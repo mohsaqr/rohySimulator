@@ -2,6 +2,16 @@
 
 A comprehensive medical simulation platform featuring realistic patient monitoring, ECG visualization, and AI-powered patient interactions.
 
+---
+
+**Created and Maintained by:**  
+**Mohammed Saqr**  
+Professor of Computer Science  
+University of Eastern Finland  
+🌐 [www.saqr.me](https://www.saqr.me)
+
+---
+
 ## Features
 
 - **Realistic Patient Monitor**: Full ICU monitor with ECG, SpO2, respiratory waveforms
@@ -61,6 +71,14 @@ npm run dev
 - **Database**: SQLite
 - **Authentication**: JWT with bcrypt
 - **UI Icons**: Lucide React
+
+## Author & Maintainer
+
+**Mohammed Saqr, PhD**  
+Professor of Computer Science  
+University of Eastern Finland  
+🌐 Website: [www.saqr.me](https://www.saqr.me)  
+📧 Contact: Available via website
 
 ## License
 

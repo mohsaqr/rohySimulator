@@ -2,6 +2,12 @@
   "name": "rohy",
   "private": true,
   "version": "1.0.0",
+  "description": "Virtual Patient Simulation Platform for Medical Education",
+  "author": {
+    "name": "Mohammed Saqr",
+    "email": "mohammed.saqr@uef.fi",
+    "url": "https://www.saqr.me"
+  },
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
