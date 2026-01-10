@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Trash2, Cpu, FileText, Database, Image, Loader2, Upload, Users, BarChart3, ClipboardList, Download, X, FileDown, FileUp, Layers } from 'lucide-react';
+import { Settings, Save, Plus, Trash2, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity } from 'lucide-react';
 import { LLMService } from '../../services/llmService';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthService } from '../../services/authService';
 import EventLog from '../monitor/EventLog';
+import SessionLogViewer from '../analytics/SessionLogViewer';
 import ScenarioRepository from './ScenarioRepository';
+import LabInvestigationEditor from './LabInvestigationEditor';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
@@ -81,7 +83,50 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
     // Cases State
     const [cases, setCases] = useState([]);
     const [selectedCaseId, setSelectedCaseId] = useState(null);
-    const [editingCase, setEditingCase] = useState(null);
+    const [editingCase, setEditingCase] = useState(() => {
+        // Restore editing case from localStorage on mount
+        const savedCase = localStorage.getItem('rohy_editing_case');
+        if (savedCase) {
+            try {
+                const parsed = JSON.parse(savedCase);
+                console.log('Restored case from auto-save:', parsed.name);
+                return parsed;
+            } catch (e) {
+                console.warn('Failed to restore auto-saved case:', e);
+            }
+        }
+        return null;
+    });
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [lastSavedAt, setLastSavedAt] = useState(null);
+
+    // Auto-save editing case to localStorage
+    useEffect(() => {
+        if (editingCase) {
+            localStorage.setItem('rohy_editing_case', JSON.stringify(editingCase));
+            setHasUnsavedChanges(true);
+            setLastSavedAt(new Date());
+        }
+    }, [editingCase]);
+
+    // Warn before leaving with unsaved changes
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (editingCase && hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+                return e.returnValue;
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [editingCase, hasUnsavedChanges]);
+
+    // Clear auto-save after successful save
+    const clearAutoSave = () => {
+        localStorage.removeItem('rohy_editing_case');
+        setHasUnsavedChanges(false);
+    };
 
     // Apply LLM defaults to service on mount
     useEffect(() => {
@@ -91,7 +136,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
     // Load Cases on Mount
     useEffect(() => {
         const token = AuthService.getToken();
-        fetch('http://localhost:3000/api/cases', {
+        fetch('/api/cases', {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -147,8 +192,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
 
         const isUpdate = !!editingCase.id;
         const url = isUpdate
-            ? `http://localhost:3000/api/cases/${editingCase.id}`
-            : 'http://localhost:3000/api/cases';
+            ? `/api/cases/${editingCase.id}`
+            : '/api/cases';
 
         // Auto-generate system prompt if empty
         const sysPrompt = editingCase.system_prompt || `You are ${editingCase.name}. ${editingCase.description}`;
@@ -210,7 +255,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                 // Then insert new ones
                 for (const lab of labs) {
                     try {
-                        await fetch(`http://localhost:3000/api/cases/${caseId}/labs`, {
+                        await fetch(`/api/cases/${caseId}/labs`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -234,7 +279,10 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
             }
 
             setSelectedCaseId(saved.id);
-            
+
+            // Clear auto-save after successful database save
+            clearAutoSave();
+
             // Show success notification without closing editor
             const notification = document.createElement('div');
             notification.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-in fade-in slide-in-from-top-2';
@@ -253,7 +301,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
 
         const token = AuthService.getToken();
         try {
-            const res = await fetch(`http://localhost:3000/api/cases/${caseId}`, {
+            const res = await fetch(`/api/cases/${caseId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -313,12 +361,6 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                         className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'scenarios' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                     >
                         <Layers className="w-4 h-4" /> Scenarios
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('history')}
-                        className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'history' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                    >
-                        <BarChart3 className="w-4 h-4" /> Session History
                     </button>
                     {isAdmin() && (
                         <>
@@ -487,7 +529,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                                     
                                                                     // Save to database
                                                                     const token = AuthService.getToken();
-                                                                    const res = await fetch('http://localhost:3000/api/cases', {
+                                                                    const res = await fetch('/api/cases', {
                                                                         method: 'POST',
                                                                         headers: { 
                                                                             'Content-Type': 'application/json',
@@ -499,7 +541,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                                     if (res.ok) {
                                                                         alert('✓ Case imported successfully!');
                                                                         // Reload cases
-                                                                        const casesRes = await fetch('http://localhost:3000/api/cases', {
+                                                                        const casesRes = await fetch('/api/cases', {
                                                                             headers: { 'Authorization': `Bearer ${token}` }
                                                                         });
                                                                         const data = await casesRes.json();
@@ -587,7 +629,24 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                     caseData={editingCase}
                                     setCaseData={setEditingCase}
                                     onSave={handleSaveCase}
-                                    onCancel={() => setEditingCase(null)}
+                                    onCancel={() => {
+                                        if (hasUnsavedChanges) {
+                                            const action = window.confirm(
+                                                'You have unsaved changes.\n\nClick OK to save before exiting, or Cancel to discard changes.'
+                                            );
+                                            if (action) {
+                                                handleSaveCase();
+                                            } else {
+                                                clearAutoSave();
+                                                setEditingCase(null);
+                                            }
+                                        } else {
+                                            clearAutoSave();
+                                            setEditingCase(null);
+                                        }
+                                    }}
+                                    hasUnsavedChanges={hasUnsavedChanges}
+                                    lastSavedAt={lastSavedAt}
                                 />
                             ) : null}
 
@@ -626,11 +685,6 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                         />
                     )}
 
-                    {/* --- SESSION HISTORY TAB --- */}
-                    {activeTab === 'history' && (
-                        <SessionHistory />
-                    )}
-
                     {/* --- USER MANAGEMENT TAB (Admin Only) --- */}
                     {activeTab === 'users' && isAdmin() && (
                         <UserManagement />
@@ -649,13 +703,14 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
 
 // System Logs Component (Admin Only)
 function SystemLogs() {
-    const [activeLogTab, setActiveLogTab] = useState('login'); // login, chat, settings, events
+    const [activeLogTab, setActiveLogTab] = useState('activity'); // activity, login, sessions, settings, events
     const [loginLogs, setLoginLogs] = useState([]);
     const [settingsLogs, setSettingsLogs] = useState([]);
     const [sessionsList, setSessionsList] = useState([]);
     const [loading, setLoading] = useState(false);
     const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
     const [selectedSessionForEvents, setSelectedSessionForEvents] = useState(null);
+    const [selectedSessionForActivity, setSelectedSessionForActivity] = useState(null);
 
     useEffect(() => {
         if (activeLogTab === 'login') {
@@ -667,6 +722,9 @@ function SystemLogs() {
         } else if (activeLogTab === 'events') {
             // Load sessions for event log selector
             loadSessions();
+        } else if (activeLogTab === 'activity') {
+            // Load sessions for activity log selector
+            loadSessions();
         }
     }, [activeLogTab, dateFilter]);
 
@@ -674,7 +732,7 @@ function SystemLogs() {
         setLoading(true);
         const token = AuthService.getToken();
         try {
-            const res = await fetch('http://localhost:3000/api/analytics/login-logs?limit=200', {
+            const res = await fetch('/api/analytics/login-logs?limit=200', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -690,7 +748,7 @@ function SystemLogs() {
         setLoading(true);
         const token = AuthService.getToken();
         try {
-            const res = await fetch('http://localhost:3000/api/analytics/settings-logs?limit=200', {
+            const res = await fetch('/api/analytics/settings-logs?limit=200', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -706,7 +764,7 @@ function SystemLogs() {
         setLoading(true);
         const token = AuthService.getToken();
         try {
-            const res = await fetch('http://localhost:3000/api/analytics/sessions', {
+            const res = await fetch('/api/analytics/sessions', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -724,16 +782,16 @@ function SystemLogs() {
         
         switch (logType) {
             case 'login':
-                url = 'http://localhost:3000/api/export/login-logs';
+                url = '/api/export/login-logs';
                 break;
             case 'chat':
-                url = 'http://localhost:3000/api/export/chat-logs';
+                url = '/api/export/chat-logs';
                 break;
             case 'settings':
-                url = 'http://localhost:3000/api/export/settings-logs';
+                url = '/api/export/settings-logs';
                 break;
             case 'session-settings':
-                url = 'http://localhost:3000/api/export/session-settings';
+                url = '/api/export/session-settings';
                 break;
         }
 
@@ -849,28 +907,35 @@ function SystemLogs() {
             </div>
 
             {/* Log Viewer Tabs */}
-            <div className="border-b border-neutral-700 flex gap-4">
+            <div className="border-b border-neutral-700 flex gap-4 overflow-x-auto">
+                <button
+                    onClick={() => setActiveLogTab('activity')}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-1 whitespace-nowrap ${activeLogTab === 'activity' ? 'border-cyan-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                >
+                    <Activity className="w-4 h-4" />
+                    Activity Log
+                </button>
                 <button
                     onClick={() => setActiveLogTab('login')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${activeLogTab === 'login' ? 'border-green-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'login' ? 'border-green-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     Login Activity ({loginLogs.length})
                 </button>
                 <button
                     onClick={() => setActiveLogTab('sessions')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${activeLogTab === 'sessions' ? 'border-blue-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'sessions' ? 'border-blue-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     All Sessions ({sessionsList.length})
                 </button>
                 <button
                     onClick={() => setActiveLogTab('settings')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${activeLogTab === 'settings' ? 'border-purple-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'settings' ? 'border-purple-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     Settings Changes ({settingsLogs.length})
                 </button>
                 <button
                     onClick={() => setActiveLogTab('events')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${activeLogTab === 'events' ? 'border-orange-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'events' ? 'border-orange-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     Event Log
                 </button>
@@ -878,9 +943,13 @@ function SystemLogs() {
 
             {/* Log Content - Table View */}
             <div className="flex-1 overflow-auto">
-                {loading ? (
+                {loading && activeLogTab !== 'activity' ? (
                     <div className="text-center py-8">
                         <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                    </div>
+                ) : activeLogTab === 'activity' ? (
+                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
+                        <SessionLogViewer showAllSessions={true} />
                     </div>
                 ) : activeLogTab === 'login' ? (
                     <div className="overflow-x-auto">
@@ -1064,148 +1133,6 @@ function SystemLogs() {
     );
 }
 
-// Session History Component
-function SessionHistory() {
-    const { user, isAdmin } = useAuth();
-    const [sessions, setSessions] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedSession, setSelectedSession] = useState(null);
-    const [interactions, setInteractions] = useState([]);
-
-    useEffect(() => {
-        loadSessions();
-    }, []);
-
-    const loadSessions = async () => {
-        const token = AuthService.getToken();
-        try {
-            const res = await fetch('http://localhost:3000/api/analytics/sessions', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            setSessions(data.sessions || []);
-        } catch (err) {
-            console.error('Failed to load sessions', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const loadSessionDetails = async (sessionId) => {
-        const token = AuthService.getToken();
-        try {
-            const res = await fetch(`http://localhost:3000/api/analytics/sessions/${sessionId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            setSelectedSession(data.session);
-            setInteractions(data.interactions || []);
-        } catch (err) {
-            console.error('Failed to load session details', err);
-        }
-    };
-
-    const formatDuration = (seconds) => {
-        if (!seconds) return 'In progress';
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}m ${secs}s`;
-    };
-
-    if (loading) {
-        return <div className="text-center py-8"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>;
-    }
-
-    if (selectedSession) {
-        return (
-            <div className="space-y-4">
-                <button 
-                    onClick={() => { setSelectedSession(null); setInteractions([]); }}
-                    className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                >
-                    ← Back to Sessions
-                </button>
-                <div className="bg-neutral-800 p-4 rounded-lg border border-neutral-700">
-                    <h3 className="font-bold text-lg mb-2">{selectedSession.case_name}</h3>
-                    <div className="text-sm text-neutral-400 space-y-1">
-                        <p><span className="font-bold">User:</span> {selectedSession.username}</p>
-                        <p><span className="font-bold">Started:</span> {new Date(selectedSession.start_time).toLocaleString()}</p>
-                        <p><span className="font-bold">Duration:</span> {formatDuration(selectedSession.duration)}</p>
-                        <p><span className="font-bold">Messages:</span> {interactions.length}</p>
-                    </div>
-                </div>
-                
-                <div className="space-y-2">
-                    <h4 className="font-bold text-sm flex items-center gap-2">
-                        Chat Conversation 
-                        <span className="text-neutral-500">({interactions.length} messages)</span>
-                    </h4>
-                    {interactions.length === 0 ? (
-                        <div className="text-center py-8 bg-neutral-800 rounded-lg border border-neutral-700">
-                            <p className="text-neutral-500">No chat messages found for this session.</p>
-                            <p className="text-xs text-neutral-600 mt-2">The conversation may not have been recorded.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {interactions.map((int, idx) => (
-                                <div key={idx} className={`p-3 rounded-lg border ${int.role === 'user' 
-                                    ? 'bg-blue-900/30 border-blue-700/50 ml-8' 
-                                    : 'bg-neutral-800 border-neutral-700 mr-8'
-                                }`}>
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className={`text-xs font-bold ${int.role === 'user' ? 'text-blue-300' : 'text-green-300'}`}>
-                                            {int.role === 'user' ? '👨‍⚕️ Student' : '🤒 Patient'}
-                                        </span>
-                                        <span className="text-xs text-neutral-500">
-                                            {new Date(int.timestamp).toLocaleString()}
-                                        </span>
-                                    </div>
-                                    <div className="text-sm text-neutral-200">{int.content}</div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <h3 className="text-lg font-bold">{isAdmin() ? 'All Sessions' : 'My Sessions'}</h3>
-                <p className="text-sm text-neutral-400">{sessions.length} total</p>
-            </div>
-            
-            <div className="space-y-2">
-                {sessions.map(session => (
-                    <div 
-                        key={session.id}
-                        onClick={() => loadSessionDetails(session.id)}
-                        className="p-4 bg-neutral-800 border border-neutral-700 rounded-lg hover:bg-neutral-750 cursor-pointer transition-colors"
-                    >
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <div className="font-bold">{session.case_name}</div>
-                                <div className="text-xs text-neutral-400 mt-1">
-                                    {isAdmin() && <span>{session.username} • </span>}
-                                    {new Date(session.start_time).toLocaleDateString()} • {formatDuration(session.duration)}
-                                </div>
-                            </div>
-                            <button className="text-xs bg-neutral-700 px-2 py-1 rounded hover:bg-neutral-600">
-                                View
-                            </button>
-                        </div>
-                    </div>
-                ))}
-                {sessions.length === 0 && (
-                    <div className="text-center py-8 text-neutral-500">No sessions yet</div>
-                )}
-            </div>
-        </div>
-    );
-}
-
 // User Management Component (Admin Only)
 function UserManagement() {
     const [users, setUsers] = useState([]);
@@ -1224,7 +1151,7 @@ function UserManagement() {
         setLoading(true);
         const token = AuthService.getToken();
         try {
-            const res = await fetch('http://localhost:3000/api/users', {
+            const res = await fetch('/api/users', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -1240,7 +1167,7 @@ function UserManagement() {
         e.preventDefault();
         const token = AuthService.getToken();
         try {
-            const res = await fetch('http://localhost:3000/api/users/create', {
+            const res = await fetch('/api/users/create', {
                 method: 'POST',
                 headers: { 
                     'Authorization': `Bearer ${token}`,
@@ -1267,7 +1194,7 @@ function UserManagement() {
         e.preventDefault();
         const token = AuthService.getToken();
         try {
-            const res = await fetch(`http://localhost:3000/api/users/${editingUser.id}`, {
+            const res = await fetch(`/api/users/${editingUser.id}`, {
                 method: 'PUT',
                 headers: { 
                     'Authorization': `Bearer ${token}`,
@@ -1319,7 +1246,7 @@ function UserManagement() {
                 }
 
                 const token = AuthService.getToken();
-                const res = await fetch('http://localhost:3000/api/users/batch', {
+                const res = await fetch('/api/users/batch', {
                     method: 'POST',
                     headers: { 
                         'Authorization': `Bearer ${token}`,
@@ -1364,7 +1291,7 @@ student1,Student One,student1@school.edu,stud123,user`;
 
         const token = AuthService.getToken();
         try {
-            const res = await fetch(`http://localhost:3000/api/users/${userId}`, {
+            const res = await fetch(`/api/users/${userId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -1384,7 +1311,7 @@ student1,Student One,student1@school.edu,stud123,user`;
 
         try {
             const user = users.find(u => u.id === userId);
-            const res = await fetch(`http://localhost:3000/api/users/${userId}`, {
+            const res = await fetch(`/api/users/${userId}`, {
                 method: 'PUT',
                 headers: { 
                     'Authorization': `Bearer ${token}`,
@@ -1687,7 +1614,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
     // Load groups on mount
     useEffect(() => {
         const token = AuthService.getToken();
-        fetch('http://localhost:3000/api/labs/groups', {
+        fetch('/api/labs/groups', {
             headers: { 'Authorization': `Bearer ${token}` }
         })
             .then(res => res.json())
@@ -1704,7 +1631,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
 
         setIsSearching(true);
         const token = AuthService.getToken();
-        fetch(`http://localhost:3000/api/labs/search?q=${encodeURIComponent(searchQuery)}&limit=20`, {
+        fetch(`/api/labs/search?q=${encodeURIComponent(searchQuery)}&limit=20`, {
             headers: { 'Authorization': `Bearer ${token}` }
         })
             .then(res => res.json())
@@ -1761,7 +1688,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
         setAddingGroup(true);
         try {
             const token = AuthService.getToken();
-            const response = await fetch(`http://localhost:3000/api/labs/group/${encodeURIComponent(selectedGroup)}`, {
+            const response = await fetch(`/api/labs/group/${encodeURIComponent(selectedGroup)}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -1880,9 +1807,20 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
 }
 
 // Sub-component for the Wizard to keep code clean
-function CaseWizard({ caseData, setCaseData, onSave, onCancel }) {
+function CaseWizard({ caseData, setCaseData, onSave, onCancel, hasUnsavedChanges, lastSavedAt }) {
     const [step, setStep] = useState(1);
     const [uploading, setUploading] = useState(false);
+
+    // Format last saved time
+    const formatLastSaved = () => {
+        if (!lastSavedAt) return null;
+        const now = new Date();
+        const diff = Math.floor((now - lastSavedAt) / 1000);
+        if (diff < 5) return 'Just now';
+        if (diff < 60) return `${diff}s ago`;
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        return lastSavedAt.toLocaleTimeString();
+    };
 
     // Helper to update deeply nested config
     const updateConfig = (key, value) => {
@@ -1901,7 +1839,7 @@ function CaseWizard({ caseData, setCaseData, onSave, onCancel }) {
         formData.append('photo', file);
 
         try {
-            const res = await fetch('http://localhost:3000/api/upload', {
+            const res = await fetch('/api/upload', {
                 method: 'POST',
                 body: formData
             });
@@ -2029,21 +1967,73 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
         }));
     };
 
+    const WIZARD_STEPS = [
+        { num: 1, title: 'Persona', icon: '🎭' },
+        { num: 2, title: 'Details', icon: '📋' },
+        { num: 3, title: 'Scenario', icon: '📈' },
+        { num: 4, title: 'Labs', icon: '🧪' },
+        { num: 5, title: 'Records', icon: '📄' }
+    ];
+
     return (
         <div className="flex flex-col h-full max-w-3xl animate-in fade-in slide-in-from-right-4">
 
-            {/* Wizard Header */}
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-4 mb-6">
-                <div>
-                    <h3 className="text-xl font-bold text-white">Case Configuration</h3>
-                    <p className="text-xs text-neutral-500">Step {step} of 5</p>
+            {/* Wizard Header with Step Navigation */}
+            <div className="border-b border-neutral-800 pb-4 mb-6">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 className="text-xl font-bold text-white">Case Configuration</h3>
+                        <div className="flex items-center gap-3">
+                            <p className="text-xs text-neutral-500">{caseData.name || 'New Case'}</p>
+                            {lastSavedAt && (
+                                <span className="text-[10px] text-green-500 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                                    Auto-saved {formatLastSaved()}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={onSave}
+                            className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded-lg flex items-center gap-1"
+                        >
+                            <Save className="w-4 h-4" />
+                            Save
+                        </button>
+                        <button
+                            onClick={onCancel}
+                            className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 text-white text-sm font-bold rounded-lg flex items-center gap-1"
+                        >
+                            <X className="w-4 h-4" />
+                            Exit
+                        </button>
+                    </div>
                 </div>
-                <div className="flex gap-2">
-                    <div className={`w-3 h-3 rounded-full ${step >= 1 ? 'bg-purple-500' : 'bg-neutral-800'}`} />
-                    <div className={`w-3 h-3 rounded-full ${step >= 2 ? 'bg-purple-500' : 'bg-neutral-800'}`} />
-                    <div className={`w-3 h-3 rounded-full ${step >= 3 ? 'bg-purple-500' : 'bg-neutral-800'}`} />
-                    <div className={`w-3 h-3 rounded-full ${step >= 4 ? 'bg-purple-500' : 'bg-neutral-800'}`} />
-                    <div className={`w-3 h-3 rounded-full ${step >= 5 ? 'bg-purple-500' : 'bg-neutral-800'}`} />
+
+                {/* Clickable Step Navigation */}
+                <div className="flex gap-1">
+                    {WIZARD_STEPS.map((s, idx) => (
+                        <button
+                            key={s.num}
+                            onClick={async () => {
+                                // Auto-save before switching
+                                await onSave();
+                                setStep(s.num);
+                            }}
+                            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${
+                                step === s.num
+                                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/30'
+                                    : step > s.num
+                                    ? 'bg-green-900/30 text-green-300 hover:bg-green-900/50 border border-green-700/50'
+                                    : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-white'
+                            }`}
+                        >
+                            <span>{s.icon}</span>
+                            <span className="hidden sm:inline">{s.title}</span>
+                            <span className="sm:hidden">{s.num}</span>
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -2364,142 +2354,15 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {step === 4 && (
                     <div className="space-y-6">
                         <h4 className="text-lg font-bold text-purple-400">4. Laboratory Investigations</h4>
-                        
-                        {/* Default Labs Toggle */}
-                        <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
-                            <div className="flex items-start gap-3">
-                                <div className="flex-1">
-                                    <label className="flex items-center gap-3 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={caseData.config?.investigations?.defaultLabsEnabled !== false}
-                                            onChange={(e) => {
-                                                updateConfig('investigations', {
-                                                    ...(caseData.config?.investigations || {}),
-                                                    defaultLabsEnabled: e.target.checked,
-                                                    labs: caseData.config?.investigations?.labs || []
-                                                });
-                                            }}
-                                            className="w-5 h-5"
-                                        />
-                                        <div>
-                                            <div className="font-bold text-white">All Lab Tests Available by Default</div>
-                                            <div className="text-xs text-neutral-400 mt-1">
-                                                When enabled: All 77 lab tests are available with <strong>normal values</strong>.
-                                                <br />When disabled: Only abnormal tests you configure below will be available.
-                                            </div>
-                                        </div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
+                        <p className="text-xs text-neutral-500">
+                            Configure lab tests with smart search, clinical panel templates, and visual value editors.
+                        </p>
 
-                        {/* Abnormal Tests Section */}
-                        <div>
-                            <div className="flex items-center justify-between mb-3">
-                                <h5 className="text-sm font-bold text-purple-300">Abnormal Tests (Optional)</h5>
-                                <span className="text-xs text-neutral-500">{(caseData.config?.investigations?.labs || []).length} configured</span>
-                            </div>
-                            <p className="text-xs text-neutral-500 mb-4">
-                                Add specific tests with abnormal values. These will override normal values when ordered by students.
-                            </p>
-
-                            {/* Add Tests Interface */}
-                            <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4 mb-4">
-                                <LabInvestigationSelector 
-                                    caseData={caseData}
-                                    onAddLab={(lab) => {
-                                        const labs = caseData.config?.investigations?.labs || [];
-                                        // Mark as abnormal by default when added here
-                                        updateConfig('investigations', {
-                                            ...(caseData.config?.investigations || {}),
-                                            defaultLabsEnabled: caseData.config?.investigations?.defaultLabsEnabled !== false,
-                                            labs: [...labs, { ...lab, is_abnormal: true }]
-                                        });
-                                    }}
-                                    patientGender={caseData.config?.demographics?.gender}
-                                    showAddByGroup={true}
-                                />
-                            </div>
-
-                            {/* Configured Abnormal Tests List */}
-                            <div className="space-y-2">
-                                {(caseData.config?.investigations?.labs || []).map((lab, idx) => (
-                                    <div key={idx} className="bg-neutral-800 border border-neutral-700 rounded p-3">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div className="flex-1">
-                                                <div className="font-bold text-sm flex items-center gap-2">
-                                                    {lab.test_name}
-                                                    <span className="px-2 py-0.5 bg-yellow-900/40 text-yellow-400 text-xs rounded">ABNORMAL</span>
-                                                </div>
-                                                <div className="text-xs text-neutral-400">{lab.test_group} • {lab.gender_category}</div>
-                                            </div>
-                                            <button
-                                                onClick={() => {
-                                                    const labs = caseData.config.investigations.labs.filter((_, i) => i !== idx);
-                                                    updateConfig('investigations', {
-                                                        ...(caseData.config?.investigations || {}),
-                                                        labs
-                                                    });
-                                                }}
-                                                className="text-neutral-500 hover:text-red-400"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-3 text-xs">
-                                            <div>
-                                                <span className="text-neutral-500 block mb-1">Normal Range:</span>
-                                                <div className="font-mono text-neutral-400">{lab.min_value}-{lab.max_value} {lab.unit}</div>
-                                            </div>
-                                            <div>
-                                                <label className="text-neutral-500 block mb-1">Abnormal Value:</label>
-                                                <input
-                                                    type="number"
-                                                    step="0.1"
-                                                    value={lab.current_value}
-                                                    onChange={(e) => {
-                                                        const labs = [...caseData.config.investigations.labs];
-                                                        labs[idx].current_value = parseFloat(e.target.value);
-                                                        updateConfig('investigations', {
-                                                            ...(caseData.config?.investigations || {}),
-                                                            labs
-                                                        });
-                                                    }}
-                                                    className="input-dark w-full"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-neutral-500 block mb-1">Turnaround (min):</label>
-                                                <input
-                                                    type="number"
-                                                    value={lab.turnaround_minutes || 30}
-                                                    onChange={(e) => {
-                                                        const labs = [...caseData.config.investigations.labs];
-                                                        labs[idx].turnaround_minutes = parseInt(e.target.value);
-                                                        updateConfig('investigations', {
-                                                            ...(caseData.config?.investigations || {}),
-                                                            labs
-                                                        });
-                                                    }}
-                                                    className="input-dark w-full"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                                {(caseData.config?.investigations?.labs || []).length === 0 && (
-                                    <div className="text-center py-8 bg-neutral-800/50 rounded-lg border border-dashed border-neutral-700 text-neutral-500 text-sm">
-                                        <p className="mb-2">No abnormal tests configured</p>
-                                        <p className="text-xs">
-                                            {caseData.config?.investigations?.defaultLabsEnabled !== false 
-                                                ? 'All lab tests will return normal values'
-                                                : 'Students won\'t be able to get any lab results'}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                        <LabInvestigationEditor
+                            caseData={caseData}
+                            setCaseData={setCaseData}
+                            patientGender={caseData.config?.demographics?.gender}
+                        />
                     </div>
                 )}
 
