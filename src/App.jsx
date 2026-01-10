@@ -11,7 +11,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { AuthService } from './services/authService';
 import EventLogger, { COMPONENTS } from './services/eventLogger';
-import { Settings, X, LogOut, User, RotateCcw } from 'lucide-react';
+import { Settings, X, LogOut, User, RotateCcw, Stethoscope } from 'lucide-react';
+import ManikinPanel from './components/examination/ManikinPanel';
 
 // Session expiry time in milliseconds (default 30 minutes)
 const SESSION_EXPIRY_MS = parseInt(localStorage.getItem('rohy_session_expiry_minutes') || '30') * 60 * 1000;
@@ -27,6 +28,7 @@ function MainApp() {
    const [activeCase, setActiveCase] = useState(null);
    const [sessionId, setSessionId] = useState(null);
    const [selectedResult, setSelectedResult] = useState(null);
+   const [showExamination, setShowExamination] = useState(false);
 
    // Set user context for EventLogger when user logs in
    useEffect(() => {
@@ -316,6 +318,28 @@ function MainApp() {
                onClose={handleCloseLabResults}
             />
          )}
+
+         {/* Physical Examination Button - Floating */}
+         {activeCase && sessionId && (
+            <button
+               onClick={() => setShowExamination(true)}
+               className="fixed bottom-24 right-6 z-40 p-4 bg-cyan-600 hover:bg-cyan-500 text-white rounded-full shadow-lg transition-all hover:scale-105 flex items-center gap-2"
+               title="Physical Examination"
+            >
+               <Stethoscope className="w-6 h-6" />
+            </button>
+         )}
+
+         {/* Physical Examination Panel */}
+         <ManikinPanel
+            isOpen={showExamination}
+            onClose={() => setShowExamination(false)}
+            physicalExam={activeCase?.config?.physicalExam || null}
+            onExamPerformed={(exam) => {
+               // Log exam to session (optional - can integrate later)
+               console.log('Exam performed:', exam);
+            }}
+         />
 
       </div>
    );
