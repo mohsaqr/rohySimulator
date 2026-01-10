@@ -1,8 +1,8 @@
 import React from 'react';
 
 /**
- * SVG Body Map Component
- * Displays an interactive human body silhouette with clickable regions
+ * Body Map Component with Clean Silhouette and Hotspots
+ * Professional medical examination interface
  */
 export default function BodyMap({
     view = 'anterior',
@@ -12,370 +12,325 @@ export default function BodyMap({
     abnormalRegions = new Set()
 }) {
 
-    // Get region style based on state
-    const getRegionStyle = (regionId) => {
+    // Hotspot configuration for anterior view
+    const anteriorHotspots = [
+        { id: 'head', x: 100, y: 40, label: 'Head' },
+        { id: 'eyes', x: 100, y: 30, label: 'Eyes', small: true },
+        { id: 'neck', x: 100, y: 72, label: 'Neck' },
+        { id: 'chestAnterior', x: 100, y: 115, label: 'Chest' },
+        { id: 'heart', x: 115, y: 125, label: 'Heart', small: true },
+        { id: 'abdomen', x: 100, y: 175, label: 'Abdomen' },
+        { id: 'upperLimbLeft', x: 45, y: 130, label: 'L. Arm' },
+        { id: 'upperLimbRight', x: 155, y: 130, label: 'R. Arm' },
+        { id: 'lowerLimbLeft', x: 80, y: 290, label: 'L. Leg' },
+        { id: 'lowerLimbRight', x: 120, y: 290, label: 'R. Leg' },
+    ];
+
+    // Hotspot configuration for posterior view
+    const posteriorHotspots = [
+        { id: 'head', x: 100, y: 40, label: 'Head' },
+        { id: 'neck', x: 100, y: 72, label: 'Neck' },
+        { id: 'backUpper', x: 100, y: 115, label: 'Upper Back' },
+        { id: 'backLower', x: 100, y: 175, label: 'Lower Back' },
+        { id: 'upperLimbLeft', x: 45, y: 130, label: 'L. Arm' },
+        { id: 'upperLimbRight', x: 155, y: 130, label: 'R. Arm' },
+        { id: 'lowerLimbLeft', x: 80, y: 290, label: 'L. Leg' },
+        { id: 'lowerLimbRight', x: 120, y: 290, label: 'R. Leg' },
+    ];
+
+    const hotspots = view === 'anterior' ? anteriorHotspots : posteriorHotspots;
+
+    // Get hotspot status and styling
+    const getHotspotStatus = (regionId) => {
         const isSelected = selectedRegion === regionId;
         const isExamined = examinedRegions.has(regionId);
         const isAbnormal = abnormalRegions.has(regionId);
 
-        let fill = 'rgba(100, 116, 139, 0.3)'; // Default slate
-        let stroke = 'rgb(100, 116, 139)';
-        let strokeWidth = 1;
-
-        if (isAbnormal) {
-            fill = 'rgba(239, 68, 68, 0.3)'; // Red for abnormal
-            stroke = 'rgb(239, 68, 68)';
-        } else if (isExamined) {
-            fill = 'rgba(34, 197, 94, 0.3)'; // Green for examined normal
-            stroke = 'rgb(34, 197, 94)';
-        }
-
-        if (isSelected) {
-            fill = 'rgba(6, 182, 212, 0.4)'; // Cyan for selected
-            stroke = 'rgb(6, 182, 212)';
-            strokeWidth = 2;
-        }
-
-        return { fill, stroke, strokeWidth };
+        return { isSelected, isExamined, isAbnormal };
     };
 
-    // Common props for clickable regions
-    const getRegionProps = (regionId) => ({
-        onClick: () => onRegionClick(regionId),
-        style: { cursor: 'pointer', transition: 'all 0.2s ease' },
-        className: 'hover:opacity-80'
-    });
-
-    if (view === 'anterior') {
-        return (
-            <svg viewBox="0 0 200 400" className="w-full h-full max-h-[500px]">
-                {/* Background */}
-                <rect width="200" height="400" fill="transparent" />
-
-                {/* Body outline - decorative */}
-                <ellipse cx="100" cy="385" rx="30" ry="8" fill="rgba(50,50,50,0.3)" /> {/* Shadow */}
-
-                {/* HEAD */}
-                <g {...getRegionProps('head')}>
-                    <ellipse
-                        cx="100" cy="35" rx="25" ry="30"
-                        {...getRegionStyle('head')}
-                    />
-                    <text x="100" y="38" textAnchor="middle" fontSize="10" fill="white" pointerEvents="none">
-                        Head
-                    </text>
-                </g>
-
-                {/* NECK */}
-                <g {...getRegionProps('neck')}>
-                    <rect
-                        x="88" y="62" width="24" height="20" rx="4"
-                        {...getRegionStyle('neck')}
-                    />
-                    <text x="100" y="75" textAnchor="middle" fontSize="8" fill="white" pointerEvents="none">
-                        Neck
-                    </text>
-                </g>
-
-                {/* CHEST (Anterior) */}
-                <g {...getRegionProps('chestAnterior')}>
-                    <path
-                        d="M 60 82
-                           Q 55 90 55 110
-                           L 55 150
-                           Q 55 155 60 158
-                           L 140 158
-                           Q 145 155 145 150
-                           L 145 110
-                           Q 145 90 140 82
-                           L 115 82
-                           Q 100 85 85 82
-                           Z"
-                        {...getRegionStyle('chestAnterior')}
-                    />
-                    <text x="100" y="125" textAnchor="middle" fontSize="10" fill="white" pointerEvents="none">
-                        Chest
-                    </text>
-                </g>
-
-                {/* HEART area overlay - clickable separately */}
-                <g {...getRegionProps('heart')}>
-                    <ellipse
-                        cx="108" cy="130" rx="18" ry="20"
-                        {...getRegionStyle('heart')}
-                    />
-                    <text x="108" y="133" textAnchor="middle" fontSize="8" fill="white" pointerEvents="none">
-                        Heart
-                    </text>
-                </g>
-
-                {/* ABDOMEN */}
-                <g {...getRegionProps('abdomen')}>
-                    <path
-                        d="M 60 160
-                           L 60 230
-                           Q 65 245 100 248
-                           Q 135 245 140 230
-                           L 140 160
-                           Z"
-                        {...getRegionStyle('abdomen')}
-                    />
-                    <text x="100" y="205" textAnchor="middle" fontSize="10" fill="white" pointerEvents="none">
-                        Abdomen
-                    </text>
-                </g>
-
-                {/* LEFT UPPER LIMB */}
-                <g {...getRegionProps('upperLimbLeft')}>
-                    <path
-                        d="M 55 85
-                           Q 35 90 25 120
-                           L 15 180
-                           Q 12 190 18 192
-                           L 28 192
-                           Q 34 190 36 180
-                           L 48 120
-                           Q 52 100 55 95
-                           Z"
-                        {...getRegionStyle('upperLimbLeft')}
-                    />
-                    <text x="32" y="140" textAnchor="middle" fontSize="7" fill="white" pointerEvents="none" transform="rotate(-15, 32, 140)">
-                        L.Arm
-                    </text>
-                </g>
-
-                {/* RIGHT UPPER LIMB */}
-                <g {...getRegionProps('upperLimbRight')}>
-                    <path
-                        d="M 145 85
-                           Q 165 90 175 120
-                           L 185 180
-                           Q 188 190 182 192
-                           L 172 192
-                           Q 166 190 164 180
-                           L 152 120
-                           Q 148 100 145 95
-                           Z"
-                        {...getRegionStyle('upperLimbRight')}
-                    />
-                    <text x="168" y="140" textAnchor="middle" fontSize="7" fill="white" pointerEvents="none" transform="rotate(15, 168, 140)">
-                        R.Arm
-                    </text>
-                </g>
-
-                {/* LEFT LOWER LIMB */}
-                <g {...getRegionProps('lowerLimbLeft')}>
-                    <path
-                        d="M 70 248
-                           L 65 320
-                           Q 63 350 60 370
-                           L 58 380
-                           Q 57 385 62 386
-                           L 78 386
-                           Q 83 385 82 380
-                           L 85 350
-                           Q 88 320 90 280
-                           L 92 248
-                           Z"
-                        {...getRegionStyle('lowerLimbLeft')}
-                    />
-                    <text x="75" y="320" textAnchor="middle" fontSize="7" fill="white" pointerEvents="none">
-                        L.Leg
-                    </text>
-                </g>
-
-                {/* RIGHT LOWER LIMB */}
-                <g {...getRegionProps('lowerLimbRight')}>
-                    <path
-                        d="M 130 248
-                           L 135 320
-                           Q 137 350 140 370
-                           L 142 380
-                           Q 143 385 138 386
-                           L 122 386
-                           Q 117 385 118 380
-                           L 115 350
-                           Q 112 320 110 280
-                           L 108 248
-                           Z"
-                        {...getRegionStyle('lowerLimbRight')}
-                    />
-                    <text x="125" y="320" textAnchor="middle" fontSize="7" fill="white" pointerEvents="none">
-                        R.Leg
-                    </text>
-                </g>
-
-                {/* Legend */}
-                <g transform="translate(5, 360)">
-                    <rect x="0" y="0" width="8" height="8" fill="rgba(100, 116, 139, 0.3)" stroke="rgb(100, 116, 139)" />
-                    <text x="12" y="7" fontSize="7" fill="rgb(156, 163, 175)">Not examined</text>
-
-                    <rect x="0" y="12" width="8" height="8" fill="rgba(34, 197, 94, 0.3)" stroke="rgb(34, 197, 94)" />
-                    <text x="12" y="19" fontSize="7" fill="rgb(156, 163, 175)">Normal</text>
-
-                    <rect x="0" y="24" width="8" height="8" fill="rgba(239, 68, 68, 0.3)" stroke="rgb(239, 68, 68)" />
-                    <text x="12" y="31" fontSize="7" fill="rgb(156, 163, 175)">Abnormal</text>
-                </g>
-            </svg>
-        );
-    }
-
-    // Posterior view
     return (
-        <svg viewBox="0 0 200 400" className="w-full h-full max-h-[500px]">
-            {/* Background */}
-            <rect width="200" height="400" fill="transparent" />
+        <svg viewBox="0 0 200 380" className="w-full h-full max-h-[500px]">
+            <defs>
+                {/* Glow filter for selected */}
+                <filter id="glow-cyan" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                    <feMerge>
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
 
-            {/* Shadow */}
-            <ellipse cx="100" cy="385" rx="30" ry="8" fill="rgba(50,50,50,0.3)" />
+                {/* Pulse animation for abnormal */}
+                <filter id="glow-red" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                    <feMerge>
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
 
-            {/* HEAD (back) */}
-            <g {...getRegionProps('head')}>
-                <ellipse
-                    cx="100" cy="35" rx="25" ry="30"
-                    {...getRegionStyle('head')}
-                />
-                <text x="100" y="38" textAnchor="middle" fontSize="10" fill="white" pointerEvents="none">
-                    Head
-                </text>
-            </g>
+                {/* Gradient for body */}
+                <linearGradient id="bodyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#374151" stopOpacity="0.6"/>
+                    <stop offset="100%" stopColor="#1f2937" stopOpacity="0.8"/>
+                </linearGradient>
+            </defs>
 
-            {/* NECK (back) */}
-            <g {...getRegionProps('neck')}>
-                <rect
-                    x="88" y="62" width="24" height="20" rx="4"
-                    {...getRegionStyle('neck')}
-                />
-                <text x="100" y="75" textAnchor="middle" fontSize="8" fill="white" pointerEvents="none">
-                    Neck
-                </text>
-            </g>
+            {/* Clean Body Silhouette */}
+            {view === 'anterior' ? (
+                <g className="body-silhouette">
+                    {/* Head */}
+                    <ellipse cx="100" cy="38" rx="22" ry="26"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
 
-            {/* UPPER BACK */}
-            <g {...getRegionProps('backUpper')}>
-                <path
-                    d="M 60 82
-                       Q 55 90 55 110
-                       L 55 155
-                       L 145 155
-                       L 145 110
-                       Q 145 90 140 82
-                       L 115 82
-                       Q 100 85 85 82
-                       Z"
-                    {...getRegionStyle('backUpper')}
-                />
-                <text x="100" y="120" textAnchor="middle" fontSize="10" fill="white" pointerEvents="none">
-                    Upper Back
-                </text>
-            </g>
+                    {/* Neck */}
+                    <rect x="90" y="62" width="20" height="18" rx="3"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
 
-            {/* LOWER BACK */}
-            <g {...getRegionProps('backLower')}>
-                <path
-                    d="M 55 157
-                       L 55 230
-                       Q 60 245 100 248
-                       Q 140 245 145 230
-                       L 145 157
-                       Z"
-                    {...getRegionStyle('backLower')}
-                />
-                <text x="100" y="200" textAnchor="middle" fontSize="10" fill="white" pointerEvents="none">
-                    Lower Back
-                </text>
-            </g>
+                    {/* Torso */}
+                    <path d="M 60 80
+                             Q 55 85 55 100
+                             L 55 200
+                             Q 55 210 70 215
+                             L 70 220
+                             L 85 220
+                             L 85 215
+                             Q 100 218 115 215
+                             L 115 220
+                             L 130 220
+                             L 130 215
+                             Q 145 210 145 200
+                             L 145 100
+                             Q 145 85 140 80
+                             Q 120 78 100 80
+                             Q 80 78 60 80 Z"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
 
-            {/* LEFT UPPER LIMB (back view) */}
-            <g {...getRegionProps('upperLimbLeft')}>
-                <path
-                    d="M 55 85
-                       Q 35 90 25 120
-                       L 15 180
-                       Q 12 190 18 192
-                       L 28 192
-                       Q 34 190 36 180
-                       L 48 120
-                       Q 52 100 55 95
-                       Z"
-                    {...getRegionStyle('upperLimbLeft')}
-                />
-                <text x="32" y="140" textAnchor="middle" fontSize="7" fill="white" pointerEvents="none" transform="rotate(-15, 32, 140)">
-                    L.Arm
-                </text>
-            </g>
+                    {/* Left Arm */}
+                    <path d="M 55 85
+                             Q 35 90 28 120
+                             L 18 175
+                             Q 15 185 20 188
+                             L 30 188
+                             Q 35 185 37 175
+                             L 48 120
+                             Q 52 95 55 90 Z"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
 
-            {/* RIGHT UPPER LIMB (back view) */}
-            <g {...getRegionProps('upperLimbRight')}>
-                <path
-                    d="M 145 85
-                       Q 165 90 175 120
-                       L 185 180
-                       Q 188 190 182 192
-                       L 172 192
-                       Q 166 190 164 180
-                       L 152 120
-                       Q 148 100 145 95
-                       Z"
-                    {...getRegionStyle('upperLimbRight')}
-                />
-                <text x="168" y="140" textAnchor="middle" fontSize="7" fill="white" pointerEvents="none" transform="rotate(15, 168, 140)">
-                    R.Arm
-                </text>
-            </g>
+                    {/* Right Arm */}
+                    <path d="M 145 85
+                             Q 165 90 172 120
+                             L 182 175
+                             Q 185 185 180 188
+                             L 170 188
+                             Q 165 185 163 175
+                             L 152 120
+                             Q 148 95 145 90 Z"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
 
-            {/* LEFT LOWER LIMB (back view) */}
-            <g {...getRegionProps('lowerLimbLeft')}>
-                <path
-                    d="M 70 248
-                       L 65 320
-                       Q 63 350 60 370
-                       L 58 380
-                       Q 57 385 62 386
-                       L 78 386
-                       Q 83 385 82 380
-                       L 85 350
-                       Q 88 320 90 280
-                       L 92 248
-                       Z"
-                    {...getRegionStyle('lowerLimbLeft')}
-                />
-                <text x="75" y="320" textAnchor="middle" fontSize="7" fill="white" pointerEvents="none">
-                    L.Leg
-                </text>
-            </g>
+                    {/* Left Leg */}
+                    <path d="M 70 220
+                             L 68 300
+                             Q 66 340 63 355
+                             L 60 365
+                             Q 58 370 65 372
+                             L 80 372
+                             Q 87 370 85 365
+                             L 82 340
+                             Q 85 300 88 250
+                             L 88 220 Z"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
 
-            {/* RIGHT LOWER LIMB (back view) */}
-            <g {...getRegionProps('lowerLimbRight')}>
-                <path
-                    d="M 130 248
-                       L 135 320
-                       Q 137 350 140 370
-                       L 142 380
-                       Q 143 385 138 386
-                       L 122 386
-                       Q 117 385 118 380
-                       L 115 350
-                       Q 112 320 110 280
-                       L 108 248
-                       Z"
-                    {...getRegionStyle('lowerLimbRight')}
-                />
-                <text x="125" y="320" textAnchor="middle" fontSize="7" fill="white" pointerEvents="none">
-                    R.Leg
-                </text>
-            </g>
+                    {/* Right Leg */}
+                    <path d="M 130 220
+                             L 132 300
+                             Q 134 340 137 355
+                             L 140 365
+                             Q 142 370 135 372
+                             L 120 372
+                             Q 113 370 115 365
+                             L 118 340
+                             Q 115 300 112 250
+                             L 112 220 Z"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
+                </g>
+            ) : (
+                <g className="body-silhouette">
+                    {/* Head - Back View */}
+                    <ellipse cx="100" cy="38" rx="22" ry="26"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
+
+                    {/* Neck */}
+                    <rect x="90" y="62" width="20" height="18" rx="3"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
+
+                    {/* Back/Torso */}
+                    <path d="M 60 80
+                             Q 55 85 55 100
+                             L 55 200
+                             Q 55 210 70 215
+                             L 70 220
+                             L 85 220
+                             L 85 215
+                             Q 100 218 115 215
+                             L 115 220
+                             L 130 220
+                             L 130 215
+                             Q 145 210 145 200
+                             L 145 100
+                             Q 145 85 140 80
+                             Q 120 78 100 80
+                             Q 80 78 60 80 Z"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
+
+                    {/* Spine indication */}
+                    <line x1="100" y1="85" x2="100" y2="210" stroke="#6b7280" strokeWidth="1" strokeDasharray="3,3"/>
+
+                    {/* Left Arm */}
+                    <path d="M 55 85
+                             Q 35 90 28 120
+                             L 18 175
+                             Q 15 185 20 188
+                             L 30 188
+                             Q 35 185 37 175
+                             L 48 120
+                             Q 52 95 55 90 Z"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
+
+                    {/* Right Arm */}
+                    <path d="M 145 85
+                             Q 165 90 172 120
+                             L 182 175
+                             Q 185 185 180 188
+                             L 170 188
+                             Q 165 185 163 175
+                             L 152 120
+                             Q 148 95 145 90 Z"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
+
+                    {/* Left Leg */}
+                    <path d="M 70 220
+                             L 68 300
+                             Q 66 340 63 355
+                             L 60 365
+                             Q 58 370 65 372
+                             L 80 372
+                             Q 87 370 85 365
+                             L 82 340
+                             Q 85 300 88 250
+                             L 88 220 Z"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
+
+                    {/* Right Leg */}
+                    <path d="M 130 220
+                             L 132 300
+                             Q 134 340 137 355
+                             L 140 365
+                             Q 142 370 135 372
+                             L 120 372
+                             Q 113 370 115 365
+                             L 118 340
+                             Q 115 300 112 250
+                             L 112 220 Z"
+                        fill="url(#bodyGradient)" stroke="#4b5563" strokeWidth="1.5"/>
+                </g>
+            )}
+
+            {/* Hotspots */}
+            {hotspots.map(hotspot => {
+                const { isSelected, isExamined, isAbnormal } = getHotspotStatus(hotspot.id);
+                const size = hotspot.small ? 8 : 12;
+
+                let fillColor = '#475569'; // Default gray
+                let strokeColor = '#64748b';
+                let filter = '';
+                let pulseClass = '';
+
+                if (isAbnormal) {
+                    fillColor = '#ef4444';
+                    strokeColor = '#f87171';
+                    filter = 'url(#glow-red)';
+                    pulseClass = 'animate-pulse';
+                } else if (isExamined) {
+                    fillColor = '#22c55e';
+                    strokeColor = '#4ade80';
+                } else if (isSelected) {
+                    fillColor = '#06b6d4';
+                    strokeColor = '#22d3ee';
+                    filter = 'url(#glow-cyan)';
+                }
+
+                return (
+                    <g
+                        key={hotspot.id}
+                        onClick={() => onRegionClick(hotspot.id)}
+                        className={`cursor-pointer transition-all duration-200 hover:scale-110 ${pulseClass}`}
+                        style={{ transformOrigin: `${hotspot.x}px ${hotspot.y}px` }}
+                    >
+                        {/* Outer ring for better visibility */}
+                        <circle
+                            cx={hotspot.x}
+                            cy={hotspot.y}
+                            r={size + 4}
+                            fill="transparent"
+                            stroke={strokeColor}
+                            strokeWidth="1"
+                            opacity="0.5"
+                        />
+
+                        {/* Main hotspot */}
+                        <circle
+                            cx={hotspot.x}
+                            cy={hotspot.y}
+                            r={size}
+                            fill={fillColor}
+                            stroke={strokeColor}
+                            strokeWidth="2"
+                            filter={filter}
+                            className="transition-all duration-200"
+                        />
+
+                        {/* Inner dot */}
+                        <circle
+                            cx={hotspot.x}
+                            cy={hotspot.y}
+                            r={size * 0.3}
+                            fill="white"
+                            opacity="0.8"
+                        />
+
+                        {/* Label on hover - positioned to avoid overlap */}
+                        <text
+                            x={hotspot.x + (hotspot.x < 100 ? -size - 8 : size + 8)}
+                            y={hotspot.y + 4}
+                            textAnchor={hotspot.x < 100 ? 'end' : 'start'}
+                            fontSize="9"
+                            fill="#94a3b8"
+                            className="pointer-events-none select-none"
+                            fontWeight="500"
+                        >
+                            {hotspot.label}
+                        </text>
+                    </g>
+                );
+            })}
 
             {/* Legend */}
-            <g transform="translate(5, 360)">
-                <rect x="0" y="0" width="8" height="8" fill="rgba(100, 116, 139, 0.3)" stroke="rgb(100, 116, 139)" />
-                <text x="12" y="7" fontSize="7" fill="rgb(156, 163, 175)">Not examined</text>
+            <g transform="translate(10, 340)">
+                <text x="0" y="0" fontSize="8" fill="#64748b" fontWeight="600">LEGEND</text>
 
-                <rect x="0" y="12" width="8" height="8" fill="rgba(34, 197, 94, 0.3)" stroke="rgb(34, 197, 94)" />
-                <text x="12" y="19" fontSize="7" fill="rgb(156, 163, 175)">Normal</text>
+                <circle cx="8" cy="12" r="5" fill="#475569" stroke="#64748b" strokeWidth="1"/>
+                <text x="18" y="15" fontSize="7" fill="#94a3b8">Not examined</text>
 
-                <rect x="0" y="24" width="8" height="8" fill="rgba(239, 68, 68, 0.3)" stroke="rgb(239, 68, 68)" />
-                <text x="12" y="31" fontSize="7" fill="rgb(156, 163, 175)">Abnormal</text>
+                <circle cx="8" cy="26" r="5" fill="#22c55e" stroke="#4ade80" strokeWidth="1"/>
+                <text x="18" y="29" fontSize="7" fill="#94a3b8">Normal</text>
+
+                <circle cx="70" cy="12" r="5" fill="#ef4444" stroke="#f87171" strokeWidth="1"/>
+                <text x="80" y="15" fontSize="7" fill="#94a3b8">Abnormal</text>
+
+                <circle cx="70" cy="26" r="5" fill="#06b6d4" stroke="#22d3ee" strokeWidth="1"/>
+                <text x="80" y="29" fontSize="7" fill="#94a3b8">Selected</text>
             </g>
         </svg>
     );
