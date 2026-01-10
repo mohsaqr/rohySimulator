@@ -348,6 +348,7 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
 
   return {
     thresholds,
+    setThresholds,
     activeAlarms: Array.from(activeAlarms),
     alarmHistory,
     isMuted,

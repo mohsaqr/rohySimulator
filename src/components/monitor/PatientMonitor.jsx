@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Heart, Activity, Wind, Thermometer, Bell, Settings, Play, Pause, AlertCircle, Menu, X, Monitor, User, FileJson, FastForward, Save, Download, Upload, BellOff, Volume2, VolumeX } from 'lucide-react';
+import { Heart, Activity, Wind, Thermometer, Bell, Settings, Play, Pause, AlertCircle, Menu, X, Monitor, User, FileJson, FastForward, Save, Download, Upload, BellOff, Volume2, VolumeX, Pencil } from 'lucide-react';
 import defaultSettings from '../../settings.json';
 import { useEventLog } from '../../hooks/useEventLog';
 import { useAlarms } from '../../hooks/useAlarms';
 import { getAudioContext, resumeAudioContext } from '../../utils/alarmAudio';
 import LabValueEditor from '../investigations/LabValueEditor';
+import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 
 /**
  * ADVANCED ECG GENERATION UTILITIES
@@ -287,6 +288,14 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
    // Patient Parameters (Target/Set values)
    const [params, setParams] = useState(initialParams);
 
+   // Case baseline vitals (loaded from case config)
+   const [caseBaseline, setCaseBaseline] = useState(null);
+   const [caseBaselineRhythm, setCaseBaselineRhythm] = useState(null);
+   const [caseBaselineConditions, setCaseBaselineConditions] = useState(null);
+
+   // Track which vitals have been manually overridden from case defaults
+   const [overriddenVitals, setOverriddenVitals] = useState(new Set());
+
    // Display Vitals (Fluctuating values)
    const [displayVitals, setDisplayVitals] = useState(params);
 
@@ -338,32 +347,92 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
    // Load Scenarios into State (to allow custom additions)
    const [scenarioList, setScenarioList] = useState(defaultSettings.scenarios);
    
-   // Load scenario from case data when case loads
+   // Load initial vitals and scenario from case data when case loads
    useEffect(() => {
-      if (caseData?.scenario) {
-         const caseScenario = {
-            id: `case_${caseData.id}`,
-            name: `${caseData.name} - Scenario`,
-            description: caseData.scenario.description || 'Case scenario',
-            timeline: caseData.scenario.timeline || []
-         };
-         
-         // Add case scenario to list if it has a timeline
-         if (caseScenario.timeline.length > 0) {
-            setScenarioList(prev => {
-               // Remove any existing case scenario and add new one
-               const filtered = prev.filter(s => !s.id.startsWith('case_'));
-               return [...filtered, caseScenario];
+      if (caseData) {
+         // Load initial vitals from case config
+         const initialVitals = caseData.config?.initialVitals;
+         if (initialVitals) {
+            // Set baseline from case (for reset functionality)
+            const baselineParams = {
+               hr: initialVitals.hr ?? FACTORY_DEFAULTS.params.hr,
+               spo2: initialVitals.spo2 ?? FACTORY_DEFAULTS.params.spo2,
+               rr: initialVitals.rr ?? FACTORY_DEFAULTS.params.rr,
+               bpSys: initialVitals.bpSys ?? FACTORY_DEFAULTS.params.bpSys,
+               bpDia: initialVitals.bpDia ?? FACTORY_DEFAULTS.params.bpDia,
+               temp: initialVitals.temp ?? FACTORY_DEFAULTS.params.temp,
+               etco2: initialVitals.etco2 ?? FACTORY_DEFAULTS.params.etco2
+            };
+            setCaseBaseline(baselineParams);
+            setParams(baselineParams);
+
+            // Set rhythm from case
+            if (initialVitals.rhythm) {
+               setCaseBaselineRhythm(initialVitals.rhythm);
+               setRhythm(initialVitals.rhythm);
+            }
+
+            // Set ECG conditions from case
+            if (initialVitals.conditions) {
+               const caseConditions = {
+                  pvc: initialVitals.conditions.pvc ?? false,
+                  stElev: initialVitals.conditions.stElev ?? 0,
+                  tInv: initialVitals.conditions.tInv ?? false,
+                  wideQRS: initialVitals.conditions.wideQRS ?? false,
+                  noise: initialVitals.conditions.noise ?? 0
+               };
+               setCaseBaselineConditions(caseConditions);
+               setConditions(caseConditions);
+            }
+
+            // Clear overrides when new case loads
+            setOverriddenVitals(new Set());
+         }
+
+         // Load alarm thresholds from case config
+         const caseAlarms = caseData.config?.alarms;
+         if (caseAlarms && alarmSystem.setThresholds) {
+            const newThresholds = {};
+            Object.keys(caseAlarms).forEach(vital => {
+               if (caseAlarms[vital]) {
+                  newThresholds[vital] = {
+                     low: caseAlarms[vital].low,
+                     high: caseAlarms[vital].high,
+                     enabled: caseAlarms[vital].enabled ?? true
+                  };
+               }
             });
-            
-            // Auto-start if configured
-            if (caseData.scenario.autoStart) {
-               setActiveScenario(caseScenario.id);
-               setScenarioTime(0);
-               setScenarioPlaying(true);
+            if (Object.keys(newThresholds).length > 0) {
+               alarmSystem.setThresholds(prev => ({ ...prev, ...newThresholds }));
             }
          }
-         
+
+         // Load scenario if present
+         if (caseData.scenario) {
+            const caseScenario = {
+               id: `case_${caseData.id}`,
+               name: `${caseData.name} - Scenario`,
+               description: caseData.scenario.description || 'Case scenario',
+               timeline: caseData.scenario.timeline || []
+            };
+
+            // Add case scenario to list if it has a timeline
+            if (caseScenario.timeline.length > 0) {
+               setScenarioList(prev => {
+                  // Remove any existing case scenario and add new one
+                  const filtered = prev.filter(s => !s.id.startsWith('case_'));
+                  return [...filtered, caseScenario];
+               });
+
+               // Auto-start if configured
+               if (caseData.scenario.autoStart) {
+                  setActiveScenario(caseScenario.id);
+                  setScenarioTime(0);
+                  setScenarioPlaying(true);
+               }
+            }
+         }
+
          // Log case load
          if (eventLog.logCaseLoad) {
             eventLog.logCaseLoad(caseData.name);
@@ -403,6 +472,47 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
       setScenarioPlaying(true);
       setShowBuilder(false);
    };
+
+   // Helper to update a vital and mark as overridden
+   const updateVitalWithOverride = (vitalKey, value) => {
+      setParams(prev => ({ ...prev, [vitalKey]: value }));
+      if (caseBaseline) {
+         setOverriddenVitals(prev => new Set([...prev, vitalKey]));
+      }
+   };
+
+   // Helper to update rhythm with override tracking
+   const updateRhythmWithOverride = (newRhythm) => {
+      setRhythm(newRhythm);
+      if (caseBaselineRhythm) {
+         setOverriddenVitals(prev => new Set([...prev, 'rhythm']));
+      }
+   };
+
+   // Helper to update conditions with override tracking
+   const updateConditionsWithOverride = (newConditions) => {
+      setConditions(newConditions);
+      if (caseBaselineConditions) {
+         setOverriddenVitals(prev => new Set([...prev, 'conditions']));
+      }
+   };
+
+   // Reset all vitals to case baseline
+   const resetToCaseDefaults = () => {
+      if (caseBaseline) {
+         setParams(caseBaseline);
+      }
+      if (caseBaselineRhythm) {
+         setRhythm(caseBaselineRhythm);
+      }
+      if (caseBaselineConditions) {
+         setConditions(caseBaselineConditions);
+      }
+      setOverriddenVitals(new Set());
+   };
+
+   // Check if any vitals are overridden
+   const hasOverrides = overriddenVitals.size > 0;
 
    // Engine Loop
    useEffect(() => {
@@ -560,6 +670,42 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
    const [controlsOpen, setControlsOpen] = useState(false);
    const [activeTab, setActiveTab] = useState('rhythm'); // rhythm, vitals, display
 
+   // Event logging handlers for controls panel
+   const handleControlsOpen = (tab = null) => {
+      if (tab) {
+         setActiveTab(tab);
+         EventLogger.tabSwitched(tab, COMPONENTS.PATIENT_MONITOR);
+      }
+      setControlsOpen(true);
+      EventLogger.componentOpened(COMPONENTS.PATIENT_MONITOR, 'Monitor Controls');
+   };
+
+   const handleControlsClose = () => {
+      setControlsOpen(false);
+      EventLogger.componentClosed(COMPONENTS.PATIENT_MONITOR, 'Monitor Controls');
+   };
+
+   const handleTabChange = (tab) => {
+      setActiveTab(tab);
+      EventLogger.tabSwitched(tab, COMPONENTS.PATIENT_MONITOR);
+   };
+
+   // Log alarm acknowledgement
+   const handleAcknowledgeAlarm = (alarmKey) => {
+      alarmSystem.acknowledgeAlarm(alarmKey);
+      EventLogger.alarmAcknowledged(alarmKey, COMPONENTS.PATIENT_MONITOR);
+   };
+
+   const handleAcknowledgeAll = () => {
+      alarmSystem.acknowledgeAll();
+      EventLogger.buttonClicked('Acknowledge All Alarms', COMPONENTS.PATIENT_MONITOR);
+   };
+
+   const handleSnoozeAlarm = (alarmKey) => {
+      alarmSystem.snoozeAlarm(alarmKey);
+      EventLogger.alarmSilenced(alarmKey, COMPONENTS.PATIENT_MONITOR);
+   };
+
    // Internal Physics State
    const physics = useRef({
       phase: 0.0,      // 0.0 to 1.0 (cardiac cycle position)
@@ -689,7 +835,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
 
    // Helper to switch rhythm and set appropriate defaults
    const handleRhythmChange = (r) => {
-      setRhythm(r);
+      updateRhythmWithOverride(r);
       const updates = {};
 
       switch (r) {
@@ -714,6 +860,10 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
 
       if (Object.keys(updates).length > 0) {
          setParams(p => ({ ...p, ...updates }));
+         // Mark affected vitals as overridden
+         if (caseBaseline) {
+            setOverriddenVitals(prev => new Set([...prev, ...Object.keys(updates)]));
+         }
       }
    };
 
@@ -821,10 +971,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                </button>
 
                <button
-                  onClick={() => {
-                     setActiveTab('alarms');
-                     setControlsOpen(true);
-                  }}
+                  onClick={() => handleControlsOpen('alarms')}
                   className={`p-2 rounded-full transition-colors relative ${alarmSystem.activeAlarms.length > 0 ? 'bg-red-900/40 text-red-500 animate-pulse' : 'bg-neutral-800 text-neutral-400'}`}
                   title="Alarms"
                >
@@ -837,10 +984,10 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                </button>
 
                <button
-                  onClick={() => setControlsOpen(true)}
+                  onClick={() => handleControlsOpen()}
                   className={`p-2 rounded-md transition-colors shadow-lg relative ${
-                     savedSettings 
-                        ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/20' 
+                     savedSettings
+                        ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/20'
                         : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
                   }`}
                   title={savedSettings ? 'Monitor Settings (Custom settings loaded)' : 'Monitor Settings'}
@@ -980,7 +1127,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                   <Settings className="w-5 h-5 text-blue-500" />
                   Simulator Controls
                </h2>
-               <button onClick={() => setControlsOpen(false)} className="text-neutral-400 hover:text-white">
+               <button onClick={handleControlsClose} className="text-neutral-400 hover:text-white">
                   <X className="w-6 h-6" />
                </button>
             </div>
@@ -990,7 +1137,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                {['rhythm', 'vitals', 'scenarios', 'alarms', 'labs'].map(tab => (
                   <button
                      key={tab}
-                     onClick={() => setActiveTab(tab)}
+                     onClick={() => handleTabChange(tab)}
                      className={`flex-1 py-2 px-2 text-sm font-bold uppercase tracking-wider rounded-md transition-colors whitespace-nowrap ${activeTab === tab ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
                   >
                      {tab}
@@ -1186,6 +1333,28 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
 
                {activeTab === 'rhythm' && (
                   <div className="space-y-6">
+                     {/* Override indicator */}
+                     {caseBaselineRhythm && overriddenVitals.has('rhythm') && (
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-orange-900/30 border border-orange-700/50">
+                           <div className="flex items-center gap-2">
+                              <Pencil className="w-4 h-4 text-orange-400" />
+                              <span className="text-xs text-orange-300">Rhythm overridden from case</span>
+                           </div>
+                           <button
+                              onClick={() => {
+                                 setRhythm(caseBaselineRhythm);
+                                 setOverriddenVitals(prev => {
+                                    const next = new Set(prev);
+                                    next.delete('rhythm');
+                                    return next;
+                                 });
+                              }}
+                              className="text-xs px-2 py-1 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold"
+                           >
+                              Reset Rhythm
+                           </button>
+                        </div>
+                     )}
 
                      {/* Rhythm Select */}
                      <div className="space-y-2">
@@ -1362,16 +1531,46 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
 
                {activeTab === 'vitals' && (
                   <div className="space-y-6">
+                     {/* Override indicator and reset button */}
+                     {caseBaseline && (
+                        <div className={`flex items-center justify-between p-2 rounded-lg ${hasOverrides ? 'bg-orange-900/30 border border-orange-700/50' : 'bg-green-900/20 border border-green-700/30'}`}>
+                           <div className="flex items-center gap-2">
+                              {hasOverrides ? (
+                                 <>
+                                    <Pencil className="w-4 h-4 text-orange-400" />
+                                    <span className="text-xs text-orange-300">Override Mode ({overriddenVitals.size} modified)</span>
+                                 </>
+                              ) : (
+                                 <>
+                                    <Activity className="w-4 h-4 text-green-400" />
+                                    <span className="text-xs text-green-300">Using Case Vitals</span>
+                                 </>
+                              )}
+                           </div>
+                           {hasOverrides && (
+                              <button
+                                 onClick={resetToCaseDefaults}
+                                 className="text-xs px-2 py-1 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold"
+                              >
+                                 Reset to Case
+                              </button>
+                           )}
+                        </div>
+                     )}
+
                      {/* HR */}
                      <div className="space-y-2">
                         <div className="flex justify-between items-end">
-                           <label className="text-xs font-bold text-neutral-500 uppercase">Heart Rate</label>
+                           <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
+                              Heart Rate
+                              {overriddenVitals.has('hr') && <Pencil className="w-3 h-3 text-orange-400" />}
+                           </label>
                            <span className="text-xl font-mono text-green-500 font-bold">{params.hr}</span>
                         </div>
                         <input
                            type="range" min="20" max="250"
                            value={params.hr}
-                           onChange={(e) => setParams(p => ({ ...p, hr: parseInt(e.target.value) }))}
+                           onChange={(e) => updateVitalWithOverride('hr', parseInt(e.target.value))}
                            className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-green-500"
                         />
                      </div>
@@ -1379,13 +1578,16 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                      {/* SpO2 */}
                      <div className="space-y-2">
                         <div className="flex justify-between items-end">
-                           <label className="text-xs font-bold text-neutral-500 uppercase">SpO2</label>
+                           <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
+                              SpO2
+                              {overriddenVitals.has('spo2') && <Pencil className="w-3 h-3 text-orange-400" />}
+                           </label>
                            <span className="text-xl font-mono text-sky-500 font-bold">{params.spo2}%</span>
                         </div>
                         <input
                            type="range" min="50" max="100"
                            value={params.spo2}
-                           onChange={(e) => setParams(p => ({ ...p, spo2: parseInt(e.target.value) }))}
+                           onChange={(e) => updateVitalWithOverride('spo2', parseInt(e.target.value))}
                            className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
                         />
                      </div>
@@ -1393,13 +1595,16 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                      {/* RR */}
                      <div className="space-y-2">
                         <div className="flex justify-between items-end">
-                           <label className="text-xs font-bold text-neutral-500 uppercase">Resp Rate</label>
+                           <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
+                              Resp Rate
+                              {overriddenVitals.has('rr') && <Pencil className="w-3 h-3 text-orange-400" />}
+                           </label>
                            <span className="text-xl font-mono text-amber-500 font-bold">{params.rr}</span>
                         </div>
                         <input
                            type="range" min="0" max="60"
                            value={params.rr}
-                           onChange={(e) => setParams(p => ({ ...p, rr: parseInt(e.target.value) }))}
+                           onChange={(e) => updateVitalWithOverride('rr', parseInt(e.target.value))}
                            className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
                         />
                      </div>
@@ -1408,26 +1613,66 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                      <div className="space-y-4 pt-4 border-t border-neutral-800">
                         <div className="space-y-2">
                            <div className="flex justify-between items-end">
-                              <label className="text-xs font-bold text-neutral-500 uppercase">Systolic BP</label>
+                              <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
+                                 Systolic BP
+                                 {overriddenVitals.has('bpSys') && <Pencil className="w-3 h-3 text-orange-400" />}
+                              </label>
                               <span className="text-lg font-mono text-red-400 font-bold">{params.bpSys}</span>
                            </div>
                            <input
                               type="range" min="50" max="250"
                               value={params.bpSys}
-                              onChange={(e) => setParams(p => ({ ...p, bpSys: parseInt(e.target.value) }))}
+                              onChange={(e) => updateVitalWithOverride('bpSys', parseInt(e.target.value))}
                               className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-red-500"
                            />
                         </div>
                         <div className="space-y-2">
                            <div className="flex justify-between items-end">
-                              <label className="text-xs font-bold text-neutral-500 uppercase">Diastolic BP</label>
+                              <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
+                                 Diastolic BP
+                                 {overriddenVitals.has('bpDia') && <Pencil className="w-3 h-3 text-orange-400" />}
+                              </label>
                               <span className="text-lg font-mono text-red-500 font-bold">{params.bpDia}</span>
                            </div>
                            <input
                               type="range" min="30" max="150"
                               value={params.bpDia}
-                              onChange={(e) => setParams(p => ({ ...p, bpDia: parseInt(e.target.value) }))}
+                              onChange={(e) => updateVitalWithOverride('bpDia', parseInt(e.target.value))}
                               className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-red-500"
+                           />
+                        </div>
+                     </div>
+
+                     {/* Temp & EtCO2 */}
+                     <div className="space-y-4 pt-4 border-t border-neutral-800">
+                        <div className="space-y-2">
+                           <div className="flex justify-between items-end">
+                              <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
+                                 Temperature
+                                 {overriddenVitals.has('temp') && <Pencil className="w-3 h-3 text-orange-400" />}
+                              </label>
+                              <span className="text-lg font-mono text-purple-400 font-bold">{params.temp?.toFixed(1)}°C</span>
+                           </div>
+                           <input
+                              type="range" min="32" max="42" step="0.1"
+                              value={params.temp || 37}
+                              onChange={(e) => updateVitalWithOverride('temp', parseFloat(e.target.value))}
+                              className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                           />
+                        </div>
+                        <div className="space-y-2">
+                           <div className="flex justify-between items-end">
+                              <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
+                                 EtCO2
+                                 {overriddenVitals.has('etco2') && <Pencil className="w-3 h-3 text-orange-400" />}
+                              </label>
+                              <span className="text-lg font-mono text-yellow-400 font-bold">{params.etco2} mmHg</span>
+                           </div>
+                           <input
+                              type="range" min="0" max="100"
+                              value={params.etco2 || 38}
+                              onChange={(e) => updateVitalWithOverride('etco2', parseInt(e.target.value))}
+                              className="w-full h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-yellow-500"
                            />
                         </div>
                      </div>
@@ -1461,13 +1706,13 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                                  <div className="text-sm text-white font-semibold mb-2">{alarmKey.replace('_', ' ').toUpperCase()}</div>
                                  <div className="flex gap-2">
                                     <button
-                                       onClick={() => alarmSystem.acknowledgeAlarm(alarmKey)}
+                                       onClick={() => handleAcknowledgeAlarm(alarmKey)}
                                        className="flex-1 text-xs px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded"
                                     >
                                        Acknowledge
                                     </button>
                                     <button
-                                       onClick={() => alarmSystem.snoozeAlarm(alarmKey)}
+                                       onClick={() => handleSnoozeAlarm(alarmKey)}
                                        className="flex-1 text-xs px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 text-white rounded"
                                     >
                                        Snooze {alarmSystem.snoozeDuration}min
@@ -1477,13 +1722,16 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                            ))}
                            <div className="flex gap-2">
                               <button
-                                 onClick={alarmSystem.acknowledgeAll}
+                                 onClick={handleAcknowledgeAll}
                                  className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-bold"
                               >
                                  Acknowledge All
                               </button>
                               <button
-                                 onClick={alarmSystem.snoozeAll}
+                                 onClick={() => {
+                                    alarmSystem.snoozeAll();
+                                    EventLogger.buttonClicked('Snooze All Alarms', COMPONENTS.PATIENT_MONITOR);
+                                 }}
                                  className="flex-1 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm font-bold"
                               >
                                  Snooze All

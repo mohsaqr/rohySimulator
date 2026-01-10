@@ -1970,9 +1970,10 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
     const WIZARD_STEPS = [
         { num: 1, title: 'Persona', icon: '🎭' },
         { num: 2, title: 'Details', icon: '📋' },
-        { num: 3, title: 'Scenario', icon: '📈' },
-        { num: 4, title: 'Labs', icon: '🧪' },
-        { num: 5, title: 'Records', icon: '📄' }
+        { num: 3, title: 'Vitals', icon: '💓' },
+        { num: 4, title: 'Scenario', icon: '📈' },
+        { num: 5, title: 'Labs', icon: '🧪' },
+        { num: 6, title: 'Records', icon: '📄' }
     ];
 
     return (
@@ -2177,10 +2178,11 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                 </select>
                             </div>
                             <div>
-                                <label className="label-xs">Initial HR (Monitor)</label>
-                                <input type="number" className="input-dark"
-                                    value={caseData.config?.hr || 80}
-                                    onChange={e => updateConfig('hr', parseInt(e.target.value))}
+                                <label className="label-xs">Weight (kg)</label>
+                                <input type="text" className="input-dark"
+                                    value={caseData.config?.demographics?.weight || ''}
+                                    onChange={e => updateDemographics('weight', e.target.value)}
+                                    placeholder="e.g. 70 kg"
                                 />
                             </div>
                         </div>
@@ -2198,10 +2200,231 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     </div>
                 )}
 
-                {/* STEP 3: SCENARIO (OPTIONAL) */}
+                {/* STEP 3: VITALS & ALARMS */}
                 {step === 3 && (
                     <div className="space-y-6">
-                        <h4 className="text-lg font-bold text-purple-400">3. Progression Scenario (Optional)</h4>
+                        <h4 className="text-lg font-bold text-purple-400">3. Initial Vitals & Alarms</h4>
+                        <p className="text-xs text-neutral-500">Configure the patient's baseline vital signs and alarm thresholds. These will be applied when the case loads.</p>
+
+                        {/* Rhythm Selection */}
+                        <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
+                            <h5 className="text-sm font-bold text-white mb-3">ECG Rhythm</h5>
+                            <div className="grid grid-cols-3 gap-2">
+                                {['NSR', 'Sinus Tachycardia', 'Sinus Bradycardia', 'Atrial Fibrillation', 'Atrial Flutter', 'SVT', 'Ventricular Tachycardia', 'Ventricular Fibrillation', 'Asystole'].map(rhythm => (
+                                    <button
+                                        key={rhythm}
+                                        onClick={() => updateConfig('initialVitals', { ...(caseData.config?.initialVitals || {}), rhythm })}
+                                        className={`px-3 py-2 rounded text-xs font-bold transition-all ${
+                                            (caseData.config?.initialVitals?.rhythm || 'NSR') === rhythm
+                                                ? 'bg-purple-600 text-white'
+                                                : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
+                                        }`}
+                                    >
+                                        {rhythm}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Vital Signs */}
+                        <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
+                            <h5 className="text-sm font-bold text-white mb-3">Vital Signs</h5>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="label-xs">Heart Rate (bpm)</label>
+                                    <input
+                                        type="number"
+                                        value={caseData.config?.initialVitals?.hr ?? 80}
+                                        onChange={e => updateConfig('initialVitals', { ...(caseData.config?.initialVitals || {}), hr: parseInt(e.target.value) || 80 })}
+                                        className="input-dark"
+                                        min="20" max="250"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label-xs">SpO2 (%)</label>
+                                    <input
+                                        type="number"
+                                        value={caseData.config?.initialVitals?.spo2 ?? 98}
+                                        onChange={e => updateConfig('initialVitals', { ...(caseData.config?.initialVitals || {}), spo2: parseInt(e.target.value) || 98 })}
+                                        className="input-dark"
+                                        min="50" max="100"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label-xs">Respiratory Rate (/min)</label>
+                                    <input
+                                        type="number"
+                                        value={caseData.config?.initialVitals?.rr ?? 16}
+                                        onChange={e => updateConfig('initialVitals', { ...(caseData.config?.initialVitals || {}), rr: parseInt(e.target.value) || 16 })}
+                                        className="input-dark"
+                                        min="4" max="60"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label-xs">Temperature (°C)</label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        value={caseData.config?.initialVitals?.temp ?? 37.0}
+                                        onChange={e => updateConfig('initialVitals', { ...(caseData.config?.initialVitals || {}), temp: parseFloat(e.target.value) || 37.0 })}
+                                        className="input-dark"
+                                        min="32" max="42"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label-xs">BP Systolic (mmHg)</label>
+                                    <input
+                                        type="number"
+                                        value={caseData.config?.initialVitals?.bpSys ?? 120}
+                                        onChange={e => updateConfig('initialVitals', { ...(caseData.config?.initialVitals || {}), bpSys: parseInt(e.target.value) || 120 })}
+                                        className="input-dark"
+                                        min="40" max="300"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label-xs">BP Diastolic (mmHg)</label>
+                                    <input
+                                        type="number"
+                                        value={caseData.config?.initialVitals?.bpDia ?? 80}
+                                        onChange={e => updateConfig('initialVitals', { ...(caseData.config?.initialVitals || {}), bpDia: parseInt(e.target.value) || 80 })}
+                                        className="input-dark"
+                                        min="20" max="200"
+                                    />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="label-xs">EtCO2 (mmHg)</label>
+                                    <input
+                                        type="number"
+                                        value={caseData.config?.initialVitals?.etco2 ?? 38}
+                                        onChange={e => updateConfig('initialVitals', { ...(caseData.config?.initialVitals || {}), etco2: parseInt(e.target.value) || 38 })}
+                                        className="input-dark"
+                                        min="0" max="100"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ECG Conditions */}
+                        <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
+                            <h5 className="text-sm font-bold text-white mb-3">ECG Conditions</h5>
+                            <div className="grid grid-cols-2 gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={caseData.config?.initialVitals?.conditions?.pvc || false}
+                                        onChange={e => updateConfig('initialVitals', {
+                                            ...(caseData.config?.initialVitals || {}),
+                                            conditions: { ...(caseData.config?.initialVitals?.conditions || {}), pvc: e.target.checked }
+                                        })}
+                                        className="w-4 h-4 rounded bg-neutral-700 border-neutral-600"
+                                    />
+                                    <span className="text-sm text-neutral-300">PVCs (Premature Ventricular)</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={caseData.config?.initialVitals?.conditions?.wideQRS || false}
+                                        onChange={e => updateConfig('initialVitals', {
+                                            ...(caseData.config?.initialVitals || {}),
+                                            conditions: { ...(caseData.config?.initialVitals?.conditions || {}), wideQRS: e.target.checked }
+                                        })}
+                                        className="w-4 h-4 rounded bg-neutral-700 border-neutral-600"
+                                    />
+                                    <span className="text-sm text-neutral-300">Wide QRS</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={caseData.config?.initialVitals?.conditions?.tInv || false}
+                                        onChange={e => updateConfig('initialVitals', {
+                                            ...(caseData.config?.initialVitals || {}),
+                                            conditions: { ...(caseData.config?.initialVitals?.conditions || {}), tInv: e.target.checked }
+                                        })}
+                                        className="w-4 h-4 rounded bg-neutral-700 border-neutral-600"
+                                    />
+                                    <span className="text-sm text-neutral-300">T-Wave Inversion</span>
+                                </label>
+                                <div>
+                                    <label className="label-xs">ST Elevation (0-5)</label>
+                                    <input
+                                        type="range"
+                                        min="0" max="5" step="1"
+                                        value={caseData.config?.initialVitals?.conditions?.stElev || 0}
+                                        onChange={e => updateConfig('initialVitals', {
+                                            ...(caseData.config?.initialVitals || {}),
+                                            conditions: { ...(caseData.config?.initialVitals?.conditions || {}), stElev: parseInt(e.target.value) }
+                                        })}
+                                        className="w-full"
+                                    />
+                                    <div className="text-xs text-neutral-400 text-center">{caseData.config?.initialVitals?.conditions?.stElev || 0}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Alarm Thresholds */}
+                        <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
+                            <h5 className="text-sm font-bold text-white mb-3">Alarm Thresholds</h5>
+                            <p className="text-xs text-neutral-500 mb-4">Set alarm limits for this case. Leave empty to use system defaults.</p>
+
+                            <div className="space-y-3">
+                                {[
+                                    { key: 'hr', label: 'Heart Rate', unit: 'bpm', defaultLow: 50, defaultHigh: 120 },
+                                    { key: 'spo2', label: 'SpO2', unit: '%', defaultLow: 90, defaultHigh: null },
+                                    { key: 'rr', label: 'Resp Rate', unit: '/min', defaultLow: 8, defaultHigh: 30 },
+                                    { key: 'bpSys', label: 'BP Systolic', unit: 'mmHg', defaultLow: 90, defaultHigh: 180 },
+                                    { key: 'bpDia', label: 'BP Diastolic', unit: 'mmHg', defaultLow: 50, defaultHigh: 110 },
+                                    { key: 'temp', label: 'Temperature', unit: '°C', defaultLow: 36, defaultHigh: 38.5 },
+                                    { key: 'etco2', label: 'EtCO2', unit: 'mmHg', defaultLow: 30, defaultHigh: 50 }
+                                ].map(vital => (
+                                    <div key={vital.key} className="grid grid-cols-4 gap-2 items-center">
+                                        <label className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={caseData.config?.alarms?.[vital.key]?.enabled ?? true}
+                                                onChange={e => updateConfig('alarms', {
+                                                    ...(caseData.config?.alarms || {}),
+                                                    [vital.key]: { ...(caseData.config?.alarms?.[vital.key] || {}), enabled: e.target.checked }
+                                                })}
+                                                className="w-4 h-4 rounded bg-neutral-700 border-neutral-600"
+                                            />
+                                            <span className="text-xs text-neutral-300">{vital.label}</span>
+                                        </label>
+                                        <div>
+                                            <input
+                                                type="number"
+                                                placeholder={`Low (${vital.defaultLow || '-'})`}
+                                                value={caseData.config?.alarms?.[vital.key]?.low ?? ''}
+                                                onChange={e => updateConfig('alarms', {
+                                                    ...(caseData.config?.alarms || {}),
+                                                    [vital.key]: { ...(caseData.config?.alarms?.[vital.key] || {}), low: e.target.value ? parseFloat(e.target.value) : null }
+                                                })}
+                                                className="input-dark text-xs"
+                                            />
+                                        </div>
+                                        <div>
+                                            <input
+                                                type="number"
+                                                placeholder={`High (${vital.defaultHigh || '-'})`}
+                                                value={caseData.config?.alarms?.[vital.key]?.high ?? ''}
+                                                onChange={e => updateConfig('alarms', {
+                                                    ...(caseData.config?.alarms || {}),
+                                                    [vital.key]: { ...(caseData.config?.alarms?.[vital.key] || {}), high: e.target.value ? parseFloat(e.target.value) : null }
+                                                })}
+                                                className="input-dark text-xs"
+                                            />
+                                        </div>
+                                        <span className="text-xs text-neutral-500">{vital.unit}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* STEP 4: SCENARIO (OPTIONAL) */}
+                {step === 4 && (
+                    <div className="space-y-6">
+                        <h4 className="text-lg font-bold text-purple-400">4. Progression Scenario (Optional)</h4>
                         <p className="text-xs text-neutral-500">Add automatic deterioration or improvement over time. Choose from quick templates or browse the full repository.</p>
                         
                         {/* Scenario Selector */}
@@ -2350,10 +2573,10 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     </div>
                 )}
 
-                {/* STEP 4: LABORATORY INVESTIGATIONS */}
-                {step === 4 && (
+                {/* STEP 5: LABORATORY INVESTIGATIONS */}
+                {step === 5 && (
                     <div className="space-y-6">
-                        <h4 className="text-lg font-bold text-purple-400">4. Laboratory Investigations</h4>
+                        <h4 className="text-lg font-bold text-purple-400">5. Laboratory Investigations</h4>
                         <p className="text-xs text-neutral-500">
                             Configure lab tests with smart search, clinical panel templates, and visual value editors.
                         </p>
@@ -2366,11 +2589,11 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     </div>
                 )}
 
-                {/* STEP 5: CLINICAL PAGES */}
-                {step === 5 && (
+                {/* STEP 6: CLINICAL PAGES */}
+                {step === 6 && (
                     <div className="space-y-6">
                         <div className="flex justify-between items-center">
-                            <h4 className="text-lg font-bold text-purple-400">5. Clinical Records</h4>
+                            <h4 className="text-lg font-bold text-purple-400">6. Clinical Records</h4>
                             <button
                                 onClick={() => {
                                     const newPages = [...(caseData.config?.pages || [])];
