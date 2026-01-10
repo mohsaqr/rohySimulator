@@ -615,7 +615,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                     </button>
                                                     {isAdmin() && (
                                                         <>
-                                                            <button onClick={() => setEditingCase(c)} className="p-2 bg-neutral-700 rounded text-xs hover:bg-neutral-600">Edit</button>
+                                                            <button onClick={() => {
+                                                                // Clear auto-save to ensure fresh load from database
+                                                                localStorage.removeItem('rohy_editing_case');
+                                                                console.log('[ConfigPanel] Editing case:', c.name, 'scenario:', c.scenario ? 'present' : 'null');
+                                                                setEditingCase(c);
+                                                            }} className="p-2 bg-neutral-700 rounded text-xs hover:bg-neutral-600">Edit</button>
                                                             <button onClick={() => handleDeleteCase(c.id)} className="p-2 bg-red-900/30 text-red-400 rounded text-xs hover:bg-red-900/50">Delete</button>
                                                         </>
                                                     )}
@@ -2228,12 +2233,16 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     <div className="space-y-6">
                         <h4 className="text-lg font-bold text-purple-400">4. Initial Vitals & Alarms</h4>
 
-                        {/* Scenario status indicator */}
-                        {hasScenario ? (
-                            <div className={`p-3 rounded-lg border ${vitalsOverridden ? 'bg-orange-900/20 border-orange-700/50' : 'bg-blue-900/20 border-blue-700/50'}`}>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        {vitalsOverridden ? (
+                        {/* Scenario/Vitals status indicator */}
+                        <div className={`p-3 rounded-lg border ${
+                            hasScenario
+                                ? (vitalsOverridden ? 'bg-orange-900/20 border-orange-700/50' : 'bg-blue-900/20 border-blue-700/50')
+                                : (caseData.config?.initialVitals ? 'bg-green-900/20 border-green-700/50' : 'bg-neutral-800 border-neutral-700')
+                        }`}>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    {hasScenario ? (
+                                        vitalsOverridden ? (
                                             <>
                                                 <span className="text-orange-400 font-bold text-sm">Override Mode</span>
                                                 <span className="text-xs text-orange-300">- Custom vitals will replace scenario's first frame</span>
@@ -2243,9 +2252,23 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                                 <span className="text-blue-400 font-bold text-sm">Reading from Scenario</span>
                                                 <span className="text-xs text-blue-300">- Values below show scenario's starting vitals</span>
                                             </>
-                                        )}
-                                    </div>
-                                    {vitalsOverridden && (
+                                        )
+                                    ) : (
+                                        caseData.config?.initialVitals ? (
+                                            <>
+                                                <span className="text-green-400 font-bold text-sm">Custom Vitals Set</span>
+                                                <span className="text-xs text-green-300">- These vitals will be applied when case loads</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="text-neutral-400 font-bold text-sm">Default Vitals</span>
+                                                <span className="text-xs text-neutral-500">- Using system defaults (HR: 72, SpO2: 98%, etc.)</span>
+                                            </>
+                                        )
+                                    )}
+                                </div>
+                                <div className="flex gap-2">
+                                    {hasScenario && vitalsOverridden && (
                                         <button
                                             onClick={() => {
                                                 // Clear initial vitals to reset to scenario
@@ -2262,11 +2285,26 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             Reset to Scenario
                                         </button>
                                     )}
+                                    {!hasScenario && caseData.config?.initialVitals && (
+                                        <button
+                                            onClick={() => {
+                                                // Clear initial vitals to use defaults
+                                                setCaseData(prev => ({
+                                                    ...prev,
+                                                    config: {
+                                                        ...prev.config,
+                                                        initialVitals: null
+                                                    }
+                                                }));
+                                            }}
+                                            className="px-3 py-1 text-xs font-bold bg-neutral-600 hover:bg-neutral-500 text-white rounded"
+                                        >
+                                            Reset to Defaults
+                                        </button>
+                                    )}
                                 </div>
                             </div>
-                        ) : (
-                            <p className="text-xs text-neutral-500">Configure the patient's baseline vital signs and alarm thresholds. These will be applied when the case loads.</p>
-                        )}
+                        </div>
 
                         {/* Alarm Thresholds - TOP */}
                         <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
