@@ -198,6 +198,226 @@ export const BODY_REGIONS = {
         }
     },
 
+    // Shoulder regions
+    shoulderLeft: {
+        id: 'shoulderLeft',
+        name: 'Left Shoulder',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Range of motion', 'Rotator cuff tests', 'Apprehension test', 'Empty can test'],
+        defaultFindings: {
+            inspection: 'No swelling, no deformity, no muscle wasting',
+            palpation: 'No tenderness over AC joint, no crepitus',
+            special: 'Full range of motion, rotator cuff intact, negative apprehension'
+        }
+    },
+    shoulderRight: {
+        id: 'shoulderRight',
+        name: 'Right Shoulder',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Range of motion', 'Rotator cuff tests', 'Apprehension test', 'Empty can test'],
+        defaultFindings: {
+            inspection: 'No swelling, no deformity, no muscle wasting',
+            palpation: 'No tenderness over AC joint, no crepitus',
+            special: 'Full range of motion, rotator cuff intact, negative apprehension'
+        }
+    },
+
+    // Elbow regions
+    elbowLeft: {
+        id: 'elbowLeft',
+        name: 'Left Elbow',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Range of motion', 'Biceps reflex', 'Brachioradialis reflex'],
+        defaultFindings: {
+            inspection: 'No swelling, no deformity, normal carrying angle',
+            palpation: 'No tenderness, no effusion',
+            special: 'Full range of motion, biceps reflex 2+'
+        }
+    },
+    elbowRight: {
+        id: 'elbowRight',
+        name: 'Right Elbow',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Range of motion', 'Biceps reflex', 'Brachioradialis reflex'],
+        defaultFindings: {
+            inspection: 'No swelling, no deformity, normal carrying angle',
+            palpation: 'No tenderness, no effusion',
+            special: 'Full range of motion, biceps reflex 2+'
+        }
+    },
+
+    // Forearm regions
+    forearmLeft: {
+        id: 'forearmLeft',
+        name: 'Left Forearm',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation'],
+        specialTests: [],
+        defaultFindings: {
+            inspection: 'No swelling, no deformity, no skin changes',
+            palpation: 'No tenderness, radial pulse 2+'
+        }
+    },
+    forearmRight: {
+        id: 'forearmRight',
+        name: 'Right Forearm',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation'],
+        specialTests: [],
+        defaultFindings: {
+            inspection: 'No swelling, no deformity, no skin changes',
+            palpation: 'No tenderness, radial pulse 2+'
+        }
+    },
+
+    // Hand regions
+    handLeft: {
+        id: 'handLeft',
+        name: 'Left Hand',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Grip strength', 'Fine motor', 'Sensation', 'Allen test'],
+        defaultFindings: {
+            inspection: 'No deformities, no swelling, no nail changes',
+            palpation: 'Warm, no tenderness, radial and ulnar pulses palpable',
+            special: 'Grip strength normal, fine motor intact, sensation intact'
+        }
+    },
+    handRight: {
+        id: 'handRight',
+        name: 'Right Hand',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Grip strength', 'Fine motor', 'Sensation', 'Allen test'],
+        defaultFindings: {
+            inspection: 'No deformities, no swelling, no nail changes',
+            palpation: 'Warm, no tenderness, radial and ulnar pulses palpable',
+            special: 'Grip strength normal, fine motor intact, sensation intact'
+        }
+    },
+
+    // Groin region
+    groin: {
+        id: 'groin',
+        name: 'Groin / Inguinal',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Hernia exam', 'Lymph node exam', 'Femoral pulse'],
+        defaultFindings: {
+            inspection: 'No visible masses or bulges',
+            palpation: 'No inguinal lymphadenopathy, femoral pulses 2+ bilaterally',
+            special: 'No inguinal hernia on Valsalva'
+        }
+    },
+
+    // Thigh regions
+    thighLeft: {
+        id: 'thighLeft',
+        name: 'Left Thigh',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Muscle strength', 'Sensation'],
+        defaultFindings: {
+            inspection: 'No swelling, no skin changes, normal muscle bulk',
+            palpation: 'No tenderness, no masses',
+            special: 'Power 5/5 quadriceps, sensation intact'
+        }
+    },
+    thighRight: {
+        id: 'thighRight',
+        name: 'Right Thigh',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Muscle strength', 'Sensation'],
+        defaultFindings: {
+            inspection: 'No swelling, no skin changes, normal muscle bulk',
+            palpation: 'No tenderness, no masses',
+            special: 'Power 5/5 quadriceps, sensation intact'
+        }
+    },
+
+    // Knee regions
+    kneeLeft: {
+        id: 'kneeLeft',
+        name: 'Left Knee',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Patellar reflex', 'Range of motion', 'Drawer test', 'McMurray test', 'Valgus/Varus stress'],
+        defaultFindings: {
+            inspection: 'No swelling, no deformity, no erythema',
+            palpation: 'No effusion, no joint line tenderness, patella tracks normally',
+            special: 'Patellar reflex 2+, full range of motion, ligaments stable, McMurray negative'
+        }
+    },
+    kneeRight: {
+        id: 'kneeRight',
+        name: 'Right Knee',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Patellar reflex', 'Range of motion', 'Drawer test', 'McMurray test', 'Valgus/Varus stress'],
+        defaultFindings: {
+            inspection: 'No swelling, no deformity, no erythema',
+            palpation: 'No effusion, no joint line tenderness, patella tracks normally',
+            special: 'Patellar reflex 2+, full range of motion, ligaments stable, McMurray negative'
+        }
+    },
+
+    // Ankle regions
+    ankleLeft: {
+        id: 'ankleLeft',
+        name: 'Left Ankle',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Range of motion', 'Drawer test', 'Achilles reflex'],
+        defaultFindings: {
+            inspection: 'No swelling, no deformity',
+            palpation: 'No tenderness over malleoli, posterior tibial pulse 2+',
+            special: 'Full range of motion, ankle stable, Achilles reflex 2+'
+        }
+    },
+    ankleRight: {
+        id: 'ankleRight',
+        name: 'Right Ankle',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Range of motion', 'Drawer test', 'Achilles reflex'],
+        defaultFindings: {
+            inspection: 'No swelling, no deformity',
+            palpation: 'No tenderness over malleoli, posterior tibial pulse 2+',
+            special: 'Full range of motion, ankle stable, Achilles reflex 2+'
+        }
+    },
+
+    // Foot regions
+    footLeft: {
+        id: 'footLeft',
+        name: 'Left Foot',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Sensation', 'Pulses', 'Plantar reflex'],
+        defaultFindings: {
+            inspection: 'No deformities, no skin changes, no ulcers',
+            palpation: 'Warm, dorsalis pedis pulse 2+, no edema',
+            special: 'Sensation intact to monofilament, plantar reflex downgoing'
+        }
+    },
+    footRight: {
+        id: 'footRight',
+        name: 'Right Foot',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Sensation', 'Pulses', 'Plantar reflex'],
+        defaultFindings: {
+            inspection: 'No deformities, no skin changes, no ulcers',
+            palpation: 'Warm, dorsalis pedis pulse 2+, no edema',
+            special: 'Sensation intact to monofilament, plantar reflex downgoing'
+        }
+    },
+
     // Posterior view regions
     backUpper: {
         id: 'backUpper',
@@ -223,6 +443,174 @@ export const BODY_REGIONS = {
             palpation: 'No tenderness over spinous processes',
             percussion: 'No CVA tenderness',
             special: 'Straight leg raise negative bilaterally'
+        }
+    },
+
+    // Scapula regions
+    scapulaLeft: {
+        id: 'scapulaLeft',
+        name: 'Left Scapula',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation', 'auscultation'],
+        specialTests: [],
+        defaultFindings: {
+            inspection: 'No winging, symmetrical position',
+            palpation: 'No tenderness, normal muscle tone',
+            auscultation: 'Clear breath sounds at left lung base'
+        }
+    },
+    scapulaRight: {
+        id: 'scapulaRight',
+        name: 'Right Scapula',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation', 'auscultation'],
+        specialTests: [],
+        defaultFindings: {
+            inspection: 'No winging, symmetrical position',
+            palpation: 'No tenderness, normal muscle tone',
+            auscultation: 'Clear breath sounds at right lung base'
+        }
+    },
+
+    // Buttocks regions (left and right)
+    buttockLeft: {
+        id: 'buttockLeft',
+        name: 'Left Buttock / Gluteal',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Piriformis test', 'Sciatic nerve assessment'],
+        defaultFindings: {
+            inspection: 'No asymmetry, no skin changes',
+            palpation: 'No tenderness over gluteal muscles or sciatic notch',
+            special: 'No piriformis tenderness, no sciatic irritation'
+        }
+    },
+    buttockRight: {
+        id: 'buttockRight',
+        name: 'Right Buttock / Gluteal',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Piriformis test', 'Sciatic nerve assessment'],
+        defaultFindings: {
+            inspection: 'No asymmetry, no skin changes',
+            palpation: 'No tenderness over gluteal muscles or sciatic notch',
+            special: 'No piriformis tenderness, no sciatic irritation'
+        }
+    },
+
+    // Sacrum region
+    sacrum: {
+        id: 'sacrum',
+        name: 'Sacrum',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation', 'percussion'],
+        specialTests: [],
+        defaultFindings: {
+            inspection: 'No skin changes, no dimpling',
+            palpation: 'Non-tender, no step deformity',
+            percussion: 'No tenderness'
+        }
+    },
+
+    // Popliteal fossa regions (back of knee)
+    poplitealLeft: {
+        id: 'poplitealLeft',
+        name: 'Left Popliteal Fossa',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation', 'auscultation'],
+        specialTests: ['Popliteal pulse', 'Baker cyst assessment'],
+        defaultFindings: {
+            inspection: 'No swelling, no visible mass',
+            palpation: 'Popliteal pulse 2+, no cyst palpable',
+            auscultation: 'No bruit'
+        }
+    },
+    poplitealRight: {
+        id: 'poplitealRight',
+        name: 'Right Popliteal Fossa',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation', 'auscultation'],
+        specialTests: ['Popliteal pulse', 'Baker cyst assessment'],
+        defaultFindings: {
+            inspection: 'No swelling, no visible mass',
+            palpation: 'Popliteal pulse 2+, no cyst palpable',
+            auscultation: 'No bruit'
+        }
+    },
+
+    // Calf regions
+    calfLeft: {
+        id: 'calfLeft',
+        name: 'Left Calf',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Homan sign', 'Calf squeeze', 'Thompson test'],
+        defaultFindings: {
+            inspection: 'No swelling, no erythema, no varicosities',
+            palpation: 'Soft, non-tender, no cord palpable',
+            special: "Homan's sign negative, Thompson test negative"
+        }
+    },
+    calfRight: {
+        id: 'calfRight',
+        name: 'Right Calf',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Homan sign', 'Calf squeeze', 'Thompson test'],
+        defaultFindings: {
+            inspection: 'No swelling, no erythema, no varicosities',
+            palpation: 'Soft, non-tender, no cord palpable',
+            special: "Homan's sign negative, Thompson test negative"
+        }
+    },
+
+    // Achilles tendon regions
+    achillesLeft: {
+        id: 'achillesLeft',
+        name: 'Left Achilles Tendon',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Achilles reflex', 'Thompson test'],
+        defaultFindings: {
+            inspection: 'No swelling, no nodules',
+            palpation: 'Non-tender, intact tendon',
+            special: 'Achilles reflex 2+, Thompson test negative'
+        }
+    },
+    achillesRight: {
+        id: 'achillesRight',
+        name: 'Right Achilles Tendon',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Achilles reflex', 'Thompson test'],
+        defaultFindings: {
+            inspection: 'No swelling, no nodules',
+            palpation: 'Non-tender, intact tendon',
+            special: 'Achilles reflex 2+, Thompson test negative'
+        }
+    },
+
+    // Heel regions
+    heelLeft: {
+        id: 'heelLeft',
+        name: 'Left Heel',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation'],
+        specialTests: [],
+        defaultFindings: {
+            inspection: 'No swelling, no skin changes',
+            palpation: 'Non-tender, no calcaneal spur tenderness'
+        }
+    },
+    heelRight: {
+        id: 'heelRight',
+        name: 'Right Heel',
+        view: 'posterior',
+        examTypes: ['inspection', 'palpation'],
+        specialTests: [],
+        defaultFindings: {
+            inspection: 'No swelling, no skin changes',
+            palpation: 'Non-tender, no calcaneal spur tenderness'
         }
     },
 
