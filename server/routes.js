@@ -6,6 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcrypt';
 import { authenticateToken, requireAdmin, requireAuth, generateToken } from './middleware/auth.js';
+import * as labDb from './services/labDatabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -319,30 +320,59 @@ router.post('/upload', upload.single('photo'), (req, res) => {
 router.get('/cases', authenticateToken, (req, res) => {
     db.all("SELECT * FROM cases ORDER BY created_at DESC", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ cases: rows });
+        
+        // Parse JSON fields
+        const cases = rows.map(row => ({
+            ...row,
+            config: row.config ? JSON.parse(row.config) : {},
+            scenario: row.scenario ? JSON.parse(row.scenario) : null
+        }));
+        
+        res.json({ cases });
     });
 });
 
 // POST /api/cases - Admin only
 router.post('/cases', authenticateToken, requireAdmin, (req, res) => {
-    const { name, description, system_prompt, config, image_url } = req.body;
-    const sql = `INSERT INTO cases (name, description, system_prompt, config, image_url) VALUES (?, ?, ?, ?, ?)`;
-    const params = [name, description, system_prompt, JSON.stringify(config), image_url];
+    const { name, description, system_prompt, config, image_url, scenario } = req.body;
+    const sql = `INSERT INTO cases (name, description, system_prompt, config, image_url, scenario) VALUES (?, ?, ?, ?, ?, ?)`;
+    const params = [
+        name, 
+        description, 
+        system_prompt, 
+        JSON.stringify(config || {}), 
+        image_url || null,
+        scenario ? JSON.stringify(scenario) : null
+    ];
 
     db.run(sql, params, function (err) {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) {
+            console.error('Error saving case:', err);
+            return res.status(500).json({ error: err.message });
+        }
         res.json({ id: this.lastID, ...req.body });
     });
 });
 
 // PUT /api/cases/:id - Admin only
 router.put('/cases/:id', authenticateToken, requireAdmin, (req, res) => {
-    const { name, description, system_prompt, config, image_url } = req.body;
-    const sql = `UPDATE cases SET name = ?, description = ?, system_prompt = ?, config = ?, image_url = ? WHERE id = ?`;
-    const params = [name, description, system_prompt, JSON.stringify(config), image_url, req.params.id];
+    const { name, description, system_prompt, config, image_url, scenario } = req.body;
+    const sql = `UPDATE cases SET name = ?, description = ?, system_prompt = ?, config = ?, image_url = ?, scenario = ? WHERE id = ?`;
+    const params = [
+        name, 
+        description, 
+        system_prompt, 
+        JSON.stringify(config || {}), 
+        image_url || null,
+        scenario ? JSON.stringify(scenario) : null,
+        req.params.id
+    ];
 
     db.run(sql, params, function (err) {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) {
+            console.error('Error updating case:', err);
+            return res.status(500).json({ error: err.message });
+        }
         res.json({ id: req.params.id, ...req.body });
     });
 });
@@ -1251,6 +1281,502 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
             return res.status(500).json({ error: err.message });
         }
         res.json({ message: 'Investigation marked as viewed' });
+    });
+});
+
+// --- LABORATORY DATABASE ENDPOINTS ---
+
+// GET /api/labs/search - Search lab database
+router.get('/labs/search', authenticateToken, (req, res) => {
+    const { q, limit = 50 } = req.query;
+    
+    if (!q || q.trim() === '') {
+        return res.json({ results: [] });
+    }
+    
+    try {
+        const results = labDb.searchTests(q, parseInt(limit));
+        res.json({ results });
+    } catch (error) {
+        res.status(500).json({ error: 'Error searching labs', details: error.message });
+    }
+});
+
+// GET /api/labs/groups - Get all test groups
+router.get('/labs/groups', authenticateToken, (req, res) => {
+    try {
+        const groups = labDb.getAllGroups();
+        res.json({ groups });
+    } catch (error) {
+        res.status(500).json({ error: 'Error fetching groups', details: error.message });
+    }
+});
+
+// GET /api/labs/group/:groupName - Get tests by group
+router.get('/labs/group/:groupName', authenticateToken, (req, res) => {
+    const { groupName } = req.params;
+    
+    try {
+        const tests = labDb.getTestsByGroup(decodeURIComponent(groupName));
+        res.json({ tests });
+    } catch (error) {
+        res.status(500).json({ error: 'Error fetching tests by group', details: error.message });
+    }
+});
+
+// GET /api/labs/all - Get all tests (paginated)
+router.get('/labs/all', authenticateToken, (req, res) => {
+    const { page = 1, pageSize = 50 } = req.query;
+    
+    try {
+        const result = labDb.getAllTests(parseInt(page), parseInt(pageSize));
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: 'Error fetching all tests', details: error.message });
+    }
+});
+
+// GET /api/labs/grouped - Get tests grouped by name
+router.get('/labs/grouped', authenticateToken, (req, res) => {
+    try {
+        const grouped = labDb.getGroupedTests();
+        res.json({ tests: grouped });
+    } catch (error) {
+        res.status(500).json({ error: 'Error fetching grouped tests', details: error.message });
+    }
+});
+
+// POST /api/cases/:caseId/labs - Add lab test to case (Admin only)
+router.post('/cases/:caseId/labs', authenticateToken, requireAdmin, (req, res) => {
+    const { caseId } = req.params;
+    const { 
+        test_name, 
+        test_group, 
+        gender_category, 
+        min_value, 
+        max_value, 
+        current_value, 
+        unit, 
+        normal_samples,
+        is_abnormal,
+        turnaround_minutes = 30
+    } = req.body;
+    
+    if (!test_name) {
+        return res.status(400).json({ error: 'test_name is required' });
+    }
+    
+    const sql = `
+        INSERT INTO case_investigations (
+            case_id, investigation_type, test_name, test_group, gender_category,
+            min_value, max_value, current_value, unit, normal_samples,
+            is_abnormal, turnaround_minutes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    db.run(sql, [
+        caseId, 'lab', test_name, test_group, gender_category,
+        min_value, max_value, current_value, unit,
+        JSON.stringify(normal_samples || []),
+        is_abnormal ? 1 : 0, turnaround_minutes
+    ], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ 
+            id: this.lastID,
+            message: 'Lab test added to case'
+        });
+    });
+});
+
+// PUT /api/cases/:caseId/labs/:labId - Update lab values (Admin only)
+router.put('/cases/:caseId/labs/:labId', authenticateToken, requireAdmin, (req, res) => {
+    const { labId } = req.params;
+    const { 
+        current_value, 
+        is_abnormal,
+        min_value,
+        max_value,
+        turnaround_minutes
+    } = req.body;
+    
+    // Build dynamic update query
+    const updates = [];
+    const params = [];
+    
+    if (current_value !== undefined) {
+        updates.push('current_value = ?');
+        params.push(current_value);
+    }
+    if (is_abnormal !== undefined) {
+        updates.push('is_abnormal = ?');
+        params.push(is_abnormal ? 1 : 0);
+    }
+    if (min_value !== undefined) {
+        updates.push('min_value = ?');
+        params.push(min_value);
+    }
+    if (max_value !== undefined) {
+        updates.push('max_value = ?');
+        params.push(max_value);
+    }
+    if (turnaround_minutes !== undefined) {
+        updates.push('turnaround_minutes = ?');
+        params.push(turnaround_minutes);
+    }
+    
+    if (updates.length === 0) {
+        return res.status(400).json({ error: 'No fields to update' });
+    }
+    
+    params.push(labId);
+    const sql = `UPDATE case_investigations SET ${updates.join(', ')} WHERE id = ?`;
+    
+    db.run(sql, params, function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Lab test not found' });
+        }
+        res.json({ message: 'Lab test updated' });
+    });
+});
+
+// DELETE /api/cases/:caseId/labs/:labId - Remove lab from case (Admin only)
+router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireAdmin, (req, res) => {
+    const { labId, caseId } = req.params;
+    
+    const sql = `DELETE FROM case_investigations WHERE id = ? AND case_id = ?`;
+    
+    db.run(sql, [labId, caseId], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Lab test not found' });
+        }
+        res.json({ message: 'Lab test removed from case' });
+    });
+});
+
+// GET /api/sessions/:sessionId/available-labs - Get available labs for session's case
+router.get('/sessions/:sessionId/available-labs', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+    
+    // Get session and case details
+    const sessionSql = `SELECT s.case_id, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?`;
+    
+    db.get(sessionSql, [sessionId], (err, session) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (!session) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        
+        // Parse case config
+        const caseConfig = JSON.parse(session.config || '{}');
+        const defaultLabsEnabled = caseConfig.investigations?.defaultLabsEnabled !== false;
+        
+        // Get configured abnormal labs for this case
+        const labsSql = `
+            SELECT 
+                id, test_name, test_group, gender_category,
+                min_value, max_value, current_value, unit,
+                normal_samples, is_abnormal, turnaround_minutes
+            FROM case_investigations 
+            WHERE case_id = ? AND investigation_type = 'lab'
+            ORDER BY test_group, test_name
+        `;
+        
+        db.all(labsSql, [session.case_id], (err, configuredLabs) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            
+            if (defaultLabsEnabled) {
+                // Return ALL labs from database, with configured abnormals overriding normals
+                const allLabs = labDb.loadLabDatabase();
+                const patientGender = caseConfig.demographics?.gender || 'Male';
+                
+                // Create a map of configured labs by test name
+                const configuredMap = {};
+                configuredLabs.forEach(lab => {
+                    configuredMap[lab.test_name] = lab;
+                });
+                
+                // Get unique test names from database
+                const uniqueTests = {};
+                allLabs.forEach(test => {
+                    if (!uniqueTests[test.test_name]) {
+                        uniqueTests[test.test_name] = [];
+                    }
+                    uniqueTests[test.test_name].push(test);
+                });
+                
+                // Build response with all tests
+                const responseLabs = [];
+                Object.entries(uniqueTests).forEach(([testName, variations]) => {
+                    // Check if this test has a configured abnormal value
+                    if (configuredMap[testName]) {
+                        // Use configured abnormal value
+                        responseLabs.push({
+                            ...configuredMap[testName],
+                            normal_samples: JSON.parse(configuredMap[testName].normal_samples || '[]'),
+                            source: 'configured'
+                        });
+                    } else {
+                        // Use default normal value from database
+                        const genderSpecific = labDb.getGenderSpecificTest(testName, patientGender);
+                        if (genderSpecific) {
+                            const normalValue = labDb.getRandomNormalValue(genderSpecific);
+                            responseLabs.push({
+                                id: `default_${testName.replace(/[^a-zA-Z0-9]/g, '_')}`,
+                                test_name: genderSpecific.test_name,
+                                test_group: genderSpecific.group,
+                                gender_category: genderSpecific.category,
+                                min_value: genderSpecific.min_value,
+                                max_value: genderSpecific.max_value,
+                                current_value: normalValue,
+                                unit: genderSpecific.unit,
+                                normal_samples: genderSpecific.normal_samples,
+                                is_abnormal: false,
+                                turnaround_minutes: 30,
+                                source: 'default'
+                            });
+                        }
+                    }
+                });
+                
+                res.json({ labs: responseLabs, defaultLabsEnabled: true });
+            } else {
+                // Only return configured labs
+                const parsedLabs = configuredLabs.map(lab => ({
+                    ...lab,
+                    normal_samples: JSON.parse(lab.normal_samples || '[]'),
+                    source: 'configured'
+                }));
+                
+                res.json({ labs: parsedLabs, defaultLabsEnabled: false });
+            }
+        });
+    });
+});
+
+// POST /api/sessions/:sessionId/order-labs - Order multiple lab tests
+router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+    const { lab_ids } = req.body; // Array of lab investigation IDs or default_ IDs
+    
+    if (!Array.isArray(lab_ids) || lab_ids.length === 0) {
+        return res.status(400).json({ error: 'lab_ids array is required' });
+    }
+    
+    // Verify session exists and user has access
+    db.get('SELECT user_id, case_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (!session) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        if (session.user_id !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        
+        // Separate configured IDs from default IDs
+        const configuredIds = lab_ids.filter(id => !String(id).startsWith('default_'));
+        const defaultIds = lab_ids.filter(id => String(id).startsWith('default_'));
+        
+        // Process all IDs and create orders
+        const processOrders = () => {
+            const sql = `
+                INSERT INTO investigation_orders (session_id, investigation_id, ordered_at, available_at) 
+                VALUES (?, ?, datetime('now'), datetime('now', '+' || ? || ' minutes'))
+            `;
+            
+            const stmt = db.prepare(sql);
+            let inserted = 0;
+            const orderIds = [];
+            
+            // Get configured labs
+            if (configuredIds.length > 0) {
+                const labsSql = `SELECT id, turnaround_minutes, test_name FROM case_investigations WHERE id IN (${configuredIds.map(() => '?').join(',')})`;
+                
+                db.all(labsSql, configuredIds, (err, labs) => {
+                    if (err) {
+                        console.error('Error fetching labs:', err);
+                    } else {
+                        labs.forEach(lab => {
+                            stmt.run(sessionId, lab.id, lab.turnaround_minutes || 30, function(err) {
+                                if (!err) {
+                                    orderIds.push({ id: this.lastID, test_name: lab.test_name });
+                                    inserted++;
+                                }
+                            });
+                        });
+                    }
+                    
+                    finalizeOrders();
+                });
+            } else {
+                finalizeOrders();
+            }
+            
+            function finalizeOrders() {
+                stmt.finalize((err) => {
+                    if (err) {
+                        return res.status(500).json({ error: err.message });
+                    }
+                    
+                    // Log event
+                    db.run(
+                        `INSERT INTO event_log (session_id, event_type, description) VALUES (?, ?, ?)`,
+                        [sessionId, 'investigation_ordered', `Ordered ${inserted} lab tests`]
+                    );
+                    
+                    res.json({ 
+                        message: `${inserted} lab tests ordered`,
+                        orders: orderIds
+                    });
+                });
+            }
+        };
+        
+        // Create case_investigations entries for default labs if needed
+        if (defaultIds.length > 0) {
+            // Extract test names from default IDs
+            const testNames = defaultIds.map(id => String(id).replace('default_', '').replace(/_/g, ' '));
+            
+            // Get case config to determine patient gender
+            db.get('SELECT config FROM cases WHERE id = ?', [session.case_id], (err, caseRow) => {
+                if (err) {
+                    return res.status(500).json({ error: err.message });
+                }
+                
+                const caseConfig = JSON.parse(caseRow?.config || '{}');
+                const patientGender = caseConfig.demographics?.gender || 'Male';
+                
+                // Create case_investigations for each default lab
+                const insertLabSql = `
+                    INSERT INTO case_investigations (
+                        case_id, investigation_type, test_name, test_group, gender_category,
+                        min_value, max_value, current_value, unit, normal_samples,
+                        is_abnormal, turnaround_minutes
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `;
+                
+                let created = 0;
+                testNames.forEach(testName => {
+                    const genderSpecific = labDb.getGenderSpecificTest(testName, patientGender);
+                    if (genderSpecific) {
+                        const normalValue = labDb.getRandomNormalValue(genderSpecific);
+                        
+                        db.run(insertLabSql, [
+                            session.case_id, 'lab', genderSpecific.test_name, genderSpecific.group, genderSpecific.category,
+                            genderSpecific.min_value, genderSpecific.max_value, normalValue, genderSpecific.unit,
+                            JSON.stringify(genderSpecific.normal_samples), 0, 30
+                        ], function(err) {
+                            if (!err) {
+                                // Add to configured IDs
+                                configuredIds.push(this.lastID);
+                                created++;
+                            }
+                            
+                            // When all created, process orders
+                            if (created === testNames.length) {
+                                processOrders();
+                            }
+                        });
+                    } else {
+                        created++;
+                        if (created === testNames.length) {
+                            processOrders();
+                        }
+                    }
+                });
+            });
+        } else {
+            processOrders();
+        }
+    });
+});
+
+// GET /api/sessions/:sessionId/lab-results - Get completed lab results
+router.get('/sessions/:sessionId/lab-results', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+    
+    const sql = `
+        SELECT 
+            io.id as order_id,
+            io.ordered_at,
+            io.available_at,
+            io.viewed_at,
+            ci.id as lab_id,
+            ci.test_name,
+            ci.test_group,
+            ci.unit,
+            ci.current_value,
+            ci.min_value,
+            ci.max_value,
+            ci.is_abnormal,
+            ci.gender_category
+        FROM investigation_orders io
+        JOIN case_investigations ci ON io.investigation_id = ci.id
+        WHERE io.session_id = ? AND ci.investigation_type = 'lab'
+        AND datetime(io.available_at) <= datetime('now')
+        ORDER BY io.available_at DESC
+    `;
+    
+    db.all(sql, [sessionId], (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        
+        // Evaluate each result
+        const processedResults = results.map(result => ({
+            ...result,
+            status: labDb.evaluateValue(result.current_value, result.min_value, result.max_value),
+            flag: labDb.getValueFlag(labDb.evaluateValue(result.current_value, result.min_value, result.max_value)),
+            is_ready: true
+        }));
+        
+        res.json({ results: processedResults });
+    });
+});
+
+// PUT /api/sessions/:sessionId/labs/:labId - Instructor edit lab value during simulation (Admin only)
+router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireAdmin, (req, res) => {
+    const { sessionId, labId } = req.params;
+    const { current_value } = req.body;
+    
+    if (current_value === undefined) {
+        return res.status(400).json({ error: 'current_value is required' });
+    }
+    
+    // Update the lab value in case_investigations
+    const sql = `UPDATE case_investigations SET current_value = ?, is_abnormal = 1 WHERE id = ?`;
+    
+    db.run(sql, [current_value, labId], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Lab test not found' });
+        }
+        
+        // Log the instructor edit
+        db.run(
+            `INSERT INTO event_log (session_id, event_type, description) VALUES (?, ?, ?)`,
+            [sessionId, 'lab_value_edited', `Instructor edited lab value for test ID ${labId} to ${current_value}`]
+        );
+        
+        res.json({ 
+            message: 'Lab value updated',
+            new_value: current_value
+        });
     });
 });
 

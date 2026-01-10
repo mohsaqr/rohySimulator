@@ -207,6 +207,36 @@ function initDb() {
             FOREIGN KEY(case_id) REFERENCES cases(id)
         )`);
 
+        // Migration: Add lab database columns to case_investigations
+        db.all("PRAGMA table_info(case_investigations)", (err, rows) => {
+            if (rows) {
+                if (!rows.find(r => r.name === 'test_group')) {
+                    db.run("ALTER TABLE case_investigations ADD COLUMN test_group TEXT");
+                }
+                if (!rows.find(r => r.name === 'gender_category')) {
+                    db.run("ALTER TABLE case_investigations ADD COLUMN gender_category TEXT");
+                }
+                if (!rows.find(r => r.name === 'min_value')) {
+                    db.run("ALTER TABLE case_investigations ADD COLUMN min_value REAL");
+                }
+                if (!rows.find(r => r.name === 'max_value')) {
+                    db.run("ALTER TABLE case_investigations ADD COLUMN max_value REAL");
+                }
+                if (!rows.find(r => r.name === 'current_value')) {
+                    db.run("ALTER TABLE case_investigations ADD COLUMN current_value REAL");
+                }
+                if (!rows.find(r => r.name === 'unit')) {
+                    db.run("ALTER TABLE case_investigations ADD COLUMN unit TEXT");
+                }
+                if (!rows.find(r => r.name === 'normal_samples')) {
+                    db.run("ALTER TABLE case_investigations ADD COLUMN normal_samples JSON");
+                }
+                if (!rows.find(r => r.name === 'is_abnormal')) {
+                    db.run("ALTER TABLE case_investigations ADD COLUMN is_abnormal BOOLEAN DEFAULT 0");
+                }
+            }
+        });
+
         // 12. Investigation Orders Table - Track ordered tests
         db.run(`CREATE TABLE IF NOT EXISTS investigation_orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

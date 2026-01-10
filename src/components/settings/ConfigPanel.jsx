@@ -139,6 +139,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
     const handleSaveCase = async () => {
         if (!editingCase) return;
 
+        // Validate required fields
+        if (!editingCase.name || editingCase.name.trim() === '') {
+            alert('Please enter a case name before saving.');
+            return;
+        }
+
         const isUpdate = !!editingCase.id;
         const url = isUpdate
             ? `http://localhost:3000/api/cases/${editingCase.id}`
@@ -146,9 +152,25 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
 
         // Auto-generate system prompt if empty
         const sysPrompt = editingCase.system_prompt || `You are ${editingCase.name}. ${editingCase.description}`;
-        const payload = { ...editingCase, system_prompt: sysPrompt };
+        
+        // Ensure config exists
+        const config = editingCase.config || {};
+        
+        const payload = { 
+            ...editingCase, 
+            system_prompt: sysPrompt,
+            config: config,
+            description: editingCase.description || ''
+        };
 
         const token = AuthService.getToken();
+        
+        if (!token) {
+            alert('Authentication required. Please log in again.');
+            return;
+        }
+
+        console.log('Saving case:', { isUpdate, url, payload: { ...payload, config: 'omitted for brevity' } });
 
         try {
             const res = await fetch(url, {
@@ -160,23 +182,66 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                 body: JSON.stringify(payload)
             });
 
+            console.log('Response status:', res.status);
+
             if (!res.ok) {
-                const error = await res.json();
-                throw new Error(error.error || 'Failed to save case');
+                // Check if response is JSON
+                const contentType = res.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const error = await res.json();
+                    throw new Error(error.error || `Failed to save case (${res.status})`);
+                } else {
+                    // Response is not JSON (likely HTML error page)
+                    const text = await res.text();
+                    console.error('Non-JSON response:', text);
+                    throw new Error(`Server error (${res.status}). Check console for details.`);
+                }
             }
 
             const saved = await res.json();
+            console.log('Case saved successfully:', saved);
+
+            // Save lab investigations to database if any
+            const labs = editingCase.config?.investigations?.labs || [];
+            if (labs.length > 0) {
+                const caseId = saved.id;
+                
+                // First, delete existing labs for this case (to handle updates)
+                // Then insert new ones
+                for (const lab of labs) {
+                    try {
+                        await fetch(`http://localhost:3000/api/cases/${caseId}/labs`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify(lab)
+                        });
+                    } catch (labErr) {
+                        console.error('Failed to save lab:', labErr);
+                    }
+                }
+            }
 
             // Update List
             if (isUpdate) {
                 setCases(prev => prev.map(c => c.id === saved.id ? saved : c));
             } else {
                 setCases(prev => [saved, ...prev]);
+                // For new cases, update editingCase with the new ID so subsequent saves are updates
+                setEditingCase(prev => ({ ...prev, id: saved.id }));
             }
 
-            setEditingCase(null); // Close editor
             setSelectedCaseId(saved.id);
-            alert('Case saved successfully!');
+            
+            // Show success notification without closing editor
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-in fade-in slide-in-from-top-2';
+            notification.innerHTML = `<div class="flex items-center gap-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="font-bold">Case saved successfully!</span></div>`;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+            
         } catch (err) {
             console.error(err);
             alert(err.message || 'Failed to save case');
@@ -1610,6 +1675,210 @@ jane_admin,Jane Smith,jane@example.com,admin456,admin`}
     );
 }
 
+// Lab Investigation Selector Component
+function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddByGroup = false }) {
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [selectedGroup, setSelectedGroup] = useState('all');
+    const [groups, setGroups] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [addingGroup, setAddingGroup] = useState(false);
+
+    // Load groups on mount
+    useEffect(() => {
+        const token = AuthService.getToken();
+        fetch('http://localhost:3000/api/labs/groups', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+            .then(res => res.json())
+            .then(data => setGroups(data.groups || []))
+            .catch(err => console.error('Failed to load groups:', err));
+    }, []);
+
+    // Search labs
+    useEffect(() => {
+        if (!searchQuery || searchQuery.trim().length < 2) {
+            setSearchResults([]);
+            return;
+        }
+
+        setIsSearching(true);
+        const token = AuthService.getToken();
+        fetch(`http://localhost:3000/api/labs/search?q=${encodeURIComponent(searchQuery)}&limit=20`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+            .then(res => res.json())
+            .then(data => {
+                setSearchResults(data.results || []);
+                setIsSearching(false);
+            })
+            .catch(err => {
+                console.error('Search failed:', err);
+                setIsSearching(false);
+            });
+    }, [searchQuery]);
+
+    const handleAddLab = (testGroup) => {
+        // testGroup is array of gender variations
+        // Find gender-specific test or first available
+        let selectedTest = testGroup.find(t => t.category === patientGender);
+        if (!selectedTest) {
+            selectedTest = testGroup.find(t => t.category === 'Both');
+        }
+        if (!selectedTest) {
+            selectedTest = testGroup[0];
+        }
+
+        // Get random normal value as default
+        const normalValue = selectedTest.normal_samples && selectedTest.normal_samples.length > 0
+            ? selectedTest.normal_samples[Math.floor(Math.random() * selectedTest.normal_samples.length)]
+            : (selectedTest.min_value + selectedTest.max_value) / 2;
+
+        const labData = {
+            test_name: selectedTest.test_name,
+            test_group: selectedTest.group,
+            gender_category: selectedTest.category,
+            min_value: selectedTest.min_value,
+            max_value: selectedTest.max_value,
+            current_value: normalValue,
+            unit: selectedTest.unit,
+            normal_samples: selectedTest.normal_samples,
+            is_abnormal: false,
+            turnaround_minutes: 30
+        };
+
+        onAddLab(labData);
+        setSearchQuery('');
+        setSearchResults([]);
+    };
+
+    const handleAddByGroup = async () => {
+        if (selectedGroup === 'all') {
+            alert('Please select a specific group to add');
+            return;
+        }
+
+        setAddingGroup(true);
+        try {
+            const token = AuthService.getToken();
+            const response = await fetch(`http://localhost:3000/api/labs/group/${encodeURIComponent(selectedGroup)}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const tests = data.tests || [];
+                
+                // Group tests by name
+                const grouped = {};
+                tests.forEach(test => {
+                    if (!grouped[test.test_name]) {
+                        grouped[test.test_name] = [];
+                    }
+                    grouped[test.test_name].push(test);
+                });
+
+                // Add each unique test
+                Object.values(grouped).forEach(testGroup => {
+                    handleAddLab(testGroup);
+                });
+
+                alert(`Added ${Object.keys(grouped).length} tests from ${selectedGroup}`);
+            }
+        } catch (error) {
+            console.error('Failed to add group:', error);
+            alert('Failed to add tests by group');
+        } finally {
+            setAddingGroup(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="flex gap-2">
+                <div className="flex-1">
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search lab tests (e.g., glucose, hemoglobin, sodium)..."
+                        className="input-dark w-full"
+                    />
+                </div>
+                <select
+                    value={selectedGroup}
+                    onChange={(e) => setSelectedGroup(e.target.value)}
+                    className="input-dark"
+                >
+                    <option value="all">All Groups</option>
+                    {groups.map(group => (
+                        <option key={group} value={group}>{group}</option>
+                    ))}
+                </select>
+                {showAddByGroup && (
+                    <button
+                        onClick={handleAddByGroup}
+                        disabled={selectedGroup === 'all' || addingGroup}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-neutral-700 disabled:cursor-not-allowed text-white rounded font-bold text-sm whitespace-nowrap flex items-center gap-2"
+                        title="Add all tests from selected group"
+                    >
+                        {addingGroup ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Adding...
+                            </>
+                        ) : (
+                            <>
+                                <Plus className="w-4 h-4" />
+                                Add Group
+                            </>
+                        )}
+                    </button>
+                )}
+            </div>
+
+            {isSearching && (
+                <div className="text-center py-4 text-neutral-500">
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                </div>
+            )}
+
+            {searchResults.length > 0 && (
+                <div className="bg-neutral-900 border border-neutral-700 rounded max-h-64 overflow-y-auto">
+                    {searchResults
+                        .filter(testGroup => selectedGroup === 'all' || testGroup[0].group === selectedGroup)
+                        .map((testGroup, idx) => {
+                            const test = testGroup[0];
+                            return (
+                                <div
+                                    key={idx}
+                                    className="p-3 border-b border-neutral-800 hover:bg-neutral-800 cursor-pointer transition-colors"
+                                    onClick={() => handleAddLab(testGroup)}
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="font-bold text-sm">{test.test_name}</div>
+                                            <div className="text-xs text-neutral-400">
+                                                {test.group} • {testGroup.length} variation(s)
+                                            </div>
+                                        </div>
+                                        <Plus className="w-4 h-4 text-green-400" />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                </div>
+            )}
+
+            {searchQuery && !isSearching && searchResults.length === 0 && (
+                <div className="text-center py-4 text-neutral-500 text-sm">
+                    No tests found matching "{searchQuery}"
+                </div>
+            )}
+        </div>
+    );
+}
+
 // Sub-component for the Wizard to keep code clean
 function CaseWizard({ caseData, setCaseData, onSave, onCancel }) {
     const [step, setStep] = useState(1);
@@ -1661,13 +1930,101 @@ function CaseWizard({ caseData, setCaseData, onSave, onCancel }) {
     const applyPersonaDefaults = () => {
         setCaseData(prev => ({
             ...prev,
-            system_prompt: "You are a 55-year-old patient named John Doe. You are currently in the ICU experiencing chest pain. You are anxious but cooperative. You provide short, direct answers.",
+            name: 'Angina Pectoris - 62M',
+            description: 'A 62-year-old male presenting with classic angina pectoris. Known history of hypertension and hyperlipidemia. Experiencing substernal chest pressure with radiation to the left arm, triggered by exertion and relieved by rest. Risk factors include smoking history (30 pack-years, quit 5 years ago) and family history of coronary artery disease.',
+            system_prompt: `You are Richard Thompson, a 62-year-old male accountant presenting with chest pain. 
+
+CURRENT SYMPTOMS:
+- Substernal chest pressure (6/10 severity), feels like "squeezing" or "tightness"
+- Started 2 hours ago after climbing stairs at work
+- Radiates to left arm and jaw
+- Associated with mild shortness of breath and sweating
+- Partially relieved by rest
+
+MEDICAL HISTORY:
+- Hypertension (controlled on amlodipine 5mg daily)
+- Hyperlipidemia (on atorvastatin 40mg daily)
+- No diabetes
+- Previous episodes of similar chest pain over past 3 months, but less severe
+- Smoking: 30 pack-year history, quit 5 years ago
+- Family history: Father had MI at age 58
+
+CURRENT MEDICATIONS:
+- Amlodipine 5mg once daily
+- Atorvastatin 40mg once daily
+- Aspirin 81mg daily
+
+ALLERGIES: No known drug allergies
+
+SOCIAL HISTORY:
+- Occupation: Accountant (sedentary job)
+- Lives with wife, two adult children
+- Occasional alcohol (1-2 drinks per week)
+- No current tobacco or recreational drug use
+
+PERSONALITY: You are anxious but cooperative. You're worried this might be a heart attack because of your father's history. You answer questions directly but sometimes ramble when nervous. You appreciate clear explanations and want to understand what's happening.`,
             config: {
                 ...prev.config,
                 persona_type: 'Standard Simulated Patient',
-                constraints: 'Do not invent medical history not provided. If asked about something unknown, say you do not know.',
-                greeting: 'Doctor, my chest feels like an elephant is sitting on it.',
-                demographics: { age: 55, gender: 'Male' }
+                constraints: 'Stick to the provided history. If asked about tests or values, say you don\'t remember exact numbers unless specifically mentioned. Express appropriate concern about cardiac symptoms. Do not volunteer diagnosis - let the doctor make conclusions.',
+                greeting: 'Doctor, I\'ve been having this pressure in my chest... it\'s really worrying me.',
+                patient_name: 'Richard Thompson',
+                demographics: { 
+                    age: 62, 
+                    gender: 'Male',
+                    weight: '85 kg',
+                    height: '175 cm',
+                    bmi: '27.8'
+                },
+                // Initial vitals - stable angina
+                hr: 88,
+                spo2: 97,
+                rr: 18,
+                temp: 36.8,
+                sbp: 145,
+                dbp: 88,
+                etco2: 38,
+                // Clinical records for angina pectoris
+                clinical_records: {
+                    chief_complaint: 'Chest pain and pressure for 2 hours',
+                    present_illness: `Patient is a 62-year-old male with history of hypertension and hyperlipidemia presenting with substernal chest pressure that began 2 hours ago after climbing 3 flights of stairs at work. Describes sensation as "squeezing" or "tight band around chest" rated 6/10 severity. Pain radiates to left arm and occasionally to jaw. Associated with diaphoresis and mild dyspnea. Reports similar but milder episodes over past 3 months, typically triggered by exertion and relieved by rest within 5-10 minutes. Today's episode more severe and lasted 20 minutes before partially improving with rest. Denies nausea, vomiting, palpitations, syncope, or loss of consciousness.`,
+                    risk_factors: [
+                        'Hypertension (on treatment)',
+                        'Hyperlipidemia (on statin)',
+                        'Former smoker (30 pack-years, quit 5 years ago)',
+                        'Family history of premature CAD (father MI at 58)',
+                        'Male gender',
+                        'Age > 60',
+                        'Sedentary lifestyle',
+                        'Overweight (BMI 27.8)'
+                    ],
+                    physical_exam: {
+                        general: 'Alert, oriented, appears anxious, diaphoretic',
+                        cardiovascular: 'Regular rate and rhythm, no murmurs, rubs, or gallops. Normal S1/S2. No JVD. Peripheral pulses 2+ and equal bilaterally.',
+                        respiratory: 'Clear to auscultation bilaterally, no wheezes or crackles',
+                        abdomen: 'Soft, non-tender, no organomegaly',
+                        extremities: 'No edema, no cyanosis'
+                    },
+                    differential_diagnosis: [
+                        'Stable angina pectoris (most likely)',
+                        'Unstable angina',
+                        'NSTEMI',
+                        'GERD',
+                        'Musculoskeletal chest pain',
+                        'Anxiety/panic attack'
+                    ],
+                    management_plan: [
+                        'Obtain 12-lead ECG',
+                        'Cardiac biomarkers (Troponin I/T, CK-MB)',
+                        'Complete metabolic panel',
+                        'Lipid panel',
+                        'CBC',
+                        'Chest X-ray',
+                        'Consider stress test if biomarkers negative',
+                        'Optimize anti-anginal medications',
+                        'Cardiology consultation if indicated'
+                    ]
+                }
             }
         }));
     };
@@ -1679,13 +2036,14 @@ function CaseWizard({ caseData, setCaseData, onSave, onCancel }) {
             <div className="flex items-center justify-between border-b border-neutral-800 pb-4 mb-6">
                 <div>
                     <h3 className="text-xl font-bold text-white">Case Configuration</h3>
-                    <p className="text-xs text-neutral-500">Step {step} of 4</p>
+                    <p className="text-xs text-neutral-500">Step {step} of 5</p>
                 </div>
                 <div className="flex gap-2">
                     <div className={`w-3 h-3 rounded-full ${step >= 1 ? 'bg-purple-500' : 'bg-neutral-800'}`} />
                     <div className={`w-3 h-3 rounded-full ${step >= 2 ? 'bg-purple-500' : 'bg-neutral-800'}`} />
                     <div className={`w-3 h-3 rounded-full ${step >= 3 ? 'bg-purple-500' : 'bg-neutral-800'}`} />
                     <div className={`w-3 h-3 rounded-full ${step >= 4 ? 'bg-purple-500' : 'bg-neutral-800'}`} />
+                    <div className={`w-3 h-3 rounded-full ${step >= 5 ? 'bg-purple-500' : 'bg-neutral-800'}`} />
                 </div>
             </div>
 
@@ -2002,11 +2360,154 @@ function CaseWizard({ caseData, setCaseData, onSave, onCancel }) {
                     </div>
                 )}
 
-                {/* STEP 4: CLINICAL PAGES */}
+                {/* STEP 4: LABORATORY INVESTIGATIONS */}
                 {step === 4 && (
                     <div className="space-y-6">
+                        <h4 className="text-lg font-bold text-purple-400">4. Laboratory Investigations</h4>
+                        
+                        {/* Default Labs Toggle */}
+                        <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
+                            <div className="flex items-start gap-3">
+                                <div className="flex-1">
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={caseData.config?.investigations?.defaultLabsEnabled !== false}
+                                            onChange={(e) => {
+                                                updateConfig('investigations', {
+                                                    ...(caseData.config?.investigations || {}),
+                                                    defaultLabsEnabled: e.target.checked,
+                                                    labs: caseData.config?.investigations?.labs || []
+                                                });
+                                            }}
+                                            className="w-5 h-5"
+                                        />
+                                        <div>
+                                            <div className="font-bold text-white">All Lab Tests Available by Default</div>
+                                            <div className="text-xs text-neutral-400 mt-1">
+                                                When enabled: All 77 lab tests are available with <strong>normal values</strong>.
+                                                <br />When disabled: Only abnormal tests you configure below will be available.
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Abnormal Tests Section */}
+                        <div>
+                            <div className="flex items-center justify-between mb-3">
+                                <h5 className="text-sm font-bold text-purple-300">Abnormal Tests (Optional)</h5>
+                                <span className="text-xs text-neutral-500">{(caseData.config?.investigations?.labs || []).length} configured</span>
+                            </div>
+                            <p className="text-xs text-neutral-500 mb-4">
+                                Add specific tests with abnormal values. These will override normal values when ordered by students.
+                            </p>
+
+                            {/* Add Tests Interface */}
+                            <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4 mb-4">
+                                <LabInvestigationSelector 
+                                    caseData={caseData}
+                                    onAddLab={(lab) => {
+                                        const labs = caseData.config?.investigations?.labs || [];
+                                        // Mark as abnormal by default when added here
+                                        updateConfig('investigations', {
+                                            ...(caseData.config?.investigations || {}),
+                                            defaultLabsEnabled: caseData.config?.investigations?.defaultLabsEnabled !== false,
+                                            labs: [...labs, { ...lab, is_abnormal: true }]
+                                        });
+                                    }}
+                                    patientGender={caseData.config?.demographics?.gender}
+                                    showAddByGroup={true}
+                                />
+                            </div>
+
+                            {/* Configured Abnormal Tests List */}
+                            <div className="space-y-2">
+                                {(caseData.config?.investigations?.labs || []).map((lab, idx) => (
+                                    <div key={idx} className="bg-neutral-800 border border-neutral-700 rounded p-3">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div className="flex-1">
+                                                <div className="font-bold text-sm flex items-center gap-2">
+                                                    {lab.test_name}
+                                                    <span className="px-2 py-0.5 bg-yellow-900/40 text-yellow-400 text-xs rounded">ABNORMAL</span>
+                                                </div>
+                                                <div className="text-xs text-neutral-400">{lab.test_group} • {lab.gender_category}</div>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    const labs = caseData.config.investigations.labs.filter((_, i) => i !== idx);
+                                                    updateConfig('investigations', {
+                                                        ...(caseData.config?.investigations || {}),
+                                                        labs
+                                                    });
+                                                }}
+                                                className="text-neutral-500 hover:text-red-400"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-3 text-xs">
+                                            <div>
+                                                <span className="text-neutral-500 block mb-1">Normal Range:</span>
+                                                <div className="font-mono text-neutral-400">{lab.min_value}-{lab.max_value} {lab.unit}</div>
+                                            </div>
+                                            <div>
+                                                <label className="text-neutral-500 block mb-1">Abnormal Value:</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={lab.current_value}
+                                                    onChange={(e) => {
+                                                        const labs = [...caseData.config.investigations.labs];
+                                                        labs[idx].current_value = parseFloat(e.target.value);
+                                                        updateConfig('investigations', {
+                                                            ...(caseData.config?.investigations || {}),
+                                                            labs
+                                                        });
+                                                    }}
+                                                    className="input-dark w-full"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-neutral-500 block mb-1">Turnaround (min):</label>
+                                                <input
+                                                    type="number"
+                                                    value={lab.turnaround_minutes || 30}
+                                                    onChange={(e) => {
+                                                        const labs = [...caseData.config.investigations.labs];
+                                                        labs[idx].turnaround_minutes = parseInt(e.target.value);
+                                                        updateConfig('investigations', {
+                                                            ...(caseData.config?.investigations || {}),
+                                                            labs
+                                                        });
+                                                    }}
+                                                    className="input-dark w-full"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {(caseData.config?.investigations?.labs || []).length === 0 && (
+                                    <div className="text-center py-8 bg-neutral-800/50 rounded-lg border border-dashed border-neutral-700 text-neutral-500 text-sm">
+                                        <p className="mb-2">No abnormal tests configured</p>
+                                        <p className="text-xs">
+                                            {caseData.config?.investigations?.defaultLabsEnabled !== false 
+                                                ? 'All lab tests will return normal values'
+                                                : 'Students won\'t be able to get any lab results'}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* STEP 5: CLINICAL PAGES */}
+                {step === 5 && (
+                    <div className="space-y-6">
                         <div className="flex justify-between items-center">
-                            <h4 className="text-lg font-bold text-purple-400">4. Clinical Records</h4>
+                            <h4 className="text-lg font-bold text-purple-400">5. Clinical Records</h4>
                             <button
                                 onClick={() => {
                                     const newPages = [...(caseData.config?.pages || [])];
@@ -2074,17 +2575,49 @@ function CaseWizard({ caseData, setCaseData, onSave, onCancel }) {
                 <button onClick={onCancel} className="text-neutral-500 hover:text-white px-4">Cancel</button>
                 <div className="flex gap-2">
                     {step > 1 && (
-                        <button onClick={() => setStep(s => s - 1)} className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded font-bold text-sm">
+                        <button 
+                            onClick={async () => {
+                                // Auto-save before going back
+                                await onSave();
+                                setStep(s => s - 1);
+                            }} 
+                            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded font-bold text-sm"
+                        >
                             Back
                         </button>
                     )}
-                    {step < 4 ? (
-                        <button onClick={() => setStep(s => s + 1)} className="px-6 py-2 bg-purple-600 hover:bg-purple-500 rounded font-bold text-sm">
+                    
+                    {/* Save Progress button on all steps except last */}
+                    {step < 5 && (
+                        <button 
+                            onClick={onSave} 
+                            className="px-4 py-2 bg-blue-700 hover:bg-blue-600 rounded font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-900/20"
+                        >
+                            <Save className="w-4 h-4" /> Save Progress
+                        </button>
+                    )}
+                    
+                    {step < 5 ? (
+                        <button 
+                            onClick={async () => {
+                                // Auto-save before moving forward
+                                await onSave();
+                                setStep(s => s + 1);
+                            }} 
+                            className="px-6 py-2 bg-purple-600 hover:bg-purple-500 rounded font-bold text-sm"
+                        >
                             Next
                         </button>
                     ) : (
-                        <button onClick={onSave} className="px-6 py-2 bg-green-600 hover:bg-green-500 rounded font-bold text-sm shadow-lg shadow-green-900/20 flex items-center gap-2">
-                            <Save className="w-4 h-4" /> Save Case
+                        <button 
+                            onClick={async () => {
+                                await onSave();
+                                // Close wizard after final save
+                                setTimeout(() => onCancel(), 500);
+                            }} 
+                            className="px-6 py-2 bg-green-600 hover:bg-green-500 rounded font-bold text-sm shadow-lg shadow-green-900/20 flex items-center gap-2"
+                        >
+                            <Save className="w-4 h-4" /> Save & Finish
                         </button>
                     )}
                 </div>

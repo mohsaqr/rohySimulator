@@ -4,6 +4,7 @@ import defaultSettings from '../../settings.json';
 import { useEventLog } from '../../hooks/useEventLog';
 import { useAlarms } from '../../hooks/useAlarms';
 import { getAudioContext, resumeAudioContext } from '../../utils/alarmAudio';
+import LabValueEditor from '../investigations/LabValueEditor';
 
 /**
  * ADVANCED ECG GENERATION UTILITIES
@@ -986,7 +987,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
 
             {/* Tabs */}
             <div className="flex p-1 bg-neutral-900 border-b border-neutral-800 overflow-x-auto">
-               {['rhythm', 'vitals', 'scenarios', 'alarms'].map(tab => (
+               {['rhythm', 'vitals', 'scenarios', 'alarms', 'labs'].map(tab => (
                   <button
                      key={tab}
                      onClick={() => setActiveTab(tab)}
@@ -1590,6 +1591,25 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                            Reset to Defaults
                         </button>
                      </div>
+                  </div>
+               )}
+
+               {/* LABS TAB */}
+               {activeTab === 'labs' && sessionId && (
+                  <div>
+                     <LabValueEditor 
+                        sessionId={sessionId}
+                        caseId={caseData?.id}
+                        onUpdate={(labId, newValue) => {
+                           console.log(`Lab ${labId} updated to ${newValue}`);
+                        }}
+                     />
+                  </div>
+               )}
+
+               {activeTab === 'labs' && !sessionId && (
+                  <div className="text-center py-8 text-neutral-500">
+                     <p>Start a session to edit lab values</p>
                   </div>
                )}
 

@@ -6,7 +6,7 @@ import ConfigPanel from './components/settings/ConfigPanel';
 import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
 import InvestigationPanel from './components/investigations/InvestigationPanel';
-import ResultsModal from './components/investigations/ResultsModal';
+import LabResultsModal from './components/investigations/LabResultsModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Settings, X, LogOut, User } from 'lucide-react';
 
@@ -116,10 +116,16 @@ function MainApp() {
             />
          </div>
 
-         {/* Results Modal */}
+         {/* Lab Results Modal */}
          {selectedResult && (
-            <ResultsModal
-               order={selectedResult}
+            <LabResultsModal
+               result={selectedResult}
+               sessionId={sessionId}
+               patientInfo={{
+                  name: activeCase?.config?.patient_name || 'Unknown',
+                  age: activeCase?.config?.demographics?.age || 'Unknown',
+                  gender: activeCase?.config?.demographics?.gender || 'Unknown'
+               }}
                onClose={() => setSelectedResult(null)}
             />
          )}
