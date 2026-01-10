@@ -295,6 +295,8 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
 
    // Track which vitals have been manually overridden from case defaults
    const [overriddenVitals, setOverriddenVitals] = useState(new Set());
+   // Toggle to disable override tracking entirely
+   const [trackOverrides, setTrackOverrides] = useState(true);
 
    // Display Vitals (Fluctuating values)
    const [displayVitals, setDisplayVitals] = useState(params);
@@ -494,7 +496,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
    // Helper to update a vital and mark as overridden
    const updateVitalWithOverride = (vitalKey, value) => {
       setParams(prev => ({ ...prev, [vitalKey]: value }));
-      if (caseBaseline) {
+      if (caseBaseline && trackOverrides) {
          setOverriddenVitals(prev => new Set([...prev, vitalKey]));
       }
    };
@@ -502,7 +504,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
    // Helper to update rhythm with override tracking
    const updateRhythmWithOverride = (newRhythm) => {
       setRhythm(newRhythm);
-      if (caseBaselineRhythm) {
+      if (caseBaselineRhythm && trackOverrides) {
          setOverriddenVitals(prev => new Set([...prev, 'rhythm']));
       }
    };
@@ -510,7 +512,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
    // Helper to update conditions with override tracking
    const updateConditionsWithOverride = (newConditions) => {
       setConditions(newConditions);
-      if (caseBaselineConditions) {
+      if (caseBaselineConditions && trackOverrides) {
          setOverriddenVitals(prev => new Set([...prev, 'conditions']));
       }
    };
@@ -878,8 +880,8 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
 
       if (Object.keys(updates).length > 0) {
          setParams(p => ({ ...p, ...updates }));
-         // Mark affected vitals as overridden
-         if (caseBaseline) {
+         // Mark affected vitals as overridden (if tracking is enabled)
+         if (caseBaseline && trackOverrides) {
             setOverriddenVitals(prev => new Set([...prev, ...Object.keys(updates)]));
          }
       }
@@ -1352,7 +1354,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                {activeTab === 'rhythm' && (
                   <div className="space-y-6">
                      {/* Override indicator */}
-                     {caseBaselineRhythm && overriddenVitals.has('rhythm') && (
+                     {trackOverrides && caseBaselineRhythm && overriddenVitals.has('rhythm') && (
                         <div className="flex items-center justify-between p-2 rounded-lg bg-orange-900/30 border border-orange-700/50">
                            <div className="flex items-center gap-2">
                               <Pencil className="w-4 h-4 text-orange-400" />
@@ -1549,48 +1551,69 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
 
                {activeTab === 'vitals' && (
                   <div className="space-y-6">
-                     {/* Override indicator and reset buttons */}
-                     <div className={`flex items-center justify-between p-2 rounded-lg ${hasOverrides ? 'bg-orange-900/30 border border-orange-700/50' : 'bg-green-900/20 border border-green-700/30'}`}>
+                     {/* Override tracking toggle */}
+                     <div className="flex items-center justify-between p-2 rounded-lg bg-neutral-800/50 border border-neutral-700">
                         <div className="flex items-center gap-2">
-                           {hasOverrides ? (
-                              <>
-                                 <Pencil className="w-4 h-4 text-orange-400" />
-                                 <span className="text-xs text-orange-300">Override Mode ({overriddenVitals.size} modified)</span>
-                              </>
-                           ) : (
-                              <>
-                                 <Activity className="w-4 h-4 text-green-400" />
-                                 <span className="text-xs text-green-300">{caseBaseline ? 'Using Case Vitals' : 'Default Vitals'}</span>
-                              </>
-                           )}
+                           <span className="text-xs text-neutral-400">Track Overrides</span>
                         </div>
-                        <div className="flex gap-2">
-                           {hasOverrides && (
-                              <button
-                                 onClick={() => setOverriddenVitals(new Set())}
-                                 className="text-xs px-2 py-1 bg-neutral-600 hover:bg-neutral-500 text-white rounded"
-                                 title="Clear override tracking without resetting values"
-                              >
-                                 Clear Flags
-                              </button>
-                           )}
-                           {(hasOverrides || caseBaseline) && (
-                              <button
-                                 onClick={resetToCaseDefaults}
-                                 className="text-xs px-2 py-1 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold"
-                              >
-                                 Reset to Case
-                              </button>
-                           )}
-                        </div>
+                        <button
+                           onClick={() => {
+                              setTrackOverrides(!trackOverrides);
+                              if (trackOverrides) {
+                                 // Turning off - clear existing overrides
+                                 setOverriddenVitals(new Set());
+                              }
+                           }}
+                           className={`relative w-10 h-5 rounded-full transition-colors ${trackOverrides ? 'bg-orange-600' : 'bg-neutral-600'}`}
+                        >
+                           <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${trackOverrides ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                        </button>
                      </div>
+
+                     {/* Override indicator and reset buttons - only show when tracking */}
+                     {trackOverrides && (
+                        <div className={`flex items-center justify-between p-2 rounded-lg ${hasOverrides ? 'bg-orange-900/30 border border-orange-700/50' : 'bg-green-900/20 border border-green-700/30'}`}>
+                           <div className="flex items-center gap-2">
+                              {hasOverrides ? (
+                                 <>
+                                    <Pencil className="w-4 h-4 text-orange-400" />
+                                    <span className="text-xs text-orange-300">Override Mode ({overriddenVitals.size} modified)</span>
+                                 </>
+                              ) : (
+                                 <>
+                                    <Activity className="w-4 h-4 text-green-400" />
+                                    <span className="text-xs text-green-300">{caseBaseline ? 'Using Case Vitals' : 'Default Vitals'}</span>
+                                 </>
+                              )}
+                           </div>
+                           <div className="flex gap-2">
+                              {hasOverrides && (
+                                 <button
+                                    onClick={() => setOverriddenVitals(new Set())}
+                                    className="text-xs px-2 py-1 bg-neutral-600 hover:bg-neutral-500 text-white rounded"
+                                    title="Clear override flags without resetting values"
+                                 >
+                                    Clear Flags
+                                 </button>
+                              )}
+                              {caseBaseline && (
+                                 <button
+                                    onClick={resetToCaseDefaults}
+                                    className="text-xs px-2 py-1 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold"
+                                 >
+                                    Reset to Case
+                                 </button>
+                              )}
+                           </div>
+                        </div>
+                     )}
 
                      {/* HR */}
                      <div className="space-y-2">
                         <div className="flex justify-between items-end">
                            <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
                               Heart Rate
-                              {overriddenVitals.has('hr') && <Pencil className="w-3 h-3 text-orange-400" />}
+                              {trackOverrides && overriddenVitals.has('hr') && <Pencil className="w-3 h-3 text-orange-400" />}
                            </label>
                            <span className="text-xl font-mono text-green-500 font-bold">{params.hr}</span>
                         </div>
@@ -1607,7 +1630,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                         <div className="flex justify-between items-end">
                            <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
                               SpO2
-                              {overriddenVitals.has('spo2') && <Pencil className="w-3 h-3 text-orange-400" />}
+                              {trackOverrides && overriddenVitals.has('spo2') && <Pencil className="w-3 h-3 text-orange-400" />}
                            </label>
                            <span className="text-xl font-mono text-sky-500 font-bold">{params.spo2}%</span>
                         </div>
@@ -1624,7 +1647,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                         <div className="flex justify-between items-end">
                            <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
                               Resp Rate
-                              {overriddenVitals.has('rr') && <Pencil className="w-3 h-3 text-orange-400" />}
+                              {trackOverrides && overriddenVitals.has('rr') && <Pencil className="w-3 h-3 text-orange-400" />}
                            </label>
                            <span className="text-xl font-mono text-amber-500 font-bold">{params.rr}</span>
                         </div>
@@ -1642,7 +1665,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                            <div className="flex justify-between items-end">
                               <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
                                  Systolic BP
-                                 {overriddenVitals.has('bpSys') && <Pencil className="w-3 h-3 text-orange-400" />}
+                                 {trackOverrides && overriddenVitals.has('bpSys') && <Pencil className="w-3 h-3 text-orange-400" />}
                               </label>
                               <span className="text-lg font-mono text-red-400 font-bold">{params.bpSys}</span>
                            </div>
@@ -1657,7 +1680,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                            <div className="flex justify-between items-end">
                               <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
                                  Diastolic BP
-                                 {overriddenVitals.has('bpDia') && <Pencil className="w-3 h-3 text-orange-400" />}
+                                 {trackOverrides && overriddenVitals.has('bpDia') && <Pencil className="w-3 h-3 text-orange-400" />}
                               </label>
                               <span className="text-lg font-mono text-red-500 font-bold">{params.bpDia}</span>
                            </div>
@@ -1676,7 +1699,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                            <div className="flex justify-between items-end">
                               <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
                                  Temperature
-                                 {overriddenVitals.has('temp') && <Pencil className="w-3 h-3 text-orange-400" />}
+                                 {trackOverrides && overriddenVitals.has('temp') && <Pencil className="w-3 h-3 text-orange-400" />}
                               </label>
                               <span className="text-lg font-mono text-purple-400 font-bold">{params.temp?.toFixed(1)}°C</span>
                            </div>
@@ -1691,7 +1714,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
                            <div className="flex justify-between items-end">
                               <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
                                  EtCO2
-                                 {overriddenVitals.has('etco2') && <Pencil className="w-3 h-3 text-orange-400" />}
+                                 {trackOverrides && overriddenVitals.has('etco2') && <Pencil className="w-3 h-3 text-orange-400" />}
                               </label>
                               <span className="text-lg font-mono text-yellow-400 font-bold">{params.etco2} mmHg</span>
                            </div>

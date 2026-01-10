@@ -10,8 +10,8 @@ const RECORD_TABS = [
     { id: 'notes', label: 'Notes', icon: ClipboardList }
 ];
 
-export default function ClinicalRecordsPanel({ caseConfig }) {
-    const [activeTab, setActiveTab] = useState('history');
+export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history' }) {
+    const [activeTab, setActiveTab] = useState(initialTab);
     const [expandedSection, setExpandedSection] = useState(null);
     const [viewingImage, setViewingImage] = useState(null);
 

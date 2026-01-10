@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     FlaskConical, Pill, X, ChevronUp, ChevronDown,
     Search, Clock, CheckCircle, Loader2, List,
-    Settings, Eye, EyeOff, Timer, FileText
+    Settings, Eye, EyeOff, Timer, FileText, Scan
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
@@ -265,6 +265,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
 
     const tabs = [
         { id: 'labs', label: 'Laboratory', icon: FlaskConical, count: readyOrders.length },
+        { id: 'radiology', label: 'Radiology', icon: Scan, count: 0 },
         { id: 'drugs', label: 'Medications', icon: Pill, count: 0 },
         { id: 'records', label: 'Records', icon: FileText, count: 0 },
         { id: 'settings', label: 'Settings', icon: Settings, count: 0 }
@@ -370,6 +371,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                             onClick={() => handleDrawerOpen(tab.id)}
                             className={`relative px-4 py-3 rounded-full flex items-center gap-2 font-bold text-sm shadow-lg transition-all hover:scale-105 ${
                                 tab.id === 'labs' ? 'bg-purple-600 hover:bg-purple-500 text-white' :
+                                tab.id === 'radiology' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' :
                                 tab.id === 'drugs' ? 'bg-green-600 hover:bg-green-500 text-white' :
                                 tab.id === 'records' ? 'bg-amber-600 hover:bg-amber-500 text-white' :
                                 'bg-neutral-700 hover:bg-neutral-600 text-white'
@@ -443,6 +445,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                     className={`flex-1 px-4 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors ${
                                         activeTab === tab.id
                                             ? tab.id === 'labs' ? 'bg-purple-600 text-white' :
+                                              tab.id === 'radiology' ? 'bg-cyan-600 text-white' :
                                               tab.id === 'drugs' ? 'bg-green-600 text-white' :
                                               tab.id === 'records' ? 'bg-amber-600 text-white' :
                                               'bg-neutral-700 text-white'
@@ -730,6 +733,13 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                         </div>
                                     )}
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Radiology Tab */}
+                        {activeTab === 'radiology' && (
+                            <div className="h-full">
+                                <ClinicalRecordsPanel caseConfig={caseData?.config} initialTab="radiology" />
                             </div>
                         )}
 
