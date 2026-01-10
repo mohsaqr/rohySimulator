@@ -313,13 +313,10 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
 
    // Sync params changes to simulation ref immediately
    useEffect(() => {
+      console.log('[PatientMonitor] Params changed, syncing:', params.hr, 'activeScenario:', activeScenario);
       simulationParams.current = params;
-      // If we are NOT running a scenario, update display immediately.
-      // If running a scenario, the engine loop updates displayVitals, so we might fight it.
-      // But typically manual changes shouldn't happen during scenario auto-play.
-      if (!activeScenario) {
-         setDisplayVitals(params);
-      }
+      // Always sync displayVitals when params change (scenario will override via its own loop)
+      setDisplayVitals(params);
    }, [params]);
    
    // Log vital changes
@@ -351,39 +348,49 @@ export default function PatientMonitor({ caseParams, caseData, sessionId }) {
    useEffect(() => {
       if (caseData) {
          // Load initial vitals from case config
-         // Check both new structure (initialVitals) and legacy flat structure (config.hr, etc.)
+         // Priority: initialVitals > scenario first frame > legacy config > factory defaults
          const initialVitals = caseData.config?.initialVitals;
          const legacyConfig = caseData.config;
 
-         // Determine if we have any vitals to load (new or legacy format)
+         // Get scenario's first frame params if available
+         const scenarioTimeline = caseData.scenario?.timeline;
+         const scenarioFirstFrame = scenarioTimeline && scenarioTimeline.length > 0
+            ? scenarioTimeline.sort((a, b) => a.time - b.time)[0]
+            : null;
+         const scenarioParams = scenarioFirstFrame?.params;
+
+         // Determine if we have any vitals to load
          const hasNewVitals = initialVitals && Object.keys(initialVitals).length > 0;
+         const hasScenarioVitals = scenarioParams && Object.keys(scenarioParams).length > 0;
          const hasLegacyVitals = legacyConfig && (legacyConfig.hr || legacyConfig.spo2 || legacyConfig.rr);
 
-         if (hasNewVitals || hasLegacyVitals) {
+         if (hasNewVitals || hasScenarioVitals || hasLegacyVitals) {
             // Set baseline from case (for reset functionality)
-            // Prioritize new initialVitals structure, fall back to legacy flat config
+            // Priority: initialVitals > scenario first frame > legacy config > factory defaults
             const baselineParams = {
-               hr: initialVitals?.hr ?? legacyConfig?.hr ?? FACTORY_DEFAULTS.params.hr,
-               spo2: initialVitals?.spo2 ?? legacyConfig?.spo2 ?? FACTORY_DEFAULTS.params.spo2,
-               rr: initialVitals?.rr ?? legacyConfig?.rr ?? FACTORY_DEFAULTS.params.rr,
-               bpSys: initialVitals?.bpSys ?? legacyConfig?.sbp ?? legacyConfig?.bpSys ?? FACTORY_DEFAULTS.params.bpSys,
-               bpDia: initialVitals?.bpDia ?? legacyConfig?.dbp ?? legacyConfig?.bpDia ?? FACTORY_DEFAULTS.params.bpDia,
-               temp: initialVitals?.temp ?? legacyConfig?.temp ?? FACTORY_DEFAULTS.params.temp,
-               etco2: initialVitals?.etco2 ?? legacyConfig?.etco2 ?? FACTORY_DEFAULTS.params.etco2
+               hr: initialVitals?.hr ?? scenarioParams?.hr ?? legacyConfig?.hr ?? FACTORY_DEFAULTS.params.hr,
+               spo2: initialVitals?.spo2 ?? scenarioParams?.spo2 ?? legacyConfig?.spo2 ?? FACTORY_DEFAULTS.params.spo2,
+               rr: initialVitals?.rr ?? scenarioParams?.rr ?? legacyConfig?.rr ?? FACTORY_DEFAULTS.params.rr,
+               bpSys: initialVitals?.bpSys ?? scenarioParams?.bpSys ?? legacyConfig?.sbp ?? legacyConfig?.bpSys ?? FACTORY_DEFAULTS.params.bpSys,
+               bpDia: initialVitals?.bpDia ?? scenarioParams?.bpDia ?? legacyConfig?.dbp ?? legacyConfig?.bpDia ?? FACTORY_DEFAULTS.params.bpDia,
+               temp: initialVitals?.temp ?? scenarioParams?.temp ?? legacyConfig?.temp ?? FACTORY_DEFAULTS.params.temp,
+               etco2: initialVitals?.etco2 ?? scenarioParams?.etco2 ?? legacyConfig?.etco2 ?? FACTORY_DEFAULTS.params.etco2
             };
-            console.log('[PatientMonitor] Loading case vitals:', baselineParams);
+            console.log('[PatientMonitor] Loading case vitals:', baselineParams, 'source:', hasNewVitals ? 'initialVitals' : hasScenarioVitals ? 'scenario' : 'legacy');
             setCaseBaseline(baselineParams);
             setParams(baselineParams);
 
-            // Set rhythm from case
-            const caseRhythm = initialVitals?.rhythm || legacyConfig?.rhythm;
+            // Set rhythm from case (priority: initialVitals > scenario > legacy)
+            const scenarioRhythm = scenarioFirstFrame?.rhythm;
+            const caseRhythm = initialVitals?.rhythm || scenarioRhythm || legacyConfig?.rhythm;
             if (caseRhythm) {
                setCaseBaselineRhythm(caseRhythm);
                setRhythm(caseRhythm);
             }
 
             // Set ECG conditions from case
-            const caseConditions = initialVitals?.conditions || legacyConfig?.conditions;
+            const scenarioConditions = scenarioFirstFrame?.conditions;
+            const caseConditions = initialVitals?.conditions || scenarioConditions || legacyConfig?.conditions;
             if (caseConditions) {
                const conditionsToApply = {
                   pvc: caseConditions.pvc ?? false,
