@@ -1,0 +1,123 @@
+{
+  "name": "DEMO: Rapid Deterioration with Alarms",
+  "description": "Demonstration case showing rapid patient deterioration with multiple alarm triggers. Ideal for testing and teaching alarm management.",
+  "image_url": "/patient_avatar.png",
+  "system_prompt": "You are a 45-year-old patient experiencing rapid deterioration. You are confused, anxious, and struggling to breathe. You feel your heart racing and you're becoming increasingly distressed. Keep responses SHORT and reflect increasing distress as vitals worsen.",
+  "config": {
+    "persona_type": "Standard Simulated Patient",
+    "patient_name": "Demo Patient - Alarm Test",
+    "constraints": "Stay in character. Show increasing confusion and distress as condition worsens.",
+    "greeting": "Help me... I can't breathe... my chest hurts!",
+    "demographics": {
+      "age": 45,
+      "gender": "Male"
+    },
+    "hr": 150,
+    "spo2": 85,
+    "rr": 35,
+    "bpSys": 85,
+    "bpDia": 50,
+    "temp": 39.5,
+    "etco2": 55,
+    "pages": [
+      {
+        "title": "History",
+        "content": "Patient with no significant past medical history. Presented with sudden onset chest pain and shortness of breath."
+      },
+      {
+        "title": "Physical Exam",
+        "content": "Patient in obvious distress. Tachycardic, tachypneic, hypotensive. Skin cool and clammy. Decreased breath sounds bilaterally."
+      }
+    ]
+  },
+  "scenario": {
+    "enabled": true,
+    "autoStart": true,
+    "timeline": [
+      {
+        "time": 0,
+        "label": "Initial presentation - Multiple alarms active",
+        "params": {
+          "hr": 150,
+          "spo2": 85,
+          "rr": 35,
+          "bpSys": 85,
+          "bpDia": 50,
+          "temp": 39.5,
+          "etco2": 55
+        },
+        "conditions": {
+          "stElev": 0,
+          "pvc": true,
+          "wideQRS": false,
+          "tInv": false,
+          "noise": 2
+        },
+        "rhythm": "NSR"
+      },
+      {
+        "time": 120,
+        "label": "Worsening - More alarms",
+        "params": {
+          "hr": 160,
+          "spo2": 80,
+          "rr": 38,
+          "bpSys": 75,
+          "bpDia": 45,
+          "temp": 39.8,
+          "etco2": 60
+        },
+        "conditions": {
+          "stElev": 1.0,
+          "pvc": true,
+          "wideQRS": false,
+          "tInv": false,
+          "noise": 3
+        },
+        "rhythm": "NSR"
+      },
+      {
+        "time": 240,
+        "label": "Critical - Maximum alarm state",
+        "params": {
+          "hr": 170,
+          "spo2": 75,
+          "rr": 40,
+          "bpSys": 65,
+          "bpDia": 40,
+          "temp": 40.0,
+          "etco2": 65
+        },
+        "conditions": {
+          "stElev": 2.0,
+          "pvc": true,
+          "wideQRS": true,
+          "tInv": false,
+          "noise": 4
+        },
+        "rhythm": "VTach"
+      },
+      {
+        "time": 300,
+        "label": "Late stage - Severe compromise",
+        "params": {
+          "hr": 180,
+          "spo2": 70,
+          "rr": 42,
+          "bpSys": 60,
+          "bpDia": 35,
+          "temp": 40.2,
+          "etco2": 70
+        },
+        "conditions": {
+          "stElev": 2.5,
+          "pvc": true,
+          "wideQRS": true,
+          "tInv": false,
+          "noise": 5
+        },
+        "rhythm": "VTach"
+      }
+    ]
+  }
+}

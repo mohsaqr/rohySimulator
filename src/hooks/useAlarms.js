@@ -53,7 +53,8 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
 
   // Check vitals against thresholds
   const checkVitals = useCallback(() => {
-    if (!vitals || !sessionId) return;
+    if (!vitals) return;
+    // Note: Alarms work even without a session, but won't be logged to database
 
     const now = Date.now();
     const newActiveAlarms = new Set();
@@ -117,6 +118,9 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
 
   // Log alarm to backend
   const logAlarm = async (vital, thresholdType, thresholdValue, actualValue) => {
+    // Skip logging if no active session
+    if (!sessionId) return;
+    
     try {
       const token = localStorage.getItem('token');
       await fetch('/api/alarms/log', {
