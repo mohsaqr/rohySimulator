@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 
 /**
- * Body Map Component with Professional Silhouette and Floating Hotspots
- * Hotspots are always visible as subtle dots, become prominent on hover/selection
+ * Body Map Component with Invisible Polygon Regions
+ * Regions are traced to match actual body silhouette areas
+ * Only visible on hover/selection
  */
 export default function BodyMap({
     view = 'anterior',
@@ -14,219 +15,578 @@ export default function BodyMap({
 }) {
     const [hoveredRegion, setHoveredRegion] = useState(null);
 
-    // Hotspot positions calibrated to actual SVG silhouettes
-    // Man SVG: 358.5 x 1086 (narrow, tall ~1:3)
-    // Woman SVG: 640 x 1280 (wider, ~1:2)
-    const hotspots = {
+    // Polygon regions defined as percentage coordinates [x, y] pairs
+    // Traced to match actual SVG silhouette proportions
+    // Man SVG: 358.5 x 1086, Woman SVG: 640 x 1280
+
+    const regions = {
         anterior: {
-            male: [
-                // Head & Neck (0-10% height)
-                { id: 'head', x: 50, y: 3.5, label: 'Head' },
-                { id: 'eyes', x: 50, y: 2.5, label: 'Eyes', small: true },
-                { id: 'ears', x: 44, y: 3, label: 'L. Ear', small: true },
-                { id: 'mouth', x: 50, y: 5, label: 'Mouth', small: true },
-                { id: 'neck', x: 50, y: 7.5, label: 'Neck' },
-
-                // Shoulders & Upper torso (10-18%)
-                { id: 'shoulderLeft', x: 32, y: 11, label: 'L. Shoulder' },
-                { id: 'shoulderRight', x: 68, y: 11, label: 'R. Shoulder' },
-                { id: 'chestAnterior', x: 50, y: 14, label: 'Chest' },
-                { id: 'heart', x: 54, y: 15, label: 'Heart', small: true },
-
-                // Arms (extending outward, 12-40%)
-                { id: 'upperLimbLeft', x: 24, y: 17, label: 'L. Upper Arm' },
-                { id: 'upperLimbRight', x: 76, y: 17, label: 'R. Upper Arm' },
-                { id: 'elbowLeft', x: 15, y: 24, label: 'L. Elbow', small: true },
-                { id: 'elbowRight', x: 85, y: 24, label: 'R. Elbow', small: true },
-                { id: 'forearmLeft', x: 10, y: 30, label: 'L. Forearm', small: true },
-                { id: 'forearmRight', x: 90, y: 30, label: 'R. Forearm', small: true },
-                { id: 'handLeft', x: 6, y: 38, label: 'L. Hand', small: true },
-                { id: 'handRight', x: 94, y: 38, label: 'R. Hand', small: true },
-
-                // Abdomen & Pelvis (18-35%)
-                { id: 'abdomen', x: 50, y: 22, label: 'Abdomen' },
-                { id: 'groin', x: 50, y: 32, label: 'Groin', small: true },
-
-                // Thighs (35-52%)
-                { id: 'thighLeft', x: 43, y: 42, label: 'L. Thigh' },
-                { id: 'thighRight', x: 57, y: 42, label: 'R. Thigh' },
-
-                // Knees (52-58%)
-                { id: 'kneeLeft', x: 42, y: 53, label: 'L. Knee' },
-                { id: 'kneeRight', x: 58, y: 53, label: 'R. Knee' },
-
-                // Lower legs (58-82%)
-                { id: 'lowerLimbLeft', x: 40, y: 67, label: 'L. Shin' },
-                { id: 'lowerLimbRight', x: 60, y: 67, label: 'R. Shin' },
-
-                // Ankles (82-88%)
-                { id: 'ankleLeft', x: 38, y: 82, label: 'L. Ankle', small: true },
-                { id: 'ankleRight', x: 62, y: 82, label: 'R. Ankle', small: true },
-
-                // Feet (88-97%)
-                { id: 'footLeft', x: 35, y: 92, label: 'L. Foot', small: true },
-                { id: 'footRight', x: 65, y: 92, label: 'R. Foot', small: true },
-            ],
-            female: [
-                // Head & Neck - woman has proportionally smaller head
-                { id: 'head', x: 50, y: 4, label: 'Head' },
-                { id: 'eyes', x: 50, y: 3, label: 'Eyes', small: true },
-                { id: 'ears', x: 45, y: 3.5, label: 'L. Ear', small: true },
-                { id: 'mouth', x: 50, y: 5.5, label: 'Mouth', small: true },
-                { id: 'neck', x: 50, y: 8, label: 'Neck' },
-
-                // Shoulders & Upper torso - woman has narrower shoulders
-                { id: 'shoulderLeft', x: 36, y: 12, label: 'L. Shoulder' },
-                { id: 'shoulderRight', x: 64, y: 12, label: 'R. Shoulder' },
-                { id: 'chestAnterior', x: 50, y: 16, label: 'Chest' },
-                { id: 'heart', x: 54, y: 17, label: 'Heart', small: true },
-
-                // Arms - closer to body for woman
-                { id: 'upperLimbLeft', x: 28, y: 19, label: 'L. Upper Arm' },
-                { id: 'upperLimbRight', x: 72, y: 19, label: 'R. Upper Arm' },
-                { id: 'elbowLeft', x: 22, y: 26, label: 'L. Elbow', small: true },
-                { id: 'elbowRight', x: 78, y: 26, label: 'R. Elbow', small: true },
-                { id: 'forearmLeft', x: 18, y: 32, label: 'L. Forearm', small: true },
-                { id: 'forearmRight', x: 82, y: 32, label: 'R. Forearm', small: true },
-                { id: 'handLeft', x: 14, y: 40, label: 'L. Hand', small: true },
-                { id: 'handRight', x: 86, y: 40, label: 'R. Hand', small: true },
-
-                // Abdomen & Pelvis
-                { id: 'abdomen', x: 50, y: 24, label: 'Abdomen' },
-                { id: 'groin', x: 50, y: 35, label: 'Groin', small: true },
-
-                // Thighs - woman has wider hips
-                { id: 'thighLeft', x: 41, y: 46, label: 'L. Thigh' },
-                { id: 'thighRight', x: 59, y: 46, label: 'R. Thigh' },
-
-                // Knees
-                { id: 'kneeLeft', x: 42, y: 58, label: 'L. Knee' },
-                { id: 'kneeRight', x: 58, y: 58, label: 'R. Knee' },
-
-                // Lower legs
-                { id: 'lowerLimbLeft', x: 41, y: 72, label: 'L. Shin' },
-                { id: 'lowerLimbRight', x: 59, y: 72, label: 'R. Shin' },
-
-                // Ankles
-                { id: 'ankleLeft', x: 40, y: 86, label: 'L. Ankle', small: true },
-                { id: 'ankleRight', x: 60, y: 86, label: 'R. Ankle', small: true },
-
-                // Feet
-                { id: 'footLeft', x: 38, y: 94, label: 'L. Foot', small: true },
-                { id: 'footRight', x: 62, y: 94, label: 'R. Foot', small: true },
-            ]
+            male: {
+                head: {
+                    id: 'head',
+                    label: 'Head',
+                    points: [[42, 0], [58, 0], [60, 3], [58, 7], [42, 7], [40, 3]]
+                },
+                neck: {
+                    id: 'neck',
+                    label: 'Neck',
+                    points: [[44, 7], [56, 7], [56, 10], [44, 10]]
+                },
+                shoulderLeft: {
+                    id: 'shoulderLeft',
+                    label: 'L. Shoulder',
+                    points: [[28, 10], [44, 10], [44, 13], [32, 14], [26, 12]]
+                },
+                shoulderRight: {
+                    id: 'shoulderRight',
+                    label: 'R. Shoulder',
+                    points: [[56, 10], [72, 10], [74, 12], [68, 14], [56, 13]]
+                },
+                chestAnterior: {
+                    id: 'chestAnterior',
+                    label: 'Chest',
+                    points: [[38, 13], [62, 13], [62, 20], [38, 20]]
+                },
+                heart: {
+                    id: 'heart',
+                    label: 'Heart',
+                    points: [[48, 14], [58, 14], [58, 19], [48, 19]]
+                },
+                upperLimbLeft: {
+                    id: 'upperLimbLeft',
+                    label: 'L. Upper Arm',
+                    points: [[20, 13], [28, 13], [24, 24], [16, 24]]
+                },
+                upperLimbRight: {
+                    id: 'upperLimbRight',
+                    label: 'R. Upper Arm',
+                    points: [[72, 13], [80, 13], [84, 24], [76, 24]]
+                },
+                elbowLeft: {
+                    id: 'elbowLeft',
+                    label: 'L. Elbow',
+                    points: [[14, 23], [24, 23], [22, 27], [12, 27]]
+                },
+                elbowRight: {
+                    id: 'elbowRight',
+                    label: 'R. Elbow',
+                    points: [[76, 23], [86, 23], [88, 27], [78, 27]]
+                },
+                forearmLeft: {
+                    id: 'forearmLeft',
+                    label: 'L. Forearm',
+                    points: [[10, 27], [22, 27], [18, 36], [6, 36]]
+                },
+                forearmRight: {
+                    id: 'forearmRight',
+                    label: 'R. Forearm',
+                    points: [[78, 27], [90, 27], [94, 36], [82, 36]]
+                },
+                handLeft: {
+                    id: 'handLeft',
+                    label: 'L. Hand',
+                    points: [[4, 36], [18, 36], [16, 44], [2, 44]]
+                },
+                handRight: {
+                    id: 'handRight',
+                    label: 'R. Hand',
+                    points: [[82, 36], [96, 36], [98, 44], [84, 44]]
+                },
+                abdomen: {
+                    id: 'abdomen',
+                    label: 'Abdomen',
+                    points: [[40, 20], [60, 20], [58, 32], [42, 32]]
+                },
+                groin: {
+                    id: 'groin',
+                    label: 'Groin',
+                    points: [[42, 32], [58, 32], [56, 37], [44, 37]]
+                },
+                thighLeft: {
+                    id: 'thighLeft',
+                    label: 'L. Thigh',
+                    points: [[36, 36], [48, 36], [46, 52], [38, 52]]
+                },
+                thighRight: {
+                    id: 'thighRight',
+                    label: 'R. Thigh',
+                    points: [[52, 36], [64, 36], [62, 52], [54, 52]]
+                },
+                kneeLeft: {
+                    id: 'kneeLeft',
+                    label: 'L. Knee',
+                    points: [[38, 52], [46, 52], [45, 58], [39, 58]]
+                },
+                kneeRight: {
+                    id: 'kneeRight',
+                    label: 'R. Knee',
+                    points: [[54, 52], [62, 52], [61, 58], [55, 58]]
+                },
+                lowerLimbLeft: {
+                    id: 'lowerLimbLeft',
+                    label: 'L. Shin',
+                    points: [[38, 58], [46, 58], [44, 82], [40, 82]]
+                },
+                lowerLimbRight: {
+                    id: 'lowerLimbRight',
+                    label: 'R. Shin',
+                    points: [[54, 58], [62, 58], [60, 82], [56, 82]]
+                },
+                ankleLeft: {
+                    id: 'ankleLeft',
+                    label: 'L. Ankle',
+                    points: [[40, 82], [44, 82], [44, 88], [40, 88]]
+                },
+                ankleRight: {
+                    id: 'ankleRight',
+                    label: 'R. Ankle',
+                    points: [[56, 82], [60, 82], [60, 88], [56, 88]]
+                },
+                footLeft: {
+                    id: 'footLeft',
+                    label: 'L. Foot',
+                    points: [[34, 88], [44, 88], [44, 98], [30, 98]]
+                },
+                footRight: {
+                    id: 'footRight',
+                    label: 'R. Foot',
+                    points: [[56, 88], [66, 88], [70, 98], [56, 98]]
+                }
+            },
+            female: {
+                head: {
+                    id: 'head',
+                    label: 'Head',
+                    points: [[43, 0], [57, 0], [59, 4], [57, 8], [43, 8], [41, 4]]
+                },
+                neck: {
+                    id: 'neck',
+                    label: 'Neck',
+                    points: [[45, 8], [55, 8], [55, 11], [45, 11]]
+                },
+                shoulderLeft: {
+                    id: 'shoulderLeft',
+                    label: 'L. Shoulder',
+                    points: [[32, 11], [45, 11], [45, 14], [36, 15], [30, 13]]
+                },
+                shoulderRight: {
+                    id: 'shoulderRight',
+                    label: 'R. Shoulder',
+                    points: [[55, 11], [68, 11], [70, 13], [64, 15], [55, 14]]
+                },
+                chestAnterior: {
+                    id: 'chestAnterior',
+                    label: 'Chest',
+                    points: [[40, 14], [60, 14], [60, 22], [40, 22]]
+                },
+                heart: {
+                    id: 'heart',
+                    label: 'Heart',
+                    points: [[49, 15], [58, 15], [58, 20], [49, 20]]
+                },
+                upperLimbLeft: {
+                    id: 'upperLimbLeft',
+                    label: 'L. Upper Arm',
+                    points: [[24, 14], [32, 14], [28, 26], [20, 26]]
+                },
+                upperLimbRight: {
+                    id: 'upperLimbRight',
+                    label: 'R. Upper Arm',
+                    points: [[68, 14], [76, 14], [80, 26], [72, 26]]
+                },
+                elbowLeft: {
+                    id: 'elbowLeft',
+                    label: 'L. Elbow',
+                    points: [[18, 25], [28, 25], [26, 30], [16, 30]]
+                },
+                elbowRight: {
+                    id: 'elbowRight',
+                    label: 'R. Elbow',
+                    points: [[72, 25], [82, 25], [84, 30], [74, 30]]
+                },
+                forearmLeft: {
+                    id: 'forearmLeft',
+                    label: 'L. Forearm',
+                    points: [[14, 30], [26, 30], [22, 40], [10, 40]]
+                },
+                forearmRight: {
+                    id: 'forearmRight',
+                    label: 'R. Forearm',
+                    points: [[74, 30], [86, 30], [90, 40], [78, 40]]
+                },
+                handLeft: {
+                    id: 'handLeft',
+                    label: 'L. Hand',
+                    points: [[8, 40], [22, 40], [20, 48], [6, 48]]
+                },
+                handRight: {
+                    id: 'handRight',
+                    label: 'R. Hand',
+                    points: [[78, 40], [92, 40], [94, 48], [80, 48]]
+                },
+                abdomen: {
+                    id: 'abdomen',
+                    label: 'Abdomen',
+                    points: [[42, 22], [58, 22], [56, 35], [44, 35]]
+                },
+                groin: {
+                    id: 'groin',
+                    label: 'Groin',
+                    points: [[44, 35], [56, 35], [54, 40], [46, 40]]
+                },
+                thighLeft: {
+                    id: 'thighLeft',
+                    label: 'L. Thigh',
+                    points: [[38, 39], [49, 39], [47, 57], [40, 57]]
+                },
+                thighRight: {
+                    id: 'thighRight',
+                    label: 'R. Thigh',
+                    points: [[51, 39], [62, 39], [60, 57], [53, 57]]
+                },
+                kneeLeft: {
+                    id: 'kneeLeft',
+                    label: 'L. Knee',
+                    points: [[40, 57], [47, 57], [46, 63], [41, 63]]
+                },
+                kneeRight: {
+                    id: 'kneeRight',
+                    label: 'R. Knee',
+                    points: [[53, 57], [60, 57], [59, 63], [54, 63]]
+                },
+                lowerLimbLeft: {
+                    id: 'lowerLimbLeft',
+                    label: 'L. Shin',
+                    points: [[40, 63], [47, 63], [45, 86], [42, 86]]
+                },
+                lowerLimbRight: {
+                    id: 'lowerLimbRight',
+                    label: 'R. Shin',
+                    points: [[53, 63], [60, 63], [58, 86], [55, 86]]
+                },
+                ankleLeft: {
+                    id: 'ankleLeft',
+                    label: 'L. Ankle',
+                    points: [[42, 86], [46, 86], [46, 91], [42, 91]]
+                },
+                ankleRight: {
+                    id: 'ankleRight',
+                    label: 'R. Ankle',
+                    points: [[54, 86], [58, 86], [58, 91], [54, 91]]
+                },
+                footLeft: {
+                    id: 'footLeft',
+                    label: 'L. Foot',
+                    points: [[38, 91], [46, 91], [46, 99], [36, 99]]
+                },
+                footRight: {
+                    id: 'footRight',
+                    label: 'R. Foot',
+                    points: [[54, 91], [62, 91], [64, 99], [54, 99]]
+                }
+            }
         },
         posterior: {
-            male: [
-                // Head & Neck
-                { id: 'head', x: 50, y: 3.5, label: 'Head' },
-                { id: 'neck', x: 50, y: 7.5, label: 'Neck' },
-
-                // Shoulders & Upper back
-                { id: 'shoulderLeft', x: 32, y: 11, label: 'L. Shoulder' },
-                { id: 'shoulderRight', x: 68, y: 11, label: 'R. Shoulder' },
-                { id: 'scapulaLeft', x: 40, y: 14, label: 'L. Scapula', small: true },
-                { id: 'scapulaRight', x: 60, y: 14, label: 'R. Scapula', small: true },
-                { id: 'backUpper', x: 50, y: 16, label: 'Upper Back' },
-
-                // Arms
-                { id: 'upperLimbLeft', x: 24, y: 17, label: 'L. Upper Arm' },
-                { id: 'upperLimbRight', x: 76, y: 17, label: 'R. Upper Arm' },
-                { id: 'elbowLeft', x: 15, y: 24, label: 'L. Elbow', small: true },
-                { id: 'elbowRight', x: 85, y: 24, label: 'R. Elbow', small: true },
-
-                // Lower back & Sacrum
-                { id: 'backLower', x: 50, y: 24, label: 'Lower Back' },
-                { id: 'sacrum', x: 50, y: 30, label: 'Sacrum', small: true },
-
-                // Buttocks
-                { id: 'buttockLeft', x: 43, y: 34, label: 'L. Buttock' },
-                { id: 'buttockRight', x: 57, y: 34, label: 'R. Buttock' },
-
-                // Posterior thighs
-                { id: 'thighLeft', x: 43, y: 44, label: 'L. Thigh' },
-                { id: 'thighRight', x: 57, y: 44, label: 'R. Thigh' },
-
-                // Popliteal fossa (back of knee)
-                { id: 'poplitealLeft', x: 42, y: 53, label: 'L. Popliteal', small: true },
-                { id: 'poplitealRight', x: 58, y: 53, label: 'R. Popliteal', small: true },
-
-                // Calves
-                { id: 'calfLeft', x: 40, y: 67, label: 'L. Calf' },
-                { id: 'calfRight', x: 60, y: 67, label: 'R. Calf' },
-
-                // Achilles & Heels
-                { id: 'achillesLeft', x: 38, y: 80, label: 'L. Achilles', small: true },
-                { id: 'achillesRight', x: 62, y: 80, label: 'R. Achilles', small: true },
-                { id: 'heelLeft', x: 36, y: 90, label: 'L. Heel', small: true },
-                { id: 'heelRight', x: 64, y: 90, label: 'R. Heel', small: true },
-            ],
-            female: [
-                // Head & Neck
-                { id: 'head', x: 50, y: 4, label: 'Head' },
-                { id: 'neck', x: 50, y: 8, label: 'Neck' },
-
-                // Shoulders & Upper back
-                { id: 'shoulderLeft', x: 36, y: 12, label: 'L. Shoulder' },
-                { id: 'shoulderRight', x: 64, y: 12, label: 'R. Shoulder' },
-                { id: 'scapulaLeft', x: 42, y: 16, label: 'L. Scapula', small: true },
-                { id: 'scapulaRight', x: 58, y: 16, label: 'R. Scapula', small: true },
-                { id: 'backUpper', x: 50, y: 18, label: 'Upper Back' },
-
-                // Arms
-                { id: 'upperLimbLeft', x: 28, y: 19, label: 'L. Upper Arm' },
-                { id: 'upperLimbRight', x: 72, y: 19, label: 'R. Upper Arm' },
-                { id: 'elbowLeft', x: 22, y: 26, label: 'L. Elbow', small: true },
-                { id: 'elbowRight', x: 78, y: 26, label: 'R. Elbow', small: true },
-
-                // Lower back & Sacrum
-                { id: 'backLower', x: 50, y: 26, label: 'Lower Back' },
-                { id: 'sacrum', x: 50, y: 32, label: 'Sacrum', small: true },
-
-                // Buttocks - wider for woman
-                { id: 'buttockLeft', x: 41, y: 37, label: 'L. Buttock' },
-                { id: 'buttockRight', x: 59, y: 37, label: 'R. Buttock' },
-
-                // Posterior thighs
-                { id: 'thighLeft', x: 42, y: 48, label: 'L. Thigh' },
-                { id: 'thighRight', x: 58, y: 48, label: 'R. Thigh' },
-
-                // Popliteal fossa
-                { id: 'poplitealLeft', x: 42, y: 58, label: 'L. Popliteal', small: true },
-                { id: 'poplitealRight', x: 58, y: 58, label: 'R. Popliteal', small: true },
-
-                // Calves
-                { id: 'calfLeft', x: 41, y: 72, label: 'L. Calf' },
-                { id: 'calfRight', x: 59, y: 72, label: 'R. Calf' },
-
-                // Achilles & Heels
-                { id: 'achillesLeft', x: 40, y: 84, label: 'L. Achilles', small: true },
-                { id: 'achillesRight', x: 60, y: 84, label: 'R. Achilles', small: true },
-                { id: 'heelLeft', x: 38, y: 93, label: 'L. Heel', small: true },
-                { id: 'heelRight', x: 62, y: 93, label: 'R. Heel', small: true },
-            ]
+            male: {
+                head: {
+                    id: 'head',
+                    label: 'Head',
+                    points: [[42, 0], [58, 0], [60, 3], [58, 7], [42, 7], [40, 3]]
+                },
+                neck: {
+                    id: 'neck',
+                    label: 'Neck',
+                    points: [[44, 7], [56, 7], [56, 10], [44, 10]]
+                },
+                shoulderLeft: {
+                    id: 'shoulderLeft',
+                    label: 'L. Shoulder',
+                    points: [[28, 10], [44, 10], [44, 13], [32, 14], [26, 12]]
+                },
+                shoulderRight: {
+                    id: 'shoulderRight',
+                    label: 'R. Shoulder',
+                    points: [[56, 10], [72, 10], [74, 12], [68, 14], [56, 13]]
+                },
+                scapulaLeft: {
+                    id: 'scapulaLeft',
+                    label: 'L. Scapula',
+                    points: [[34, 13], [44, 13], [44, 20], [36, 20]]
+                },
+                scapulaRight: {
+                    id: 'scapulaRight',
+                    label: 'R. Scapula',
+                    points: [[56, 13], [66, 13], [64, 20], [56, 20]]
+                },
+                backUpper: {
+                    id: 'backUpper',
+                    label: 'Upper Back',
+                    points: [[44, 13], [56, 13], [56, 20], [44, 20]]
+                },
+                upperLimbLeft: {
+                    id: 'upperLimbLeft',
+                    label: 'L. Upper Arm',
+                    points: [[20, 13], [28, 13], [24, 24], [16, 24]]
+                },
+                upperLimbRight: {
+                    id: 'upperLimbRight',
+                    label: 'R. Upper Arm',
+                    points: [[72, 13], [80, 13], [84, 24], [76, 24]]
+                },
+                elbowLeft: {
+                    id: 'elbowLeft',
+                    label: 'L. Elbow',
+                    points: [[14, 23], [24, 23], [22, 27], [12, 27]]
+                },
+                elbowRight: {
+                    id: 'elbowRight',
+                    label: 'R. Elbow',
+                    points: [[76, 23], [86, 23], [88, 27], [78, 27]]
+                },
+                backLower: {
+                    id: 'backLower',
+                    label: 'Lower Back',
+                    points: [[40, 20], [60, 20], [58, 30], [42, 30]]
+                },
+                sacrum: {
+                    id: 'sacrum',
+                    label: 'Sacrum',
+                    points: [[44, 30], [56, 30], [54, 35], [46, 35]]
+                },
+                buttockLeft: {
+                    id: 'buttockLeft',
+                    label: 'L. Buttock',
+                    points: [[36, 32], [48, 32], [46, 40], [38, 40]]
+                },
+                buttockRight: {
+                    id: 'buttockRight',
+                    label: 'R. Buttock',
+                    points: [[52, 32], [64, 32], [62, 40], [54, 40]]
+                },
+                thighLeft: {
+                    id: 'thighLeft',
+                    label: 'L. Thigh',
+                    points: [[38, 40], [46, 40], [45, 52], [39, 52]]
+                },
+                thighRight: {
+                    id: 'thighRight',
+                    label: 'R. Thigh',
+                    points: [[54, 40], [62, 40], [61, 52], [55, 52]]
+                },
+                poplitealLeft: {
+                    id: 'poplitealLeft',
+                    label: 'L. Popliteal',
+                    points: [[39, 52], [45, 52], [44, 58], [40, 58]]
+                },
+                poplitealRight: {
+                    id: 'poplitealRight',
+                    label: 'R. Popliteal',
+                    points: [[55, 52], [61, 52], [60, 58], [56, 58]]
+                },
+                calfLeft: {
+                    id: 'calfLeft',
+                    label: 'L. Calf',
+                    points: [[38, 58], [46, 58], [44, 80], [40, 80]]
+                },
+                calfRight: {
+                    id: 'calfRight',
+                    label: 'R. Calf',
+                    points: [[54, 58], [62, 58], [60, 80], [56, 80]]
+                },
+                achillesLeft: {
+                    id: 'achillesLeft',
+                    label: 'L. Achilles',
+                    points: [[40, 80], [44, 80], [44, 88], [40, 88]]
+                },
+                achillesRight: {
+                    id: 'achillesRight',
+                    label: 'R. Achilles',
+                    points: [[56, 80], [60, 80], [60, 88], [56, 88]]
+                },
+                heelLeft: {
+                    id: 'heelLeft',
+                    label: 'L. Heel',
+                    points: [[38, 88], [46, 88], [46, 96], [38, 96]]
+                },
+                heelRight: {
+                    id: 'heelRight',
+                    label: 'R. Heel',
+                    points: [[54, 88], [62, 88], [62, 96], [54, 96]]
+                }
+            },
+            female: {
+                head: {
+                    id: 'head',
+                    label: 'Head',
+                    points: [[43, 0], [57, 0], [59, 4], [57, 8], [43, 8], [41, 4]]
+                },
+                neck: {
+                    id: 'neck',
+                    label: 'Neck',
+                    points: [[45, 8], [55, 8], [55, 11], [45, 11]]
+                },
+                shoulderLeft: {
+                    id: 'shoulderLeft',
+                    label: 'L. Shoulder',
+                    points: [[32, 11], [45, 11], [45, 14], [36, 15], [30, 13]]
+                },
+                shoulderRight: {
+                    id: 'shoulderRight',
+                    label: 'R. Shoulder',
+                    points: [[55, 11], [68, 11], [70, 13], [64, 15], [55, 14]]
+                },
+                scapulaLeft: {
+                    id: 'scapulaLeft',
+                    label: 'L. Scapula',
+                    points: [[38, 14], [46, 14], [46, 22], [40, 22]]
+                },
+                scapulaRight: {
+                    id: 'scapulaRight',
+                    label: 'R. Scapula',
+                    points: [[54, 14], [62, 14], [60, 22], [54, 22]]
+                },
+                backUpper: {
+                    id: 'backUpper',
+                    label: 'Upper Back',
+                    points: [[46, 14], [54, 14], [54, 22], [46, 22]]
+                },
+                upperLimbLeft: {
+                    id: 'upperLimbLeft',
+                    label: 'L. Upper Arm',
+                    points: [[24, 14], [32, 14], [28, 26], [20, 26]]
+                },
+                upperLimbRight: {
+                    id: 'upperLimbRight',
+                    label: 'R. Upper Arm',
+                    points: [[68, 14], [76, 14], [80, 26], [72, 26]]
+                },
+                elbowLeft: {
+                    id: 'elbowLeft',
+                    label: 'L. Elbow',
+                    points: [[18, 25], [28, 25], [26, 30], [16, 30]]
+                },
+                elbowRight: {
+                    id: 'elbowRight',
+                    label: 'R. Elbow',
+                    points: [[72, 25], [82, 25], [84, 30], [74, 30]]
+                },
+                backLower: {
+                    id: 'backLower',
+                    label: 'Lower Back',
+                    points: [[42, 22], [58, 22], [56, 33], [44, 33]]
+                },
+                sacrum: {
+                    id: 'sacrum',
+                    label: 'Sacrum',
+                    points: [[46, 33], [54, 33], [52, 38], [48, 38]]
+                },
+                buttockLeft: {
+                    id: 'buttockLeft',
+                    label: 'L. Buttock',
+                    points: [[38, 35], [50, 35], [48, 44], [40, 44]]
+                },
+                buttockRight: {
+                    id: 'buttockRight',
+                    label: 'R. Buttock',
+                    points: [[50, 35], [62, 35], [60, 44], [52, 44]]
+                },
+                thighLeft: {
+                    id: 'thighLeft',
+                    label: 'L. Thigh',
+                    points: [[40, 44], [48, 44], [46, 57], [42, 57]]
+                },
+                thighRight: {
+                    id: 'thighRight',
+                    label: 'R. Thigh',
+                    points: [[52, 44], [60, 44], [58, 57], [54, 57]]
+                },
+                poplitealLeft: {
+                    id: 'poplitealLeft',
+                    label: 'L. Popliteal',
+                    points: [[42, 57], [46, 57], [45, 63], [43, 63]]
+                },
+                poplitealRight: {
+                    id: 'poplitealRight',
+                    label: 'R. Popliteal',
+                    points: [[54, 57], [58, 57], [57, 63], [55, 63]]
+                },
+                calfLeft: {
+                    id: 'calfLeft',
+                    label: 'L. Calf',
+                    points: [[42, 63], [46, 63], [45, 84], [43, 84]]
+                },
+                calfRight: {
+                    id: 'calfRight',
+                    label: 'R. Calf',
+                    points: [[54, 63], [58, 63], [57, 84], [55, 84]]
+                },
+                achillesLeft: {
+                    id: 'achillesLeft',
+                    label: 'L. Achilles',
+                    points: [[43, 84], [45, 84], [45, 90], [43, 90]]
+                },
+                achillesRight: {
+                    id: 'achillesRight',
+                    label: 'R. Achilles',
+                    points: [[55, 84], [57, 84], [57, 90], [55, 90]]
+                },
+                heelLeft: {
+                    id: 'heelLeft',
+                    label: 'L. Heel',
+                    points: [[42, 90], [46, 90], [46, 97], [42, 97]]
+                },
+                heelRight: {
+                    id: 'heelRight',
+                    label: 'R. Heel',
+                    points: [[54, 90], [58, 90], [58, 97], [54, 97]]
+                }
+            }
         }
     };
 
-    const currentHotspots = hotspots[view]?.[gender] || hotspots.anterior.male;
+    const currentRegions = regions[view]?.[gender] || regions.anterior.male;
+    const silhouetteSrc = gender === 'female' ? '/woman-silhouette.svg' : '/man-silhouette.svg';
 
-    // Get hotspot visual state
-    const getHotspotState = (regionId) => {
+    // Convert points array to SVG polygon points string
+    const pointsToString = (points) => {
+        return points.map(([x, y]) => `${x},${y}`).join(' ');
+    };
+
+    // Get region visual state
+    const getRegionState = (regionId) => {
         const isSelected = selectedRegion === regionId;
         const isHovered = hoveredRegion === regionId;
         const isExamined = examinedRegions.has(regionId);
         const isAbnormal = abnormalRegions.has(regionId);
-
         return { isSelected, isHovered, isExamined, isAbnormal };
     };
 
-    const silhouetteSrc = gender === 'female' ? '/woman-silhouette.svg' : '/man-silhouette.svg';
+    // Get fill color based on state
+    const getFillColor = (regionId) => {
+        const { isSelected, isHovered, isExamined, isAbnormal } = getRegionState(regionId);
+
+        if (isAbnormal) return 'rgba(239, 68, 68, 0.5)'; // red
+        if (isExamined) return 'rgba(34, 197, 94, 0.4)'; // green
+        if (isSelected) return 'rgba(6, 182, 212, 0.5)'; // cyan
+        if (isHovered) return 'rgba(255, 255, 255, 0.3)'; // white
+        return 'transparent';
+    };
+
+    // Get stroke color based on state
+    const getStrokeColor = (regionId) => {
+        const { isSelected, isHovered, isExamined, isAbnormal } = getRegionState(regionId);
+
+        if (isAbnormal) return 'rgba(239, 68, 68, 0.8)';
+        if (isExamined) return 'rgba(34, 197, 94, 0.6)';
+        if (isSelected) return 'rgba(6, 182, 212, 0.8)';
+        if (isHovered) return 'rgba(255, 255, 255, 0.6)';
+        return 'transparent';
+    };
 
     return (
         <div className="relative w-full h-full flex flex-col overflow-hidden">
-            {/* Silhouette Container - Full height */}
+            {/* Main container */}
             <div className="relative flex-1 flex items-center justify-center min-h-0">
-                {/* Wrapper for proper aspect ratio */}
                 <div
                     className="relative h-full"
                     style={{
@@ -235,112 +595,106 @@ export default function BodyMap({
                         maxWidth: '100%'
                     }}
                 >
-                    {/* SVG Silhouette */}
+                    {/* SVG Silhouette as background */}
                     <img
                         src={silhouetteSrc}
                         alt={`${gender} body silhouette`}
-                        className="w-full h-full object-contain select-none"
+                        className="absolute inset-0 w-full h-full object-contain select-none pointer-events-none"
                         style={{
-                            filter: 'invert(0.7) sepia(0.05) saturate(0.3) brightness(1.2)',
+                            filter: 'invert(0.6) sepia(0.05) saturate(0.3) brightness(1.3)',
                         }}
                         draggable={false}
                     />
 
-                    {/* Hotspots Overlay */}
-                    <div className="absolute inset-0">
-                        {currentHotspots.map(hotspot => {
-                            const { isSelected, isHovered, isExamined, isAbnormal } = getHotspotState(hotspot.id);
-                            const isActive = isSelected || isHovered;
+                    {/* SVG Overlay for clickable regions */}
+                    <svg
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                        className="absolute inset-0 w-full h-full"
+                        style={{ cursor: 'pointer' }}
+                    >
+                        {Object.values(currentRegions).map(region => {
+                            const { isSelected, isHovered, isAbnormal } = getRegionState(region.id);
+                            const showLabel = isSelected || isHovered;
 
-                            // Determine colors
-                            let bgColor = 'bg-white/40';
-                            let borderColor = 'border-white/60';
-                            let ringColor = '';
-
-                            if (isAbnormal) {
-                                bgColor = 'bg-red-500';
-                                borderColor = 'border-red-300';
-                                ringColor = 'ring-2 ring-red-500/50';
-                            } else if (isExamined) {
-                                bgColor = 'bg-emerald-500';
-                                borderColor = 'border-emerald-300';
-                            } else if (isSelected) {
-                                bgColor = 'bg-cyan-400';
-                                borderColor = 'border-cyan-200';
-                                ringColor = 'ring-2 ring-cyan-400/50';
-                            } else if (isHovered) {
-                                bgColor = 'bg-white/80';
-                                borderColor = 'border-white';
-                            }
-
-                            const size = hotspot.small
-                                ? (isActive ? 'w-4 h-4' : 'w-2 h-2')
-                                : (isActive ? 'w-5 h-5' : 'w-3 h-3');
+                            // Calculate label position (center of polygon)
+                            const centerX = region.points.reduce((sum, p) => sum + p[0], 0) / region.points.length;
+                            const centerY = region.points.reduce((sum, p) => sum + p[1], 0) / region.points.length;
 
                             return (
-                                <div
-                                    key={hotspot.id}
-                                    className="absolute transform -translate-x-1/2 -translate-y-1/2 group z-10"
-                                    style={{
-                                        left: `${hotspot.x}%`,
-                                        top: `${hotspot.y}%`,
-                                    }}
-                                >
-                                    {/* Pulse ring for abnormal */}
-                                    {isAbnormal && (
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <div className="w-6 h-6 rounded-full bg-red-500/30 animate-ping" />
-                                        </div>
-                                    )}
-
-                                    {/* Hotspot button */}
-                                    <button
-                                        onClick={() => onRegionClick(hotspot.id)}
-                                        onMouseEnter={() => setHoveredRegion(hotspot.id)}
+                                <g key={region.id}>
+                                    {/* Clickable polygon region */}
+                                    <polygon
+                                        points={pointsToString(region.points)}
+                                        fill={getFillColor(region.id)}
+                                        stroke={getStrokeColor(region.id)}
+                                        strokeWidth="0.5"
+                                        className="transition-all duration-150 cursor-pointer"
+                                        onClick={() => onRegionClick(region.id)}
+                                        onMouseEnter={() => setHoveredRegion(region.id)}
                                         onMouseLeave={() => setHoveredRegion(null)}
-                                        className={`
-                                            ${size} ${bgColor} ${borderColor} ${ringColor}
-                                            rounded-full border shadow-sm
-                                            cursor-pointer transition-all duration-150
-                                            hover:scale-150 hover:bg-white/90 hover:border-white
-                                            flex items-center justify-center
-                                        `}
-                                        title={hotspot.label}
                                     />
 
-                                    {/* Label - shows on hover */}
-                                    <div className={`
-                                        absolute left-1/2 -translate-x-1/2 mt-1
-                                        px-2 py-0.5 rounded text-[10px] font-medium whitespace-nowrap
-                                        bg-black/80 text-white border border-white/20
-                                        transition-all duration-150 pointer-events-none
-                                        ${isActive ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1'}
-                                    `}>
-                                        {hotspot.label}
-                                    </div>
-                                </div>
+                                    {/* Pulsing indicator for abnormal regions */}
+                                    {isAbnormal && (
+                                        <circle
+                                            cx={centerX}
+                                            cy={centerY}
+                                            r="2"
+                                            fill="rgba(239, 68, 68, 0.8)"
+                                            className="animate-ping"
+                                        />
+                                    )}
+
+                                    {/* Label on hover/select */}
+                                    {showLabel && (
+                                        <g>
+                                            <rect
+                                                x={centerX - 8}
+                                                y={centerY - 2.5}
+                                                width="16"
+                                                height="4"
+                                                rx="0.5"
+                                                fill="rgba(0, 0, 0, 0.85)"
+                                                stroke="rgba(255, 255, 255, 0.3)"
+                                                strokeWidth="0.2"
+                                            />
+                                            <text
+                                                x={centerX}
+                                                y={centerY + 0.8}
+                                                textAnchor="middle"
+                                                fontSize="2.2"
+                                                fill="white"
+                                                fontWeight="500"
+                                                style={{ pointerEvents: 'none' }}
+                                            >
+                                                {region.label}
+                                            </text>
+                                        </g>
+                                    )}
+                                </g>
                             );
                         })}
-                    </div>
+                    </svg>
                 </div>
             </div>
 
-            {/* Compact Legend */}
+            {/* Legend */}
             <div className="flex items-center justify-center gap-4 py-1.5 border-t border-slate-700/50 bg-slate-900/50">
                 <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-white/40 border border-white/60" />
-                    <span className="text-[10px] text-slate-500">Not examined</span>
+                    <div className="w-3 h-3 rounded border border-white/30 bg-transparent" />
+                    <span className="text-[10px] text-slate-500">Hover to reveal</span>
                 </div>
                 <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 border border-emerald-300" />
+                    <div className="w-3 h-3 rounded bg-emerald-500/50 border border-emerald-400" />
                     <span className="text-[10px] text-slate-500">Normal</span>
                 </div>
                 <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-red-500 border border-red-300" />
+                    <div className="w-3 h-3 rounded bg-red-500/50 border border-red-400" />
                     <span className="text-[10px] text-slate-500">Abnormal</span>
                 </div>
                 <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-cyan-400 border border-cyan-200" />
+                    <div className="w-3 h-3 rounded bg-cyan-500/50 border border-cyan-400" />
                     <span className="text-[10px] text-slate-500">Selected</span>
                 </div>
             </div>
