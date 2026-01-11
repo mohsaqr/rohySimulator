@@ -1195,9 +1195,9 @@ function LLMConfiguration() {
     const [showApiKey, setShowApiKey] = useState(false);
 
     const PROVIDERS = {
-        openai: { name: 'OpenAI', defaultBase: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', needsKey: true },
-        lmstudio: { name: 'LM Studio (Local)', defaultBase: 'http://localhost:1234/v1', defaultModel: 'local-model', needsKey: false },
-        ollama: { name: 'Ollama (Local)', defaultBase: 'http://localhost:11434/v1', defaultModel: 'llama3', needsKey: false }
+        openai: { name: 'OpenAI', defaultBase: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', needsKey: true, modelRequired: true },
+        lmstudio: { name: 'LM Studio (Local)', defaultBase: 'http://localhost:1234/v1', defaultModel: '', needsKey: false, modelRequired: false },
+        ollama: { name: 'Ollama (Local)', defaultBase: 'http://localhost:11434/v1', defaultModel: 'llama3', needsKey: false, modelRequired: true }
     };
 
     useEffect(() => {
@@ -1380,13 +1380,18 @@ function LLMConfiguration() {
 
                     {/* Model */}
                     <div>
-                        <label className="block text-sm font-medium text-neutral-300 mb-2">Model</label>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">
+                            Model
+                            {!currentProvider.modelRequired && (
+                                <span className="text-neutral-500 text-xs ml-2">(optional - uses loaded model)</span>
+                            )}
+                        </label>
                         <input
                             type="text"
                             value={llmConfig.model}
                             onChange={(e) => setLlmConfig(prev => ({ ...prev, model: e.target.value }))}
                             className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
-                            placeholder="gpt-4o-mini"
+                            placeholder={currentProvider.modelRequired ? 'gpt-4o-mini' : 'Leave empty to use loaded model'}
                         />
                     </div>
 

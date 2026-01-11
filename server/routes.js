@@ -3053,7 +3053,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         });
 
         const provider = await getLLMSetting('llm_provider', 'lmstudio');
-        const model = await getLLMSetting('llm_model', 'local-model');
+        const model = await getLLMSetting('llm_model', '');
         const baseUrl = await getLLMSetting('llm_base_url', 'http://localhost:1234/v1');
         const apiKey = await getLLMSetting('llm_api_key', '');
 
@@ -3072,16 +3072,22 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             conversation.push(...messages);
         }
 
-        // 10. Make LLM request
-        console.log(`[LLM Proxy] User ${userId} sending request to ${provider}/${model}`);
+        // 10. Build request payload - model is optional for local providers
+        const requestPayload = {
+            messages: conversation,
+            stream: false
+        };
+        // Only include model if specified (LM Studio uses default if omitted)
+        if (model && model.trim() !== '') {
+            requestPayload.model = model;
+        }
+
+        // 11. Make LLM request
+        console.log(`[LLM Proxy] User ${userId} sending request to ${provider}${model ? '/' + model : ' (default model)'}`);
         const response = await fetch(`${baseUrl}/chat/completions`, {
             method: 'POST',
             headers: llmHeaders,
-            body: JSON.stringify({
-                model: model,
-                messages: conversation,
-                stream: false
-            })
+            body: JSON.stringify(requestPayload)
         });
 
         const responseTime = Date.now() - startTime;
@@ -4711,7 +4717,7 @@ router.put('/platform-settings/llm', authenticateToken, requireAdmin, async (req
 router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const provider = await getPlatformSetting('llm_provider') || DEFAULT_LLM_SETTINGS.provider;
-        const model = await getPlatformSetting('llm_model') || DEFAULT_LLM_SETTINGS.model;
+        const model = await getPlatformSetting('llm_model') || '';
         const baseUrl = await getPlatformSetting('llm_base_url') || DEFAULT_LLM_SETTINGS.baseUrl;
         const apiKey = await getPlatformSetting('llm_api_key') || '';
 
@@ -4720,14 +4726,19 @@ router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, asyn
             headers['Authorization'] = `Bearer ${apiKey}`;
         }
 
+        // Build request payload - model is optional for local providers (LM Studio)
+        const requestPayload = {
+            messages: [{ role: 'user', content: 'Say "test successful" in exactly two words.' }],
+            max_tokens: 10
+        };
+        if (model && model.trim() !== '') {
+            requestPayload.model = model;
+        }
+
         const testResponse = await fetch(`${baseUrl}/chat/completions`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({
-                model: model,
-                messages: [{ role: 'user', content: 'Say "test successful" in exactly two words.' }],
-                max_tokens: 10
-            })
+            body: JSON.stringify(requestPayload)
         });
 
         if (!testResponse.ok) {
