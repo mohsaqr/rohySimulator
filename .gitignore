@@ -22,3 +22,18 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Server files
+server/.env
+server/database.sqlite
+
+# User uploads
+public/uploads/
+
+# Claude workspace
+.claude/
+
+# Misc
+nul
+.Rhistory
+*.svg.bak
