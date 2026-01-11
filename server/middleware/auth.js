@@ -9,7 +9,14 @@ const __dirname = path.dirname(__filename);
 // Load environment variables from server/.env
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key';
+// JWT_SECRET is required - fail fast if not configured
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error('FATAL: JWT_SECRET environment variable is not set!');
+    console.error('Please set JWT_SECRET in server/.env file');
+    console.error('Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"');
+    process.exit(1);
+}
 
 // Middleware to authenticate JWT token
 export const authenticateToken = (req, res, next) => {

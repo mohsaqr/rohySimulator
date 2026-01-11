@@ -50,7 +50,12 @@ function logAudit(params) {
             newValue ? JSON.stringify(newValue) : null,
             ipAddress, userAgent, sessionId, status, errorMessage,
             metadata ? JSON.stringify(metadata) : null
-        ]
+        ],
+        (err) => {
+            if (err) {
+                console.error('[Audit Log] Failed to write audit log:', err.message);
+            }
+        }
     );
 }
 
@@ -69,14 +74,19 @@ function createCaseVersion(caseId, userId, changeType, description, configSnapsh
         [caseId],
         (err, row) => {
             if (err) {
-                console.error('Error getting version number:', err);
+                console.error('[Case Version] Error getting version number:', err.message);
                 return;
             }
             const versionNumber = row?.next_version || 1;
             db.run(
                 `INSERT INTO case_versions (case_id, version_number, changed_by, change_type, changes_description, config_snapshot)
                  VALUES (?, ?, ?, ?, ?, ?)`,
-                [caseId, versionNumber, userId, changeType, description, JSON.stringify(configSnapshot)]
+                [caseId, versionNumber, userId, changeType, description, JSON.stringify(configSnapshot)],
+                (err) => {
+                    if (err) {
+                        console.error('[Case Version] Failed to create version:', err.message);
+                    }
+                }
             );
         }
     );
@@ -2455,8 +2465,14 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, (req, res) 
             return res.status(404).json({ error: 'Session not found' });
         }
         
-        // Parse case config
-        const caseConfig = JSON.parse(session.config || '{}');
+        // Parse case config safely
+        let caseConfig = {};
+        try {
+            caseConfig = JSON.parse(session.config || '{}');
+        } catch (parseErr) {
+            console.error('[Labs API] Invalid case config JSON:', parseErr.message);
+            return res.status(500).json({ error: 'Invalid case configuration' });
+        }
         const defaultLabsEnabled = caseConfig.investigations?.defaultLabsEnabled !== false;
         
         // Get configured abnormal labs for this case
@@ -2503,9 +2519,15 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, (req, res) 
 
             // Then DB labs override (they have proper IDs)
             dbConfiguredLabs.forEach(lab => {
+                let normalSamples = [];
+                try {
+                    normalSamples = JSON.parse(lab.normal_samples || '[]');
+                } catch (e) {
+                    console.error(`[Labs API] Invalid normal_samples JSON for ${lab.test_name}:`, e.message);
+                }
                 configuredMap[lab.test_name] = {
                     ...lab,
-                    normal_samples: JSON.parse(lab.normal_samples || '[]'),
+                    normal_samples: normalSamples,
                     source: 'database'
                 };
             });
@@ -2914,9 +2936,12 @@ router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireAdmin, 
         // Log the instructor edit
         db.run(
             `INSERT INTO event_log (session_id, event_type, description) VALUES (?, ?, ?)`,
-            [sessionId, 'lab_value_edited', `Instructor edited lab value for test ID ${labId} to ${current_value}`]
+            [sessionId, 'lab_value_edited', `Instructor edited lab value for test ID ${labId} to ${current_value}`],
+            (err) => {
+                if (err) console.error('[Event Log] Failed to log lab edit:', err.message);
+            }
         );
-        
+
         res.json({ 
             message: 'Lab value updated',
             new_value: current_value
@@ -2973,11 +2998,17 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         const tokensPlatformDaily = await getLimitSetting('rate_limit_tokens_platform_daily', 0);
         const costPlatformDaily = await getLimitSetting('rate_limit_cost_platform_daily', 0);
 
+        // Helper to log rate limit events (fire and forget with error handling)
+        const logRateLimit = (msg) => {
+            db.run('INSERT INTO llm_request_log (user_id, session_id, status, error_message) VALUES (?, ?, ?, ?)',
+                [userId, session_id, 'rate_limited', msg],
+                (err) => { if (err) console.error('[LLM Rate Limit] Log failed:', err.message); }
+            );
+        };
+
         // 5. Check user rate limits (0 = unlimited/disabled)
         if (tokensPerUserDaily > 0 && userUsage.total_tokens >= tokensPerUserDaily) {
-            // Log rate limit hit
-            db.run('INSERT INTO llm_request_log (user_id, session_id, status, error_message) VALUES (?, ?, ?, ?)',
-                [userId, session_id, 'rate_limited', 'User daily token limit exceeded']);
+            logRateLimit('User daily token limit exceeded');
             return res.status(429).json({
                 error: 'Daily token limit exceeded',
                 tokensUsed: userUsage.total_tokens,
@@ -2987,8 +3018,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         }
 
         if (costPerUserDaily > 0 && userUsage.estimated_cost >= costPerUserDaily) {
-            db.run('INSERT INTO llm_request_log (user_id, session_id, status, error_message) VALUES (?, ?, ?, ?)',
-                [userId, session_id, 'rate_limited', 'User daily cost limit exceeded']);
+            logRateLimit('User daily cost limit exceeded');
             return res.status(429).json({
                 error: 'Daily cost limit exceeded',
                 costUsed: userUsage.estimated_cost,
@@ -2999,8 +3029,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
 
         // 6. Check platform rate limits (0 = unlimited/disabled)
         if (tokensPlatformDaily > 0 && (platformUsage.total_tokens || 0) >= tokensPlatformDaily) {
-            db.run('INSERT INTO llm_request_log (user_id, session_id, status, error_message) VALUES (?, ?, ?, ?)',
-                [userId, session_id, 'rate_limited', 'Platform daily token limit exceeded']);
+            logRateLimit('Platform daily token limit exceeded');
             return res.status(429).json({
                 error: 'Platform daily token limit exceeded. Please try again tomorrow.',
                 resetsAt: 'midnight UTC'
@@ -3008,8 +3037,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         }
 
         if (costPlatformDaily > 0 && (platformUsage.total_cost || 0) >= costPlatformDaily) {
-            db.run('INSERT INTO llm_request_log (user_id, session_id, status, error_message) VALUES (?, ?, ?, ?)',
-                [userId, session_id, 'rate_limited', 'Platform daily cost limit exceeded']);
+            logRateLimit('Platform daily cost limit exceeded');
             return res.status(429).json({
                 error: 'Platform daily cost limit exceeded. Please try again tomorrow.',
                 resetsAt: 'midnight UTC'
