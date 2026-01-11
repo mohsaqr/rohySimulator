@@ -3056,6 +3056,11 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         const model = await getLLMSetting('llm_model', '');
         const baseUrl = await getLLMSetting('llm_base_url', 'http://localhost:1234/v1');
         const apiKey = await getLLMSetting('llm_api_key', '');
+        const maxOutputTokensRaw = await getLLMSetting('llm_max_output_tokens', '');
+        const temperatureRaw = await getLLMSetting('llm_temperature', '');
+        const maxOutputTokens = maxOutputTokensRaw ? parseInt(maxOutputTokensRaw) : null;
+        const temperature = temperatureRaw ? parseFloat(temperatureRaw) : null;
+        const systemPromptTemplate = await getLLMSetting('llm_system_prompt_template', '');
 
         // 8. Build headers
         const llmHeaders = { 'Content-Type': 'application/json' };
@@ -3063,10 +3068,17 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             llmHeaders['Authorization'] = `Bearer ${apiKey}`;
         }
 
-        // 9. Build request body
+        // 9. Build request body - combine platform system prompt with case-specific prompt
         const conversation = [];
+        let fullSystemPrompt = '';
+        if (systemPromptTemplate) {
+            fullSystemPrompt = systemPromptTemplate;
+        }
         if (system_prompt) {
-            conversation.push({ role: 'system', content: system_prompt });
+            fullSystemPrompt += (fullSystemPrompt ? '\n\n---\n\n' : '') + system_prompt;
+        }
+        if (fullSystemPrompt) {
+            conversation.push({ role: 'system', content: fullSystemPrompt });
         }
         if (messages && Array.isArray(messages)) {
             conversation.push(...messages);
@@ -3075,9 +3087,20 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // 10. Build request payload - model is optional for local providers
         const requestPayload = {
             messages: conversation,
-            stream: false,
-            max_tokens: 4096
+            stream: false
         };
+        // Only include temperature if set
+        if (temperature !== null) {
+            requestPayload.temperature = temperature;
+        }
+        // Only include max tokens if set - use max_completion_tokens for OpenAI (newer models), max_tokens for others
+        if (maxOutputTokens) {
+            if (provider === 'openai') {
+                requestPayload.max_completion_tokens = maxOutputTokens;
+            } else {
+                requestPayload.max_tokens = maxOutputTokens;
+            }
+        }
         // Only include model if specified (LM Studio uses default if omitted)
         if (model && model.trim() !== '') {
             requestPayload.model = model;
@@ -4148,8 +4171,8 @@ router.get('/master/medications', (req, res) => {
         params.push(category);
     }
     if (search) {
-        sql += ` AND (generic_name LIKE ? OR brand_names LIKE ? OR medication_code LIKE ?)`;
-        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        sql += ` AND (generic_name LIKE ? OR brand_names LIKE ? OR medication_code LIKE ? OR indications LIKE ?)`;
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     sql += ` ORDER BY generic_name LIMIT ? OFFSET ?`;
@@ -4174,6 +4197,73 @@ router.post('/master/medications', authenticateToken, requireAdmin, (req, res) =
             res.json({ id: this.lastID, message: 'Medication created' });
         }
     );
+});
+
+// POST /api/master/medications/bulk - Bulk import medications (Admin)
+router.post('/master/medications/bulk', authenticateToken, requireAdmin, (req, res) => {
+    const { medications } = req.body; // Array of { name, uses, side_effects, description }
+
+    if (!Array.isArray(medications) || medications.length === 0) {
+        return res.status(400).json({ error: 'medications array is required' });
+    }
+
+    const stmt = db.prepare(
+        `INSERT OR IGNORE INTO medications (generic_name, indications, side_effects, category) VALUES (?, ?, ?, ?)`
+    );
+
+    let inserted = 0;
+    let skipped = 0;
+
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+
+        for (const med of medications) {
+            const name = med.name || med.medicine_name || med.generic_name;
+            if (!name) {
+                skipped++;
+                continue;
+            }
+
+            stmt.run(
+                name.trim(),
+                JSON.stringify(med.uses || []),
+                JSON.stringify(med.side_effects || []),
+                'General',
+                function(err) {
+                    if (!err && this.changes > 0) inserted++;
+                    else skipped++;
+                }
+            );
+        }
+
+        db.run('COMMIT', () => {
+            stmt.finalize();
+            res.json({
+                message: 'Bulk import completed',
+                inserted,
+                skipped,
+                total: medications.length
+            });
+        });
+    });
+});
+
+// DELETE /api/master/medications/:id - Delete single medication (Admin)
+router.delete('/master/medications/:id', authenticateToken, requireAdmin, (req, res) => {
+    const { id } = req.params;
+    db.run('DELETE FROM medications WHERE id = ?', [id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'Medication not found' });
+        res.json({ message: 'Medication deleted' });
+    });
+});
+
+// DELETE /api/master/medications/all - Clear all medications (Admin)
+router.delete('/master/medications/all', authenticateToken, requireAdmin, (req, res) => {
+    db.run('DELETE FROM medications', function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'All medications deleted', deleted: this.changes });
+    });
 });
 
 // --- INVESTIGATION TEMPLATES ---
@@ -4654,7 +4744,33 @@ const DEFAULT_LLM_SETTINGS = {
     model: 'local-model',
     baseUrl: 'http://localhost:1234/v1',
     apiKey: '',
-    enabled: true
+    enabled: true,
+    maxOutputTokens: '',  // Empty = use provider default
+    temperature: '',      // Empty = use provider default
+    systemPromptTemplate: `You are a simulated patient in a medical training scenario.
+
+BEHAVIORAL GUIDELINES:
+- Stay fully in character as the patient described below at all times
+- Respond naturally and conversationally, exactly like a real patient would
+- Keep responses concise (2-4 sentences typically) - do not ramble or over-explain
+- Express appropriate emotions based on your condition (anxiety, pain, worry, frustration, confusion)
+- Use everyday language - do NOT use medical terminology or jargon
+- Do NOT volunteer diagnoses or suggest what might be wrong with you
+- Do NOT give unsolicited medical information - only answer what is asked
+- Only reveal information when the doctor specifically asks about it
+- It's okay to say "I don't know", "I'm not sure", or "I don't remember exactly"
+- If asked about test results or numbers you weren't told, say you don't remember the exact values
+- Show realistic patient behaviors: interrupt, ask questions back, express concerns
+- If in pain or distress, let it affect how you communicate (shorter answers, difficulty focusing)
+
+CONVERSATION STYLE:
+- Speak in first person as the patient
+- Use natural speech patterns with occasional filler words ("um", "well", "you know")
+- React emotionally to concerning questions or news
+- Ask clarifying questions if you don't understand medical terms
+- Express gratitude, frustration, or worry as appropriate to the situation
+
+The doctor will ask you questions. Answer based on your patient profile provided below.`
 };
 
 // Default rate limit settings (0 = unlimited/disabled)
@@ -4670,7 +4786,7 @@ const DEFAULT_RATE_LIMITS = {
 router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
     try {
         const settings = {};
-        const keys = ['llm_provider', 'llm_model', 'llm_base_url', 'llm_api_key', 'llm_enabled'];
+        const keys = ['llm_provider', 'llm_model', 'llm_base_url', 'llm_api_key', 'llm_enabled', 'llm_max_output_tokens', 'llm_temperature', 'llm_system_prompt_template'];
 
         for (const key of keys) {
             settings[key] = await getPlatformSetting(key);
@@ -4683,7 +4799,10 @@ router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
             baseUrl: settings.llm_base_url || DEFAULT_LLM_SETTINGS.baseUrl,
             apiKey: settings.llm_api_key ? '••••••••' : '', // Mask API key for non-admins
             apiKeySet: !!settings.llm_api_key,
-            enabled: settings.llm_enabled !== 'false'
+            enabled: settings.llm_enabled !== 'false',
+            maxOutputTokens: settings.llm_max_output_tokens || '',
+            temperature: settings.llm_temperature || '',
+            systemPromptTemplate: settings.llm_system_prompt_template || DEFAULT_LLM_SETTINGS.systemPromptTemplate
         };
 
         // Admins get full settings
@@ -4700,13 +4819,16 @@ router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
 // PUT /api/platform-settings/llm - Update LLM configuration (Admin only)
 router.put('/platform-settings/llm', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const { provider, model, baseUrl, apiKey, enabled } = req.body;
+        const { provider, model, baseUrl, apiKey, enabled, maxOutputTokens, temperature, systemPromptTemplate } = req.body;
 
         if (provider) await setPlatformSetting('llm_provider', provider, req.user.id);
         if (model !== undefined) await setPlatformSetting('llm_model', model, req.user.id);
         if (baseUrl) await setPlatformSetting('llm_base_url', baseUrl, req.user.id);
         if (apiKey !== undefined) await setPlatformSetting('llm_api_key', apiKey, req.user.id);
         if (enabled !== undefined) await setPlatformSetting('llm_enabled', String(enabled), req.user.id);
+        if (maxOutputTokens !== undefined) await setPlatformSetting('llm_max_output_tokens', String(maxOutputTokens), req.user.id);
+        if (temperature !== undefined) await setPlatformSetting('llm_temperature', String(temperature), req.user.id);
+        if (systemPromptTemplate !== undefined) await setPlatformSetting('llm_system_prompt_template', systemPromptTemplate, req.user.id);
 
         res.json({ message: 'LLM settings updated successfully' });
     } catch (err) {
@@ -4729,8 +4851,7 @@ router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, asyn
 
         // Build request payload - model is optional for local providers (LM Studio)
         const requestPayload = {
-            messages: [{ role: 'user', content: 'Say "test successful" in exactly two words.' }],
-            max_tokens: 10
+            messages: [{ role: 'user', content: 'Say "test successful" in exactly two words.' }]
         };
         if (model && model.trim() !== '') {
             requestPayload.model = model;
@@ -4834,6 +4955,41 @@ router.put('/platform-settings/monitor', authenticateToken, requireAdmin, async 
         }
 
         res.json({ message: 'Monitor settings updated successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Default doctor/chat settings
+const DEFAULT_CHAT_SETTINGS = {
+    doctorName: 'Dr. Carmen',
+    doctorAvatar: ''
+};
+
+// GET /api/platform-settings/chat - Get chat/doctor settings
+router.get('/platform-settings/chat', authenticateToken, async (req, res) => {
+    try {
+        const doctorName = await getPlatformSetting('chat_doctor_name') || DEFAULT_CHAT_SETTINGS.doctorName;
+        const doctorAvatar = await getPlatformSetting('chat_doctor_avatar') || DEFAULT_CHAT_SETTINGS.doctorAvatar;
+
+        res.json({
+            doctorName,
+            doctorAvatar
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/platform-settings/chat - Update chat/doctor settings (Admin only)
+router.put('/platform-settings/chat', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { doctorName, doctorAvatar } = req.body;
+
+        if (doctorName !== undefined) await setPlatformSetting('chat_doctor_name', doctorName, req.user.id);
+        if (doctorAvatar !== undefined) await setPlatformSetting('chat_doctor_avatar', doctorAvatar, req.user.id);
+
+        res.json({ message: 'Chat settings updated successfully' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

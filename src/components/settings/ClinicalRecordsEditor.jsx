@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Upload, FileText, Stethoscope, Pill, Syringe, ClipboardList, Image, Brain, Eye, EyeOff } from 'lucide-react';
 import { AuthService } from '../../services/authService';
+import MedicationSearch from './MedicationSearch';
 
 const RECORD_TABS = [
     { id: 'history', label: 'History', icon: FileText },
@@ -70,6 +71,17 @@ export default function ClinicalRecordsEditor({ caseData, setCaseData, updateCon
     };
     const removeMedication = (idx) => {
         updateRecords('medications', medications.filter((_, i) => i !== idx));
+    };
+    // Handle medication selection from search
+    const handleMedicationSelect = (idx, medication) => {
+        const updated = [...medications];
+        updated[idx] = {
+            ...updated[idx],
+            name: medication.generic_name,
+            route: medication.route || updated[idx].route || 'PO',
+            dose: medication.typical_dose || updated[idx].dose || ''
+        };
+        updateRecords('medications', updated);
     };
 
     // Radiology helpers
@@ -400,13 +412,14 @@ export default function ClinicalRecordsEditor({ caseData, setCaseData, updateCon
                             <div className="space-y-2">
                                 {medications.map((med, idx) => (
                                     <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-neutral-900/50 p-2 rounded">
-                                        <input
-                                            type="text"
-                                            value={med.name}
-                                            onChange={e => updateMedication(idx, 'name', e.target.value)}
-                                            className="input-dark text-xs col-span-4"
-                                            placeholder="Drug name"
-                                        />
+                                        <div className="col-span-4">
+                                            <MedicationSearch
+                                                value={med.name}
+                                                onChange={(name) => updateMedication(idx, 'name', name)}
+                                                onSelect={(medication) => handleMedicationSelect(idx, medication)}
+                                                placeholder="Search drug name..."
+                                            />
+                                        </div>
                                         <input
                                             type="text"
                                             value={med.dose}

@@ -10,6 +10,7 @@ import LabInvestigationEditor from './LabInvestigationEditor';
 import ClinicalRecordsEditor from './ClinicalRecordsEditor';
 import PhysicalExamEditor from './PhysicalExamEditor';
 import LabTestManager from './LabTestManager';
+import MedicationManager from './MedicationManager';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
@@ -286,6 +287,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                 <Database className="w-4 h-4" /> Lab Database
                             </button>
                             <button
+                                onClick={() => setActiveTab('medications')}
+                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'medications' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                            >
+                                <Database className="w-4 h-4" /> Medications
+                            </button>
+                            <button
                                 onClick={() => setActiveTab('bodymap')}
                                 className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'bodymap' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                             >
@@ -370,6 +377,24 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* Case Stats */}
+                                    {isAdmin() && (
+                                        <div className="grid grid-cols-3 gap-3 mb-4">
+                                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-3 text-center">
+                                                <div className="text-xl font-bold text-white">{cases.length}</div>
+                                                <div className="text-xs text-neutral-400">Total Cases</div>
+                                            </div>
+                                            <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-3 text-center">
+                                                <div className="text-xl font-bold text-blue-400">{cases.filter(c => c.is_available).length}</div>
+                                                <div className="text-xs text-neutral-400">Available</div>
+                                            </div>
+                                            <div className="bg-neutral-700/30 border border-neutral-600 rounded-lg p-3 text-center">
+                                                <div className="text-xl font-bold text-neutral-400">{cases.filter(c => !c.is_available).length}</div>
+                                                <div className="text-xs text-neutral-400">Hidden</div>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="grid gap-3">
                                         {cases.map(c => (
@@ -546,34 +571,76 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
 
                     {/* --- SCENARIOS TAB --- */}
                     {activeTab === 'scenarios' && (
-                        <ScenarioRepository 
-                            onSelectScenario={(scenario) => {
-                                if (editingCase) {
-                                    // Apply scenario to editing case
-                                    const scaledScenario = {
-                                        enabled: true,
-                                        autoStart: false,
-                                        timeline: scenario.timeline
-                                    };
-                                    
-                                    setEditingCase(prev => ({
-                                        ...prev,
-                                        scenario: scaledScenario,
-                                        scenario_duration: scenario.duration_minutes,
-                                        scenario_from_repository: {
-                                            id: scenario.id,
-                                            name: scenario.name
-                                        }
-                                    }));
-                                    
-                                    // Switch back to cases tab
-                                    setActiveTab('cases');
-                                    toast.success(`Scenario "${scenario.name}" applied to case!`);
-                                } else {
-                                    toast.warning('Please start editing a case first, then browse scenarios from Step 3.');
-                                }
-                            }} 
-                        />
+                        <div className="space-y-4">
+                            {!editingCase && (
+                                <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-4 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm text-amber-300 font-medium">No case selected</p>
+                                        <p className="text-xs text-neutral-400">Create or edit a case to apply scenarios</p>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setEditingCase({ name: '', description: '', config: { pages: [] } });
+                                            setActiveTab('cases');
+                                        }}
+                                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded text-sm font-bold"
+                                    >
+                                        + New Case
+                                    </button>
+                                </div>
+                            )}
+                            {editingCase && (
+                                <div className="bg-green-900/20 border border-green-700/50 rounded-lg p-4">
+                                    <p className="text-sm text-green-300">
+                                        Editing: <strong>{editingCase.name || 'New Case'}</strong> — Select a scenario below to apply it
+                                    </p>
+                                </div>
+                            )}
+                            <ScenarioRepository
+                                onSelectScenario={(scenario) => {
+                                    if (editingCase) {
+                                        const scaledScenario = {
+                                            enabled: true,
+                                            autoStart: false,
+                                            timeline: scenario.timeline
+                                        };
+
+                                        setEditingCase(prev => ({
+                                            ...prev,
+                                            scenario: scaledScenario,
+                                            scenario_duration: scenario.duration_minutes,
+                                            scenario_from_repository: {
+                                                id: scenario.id,
+                                                name: scenario.name
+                                            }
+                                        }));
+
+                                        setActiveTab('cases');
+                                        toast.success(`Scenario "${scenario.name}" applied to case!`);
+                                    } else {
+                                        // Create new case with this scenario
+                                        const scaledScenario = {
+                                            enabled: true,
+                                            autoStart: false,
+                                            timeline: scenario.timeline
+                                        };
+                                        setEditingCase({
+                                            name: '',
+                                            description: '',
+                                            config: { pages: [] },
+                                            scenario: scaledScenario,
+                                            scenario_duration: scenario.duration_minutes,
+                                            scenario_from_repository: {
+                                                id: scenario.id,
+                                                name: scenario.name
+                                            }
+                                        });
+                                        setActiveTab('cases');
+                                        toast.success(`Scenario "${scenario.name}" applied. Complete your new case details.`);
+                                    }
+                                }}
+                            />
+                        </div>
                     )}
 
                     {/* --- USER MANAGEMENT TAB (Admin Only) --- */}
@@ -599,6 +666,13 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                 <span className="text-xs text-neutral-500">Manage laboratory test reference values</span>
                             </div>
                             <LabTestManager />
+                        </div>
+                    )}
+
+                    {/* --- MEDICATIONS TAB (Admin Only) --- */}
+                    {activeTab === 'medications' && isAdmin() && (
+                        <div className="space-y-6">
+                            <MedicationManager />
                         </div>
                     )}
 
@@ -748,8 +822,16 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
 
 // Platform Settings Component (Admin Only)
 function PlatformSettings({ cases, setCases }) {
+    const [activeSection, setActiveSection] = useState('general');
     const [defaultCaseId, setDefaultCaseId] = useState(null);
     const [loading, setLoading] = useState(false);
+
+    const sections = [
+        { id: 'general', label: 'General', icon: Settings },
+        { id: 'ai', label: 'AI / LLM', icon: Cpu },
+        { id: 'users', label: 'Users', icon: Users },
+        { id: 'monitor', label: 'Monitor', icon: Monitor }
+    ];
 
     // Find the current default case
     useEffect(() => {
@@ -772,7 +854,6 @@ function PlatformSettings({ cases, setCases }) {
                 body: JSON.stringify({ is_default: true })
             });
             if (res.ok) {
-                // Refresh cases
                 const casesRes = await fetch('/api/cases', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -800,7 +881,6 @@ function PlatformSettings({ cases, setCases }) {
                 body: JSON.stringify({ is_default: false })
             });
             if (res.ok) {
-                // Refresh cases
                 const casesRes = await fetch('/api/cases', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -814,160 +894,90 @@ function PlatformSettings({ cases, setCases }) {
         setLoading(false);
     };
 
-    const handleToggleAvailability = async (caseId, currentAvailability) => {
-        try {
-            const token = AuthService.getToken();
-            const res = await fetch(`/api/cases/${caseId}/availability`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ is_available: !currentAvailability })
-            });
-            if (res.ok) {
-                // Refresh cases
-                const casesRes = await fetch('/api/cases', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await casesRes.json();
-                setCases(data.cases || []);
-            }
-        } catch (err) {
-            console.error('Failed to toggle availability:', err);
-        }
-    };
-
     const availableCases = cases.filter(c => c.is_available);
-    const hiddenCases = cases.filter(c => !c.is_available);
 
     return (
-        <div className="space-y-8">
-            <div>
-                <h3 className="text-lg font-bold mb-2">Platform Settings</h3>
-                <p className="text-sm text-neutral-400 mb-6">Configure which cases are available to students and set the default case.</p>
+        <div className="space-y-6">
+            {/* Section Tabs */}
+            <div className="flex gap-2 border-b border-neutral-700 pb-3">
+                {sections.map(section => {
+                    const Icon = section.icon;
+                    return (
+                        <button
+                            key={section.id}
+                            onClick={() => setActiveSection(section.id)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+                                activeSection === section.id
+                                    ? 'bg-neutral-800 text-cyan-400 border border-neutral-700 border-b-neutral-800 -mb-[13px]'
+                                    : 'text-neutral-400 hover:text-white hover:bg-neutral-800/50'
+                            }`}
+                        >
+                            <Icon className="w-4 h-4" />
+                            {section.label}
+                        </button>
+                    );
+                })}
             </div>
 
-            {/* Default Case Selection */}
-            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
-                <h4 className="text-md font-bold text-green-400 mb-4 flex items-center gap-2">
-                    <Activity className="w-5 h-5" />
-                    Default Case for Students
-                </h4>
-                <p className="text-sm text-neutral-400 mb-4">
-                    When students log in, they will see the default case pre-selected. If no default is set, students will see a list of available cases.
-                </p>
-                <select
-                    value={defaultCaseId || ''}
-                    onChange={(e) => {
-                        const id = e.target.value;
-                        if (id) {
-                            handleSetDefault(parseInt(id));
-                        } else {
-                            handleClearDefault();
-                        }
-                    }}
-                    disabled={loading}
-                    className="w-full max-w-md bg-neutral-800 border border-neutral-600 rounded p-3 text-sm focus:border-green-500 outline-none"
-                >
-                    <option value="">No default case</option>
-                    {cases.filter(c => c.is_available).map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                </select>
-                {defaultCaseId && (
-                    <p className="text-xs text-green-400 mt-2">
-                        ✓ Students will automatically see "{cases.find(c => c.id === defaultCaseId)?.name}" when they log in.
-                    </p>
-                )}
-            </div>
-
-            {/* Case Availability Management */}
-            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
-                <h4 className="text-md font-bold text-blue-400 mb-4 flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    Case Availability
-                </h4>
-                <p className="text-sm text-neutral-400 mb-4">
-                    Toggle which cases are visible to students. Hidden cases are only visible to administrators.
-                </p>
-
-                {/* Available Cases */}
-                <div className="mb-6">
-                    <h5 className="text-sm font-bold text-blue-300 mb-3">Available to Students ({availableCases.length})</h5>
-                    {availableCases.length > 0 ? (
-                        <div className="space-y-2">
+            {/* General Section */}
+            {activeSection === 'general' && (
+                <div className="space-y-6">
+                    {/* Default Case Selection */}
+                    <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
+                        <h4 className="text-md font-bold text-green-400 mb-4 flex items-center gap-2">
+                            <Activity className="w-5 h-5" />
+                            Default Case for Students
+                        </h4>
+                        <p className="text-sm text-neutral-400 mb-4">
+                            When students log in, they will see this case pre-selected.
+                        </p>
+                        <select
+                            value={defaultCaseId || ''}
+                            onChange={(e) => {
+                                const id = e.target.value;
+                                if (id) handleSetDefault(parseInt(id));
+                                else handleClearDefault();
+                            }}
+                            disabled={loading}
+                            className="w-full max-w-md bg-neutral-800 border border-neutral-600 rounded p-3 text-sm focus:border-green-500 outline-none"
+                        >
+                            <option value="">No default case</option>
                             {availableCases.map(c => (
-                                <div key={c.id} className="flex items-center justify-between bg-blue-900/20 border border-blue-700/30 rounded p-3">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-white">{c.name}</span>
-                                        {c.is_default && (
-                                            <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded">Default</span>
-                                        )}
-                                    </div>
-                                    <button
-                                        onClick={() => handleToggleAvailability(c.id, c.is_available)}
-                                        className="px-3 py-1 bg-red-900/30 text-red-400 rounded text-xs hover:bg-red-900/50"
-                                        disabled={c.is_default}
-                                        title={c.is_default ? 'Cannot hide default case' : 'Hide from students'}
-                                    >
-                                        {c.is_default ? 'Default' : 'Hide'}
-                                    </button>
-                                </div>
+                                <option key={c.id} value={c.id}>{c.name}</option>
                             ))}
-                        </div>
-                    ) : (
-                        <p className="text-sm text-neutral-500 italic">No cases available to students yet.</p>
-                    )}
-                </div>
+                        </select>
+                        {defaultCaseId && (
+                            <p className="text-xs text-green-400 mt-2">
+                                Students will automatically see "{cases.find(c => c.id === defaultCaseId)?.name}" when they log in.
+                            </p>
+                        )}
+                    </div>
 
-                {/* Hidden Cases */}
-                <div>
-                    <h5 className="text-sm font-bold text-neutral-400 mb-3">Hidden from Students ({hiddenCases.length})</h5>
-                    {hiddenCases.length > 0 ? (
-                        <div className="space-y-2">
-                            {hiddenCases.map(c => (
-                                <div key={c.id} className="flex items-center justify-between bg-neutral-700/30 border border-neutral-600 rounded p-3">
-                                    <span className="text-neutral-300">{c.name}</span>
-                                    <button
-                                        onClick={() => handleToggleAvailability(c.id, c.is_available)}
-                                        className="px-3 py-1 bg-blue-900/30 text-blue-400 rounded text-xs hover:bg-blue-900/50"
-                                    >
-                                        Show
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-sm text-neutral-500 italic">No hidden cases.</p>
-                    )}
+                    {/* Chat Interface Configuration */}
+                    <ChatConfiguration />
                 </div>
-            </div>
+            )}
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-3 gap-4">
-                <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-white">{cases.length}</div>
-                    <div className="text-xs text-neutral-400">Total Cases</div>
+            {/* AI/LLM Section */}
+            {activeSection === 'ai' && (
+                <div className="space-y-6">
+                    <LLMConfiguration />
                 </div>
-                <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-blue-400">{availableCases.length}</div>
-                    <div className="text-xs text-neutral-400">Available</div>
+            )}
+
+            {/* Users Section */}
+            {activeSection === 'users' && (
+                <div className="space-y-6">
+                    <UserFieldConfiguration />
                 </div>
-                <div className="bg-neutral-700/30 border border-neutral-600 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-neutral-400">{hiddenCases.length}</div>
-                    <div className="text-xs text-neutral-400">Hidden</div>
+            )}
+
+            {/* Monitor Section */}
+            {activeSection === 'monitor' && (
+                <div className="space-y-6">
+                    <MonitorConfiguration />
                 </div>
-            </div>
-
-            {/* User Profile Field Configuration */}
-            <UserFieldConfiguration />
-
-            {/* LLM Configuration */}
-            <LLMConfiguration />
-
-            {/* Monitor Display Configuration */}
-            <MonitorConfiguration />
+            )}
         </div>
     );
 }
@@ -1180,7 +1190,10 @@ function LLMConfiguration() {
         model: 'local-model',
         baseUrl: 'http://localhost:1234/v1',
         apiKey: '',
-        enabled: true
+        enabled: true,
+        maxOutputTokens: '',
+        temperature: '',
+        systemPromptTemplate: ''
     });
     const [rateLimits, setRateLimits] = useState({
         tokensPerUserDaily: 0,
@@ -1418,6 +1431,45 @@ function LLMConfiguration() {
                         </div>
                     )}
 
+                    {/* Model Parameters */}
+                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-neutral-700 mt-4">
+                        <div>
+                            <label className="block text-sm font-medium text-neutral-300 mb-2">Max Output Tokens</label>
+                            <input
+                                type="text"
+                                value={llmConfig.maxOutputTokens}
+                                onChange={(e) => setLlmConfig(prev => ({ ...prev, maxOutputTokens: e.target.value }))}
+                                placeholder="Provider default"
+                                className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
+                            />
+                            <p className="text-xs text-neutral-500 mt-1">Empty = provider default</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-neutral-300 mb-2">Temperature</label>
+                            <input
+                                type="text"
+                                value={llmConfig.temperature}
+                                onChange={(e) => setLlmConfig(prev => ({ ...prev, temperature: e.target.value }))}
+                                placeholder="Provider default"
+                                className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
+                            />
+                            <p className="text-xs text-neutral-500 mt-1">Empty = provider default (0-2)</p>
+                        </div>
+                    </div>
+
+                    {/* System Prompt Template */}
+                    <div className="pt-2">
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">System Prompt Template</label>
+                        <textarea
+                            value={llmConfig.systemPromptTemplate}
+                            onChange={(e) => setLlmConfig(prev => ({ ...prev, systemPromptTemplate: e.target.value }))}
+                            rows={8}
+                            className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none font-mono text-xs"
+                            placeholder="Instructions sent with every conversation (e.g., 'You are a simulated patient...')"
+                        />
+                        <p className="text-xs text-neutral-500 mt-1">This prompt is prepended to every conversation. Case-specific details are added automatically.</p>
+                    </div>
+
                     {/* Action Buttons */}
                     <div className="flex gap-3 pt-4">
                         <button
@@ -1571,6 +1623,163 @@ function LLMConfiguration() {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+// Chat/Doctor Configuration Component (Admin Only)
+function ChatConfiguration() {
+    const toast = useToast();
+    const [chatSettings, setChatSettings] = useState({
+        doctorName: 'Dr. Carmen',
+        doctorAvatar: ''
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [previewAvatar, setPreviewAvatar] = useState('');
+
+    useEffect(() => {
+        loadSettings();
+    }, []);
+
+    const loadSettings = async () => {
+        try {
+            const token = AuthService.getToken();
+            const res = await fetch('/api/platform-settings/chat', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setChatSettings(data);
+                setPreviewAvatar(data.doctorAvatar || '');
+            }
+        } catch (err) {
+            console.error('Failed to load chat settings:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            const token = AuthService.getToken();
+            const res = await fetch('/api/platform-settings/chat', {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(chatSettings)
+            });
+            if (res.ok) {
+                toast.success('Chat settings saved successfully!');
+            } else {
+                throw new Error('Failed to save');
+            }
+        } catch (err) {
+            toast.error('Failed to save chat settings');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleAvatarUpload = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (file.size > 500000) {
+                toast.warning('Image too large. Please use an image under 500KB.');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64 = reader.result;
+                setChatSettings(prev => ({ ...prev, doctorAvatar: base64 }));
+                setPreviewAvatar(base64);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    if (loading) {
+        return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+    }
+
+    return (
+        <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
+            <h4 className="text-md font-bold text-cyan-400 mb-4 flex items-center gap-2">
+                <User className="w-5 h-5" />
+                Chat Interface Settings
+            </h4>
+            <p className="text-sm text-neutral-400 mb-6">
+                Configure how the doctor appears in patient conversations.
+            </p>
+
+            <div className="space-y-4">
+                {/* Doctor Name */}
+                <div>
+                    <label className="block text-sm font-medium text-neutral-300 mb-2">Doctor Name</label>
+                    <input
+                        type="text"
+                        value={chatSettings.doctorName}
+                        onChange={(e) => setChatSettings(prev => ({ ...prev, doctorName: e.target.value }))}
+                        placeholder="Dr. Carmen"
+                        className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
+                    />
+                    <p className="text-xs text-neutral-500 mt-1">This name appears next to user messages in the chat</p>
+                </div>
+
+                {/* Doctor Avatar */}
+                <div>
+                    <label className="block text-sm font-medium text-neutral-300 mb-2">Doctor Avatar (Optional)</label>
+                    <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-full bg-neutral-700 border border-neutral-600 flex items-center justify-center overflow-hidden">
+                            {previewAvatar ? (
+                                <img src={previewAvatar} alt="Doctor" className="w-full h-full object-cover" />
+                            ) : (
+                                <User className="w-8 h-8 text-neutral-500" />
+                            )}
+                        </div>
+                        <div className="flex-1">
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleAvatarUpload}
+                                className="hidden"
+                                id="doctor-avatar-upload"
+                            />
+                            <label
+                                htmlFor="doctor-avatar-upload"
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded-lg cursor-pointer transition-colors text-sm"
+                            >
+                                <Upload className="w-4 h-4" />
+                                Upload Image
+                            </label>
+                            {previewAvatar && (
+                                <button
+                                    onClick={() => {
+                                        setChatSettings(prev => ({ ...prev, doctorAvatar: '' }));
+                                        setPreviewAvatar('');
+                                    }}
+                                    className="ml-2 px-3 py-2 text-red-400 hover:text-red-300 text-sm"
+                                >
+                                    Remove
+                                </button>
+                            )}
+                            <p className="text-xs text-neutral-500 mt-2">Square image recommended, max 500KB</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Save Button */}
+                <div className="pt-4">
+                    <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        Save Chat Settings
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
@@ -1854,7 +2063,7 @@ function SystemLogs() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h3 className="text-lg font-bold">System Logs & Data Export</h3>
+                <h3 className="text-lg font-bold">System Logs</h3>
                 <div className="flex gap-2">
                     <input
                         type="date"
@@ -1870,57 +2079,6 @@ function SystemLogs() {
                         className="px-3 py-1 bg-neutral-800 border border-neutral-700 rounded text-sm"
                         placeholder="End Date"
                     />
-                </div>
-            </div>
-
-            {/* Export Buttons */}
-            <div className="grid grid-cols-2 gap-4 p-4 bg-neutral-800 border border-neutral-700 rounded-lg">
-                <div className="space-y-2">
-                    <h4 className="font-bold text-sm">Login & Authentication Logs</h4>
-                    <button
-                        onClick={() => downloadCSV('login')}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-600 text-white rounded text-sm font-bold"
-                    >
-                        <Download className="w-4 h-4" />
-                        Export Login Logs (CSV)
-                    </button>
-                    <p className="text-xs text-neutral-400">All login, logout, and failed login attempts</p>
-                </div>
-
-                <div className="space-y-2">
-                    <h4 className="font-bold text-sm">Chat & Conversation Logs</h4>
-                    <button
-                        onClick={() => downloadCSV('chat')}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-700 hover:bg-blue-600 text-white rounded text-sm font-bold"
-                    >
-                        <Download className="w-4 h-4" />
-                        Export Chat Logs (CSV)
-                    </button>
-                    <p className="text-xs text-neutral-400">Complete conversation history with timestamps</p>
-                </div>
-
-                <div className="space-y-2">
-                    <h4 className="font-bold text-sm">Settings Change Logs</h4>
-                    <button
-                        onClick={() => downloadCSV('settings')}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded text-sm font-bold"
-                    >
-                        <Download className="w-4 h-4" />
-                        Export Settings Logs (CSV)
-                    </button>
-                    <p className="text-xs text-neutral-400">All LLM and monitor settings changes</p>
-                </div>
-
-                <div className="space-y-2">
-                    <h4 className="font-bold text-sm">Session Settings Snapshots</h4>
-                    <button
-                        onClick={() => downloadCSV('session-settings')}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-700 hover:bg-orange-600 text-white rounded text-sm font-bold"
-                    >
-                        <Download className="w-4 h-4" />
-                        Export Session Settings (CSV)
-                    </button>
-                    <p className="text-xs text-neutral-400">Complete settings used in each session</p>
                 </div>
             </div>
 
@@ -2132,19 +2290,41 @@ function SystemLogs() {
                 ) : null}
             </div>
 
-            {/* Info Box */}
-            <div className="p-4 bg-blue-900/20 border border-blue-700/50 rounded-lg">
-                <h4 className="font-bold text-sm mb-2 flex items-center gap-2">
-                    <Database className="w-4 h-4" />
-                    Comprehensive Data Logging
+            {/* Export Section */}
+            <div className="border-t border-neutral-700 pt-6">
+                <h4 className="font-bold text-sm mb-4 flex items-center gap-2">
+                    <Download className="w-4 h-4" />
+                    Export Data (CSV)
                 </h4>
-                <div className="text-xs text-neutral-300 space-y-1">
-                    <p>✅ All logins, logouts, and failed attempts are logged</p>
-                    <p>✅ Every chat message is recorded with timestamps</p>
-                    <p>✅ All settings changes are tracked (LLM, monitor)</p>
-                    <p>✅ Each session includes complete settings snapshot</p>
-                    <p>✅ All data is linked by User, Session, and Case</p>
-                    <p className="mt-2 text-yellow-400">💾 Export to CSV for spreadsheet analysis (Excel, Google Sheets, etc.)</p>
+                <div className="grid grid-cols-4 gap-3">
+                    <button
+                        onClick={() => downloadCSV('login')}
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-green-700 hover:bg-green-600 text-white rounded text-sm font-medium"
+                    >
+                        <Download className="w-4 h-4" />
+                        Login Logs
+                    </button>
+                    <button
+                        onClick={() => downloadCSV('chat')}
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-700 hover:bg-blue-600 text-white rounded text-sm font-medium"
+                    >
+                        <Download className="w-4 h-4" />
+                        Chat Logs
+                    </button>
+                    <button
+                        onClick={() => downloadCSV('settings')}
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded text-sm font-medium"
+                    >
+                        <Download className="w-4 h-4" />
+                        Settings Logs
+                    </button>
+                    <button
+                        onClick={() => downloadCSV('session-settings')}
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-orange-700 hover:bg-orange-600 text-white rounded text-sm font-medium"
+                    >
+                        <Download className="w-4 h-4" />
+                        Session Settings
+                    </button>
                 </div>
             </div>
         </div>
@@ -3196,6 +3376,52 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         onChange={e => updateConfig('patient_name', e.target.value)}
                                         className="input-dark"
                                     />
+                                </div>
+                            </div>
+
+                            {/* Patient Avatar */}
+                            <div className="mt-3">
+                                <label className="label-xs">Patient Avatar (Optional)</label>
+                                <div className="flex items-center gap-3 mt-1">
+                                    <div className="w-12 h-12 rounded-full bg-neutral-700 border border-neutral-600 flex items-center justify-center overflow-hidden">
+                                        {caseData.config?.patient_avatar ? (
+                                            <img src={caseData.config.patient_avatar} alt="Patient" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <User className="w-6 h-6 text-neutral-500" />
+                                        )}
+                                    </div>
+                                    <div className="flex-1">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            id="patient-avatar-upload"
+                                            onChange={(e) => {
+                                                const file = e.target.files[0];
+                                                if (file) {
+                                                    if (file.size > 500000) {
+                                                        toast.warning('Image too large. Max 500KB.');
+                                                        return;
+                                                    }
+                                                    const reader = new FileReader();
+                                                    reader.onloadend = () => updateConfig('patient_avatar', reader.result);
+                                                    reader.readAsDataURL(file);
+                                                }
+                                            }}
+                                        />
+                                        <label htmlFor="patient-avatar-upload" className="text-xs px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded cursor-pointer">
+                                            Upload
+                                        </label>
+                                        {caseData.config?.patient_avatar && (
+                                            <button
+                                                type="button"
+                                                onClick={() => updateConfig('patient_avatar', '')}
+                                                className="ml-2 text-xs text-red-400 hover:text-red-300"
+                                            >
+                                                Remove
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
