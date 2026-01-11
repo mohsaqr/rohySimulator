@@ -2622,7 +2622,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
 
             console.log(`[Order Labs] Case config: instantResults=${caseInstantResults}, defaultTurnaround=${caseDefaultTurnaround}, configLabs=${configJsonLabs.length}`);
 
-            // Helper to get turnaround time (priority: instant/override > case default > test default)
+            // Helper to get turnaround time (priority: instant/override > test default > case default)
             const getTurnaround = (testDefaultMinutes) => {
                 // Instant results = 0 minutes (from case config)
                 if (caseInstantResults) {
@@ -2637,12 +2637,16 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                         return turnaround_override;
                     }
                 }
-                // Case-level default
+                // Test default takes priority (individual lab turnaround times)
+                if (testDefaultMinutes && testDefaultMinutes > 0) {
+                    return testDefaultMinutes;
+                }
+                // Case-level default as fallback
                 if (caseDefaultTurnaround > 0) {
                     return caseDefaultTurnaround;
                 }
-                // Test default or fallback
-                return testDefaultMinutes || 30;
+                // Final fallback
+                return 30;
             };
 
             // Process all IDs and create orders

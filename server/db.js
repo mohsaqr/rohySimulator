@@ -916,7 +916,8 @@ function initDb() {
                 addColumn('last_login', 'DATETIME');
                 addColumn('failed_login_attempts', 'INTEGER DEFAULT 0');
                 addColumn('locked_until', 'DATETIME');
-                addColumn('updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+                // SQLite doesn't allow CURRENT_TIMESTAMP as default in ALTER TABLE
+                addColumn('updated_at', 'DATETIME');
                 addColumn('deleted_at', 'DATETIME');
                 // User profile fields
                 addColumn('institution', 'TEXT');
@@ -948,7 +949,8 @@ function initDb() {
                 addColumn('published_at', 'DATETIME');
                 addColumn('created_by', 'INTEGER');
                 addColumn('last_modified_by', 'INTEGER');
-                addColumn('updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+                // SQLite doesn't allow CURRENT_TIMESTAMP as default in ALTER TABLE
+                addColumn('updated_at', 'DATETIME');
                 addColumn('deleted_at', 'DATETIME');
             }
         });
@@ -968,7 +970,8 @@ function initDb() {
                 addColumn('message_count', 'INTEGER DEFAULT 0');
                 addColumn('performance_score', 'REAL');
                 addColumn('instructor_notes', 'TEXT');
-                addColumn('updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+                // SQLite doesn't allow CURRENT_TIMESTAMP as default in ALTER TABLE
+                addColumn('updated_at', 'DATETIME');
                 addColumn('deleted_at', 'DATETIME');
             }
         });
