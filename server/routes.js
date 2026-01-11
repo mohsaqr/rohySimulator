@@ -3075,7 +3075,8 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // 10. Build request payload - model is optional for local providers
         const requestPayload = {
             messages: conversation,
-            stream: false
+            stream: false,
+            max_tokens: 4096
         };
         // Only include model if specified (LM Studio uses default if omitted)
         if (model && model.trim() !== '') {
@@ -4702,7 +4703,7 @@ router.put('/platform-settings/llm', authenticateToken, requireAdmin, async (req
         const { provider, model, baseUrl, apiKey, enabled } = req.body;
 
         if (provider) await setPlatformSetting('llm_provider', provider, req.user.id);
-        if (model) await setPlatformSetting('llm_model', model, req.user.id);
+        if (model !== undefined) await setPlatformSetting('llm_model', model, req.user.id);
         if (baseUrl) await setPlatformSetting('llm_base_url', baseUrl, req.user.id);
         if (apiKey !== undefined) await setPlatformSetting('llm_api_key', apiKey, req.user.id);
         if (enabled !== undefined) await setPlatformSetting('llm_enabled', String(enabled), req.user.id);
