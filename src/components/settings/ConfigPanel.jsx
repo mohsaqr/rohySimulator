@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Trash2, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User } from 'lucide-react';
-import { LLMService } from '../../services/llmService';
+import { Settings, Save, Plus, Trash2, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { AuthService } from '../../services/authService';
@@ -16,78 +15,8 @@ import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTe
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
     const { user, isAdmin } = useAuth();
     const toast = useToast();
-    // Students always see 'cases' tab, admins see 'llm' when not in full page mode
-    const [activeTab, setActiveTab] = useState(() => {
-        if (!isAdmin()) return 'cases'; // Students always default to cases
-        return fullPage ? 'cases' : 'llm';
-    }); // llm, cases, users, history, logs, platform
-
-    // Provider Configurations
-    const PROVIDERS = {
-        openai: {
-            name: 'OpenAI API',
-            defaultBase: 'https://api.openai.com/v1',
-            defaultModel: 'gpt-3.5-turbo',
-            needsKey: true,
-            needsModel: true
-        },
-        lmstudio: {
-            name: 'LM Studio (Local)',
-            defaultBase: 'http://localhost:1234/v1',
-            defaultModel: 'local-model',
-            needsKey: false,
-            needsModel: false
-        },
-        ollama: {
-            name: 'Ollama (Local)',
-            defaultBase: 'http://localhost:11434/v1',
-            defaultModel: 'llama3',
-            needsKey: false,
-            needsModel: true
-        }
-    };
-
-    // LLM Config State - Initialize with localStorage defaults or service config
-    const [llmConfig, setLlmConfig] = useState(() => {
-        // Try to load from localStorage first
-        const savedDefaults = localStorage.getItem('rohy_llm_defaults');
-        if (savedDefaults) {
-            try {
-                const parsed = JSON.parse(savedDefaults);
-                // Validate provider exists
-                if (parsed.provider && PROVIDERS[parsed.provider]) {
-                    return parsed;
-                }
-            } catch (e) {
-                console.warn('Failed to parse saved LLM defaults:', e);
-            }
-        }
-
-        // Fallback to current service config or defaults
-        const current = LLMService.config;
-        let provider = current.provider === 'local' ? 'lmstudio' : current.provider;
-        if (!PROVIDERS[provider]) provider = 'lmstudio';
-
-        return {
-            provider,
-            apiKey: current.apiKey || '',
-            baseUrl: current.baseUrl || PROVIDERS[provider].defaultBase,
-            model: current.model || PROVIDERS[provider].defaultModel
-        };
-    });
-
-    const [hasDefaults, setHasDefaults] = useState(() => !!localStorage.getItem('rohy_llm_defaults'));
-
-    // Handle Provider Change
-    const handleProviderChange = (newProvider) => {
-        const defaults = PROVIDERS[newProvider];
-        setLlmConfig({
-            provider: newProvider,
-            baseUrl: defaults.defaultBase,
-            model: defaults.defaultModel,
-            apiKey: '' // Clear key on switch for security/cleanliness
-        });
-    };
+    // Default to 'cases' tab for all users, admins can access 'platform' for LLM settings
+    const [activeTab, setActiveTab] = useState('cases'); // cases, users, history, logs, platform, scenarios
 
     // Cases State
     const [cases, setCases] = useState([]);
@@ -137,11 +66,6 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
         setHasUnsavedChanges(false);
     };
 
-    // Apply LLM defaults to service on mount
-    useEffect(() => {
-        LLMService.setConfig(llmConfig);
-    }, []); // Only run once on mount
-
     // Load Cases on Mount
     useEffect(() => {
         const token = AuthService.getToken();
@@ -157,39 +81,6 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
             })
             .catch(err => console.error("Failed to load cases", err));
     }, []);
-
-    const handleSaveLLMAsDefault = () => {
-        // Save to localStorage
-        localStorage.setItem('rohy_llm_defaults', JSON.stringify(llmConfig));
-        // Apply to service
-        LLMService.setConfig(llmConfig);
-        setHasDefaults(true);
-        toast.success('LLM Settings saved as default! They will persist across sessions.');
-    };
-
-    const handleSaveLLMForSession = () => {
-        // Only apply to service, don't save to localStorage
-        LLMService.setConfig(llmConfig);
-        toast.success('LLM Settings applied for this session only.');
-    };
-
-    const handleResetLLMDefaults = async () => {
-        const confirmed = await toast.confirm('Reset to factory defaults? This will clear your saved settings.', { title: 'Reset Settings', type: 'warning' });
-        if (!confirmed) return;
-        localStorage.removeItem('rohy_llm_defaults');
-        const provider = 'lmstudio';
-        const defaults = PROVIDERS[provider];
-        const newConfig = {
-            provider,
-            apiKey: '',
-            baseUrl: defaults.defaultBase,
-            model: defaults.defaultModel
-        };
-        setLlmConfig(newConfig);
-        LLMService.setConfig(newConfig);
-        setHasDefaults(false);
-        toast.success('Reset to factory defaults (LM Studio)');
-    };
 
     const handleSaveCase = async () => {
         if (!editingCase) return;
@@ -353,15 +244,6 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
 
                 {/* Sidebar */}
                 <div className="w-48 bg-neutral-950 border-r border-neutral-800 flex flex-col pt-4">
-                    {/* LLM Settings - Admin Only */}
-                    {isAdmin() && (
-                        <button
-                            onClick={() => setActiveTab('llm')}
-                            className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'llm' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                        >
-                            <Cpu className="w-4 h-4" /> LLM Settings
-                        </button>
-                    )}
                     <button
                         onClick={() => setActiveTab('cases')}
                         className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'cases' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
@@ -415,115 +297,6 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
 
                 {/* Content Area */}
                 <div className="flex-1 p-8 overflow-y-auto bg-neutral-900">
-
-                    {/* --- LLM TAB --- */}
-                    {activeTab === 'llm' && (
-                        <div className="space-y-6 max-w-2xl">
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
-                                    <h3 className="text-lg font-bold">Model Connection</h3>
-                                    {hasDefaults && (
-                                        <span className="text-xs bg-purple-900/30 text-purple-300 px-2 py-1 rounded border border-purple-700">
-                                            ✓ Using Saved Defaults
-                                        </span>
-                                    )}
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-neutral-500 mb-1 uppercase">Provider</label>
-                                        <select
-                                            value={llmConfig.provider}
-                                            onChange={(e) => handleProviderChange(e.target.value)}
-                                            className="w-full bg-neutral-800 border border-neutral-700 rounded p-2 text-sm focus:border-purple-500 outline-none"
-                                        >
-                                            {Object.entries(PROVIDERS).map(([key, config]) => (
-                                                <option key={key} value={key}>{config.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {/* BASE URL */}
-                                    <div>
-                                        <label className="block text-xs font-bold text-neutral-500 mb-1 uppercase">Base URL</label>
-                                        <input
-                                            type="text"
-                                            value={llmConfig.baseUrl}
-                                            onChange={(e) => setLlmConfig({ ...llmConfig, baseUrl: e.target.value })}
-                                            className="w-full bg-neutral-800 border border-neutral-700 rounded p-2 text-sm font-mono focus:border-purple-500 outline-none"
-                                        />
-                                        <p className="text-[10px] text-neutral-500 mt-1">Default: {PROVIDERS[llmConfig.provider].defaultBase}</p>
-                                    </div>
-
-                                    {/* MODEL NAME (Conditional) */}
-                                    {PROVIDERS[llmConfig.provider].needsModel && (
-                                        <div>
-                                            <label className="block text-xs font-bold text-neutral-500 mb-1 uppercase">Model Name</label>
-                                            <input
-                                                type="text"
-                                                value={llmConfig.model}
-                                                onChange={(e) => setLlmConfig({ ...llmConfig, model: e.target.value })}
-                                                className="w-full bg-neutral-800 border border-neutral-700 rounded p-2 text-sm focus:border-purple-500 outline-none"
-                                                placeholder={PROVIDERS[llmConfig.provider].defaultModel}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {/* API KEY (Conditional) */}
-                                    {PROVIDERS[llmConfig.provider].needsKey && (
-                                        <div>
-                                            <label className="block text-xs font-bold text-neutral-500 mb-1 uppercase">API Key</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="password"
-                                                    value={llmConfig.apiKey}
-                                                    onChange={(e) => setLlmConfig({ ...llmConfig, apiKey: e.target.value })}
-                                                    className="w-full bg-neutral-800 border border-neutral-700 rounded p-2 text-sm focus:border-purple-500 outline-none pr-10"
-                                                    placeholder="sk-..."
-                                                />
-                                                <div className="absolute right-3 top-2.5 text-neutral-500">
-                                                    <Cpu className="w-4 h-4" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                </div> {/* End Grid */}
-
-                                <div className="flex items-center justify-between pt-4 border-t border-neutral-800">
-                                    <button
-                                        onClick={handleResetLLMDefaults}
-                                        className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm text-neutral-400 hover:text-white"
-                                    >
-                                        Reset to Factory
-                                    </button>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={handleSaveLLMForSession}
-                                            className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded font-bold text-sm"
-                                        >
-                                            For This Session
-                                        </button>
-                                        <button
-                                            onClick={handleSaveLLMAsDefault}
-                                            className="px-6 py-2 bg-purple-600 hover:bg-purple-500 rounded font-bold text-sm shadow-lg shadow-purple-900/20 flex items-center gap-2"
-                                        >
-                                            <Save className="w-4 h-4" /> Save as Default
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="bg-neutral-800/50 border border-neutral-700 rounded p-3 text-xs text-neutral-400">
-                                    <p className="font-bold text-neutral-300 mb-1">💡 Save Options:</p>
-                                    <ul className="space-y-1 ml-4 list-disc">
-                                        <li><strong className="text-purple-400">Save as Default:</strong> Persists across sessions (stored in browser)</li>
-                                        <li><strong className="text-neutral-300">For This Session:</strong> Applies now, resets on refresh</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
 
                     {/* --- CASES TAB --- */}
                     {activeTab === 'cases' && (
@@ -1189,6 +962,9 @@ function PlatformSettings({ cases, setCases }) {
 
             {/* User Profile Field Configuration */}
             <UserFieldConfiguration />
+
+            {/* LLM Configuration */}
+            <LLMConfiguration />
         </div>
     );
 }
@@ -1389,6 +1165,404 @@ function UserFieldConfiguration() {
                     )}
                 </button>
             </div>
+        </div>
+    );
+}
+
+// LLM Configuration Component (Admin Only)
+function LLMConfiguration() {
+    const toast = useToast();
+    const [llmConfig, setLlmConfig] = useState({
+        provider: 'lmstudio',
+        model: 'local-model',
+        baseUrl: 'http://localhost:1234/v1',
+        apiKey: '',
+        enabled: true
+    });
+    const [rateLimits, setRateLimits] = useState({
+        tokensPerUserDaily: 0,
+        costPerUserDaily: 0,
+        tokensPlatformDaily: 0,
+        costPlatformDaily: 0
+    });
+    const [platformUsage, setPlatformUsage] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [testing, setTesting] = useState(false);
+    const [showApiKey, setShowApiKey] = useState(false);
+
+    const PROVIDERS = {
+        openai: { name: 'OpenAI', defaultBase: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', needsKey: true },
+        lmstudio: { name: 'LM Studio (Local)', defaultBase: 'http://localhost:1234/v1', defaultModel: 'local-model', needsKey: false },
+        ollama: { name: 'Ollama (Local)', defaultBase: 'http://localhost:11434/v1', defaultModel: 'llama3', needsKey: false }
+    };
+
+    useEffect(() => {
+        loadConfig();
+    }, []);
+
+    const loadConfig = async () => {
+        try {
+            const token = AuthService.getToken();
+            const [llmRes, limitsRes, usageRes] = await Promise.all([
+                fetch('/api/platform-settings/llm', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('/api/platform-settings/rate-limits', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('/api/llm/usage/platform', { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+
+            if (llmRes.ok) {
+                const data = await llmRes.json();
+                setLlmConfig(data);
+            }
+            if (limitsRes.ok) {
+                const data = await limitsRes.json();
+                setRateLimits(data);
+            }
+            if (usageRes.ok) {
+                const data = await usageRes.json();
+                setPlatformUsage(data);
+            }
+        } catch (err) {
+            console.error('Failed to load LLM config:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleProviderChange = (provider) => {
+        const providerConfig = PROVIDERS[provider];
+        setLlmConfig(prev => ({
+            ...prev,
+            provider,
+            baseUrl: providerConfig.defaultBase,
+            model: providerConfig.defaultModel,
+            apiKey: providerConfig.needsKey ? prev.apiKey : ''
+        }));
+    };
+
+    const handleSaveLLM = async () => {
+        setSaving(true);
+        try {
+            const token = AuthService.getToken();
+            const res = await fetch('/api/platform-settings/llm', {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(llmConfig)
+            });
+            if (res.ok) {
+                toast.success('LLM settings saved successfully!');
+            } else {
+                throw new Error('Failed to save');
+            }
+        } catch (err) {
+            toast.error('Failed to save LLM settings');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleSaveRateLimits = async () => {
+        setSaving(true);
+        try {
+            const token = AuthService.getToken();
+            const res = await fetch('/api/platform-settings/rate-limits', {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(rateLimits)
+            });
+            if (res.ok) {
+                toast.success('Rate limits saved successfully!');
+            } else {
+                throw new Error('Failed to save');
+            }
+        } catch (err) {
+            toast.error('Failed to save rate limits');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleTestConnection = async () => {
+        setTesting(true);
+        try {
+            // First save the current settings
+            const token = AuthService.getToken();
+            await fetch('/api/platform-settings/llm', {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(llmConfig)
+            });
+
+            // Then test
+            const res = await fetch('/api/platform-settings/llm/test', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                toast.success(`Connection successful! Response: "${data.response}"`);
+            } else {
+                toast.error(`Connection failed: ${data.error}`);
+            }
+        } catch (err) {
+            toast.error('Connection test failed: ' + err.message);
+        } finally {
+            setTesting(false);
+        }
+    };
+
+    if (loading) {
+        return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+    }
+
+    const currentProvider = PROVIDERS[llmConfig.provider] || PROVIDERS.lmstudio;
+
+    return (
+        <div className="space-y-6">
+            {/* LLM Provider Configuration */}
+            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
+                <h4 className="text-md font-bold text-cyan-400 mb-4 flex items-center gap-2">
+                    <Cpu className="w-5 h-5" />
+                    LLM Configuration
+                </h4>
+                <p className="text-sm text-neutral-400 mb-6">
+                    Configure the AI model used for patient simulations. These settings apply to all users.
+                </p>
+
+                <div className="space-y-4">
+                    {/* Enable/Disable */}
+                    <div className="flex items-center justify-between p-3 bg-neutral-700/30 rounded-lg">
+                        <div>
+                            <span className="text-white font-medium">LLM Service</span>
+                            <p className="text-xs text-neutral-400">Enable or disable AI functionality for all users</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={llmConfig.enabled}
+                                onChange={(e) => setLlmConfig(prev => ({ ...prev, enabled: e.target.checked }))}
+                                className="sr-only peer"
+                            />
+                            <div className={`w-11 h-6 rounded-full peer-focus:ring-2 peer-focus:ring-cyan-500 ${
+                                llmConfig.enabled ? 'bg-cyan-600' : 'bg-neutral-600'
+                            } after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5`}></div>
+                        </label>
+                    </div>
+
+                    {/* Provider Selection */}
+                    <div>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">Provider</label>
+                        <select
+                            value={llmConfig.provider}
+                            onChange={(e) => handleProviderChange(e.target.value)}
+                            className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
+                        >
+                            {Object.entries(PROVIDERS).map(([key, provider]) => (
+                                <option key={key} value={key}>{provider.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Base URL */}
+                    <div>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">Base URL</label>
+                        <input
+                            type="text"
+                            value={llmConfig.baseUrl}
+                            onChange={(e) => setLlmConfig(prev => ({ ...prev, baseUrl: e.target.value }))}
+                            className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
+                            placeholder="https://api.openai.com/v1"
+                        />
+                    </div>
+
+                    {/* Model */}
+                    <div>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">Model</label>
+                        <input
+                            type="text"
+                            value={llmConfig.model}
+                            onChange={(e) => setLlmConfig(prev => ({ ...prev, model: e.target.value }))}
+                            className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
+                            placeholder="gpt-4o-mini"
+                        />
+                    </div>
+
+                    {/* API Key */}
+                    {currentProvider.needsKey && (
+                        <div>
+                            <label className="block text-sm font-medium text-neutral-300 mb-2">API Key</label>
+                            <div className="relative">
+                                <input
+                                    type={showApiKey ? 'text' : 'password'}
+                                    value={llmConfig.apiKey}
+                                    onChange={(e) => setLlmConfig(prev => ({ ...prev, apiKey: e.target.value }))}
+                                    className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none pr-20"
+                                    placeholder="sk-..."
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowApiKey(!showApiKey)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs text-neutral-400 hover:text-white"
+                                >
+                                    {showApiKey ? 'Hide' : 'Show'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 pt-4">
+                        <button
+                            onClick={handleSaveLLM}
+                            disabled={saving}
+                            className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-neutral-600 text-white rounded-lg font-medium flex items-center gap-2"
+                        >
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            Save Settings
+                        </button>
+                        <button
+                            onClick={handleTestConnection}
+                            disabled={testing}
+                            className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 disabled:bg-neutral-800 text-white rounded-lg font-medium flex items-center gap-2"
+                        >
+                            {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                            Test Connection
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Rate Limits Configuration */}
+            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
+                <h4 className="text-md font-bold text-orange-400 mb-4 flex items-center gap-2">
+                    <Shield className="w-5 h-5" />
+                    Rate Limits & Quotas
+                </h4>
+                <p className="text-sm text-neutral-400 mb-6">
+                    Set daily limits for token usage and costs to control API spending. Set to 0 for unlimited (disabled).
+                </p>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">
+                            Tokens per User (Daily)
+                            {rateLimits.tokensPerUserDaily === 0 && <span className="text-green-400 ml-2 text-xs">Unlimited</span>}
+                        </label>
+                        <input
+                            type="number"
+                            value={rateLimits.tokensPerUserDaily}
+                            onChange={(e) => setRateLimits(prev => ({ ...prev, tokensPerUserDaily: parseInt(e.target.value) || 0 }))}
+                            placeholder="0 = Unlimited"
+                            className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-orange-500 outline-none"
+                        />
+                        <p className="text-xs text-neutral-500 mt-1">Max tokens each user can use per day (0 = unlimited)</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">
+                            Cost per User (Daily) $
+                            {rateLimits.costPerUserDaily === 0 && <span className="text-green-400 ml-2 text-xs">Unlimited</span>}
+                        </label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            value={rateLimits.costPerUserDaily}
+                            onChange={(e) => setRateLimits(prev => ({ ...prev, costPerUserDaily: parseFloat(e.target.value) || 0 }))}
+                            placeholder="0 = Unlimited"
+                            className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-orange-500 outline-none"
+                        />
+                        <p className="text-xs text-neutral-500 mt-1">Max cost each user can incur per day (0 = unlimited)</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">
+                            Platform Tokens (Daily)
+                            {rateLimits.tokensPlatformDaily === 0 && <span className="text-green-400 ml-2 text-xs">Unlimited</span>}
+                        </label>
+                        <input
+                            type="number"
+                            value={rateLimits.tokensPlatformDaily}
+                            onChange={(e) => setRateLimits(prev => ({ ...prev, tokensPlatformDaily: parseInt(e.target.value) || 0 }))}
+                            placeholder="0 = Unlimited"
+                            className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-orange-500 outline-none"
+                        />
+                        <p className="text-xs text-neutral-500 mt-1">Max tokens for entire platform per day (0 = unlimited)</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">
+                            Platform Cost (Daily) $
+                            {rateLimits.costPlatformDaily === 0 && <span className="text-green-400 ml-2 text-xs">Unlimited</span>}
+                        </label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            value={rateLimits.costPlatformDaily}
+                            onChange={(e) => setRateLimits(prev => ({ ...prev, costPlatformDaily: parseFloat(e.target.value) || 0 }))}
+                            placeholder="0 = Unlimited"
+                            className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-orange-500 outline-none"
+                        />
+                        <p className="text-xs text-neutral-500 mt-1">Max cost for entire platform per day (0 = unlimited)</p>
+                    </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-neutral-700">
+                    <button
+                        onClick={handleSaveRateLimits}
+                        disabled={saving}
+                        className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-neutral-600 text-white rounded-lg font-medium flex items-center gap-2"
+                    >
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        Save Rate Limits
+                    </button>
+                </div>
+            </div>
+
+            {/* Platform Usage Stats */}
+            {platformUsage && (
+                <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
+                    <h4 className="text-md font-bold text-green-400 mb-4 flex items-center gap-2">
+                        <Activity className="w-5 h-5" />
+                        Today's Usage
+                    </h4>
+
+                    <div className="grid grid-cols-4 gap-4">
+                        <div className="bg-neutral-700/30 rounded-lg p-4 text-center">
+                            <div className="text-2xl font-bold text-white">{platformUsage.tokensUsed?.toLocaleString() || 0}</div>
+                            <div className="text-xs text-neutral-400">Tokens Used</div>
+                            <div className="mt-2 h-1 bg-neutral-600 rounded">
+                                <div
+                                    className="h-full bg-green-500 rounded"
+                                    style={{ width: `${Math.min((platformUsage.tokensUsed / platformUsage.tokensLimit) * 100, 100)}%` }}
+                                />
+                            </div>
+                            <div className="text-xs text-neutral-500 mt-1">{platformUsage.tokensRemaining?.toLocaleString() || 0} remaining</div>
+                        </div>
+
+                        <div className="bg-neutral-700/30 rounded-lg p-4 text-center">
+                            <div className="text-2xl font-bold text-white">${platformUsage.costUsed?.toFixed(2) || '0.00'}</div>
+                            <div className="text-xs text-neutral-400">Cost Today</div>
+                            <div className="mt-2 h-1 bg-neutral-600 rounded">
+                                <div
+                                    className="h-full bg-orange-500 rounded"
+                                    style={{ width: `${Math.min((platformUsage.costUsed / platformUsage.costLimit) * 100, 100)}%` }}
+                                />
+                            </div>
+                            <div className="text-xs text-neutral-500 mt-1">${platformUsage.costRemaining?.toFixed(2) || '0.00'} remaining</div>
+                        </div>
+
+                        <div className="bg-neutral-700/30 rounded-lg p-4 text-center">
+                            <div className="text-2xl font-bold text-white">{platformUsage.totalRequests || 0}</div>
+                            <div className="text-xs text-neutral-400">Total Requests</div>
+                        </div>
+
+                        <div className="bg-neutral-700/30 rounded-lg p-4 text-center">
+                            <div className="text-2xl font-bold text-white">{platformUsage.activeUsers || 0}</div>
+                            <div className="text-xs text-neutral-400">Active Users</div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -1827,6 +2001,7 @@ function SystemLogs() {
 
 // User Management Component (Admin Only)
 function UserManagement() {
+    const toast = useToast();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showCreateForm, setShowCreateForm] = useState(false);
@@ -1885,6 +2060,7 @@ function UserManagement() {
     const handleEditUser = async (e) => {
         e.preventDefault();
         const token = AuthService.getToken();
+
         try {
             const res = await fetch(`/api/users/${editingUser.id}`, {
                 method: 'PUT',
@@ -1896,6 +2072,7 @@ function UserManagement() {
             });
 
             const data = await res.json();
+
             if (res.ok) {
                 toast.success('User updated successfully!');
                 loadUsers();
@@ -1906,7 +2083,8 @@ function UserManagement() {
                 toast.error(data.error || 'Failed to update user');
             }
         } catch (err) {
-            toast.error('Error updating user');
+            console.error('Error updating user:', err);
+            toast.error('Error updating user: ' + err.message);
         }
     };
 

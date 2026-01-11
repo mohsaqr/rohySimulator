@@ -895,7 +895,7 @@ router.get('/interactions/:session_id', authenticateToken, (req, res) => {
 
 // GET /api/users - List all users (Admin only)
 router.get('/users', authenticateToken, requireAdmin, (req, res) => {
-    const sql = `SELECT id, username, email, role, created_at FROM users ORDER BY created_at DESC`;
+    const sql = `SELECT id, username, name, email, role, created_at FROM users ORDER BY created_at DESC`;
     db.all(sql, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ users: rows });
@@ -904,7 +904,7 @@ router.get('/users', authenticateToken, requireAdmin, (req, res) => {
 
 // GET /api/users/:id - Get user details (Admin only)
 router.get('/users/:id', authenticateToken, requireAdmin, (req, res) => {
-    const sql = `SELECT id, username, email, role, created_at FROM users WHERE id = ?`;
+    const sql = `SELECT id, username, name, email, role, created_at FROM users WHERE id = ?`;
     db.get(sql, [req.params.id], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) return res.status(404).json({ error: 'User not found' });
@@ -915,7 +915,7 @@ router.get('/users/:id', authenticateToken, requireAdmin, (req, res) => {
 // PUT /api/users/:id - Update user (Admin only)
 router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     const { username, name, email, role, password } = req.body;
-    
+
     try {
         // If password is provided, hash it
         if (password) {
@@ -2920,29 +2920,192 @@ router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireAdmin, 
     });
 });
 
-// --- LLM PROXY ROUTE to avoid CORS ---
-router.post('/proxy/llm', async (req, res) => {
-    const { targetUrl, body, headers } = req.body;
+// --- LLM PROXY ROUTE with Authentication & Rate Limiting ---
+router.post('/proxy/llm', authenticateToken, async (req, res) => {
+    const { messages, system_prompt, session_id } = req.body;
+    const userId = req.user.id;
+    const today = new Date().toISOString().split('T')[0];
+    const startTime = Date.now();
 
     try {
-        console.log(`[Proxy] Forwarding to: ${targetUrl}`);
-        const response = await fetch(targetUrl, {
-            method: 'POST',
-            headers: headers || { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
+        // 1. Check if LLM is enabled
+        const llmEnabled = await new Promise((resolve, reject) => {
+            db.get('SELECT setting_value FROM platform_settings WHERE setting_key = ?', ['llm_enabled'], (err, row) => {
+                if (err) reject(err);
+                else resolve(row?.setting_value !== 'false');
+            });
         });
+
+        if (!llmEnabled) {
+            return res.status(503).json({ error: 'LLM service is currently disabled by administrator' });
+        }
+
+        // 2. Get user's current usage
+        const userUsage = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM llm_usage WHERE user_id = ? AND date = ?', [userId, today], (err, row) => {
+                if (err) reject(err);
+                else resolve(row || { total_tokens: 0, estimated_cost: 0, request_count: 0 });
+            });
+        });
+
+        // 3. Get platform usage
+        const platformUsage = await new Promise((resolve, reject) => {
+            db.get('SELECT SUM(total_tokens) as total_tokens, SUM(estimated_cost) as total_cost FROM llm_usage WHERE date = ?', [today], (err, row) => {
+                if (err) reject(err);
+                else resolve(row || { total_tokens: 0, total_cost: 0 });
+            });
+        });
+
+        // 4. Get rate limits
+        const getLimitSetting = (key, defaultVal) => new Promise((resolve, reject) => {
+            db.get('SELECT setting_value FROM platform_settings WHERE setting_key = ?', [key], (err, row) => {
+                if (err) reject(err);
+                else resolve(row?.setting_value ? parseFloat(row.setting_value) : defaultVal);
+            });
+        });
+
+        const tokensPerUserDaily = await getLimitSetting('rate_limit_tokens_per_user_daily', 0);
+        const costPerUserDaily = await getLimitSetting('rate_limit_cost_per_user_daily', 0);
+        const tokensPlatformDaily = await getLimitSetting('rate_limit_tokens_platform_daily', 0);
+        const costPlatformDaily = await getLimitSetting('rate_limit_cost_platform_daily', 0);
+
+        // 5. Check user rate limits (0 = unlimited/disabled)
+        if (tokensPerUserDaily > 0 && userUsage.total_tokens >= tokensPerUserDaily) {
+            // Log rate limit hit
+            db.run('INSERT INTO llm_request_log (user_id, session_id, status, error_message) VALUES (?, ?, ?, ?)',
+                [userId, session_id, 'rate_limited', 'User daily token limit exceeded']);
+            return res.status(429).json({
+                error: 'Daily token limit exceeded',
+                tokensUsed: userUsage.total_tokens,
+                tokensLimit: tokensPerUserDaily,
+                resetsAt: 'midnight UTC'
+            });
+        }
+
+        if (costPerUserDaily > 0 && userUsage.estimated_cost >= costPerUserDaily) {
+            db.run('INSERT INTO llm_request_log (user_id, session_id, status, error_message) VALUES (?, ?, ?, ?)',
+                [userId, session_id, 'rate_limited', 'User daily cost limit exceeded']);
+            return res.status(429).json({
+                error: 'Daily cost limit exceeded',
+                costUsed: userUsage.estimated_cost,
+                costLimit: costPerUserDaily,
+                resetsAt: 'midnight UTC'
+            });
+        }
+
+        // 6. Check platform rate limits (0 = unlimited/disabled)
+        if (tokensPlatformDaily > 0 && (platformUsage.total_tokens || 0) >= tokensPlatformDaily) {
+            db.run('INSERT INTO llm_request_log (user_id, session_id, status, error_message) VALUES (?, ?, ?, ?)',
+                [userId, session_id, 'rate_limited', 'Platform daily token limit exceeded']);
+            return res.status(429).json({
+                error: 'Platform daily token limit exceeded. Please try again tomorrow.',
+                resetsAt: 'midnight UTC'
+            });
+        }
+
+        if (costPlatformDaily > 0 && (platformUsage.total_cost || 0) >= costPlatformDaily) {
+            db.run('INSERT INTO llm_request_log (user_id, session_id, status, error_message) VALUES (?, ?, ?, ?)',
+                [userId, session_id, 'rate_limited', 'Platform daily cost limit exceeded']);
+            return res.status(429).json({
+                error: 'Platform daily cost limit exceeded. Please try again tomorrow.',
+                resetsAt: 'midnight UTC'
+            });
+        }
+
+        // 7. Get LLM settings from platform settings
+        const getLLMSetting = (key, defaultVal) => new Promise((resolve, reject) => {
+            db.get('SELECT setting_value FROM platform_settings WHERE setting_key = ?', [key], (err, row) => {
+                if (err) reject(err);
+                else resolve(row?.setting_value || defaultVal);
+            });
+        });
+
+        const provider = await getLLMSetting('llm_provider', 'lmstudio');
+        const model = await getLLMSetting('llm_model', 'local-model');
+        const baseUrl = await getLLMSetting('llm_base_url', 'http://localhost:1234/v1');
+        const apiKey = await getLLMSetting('llm_api_key', '');
+
+        // 8. Build headers
+        const llmHeaders = { 'Content-Type': 'application/json' };
+        if (apiKey) {
+            llmHeaders['Authorization'] = `Bearer ${apiKey}`;
+        }
+
+        // 9. Build request body
+        const conversation = [];
+        if (system_prompt) {
+            conversation.push({ role: 'system', content: system_prompt });
+        }
+        if (messages && Array.isArray(messages)) {
+            conversation.push(...messages);
+        }
+
+        // 10. Make LLM request
+        console.log(`[LLM Proxy] User ${userId} sending request to ${provider}/${model}`);
+        const response = await fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: llmHeaders,
+            body: JSON.stringify({
+                model: model,
+                messages: conversation,
+                stream: false
+            })
+        });
+
+        const responseTime = Date.now() - startTime;
 
         if (!response.ok) {
             const errText = await response.text();
-            console.error(`[Proxy] Error ${response.status}: ${errText}`);
+            console.error(`[LLM Proxy] Error ${response.status}: ${errText}`);
+            db.run('INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms) VALUES (?, ?, ?, ?, ?, ?)',
+                [userId, session_id, model, 'error', errText.substring(0, 500), responseTime]);
             return res.status(response.status).json({ error: errText });
         }
 
         const data = await response.json();
+
+        // 11. Extract usage from response
+        const promptTokens = data.usage?.prompt_tokens || 0;
+        const completionTokens = data.usage?.completion_tokens || 0;
+        const totalTokens = data.usage?.total_tokens || promptTokens + completionTokens;
+
+        // 12. Calculate estimated cost
+        const pricing = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM llm_model_pricing WHERE provider = ? AND (model = ? OR model = ?)',
+                [provider, model, 'default'], (err, row) => {
+                if (err) reject(err);
+                else resolve(row || { input_cost_per_1k: 0, output_cost_per_1k: 0 });
+            });
+        });
+
+        const estimatedCost = (promptTokens / 1000) * pricing.input_cost_per_1k +
+                             (completionTokens / 1000) * pricing.output_cost_per_1k;
+
+        // 13. Update user's daily usage (upsert)
+        db.run(`
+            INSERT INTO llm_usage (user_id, date, prompt_tokens, completion_tokens, total_tokens, estimated_cost, model, request_count, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id, date) DO UPDATE SET
+            prompt_tokens = llm_usage.prompt_tokens + excluded.prompt_tokens,
+            completion_tokens = llm_usage.completion_tokens + excluded.completion_tokens,
+            total_tokens = llm_usage.total_tokens + excluded.total_tokens,
+            estimated_cost = llm_usage.estimated_cost + excluded.estimated_cost,
+            request_count = llm_usage.request_count + 1,
+            updated_at = CURRENT_TIMESTAMP
+        `, [userId, today, promptTokens, completionTokens, totalTokens, estimatedCost, model]);
+
+        // 14. Log the request
+        db.run(`INSERT INTO llm_request_log (user_id, session_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, response_time_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [userId, session_id, model, promptTokens, completionTokens, totalTokens, estimatedCost, 'success', responseTime]);
+
+        console.log(`[LLM Proxy] User ${userId}: ${totalTokens} tokens, $${estimatedCost.toFixed(4)}, ${responseTime}ms`);
+
+        // 15. Return response
         res.json(data);
     } catch (err) {
-        console.error('[Proxy] Failure:', err);
-        res.status(500).json({ error: "Proxy Request Failed", details: err.message });
+        console.error('[LLM Proxy] Failure:', err);
+        res.status(500).json({ error: "LLM Request Failed", details: err.message });
     }
 });
 
@@ -4411,6 +4574,336 @@ router.get('/platform-settings', authenticateToken, requireAdmin, (req, res) => 
             res.json({ settings: parsed });
         }
     );
+});
+
+// ============================================
+// LLM SETTINGS & RATE LIMITING API
+// ============================================
+
+// Helper function to get a platform setting
+const getPlatformSetting = (key) => {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT setting_value FROM platform_settings WHERE setting_key = ?', [key], (err, row) => {
+            if (err) reject(err);
+            else resolve(row?.setting_value || null);
+        });
+    });
+};
+
+// Helper function to set a platform setting
+const setPlatformSetting = (key, value, userId) => {
+    return new Promise((resolve, reject) => {
+        db.run(
+            `INSERT INTO platform_settings (setting_key, setting_value, updated_by, updated_at)
+             VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+             ON CONFLICT(setting_key) DO UPDATE SET
+             setting_value = excluded.setting_value,
+             updated_by = excluded.updated_by,
+             updated_at = CURRENT_TIMESTAMP`,
+            [key, value, userId],
+            function(err) {
+                if (err) reject(err);
+                else resolve(this.changes);
+            }
+        );
+    });
+};
+
+// Default LLM settings
+const DEFAULT_LLM_SETTINGS = {
+    provider: 'lmstudio',
+    model: 'local-model',
+    baseUrl: 'http://localhost:1234/v1',
+    apiKey: '',
+    enabled: true
+};
+
+// Default rate limit settings (0 = unlimited/disabled)
+const DEFAULT_RATE_LIMITS = {
+    tokensPerUserDaily: 0,
+    costPerUserDaily: 0,
+    tokensPlatformDaily: 0,
+    costPlatformDaily: 0,
+    requestsPerUserHourly: 0
+};
+
+// GET /api/platform-settings/llm - Get LLM configuration
+router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
+    try {
+        const settings = {};
+        const keys = ['llm_provider', 'llm_model', 'llm_base_url', 'llm_api_key', 'llm_enabled'];
+
+        for (const key of keys) {
+            settings[key] = await getPlatformSetting(key);
+        }
+
+        // Build response with defaults
+        const response = {
+            provider: settings.llm_provider || DEFAULT_LLM_SETTINGS.provider,
+            model: settings.llm_model || DEFAULT_LLM_SETTINGS.model,
+            baseUrl: settings.llm_base_url || DEFAULT_LLM_SETTINGS.baseUrl,
+            apiKey: settings.llm_api_key ? '••••••••' : '', // Mask API key for non-admins
+            apiKeySet: !!settings.llm_api_key,
+            enabled: settings.llm_enabled !== 'false'
+        };
+
+        // Admins get full settings
+        if (req.user.role === 'admin') {
+            response.apiKey = settings.llm_api_key || '';
+        }
+
+        res.json(response);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/platform-settings/llm - Update LLM configuration (Admin only)
+router.put('/platform-settings/llm', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { provider, model, baseUrl, apiKey, enabled } = req.body;
+
+        if (provider) await setPlatformSetting('llm_provider', provider, req.user.id);
+        if (model) await setPlatformSetting('llm_model', model, req.user.id);
+        if (baseUrl) await setPlatformSetting('llm_base_url', baseUrl, req.user.id);
+        if (apiKey !== undefined) await setPlatformSetting('llm_api_key', apiKey, req.user.id);
+        if (enabled !== undefined) await setPlatformSetting('llm_enabled', String(enabled), req.user.id);
+
+        res.json({ message: 'LLM settings updated successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/platform-settings/llm/test - Test LLM connection (Admin only)
+router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const provider = await getPlatformSetting('llm_provider') || DEFAULT_LLM_SETTINGS.provider;
+        const model = await getPlatformSetting('llm_model') || DEFAULT_LLM_SETTINGS.model;
+        const baseUrl = await getPlatformSetting('llm_base_url') || DEFAULT_LLM_SETTINGS.baseUrl;
+        const apiKey = await getPlatformSetting('llm_api_key') || '';
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+
+        const testResponse = await fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                model: model,
+                messages: [{ role: 'user', content: 'Say "test successful" in exactly two words.' }],
+                max_tokens: 10
+            })
+        });
+
+        if (!testResponse.ok) {
+            const errText = await testResponse.text();
+            return res.status(400).json({
+                success: false,
+                error: `LLM API returned ${testResponse.status}: ${errText}`
+            });
+        }
+
+        const data = await testResponse.json();
+        res.json({
+            success: true,
+            message: 'Connection successful',
+            response: data.choices?.[0]?.message?.content || 'No response content'
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// GET /api/platform-settings/rate-limits - Get rate limit configuration
+router.get('/platform-settings/rate-limits', authenticateToken, async (req, res) => {
+    try {
+        const settings = {
+            tokensPerUserDaily: parseInt(await getPlatformSetting('rate_limit_tokens_per_user_daily')) || DEFAULT_RATE_LIMITS.tokensPerUserDaily,
+            costPerUserDaily: parseFloat(await getPlatformSetting('rate_limit_cost_per_user_daily')) || DEFAULT_RATE_LIMITS.costPerUserDaily,
+            tokensPlatformDaily: parseInt(await getPlatformSetting('rate_limit_tokens_platform_daily')) || DEFAULT_RATE_LIMITS.tokensPlatformDaily,
+            costPlatformDaily: parseFloat(await getPlatformSetting('rate_limit_cost_platform_daily')) || DEFAULT_RATE_LIMITS.costPlatformDaily,
+            requestsPerUserHourly: parseInt(await getPlatformSetting('rate_limit_requests_per_user_hourly')) || DEFAULT_RATE_LIMITS.requestsPerUserHourly
+        };
+
+        res.json(settings);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/platform-settings/rate-limits - Update rate limit configuration (Admin only)
+router.put('/platform-settings/rate-limits', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { tokensPerUserDaily, costPerUserDaily, tokensPlatformDaily, costPlatformDaily, requestsPerUserHourly } = req.body;
+
+        if (tokensPerUserDaily !== undefined) await setPlatformSetting('rate_limit_tokens_per_user_daily', String(tokensPerUserDaily), req.user.id);
+        if (costPerUserDaily !== undefined) await setPlatformSetting('rate_limit_cost_per_user_daily', String(costPerUserDaily), req.user.id);
+        if (tokensPlatformDaily !== undefined) await setPlatformSetting('rate_limit_tokens_platform_daily', String(tokensPlatformDaily), req.user.id);
+        if (costPlatformDaily !== undefined) await setPlatformSetting('rate_limit_cost_platform_daily', String(costPlatformDaily), req.user.id);
+        if (requestsPerUserHourly !== undefined) await setPlatformSetting('rate_limit_requests_per_user_hourly', String(requestsPerUserHourly), req.user.id);
+
+        res.json({ message: 'Rate limits updated successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/llm/usage - Get current user's usage
+router.get('/llm/usage', authenticateToken, async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+        // Get user's daily usage
+        const userUsage = await new Promise((resolve, reject) => {
+            db.get(
+                `SELECT * FROM llm_usage WHERE user_id = ? AND date = ?`,
+                [req.user.id, today],
+                (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row || { total_tokens: 0, estimated_cost: 0, request_count: 0 });
+                }
+            );
+        });
+
+        // Get rate limits
+        const limits = {
+            tokensPerUserDaily: parseInt(await getPlatformSetting('rate_limit_tokens_per_user_daily')) || DEFAULT_RATE_LIMITS.tokensPerUserDaily,
+            costPerUserDaily: parseFloat(await getPlatformSetting('rate_limit_cost_per_user_daily')) || DEFAULT_RATE_LIMITS.costPerUserDaily
+        };
+
+        res.json({
+            date: today,
+            tokensUsed: userUsage.total_tokens,
+            tokensLimit: limits.tokensPerUserDaily,
+            tokensRemaining: Math.max(0, limits.tokensPerUserDaily - userUsage.total_tokens),
+            costUsed: userUsage.estimated_cost,
+            costLimit: limits.costPerUserDaily,
+            costRemaining: Math.max(0, limits.costPerUserDaily - userUsage.estimated_cost),
+            requestCount: userUsage.request_count
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/llm/usage/all - Get all users' usage (Admin only)
+router.get('/llm/usage/all', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+        const usage = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT lu.*, u.username, u.name
+                 FROM llm_usage lu
+                 JOIN users u ON lu.user_id = u.id
+                 WHERE lu.date = ?
+                 ORDER BY lu.total_tokens DESC`,
+                [today],
+                (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows || []);
+                }
+            );
+        });
+
+        res.json({ date: today, users: usage });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/llm/usage/platform - Get platform-wide usage (Admin only)
+router.get('/llm/usage/platform', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+        // Get platform-wide totals for today
+        const platformUsage = await new Promise((resolve, reject) => {
+            db.get(
+                `SELECT
+                    SUM(total_tokens) as total_tokens,
+                    SUM(estimated_cost) as total_cost,
+                    SUM(request_count) as total_requests,
+                    COUNT(DISTINCT user_id) as active_users
+                 FROM llm_usage WHERE date = ?`,
+                [today],
+                (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row || { total_tokens: 0, total_cost: 0, total_requests: 0, active_users: 0 });
+                }
+            );
+        });
+
+        // Get limits
+        const limits = {
+            tokensPlatformDaily: parseInt(await getPlatformSetting('rate_limit_tokens_platform_daily')) || DEFAULT_RATE_LIMITS.tokensPlatformDaily,
+            costPlatformDaily: parseFloat(await getPlatformSetting('rate_limit_cost_platform_daily')) || DEFAULT_RATE_LIMITS.costPlatformDaily
+        };
+
+        res.json({
+            date: today,
+            tokensUsed: platformUsage.total_tokens || 0,
+            tokensLimit: limits.tokensPlatformDaily,
+            tokensRemaining: Math.max(0, limits.tokensPlatformDaily - (platformUsage.total_tokens || 0)),
+            costUsed: platformUsage.total_cost || 0,
+            costLimit: limits.costPlatformDaily,
+            costRemaining: Math.max(0, limits.costPlatformDaily - (platformUsage.total_cost || 0)),
+            totalRequests: platformUsage.total_requests || 0,
+            activeUsers: platformUsage.active_users || 0
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/llm/pricing - Get model pricing table (Admin only)
+router.get('/llm/pricing', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const pricing = await new Promise((resolve, reject) => {
+            db.all('SELECT * FROM llm_model_pricing WHERE is_active = 1 ORDER BY provider, model', [], (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            });
+        });
+
+        res.json({ pricing });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/llm/pricing - Update model pricing (Admin only)
+router.put('/llm/pricing', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { provider, model, inputCostPer1k, outputCostPer1k } = req.body;
+
+        if (!provider || !model) {
+            return res.status(400).json({ error: 'Provider and model are required' });
+        }
+
+        await new Promise((resolve, reject) => {
+            db.run(
+                `INSERT INTO llm_model_pricing (provider, model, input_cost_per_1k, output_cost_per_1k, updated_at)
+                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                 ON CONFLICT(provider, model) DO UPDATE SET
+                 input_cost_per_1k = excluded.input_cost_per_1k,
+                 output_cost_per_1k = excluded.output_cost_per_1k,
+                 updated_at = CURRENT_TIMESTAMP`,
+                [provider, model, inputCostPer1k || 0, outputCostPer1k || 0],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve(this.changes);
+                }
+            );
+        });
+
+        res.json({ message: 'Pricing updated successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 export default router;

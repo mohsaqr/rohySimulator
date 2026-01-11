@@ -1,41 +1,11 @@
 /**
  * Service to handle LLM communication and Backend persistence.
+ * LLM configuration is now managed server-side by administrators.
  */
-
-// Default Configuration - LM Studio is the default
-const DEFAULT_CONFIG = {
-    provider: 'lmstudio',
-    baseUrl: 'http://localhost:1234/v1',
-    apiKey: '',
-    model: 'local-model'
-};
 
 const BACKEND_URL = '/api';
 
-// Load saved config from localStorage on module init
-const loadSavedConfig = () => {
-    try {
-        const saved = localStorage.getItem('rohy_llm_defaults');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (parsed.provider) {
-                return { ...DEFAULT_CONFIG, ...parsed };
-            }
-        }
-    } catch (e) {
-        console.warn('Failed to load saved LLM config:', e);
-    }
-    return { ...DEFAULT_CONFIG };
-};
-
 export const LLMService = {
-
-    config: loadSavedConfig(),
-
-    setConfig(newConfig) {
-        this.config = { ...this.config, ...newConfig };
-        console.log('[LLMService] Config updated:', this.config);
-    },
 
     /**
      * Get authentication headers
@@ -57,14 +27,9 @@ export const LLMService = {
             const res = await fetch(`${BACKEND_URL}/sessions`, {
                 method: 'POST',
                 headers: this.getAuthHeaders(),
-                body: JSON.stringify({ 
-                    case_id: caseId, 
+                body: JSON.stringify({
+                    case_id: caseId,
                     student_name: studentName,
-                    llm_settings: {
-                        provider: this.config.provider,
-                        model: this.config.model,
-                        baseUrl: this.config.baseUrl
-                    },
                     monitor_settings: monitorSettings
                 })
             });
@@ -99,51 +64,41 @@ export const LLMService = {
     },
 
     /**
-     * Send Message to LLM and Log to Backend
+     * Send Message to LLM via authenticated server proxy
+     * Server handles LLM configuration and rate limiting
      */
     async sendMessage(sessionId, messages, systemPrompt) {
-        console.log('[LLMService] Sending message with config:', {
-            provider: this.config.provider,
-            baseUrl: this.config.baseUrl,
-            model: this.config.model
-        });
-
         // 1. Log User Message
         const lastMsg = messages[messages.length - 1];
         if (lastMsg.role === 'user') {
             await this.logInteraction(sessionId, 'user', lastMsg.content);
         }
 
-        // 2. Prepare Payload for LLM
-        // If we want the system prompt to be dynamic based on the case, we inject it here.
-        const conversation = [
-            { role: 'system', content: systemPrompt || 'You are a patient.' },
-            ...messages
-        ];
-
         try {
-            // 3. Call LLM (Via Backend Proxy to avoid CORS)
-            const headers = { 'Content-Type': 'application/json' };
-            const isLocal = this.config.provider === 'lmstudio' || this.config.provider === 'ollama';
-
-            if (!isLocal || (this.config.apiKey && this.config.apiKey.trim() !== '')) {
-                headers['Authorization'] = `Bearer ${this.config.apiKey}`;
-            }
-
-            // Route request through our Node.js server to bypass browser CORS restrictions
+            // 2. Call LLM via authenticated proxy
+            // Server handles: LLM config, rate limiting, usage tracking
             const response = await fetch(`${BACKEND_URL}/proxy/llm`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.getAuthHeaders(),
                 body: JSON.stringify({
-                    targetUrl: `${this.config.baseUrl}/chat/completions`,
-                    headers: headers,
-                    body: {
-                        model: this.config.model || 'local-model',
-                        messages: conversation,
-                        stream: false
-                    }
+                    session_id: sessionId,
+                    messages: messages,
+                    system_prompt: systemPrompt || 'You are a patient.'
                 })
             });
+
+            // Handle rate limiting
+            if (response.status === 429) {
+                const errorData = await response.json();
+                console.warn('[LLMService] Rate limit exceeded:', errorData);
+                return `Rate limit exceeded: ${errorData.error}. ${errorData.resetsAt ? `Resets at ${errorData.resetsAt}.` : ''}`;
+            }
+
+            // Handle service disabled
+            if (response.status === 503) {
+                const errorData = await response.json();
+                return `AI service unavailable: ${errorData.error}`;
+            }
 
             if (!response.ok) {
                 const errText = await response.text();
@@ -153,14 +108,32 @@ export const LLMService = {
             const data = await response.json();
             const aiContent = data.choices?.[0]?.message?.content || '...';
 
-            // 4. Log Assistant Response
+            // 3. Log Assistant Response
             await this.logInteraction(sessionId, 'assistant', aiContent);
 
             return aiContent;
 
         } catch (err) {
             console.error('LLM Error', err);
-            return "Error: Could not connect to AI patient. Please check settings.";
+            return "Error: Could not connect to AI patient. Please check with your administrator.";
+        }
+    },
+
+    /**
+     * Get current user's LLM usage
+     */
+    async getUsage() {
+        try {
+            const response = await fetch(`${BACKEND_URL}/llm/usage`, {
+                headers: this.getAuthHeaders()
+            });
+            if (!response.ok) {
+                throw new Error('Failed to get usage');
+            }
+            return await response.json();
+        } catch (err) {
+            console.error('Failed to get LLM usage:', err);
+            return null;
         }
     },
 
