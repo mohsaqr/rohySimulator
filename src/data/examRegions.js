@@ -39,6 +39,98 @@ export const EXAM_TECHNIQUES = {
 
 // Body region definitions with available exam types
 export const BODY_REGIONS = {
+    // Combined Head & Neck region (used by BodyMap)
+    headNeck: {
+        id: 'headNeck',
+        name: 'Head & Neck',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'auscultation', 'special'],
+        specialTests: ['Pupil reflex', 'Fundoscopy', 'JVP assessment', 'Lymph node exam', 'Thyroid exam'],
+        defaultFindings: {
+            inspection: 'Normocephalic, atraumatic, no facial asymmetry, trachea midline',
+            palpation: 'No tenderness, supple neck, no lymphadenopathy, thyroid normal',
+            auscultation: 'No carotid bruits',
+            special: 'PERRLA, JVP not elevated'
+        }
+    },
+    // Chest region (alias used by BodyMap)
+    chest: {
+        id: 'chest',
+        name: 'Chest',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'percussion', 'auscultation'],
+        specialTests: [],
+        defaultFindings: {
+            inspection: 'Symmetrical chest rise, no deformities, no scars',
+            palpation: 'No tenderness, normal tactile fremitus, apex beat normal position',
+            percussion: 'Resonant bilaterally',
+            auscultation: 'Clear breath sounds bilaterally, no wheeze or crackles. Heart sounds S1 S2 normal, no murmurs'
+        }
+    },
+    // Upper arm regions (used by BodyMap)
+    upperArmLeft: {
+        id: 'upperArmLeft',
+        name: 'Left Upper Arm',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Biceps reflex', 'Power', 'Sensation'],
+        defaultFindings: {
+            inspection: 'No deformities, no swelling, no skin changes',
+            palpation: 'No tenderness, normal muscle bulk',
+            special: 'Power 5/5, biceps reflex 2+, sensation intact'
+        }
+    },
+    upperArmRight: {
+        id: 'upperArmRight',
+        name: 'Right Upper Arm',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Biceps reflex', 'Power', 'Sensation'],
+        defaultFindings: {
+            inspection: 'No deformities, no swelling, no skin changes',
+            palpation: 'No tenderness, normal muscle bulk',
+            special: 'Power 5/5, biceps reflex 2+, sensation intact'
+        }
+    },
+    // Pelvis region (used by BodyMap)
+    pelvis: {
+        id: 'pelvis',
+        name: 'Pelvis',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Hernia exam', 'Hip ROM', 'FABER test'],
+        defaultFindings: {
+            inspection: 'No visible masses or asymmetry',
+            palpation: 'No tenderness, femoral pulses 2+ bilaterally',
+            special: 'No inguinal hernia, hip ROM full'
+        }
+    },
+    // Lower leg regions (used by BodyMap)
+    lowerLegLeft: {
+        id: 'lowerLegLeft',
+        name: 'Left Lower Leg',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Pulses', 'Sensation', 'Edema assessment'],
+        defaultFindings: {
+            inspection: 'No swelling, no varicosities, no skin changes',
+            palpation: 'Non-tender, posterior tibial pulse 2+, no edema',
+            special: 'Sensation intact, no pitting edema'
+        }
+    },
+    lowerLegRight: {
+        id: 'lowerLegRight',
+        name: 'Right Lower Leg',
+        view: 'anterior',
+        examTypes: ['inspection', 'palpation', 'special'],
+        specialTests: ['Pulses', 'Sensation', 'Edema assessment'],
+        defaultFindings: {
+            inspection: 'No swelling, no varicosities, no skin changes',
+            palpation: 'Non-tender, posterior tibial pulse 2+, no edema',
+            special: 'Sensation intact, no pitting edema'
+        }
+    },
+
     // Anterior view regions
     head: {
         id: 'head',

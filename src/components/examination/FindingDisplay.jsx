@@ -1,16 +1,22 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle, Search, Stethoscope } from 'lucide-react';
 import { BODY_REGIONS, EXAM_TECHNIQUES } from '../../data/examRegions';
+import AuscultationPanel from './AuscultationPanel';
 
 /**
  * Finding Display Component
  * Shows the examination finding for the selected region and exam type
+ * Special handling for auscultation with audio support
  */
 export default function FindingDisplay({
     selectedRegion,
     selectedExamType,
     finding,
-    isAbnormal
+    isAbnormal,
+    audioUrl,
+    audioUrls = {},
+    heartAudio,
+    lungAudio
 }) {
     // No region selected
     if (!selectedRegion) {
@@ -39,6 +45,21 @@ export default function FindingDisplay({
                     Select an examination technique
                 </p>
             </div>
+        );
+    }
+
+    // Special handling for auscultation - show zoomed chest with audio
+    if (selectedExamType === 'auscultation') {
+        return (
+            <AuscultationPanel
+                finding={finding}
+                isAbnormal={isAbnormal}
+                audioUrl={audioUrl}
+                audioUrls={audioUrls}
+                heartAudio={heartAudio}
+                lungAudio={lungAudio}
+                regionName={region?.name || selectedRegion}
+            />
         );
     }
 

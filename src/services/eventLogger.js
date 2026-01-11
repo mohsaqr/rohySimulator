@@ -73,6 +73,11 @@ export const VERBS = {
     ORDERED_TREATMENT: 'ORDERED_TREATMENT',
     PERFORMED_INTERVENTION: 'PERFORMED_INTERVENTION',
 
+    // Physical Examination
+    PERFORMED_PHYSICAL_EXAM: 'PERFORMED_PHYSICAL_EXAM',
+    OPENED_EXAM_PANEL: 'OPENED_EXAM_PANEL',
+    CLOSED_EXAM_PANEL: 'CLOSED_EXAM_PANEL',
+
     // Chat/Communication
     SENT_MESSAGE: 'SENT_MESSAGE',
     RECEIVED_MESSAGE: 'RECEIVED_MESSAGE',
@@ -160,6 +165,11 @@ const VERB_METADATA = {
     ORDERED_TREATMENT: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
     PERFORMED_INTERVENTION: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
 
+    // Physical Examination
+    PERFORMED_PHYSICAL_EXAM: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
+    OPENED_EXAM_PANEL: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
+    CLOSED_EXAM_PANEL: { severity: SEVERITY.DEBUG, category: CATEGORIES.CLINICAL },
+
     // Communication
     SENT_MESSAGE: { severity: SEVERITY.ACTION, category: CATEGORIES.COMMUNICATION },
     RECEIVED_MESSAGE: { severity: SEVERITY.INFO, category: CATEGORIES.COMMUNICATION },
@@ -224,7 +234,8 @@ export const OBJECT_TYPES = {
     DRAWER: 'drawer',
     PANEL: 'panel',
     SCENARIO: 'scenario',
-    COMPONENT: 'component'
+    COMPONENT: 'component',
+    PHYSICAL_EXAM: 'physical_exam'
 };
 
 // Component names for tracking
@@ -239,6 +250,8 @@ export const COMPONENTS = {
     SCENARIO_REPOSITORY: 'ScenarioRepository',
     LOGIN_PAGE: 'LoginPage',
     APP: 'App',
+    MANIKIN_PANEL: 'ManikinPanel',
+    AUSCULTATION_PANEL: 'AuscultationPanel',
     INVESTIGATION_PANEL: 'InvestigationPanel',
     PATIENT_INFO_PANEL: 'PatientInfoPanel',
     MEDICATION_PANEL: 'MedicationPanel',
@@ -811,6 +824,45 @@ class EventLoggerService {
             objectId: groupName,
             objectName: groupName,
             component: componentName
+        });
+    }
+
+    // Physical Examination events
+    examPanelOpened() {
+        this.startTiming('examPanel');
+        this.log(VERBS.OPENED_EXAM_PANEL, OBJECT_TYPES.PANEL, {
+            objectId: 'manikin_panel',
+            objectName: 'Physical Examination Panel',
+            component: COMPONENTS.MANIKIN_PANEL
+        });
+    }
+
+    examPanelClosed() {
+        this.log(VERBS.CLOSED_EXAM_PANEL, OBJECT_TYPES.PANEL, {
+            objectId: 'manikin_panel',
+            objectName: 'Physical Examination Panel',
+            component: COMPONENTS.MANIKIN_PANEL,
+            timingMark: 'examPanel'
+        });
+    }
+
+    physicalExamPerformed(region, examType, finding, context = null) {
+        this.log(VERBS.PERFORMED_PHYSICAL_EXAM, OBJECT_TYPES.PHYSICAL_EXAM, {
+            objectId: `${region}:${examType}`,
+            objectName: `${examType} - ${region}`,
+            component: COMPONENTS.MANIKIN_PANEL,
+            result: finding,
+            context
+        });
+    }
+
+    auscultationPerformed(location, soundType, finding, audioPlayed = false, audioUrl = null) {
+        this.log(VERBS.PERFORMED_PHYSICAL_EXAM, OBJECT_TYPES.PHYSICAL_EXAM, {
+            objectId: `auscultation:${location}`,
+            objectName: `Auscultation - ${location}`,
+            component: COMPONENTS.AUSCULTATION_PANEL,
+            result: finding,
+            context: { soundType, audioPlayed, audioUrl }
         });
     }
 
