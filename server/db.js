@@ -916,7 +916,8 @@ function initDb() {
                 addColumn('last_login', 'DATETIME');
                 addColumn('failed_login_attempts', 'INTEGER DEFAULT 0');
                 addColumn('locked_until', 'DATETIME');
-                addColumn('updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+                // SQLite doesn't allow CURRENT_TIMESTAMP as default in ALTER TABLE
+                addColumn('updated_at', 'DATETIME');
                 addColumn('deleted_at', 'DATETIME');
                 // User profile fields
                 addColumn('institution', 'TEXT');
@@ -948,7 +949,8 @@ function initDb() {
                 addColumn('published_at', 'DATETIME');
                 addColumn('created_by', 'INTEGER');
                 addColumn('last_modified_by', 'INTEGER');
-                addColumn('updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+                // SQLite doesn't allow CURRENT_TIMESTAMP as default in ALTER TABLE
+                addColumn('updated_at', 'DATETIME');
                 addColumn('deleted_at', 'DATETIME');
             }
         });
@@ -968,7 +970,8 @@ function initDb() {
                 addColumn('message_count', 'INTEGER DEFAULT 0');
                 addColumn('performance_score', 'REAL');
                 addColumn('instructor_notes', 'TEXT');
-                addColumn('updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+                // SQLite doesn't allow CURRENT_TIMESTAMP as default in ALTER TABLE
+                addColumn('updated_at', 'DATETIME');
                 addColumn('deleted_at', 'DATETIME');
             }
         });
@@ -1127,6 +1130,81 @@ function initDb() {
         db.run(`CREATE INDEX IF NOT EXISTS idx_diagnoses_icd ON diagnoses(icd_code)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_diagnoses_name ON diagnoses(name)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_diagnoses_system ON diagnoses(body_system)`);
+
+        // ============================================
+        // LLM USAGE TRACKING & RATE LIMITING TABLES
+        // ============================================
+
+        // LLM Usage - Daily aggregates per user
+        db.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            date DATE NOT NULL,
+            prompt_tokens INTEGER DEFAULT 0,
+            completion_tokens INTEGER DEFAULT 0,
+            total_tokens INTEGER DEFAULT 0,
+            estimated_cost REAL DEFAULT 0,
+            model TEXT,
+            request_count INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, date),
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )`);
+
+        // LLM Request Log - Detailed audit trail
+        db.run(`CREATE TABLE IF NOT EXISTS llm_request_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            session_id INTEGER,
+            model TEXT,
+            prompt_tokens INTEGER,
+            completion_tokens INTEGER,
+            total_tokens INTEGER,
+            estimated_cost REAL,
+            status TEXT CHECK(status IN ('success', 'error', 'rate_limited')) DEFAULT 'success',
+            error_message TEXT,
+            request_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            response_time_ms INTEGER,
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(session_id) REFERENCES sessions(id)
+        )`);
+
+        // LLM Model Pricing - Cost calculation reference
+        db.run(`CREATE TABLE IF NOT EXISTS llm_model_pricing (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider TEXT NOT NULL,
+            model TEXT NOT NULL,
+            input_cost_per_1k REAL NOT NULL,
+            output_cost_per_1k REAL NOT NULL,
+            is_active BOOLEAN DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(provider, model)
+        )`);
+
+        // LLM Usage indexes
+        db.run(`CREATE INDEX IF NOT EXISTS idx_llm_usage_user_date ON llm_usage(user_id, date)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_llm_usage_date ON llm_usage(date)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_llm_request_log_user ON llm_request_log(user_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_llm_request_log_timestamp ON llm_request_log(request_timestamp)`);
+
+        // Seed default model pricing
+        const defaultPricing = [
+            ['openai', 'gpt-3.5-turbo', 0.0005, 0.0015],
+            ['openai', 'gpt-4', 0.03, 0.06],
+            ['openai', 'gpt-4-turbo', 0.01, 0.03],
+            ['openai', 'gpt-4o', 0.005, 0.015],
+            ['openai', 'gpt-4o-mini', 0.00015, 0.0006],
+            ['ollama', 'default', 0, 0],
+            ['lmstudio', 'default', 0, 0]
+        ];
+
+        const pricingStmt = db.prepare(`INSERT OR IGNORE INTO llm_model_pricing (provider, model, input_cost_per_1k, output_cost_per_1k) VALUES (?, ?, ?, ?)`);
+        defaultPricing.forEach(([provider, model, input, output]) => {
+            pricingStmt.run(provider, model, input, output);
+        });
+        pricingStmt.finalize();
 
         console.log('Database tables initialized with comprehensive schema, master data tables, audit trails, and performance indexes.');
     });
