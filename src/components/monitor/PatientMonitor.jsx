@@ -1035,7 +1035,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                      <span>
                         {caseData?.config?.demographics?.age ? `${caseData.config.demographics.age}y` : ''}
                         {caseData?.config?.demographics?.gender ? ` ${caseData.config.demographics.gender}` : ''}
-                        {caseData?.config?.demographics?.weight ? ` • ${caseData.config.demographics.weight}kg` : ''}
+                        {caseData?.config?.demographics?.weight ? ` • ${caseData.config.demographics.weight}` : ''}
                      </span>
                   </div>
                </div>
