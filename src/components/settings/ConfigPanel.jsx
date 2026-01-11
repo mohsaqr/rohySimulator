@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Trash2, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap } from 'lucide-react';
+import { Settings, Save, Plus, Trash2, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { AuthService } from '../../services/authService';
@@ -965,6 +965,9 @@ function PlatformSettings({ cases, setCases }) {
 
             {/* LLM Configuration */}
             <LLMConfiguration />
+
+            {/* Monitor Display Configuration */}
+            <MonitorConfiguration />
         </div>
     );
 }
@@ -1562,6 +1565,150 @@ function LLMConfiguration() {
                         </div>
                     </div>
                 </div>
+            )}
+        </div>
+    );
+}
+
+// Monitor Display Configuration Component (Admin Only)
+function MonitorConfiguration() {
+    const toast = useToast();
+    const [monitorSettings, setMonitorSettings] = useState({
+        showTimer: true,
+        showECG: true,
+        showSpO2: true,
+        showBP: true,
+        showRR: true,
+        showTemp: true,
+        showCO2: true,
+        showPleth: true,
+        showNumerics: true
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        loadMonitorSettings();
+    }, []);
+
+    const loadMonitorSettings = async () => {
+        try {
+            const token = AuthService.getToken();
+            const response = await fetch('/api/platform-settings/monitor', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setMonitorSettings(prev => ({ ...prev, ...data }));
+            }
+        } catch (error) {
+            console.error('Failed to load monitor settings:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleToggle = (key) => {
+        setMonitorSettings(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    const saveMonitorSettings = async () => {
+        setSaving(true);
+        try {
+            const token = AuthService.getToken();
+            const response = await fetch('/api/platform-settings/monitor', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(monitorSettings)
+            });
+
+            if (response.ok) {
+                toast.success('Monitor settings saved');
+            } else {
+                throw new Error('Failed to save');
+            }
+        } catch (error) {
+            toast.error('Failed to save monitor settings');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const settingsConfig = [
+        { key: 'showTimer', label: 'Session Timer', description: 'Show elapsed time since session started' },
+        { key: 'showECG', label: 'ECG Waveform', description: 'Show ECG trace and heart rate' },
+        { key: 'showPleth', label: 'Plethysmograph', description: 'Show SpO2 waveform' },
+        { key: 'showSpO2', label: 'SpO2 Value', description: 'Show oxygen saturation numeric' },
+        { key: 'showBP', label: 'Blood Pressure', description: 'Show systolic/diastolic BP' },
+        { key: 'showRR', label: 'Respiratory Rate', description: 'Show breathing rate' },
+        { key: 'showTemp', label: 'Temperature', description: 'Show body temperature' },
+        { key: 'showCO2', label: 'EtCO2', description: 'Show end-tidal CO2' },
+        { key: 'showNumerics', label: 'Numeric Panel', description: 'Show all vital signs panel' }
+    ];
+
+    return (
+        <div className="bg-neutral-800/50 border border-neutral-700 rounded-xl p-6 mt-6">
+            <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-cyan-600/20 rounded-lg">
+                    <Monitor className="w-5 h-5 text-cyan-400" />
+                </div>
+                <div>
+                    <h3 className="text-lg font-bold text-white">Monitor Display Settings</h3>
+                    <p className="text-sm text-neutral-400">Configure which components are visible on the ICU monitor</p>
+                </div>
+            </div>
+
+            {loading ? (
+                <div className="text-center py-8 text-neutral-400">Loading settings...</div>
+            ) : (
+                <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                        {settingsConfig.map(({ key, label, description }) => (
+                            <div
+                                key={key}
+                                onClick={() => handleToggle(key)}
+                                className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                                    monitorSettings[key]
+                                        ? 'bg-cyan-900/30 border-cyan-600/50'
+                                        : 'bg-neutral-900/50 border-neutral-700 hover:border-neutral-600'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="font-medium text-white">{label}</span>
+                                    <div className={`w-10 h-5 rounded-full transition-colors ${
+                                        monitorSettings[key] ? 'bg-cyan-600' : 'bg-neutral-600'
+                                    }`}>
+                                        <div className={`w-4 h-4 rounded-full bg-white m-0.5 transition-transform ${
+                                            monitorSettings[key] ? 'translate-x-5' : 'translate-x-0'
+                                        }`} />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-neutral-400">{description}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    <button
+                        onClick={saveMonitorSettings}
+                        disabled={saving}
+                        className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 rounded-lg font-medium transition-colors flex items-center gap-2"
+                    >
+                        {saving ? (
+                            <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                Saving...
+                            </>
+                        ) : (
+                            <>
+                                <Save className="w-4 h-4" />
+                                Save Monitor Settings
+                            </>
+                        )}
+                    </button>
+                </>
             )}
         </div>
     );

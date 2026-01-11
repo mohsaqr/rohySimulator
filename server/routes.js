@@ -4783,6 +4783,50 @@ router.put('/platform-settings/rate-limits', authenticateToken, requireAdmin, as
     }
 });
 
+// Default monitor visibility settings
+const DEFAULT_MONITOR_SETTINGS = {
+    showTimer: true,
+    showECG: true,
+    showSpO2: true,
+    showBP: true,
+    showRR: true,
+    showTemp: true,
+    showCO2: true,
+    showPleth: true,
+    showNumerics: true
+};
+
+// GET /api/platform-settings/monitor - Get monitor visibility settings (public, no auth required)
+router.get('/platform-settings/monitor', async (req, res) => {
+    try {
+        const settings = {};
+        for (const [key, defaultVal] of Object.entries(DEFAULT_MONITOR_SETTINGS)) {
+            const value = await getPlatformSetting(`monitor_${key}`);
+            settings[key] = value !== null ? value === 'true' : defaultVal;
+        }
+        res.json(settings);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/platform-settings/monitor - Update monitor visibility settings (Admin only)
+router.put('/platform-settings/monitor', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const validKeys = Object.keys(DEFAULT_MONITOR_SETTINGS);
+
+        for (const [key, value] of Object.entries(req.body)) {
+            if (validKeys.includes(key)) {
+                await setPlatformSetting(`monitor_${key}`, String(value), req.user.id);
+            }
+        }
+
+        res.json({ message: 'Monitor settings updated successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/llm/usage - Get current user's usage
 router.get('/llm/usage', authenticateToken, async (req, res) => {
     try {
