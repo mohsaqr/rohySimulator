@@ -153,7 +153,32 @@ export function getTestByNameAndGender(testName, gender) {
  */
 export function getTestVariations(testName) {
     const tests = loadLabDatabase();
-    return tests.filter(t => t.test_name === testName);
+
+    // First try exact match
+    let matches = tests.filter(t => t.test_name === testName);
+    if (matches.length > 0) return matches;
+
+    // Try case-insensitive exact match
+    const lowerName = testName.toLowerCase();
+    matches = tests.filter(t => t.test_name.toLowerCase() === lowerName);
+    if (matches.length > 0) return matches;
+
+    // Try normalized match (remove special chars and compare)
+    const normalizedSearch = testName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    matches = tests.filter(t => {
+        const normalizedTest = t.test_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return normalizedTest === normalizedSearch;
+    });
+    if (matches.length > 0) return matches;
+
+    // Try partial match (search term contained in test name)
+    matches = tests.filter(t => t.test_name.toLowerCase().includes(lowerName));
+    if (matches.length > 0) return matches;
+
+    // Try reverse partial match (test name contained in search term)
+    matches = tests.filter(t => lowerName.includes(t.test_name.toLowerCase()));
+
+    return matches;
 }
 
 /**

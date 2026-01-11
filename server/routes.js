@@ -13,6 +13,75 @@ const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Log an action to the system audit log
+ * @param {Object} params - Audit log parameters
+ */
+function logAudit(params) {
+    const {
+        userId = null,
+        username = null,
+        action,
+        resourceType = null,
+        resourceId = null,
+        resourceName = null,
+        oldValue = null,
+        newValue = null,
+        ipAddress = null,
+        userAgent = null,
+        sessionId = null,
+        status = 'success',
+        errorMessage = null,
+        metadata = null
+    } = params;
+
+    db.run(
+        `INSERT INTO system_audit_log
+         (user_id, username, action, resource_type, resource_id, resource_name,
+          old_value, new_value, ip_address, user_agent, session_id, status, error_message, metadata)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            userId, username, action, resourceType, resourceId, resourceName,
+            oldValue ? JSON.stringify(oldValue) : null,
+            newValue ? JSON.stringify(newValue) : null,
+            ipAddress, userAgent, sessionId, status, errorMessage,
+            metadata ? JSON.stringify(metadata) : null
+        ]
+    );
+}
+
+/**
+ * Create a case version snapshot
+ * @param {number} caseId - Case ID
+ * @param {number} userId - User who made the change
+ * @param {string} changeType - Type of change (created, updated, restored, published, unpublished)
+ * @param {string} description - Description of changes
+ * @param {Object} configSnapshot - Full config snapshot
+ */
+function createCaseVersion(caseId, userId, changeType, description, configSnapshot) {
+    // Get current version number
+    db.get(
+        `SELECT COALESCE(MAX(version_number), 0) + 1 as next_version FROM case_versions WHERE case_id = ?`,
+        [caseId],
+        (err, row) => {
+            if (err) {
+                console.error('Error getting version number:', err);
+                return;
+            }
+            const versionNumber = row?.next_version || 1;
+            db.run(
+                `INSERT INTO case_versions (case_id, version_number, changed_by, change_type, changes_description, config_snapshot)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [caseId, versionNumber, userId, changeType, description, JSON.stringify(configSnapshot)]
+            );
+        }
+    );
+}
+
 // Configure Multer for local uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -246,7 +315,22 @@ router.post('/auth/login', (req, res) => {
                 [user.id, username, 'login', ipAddress, userAgent]
             );
 
+            // Update last_login timestamp and reset failed attempts
+            db.run(
+                `UPDATE users SET last_login = CURRENT_TIMESTAMP, failed_login_attempts = 0 WHERE id = ?`,
+                [user.id]
+            );
+
             const token = generateToken(user);
+
+            // Track active session
+            const crypto = await import('crypto');
+            const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+            db.run(
+                `INSERT INTO active_sessions (user_id, token_hash, ip_address, user_agent, expires_at) VALUES (?, ?, ?, ?, datetime('now', '+24 hours'))`,
+                [user.id, tokenHash, ipAddress, userAgent]
+            );
+
             res.json({
                 message: 'Login successful',
                 user: {
@@ -312,6 +396,88 @@ router.post('/upload', upload.single('photo'), (req, res) => {
     }
     const imageUrl = `/uploads/${req.file.filename}`;
     res.json({ imageUrl });
+});
+
+// --- BODY IMAGE UPLOAD (Admin Only) ---
+router.post('/upload-body-image', authenticateToken, upload.single('image'), (req, res) => {
+    // Check if user is admin
+    if (req.user?.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const validTypes = ['man-front', 'man-back', 'woman-front', 'woman-back'];
+    const imageType = req.body.type;
+
+    if (!validTypes.includes(imageType)) {
+        // Delete the uploaded file
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ error: 'Invalid image type. Must be one of: ' + validTypes.join(', ') });
+    }
+
+    // Get file extension
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    if (!['.png', '.svg'].includes(ext)) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ error: 'Only PNG and SVG files are allowed' });
+    }
+
+    // Target path in public folder
+    const targetPath = path.join(__dirname, '../public', `${imageType}${ext}`);
+
+    try {
+        // Move file from uploads to public folder with correct name
+        fs.renameSync(req.file.path, targetPath);
+        res.json({
+            success: true,
+            message: `Body image ${imageType} updated successfully`,
+            path: `/${imageType}${ext}`
+        });
+    } catch (err) {
+        console.error('Failed to save body image:', err);
+        res.status(500).json({ error: 'Failed to save image: ' + err.message });
+    }
+});
+
+// --- BODY MAP REGIONS ---
+const BODYMAP_REGIONS_FILE = path.join(__dirname, '../public/bodymap-regions.json');
+
+// GET body map regions
+router.get('/bodymap-regions', (req, res) => {
+    try {
+        if (fs.existsSync(BODYMAP_REGIONS_FILE)) {
+            const data = fs.readFileSync(BODYMAP_REGIONS_FILE, 'utf8');
+            res.json(JSON.parse(data));
+        } else {
+            res.json({ regions: null });
+        }
+    } catch (err) {
+        console.error('Failed to read bodymap regions:', err);
+        res.status(500).json({ error: 'Failed to read regions' });
+    }
+});
+
+// POST save body map regions (admin only)
+router.post('/bodymap-regions', authenticateToken, (req, res) => {
+    if (req.user?.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { regions } = req.body;
+    if (!regions) {
+        return res.status(400).json({ error: 'No regions data provided' });
+    }
+
+    try {
+        fs.writeFileSync(BODYMAP_REGIONS_FILE, JSON.stringify({ regions }, null, 2));
+        res.json({ success: true, message: 'Body map regions saved' });
+    } catch (err) {
+        console.error('Failed to save bodymap regions:', err);
+        res.status(500).json({ error: 'Failed to save regions: ' + err.message });
+    }
 });
 
 // --- CASES ---
@@ -389,57 +555,193 @@ router.put('/cases/:id/default', authenticateToken, requireAdmin, (req, res) => 
 // POST /api/cases - Admin only
 router.post('/cases', authenticateToken, requireAdmin, (req, res) => {
     const { name, description, system_prompt, config, image_url, scenario } = req.body;
-    const sql = `INSERT INTO cases (name, description, system_prompt, config, image_url, scenario) VALUES (?, ?, ?, ?, ?, ?)`;
+    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
+    // Extract patient info from config for denormalized storage
+    const patientGender = config?.demographics?.gender || null;
+    const patientAge = config?.demographics?.age || null;
+    const patientName = config?.demographics?.name || null;
+    const chiefComplaint = config?.chiefComplaint || null;
+    const difficultyLevel = config?.difficulty_level || null;
+
+    const sql = `INSERT INTO cases (name, description, system_prompt, config, image_url, scenario,
+                 patient_name, patient_gender, patient_age, chief_complaint, difficulty_level,
+                 created_by, last_modified_by, version)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`;
     const params = [
-        name, 
-        description, 
-        system_prompt, 
-        JSON.stringify(config || {}), 
+        name,
+        description,
+        system_prompt,
+        JSON.stringify(config || {}),
         image_url || null,
-        scenario ? JSON.stringify(scenario) : null
+        scenario ? JSON.stringify(scenario) : null,
+        patientName,
+        patientGender,
+        patientAge,
+        chiefComplaint,
+        difficultyLevel,
+        req.user.id,
+        req.user.id
     ];
 
     db.run(sql, params, function (err) {
         if (err) {
             console.error('Error saving case:', err);
+            logAudit({
+                userId: req.user.id,
+                username: req.user.username,
+                action: 'CREATE_CASE',
+                resourceType: 'case',
+                status: 'failure',
+                errorMessage: err.message,
+                ipAddress,
+                userAgent
+            });
             return res.status(500).json({ error: err.message });
         }
-        res.json({ id: this.lastID, ...req.body });
+
+        const caseId = this.lastID;
+
+        // Log audit trail
+        logAudit({
+            userId: req.user.id,
+            username: req.user.username,
+            action: 'CREATE_CASE',
+            resourceType: 'case',
+            resourceId: String(caseId),
+            resourceName: name,
+            newValue: { name, description, config },
+            ipAddress,
+            userAgent,
+            status: 'success'
+        });
+
+        // Create initial version snapshot
+        createCaseVersion(caseId, req.user.id, 'created', 'Initial case creation', {
+            name, description, system_prompt, config, scenario
+        });
+
+        res.json({ id: caseId, ...req.body });
     });
 });
 
 // PUT /api/cases/:id - Admin only
 router.put('/cases/:id', authenticateToken, requireAdmin, (req, res) => {
     const { name, description, system_prompt, config, image_url, scenario } = req.body;
-    const sql = `UPDATE cases SET name = ?, description = ?, system_prompt = ?, config = ?, image_url = ?, scenario = ? WHERE id = ?`;
-    const params = [
-        name, 
-        description, 
-        system_prompt, 
-        JSON.stringify(config || {}), 
-        image_url || null,
-        scenario ? JSON.stringify(scenario) : null,
-        req.params.id
-    ];
+    const caseId = req.params.id;
+    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
 
-    db.run(sql, params, function (err) {
+    // Extract patient info from config for denormalized storage
+    const patientGender = config?.demographics?.gender || null;
+    const patientAge = config?.demographics?.age || null;
+    const patientName = config?.demographics?.name || null;
+    const chiefComplaint = config?.chiefComplaint || null;
+    const difficultyLevel = config?.difficulty_level || null;
+
+    // First, get the old case data for audit trail
+    db.get(`SELECT * FROM cases WHERE id = ?`, [caseId], (err, oldCase) => {
         if (err) {
-            console.error('Error updating case:', err);
             return res.status(500).json({ error: err.message });
         }
-        res.json({ id: req.params.id, ...req.body });
+
+        const sql = `UPDATE cases SET
+                     name = ?, description = ?, system_prompt = ?, config = ?, image_url = ?, scenario = ?,
+                     patient_name = ?, patient_gender = ?, patient_age = ?, chief_complaint = ?, difficulty_level = ?,
+                     last_modified_by = ?, updated_at = CURRENT_TIMESTAMP, version = COALESCE(version, 0) + 1
+                     WHERE id = ?`;
+        const params = [
+            name,
+            description,
+            system_prompt,
+            JSON.stringify(config || {}),
+            image_url || null,
+            scenario ? JSON.stringify(scenario) : null,
+            patientName,
+            patientGender,
+            patientAge,
+            chiefComplaint,
+            difficultyLevel,
+            req.user.id,
+            caseId
+        ];
+
+        db.run(sql, params, function (err) {
+            if (err) {
+                console.error('Error updating case:', err);
+                logAudit({
+                    userId: req.user.id,
+                    username: req.user.username,
+                    action: 'UPDATE_CASE',
+                    resourceType: 'case',
+                    resourceId: caseId,
+                    status: 'failure',
+                    errorMessage: err.message,
+                    ipAddress,
+                    userAgent
+                });
+                return res.status(500).json({ error: err.message });
+            }
+
+            // Log audit trail
+            logAudit({
+                userId: req.user.id,
+                username: req.user.username,
+                action: 'UPDATE_CASE',
+                resourceType: 'case',
+                resourceId: caseId,
+                resourceName: name,
+                oldValue: oldCase ? { name: oldCase.name, description: oldCase.description } : null,
+                newValue: { name, description },
+                ipAddress,
+                userAgent,
+                status: 'success'
+            });
+
+            // Create version snapshot
+            createCaseVersion(caseId, req.user.id, 'updated', 'Case configuration updated', {
+                name, description, system_prompt, config, scenario
+            });
+
+            res.json({ id: caseId, ...req.body });
+        });
     });
 });
 
-// DELETE /api/cases/:id - Admin only
+// DELETE /api/cases/:id - Admin only (soft delete)
 router.delete('/cases/:id', authenticateToken, requireAdmin, (req, res) => {
-    const sql = `DELETE FROM cases WHERE id = ?`;
-    db.run(sql, [req.params.id], function (err) {
+    const caseId = req.params.id;
+    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
+    // Get case name for audit before deleting
+    db.get(`SELECT name FROM cases WHERE id = ?`, [caseId], (err, caseData) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Case not found' });
-        }
-        res.json({ message: 'Case deleted successfully', id: req.params.id });
+
+        // Soft delete - set deleted_at timestamp
+        const sql = `UPDATE cases SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL`;
+        db.run(sql, [caseId], function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'Case not found or already deleted' });
+            }
+
+            // Log audit trail
+            logAudit({
+                userId: req.user.id,
+                username: req.user.username,
+                action: 'DELETE_CASE',
+                resourceType: 'case',
+                resourceId: caseId,
+                resourceName: caseData?.name,
+                ipAddress,
+                userAgent,
+                status: 'success'
+            });
+
+            res.json({ message: 'Case deleted successfully', id: caseId });
+        });
     });
 });
 
@@ -1736,6 +2038,7 @@ router.post('/sessions/:id/order', authenticateToken, (req, res) => {
 router.get('/sessions/:id/orders', authenticateToken, (req, res) => {
     const sessionId = req.params.id;
 
+    // Calculate is_ready directly in SQLite to avoid timezone issues
     const sql = `
         SELECT
             io.*,
@@ -1750,7 +2053,9 @@ router.get('/sessions/:id/orders', authenticateToken, (req, res) => {
             ci.result_data,
             ci.image_url,
             ci.turnaround_minutes,
-            ci.is_abnormal
+            ci.is_abnormal,
+            CASE WHEN datetime(io.available_at) <= datetime('now') THEN 1 ELSE 0 END as is_ready_db,
+            (julianday(io.available_at) - julianday('now')) * 24 * 60 as minutes_remaining
         FROM investigation_orders io
         JOIN case_investigations ci ON io.investigation_id = ci.id
         WHERE io.session_id = ?
@@ -1762,17 +2067,24 @@ router.get('/sessions/:id/orders', authenticateToken, (req, res) => {
             return res.status(500).json({ error: err.message });
         }
 
+        console.log(`[Orders API] Session ${sessionId}: ${rows.length} raw rows from DB`);
+
         // Parse JSON result_data and ensure all values are present
-        const orders = rows.map(row => ({
-            ...row,
-            result_data: row.result_data ? JSON.parse(row.result_data) : null,
-            is_ready: new Date(row.available_at) <= new Date(),
-            test_group: row.test_group || 'General',
-            unit: row.unit || '',
-            min_value: row.min_value ?? null,
-            max_value: row.max_value ?? null,
-            current_value: row.current_value ?? null
-        }));
+        const orders = rows.map(row => {
+            const order = {
+                ...row,
+                result_data: row.result_data ? JSON.parse(row.result_data) : null,
+                is_ready: row.is_ready_db === 1,
+                minutes_remaining: Math.max(0, Math.ceil(row.minutes_remaining || 0)),
+                test_group: row.test_group || 'General',
+                unit: row.unit || '',
+                min_value: row.min_value ?? null,
+                max_value: row.max_value ?? null,
+                current_value: row.current_value ?? null
+            };
+            console.log(`  [Order] ${row.test_name}: is_ready=${order.is_ready}, mins_remaining_raw=${row.minutes_remaining?.toFixed(2)}, available_at=${row.available_at}`);
+            return order;
+        });
 
         res.json({ orders });
     });
@@ -2270,6 +2582,8 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
         return res.status(400).json({ error: 'lab_ids array is required' });
     }
 
+    console.log(`[Order Labs] Received request: session=${sessionId}, lab_ids=${JSON.stringify(lab_ids)}, turnaround_override=${turnaround_override}`);
+
     // Verify session exists and user has access
     db.get('SELECT user_id, case_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
         if (err) {
@@ -2286,6 +2600,8 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
         const numericIds = lab_ids.filter(id => typeof id === 'number' || (typeof id === 'string' && /^\d+$/.test(id)));
         const defaultIds = lab_ids.filter(id => String(id).startsWith('default_'));
         const configIds = lab_ids.filter(id => String(id).startsWith('config_') || String(id).startsWith('lab_'));
+
+        console.log(`[Order Labs] ID breakdown: numeric=${numericIds.length}, default=${defaultIds.length}, config=${configIds.length}`);
 
         // Track IDs that need to be inserted as orders
         const configuredIds = [...numericIds.map(id => parseInt(id, 10))];
@@ -2304,15 +2620,22 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
             const caseInstantResults = caseConfig.investigations?.instantResults === true;
             const caseDefaultTurnaround = caseConfig.investigations?.defaultTurnaround || 0;
 
-            // Helper to get turnaround time (priority: instant > override > case default > test default)
+            console.log(`[Order Labs] Case config: instantResults=${caseInstantResults}, defaultTurnaround=${caseDefaultTurnaround}, configLabs=${configJsonLabs.length}`);
+
+            // Helper to get turnaround time (priority: instant/override > case default > test default)
             const getTurnaround = (testDefaultMinutes) => {
-                // Instant results = 0 minutes
+                // Instant results = 0 minutes (from case config)
                 if (caseInstantResults) {
                     return 0;
                 }
-                // Request-level override
-                if (turnaround_override !== null && turnaround_override !== undefined && turnaround_override > 0) {
-                    return turnaround_override;
+                // Request-level override (0 means instant, positive means that many minutes)
+                if (turnaround_override !== null && turnaround_override !== undefined) {
+                    if (turnaround_override === 0) {
+                        return 0; // Instant results from request
+                    }
+                    if (turnaround_override > 0) {
+                        return turnaround_override;
+                    }
                 }
                 // Case-level default
                 if (caseDefaultTurnaround > 0) {
@@ -2329,7 +2652,6 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                     VALUES (?, ?, datetime('now'), datetime('now', '+' || ? || ' minutes'))
                 `;
 
-                const stmt = db.prepare(sql);
                 let inserted = 0;
                 const orderIds = [];
 
@@ -2342,67 +2664,76 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                             console.error('Error fetching labs:', err);
                             return finalizeOrders();
                         }
+
+                        // Track pending inserts
+                        let pendingInserts = labs.length;
+                        if (pendingInserts === 0) {
+                            return finalizeOrders();
+                        }
+
                         labs.forEach(lab => {
                             const turnaround = getTurnaround(lab.turnaround_minutes);
-                            stmt.run(sessionId, lab.id, turnaround, function(err) {
+                            console.log(`Ordering lab: ${lab.test_name}, turnaround: ${turnaround} min (test default: ${lab.turnaround_minutes}, override: ${turnaround_override}, case default: ${caseDefaultTurnaround})`);
+                            db.run(sql, [sessionId, lab.id, turnaround], function(err) {
                                 if (!err) {
-                                    orderIds.push({ id: this.lastID, test_name: lab.test_name });
+                                    orderIds.push({ id: this.lastID, test_name: lab.test_name, turnaround });
                                     inserted++;
+                                } else {
+                                    console.error('Error inserting order:', err);
+                                }
+                                pendingInserts--;
+                                if (pendingInserts === 0) {
+                                    finalizeOrders();
                                 }
                             });
                         });
-                        finalizeOrders();
                     });
                 } else {
                     finalizeOrders();
                 }
 
                 function finalizeOrders() {
-                    stmt.finalize((err) => {
-                        if (err) {
-                            return res.status(500).json({ error: err.message });
-                        }
+                    console.log(`[Order Labs] Finalizing: ${inserted} orders created, IDs: ${orderIds.map(o => `${o.test_name}(${o.turnaround}m)`).join(', ')}`);
 
-                        // Log event to event_log
-                        db.run(
-                            `INSERT INTO event_log (session_id, event_type, description) VALUES (?, ?, ?)`,
-                            [sessionId, 'investigation_ordered', `Ordered ${inserted} lab tests`]
-                        );
+                    // Log event to event_log
+                    db.run(
+                        `INSERT INTO event_log (session_id, event_type, description) VALUES (?, ?, ?)`,
+                        [sessionId, 'investigation_ordered', `Ordered ${inserted} lab tests`]
+                    );
 
-                        // Log detailed learning events for each ordered lab
-                        const logSql = `
-                            INSERT INTO learning_events (
-                                session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                                component, result, context
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        `;
+                    // Log detailed learning events for each ordered lab
+                    const logSql = `
+                        INSERT INTO learning_events (
+                            session_id, user_id, case_id, verb, object_type, object_id, object_name,
+                            component, result, context
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `;
 
-                        orderIds.forEach(order => {
-                            const turnaround = getTurnaround(30);
-                            const context = {
-                                turnaround_minutes: turnaround,
-                                instant_results: caseInstantResults,
-                                order_id: order.id
-                            };
+                    orderIds.forEach(order => {
+                        const turnaround = getTurnaround(30);
+                        const context = {
+                            turnaround_minutes: turnaround,
+                            instant_results: caseInstantResults,
+                            order_id: order.id
+                        };
 
-                            db.run(logSql, [
-                                sessionId,
-                                req.user.id,
-                                session.case_id,
-                                'ORDERED_LAB',
-                                'lab_test',
-                                String(order.id),
-                                order.test_name,
-                                'OrdersDrawer',
-                                `Turnaround: ${turnaround} min`,
-                                JSON.stringify(context)
-                            ]);
-                        });
+                        db.run(logSql, [
+                            sessionId,
+                            req.user.id,
+                            session.case_id,
+                            'ORDERED_LAB',
+                            'lab_test',
+                            String(order.id),
+                            order.test_name,
+                            'OrdersDrawer',
+                            `Turnaround: ${turnaround} min`,
+                            JSON.stringify(context)
+                        ]);
+                    });
 
-                        res.json({
-                            message: `${inserted} lab tests ordered`,
-                            orders: orderIds
-                        });
+                    res.json({
+                        message: `${inserted} lab tests ordered`,
+                        orders: orderIds
                     });
                 }
             };
@@ -2468,13 +2799,15 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
 
             // Process default labs (from lab database with normal values)
             if (defaultIds.length > 0) {
+                console.log(`[Order Labs] Processing ${defaultIds.length} default lab IDs`);
                 const testNames = defaultIds.map(id => String(id).replace('default_', '').replace(/_/g, ' '));
 
-                testNames.forEach(testName => {
+                testNames.forEach((testName, idx) => {
                     const genderSpecific = labDb.getGenderSpecificTest(testName, patientGender);
                     if (genderSpecific) {
                         pendingOps++;
                         const normalValue = labDb.getRandomNormalValue(genderSpecific);
+                        console.log(`[Order Labs] Found default lab: "${testName}" -> "${genderSpecific.test_name}"`);
 
                         db.run(insertLabSql, [
                             session.case_id, 'lab',
@@ -2497,6 +2830,8 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                             }
                             checkComplete();
                         });
+                    } else {
+                        console.warn(`[Order Labs] WARNING: Test not found in lab database: "${testName}" (from ID: ${defaultIds[idx]})`);
                     }
                 });
             }
@@ -2863,6 +3198,1221 @@ router.post('/scenarios/seed', requireAdmin, (req, res) => {
             }
         );
     });
+});
+
+// ============================================
+// NEW ROUTES - Physical Exam, Audit, Preferences
+// ============================================
+
+// --- PHYSICAL EXAM FINDINGS ---
+
+// POST /api/sessions/:sessionId/exam-findings - Record a physical exam finding
+router.post('/sessions/:sessionId/exam-findings', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+    const { body_region, exam_type, finding, is_abnormal, audio_url, audio_played, case_id } = req.body;
+
+    if (!body_region || !exam_type || !finding) {
+        return res.status(400).json({ error: 'body_region, exam_type, and finding are required' });
+    }
+
+    const sql = `INSERT INTO physical_exam_findings
+                 (session_id, case_id, user_id, body_region, exam_type, finding, is_abnormal, audio_url, audio_played)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+    db.run(sql, [
+        sessionId,
+        case_id || null,
+        req.user.id,
+        body_region,
+        exam_type,
+        finding,
+        is_abnormal ? 1 : 0,
+        audio_url || null,
+        audio_played ? 1 : 0
+    ], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+
+        // Update session exam count
+        db.run(`UPDATE sessions SET exam_findings_count = exam_findings_count + 1 WHERE id = ?`, [sessionId]);
+
+        res.json({ id: this.lastID, message: 'Exam finding recorded' });
+    });
+});
+
+// GET /api/sessions/:sessionId/exam-findings - Get all exam findings for a session
+router.get('/sessions/:sessionId/exam-findings', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+
+    db.all(
+        `SELECT * FROM physical_exam_findings WHERE session_id = ? ORDER BY timestamp`,
+        [sessionId],
+        (err, findings) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ findings });
+        }
+    );
+});
+
+// --- CASE VERSIONS ---
+
+// GET /api/cases/:caseId/versions - Get version history for a case
+router.get('/cases/:caseId/versions', authenticateToken, requireAdmin, (req, res) => {
+    const { caseId } = req.params;
+
+    db.all(
+        `SELECT cv.*, u.username as changed_by_username
+         FROM case_versions cv
+         LEFT JOIN users u ON cv.changed_by = u.id
+         WHERE cv.case_id = ?
+         ORDER BY cv.version_number DESC`,
+        [caseId],
+        (err, versions) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ versions });
+        }
+    );
+});
+
+// POST /api/cases/:caseId/restore/:versionId - Restore a case to a previous version
+router.post('/cases/:caseId/restore/:versionId', authenticateToken, requireAdmin, (req, res) => {
+    const { caseId, versionId } = req.params;
+    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
+    db.get(
+        `SELECT * FROM case_versions WHERE id = ? AND case_id = ?`,
+        [versionId, caseId],
+        (err, version) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!version) return res.status(404).json({ error: 'Version not found' });
+
+            const config = JSON.parse(version.config_snapshot);
+            const sql = `UPDATE cases SET
+                         name = ?, description = ?, system_prompt = ?, config = ?, scenario = ?,
+                         last_modified_by = ?, updated_at = CURRENT_TIMESTAMP, version = version + 1
+                         WHERE id = ?`;
+
+            db.run(sql, [
+                config.name,
+                config.description,
+                config.system_prompt,
+                JSON.stringify(config.config || {}),
+                config.scenario ? JSON.stringify(config.scenario) : null,
+                req.user.id,
+                caseId
+            ], function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+
+                // Log audit and create new version
+                logAudit({
+                    userId: req.user.id,
+                    username: req.user.username,
+                    action: 'RESTORE_CASE_VERSION',
+                    resourceType: 'case',
+                    resourceId: caseId,
+                    metadata: { restored_from_version: version.version_number },
+                    ipAddress,
+                    userAgent,
+                    status: 'success'
+                });
+
+                createCaseVersion(caseId, req.user.id, 'restored', `Restored from version ${version.version_number}`, config);
+
+                res.json({ message: 'Case restored successfully', restoredFromVersion: version.version_number });
+            });
+        }
+    );
+});
+
+// --- USER PREFERENCES ---
+
+// GET /api/users/preferences - Get current user's preferences
+router.get('/users/preferences', authenticateToken, (req, res) => {
+    db.get(
+        `SELECT * FROM user_preferences WHERE user_id = ?`,
+        [req.user.id],
+        (err, prefs) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!prefs) {
+                // Return default preferences
+                return res.json({
+                    theme: 'dark',
+                    language: 'en',
+                    notification_settings: null,
+                    dashboard_layout: null,
+                    default_llm_settings: null,
+                    default_monitor_settings: null
+                });
+            }
+            res.json(prefs);
+        }
+    );
+});
+
+// PUT /api/users/preferences - Update current user's preferences
+router.put('/users/preferences', authenticateToken, (req, res) => {
+    const { theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings } = req.body;
+
+    db.run(
+        `INSERT INTO user_preferences (user_id, theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET
+         theme = excluded.theme,
+         language = excluded.language,
+         notification_settings = excluded.notification_settings,
+         dashboard_layout = excluded.dashboard_layout,
+         default_llm_settings = excluded.default_llm_settings,
+         default_monitor_settings = excluded.default_monitor_settings,
+         accessibility_settings = excluded.accessibility_settings,
+         updated_at = CURRENT_TIMESTAMP`,
+        [
+            req.user.id,
+            theme || 'dark',
+            language || 'en',
+            notification_settings ? JSON.stringify(notification_settings) : null,
+            dashboard_layout ? JSON.stringify(dashboard_layout) : null,
+            default_llm_settings ? JSON.stringify(default_llm_settings) : null,
+            default_monitor_settings ? JSON.stringify(default_monitor_settings) : null,
+            accessibility_settings ? JSON.stringify(accessibility_settings) : null
+        ],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ message: 'Preferences updated' });
+        }
+    );
+});
+
+// --- SYSTEM AUDIT LOG ---
+
+// GET /api/admin/audit-log - Get system audit log (Admin only)
+router.get('/admin/audit-log', authenticateToken, requireAdmin, (req, res) => {
+    const { limit = 100, offset = 0, action, resource_type, user_id, from_date, to_date } = req.query;
+
+    let sql = `SELECT sal.*, u.username as user_username
+               FROM system_audit_log sal
+               LEFT JOIN users u ON sal.user_id = u.id
+               WHERE 1=1`;
+    const params = [];
+
+    if (action) {
+        sql += ` AND sal.action = ?`;
+        params.push(action);
+    }
+    if (resource_type) {
+        sql += ` AND sal.resource_type = ?`;
+        params.push(resource_type);
+    }
+    if (user_id) {
+        sql += ` AND sal.user_id = ?`;
+        params.push(user_id);
+    }
+    if (from_date) {
+        sql += ` AND sal.timestamp >= ?`;
+        params.push(from_date);
+    }
+    if (to_date) {
+        sql += ` AND sal.timestamp <= ?`;
+        params.push(to_date);
+    }
+
+    sql += ` ORDER BY sal.timestamp DESC LIMIT ? OFFSET ?`;
+    params.push(parseInt(limit), parseInt(offset));
+
+    db.all(sql, params, (err, logs) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ logs });
+    });
+});
+
+// --- VITAL SIGN HISTORY ---
+
+// POST /api/sessions/:sessionId/vitals - Record a vital sign reading
+router.post('/sessions/:sessionId/vitals', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+    const { vital_sign, value, unit, is_alarm_triggered, alarm_type, source } = req.body;
+
+    if (!vital_sign || value === undefined) {
+        return res.status(400).json({ error: 'vital_sign and value are required' });
+    }
+
+    db.run(
+        `INSERT INTO vital_sign_history (session_id, vital_sign, value, unit, is_alarm_triggered, alarm_type, source)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [sessionId, vital_sign, value, unit || null, is_alarm_triggered ? 1 : 0, alarm_type || null, source || 'system'],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, message: 'Vital sign recorded' });
+        }
+    );
+});
+
+// GET /api/sessions/:sessionId/vitals - Get vital sign history for a session
+router.get('/sessions/:sessionId/vitals', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+    const { vital_sign, limit = 1000 } = req.query;
+
+    let sql = `SELECT * FROM vital_sign_history WHERE session_id = ?`;
+    const params = [sessionId];
+
+    if (vital_sign) {
+        sql += ` AND vital_sign = ?`;
+        params.push(vital_sign);
+    }
+
+    sql += ` ORDER BY recorded_at DESC LIMIT ?`;
+    params.push(parseInt(limit));
+
+    db.all(sql, params, (err, vitals) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ vitals });
+    });
+});
+
+// --- CLINICAL NOTES ---
+
+// POST /api/sessions/:sessionId/notes - Add a clinical note
+router.post('/sessions/:sessionId/notes', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+    const { note_type, content } = req.body;
+
+    if (!content) {
+        return res.status(400).json({ error: 'content is required' });
+    }
+
+    db.run(
+        `INSERT INTO clinical_notes (session_id, user_id, note_type, content)
+         VALUES (?, ?, ?, ?)`,
+        [sessionId, req.user.id, note_type || 'general', content],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, message: 'Note added' });
+        }
+    );
+});
+
+// GET /api/sessions/:sessionId/notes - Get clinical notes for a session
+router.get('/sessions/:sessionId/notes', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+
+    db.all(
+        `SELECT cn.*, u.username
+         FROM clinical_notes cn
+         LEFT JOIN users u ON cn.user_id = u.id
+         WHERE cn.session_id = ? AND cn.deleted_at IS NULL
+         ORDER BY cn.created_at`,
+        [sessionId],
+        (err, notes) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ notes });
+        }
+    );
+});
+
+// --- EXPORT RECORDS ---
+
+// POST /api/admin/export-records - Log an export action (Admin only)
+router.post('/admin/export-records', authenticateToken, requireAdmin, (req, res) => {
+    const { export_type, export_format, resource_type, resource_ids, record_count, file_name, file_size_bytes, filters_applied, notes } = req.body;
+
+    db.run(
+        `INSERT INTO export_records (user_id, export_type, export_format, resource_type, resource_ids, record_count, file_name, file_size_bytes, filters_applied, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            req.user.id,
+            export_type,
+            export_format || null,
+            resource_type || null,
+            resource_ids ? JSON.stringify(resource_ids) : null,
+            record_count || null,
+            file_name || null,
+            file_size_bytes || null,
+            filters_applied ? JSON.stringify(filters_applied) : null,
+            notes || null
+        ],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, message: 'Export recorded' });
+        }
+    );
+});
+
+// GET /api/admin/export-records - Get export history (Admin only)
+router.get('/admin/export-records', authenticateToken, requireAdmin, (req, res) => {
+    const { limit = 100, offset = 0 } = req.query;
+
+    db.all(
+        `SELECT er.*, u.username
+         FROM export_records er
+         LEFT JOIN users u ON er.user_id = u.id
+         ORDER BY er.exported_at DESC
+         LIMIT ? OFFSET ?`,
+        [parseInt(limit), parseInt(offset)],
+        (err, records) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ records });
+        }
+    );
+});
+
+// --- ACTIVE SESSIONS ---
+
+// GET /api/admin/active-sessions - Get currently active sessions (Admin only)
+router.get('/admin/active-sessions', authenticateToken, requireAdmin, (req, res) => {
+    db.all(
+        `SELECT acs.*, u.username, u.email, u.role
+         FROM active_sessions acs
+         LEFT JOIN users u ON acs.user_id = u.id
+         WHERE acs.is_active = 1 AND (acs.expires_at IS NULL OR acs.expires_at > datetime('now'))
+         ORDER BY acs.last_activity_at DESC`,
+        [],
+        (err, sessions) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ sessions });
+        }
+    );
+});
+
+// DELETE /api/admin/active-sessions/:id - Force logout a session (Admin only)
+router.delete('/admin/active-sessions/:id', authenticateToken, requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const ipAddress = req.ip || req.connection?.remoteAddress;
+
+    db.run(
+        `UPDATE active_sessions SET is_active = 0 WHERE id = ?`,
+        [id],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'Session not found' });
+            }
+
+            logAudit({
+                userId: req.user.id,
+                username: req.user.username,
+                action: 'FORCE_LOGOUT',
+                resourceType: 'active_session',
+                resourceId: id,
+                ipAddress,
+                status: 'success'
+            });
+
+            res.json({ message: 'Session terminated' });
+        }
+    );
+});
+
+// --- DATABASE STATISTICS ---
+
+// GET /api/admin/database-stats - Get database statistics (Admin only)
+router.get('/admin/database-stats', authenticateToken, requireAdmin, (req, res) => {
+    const stats = {};
+
+    const tables = [
+        'users', 'cases', 'sessions', 'interactions', 'learning_events',
+        'physical_exam_findings', 'case_versions', 'system_audit_log',
+        'vital_sign_history', 'clinical_notes', 'export_records', 'active_sessions'
+    ];
+
+    let completed = 0;
+    tables.forEach(table => {
+        db.get(`SELECT COUNT(*) as count FROM ${table}`, (err, row) => {
+            stats[table] = err ? 'error' : row.count;
+            completed++;
+            if (completed === tables.length) {
+                // Get database file size
+                const dbPath = path.join(__dirname, 'database.sqlite');
+                try {
+                    const dbStats = fs.statSync(dbPath);
+                    stats.database_size_mb = (dbStats.size / (1024 * 1024)).toFixed(2);
+                } catch (e) {
+                    stats.database_size_mb = 'unknown';
+                }
+                res.json({ stats });
+            }
+        });
+    });
+});
+
+// ============================================
+// MASTER DATA ROUTES - Reference Data Management
+// ============================================
+
+// --- BODY REGIONS ---
+
+// GET /api/master/body-regions - Get all body regions
+router.get('/master/body-regions', (req, res) => {
+    db.all(
+        `SELECT br.*,
+                GROUP_CONCAT(DISTINCT et.technique_id) as exam_types
+         FROM body_regions br
+         LEFT JOIN region_exam_types ret ON br.id = ret.region_id
+         LEFT JOIN exam_techniques et ON ret.technique_id = et.id
+         WHERE br.is_active = 1
+         GROUP BY br.id
+         ORDER BY br.display_order`,
+        [],
+        (err, regions) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ regions });
+        }
+    );
+});
+
+// POST /api/master/body-regions - Create body region (Admin)
+router.post('/master/body-regions', authenticateToken, requireAdmin, (req, res) => {
+    const { region_id, name, anatomical_view, description, parent_region_id, display_order } = req.body;
+
+    db.run(
+        `INSERT INTO body_regions (region_id, name, anatomical_view, description, parent_region_id, display_order)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [region_id, name, anatomical_view || 'both', description, parent_region_id, display_order || 0],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, message: 'Body region created' });
+        }
+    );
+});
+
+// --- EXAM TECHNIQUES ---
+
+// GET /api/master/exam-techniques - Get all exam techniques
+router.get('/master/exam-techniques', (req, res) => {
+    db.all(
+        `SELECT * FROM exam_techniques WHERE is_active = 1 ORDER BY display_order`,
+        [],
+        (err, techniques) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ techniques });
+        }
+    );
+});
+
+// --- BODY MAP COORDINATES ---
+
+// GET /api/master/body-map-coordinates - Get body map coordinates
+router.get('/master/body-map-coordinates', (req, res) => {
+    const { gender, view } = req.query;
+
+    let sql = `SELECT bmc.*, br.region_id, br.name as region_name
+               FROM body_map_coordinates bmc
+               JOIN body_regions br ON bmc.region_id = br.id
+               WHERE bmc.is_clickable = 1`;
+    const params = [];
+
+    if (gender) {
+        sql += ` AND (bmc.gender = ? OR bmc.gender = 'unisex')`;
+        params.push(gender);
+    }
+    if (view) {
+        sql += ` AND bmc.view = ?`;
+        params.push(view);
+    }
+
+    sql += ` ORDER BY bmc.z_index`;
+
+    db.all(sql, params, (err, coordinates) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ coordinates });
+    });
+});
+
+// --- SCENARIO TEMPLATES ---
+
+// GET /api/master/scenario-templates - Get all scenario templates
+router.get('/master/scenario-templates', (req, res) => {
+    const { category, include_timeline } = req.query;
+
+    let sql = `SELECT * FROM scenario_templates WHERE is_active = 1`;
+    const params = [];
+
+    if (category) {
+        sql += ` AND category = ?`;
+        params.push(category);
+    }
+
+    sql += ` ORDER BY name`;
+
+    db.all(sql, params, (err, templates) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        if (include_timeline === 'true') {
+            // Fetch timeline for each template
+            const templateIds = templates.map(t => t.id);
+            if (templateIds.length === 0) {
+                return res.json({ templates });
+            }
+
+            db.all(
+                `SELECT * FROM scenario_timeline_points WHERE scenario_id IN (${templateIds.join(',')}) ORDER BY sequence_order`,
+                [],
+                (err, points) => {
+                    if (err) return res.status(500).json({ error: err.message });
+
+                    templates.forEach(t => {
+                        t.timeline = points.filter(p => p.scenario_id === t.id);
+                    });
+                    res.json({ templates });
+                }
+            );
+        } else {
+            res.json({ templates });
+        }
+    });
+});
+
+// GET /api/master/scenario-templates/:id - Get single scenario with timeline
+router.get('/master/scenario-templates/:id', (req, res) => {
+    const { id } = req.params;
+
+    db.get(`SELECT * FROM scenario_templates WHERE id = ? OR template_id = ?`, [id, id], (err, template) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!template) return res.status(404).json({ error: 'Scenario not found' });
+
+        db.all(
+            `SELECT * FROM scenario_timeline_points WHERE scenario_id = ? ORDER BY sequence_order`,
+            [template.id],
+            (err, timeline) => {
+                if (err) return res.status(500).json({ error: err.message });
+                template.timeline = timeline;
+                res.json({ template });
+            }
+        );
+    });
+});
+
+// POST /api/master/scenario-templates - Create scenario template (Admin)
+router.post('/master/scenario-templates', authenticateToken, requireAdmin, (req, res) => {
+    const { template_id, name, description, category, duration_minutes, difficulty_level, clinical_condition, timeline } = req.body;
+
+    db.run(
+        `INSERT INTO scenario_templates (template_id, name, description, category, duration_minutes, difficulty_level, clinical_condition, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [template_id, name, description, category, duration_minutes, difficulty_level, clinical_condition, req.user.id],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const scenarioId = this.lastID;
+
+            // Insert timeline points if provided
+            if (timeline && timeline.length > 0) {
+                const stmt = db.prepare(
+                    `INSERT INTO scenario_timeline_points
+                     (scenario_id, sequence_order, time_minutes, label, hr, spo2, rr, bp_sys, bp_dia, temp, etco2, cardiac_rhythm, st_elevation, pvc_present, wide_qrs, t_inversion, noise_level)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                );
+
+                timeline.forEach((point, index) => {
+                    stmt.run([
+                        scenarioId, index + 1, point.time_minutes || point.time, point.label,
+                        point.hr, point.spo2, point.rr, point.bp_sys || point.bpSys, point.bp_dia || point.bpDia,
+                        point.temp, point.etco2, point.cardiac_rhythm || point.rhythm,
+                        point.st_elevation || point.stElev ? 1 : 0,
+                        point.pvc_present || point.pvc ? 1 : 0,
+                        point.wide_qrs || point.wideQRS ? 1 : 0,
+                        point.t_inversion || point.tInv ? 1 : 0,
+                        point.noise_level || point.noise || 0
+                    ]);
+                });
+                stmt.finalize();
+            }
+
+            res.json({ id: scenarioId, message: 'Scenario template created' });
+        }
+    );
+});
+
+// --- LAB TESTS ---
+
+// GET /api/master/lab-tests - Get all lab tests
+router.get('/master/lab-tests', (req, res) => {
+    const { group, category, search, limit = 500, offset = 0 } = req.query;
+
+    let sql = `SELECT * FROM lab_tests WHERE is_active = 1`;
+    const params = [];
+
+    if (group) {
+        sql += ` AND test_group = ?`;
+        params.push(group);
+    }
+    if (category) {
+        sql += ` AND category = ?`;
+        params.push(category);
+    }
+    if (search) {
+        sql += ` AND (test_name LIKE ? OR test_code LIKE ?)`;
+        params.push(`%${search}%`, `%${search}%`);
+    }
+
+    sql += ` ORDER BY test_group, test_name LIMIT ? OFFSET ?`;
+    params.push(parseInt(limit), parseInt(offset));
+
+    db.all(sql, params, (err, tests) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ tests });
+    });
+});
+
+// GET /api/master/lab-tests/groups - Get lab test groups
+router.get('/master/lab-tests/groups', (req, res) => {
+    db.all(
+        `SELECT DISTINCT test_group, COUNT(*) as count FROM lab_tests WHERE is_active = 1 GROUP BY test_group ORDER BY test_group`,
+        [],
+        (err, groups) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ groups });
+        }
+    );
+});
+
+// POST /api/master/lab-tests - Create lab test (Admin)
+router.post('/master/lab-tests', authenticateToken, requireAdmin, (req, res) => {
+    const { test_code, test_name, test_group, category, specimen_type, min_value, max_value, unit, critical_low, critical_high, normal_samples, description, turnaround_minutes } = req.body;
+
+    db.run(
+        `INSERT INTO lab_tests (test_code, test_name, test_group, category, specimen_type, min_value, max_value, unit, critical_low, critical_high, normal_samples, description, turnaround_minutes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [test_code, test_name, test_group, category || 'General', specimen_type, min_value, max_value, unit, critical_low, critical_high, JSON.stringify(normal_samples || []), description, turnaround_minutes || 30],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, message: 'Lab test created' });
+        }
+    );
+});
+
+// --- LAB PANELS ---
+
+// GET /api/master/lab-panels - Get all lab panels
+router.get('/master/lab-panels', (req, res) => {
+    const { category, include_tests } = req.query;
+
+    let sql = `SELECT * FROM lab_panels WHERE is_active = 1`;
+    const params = [];
+
+    if (category) {
+        sql += ` AND category = ?`;
+        params.push(category);
+    }
+
+    sql += ` ORDER BY display_order, panel_name`;
+
+    db.all(sql, params, (err, panels) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        if (include_tests === 'true') {
+            const panelIds = panels.map(p => p.id);
+            if (panelIds.length === 0) {
+                return res.json({ panels });
+            }
+
+            db.all(
+                `SELECT pt.*, lt.test_name, lt.test_group, lt.unit, lt.min_value, lt.max_value
+                 FROM panel_tests pt
+                 JOIN lab_tests lt ON pt.lab_test_id = lt.id
+                 WHERE pt.panel_id IN (${panelIds.join(',')})
+                 ORDER BY pt.display_order`,
+                [],
+                (err, tests) => {
+                    if (err) return res.status(500).json({ error: err.message });
+
+                    panels.forEach(p => {
+                        p.tests = tests.filter(t => t.panel_id === p.id);
+                    });
+                    res.json({ panels });
+                }
+            );
+        } else {
+            res.json({ panels });
+        }
+    });
+});
+
+// --- MEDICATIONS ---
+
+// GET /api/master/medications - Get all medications
+router.get('/master/medications', (req, res) => {
+    const { drug_class, category, search, limit = 500, offset = 0 } = req.query;
+
+    let sql = `SELECT * FROM medications WHERE is_active = 1`;
+    const params = [];
+
+    if (drug_class) {
+        sql += ` AND drug_class = ?`;
+        params.push(drug_class);
+    }
+    if (category) {
+        sql += ` AND category = ?`;
+        params.push(category);
+    }
+    if (search) {
+        sql += ` AND (generic_name LIKE ? OR brand_names LIKE ? OR medication_code LIKE ?)`;
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    sql += ` ORDER BY generic_name LIMIT ? OFFSET ?`;
+    params.push(parseInt(limit), parseInt(offset));
+
+    db.all(sql, params, (err, medications) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ medications });
+    });
+});
+
+// POST /api/master/medications - Create medication (Admin)
+router.post('/master/medications', authenticateToken, requireAdmin, (req, res) => {
+    const { medication_code, generic_name, brand_names, drug_class, category, route, typical_dose, dose_unit, frequency, indications, contraindications, side_effects, is_controlled, is_high_alert } = req.body;
+
+    db.run(
+        `INSERT INTO medications (medication_code, generic_name, brand_names, drug_class, category, route, typical_dose, dose_unit, frequency, indications, contraindications, side_effects, is_controlled, is_high_alert)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [medication_code, generic_name, JSON.stringify(brand_names || []), drug_class, category, route, typical_dose, dose_unit, frequency, JSON.stringify(indications || []), JSON.stringify(contraindications || []), JSON.stringify(side_effects || []), is_controlled ? 1 : 0, is_high_alert ? 1 : 0],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, message: 'Medication created' });
+        }
+    );
+});
+
+// --- INVESTIGATION TEMPLATES ---
+
+// GET /api/master/investigation-templates - Get all investigation templates
+router.get('/master/investigation-templates', (req, res) => {
+    const { investigation_type, category } = req.query;
+
+    let sql = `SELECT * FROM investigation_templates WHERE is_active = 1`;
+    const params = [];
+
+    if (investigation_type) {
+        sql += ` AND investigation_type = ?`;
+        params.push(investigation_type);
+    }
+    if (category) {
+        sql += ` AND category = ?`;
+        params.push(category);
+    }
+
+    sql += ` ORDER BY category, name`;
+
+    db.all(sql, params, (err, templates) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ templates });
+    });
+});
+
+// --- VITAL SIGN DEFINITIONS ---
+
+// GET /api/master/vital-sign-definitions - Get vital sign definitions
+router.get('/master/vital-sign-definitions', (req, res) => {
+    db.all(
+        `SELECT * FROM vital_sign_definitions WHERE is_active = 1 ORDER BY display_order`,
+        [],
+        (err, vitals) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ vitals });
+        }
+    );
+});
+
+// --- DIAGNOSES ---
+
+// GET /api/master/diagnoses - Get diagnoses
+router.get('/master/diagnoses', (req, res) => {
+    const { body_system, severity, search, limit = 500, offset = 0 } = req.query;
+
+    let sql = `SELECT * FROM diagnoses WHERE is_active = 1`;
+    const params = [];
+
+    if (body_system) {
+        sql += ` AND body_system = ?`;
+        params.push(body_system);
+    }
+    if (severity) {
+        sql += ` AND severity = ?`;
+        params.push(severity);
+    }
+    if (search) {
+        sql += ` AND (name LIKE ? OR icd_code LIKE ? OR description LIKE ?)`;
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    sql += ` ORDER BY name LIMIT ? OFFSET ?`;
+    params.push(parseInt(limit), parseInt(offset));
+
+    db.all(sql, params, (err, diagnoses) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ diagnoses });
+    });
+});
+
+// --- SEARCH ALIASES ---
+
+// GET /api/master/search-aliases - Get search aliases
+router.get('/master/search-aliases', (req, res) => {
+    const { alias_type } = req.query;
+
+    let sql = `SELECT * FROM search_aliases WHERE is_active = 1`;
+    const params = [];
+
+    if (alias_type) {
+        sql += ` AND alias_type = ?`;
+        params.push(alias_type);
+    }
+
+    sql += ` ORDER BY alias_term`;
+
+    db.all(sql, params, (err, aliases) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ aliases });
+    });
+});
+
+// ============================================
+// SEEDING ROUTES - Import data from files
+// ============================================
+
+// POST /api/admin/seed/exam-techniques - Seed exam techniques
+router.post('/admin/seed/exam-techniques', authenticateToken, requireAdmin, (req, res) => {
+    const techniques = [
+        { technique_id: 'inspection', name: 'Inspection', icon: 'Eye', description: 'Visual examination', display_order: 1 },
+        { technique_id: 'palpation', name: 'Palpation', icon: 'Hand', description: 'Examination by touch', display_order: 2 },
+        { technique_id: 'percussion', name: 'Percussion', icon: 'Waves', description: 'Tapping to assess underlying structures', display_order: 3 },
+        { technique_id: 'auscultation', name: 'Auscultation', icon: 'Stethoscope', description: 'Listening to body sounds', display_order: 4 },
+        { technique_id: 'special', name: 'Special Tests', icon: 'ClipboardCheck', description: 'Specialized examination techniques', display_order: 5 }
+    ];
+
+    let inserted = 0;
+    techniques.forEach(t => {
+        db.run(
+            `INSERT OR IGNORE INTO exam_techniques (technique_id, name, icon, description, display_order) VALUES (?, ?, ?, ?, ?)`,
+            [t.technique_id, t.name, t.icon, t.description, t.display_order],
+            (err) => {
+                if (!err) inserted++;
+            }
+        );
+    });
+
+    setTimeout(() => {
+        res.json({ message: `Seeded ${inserted} exam techniques` });
+    }, 500);
+});
+
+// POST /api/admin/seed/vital-definitions - Seed vital sign definitions
+router.post('/admin/seed/vital-definitions', authenticateToken, requireAdmin, (req, res) => {
+    const vitals = [
+        { vital_id: 'hr', name: 'Heart Rate', abbreviation: 'HR', unit: 'bpm', normal_min: 60, normal_max: 100, critical_low: 40, critical_high: 150, alarm_low: 50, alarm_high: 120, display_order: 1, color_code: '#ef4444' },
+        { vital_id: 'spo2', name: 'Oxygen Saturation', abbreviation: 'SpO2', unit: '%', normal_min: 95, normal_max: 100, critical_low: 88, critical_high: null, alarm_low: 90, alarm_high: null, display_order: 2, color_code: '#3b82f6' },
+        { vital_id: 'rr', name: 'Respiratory Rate', abbreviation: 'RR', unit: '/min', normal_min: 12, normal_max: 20, critical_low: 8, critical_high: 30, alarm_low: 10, alarm_high: 24, display_order: 3, color_code: '#22c55e' },
+        { vital_id: 'bp_sys', name: 'Systolic BP', abbreviation: 'SBP', unit: 'mmHg', normal_min: 90, normal_max: 140, critical_low: 70, critical_high: 180, alarm_low: 80, alarm_high: 160, display_order: 4, color_code: '#f59e0b' },
+        { vital_id: 'bp_dia', name: 'Diastolic BP', abbreviation: 'DBP', unit: 'mmHg', normal_min: 60, normal_max: 90, critical_low: 40, critical_high: 110, alarm_low: 50, alarm_high: 100, display_order: 5, color_code: '#f59e0b' },
+        { vital_id: 'temp', name: 'Temperature', abbreviation: 'Temp', unit: '°C', normal_min: 36.5, normal_max: 37.5, critical_low: 35, critical_high: 40, alarm_low: 36, alarm_high: 38.5, decimal_places: 1, display_order: 6, color_code: '#a855f7' },
+        { vital_id: 'etco2', name: 'End-Tidal CO2', abbreviation: 'EtCO2', unit: 'mmHg', normal_min: 35, normal_max: 45, critical_low: 20, critical_high: 60, alarm_low: 30, alarm_high: 50, display_order: 7, color_code: '#6366f1' }
+    ];
+
+    let inserted = 0;
+    vitals.forEach(v => {
+        db.run(
+            `INSERT OR IGNORE INTO vital_sign_definitions (vital_id, name, abbreviation, unit, normal_min, normal_max, critical_low, critical_high, alarm_low, alarm_high, decimal_places, display_order, color_code)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [v.vital_id, v.name, v.abbreviation, v.unit, v.normal_min, v.normal_max, v.critical_low, v.critical_high, v.alarm_low, v.alarm_high, v.decimal_places || 0, v.display_order, v.color_code],
+            (err) => {
+                if (!err) inserted++;
+            }
+        );
+    });
+
+    setTimeout(() => {
+        res.json({ message: `Seeded ${inserted} vital sign definitions` });
+    }, 500);
+});
+
+// POST /api/admin/seed/lab-tests - Seed lab tests from file
+router.post('/admin/seed/lab-tests', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const labDbPath = path.join(__dirname, '../Lab_database.txt');
+
+        if (!fs.existsSync(labDbPath)) {
+            return res.status(404).json({ error: 'Lab_database.txt not found' });
+        }
+
+        const content = fs.readFileSync(labDbPath, 'utf8');
+        const tests = JSON.parse(content);
+
+        let inserted = 0;
+        let errors = 0;
+
+        const stmt = db.prepare(
+            `INSERT OR IGNORE INTO lab_tests (test_name, test_group, category, min_value, max_value, unit, normal_samples)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+        );
+
+        tests.forEach(test => {
+            stmt.run(
+                [test.test_name, test.group, test.category || 'General', test.min_value, test.max_value, test.unit, JSON.stringify(test.normal_samples || [])],
+                (err) => {
+                    if (err) errors++;
+                    else inserted++;
+                }
+            );
+        });
+
+        stmt.finalize(() => {
+            res.json({ message: `Imported ${inserted} lab tests, ${errors} errors`, total: tests.length });
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Error importing lab tests', details: error.message });
+    }
+});
+
+// POST /api/admin/seed/body-regions - Seed body regions from examRegions.js data
+router.post('/admin/seed/body-regions', authenticateToken, requireAdmin, (req, res) => {
+    // Basic body regions - can be expanded
+    const regions = [
+        { region_id: 'headNeck', name: 'Head & Neck', anatomical_view: 'anterior', display_order: 1 },
+        { region_id: 'eyes', name: 'Eyes', anatomical_view: 'anterior', display_order: 2 },
+        { region_id: 'ears', name: 'Ears', anatomical_view: 'both', display_order: 3 },
+        { region_id: 'nose', name: 'Nose', anatomical_view: 'anterior', display_order: 4 },
+        { region_id: 'mouth', name: 'Mouth/Throat', anatomical_view: 'anterior', display_order: 5 },
+        { region_id: 'neck', name: 'Neck', anatomical_view: 'both', display_order: 6 },
+        { region_id: 'chest', name: 'Chest', anatomical_view: 'anterior', display_order: 7 },
+        { region_id: 'heart', name: 'Heart', anatomical_view: 'anterior', display_order: 8 },
+        { region_id: 'lungs', name: 'Lungs', anatomical_view: 'both', display_order: 9 },
+        { region_id: 'abdomen', name: 'Abdomen', anatomical_view: 'anterior', display_order: 10 },
+        { region_id: 'back', name: 'Back', anatomical_view: 'posterior', display_order: 11 },
+        { region_id: 'upperExtremities', name: 'Upper Extremities', anatomical_view: 'both', display_order: 12 },
+        { region_id: 'lowerExtremities', name: 'Lower Extremities', anatomical_view: 'both', display_order: 13 },
+        { region_id: 'skin', name: 'Skin', anatomical_view: 'both', display_order: 14 },
+        { region_id: 'neurological', name: 'Neurological', anatomical_view: 'special', display_order: 15 }
+    ];
+
+    let inserted = 0;
+    regions.forEach(r => {
+        db.run(
+            `INSERT OR IGNORE INTO body_regions (region_id, name, anatomical_view, display_order) VALUES (?, ?, ?, ?)`,
+            [r.region_id, r.name, r.anatomical_view, r.display_order],
+            (err) => {
+                if (!err) inserted++;
+            }
+        );
+    });
+
+    setTimeout(() => {
+        res.json({ message: `Seeded ${inserted} body regions` });
+    }, 500);
+});
+
+// POST /api/admin/seed/all - Seed all master data
+router.post('/admin/seed/all', authenticateToken, requireAdmin, async (req, res) => {
+    const results = {
+        exam_techniques: 0,
+        vital_definitions: 0,
+        body_regions: 0,
+        lab_tests: 0
+    };
+
+    // This would trigger all seed operations
+    res.json({
+        message: 'To seed all data, call individual seed endpoints:',
+        endpoints: [
+            'POST /api/admin/seed/exam-techniques',
+            'POST /api/admin/seed/vital-definitions',
+            'POST /api/admin/seed/body-regions',
+            'POST /api/admin/seed/lab-tests'
+        ]
+    });
+});
+
+// ============================================
+// USER PROFILE ENDPOINTS
+// ============================================
+
+// GET /api/user/profile - Get current user's profile
+router.get('/user/profile', authenticateToken, (req, res) => {
+    db.get(
+        `SELECT id, username, name, email, role, department, institution, address, phone,
+                alternative_email, education, grade, created_at, updated_at, last_login
+         FROM users WHERE id = ? AND deleted_at IS NULL`,
+        [req.user.id],
+        (err, user) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!user) return res.status(404).json({ error: 'User not found' });
+            res.json({ user });
+        }
+    );
+});
+
+// PUT /api/user/profile - Update current user's profile
+router.put('/user/profile', authenticateToken, (req, res) => {
+    const { name, institution, address, phone, alternative_email, education, grade } = req.body;
+
+    // Note: username and email cannot be changed by the user
+    db.run(
+        `UPDATE users SET
+            name = COALESCE(?, name),
+            institution = ?,
+            address = ?,
+            phone = ?,
+            alternative_email = ?,
+            education = ?,
+            grade = ?,
+            updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND deleted_at IS NULL`,
+        [name, institution, address, phone, alternative_email, education, grade, req.user.id],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            if (this.changes === 0) return res.status(404).json({ error: 'User not found' });
+
+            // Return updated profile
+            db.get(
+                `SELECT id, username, name, email, role, department, institution, address, phone,
+                        alternative_email, education, grade, created_at, updated_at
+                 FROM users WHERE id = ?`,
+                [req.user.id],
+                (err, user) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    res.json({ message: 'Profile updated', user });
+                }
+            );
+        }
+    );
+});
+
+// PUT /api/user/password - Change current user's password
+router.put('/user/password', authenticateToken, async (req, res) => {
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
+        return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+
+    if (new_password.length < 6) {
+        return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    try {
+        // Get current user
+        const user = await new Promise((resolve, reject) => {
+            db.get('SELECT password_hash FROM users WHERE id = ?', [req.user.id], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Verify current password
+        const bcrypt = await import('bcryptjs');
+        const isValid = await bcrypt.compare(current_password, user.password_hash);
+
+        if (!isValid) {
+            return res.status(401).json({ error: 'Current password is incorrect' });
+        }
+
+        // Hash new password
+        const salt = await bcrypt.genSalt(10);
+        const newHash = await bcrypt.hash(new_password, salt);
+
+        // Update password
+        db.run(
+            'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [newHash, req.user.id],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ message: 'Password changed successfully' });
+            }
+        );
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// PLATFORM SETTINGS - USER FIELD CONFIGURATION
+// ============================================
+
+// Default user field configuration
+const DEFAULT_USER_FIELD_CONFIG = {
+    name: { label: 'Full Name', required: true, enabled: true },
+    institution: { label: 'Institution', required: false, enabled: true },
+    address: { label: 'Address', required: false, enabled: true },
+    phone: { label: 'Phone Number', required: false, enabled: true },
+    alternative_email: { label: 'Alternative Email', required: false, enabled: true },
+    education: { label: 'Education', required: false, enabled: true },
+    grade: { label: 'Grade/Year', required: false, enabled: true }
+};
+
+// GET /api/platform-settings/user-fields - Get user field configuration
+router.get('/platform-settings/user-fields', authenticateToken, (req, res) => {
+    db.get(
+        `SELECT setting_value FROM platform_settings WHERE setting_key = 'user_field_config'`,
+        [],
+        (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            if (row && row.setting_value) {
+                try {
+                    const config = JSON.parse(row.setting_value);
+                    res.json({ config });
+                } catch (e) {
+                    res.json({ config: DEFAULT_USER_FIELD_CONFIG });
+                }
+            } else {
+                res.json({ config: DEFAULT_USER_FIELD_CONFIG });
+            }
+        }
+    );
+});
+
+// PUT /api/platform-settings/user-fields - Update user field configuration (Admin only)
+router.put('/platform-settings/user-fields', authenticateToken, requireAdmin, (req, res) => {
+    const { config } = req.body;
+
+    if (!config || typeof config !== 'object') {
+        return res.status(400).json({ error: 'Invalid configuration' });
+    }
+
+    const configJson = JSON.stringify(config);
+
+    db.run(
+        `INSERT INTO platform_settings (setting_key, setting_value, updated_by, updated_at)
+         VALUES ('user_field_config', ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(setting_key) DO UPDATE SET
+         setting_value = excluded.setting_value,
+         updated_by = excluded.updated_by,
+         updated_at = CURRENT_TIMESTAMP`,
+        [configJson, req.user.id],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ message: 'User field configuration updated', config });
+        }
+    );
+});
+
+// GET /api/platform-settings - Get all platform settings (Admin only)
+router.get('/platform-settings', authenticateToken, requireAdmin, (req, res) => {
+    db.all(
+        `SELECT ps.*, u.username as updated_by_username
+         FROM platform_settings ps
+         LEFT JOIN users u ON ps.updated_by = u.id
+         ORDER BY ps.setting_key`,
+        [],
+        (err, settings) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            // Parse JSON values
+            const parsed = settings.map(s => ({
+                ...s,
+                setting_value: s.setting_value ? (() => {
+                    try { return JSON.parse(s.setting_value); }
+                    catch { return s.setting_value; }
+                })() : null
+            }));
+
+            res.json({ settings: parsed });
+        }
+    );
 });
 
 export default router;

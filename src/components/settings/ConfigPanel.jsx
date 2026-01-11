@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Trash2, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity } from 'lucide-react';
+import { Settings, Save, Plus, Trash2, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User } from 'lucide-react';
 import { LLMService } from '../../services/llmService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { AuthService } from '../../services/authService';
 import EventLog from '../monitor/EventLog';
 import SessionLogViewer from '../analytics/SessionLogViewer';
 import ScenarioRepository from './ScenarioRepository';
 import LabInvestigationEditor from './LabInvestigationEditor';
 import ClinicalRecordsEditor from './ClinicalRecordsEditor';
+import PhysicalExamEditor from './PhysicalExamEditor';
 import LabTestManager from './LabTestManager';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
     const { user, isAdmin } = useAuth();
+    const toast = useToast();
     // Students always see 'cases' tab, admins see 'llm' when not in full page mode
     const [activeTab, setActiveTab] = useState(() => {
         if (!isAdmin()) return 'cases'; // Students always default to cases
@@ -161,17 +164,18 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
         // Apply to service
         LLMService.setConfig(llmConfig);
         setHasDefaults(true);
-        alert('✓ LLM Settings saved as default!\nThey will persist across sessions.');
+        toast.success('LLM Settings saved as default! They will persist across sessions.');
     };
 
     const handleSaveLLMForSession = () => {
         // Only apply to service, don't save to localStorage
         LLMService.setConfig(llmConfig);
-        alert('✓ LLM Settings applied for this session only.\nThey will reset when you refresh.');
+        toast.success('LLM Settings applied for this session only.');
     };
 
-    const handleResetLLMDefaults = () => {
-        if (!confirm('Reset to factory defaults? This will clear your saved settings.')) return;
+    const handleResetLLMDefaults = async () => {
+        const confirmed = await toast.confirm('Reset to factory defaults? This will clear your saved settings.', { title: 'Reset Settings', type: 'warning' });
+        if (!confirmed) return;
         localStorage.removeItem('rohy_llm_defaults');
         const provider = 'lmstudio';
         const defaults = PROVIDERS[provider];
@@ -184,7 +188,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
         setLlmConfig(newConfig);
         LLMService.setConfig(newConfig);
         setHasDefaults(false);
-        alert('✓ Reset to factory defaults (LM Studio)');
+        toast.success('Reset to factory defaults (LM Studio)');
     };
 
     const handleSaveCase = async () => {
@@ -192,7 +196,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
 
         // Validate required fields
         if (!editingCase.name || editingCase.name.trim() === '') {
-            alert('Please enter a case name before saving.');
+            toast.warning('Please enter a case name before saving.');
             return;
         }
 
@@ -220,7 +224,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
         const token = AuthService.getToken();
         
         if (!token) {
-            alert('Authentication required. Please log in again.');
+            toast.error('Authentication required. Please log in again.');
             return;
         }
 
@@ -292,21 +296,17 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
             // Clear auto-save after successful database save
             clearAutoSave();
 
-            // Show success notification without closing editor
-            const notification = document.createElement('div');
-            notification.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-in fade-in slide-in-from-top-2';
-            notification.innerHTML = `<div class="flex items-center gap-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span class="font-bold">Case saved successfully!</span></div>`;
-            document.body.appendChild(notification);
-            setTimeout(() => notification.remove(), 3000);
-            
+            toast.success('Case saved successfully!');
+
         } catch (err) {
             console.error(err);
-            alert(err.message || 'Failed to save case');
+            toast.error(err.message || 'Failed to save case');
         }
     };
 
     const handleDeleteCase = async (caseId) => {
-        if (!confirm('Are you sure you want to delete this case?')) return;
+        const confirmed = await toast.confirm('Are you sure you want to delete this case?', { title: 'Delete Case', type: 'danger', confirmText: 'Delete' });
+        if (!confirmed) return;
 
         const token = AuthService.getToken();
         try {
@@ -322,10 +322,10 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
             }
 
             setCases(prev => prev.filter(c => c.id !== caseId));
-            alert('Case deleted successfully!');
+            toast.success('Case deleted successfully!');
         } catch (err) {
             console.error(err);
-            alert('Failed to delete case');
+            toast.error('Failed to delete case');
         }
     };
 
@@ -402,6 +402,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                 className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'labdb' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                             >
                                 <Database className="w-4 h-4" /> Lab Database
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('bodymap')}
+                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'bodymap' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                            >
+                                <Image className="w-4 h-4" /> Body Map Editor
                             </button>
                         </>
                     )}
@@ -566,7 +572,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                                     });
                                                                     
                                                                     if (res.ok) {
-                                                                        alert('✓ Case imported successfully!');
+                                                                        toast.success('Case imported successfully!');
                                                                         // Reload cases
                                                                         const casesRes = await fetch('/api/cases', {
                                                                             headers: { 'Authorization': `Bearer ${token}` }
@@ -577,7 +583,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                                         throw new Error('Failed to save case');
                                                                     }
                                                                 } catch (err) {
-                                                                    alert('✗ Failed to import case: ' + err.message);
+                                                                    toast.error('Failed to import case: ' + err.message);
                                                                 }
                                                             };
                                                             input.click();
@@ -740,10 +746,11 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                     caseData={editingCase}
                                     setCaseData={setEditingCase}
                                     onSave={handleSaveCase}
-                                    onCancel={() => {
+                                    onCancel={async () => {
                                         if (hasUnsavedChanges) {
-                                            const action = window.confirm(
-                                                'You have unsaved changes.\n\nClick OK to save before exiting, or Cancel to discard changes.'
+                                            const action = await toast.confirm(
+                                                'You have unsaved changes. Save before exiting?',
+                                                { title: 'Unsaved Changes', confirmText: 'Save & Exit', cancelText: 'Discard', type: 'warning' }
                                             );
                                             if (action) {
                                                 handleSaveCase();
@@ -788,9 +795,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                     
                                     // Switch back to cases tab
                                     setActiveTab('cases');
-                                    alert(`Scenario "${scenario.name}" applied to case! Return to Step 3 to configure.`);
+                                    toast.success(`Scenario "${scenario.name}" applied to case!`);
                                 } else {
-                                    alert('Please start editing a case first, then browse scenarios from Step 3.');
+                                    toast.warning('Please start editing a case first, then browse scenarios from Step 3.');
                                 }
                             }} 
                         />
@@ -819,6 +826,144 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                 <span className="text-xs text-neutral-500">Manage laboratory test reference values</span>
                             </div>
                             <LabTestManager />
+                        </div>
+                    )}
+
+                    {/* --- BODY MAP EDITOR TAB (Admin Only) --- */}
+                    {activeTab === 'bodymap' && isAdmin() && (
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+                                <h3 className="text-lg font-bold">Body Map Editor</h3>
+                                <span className="text-xs text-neutral-500">Edit body region mappings for physical examination</span>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="bg-neutral-800 rounded-lg p-4">
+                                    <h4 className="font-medium mb-2">Visual Region Editor</h4>
+                                    <p className="text-sm text-neutral-400 mb-4">
+                                        Open the interactive editor to drag and adjust body region polygons.
+                                        Click regions to select them, then drag vertices to reshape.
+                                    </p>
+                                    <a
+                                        href="/?debug=bodymap"
+                                        target="_blank"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded transition-colors"
+                                    >
+                                        <Image className="w-4 h-4" />
+                                        Open Body Map Editor
+                                    </a>
+                                </div>
+
+                                <div className="bg-neutral-800 rounded-lg p-4">
+                                    <h4 className="font-medium mb-2">Body Images</h4>
+                                    <p className="text-sm text-neutral-400 mb-4">
+                                        Upload custom SVG or PNG images for the body silhouettes.
+                                        Images should be transparent backgrounds with body outlines.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">Male Front</label>
+                                            <div className="flex gap-2">
+                                                <img src="/man-front.png" alt="Male front" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
+                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-purple-500 transition-colors">
+                                                    <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            const formData = new FormData();
+                                                            formData.append('image', file);
+                                                            formData.append('type', 'man-front');
+                                                            fetch('/api/upload-body-image', {
+                                                                method: 'POST',
+                                                                headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
+                                                                body: formData
+                                                            })
+                                                                .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
+                                                                .then(() => toast.success('Image uploaded!'))
+                                                                .catch(err => toast.error('Upload failed: ' + (err.error || err.message)));
+                                                        }
+                                                    }} />
+                                                    <Upload className="w-5 h-5 text-neutral-500" />
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">Male Back</label>
+                                            <div className="flex gap-2">
+                                                <img src="/man-back.png" alt="Male back" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
+                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-purple-500 transition-colors">
+                                                    <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            const formData = new FormData();
+                                                            formData.append('image', file);
+                                                            formData.append('type', 'man-back');
+                                                            fetch('/api/upload-body-image', {
+                                                                method: 'POST',
+                                                                headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
+                                                                body: formData
+                                                            })
+                                                                .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
+                                                                .then(() => toast.success('Image uploaded!'))
+                                                                .catch(err => toast.error('Upload failed: ' + (err.error || err.message)));
+                                                        }
+                                                    }} />
+                                                    <Upload className="w-5 h-5 text-neutral-500" />
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">Female Front</label>
+                                            <div className="flex gap-2">
+                                                <img src="/woman-front.png" alt="Female front" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
+                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-purple-500 transition-colors">
+                                                    <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            const formData = new FormData();
+                                                            formData.append('image', file);
+                                                            formData.append('type', 'woman-front');
+                                                            fetch('/api/upload-body-image', {
+                                                                method: 'POST',
+                                                                headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
+                                                                body: formData
+                                                            })
+                                                                .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
+                                                                .then(() => toast.success('Image uploaded!'))
+                                                                .catch(err => toast.error('Upload failed: ' + (err.error || err.message)));
+                                                        }
+                                                    }} />
+                                                    <Upload className="w-5 h-5 text-neutral-500" />
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">Female Back</label>
+                                            <div className="flex gap-2">
+                                                <img src="/woman-back.png" alt="Female back" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
+                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-purple-500 transition-colors">
+                                                    <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            const formData = new FormData();
+                                                            formData.append('image', file);
+                                                            formData.append('type', 'woman-back');
+                                                            fetch('/api/upload-body-image', {
+                                                                method: 'POST',
+                                                                headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
+                                                                body: formData
+                                                            })
+                                                                .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
+                                                                .then(() => toast.success('Image uploaded!'))
+                                                                .catch(err => toast.error('Upload failed: ' + (err.error || err.message)));
+                                                        }
+                                                    }} />
+                                                    <Upload className="w-5 h-5 text-neutral-500" />
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -864,6 +1009,34 @@ function PlatformSettings({ cases, setCases }) {
             }
         } catch (err) {
             console.error('Failed to set default case:', err);
+        }
+        setLoading(false);
+    };
+
+    const handleClearDefault = async () => {
+        if (!defaultCaseId) return;
+        setLoading(true);
+        try {
+            const token = AuthService.getToken();
+            const res = await fetch(`/api/cases/${defaultCaseId}/default`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ is_default: false })
+            });
+            if (res.ok) {
+                // Refresh cases
+                const casesRes = await fetch('/api/cases', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await casesRes.json();
+                setCases(data.cases || []);
+                setDefaultCaseId(null);
+            }
+        } catch (err) {
+            console.error('Failed to clear default case:', err);
         }
         setLoading(false);
     };
@@ -915,7 +1088,11 @@ function PlatformSettings({ cases, setCases }) {
                     value={defaultCaseId || ''}
                     onChange={(e) => {
                         const id = e.target.value;
-                        if (id) handleSetDefault(parseInt(id));
+                        if (id) {
+                            handleSetDefault(parseInt(id));
+                        } else {
+                            handleClearDefault();
+                        }
                     }}
                     disabled={loading}
                     className="w-full max-w-md bg-neutral-800 border border-neutral-600 rounded p-3 text-sm focus:border-green-500 outline-none"
@@ -1008,6 +1185,209 @@ function PlatformSettings({ cases, setCases }) {
                     <div className="text-2xl font-bold text-neutral-400">{hiddenCases.length}</div>
                     <div className="text-xs text-neutral-400">Hidden</div>
                 </div>
+            </div>
+
+            {/* User Profile Field Configuration */}
+            <UserFieldConfiguration />
+        </div>
+    );
+}
+
+// User Profile Field Configuration Component
+function UserFieldConfiguration() {
+    const toast = useToast();
+    const [fieldConfig, setFieldConfig] = useState({
+        name: { label: 'Full Name', required: true, enabled: true },
+        institution: { label: 'Institution', required: false, enabled: true },
+        address: { label: 'Address', required: false, enabled: true },
+        phone: { label: 'Phone Number', required: false, enabled: true },
+        alternative_email: { label: 'Alternative Email', required: false, enabled: true },
+        education: { label: 'Education', required: false, enabled: true },
+        grade: { label: 'Grade/Year', required: false, enabled: true }
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        loadFieldConfig();
+    }, []);
+
+    const loadFieldConfig = async () => {
+        try {
+            const token = AuthService.getToken();
+            const response = await fetch('/api/platform-settings/user-fields', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.config) {
+                    setFieldConfig(data.config);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load field config:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleFieldChange = (field, property, value) => {
+        setFieldConfig(prev => ({
+            ...prev,
+            [field]: {
+                ...prev[field],
+                [property]: value
+            }
+        }));
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            const token = AuthService.getToken();
+            const response = await fetch('/api/platform-settings/user-fields', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ config: fieldConfig })
+            });
+
+            if (response.ok) {
+                toast.success('User field configuration saved');
+            } else {
+                const data = await response.json();
+                toast.error(data.error || 'Failed to save configuration');
+            }
+        } catch (error) {
+            toast.error('Failed to save configuration: ' + error.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const fieldOrder = ['name', 'institution', 'address', 'phone', 'alternative_email', 'education', 'grade'];
+
+    if (loading) {
+        return (
+            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
+                <div className="animate-pulse space-y-4">
+                    <div className="h-6 bg-neutral-700 rounded w-1/3"></div>
+                    <div className="h-4 bg-neutral-700 rounded w-2/3"></div>
+                    <div className="space-y-2">
+                        {[1, 2, 3].map(i => (
+                            <div key={i} className="h-12 bg-neutral-700 rounded"></div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
+            <h4 className="text-md font-bold text-purple-400 mb-4 flex items-center gap-2">
+                <User className="w-5 h-5" />
+                User Profile Field Configuration
+            </h4>
+            <p className="text-sm text-neutral-400 mb-6">
+                Configure which fields are visible and required on user profiles. Disabled fields will not appear to users.
+            </p>
+
+            <div className="space-y-3">
+                {/* Header */}
+                <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-bold text-neutral-400 border-b border-neutral-700">
+                    <div className="col-span-4">Field</div>
+                    <div className="col-span-3">Label</div>
+                    <div className="col-span-2 text-center">Enabled</div>
+                    <div className="col-span-3 text-center">Required</div>
+                </div>
+
+                {/* Fields */}
+                {fieldOrder.map(fieldKey => {
+                    const config = fieldConfig[fieldKey];
+                    if (!config) return null;
+
+                    return (
+                        <div
+                            key={fieldKey}
+                            className={`grid grid-cols-12 gap-4 items-center px-4 py-3 rounded-lg ${
+                                config.enabled ? 'bg-neutral-700/30' : 'bg-neutral-800/50 opacity-60'
+                            }`}
+                        >
+                            <div className="col-span-4">
+                                <span className="text-sm text-white font-medium capitalize">
+                                    {fieldKey.replace(/_/g, ' ')}
+                                </span>
+                                {fieldKey === 'name' && (
+                                    <span className="text-xs text-amber-400 ml-2">(always required)</span>
+                                )}
+                            </div>
+                            <div className="col-span-3">
+                                <input
+                                    type="text"
+                                    value={config.label}
+                                    onChange={(e) => handleFieldChange(fieldKey, 'label', e.target.value)}
+                                    className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-600 rounded text-sm text-white focus:border-purple-500 outline-none"
+                                />
+                            </div>
+                            <div className="col-span-2 text-center">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={config.enabled}
+                                        onChange={(e) => handleFieldChange(fieldKey, 'enabled', e.target.checked)}
+                                        disabled={fieldKey === 'name'}
+                                        className="sr-only peer"
+                                    />
+                                    <div className={`w-9 h-5 rounded-full peer-focus:ring-2 peer-focus:ring-purple-500 ${
+                                        config.enabled ? 'bg-purple-600' : 'bg-neutral-600'
+                                    } ${fieldKey === 'name' ? 'opacity-50 cursor-not-allowed' : ''} after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4`}></div>
+                                </label>
+                            </div>
+                            <div className="col-span-3 text-center">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={config.required}
+                                        onChange={(e) => handleFieldChange(fieldKey, 'required', e.target.checked)}
+                                        disabled={fieldKey === 'name' || !config.enabled}
+                                        className="sr-only peer"
+                                    />
+                                    <div className={`w-9 h-5 rounded-full peer-focus:ring-2 peer-focus:ring-red-500 ${
+                                        config.required ? 'bg-red-600' : 'bg-neutral-600'
+                                    } ${(fieldKey === 'name' || !config.enabled) ? 'opacity-50 cursor-not-allowed' : ''} after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4`}></div>
+                                </label>
+                                {config.required && config.enabled && (
+                                    <span className="text-xs text-red-400 ml-2">*</span>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Save Button */}
+            <div className="mt-6 pt-4 border-t border-neutral-700 flex justify-end">
+                <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-6 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-neutral-600 text-white rounded-lg font-medium flex items-center gap-2"
+                >
+                    {saving ? (
+                        <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Saving...
+                        </>
+                    ) : (
+                        <>
+                            <Save className="w-4 h-4" />
+                            Save Configuration
+                        </>
+                    )}
+                </button>
             </div>
         </div>
     );
@@ -1138,10 +1518,10 @@ function SystemLogs() {
             document.body.removeChild(a);
             window.URL.revokeObjectURL(downloadUrl);
             
-            alert(`${logType} logs exported successfully!`);
+            toast.success(`${logType} logs exported successfully!`);
         } catch (error) {
             console.error('Export failed:', error);
-            alert('Export failed. Please try again.');
+            toast.error('Export failed. Please try again.');
         }
     };
 
@@ -1490,15 +1870,15 @@ function UserManagement() {
 
             const data = await res.json();
             if (res.ok) {
-                alert('User created successfully!');
+                toast.success('User created successfully!');
                 loadUsers();
                 setShowCreateForm(false);
                 setFormData({ username: '', name: '', email: '', password: '', role: 'user' });
             } else {
-                alert(data.error || 'Failed to create user');
+                toast.error(data.error || 'Failed to create user');
             }
         } catch (err) {
-            alert('Error creating user');
+            toast.error('Error creating user');
         }
     };
 
@@ -1508,7 +1888,7 @@ function UserManagement() {
         try {
             const res = await fetch(`/api/users/${editingUser.id}`, {
                 method: 'PUT',
-                headers: { 
+                headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
@@ -1517,16 +1897,16 @@ function UserManagement() {
 
             const data = await res.json();
             if (res.ok) {
-                alert('User updated successfully!');
+                toast.success('User updated successfully!');
                 loadUsers();
                 setShowEditForm(false);
                 setEditingUser(null);
                 setFormData({ username: '', name: '', email: '', password: '', role: 'user' });
             } else {
-                alert(data.error || 'Failed to update user');
+                toast.error(data.error || 'Failed to update user');
             }
         } catch (err) {
-            alert('Error updating user');
+            toast.error('Error updating user');
         }
     };
 
@@ -1553,14 +1933,14 @@ function UserManagement() {
                 }
 
                 if (users.length === 0) {
-                    alert('No valid users found in CSV');
+                    toast.warning('No valid users found in CSV');
                     return;
                 }
 
                 const token = AuthService.getToken();
                 const res = await fetch('/api/users/batch', {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
@@ -1568,14 +1948,14 @@ function UserManagement() {
                 });
 
                 const data = await res.json();
-                alert(data.message);
+                toast.success(data.message);
                 if (data.results.failed.length > 0) {
                     console.log('Failed users:', data.results.failed);
                 }
                 loadUsers();
                 setShowBatchUpload(false);
             } catch (err) {
-                alert('Error processing CSV file');
+                toast.error('Error processing CSV file');
             }
         };
         reader.readAsText(file);
@@ -1599,7 +1979,8 @@ student1,Student One,student1@school.edu,stud123,user`;
     };
 
     const handleDeleteUser = async (userId) => {
-        if (!confirm('Are you sure you want to delete this user?')) return;
+        const confirmed = await toast.confirm('Are you sure you want to delete this user?', { title: 'Delete User', type: 'danger', confirmText: 'Delete' });
+        if (!confirmed) return;
 
         const token = AuthService.getToken();
         try {
@@ -1610,10 +1991,10 @@ student1,Student One,student1@school.edu,stud123,user`;
 
             if (res.ok) {
                 setUsers(prev => prev.filter(u => u.id !== userId));
-                alert('User deleted successfully');
+                toast.success('User deleted successfully');
             }
         } catch (err) {
-            alert('Failed to delete user');
+            toast.error('Failed to delete user');
         }
     };
 
@@ -1625,7 +2006,7 @@ student1,Student One,student1@school.edu,stud123,user`;
             const user = users.find(u => u.id === userId);
             const res = await fetch(`/api/users/${userId}`, {
                 method: 'PUT',
-                headers: { 
+                headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
@@ -1633,13 +2014,13 @@ student1,Student One,student1@school.edu,stud123,user`;
             });
 
             if (res.ok) {
-                setUsers(prev => prev.map(u => 
+                setUsers(prev => prev.map(u =>
                     u.id === userId ? { ...u, role: newRole } : u
                 ));
-                alert('User role updated');
+                toast.success('User role updated');
             }
         } catch (err) {
-            alert('Failed to update role');
+            toast.error('Failed to update role');
         }
     };
 
@@ -1993,7 +2374,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
 
     const handleAddByGroup = async () => {
         if (selectedGroup === 'all') {
-            alert('Please select a specific group to add');
+            toast.warning('Please select a specific group to add');
             return;
         }
 
@@ -2007,7 +2388,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
             if (response.ok) {
                 const data = await response.json();
                 const tests = data.tests || [];
-                
+
                 // Group tests by name
                 const grouped = {};
                 tests.forEach(test => {
@@ -2022,11 +2403,11 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
                     handleAddLab(testGroup);
                 });
 
-                alert(`Added ${Object.keys(grouped).length} tests from ${selectedGroup}`);
+                toast.success(`Added ${Object.keys(grouped).length} tests from ${selectedGroup}`);
             }
         } catch (error) {
             console.error('Failed to add group:', error);
-            alert('Failed to add tests by group');
+            toast.error('Failed to add tests by group');
         } finally {
             setAddingGroup(false);
         }
@@ -2161,7 +2542,7 @@ function CaseWizard({ caseData, setCaseData, onSave, onCancel, hasUnsavedChanges
             }
         } catch (err) {
             console.error("Upload failed", err);
-            alert("Failed to upload photo");
+            toast.error("Failed to upload photo");
         } finally {
             setUploading(false);
         }
@@ -2285,7 +2666,8 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
         { num: 3, title: 'Scenario', icon: '📈' },
         { num: 4, title: 'Vitals', icon: '💓' },
         { num: 5, title: 'Labs', icon: '🧪' },
-        { num: 6, title: 'Records', icon: '📄' }
+        { num: 6, title: 'Exam', icon: '🩺' },
+        { num: 7, title: 'Records', icon: '📄' }
     ];
 
     // Helper to get vitals from scenario's first keyframe
@@ -2457,7 +2839,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
                                         </label>
                                         <button
-                                            onClick={() => alert("Ask the AI to 'Generate Avatar' based on the summary.")}
+                                            onClick={() => toast.info("Ask the AI to 'Generate Avatar' based on the summary.")}
                                             className="text-[10px] font-bold bg-neutral-700 hover:bg-neutral-600 px-3 py-1.5 rounded flex items-center gap-2"
                                         >
                                             <Plus className="w-3 h-3" /> AI Generate
@@ -3000,8 +3382,17 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     </div>
                 )}
 
-                {/* STEP 6: CLINICAL RECORDS */}
+                {/* STEP 6: PHYSICAL EXAMINATION */}
                 {step === 6 && (
+                    <PhysicalExamEditor
+                        caseData={caseData}
+                        setCaseData={setCaseData}
+                        patientGender={caseData.config?.demographics?.gender?.toLowerCase() || 'male'}
+                    />
+                )}
+
+                {/* STEP 7: CLINICAL RECORDS */}
+                {step === 7 && (
                     <ClinicalRecordsEditor
                         caseData={caseData}
                         setCaseData={setCaseData}
@@ -3029,16 +3420,16 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     )}
                     
                     {/* Save Progress button on all steps except last */}
-                    {step < 5 && (
-                        <button 
-                            onClick={onSave} 
+                    {step < 7 && (
+                        <button
+                            onClick={onSave}
                             className="px-4 py-2 bg-blue-700 hover:bg-blue-600 rounded font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-900/20"
                         >
                             <Save className="w-4 h-4" /> Save Progress
                         </button>
                     )}
-                    
-                    {step < 5 ? (
+
+                    {step < 7 ? (
                         <button 
                             onClick={async () => {
                                 // Auto-save before moving forward

@@ -5,6 +5,7 @@ const ToastContext = createContext(null);
 
 export function ToastProvider({ children }) {
     const [toasts, setToasts] = useState([]);
+    const [confirmDialog, setConfirmDialog] = useState(null);
 
     const addToast = useCallback((message, type = 'info', duration = 4000) => {
         const id = Date.now() + Math.random();
@@ -25,18 +26,41 @@ export function ToastProvider({ children }) {
         setToasts(prev => prev.filter(t => t.id !== id));
     }, []);
 
+    // Modern confirm dialog that returns a Promise
+    const confirm = useCallback((message, options = {}) => {
+        return new Promise((resolve) => {
+            setConfirmDialog({
+                message,
+                title: options.title || 'Confirm',
+                confirmText: options.confirmText || 'Confirm',
+                cancelText: options.cancelText || 'Cancel',
+                type: options.type || 'warning', // warning, danger, info
+                onConfirm: () => {
+                    setConfirmDialog(null);
+                    resolve(true);
+                },
+                onCancel: () => {
+                    setConfirmDialog(null);
+                    resolve(false);
+                }
+            });
+        });
+    }, []);
+
     const toast = {
         success: (message, duration) => addToast(message, 'success', duration),
         error: (message, duration) => addToast(message, 'error', duration),
         warning: (message, duration) => addToast(message, 'warning', duration),
         info: (message, duration) => addToast(message, 'info', duration),
-        remove: removeToast
+        remove: removeToast,
+        confirm
     };
 
     return (
         <ToastContext.Provider value={toast}>
             {children}
             <ToastContainer toasts={toasts} onRemove={removeToast} />
+            {confirmDialog && <ConfirmModal {...confirmDialog} />}
         </ToastContext.Provider>
     );
 }
@@ -106,6 +130,74 @@ function ToastItem({ toast, onRemove }) {
             >
                 <X className="w-4 h-4" />
             </button>
+        </div>
+    );
+}
+
+function ConfirmModal({ title, message, confirmText, cancelText, type, onConfirm, onCancel }) {
+    const typeStyles = {
+        warning: {
+            icon: AlertTriangle,
+            iconBg: 'bg-yellow-900/50',
+            iconColor: 'text-yellow-400',
+            confirmBtn: 'bg-yellow-600 hover:bg-yellow-500'
+        },
+        danger: {
+            icon: XCircle,
+            iconBg: 'bg-red-900/50',
+            iconColor: 'text-red-400',
+            confirmBtn: 'bg-red-600 hover:bg-red-500'
+        },
+        info: {
+            icon: Info,
+            iconBg: 'bg-blue-900/50',
+            iconColor: 'text-blue-400',
+            confirmBtn: 'bg-blue-600 hover:bg-blue-500'
+        }
+    };
+
+    const style = typeStyles[type] || typeStyles.warning;
+    const Icon = style.icon;
+
+    return (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div
+                className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+                onClick={onCancel}
+            />
+
+            {/* Modal */}
+            <div className="relative bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl max-w-md w-full animate-in zoom-in-95 fade-in duration-200">
+                <div className="p-6">
+                    {/* Icon and Title */}
+                    <div className="flex items-start gap-4">
+                        <div className={`p-3 rounded-full ${style.iconBg}`}>
+                            <Icon className={`w-6 h-6 ${style.iconColor}`} />
+                        </div>
+                        <div className="flex-1 pt-1">
+                            <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
+                            <p className="text-sm text-neutral-300 leading-relaxed">{message}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 px-6 pb-6">
+                    <button
+                        onClick={onCancel}
+                        className="flex-1 px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg font-medium transition-colors"
+                    >
+                        {cancelText}
+                    </button>
+                    <button
+                        onClick={onConfirm}
+                        className={`flex-1 px-4 py-2.5 text-white rounded-lg font-medium transition-colors ${style.confirmBtn}`}
+                    >
+                        {confirmText}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

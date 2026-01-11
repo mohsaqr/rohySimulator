@@ -5,6 +5,7 @@ import ExamTypeSelector from './ExamTypeSelector';
 import FindingDisplay from './FindingDisplay';
 import ExamLog from './ExamLog';
 import { BODY_REGIONS, getDefaultFinding, SAMPLE_ABNORMAL_EXAM } from '../../data/examRegions';
+import { useToast } from '../../contexts/ToastContext';
 
 /**
  * Manikin Panel - Main Physical Examination Interface
@@ -24,10 +25,18 @@ export default function ManikinPanel({
     onExamPerformed,
     patientGender = 'male'
 }) {
+    const toast = useToast();
     // State
     const [view, setView] = useState('anterior'); // anterior | posterior
     const [gender, setGender] = useState(patientGender); // male | female
     const [selectedRegion, setSelectedRegion] = useState(null);
+
+    // Sync gender with patientGender prop
+    React.useEffect(() => {
+        if (patientGender) {
+            setGender(patientGender.toLowerCase() === 'female' ? 'female' : 'male');
+        }
+    }, [patientGender]);
     const [selectedExamType, setSelectedExamType] = useState(null);
     const [examLog, setExamLog] = useState([]);
     const [currentFinding, setCurrentFinding] = useState(null);
@@ -75,18 +84,26 @@ export default function ManikinPanel({
         // Get the finding for this region and exam type
         let finding = '';
         let abnormal = false;
+        let audioUrl = null;
+        let audioUrls = {};
+        let heartAudio = null;
+        let lungAudio = null;
 
         // Check if we have configured data for this exam
         if (examData[selectedRegion] && examData[selectedRegion][examType]) {
             finding = examData[selectedRegion][examType].finding;
             abnormal = examData[selectedRegion][examType].abnormal || false;
+            audioUrl = examData[selectedRegion][examType].audioUrl || null;
+            audioUrls = examData[selectedRegion][examType].audioUrls || {};
+            heartAudio = examData[selectedRegion][examType].heartAudio || null;
+            lungAudio = examData[selectedRegion][examType].lungAudio || null;
         } else {
             // Use default finding
             finding = getDefaultFinding(selectedRegion, examType);
             abnormal = false;
         }
 
-        setCurrentFinding({ finding, abnormal });
+        setCurrentFinding({ finding, abnormal, audioUrl, audioUrls, heartAudio, lungAudio });
 
         // Add to exam log
         const logEntry = {
@@ -130,14 +147,15 @@ export default function ManikinPanel({
     }, []);
 
     // Clear log
-    const handleClearLog = useCallback(() => {
-        if (confirm('Clear all examination records?')) {
+    const handleClearLog = useCallback(async () => {
+        const confirmed = await toast.confirm('Clear all examination records?', { title: 'Clear Records', type: 'warning' });
+        if (confirmed) {
             setExamLog([]);
             setSelectedRegion(null);
             setSelectedExamType(null);
             setCurrentFinding(null);
         }
-    }, []);
+    }, [toast]);
 
     // Export findings
     const handleExportFindings = useCallback(() => {
@@ -187,7 +205,7 @@ export default function ManikinPanel({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 bg-slate-800/50">
                     <div className="flex items-center gap-3">
@@ -214,9 +232,9 @@ export default function ManikinPanel({
                 </div>
 
                 {/* Main Content */}
-                <div className="flex-1 overflow-hidden flex">
+                <div className="flex-1 overflow-hidden flex min-h-0">
                     {/* Left Panel - Body Map */}
-                    <div className="w-1/3 border-r border-slate-700 p-4 flex flex-col">
+                    <div className="w-1/3 border-r border-slate-700 p-4 flex flex-col min-h-0">
                         {/* View Toggle */}
                         <div className="flex gap-2 mb-3">
                             <button
@@ -268,7 +286,7 @@ export default function ManikinPanel({
                         </div>
 
                         {/* Body Map */}
-                        <div className="flex-1 flex items-center justify-center overflow-hidden">
+                        <div className="flex-1 flex items-center justify-center overflow-hidden min-h-0">
                             <BodyMap
                                 view={view}
                                 gender={gender}
@@ -335,6 +353,10 @@ export default function ManikinPanel({
                                 selectedExamType={selectedExamType}
                                 finding={currentFinding?.finding}
                                 isAbnormal={currentFinding?.abnormal}
+                                audioUrl={currentFinding?.audioUrl}
+                                audioUrls={currentFinding?.audioUrls || {}}
+                                heartAudio={currentFinding?.heartAudio}
+                                lungAudio={currentFinding?.lungAudio}
                             />
                         </div>
 

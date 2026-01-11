@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Edit3, Save, RefreshCw, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
 import { AuthService } from '../../services/authService';
+import { useToast } from '../../contexts/ToastContext';
 
 const LabValueEditor = ({ sessionId, caseId, onUpdate }) => {
+  const toast = useToast();
   const [availableLabs, setAvailableLabs] = useState([]);
   const [expandedLabs, setExpandedLabs] = useState(new Set());
   const [editingValues, setEditingValues] = useState({});
@@ -85,21 +87,21 @@ const LabValueEditor = ({ sessionId, caseId, onUpdate }) => {
 
       if (response.ok) {
         // Update local state
-        setAvailableLabs(prev => prev.map(l => 
-          l.id === lab.id 
+        setAvailableLabs(prev => prev.map(l =>
+          l.id === lab.id
             ? { ...l, current_value: parseFloat(newValue), is_abnormal: true }
             : l
         ));
-        
+
         if (onUpdate) {
           onUpdate(lab.id, parseFloat(newValue));
         }
       } else {
-        alert('Failed to update lab value');
+        toast.error('Failed to update lab value');
       }
     } catch (error) {
       console.error('Failed to save lab value:', error);
-      alert('Failed to update lab value');
+      toast.error('Failed to update lab value');
     } finally {
       setSaving(prev => ({ ...prev, [lab.id]: false }));
     }

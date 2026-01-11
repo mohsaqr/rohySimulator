@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Edit, Download, Upload, Globe, Lock, Play, X, Copy, Clock, ChevronDown, ChevronUp, Save, FileText } from 'lucide-react';
 import { AuthService } from '../../services/authService';
+import { useToast } from '../../contexts/ToastContext';
 import { SCENARIO_TEMPLATES } from '../../data/scenarioTemplates';
 
 const CATEGORIES = ['Cardiac', 'Respiratory', 'Sepsis', 'Trauma', 'General', 'Recovery', 'Pediatric'];
@@ -15,6 +16,7 @@ const DEFAULT_STEP = {
 };
 
 export default function ScenarioRepository({ onSelectScenario }) {
+    const toast = useToast();
     const [scenarios, setScenarios] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editingScenario, setEditingScenario] = useState(null);
@@ -45,7 +47,8 @@ export default function ScenarioRepository({ onSelectScenario }) {
     };
 
     const seedScenarios = async () => {
-        if (!confirm('Seed default scenarios? This will add 6 pre-built scenarios to the repository.')) return;
+        const confirmed = await toast.confirm('Seed default scenarios? This will add 6 pre-built scenarios to the repository.', { title: 'Seed Scenarios', type: 'info' });
+        if (!confirmed) return;
 
         try {
             const token = AuthService.getToken();
@@ -54,16 +57,17 @@ export default function ScenarioRepository({ onSelectScenario }) {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
-            alert(data.message);
+            toast.success(data.message);
             loadScenarios();
         } catch (error) {
             console.error('Failed to seed scenarios:', error);
-            alert('Failed to seed scenarios');
+            toast.error('Failed to seed scenarios');
         }
     };
 
     const deleteScenario = async (id) => {
-        if (!confirm('Delete this scenario?')) return;
+        const confirmed = await toast.confirm('Delete this scenario?', { title: 'Delete Scenario', type: 'danger', confirmText: 'Delete' });
+        if (!confirmed) return;
 
         try {
             const token = AuthService.getToken();
@@ -74,17 +78,17 @@ export default function ScenarioRepository({ onSelectScenario }) {
             loadScenarios();
         } catch (error) {
             console.error('Failed to delete scenario:', error);
-            alert('Failed to delete scenario');
+            toast.error('Failed to delete scenario');
         }
     };
 
     const saveScenario = async () => {
         if (!editingScenario.name.trim()) {
-            alert('Please enter a scenario name');
+            toast.warning('Please enter a scenario name');
             return;
         }
         if (!editingScenario.timeline || editingScenario.timeline.length === 0) {
-            alert('Please add at least one timeline step');
+            toast.warning('Please add at least one timeline step');
             return;
         }
 
@@ -117,7 +121,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
             loadScenarios();
         } catch (error) {
             console.error('Failed to save scenario:', error);
-            alert('Failed to save scenario');
+            toast.error('Failed to save scenario');
         }
     };
 
@@ -157,7 +161,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
                     is_public: true
                 });
             } catch (err) {
-                alert('Invalid scenario file');
+                toast.error('Invalid scenario file');
             }
         };
         reader.readAsText(file);
@@ -229,7 +233,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
 
     const removeTimelineStep = (index) => {
         if (editingScenario.timeline.length <= 1) {
-            alert('Scenario must have at least one step');
+            toast.warning('Scenario must have at least one step');
             return;
         }
         setEditingScenario(prev => ({

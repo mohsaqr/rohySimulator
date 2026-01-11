@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     FlaskConical, Pill, X, ChevronUp, ChevronDown,
     Search, Clock, CheckCircle, Loader2, List,
-    Settings, Eye, EyeOff, Timer, FileText, Scan
+    Eye, FileText, Scan
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
@@ -17,7 +17,7 @@ import ClinicalRecordsPanel from '../investigations/ClinicalRecordsPanel';
  */
 export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData }) {
     const [isOpen, setIsOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState('labs'); // labs, radiology, drugs, settings
+    const [activeTab, setActiveTab] = useState('labs'); // labs, radiology, drugs, records
     const [drawerHeight, setDrawerHeight] = useState('50vh'); // 50vh or 80vh
     const toast = useToast();
 
@@ -117,32 +117,43 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         fetchLabs();
     }, [sessionId]);
 
+    // Track last refresh time
+    const [lastRefresh, setLastRefresh] = useState(null);
+
     // Fetch lab orders
     const fetchLabOrders = async () => {
         if (!sessionId) {
-            console.log('No sessionId, skipping order fetch');
+            console.log('[Orders] No sessionId, skipping order fetch');
             return;
         }
 
         try {
             const token = localStorage.getItem('token');
-            console.log(`Fetching orders for session: ${sessionId}`);
+            console.log(`[Orders] Fetching orders for session ${sessionId}...`);
             const response = await fetch(`/api/sessions/${sessionId}/orders`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (response.ok) {
                 const data = await response.json();
-                console.log('Fetched orders:', data.orders?.length || 0);
-                setLabOrders(data.orders || []);
+                const orders = data.orders || [];
+                const now = new Date();
+                setLastRefresh(now);
+
+                console.log(`[Orders] Session ${sessionId} @ ${now.toISOString()}: ${orders.length} total orders`);
+                orders.forEach(o => {
+                    const status = o.viewed_at ? 'VIEWED' : o.is_ready ? 'READY' : 'PENDING';
+                    console.log(`  - ${o.test_name}: ${status}, is_ready=${o.is_ready}, mins_remaining=${o.minutes_remaining}, available_at=${o.available_at}`);
+                });
+                setLabOrders(orders);
                 setOrderError(null);
             } else {
                 const errText = await response.text();
-                console.error('Order fetch failed:', response.status, errText);
+                console.error('[Orders] Fetch failed:', response.status, errText);
                 setOrderError(`Failed to fetch orders: ${response.status}`);
             }
         } catch (error) {
-            console.error('Failed to fetch orders:', error);
+            console.error('[Orders] Fetch error:', error);
             setOrderError(error.message);
         }
     };
@@ -170,7 +181,15 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                     (labSettings.globalTurnaround > 0 ? labSettings.globalTurnaround : null)
             };
 
-            console.log('Ordering labs:', body);
+            console.log('[Orders] Submitting order:', {
+                sessionId,
+                lab_ids: selectedLabs,
+                turnaround_override: body.turnaround_override,
+                settings: {
+                    instantResults: labSettings.instantResults,
+                    globalTurnaround: labSettings.globalTurnaround
+                }
+            });
             const response = await fetch(`/api/sessions/${sessionId}/order-labs`, {
                 method: 'POST',
                 headers: {
@@ -246,9 +265,16 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     }, {});
 
     // Time remaining helper
-    const getTimeRemaining = (availableAt) => {
+    const getTimeRemaining = (order) => {
+        // Use minutes_remaining from backend if available (more accurate)
+        if (order.minutes_remaining !== undefined && order.minutes_remaining > 0) {
+            const mins = Math.floor(order.minutes_remaining);
+            const secs = Math.floor((order.minutes_remaining - mins) * 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        // Fallback to client-side calculation
         const now = new Date();
-        const available = new Date(availableAt);
+        const available = new Date(order.available_at + 'Z'); // Append Z to treat as UTC
         const diff = available - now;
         if (diff <= 0) return 'Ready';
         const minutes = Math.floor(diff / 60000);
@@ -267,8 +293,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         { id: 'labs', label: 'Laboratory', icon: FlaskConical, count: readyOrders.length },
         { id: 'radiology', label: 'Radiology', icon: Scan, count: 0 },
         { id: 'drugs', label: 'Medications', icon: Pill, count: 0 },
-        { id: 'records', label: 'Records', icon: FileText, count: 0 },
-        { id: 'settings', label: 'Settings', icon: Settings, count: 0 }
+        { id: 'records', label: 'Records', icon: FileText, count: 0 }
     ];
 
     return (
@@ -282,10 +307,17 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                             onClick={() => setShowOrdersPanel(!showOrdersPanel)}
                             className="w-full px-4 py-2 bg-neutral-800 flex items-center justify-between hover:bg-neutral-700 transition-colors"
                         >
-                            <span className="text-sm font-bold text-white flex items-center gap-2">
-                                <FlaskConical className="w-4 h-4 text-purple-400" />
-                                Ordered Tests ({labOrders.length})
-                            </span>
+                            <div className="flex flex-col items-start">
+                                <span className="text-sm font-bold text-white flex items-center gap-2">
+                                    <FlaskConical className="w-4 h-4 text-purple-400" />
+                                    Ordered Tests ({labOrders.length})
+                                </span>
+                                <span className="text-[10px] text-neutral-500">
+                                    {pendingOrders.length > 0 && <span className="text-yellow-500">{pendingOrders.length} pending</span>}
+                                    {pendingOrders.length > 0 && readyOrders.length > 0 && ' • '}
+                                    {readyOrders.length > 0 && <span className="text-green-500">{readyOrders.length} ready</span>}
+                                </span>
+                            </div>
                             {showOrdersPanel ? <ChevronDown className="w-4 h-4 text-neutral-400" /> : <ChevronUp className="w-4 h-4 text-neutral-400" />}
                         </button>
 
@@ -322,13 +354,20 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                             PENDING ({pendingOrders.length})
                                         </div>
                                         {pendingOrders.map(order => (
-                                            <div key={order.id} className="px-2 py-1 text-sm text-neutral-300 flex items-center justify-between">
-                                                <span className="truncate">{order.test_name}</span>
-                                                <span className="text-xs text-yellow-500 ml-2 font-mono">
-                                                    {getTimeRemaining(order.available_at)}
+                                            <div key={order.id} className="px-2 py-1.5 text-sm text-neutral-300 flex items-center justify-between">
+                                                <span className="truncate flex-1">{order.test_name}</span>
+                                                <span className="text-xs text-yellow-500 ml-2 font-mono min-w-[50px] text-right">
+                                                    {getTimeRemaining(order)}
                                                 </span>
                                             </div>
                                         ))}
+                                    </div>
+                                )}
+
+                                {/* Debug: Show all orders */}
+                                {labOrders.length > 0 && labOrders.length !== pendingOrders.length + readyOrders.length + viewedOrders.length && (
+                                    <div className="p-2 bg-red-900/30 text-xs text-red-400">
+                                        Warning: Order count mismatch. Total: {labOrders.length}, Pending: {pendingOrders.length}, Ready: {readyOrders.length}, Viewed: {viewedOrders.length}
                                     </div>
                                 )}
 
@@ -356,6 +395,29 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                     </div>
                                 )}
 
+                                {/* Debug: All orders raw list */}
+                                {labOrders.length > 0 && (
+                                    <details className="border-t border-neutral-800">
+                                        <summary className="px-2 py-1.5 text-[10px] text-neutral-500 cursor-pointer hover:bg-neutral-800">
+                                            Debug: All {labOrders.length} orders (click to expand)
+                                        </summary>
+                                        <div className="px-2 py-1 text-[10px] text-neutral-500 max-h-40 overflow-y-auto bg-neutral-900">
+                                            {labOrders.map(o => (
+                                                <div key={o.id} className="py-0.5 border-b border-neutral-800/50">
+                                                    {o.test_name}: is_ready={String(o.is_ready)}, mins={o.minutes_remaining}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </details>
+                                )}
+
+                                {/* Refresh indicator */}
+                                {lastRefresh && (
+                                    <div className="px-2 py-1 text-[10px] text-neutral-600 border-t border-neutral-800 flex justify-between">
+                                        <span>Auto-refresh: {labSettings.autoRefreshInterval}s</span>
+                                        <span>Updated: {lastRefresh.toLocaleTimeString()}</span>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -473,7 +535,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                 <div className="flex-1 flex flex-col border-r border-neutral-800">
                                     {/* Search & Filter */}
                                     <div className="p-4 space-y-3 border-b border-neutral-800">
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 items-center">
                                             <button
                                                 onClick={() => setLabViewMode('search')}
                                                 className={`px-3 py-1.5 rounded text-xs font-bold ${
@@ -492,7 +554,108 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                 <List className="w-3 h-3 inline mr-1" />
                                                 Browse
                                             </button>
+                                            <div className="ml-auto flex items-center gap-2">
+                                                {/* Show effective turnaround mode */}
+                                                {caseData?.config?.investigations?.instantResults ? (
+                                                    <span className="text-xs text-amber-400 bg-amber-900/30 px-2 py-0.5 rounded" title="Case configured for instant results">
+                                                        Case: Instant
+                                                    </span>
+                                                ) : caseData?.config?.investigations?.defaultTurnaround > 0 ? (
+                                                    <span className="text-xs text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded" title="Case default turnaround">
+                                                        Case: {caseData.config.investigations.defaultTurnaround}m
+                                                    </span>
+                                                ) : null}
+                                                <label className="flex items-center gap-1.5 cursor-pointer" title="When checked, results are available immediately (no turnaround delay)">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={labSettings.instantResults}
+                                                        onChange={(e) => updateSetting('instantResults', e.target.checked)}
+                                                        className="w-3 h-3"
+                                                    />
+                                                    <span className={`text-xs ${labSettings.instantResults ? 'text-green-400 font-bold' : 'text-neutral-400'}`}>
+                                                        Instant
+                                                    </span>
+                                                </label>
+                                                <button
+                                                    onClick={() => {
+                                                        localStorage.removeItem('rohy_lab_settings');
+                                                        setLabSettings({
+                                                            globalTurnaround: 0,
+                                                            showNormalRanges: true,
+                                                            showFlags: true,
+                                                            instantResults: false,
+                                                            autoRefreshInterval: 5
+                                                        });
+                                                        toast.info('Lab settings reset to defaults');
+                                                    }}
+                                                    className="text-[10px] text-neutral-500 hover:text-neutral-300 underline"
+                                                    title="Reset lab settings to defaults"
+                                                >
+                                                    Reset
+                                                </button>
+                                            </div>
                                         </div>
+
+                                        {/* Quick Panel Selection */}
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {[
+                                                { id: 'cbc', label: 'CBC', tests: ['WBC', 'RBC', 'Hemoglobin', 'Hematocrit', 'Platelet', 'MCV', 'MCH', 'MCHC'] },
+                                                { id: 'bmp', label: 'BMP', tests: ['Sodium', 'Potassium', 'Chloride', 'Bicarbonate', 'BUN', 'Creatinine', 'Glucose'] },
+                                                { id: 'cmp', label: 'CMP', tests: ['Sodium', 'Potassium', 'Chloride', 'Bicarbonate', 'BUN', 'Creatinine', 'Glucose', 'Calcium', 'Albumin', 'Bilirubin', 'ALT', 'AST', 'Alkaline'] },
+                                                { id: 'lft', label: 'LFTs', tests: ['ALT', 'AST', 'Alkaline phosphatase', 'Bilirubin', 'Albumin', 'GGT'] },
+                                                { id: 'coags', label: 'Coags', tests: ['PT', 'PTT', 'INR', 'Fibrinogen', 'D-dimer'] },
+                                                { id: 'cardiac', label: 'Cardiac', tests: ['Troponin', 'BNP', 'Myoglobin', 'Creatine Kinase'] },
+                                                { id: 'lipid', label: 'Lipids', tests: ['Cholesterol', 'Triglyceride', 'HDL', 'LDL'] },
+                                                { id: 'thyroid', label: 'TFTs', tests: ['TSH', 'T4', 'T3', 'Free T4', 'Free T3'] },
+                                            ].map(panel => {
+                                                // Find matching labs for this panel
+                                                const matchingLabs = availableLabs.filter(lab =>
+                                                    panel.tests.some(t => lab.test_name.toLowerCase().includes(t.toLowerCase()))
+                                                );
+                                                const unorderedMatches = matchingLabs.filter(lab =>
+                                                    !labOrders.some(o => o.investigation_id === lab.id)
+                                                );
+                                                const allSelected = unorderedMatches.length > 0 &&
+                                                    unorderedMatches.every(lab => selectedLabs.includes(lab.id));
+
+                                                return (
+                                                    <button
+                                                        key={panel.id}
+                                                        onClick={() => {
+                                                            if (allSelected) {
+                                                                // Deselect all from this panel
+                                                                setSelectedLabs(prev =>
+                                                                    prev.filter(id => !unorderedMatches.some(lab => lab.id === id))
+                                                                );
+                                                            } else {
+                                                                // Select all unordered from this panel
+                                                                setSelectedLabs(prev => {
+                                                                    const newIds = unorderedMatches
+                                                                        .map(lab => lab.id)
+                                                                        .filter(id => !prev.includes(id));
+                                                                    return [...prev, ...newIds];
+                                                                });
+                                                            }
+                                                        }}
+                                                        disabled={unorderedMatches.length === 0}
+                                                        className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${
+                                                            allSelected
+                                                                ? 'bg-green-600 text-white'
+                                                                : unorderedMatches.length === 0
+                                                                    ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed'
+                                                                    : 'bg-blue-900/50 text-blue-300 hover:bg-blue-800/50 border border-blue-700/50'
+                                                        }`}
+                                                        title={`${panel.label}: ${matchingLabs.length} tests (${unorderedMatches.length} available)`}
+                                                    >
+                                                        {panel.label}
+                                                        {unorderedMatches.length > 0 && (
+                                                            <span className="ml-1 text-[10px] opacity-70">({unorderedMatches.length})</span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
                                         <div className="flex gap-2">
                                             <div className="flex-1 relative">
                                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
@@ -599,7 +762,19 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
 
                                     {/* Order Button */}
                                     {selectedLabs.length > 0 && (
-                                        <div className="p-4 border-t border-neutral-800">
+                                        <div className="p-4 border-t border-neutral-800 space-y-2">
+                                            {/* Turnaround info */}
+                                            <div className="text-xs text-center">
+                                                {labSettings.instantResults || caseData?.config?.investigations?.instantResults ? (
+                                                    <span className="text-green-400">Results will be available immediately</span>
+                                                ) : labSettings.globalTurnaround > 0 ? (
+                                                    <span className="text-blue-400">Results in {labSettings.globalTurnaround} minutes</span>
+                                                ) : caseData?.config?.investigations?.defaultTurnaround > 0 ? (
+                                                    <span className="text-blue-400">Results in {caseData.config.investigations.defaultTurnaround} minutes (case default)</span>
+                                                ) : (
+                                                    <span className="text-neutral-400">Results per test turnaround (typically 30 min)</span>
+                                                )}
+                                            </div>
                                             <button
                                                 onClick={handleOrderLabs}
                                                 disabled={loadingLabs}
@@ -639,9 +814,10 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                             <div className="divide-y divide-neutral-800">
                                                 {/* Sort: Ready first (newest), then Pending, then Viewed */}
                                                 {[...readyOrders, ...pendingOrders, ...viewedOrders].map(order => {
-                                                    const isReady = !order.viewed_at && new Date(order.available_at) <= new Date();
-                                                    const isPending = !order.viewed_at && new Date(order.available_at) > new Date();
+                                                    // Use backend-calculated is_ready to avoid timezone issues
                                                     const isViewed = !!order.viewed_at;
+                                                    const isReady = order.is_ready && !isViewed;
+                                                    const isPending = !order.is_ready && !isViewed;
 
                                                     return (
                                                         <div
@@ -677,7 +853,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                                         {isPending && (
                                                                             <>
                                                                                 <Clock className="w-3 h-3 animate-pulse" />
-                                                                                {getTimeRemaining(order.available_at)}
+                                                                                {getTimeRemaining(order)}
                                                                             </>
                                                                         )}
                                                                         {isViewed && (
@@ -766,142 +942,6 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                         {activeTab === 'records' && (
                             <div className="h-full">
                                 <ClinicalRecordsPanel caseConfig={caseData?.config} />
-                            </div>
-                        )}
-
-                        {/* Settings Tab */}
-                        {activeTab === 'settings' && (
-                            <div className="h-full overflow-y-auto p-6">
-                                <div className="max-w-xl mx-auto space-y-6">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                                            <Settings className="w-5 h-5 text-purple-400" />
-                                            Lab Settings
-                                        </h3>
-                                    </div>
-
-                                    {/* Turnaround Time */}
-                                    <div className="bg-neutral-800 rounded-lg p-4 border border-neutral-700">
-                                        <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                                            <Timer className="w-4 h-4 text-yellow-400" />
-                                            Result Timing
-                                        </h4>
-
-                                        <div className="space-y-4">
-                                            {/* Instant Results Toggle */}
-                                            <label className="flex items-center justify-between cursor-pointer">
-                                                <div>
-                                                    <span className="text-sm text-white">Instant Results</span>
-                                                    <p className="text-xs text-neutral-500">Results available immediately (no wait time)</p>
-                                                </div>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={labSettings.instantResults}
-                                                    onChange={(e) => updateSetting('instantResults', e.target.checked)}
-                                                    className="w-5 h-5"
-                                                />
-                                            </label>
-
-                                            {/* Global Turnaround Override */}
-                                            {!labSettings.instantResults && (
-                                                <div>
-                                                    <label className="text-sm text-white block mb-2">
-                                                        Global Wait Time Override
-                                                    </label>
-                                                    <div className="flex items-center gap-3">
-                                                        <select
-                                                            value={labSettings.globalTurnaround}
-                                                            onChange={(e) => updateSetting('globalTurnaround', parseInt(e.target.value))}
-                                                            className="flex-1 px-3 py-2 bg-neutral-700 border border-neutral-600 rounded text-white text-sm"
-                                                        >
-                                                            <option value={0}>Use per-test defaults</option>
-                                                            <option value={1}>1 minute</option>
-                                                            <option value={2}>2 minutes</option>
-                                                            <option value={5}>5 minutes</option>
-                                                            <option value={10}>10 minutes</option>
-                                                            <option value={15}>15 minutes</option>
-                                                            <option value={30}>30 minutes</option>
-                                                            <option value={60}>60 minutes</option>
-                                                        </select>
-                                                    </div>
-                                                    <p className="text-xs text-neutral-500 mt-1">
-                                                        Override all test turnaround times with a single value
-                                                    </p>
-                                                </div>
-                                            )}
-
-                                            {/* Auto-refresh Interval */}
-                                            <div>
-                                                <label className="text-sm text-white block mb-2">
-                                                    Auto-refresh Interval
-                                                </label>
-                                                <select
-                                                    value={labSettings.autoRefreshInterval}
-                                                    onChange={(e) => updateSetting('autoRefreshInterval', parseInt(e.target.value))}
-                                                    className="w-full px-3 py-2 bg-neutral-700 border border-neutral-600 rounded text-white text-sm"
-                                                >
-                                                    <option value={2}>Every 2 seconds</option>
-                                                    <option value={5}>Every 5 seconds</option>
-                                                    <option value={10}>Every 10 seconds</option>
-                                                    <option value={30}>Every 30 seconds</option>
-                                                </select>
-                                                <p className="text-xs text-neutral-500 mt-1">
-                                                    How often to check for new results
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Display Settings */}
-                                    <div className="bg-neutral-800 rounded-lg p-4 border border-neutral-700">
-                                        <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                                            <Eye className="w-4 h-4 text-blue-400" />
-                                            Display Options
-                                        </h4>
-
-                                        <div className="space-y-3">
-                                            <label className="flex items-center justify-between cursor-pointer">
-                                                <div>
-                                                    <span className="text-sm text-white">Show Normal Ranges</span>
-                                                    <p className="text-xs text-neutral-500">Display reference ranges in results</p>
-                                                </div>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={labSettings.showNormalRanges}
-                                                    onChange={(e) => updateSetting('showNormalRanges', e.target.checked)}
-                                                    className="w-5 h-5"
-                                                />
-                                            </label>
-
-                                            <label className="flex items-center justify-between cursor-pointer">
-                                                <div>
-                                                    <span className="text-sm text-white">Show Abnormal Flags</span>
-                                                    <p className="text-xs text-neutral-500">Highlight high/low values</p>
-                                                </div>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={labSettings.showFlags}
-                                                    onChange={(e) => updateSetting('showFlags', e.target.checked)}
-                                                    className="w-5 h-5"
-                                                />
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    {/* Debug Info */}
-                                    <div className="bg-neutral-800/50 rounded-lg p-4 border border-neutral-700/50">
-                                        <h4 className="text-xs font-bold text-neutral-500 mb-2">Session Info</h4>
-                                        <div className="text-xs text-neutral-600 space-y-1 font-mono">
-                                            <div>Session ID: {sessionId}</div>
-                                            <div>Case ID: {caseId}</div>
-                                            <div>Total Orders: {labOrders.length}</div>
-                                            <div>Available Labs: {availableLabs.length}</div>
-                                            {orderError && (
-                                                <div className="text-red-400 mt-2">Error: {orderError}</div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         )}
                     </div>

@@ -205,7 +205,8 @@ export default function LabTestManager() {
 
     // Delete test
     const handleDeleteTest = async (test_name, category) => {
-        if (!confirm(`Delete "${test_name}" (${category})?`)) return;
+        const confirmed = await toast.confirm(`Delete "${test_name}" (${category})?`, { title: 'Delete Test', type: 'danger', confirmText: 'Delete' });
+        if (!confirmed) return;
 
         try {
             const token = AuthService.getToken();

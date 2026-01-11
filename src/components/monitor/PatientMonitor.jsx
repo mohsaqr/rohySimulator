@@ -3,6 +3,7 @@ import { Heart, Activity, Wind, Thermometer, Bell, Settings, Play, Pause, AlertC
 import defaultSettings from '../../settings.json';
 import { useEventLog } from '../../hooks/useEventLog';
 import { useAlarms } from '../../hooks/useAlarms';
+import { useToast } from '../../contexts/ToastContext';
 import { getAudioContext, resumeAudioContext } from '../../utils/alarmAudio';
 import LabValueEditor from '../investigations/LabValueEditor';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
@@ -235,6 +236,7 @@ const importSettingsFromJSON = (file, setRhythm, setConditions, setParams) => {
 };
 
 export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmin = false }) {
+   const toast = useToast();
    // --- Refs for Canvas & Buffers ---
    const canvasRef = useRef(null);
    const ecgCanvasRef = useRef(null);
@@ -1937,10 +1939,10 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                   <button
                      onClick={() => {
                         if (saveSettings(rhythm, conditions, params)) {
-                           alert('✓ Settings saved to browser! They will persist between sessions.');
+                           toast.success('Settings saved to browser!');
                            window.location.reload();
                         } else {
-                           alert('✗ Failed to save settings');
+                           toast.error('Failed to save settings');
                         }
                      }}
                      className="w-full py-3 rounded border border-green-700/50 bg-green-900/20 text-green-400 font-bold text-xs uppercase hover:bg-green-900/30 transition-colors flex items-center justify-center gap-2"
@@ -1954,7 +1956,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                      <button
                         onClick={() => {
                            exportSettingsToJSON(rhythm, conditions, params);
-                           alert('✓ Settings exported to JSON file!');
+                           toast.success('Settings exported to JSON file!');
                         }}
                         className="py-3 rounded border border-blue-700/50 bg-blue-900/20 text-blue-400 font-bold text-xs uppercase hover:bg-blue-900/30 transition-colors flex items-center justify-center gap-2"
                      >
@@ -1972,9 +1974,9 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                               if (file) {
                                  try {
                                     await importSettingsFromJSON(file, setRhythm, setConditions, setParams);
-                                    alert('✓ Settings imported successfully!');
+                                    toast.success('Settings imported successfully!');
                                  } catch (err) {
-                                    alert('✗ Failed to import settings: ' + err.message);
+                                    toast.error('Failed to import settings: ' + err.message);
                                  }
                               }
                            };
@@ -1989,13 +1991,14 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
 
                   {/* Reset to Factory Defaults */}
                   <button
-                     onClick={() => {
-                        if (confirm('Reset to factory defaults? This will clear saved settings.')) {
+                     onClick={async () => {
+                        const confirmed = await toast.confirm('Reset to factory defaults? This will clear saved settings.', { title: 'Reset Settings', type: 'warning' });
+                        if (confirmed) {
                            clearSavedSettings();
                            setRhythm(FACTORY_DEFAULTS.rhythm);
                            setParams(FACTORY_DEFAULTS.params);
                            setConditions(FACTORY_DEFAULTS.conditions);
-                           alert('✓ Reset to factory defaults');
+                           toast.success('Reset to factory defaults');
                            window.location.reload();
                         }
                      }}
@@ -2007,10 +2010,11 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                   {/* Clear Saved Settings (only show if saved) */}
                   {savedSettings && (
                      <button
-                        onClick={() => {
-                           if (confirm('Clear saved settings? Monitor will use factory defaults on next load.')) {
+                        onClick={async () => {
+                           const confirmed = await toast.confirm('Clear saved settings? Monitor will use factory defaults on next load.', { title: 'Clear Settings', type: 'warning' });
+                           if (confirmed) {
                               clearSavedSettings();
-                              alert('✓ Saved settings cleared. Using factory defaults.');
+                              toast.success('Saved settings cleared. Using factory defaults.');
                            }
                         }}
                         className="w-full py-2 rounded border border-red-700/50 bg-red-900/20 text-red-400 font-bold text-xs uppercase hover:bg-red-900/30 transition-colors"

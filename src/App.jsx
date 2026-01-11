@@ -7,12 +7,14 @@ import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
 import OrdersDrawer from './components/orders/OrdersDrawer';
 import LabResultsModal from './components/investigations/LabResultsModal';
+import UserProfilePanel from './components/settings/UserProfilePanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { ToastProvider } from './contexts/ToastContext';
+import { ToastProvider, useToast } from './contexts/ToastContext';
 import { AuthService } from './services/authService';
 import EventLogger, { COMPONENTS } from './services/eventLogger';
-import { Settings, X, LogOut, User, RotateCcw, Stethoscope } from 'lucide-react';
+import { Settings, X, LogOut, User, RotateCcw, Stethoscope, ChevronDown } from 'lucide-react';
 import ManikinPanel from './components/examination/ManikinPanel';
+import BodyMapDebug from './components/examination/BodyMapDebug';
 
 // Session expiry time in milliseconds (default 30 minutes)
 const SESSION_EXPIRY_MS = parseInt(localStorage.getItem('rohy_session_expiry_minutes') || '30') * 60 * 1000;
@@ -20,7 +22,10 @@ const SESSION_EXPIRY_MS = parseInt(localStorage.getItem('rohy_session_expiry_min
 function MainApp() {
    const [showConfig, setShowConfig] = useState(false);
    const [showFullPageSettings, setShowFullPageSettings] = useState(false);
+   const [showUserProfile, setShowUserProfile] = useState(false);
+   const [showUserMenu, setShowUserMenu] = useState(false);
    const { user, logout, isAdmin } = useAuth();
+   const toast = useToast();
    const [sessionValidated, setSessionValidated] = useState(false);
    const lastActivityRef = useRef(Date.now());
 
@@ -37,12 +42,35 @@ function MainApp() {
       }
    }, [user?.id]);
 
+   // Fetch and load default case if no session exists
+   const loadDefaultCase = async () => {
+      try {
+         const token = AuthService.getToken();
+         const res = await fetch('/api/cases', {
+            headers: { 'Authorization': `Bearer ${token}` }
+         });
+         if (res.ok) {
+            const data = await res.json();
+            const defaultCase = data.cases?.find(c => c.is_default);
+            if (defaultCase) {
+               console.log('Auto-loading default case:', defaultCase.name);
+               setActiveCase(defaultCase);
+               EventLogger.caseLoaded(defaultCase.id, defaultCase.name);
+            }
+         }
+      } catch (err) {
+         console.error('Failed to load default case:', err);
+      }
+   };
+
    // Validate session on mount
    useEffect(() => {
       const validateAndRestoreSession = async () => {
          try {
             const saved = localStorage.getItem('rohy_active_session');
             if (!saved) {
+               // No saved session - try to load default case
+               await loadDefaultCase();
                setSessionValidated(true);
                return;
             }
@@ -55,6 +83,8 @@ function MainApp() {
                console.log('Session expired due to inactivity');
                localStorage.removeItem('rohy_active_session');
                localStorage.removeItem('rohy_chat_history');
+               // Load default case after session expiry
+               await loadDefaultCase();
                setSessionValidated(true);
                return;
             }
@@ -81,11 +111,15 @@ function MainApp() {
                         console.log('Session already ended, clearing');
                         localStorage.removeItem('rohy_active_session');
                         localStorage.removeItem('rohy_chat_history');
+                        // Load default case after ended session
+                        await loadDefaultCase();
                      }
                   } else {
                      console.log('Session not found in backend, clearing');
                      localStorage.removeItem('rohy_active_session');
                      localStorage.removeItem('rohy_chat_history');
+                     // Load default case after invalid session
+                     await loadDefaultCase();
                   }
                } catch (err) {
                   console.error('Failed to validate session:', err);
@@ -100,6 +134,8 @@ function MainApp() {
          } catch (e) {
             console.warn('Failed to restore session:', e);
             localStorage.removeItem('rohy_active_session');
+            // Try to load default case even on error
+            await loadDefaultCase();
          }
          setSessionValidated(true);
       };
@@ -140,7 +176,11 @@ function MainApp() {
 
    // End session properly (call backend)
    const handleEndSession = async () => {
-      if (confirm('End this simulation session? Chat history will be preserved in your session history.')) {
+      const confirmed = await toast.confirm(
+         'End this simulation session? Chat history will be preserved in your session history.',
+         { title: 'End Session', confirmText: 'End Session', type: 'warning' }
+      );
+      if (confirmed) {
          // Log session end before clearing
          const sessionStartTime = lastActivityRef.current;
          const duration = Date.now() - sessionStartTime;
@@ -227,31 +267,64 @@ function MainApp() {
 
                {/* Top Right Controls */}
                <div className="absolute top-4 right-4 flex gap-2 z-10">
-                  {/* User Menu */}
-                  <div className="px-3 py-2 bg-black/50 backdrop-blur-md rounded-full flex items-center gap-2 text-sm">
-                     <User className="w-4 h-4 text-neutral-400" />
-                     <span className="text-neutral-300">{user?.username}</span>
-                     {isAdmin() && (
-                        <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded">Admin</span>
+                  {/* User Menu Dropdown */}
+                  <div className="relative">
+                     <button
+                        onClick={() => setShowUserMenu(!showUserMenu)}
+                        className="px-3 py-2 bg-black/50 backdrop-blur-md rounded-full flex items-center gap-2 text-sm hover:bg-black/70 transition-colors"
+                     >
+                        <User className="w-4 h-4 text-neutral-400" />
+                        <span className="text-neutral-300">{user?.username}</span>
+                        {isAdmin() && (
+                           <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded">Admin</span>
+                        )}
+                        <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+                     </button>
+
+                     {/* Dropdown Menu */}
+                     {showUserMenu && (
+                        <>
+                           {/* Backdrop to close menu */}
+                           <div
+                              className="fixed inset-0 z-40"
+                              onClick={() => setShowUserMenu(false)}
+                           />
+                           <div className="absolute right-0 top-full mt-2 w-48 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                              <button
+                                 onClick={() => {
+                                    setShowUserProfile(true);
+                                    setShowUserMenu(false);
+                                 }}
+                                 className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
+                              >
+                                 <User className="w-4 h-4 text-blue-400" />
+                                 My Profile
+                              </button>
+                              <button
+                                 onClick={() => {
+                                    handleOpenSettings();
+                                    setShowUserMenu(false);
+                                 }}
+                                 className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
+                              >
+                                 <Settings className="w-4 h-4 text-neutral-400" />
+                                 Settings
+                              </button>
+                              <div className="border-t border-neutral-700" />
+                              <button
+                                 onClick={() => {
+                                    logout();
+                                    setShowUserMenu(false);
+                                 }}
+                                 className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-red-900/30 flex items-center gap-3"
+                              >
+                                 <LogOut className="w-4 h-4" />
+                                 Logout
+                              </button>
+                           </div>
+                        </>
                      )}
                   </div>
-
-                  {/* Settings Button - Full Page */}
-                  <button
-                     onClick={handleOpenSettings}
-                     className="p-2 bg-black/50 hover:bg-black/80 text-neutral-400 hover:text-white rounded-full transition-all backdrop-blur-md"
-                     title="Settings (Full Page)"
-                  >
-                     <Settings className="w-5 h-5" />
-                  </button>
-
-                  {/* Logout Button */}
-                  <button
-                     onClick={logout}
-                     className="p-2 bg-black/50 hover:bg-red-900/80 text-neutral-400 hover:text-red-300 rounded-full transition-all backdrop-blur-md"
-                  >
-                     <LogOut className="w-5 h-5" />
-                  </button>
                </div>
 
                {/* Case Banner with End Session */}
@@ -322,7 +395,10 @@ function MainApp() {
          {/* Physical Examination Button - Floating */}
          {activeCase && sessionId && (
             <button
-               onClick={() => setShowExamination(true)}
+               onClick={() => {
+                  setShowExamination(true);
+                  EventLogger.examPanelOpened();
+               }}
                className="fixed bottom-24 right-6 z-40 p-4 bg-cyan-600 hover:bg-cyan-500 text-white rounded-full shadow-lg transition-all hover:scale-105 flex items-center gap-2"
                title="Physical Examination"
             >
@@ -333,19 +409,66 @@ function MainApp() {
          {/* Physical Examination Panel */}
          <ManikinPanel
             isOpen={showExamination}
-            onClose={() => setShowExamination(false)}
-            physicalExam={activeCase?.config?.physicalExam || null}
+            onClose={() => {
+               setShowExamination(false);
+               EventLogger.examPanelClosed();
+            }}
+            physicalExam={activeCase?.config?.physical_exam || null}
+            patientGender={activeCase?.config?.demographics?.gender?.toLowerCase() || 'male'}
             onExamPerformed={(exam) => {
-               // Log exam to session (optional - can integrate later)
-               console.log('Exam performed:', exam);
+               // Log exam to system
+               EventLogger.physicalExamPerformed(
+                  exam.regionId,
+                  exam.examType,
+                  exam.finding,
+                  { gender: activeCase?.config?.demographics?.gender, abnormal: exam.abnormal }
+               );
             }}
          />
+
+         {/* User Profile Modal */}
+         {showUserProfile && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+               <div className="relative w-full max-w-2xl h-[80vh] bg-neutral-900 rounded-xl shadow-2xl overflow-hidden border border-neutral-700">
+                  {/* Close Button */}
+                  <button
+                     onClick={() => setShowUserProfile(false)}
+                     className="absolute top-4 right-4 z-10 p-2 bg-neutral-800 hover:bg-neutral-700 rounded-full transition-colors"
+                  >
+                     <X className="w-5 h-5 text-neutral-400" />
+                  </button>
+                  <UserProfilePanel onClose={() => setShowUserProfile(false)} />
+               </div>
+            </div>
+         )}
 
       </div>
    );
 }
 
+// Check for debug mode via URL parameter
+const isBodyMapDebug = new URLSearchParams(window.location.search).get('debug') === 'bodymap';
+
 export default function App() {
+   if (isBodyMapDebug) {
+      const [gender, setGender] = React.useState('male');
+      const [view, setView] = React.useState('anterior');
+      return (
+         <div className="bg-slate-900 min-h-screen">
+            <div className="p-4 flex gap-4">
+               <select value={gender} onChange={(e) => setGender(e.target.value)} className="bg-slate-800 text-white p-2 rounded">
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+               </select>
+               <select value={view} onChange={(e) => setView(e.target.value)} className="bg-slate-800 text-white p-2 rounded">
+                  <option value="anterior">Front (Anterior)</option>
+                  <option value="posterior">Back (Posterior)</option>
+               </select>
+            </div>
+            <BodyMapDebug gender={gender} view={view} />
+         </div>
+      );
+   }
    const [showRegister, setShowRegister] = useState(false);
 
    return (
