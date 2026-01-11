@@ -259,30 +259,43 @@ export default function ManikinPanel({
                             </button>
                         </div>
 
-                        {/* Gender Toggle */}
+                        {/* Gender Display - locked when patient gender is set */}
                         <div className="flex gap-2 mb-4">
-                            <button
-                                onClick={() => setGender('male')}
-                                className={`flex-1 py-1.5 px-2 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
-                                    gender === 'male'
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                                }`}
-                            >
-                                <User className="w-3 h-3" />
-                                Male
-                            </button>
-                            <button
-                                onClick={() => setGender('female')}
-                                className={`flex-1 py-1.5 px-2 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
-                                    gender === 'female'
-                                        ? 'bg-pink-600 text-white'
-                                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                                }`}
-                            >
-                                <Users className="w-3 h-3" />
-                                Female
-                            </button>
+                            {patientGender ? (
+                                // Show locked gender indicator when case is loaded
+                                <div className={`flex-1 py-1.5 px-2 rounded text-xs font-medium flex items-center justify-center gap-1 ${
+                                    gender === 'male' ? 'bg-blue-600 text-white' : 'bg-pink-600 text-white'
+                                }`}>
+                                    {gender === 'male' ? <User className="w-3 h-3" /> : <Users className="w-3 h-3" />}
+                                    {gender === 'male' ? 'Male' : 'Female'} Patient
+                                </div>
+                            ) : (
+                                // Show toggle buttons when no case is loaded
+                                <>
+                                    <button
+                                        onClick={() => setGender('male')}
+                                        className={`flex-1 py-1.5 px-2 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
+                                            gender === 'male'
+                                                ? 'bg-blue-600 text-white'
+                                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                        }`}
+                                    >
+                                        <User className="w-3 h-3" />
+                                        Male
+                                    </button>
+                                    <button
+                                        onClick={() => setGender('female')}
+                                        className={`flex-1 py-1.5 px-2 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
+                                            gender === 'female'
+                                                ? 'bg-pink-600 text-white'
+                                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                        }`}
+                                    >
+                                        <Users className="w-3 h-3" />
+                                        Female
+                                    </button>
+                                </>
+                            )}
                         </div>
 
                         {/* Body Map */}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     FlaskConical, Pill, X, ChevronUp, ChevronDown,
     Search, Clock, CheckCircle, Loader2, List,
-    Eye, FileText, Scan
+    Eye, FileText, Scan, Stethoscope
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
@@ -15,7 +15,7 @@ import ClinicalRecordsPanel from '../investigations/ClinicalRecordsPanel';
  * - Radiology Studies
  * - Medications/Drugs
  */
-export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData }) {
+export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData, onOpenExamination }) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('labs'); // labs, radiology, drugs, records
     const [drawerHeight, setDrawerHeight] = useState('50vh'); // 50vh or 80vh
@@ -453,6 +453,16 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                             )}
                         </button>
                     ))}
+                    {/* Physical Examination Button */}
+                    {onOpenExamination && (
+                        <button
+                            onClick={onOpenExamination}
+                            className="relative px-4 py-3 rounded-full flex items-center gap-2 font-bold text-sm shadow-lg transition-all hover:scale-105 bg-cyan-600 hover:bg-cyan-500 text-white"
+                        >
+                            <Stethoscope className="w-5 h-5" />
+                            Physical Exam
+                        </button>
+                    )}
                 </div>
             )}
 
