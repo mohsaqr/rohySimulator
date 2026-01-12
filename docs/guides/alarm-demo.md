@@ -157,4 +157,4 @@ This case is ideal for:
 
 ---
 
-**Questions?** Check `CLINICAL_FEATURES_GUIDE.md` for complete alarm system documentation.
+**Questions?** Check [Clinical Features Guide](clinical-features.md) for complete alarm system documentation.

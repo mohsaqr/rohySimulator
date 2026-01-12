@@ -131,7 +131,7 @@ All existing routes now require authentication:
 
 ## Architecture Notes
 
-See `ARCHITECTURAL_GUIDE.md` for full system architecture details.
+See [Architecture Guide](../reference/architecture.md) for full system architecture details.
 
 Key changes:
 - All API requests now include `Authorization: Bearer <token>` header

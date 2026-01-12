@@ -97,7 +97,7 @@ npm run dev
 3. **Create a case:** Settings → Cases → New Case
 4. **Start simulation:** Select case → Start session
 
-For detailed setup instructions, see [QUICKSTART.md](QUICKSTART.md)
+For detailed setup instructions, see [Quick Start](../getting-started/quickstart.md)
 
 ---
 
@@ -138,7 +138,7 @@ User Action → Frontend Component → API Call → Backend Route → Database
                                         Response ← Processing
 ```
 
-For detailed architecture, see [ARCHITECTURAL_GUIDE.md](ARCHITECTURAL_GUIDE.md)
+For detailed architecture, see [Architecture Guide](architecture.md)
 
 ---
 
@@ -153,7 +153,7 @@ For detailed architecture, see [ARCHITECTURAL_GUIDE.md](ARCHITECTURAL_GUIDE.md)
 - Session management
 - Login/logout logging
 
-**Documentation:** [AUTH_SETUP.md](AUTH_SETUP.md)
+**Documentation:** [Authentication Guide](../getting-started/authentication.md)
 
 ### 2. Patient Monitor
 
@@ -175,7 +175,7 @@ For detailed architecture, see [ARCHITECTURAL_GUIDE.md](ARCHITECTURAL_GUIDE.md)
 - Asystole
 - PVCs (Premature Ventricular Contractions)
 
-**Documentation:** [MONITOR_SETTINGS_GUIDE.md](MONITOR_SETTINGS_GUIDE.md), [ECG_PATTERNS_GUIDE.md](ECG_PATTERNS_GUIDE.md)
+**Documentation:** [Monitor Settings](../guides/monitor-settings.md), [ECG Patterns](../guides/ecg-patterns.md)
 
 ### 3. Laboratory Investigation System
 
@@ -198,7 +198,7 @@ For detailed architecture, see [ARCHITECTURAL_GUIDE.md](ARCHITECTURAL_GUIDE.md)
 - Immunology
 - Toxicology
 
-**Documentation:** [LABORATORY_SYSTEM_GUIDE.md](LABORATORY_SYSTEM_GUIDE.md), [LAB_SYSTEM_UPDATE.md](LAB_SYSTEM_UPDATE.md)
+**Documentation:** [Laboratory System](../guides/laboratory-system.md), [Laboratory System](../guides/laboratory-system.md)
 
 ### 4. Scenario System
 
@@ -216,7 +216,7 @@ For detailed architecture, see [ARCHITECTURAL_GUIDE.md](ARCHITECTURAL_GUIDE.md)
   - Anaphylactic Shock
   - Post-Resuscitation Recovery
 
-**Documentation:** [SCENARIO_REPOSITORY_GUIDE.md](SCENARIO_REPOSITORY_GUIDE.md)
+**Documentation:** [Scenario System](../guides/scenario-system.md)
 
 ### 5. Case Management
 
@@ -232,7 +232,7 @@ For detailed architecture, see [ARCHITECTURAL_GUIDE.md](ARCHITECTURAL_GUIDE.md)
 - System prompt configuration
 - LLM model selection per case
 
-**Documentation:** [JSON_IMPORT_EXPORT_GUIDE.md](JSON_IMPORT_EXPORT_GUIDE.md)
+**Documentation:** [Import/Export Guide](../guides/import-export.md)
 
 ### 6. AI Chat Interface
 
@@ -247,7 +247,7 @@ For detailed architecture, see [ARCHITECTURAL_GUIDE.md](ARCHITECTURAL_GUIDE.md)
 - Clinical records access
 - Message history tracking
 
-**Documentation:** [CLINICAL_FEATURES_GUIDE.md](CLINICAL_FEATURES_GUIDE.md)
+**Documentation:** [Clinical Features](../guides/clinical-features.md)
 
 ### 7. Alarm System
 
@@ -260,7 +260,7 @@ For detailed architecture, see [ARCHITECTURAL_GUIDE.md](ARCHITECTURAL_GUIDE.md)
 - Alarm history logging
 - Visual indicators
 
-**Demo Case:** [DEMO_ALARM_README.md](DEMO_ALARM_README.md)
+**Demo Case:** [Alarm Demo](../guides/alarm-demo.md)
 
 ### 8. Logging & Analytics
 
@@ -273,7 +273,7 @@ For detailed architecture, see [ARCHITECTURAL_GUIDE.md](ARCHITECTURAL_GUIDE.md)
 - Export to CSV
 - Real-time event display
 
-**Documentation:** [LOGGING_SYSTEM.md](LOGGING_SYSTEM.md)
+**Documentation:** [Logging System](../guides/logging-system.md)
 
 ---
 
@@ -648,18 +648,18 @@ For complete schema details, see `server/db.js`
 
 | Guide | Description | File |
 |-------|-------------|------|
-| **Quick Start** | Get started quickly | [QUICKSTART.md](QUICKSTART.md) |
-| **Architecture** | System design & structure | [ARCHITECTURAL_GUIDE.md](ARCHITECTURAL_GUIDE.md) |
-| **Authentication** | User management & security | [AUTH_SETUP.md](AUTH_SETUP.md) |
-| **Laboratory System** | Complete lab testing guide | [LABORATORY_SYSTEM_GUIDE.md](LABORATORY_SYSTEM_GUIDE.md) |
-| **Lab Updates** | Recent lab system changes | [LAB_SYSTEM_UPDATE.md](LAB_SYSTEM_UPDATE.md) |
-| **Scenarios** | Progressive scenarios guide | [SCENARIO_REPOSITORY_GUIDE.md](SCENARIO_REPOSITORY_GUIDE.md) |
-| **Monitor Settings** | Vital signs configuration | [MONITOR_SETTINGS_GUIDE.md](MONITOR_SETTINGS_GUIDE.md) |
-| **ECG Patterns** | ECG generation details | [ECG_PATTERNS_GUIDE.md](ECG_PATTERNS_GUIDE.md) |
-| **Clinical Features** | AI patient interaction | [CLINICAL_FEATURES_GUIDE.md](CLINICAL_FEATURES_GUIDE.md) |
-| **Logging System** | Event tracking & export | [LOGGING_SYSTEM.md](LOGGING_SYSTEM.md) |
-| **Import/Export** | Case JSON management | [JSON_IMPORT_EXPORT_GUIDE.md](JSON_IMPORT_EXPORT_GUIDE.md) |
-| **Alarm Demo** | Example alarm case | [DEMO_ALARM_README.md](DEMO_ALARM_README.md) |
+| **Quick Start** | Get started quickly | [Quick Start](../getting-started/quickstart.md) |
+| **Architecture** | System design & structure | [Architecture Guide](architecture.md) |
+| **Authentication** | User management & security | [Authentication Guide](../getting-started/authentication.md) |
+| **Laboratory System** | Complete lab testing guide | [Laboratory System](../guides/laboratory-system.md) |
+| **Lab Updates** | Recent lab system changes | [Laboratory System](../guides/laboratory-system.md) |
+| **Scenarios** | Progressive scenarios guide | [Scenario System](../guides/scenario-system.md) |
+| **Monitor Settings** | Vital signs configuration | [Monitor Settings](../guides/monitor-settings.md) |
+| **ECG Patterns** | ECG generation details | [ECG Patterns](../guides/ecg-patterns.md) |
+| **Clinical Features** | AI patient interaction | [Clinical Features](../guides/clinical-features.md) |
+| **Logging System** | Event tracking & export | [Logging System](../guides/logging-system.md) |
+| **Import/Export** | Case JSON management | [Import/Export Guide](../guides/import-export.md) |
+| **Alarm Demo** | Example alarm case | [Alarm Demo](../guides/alarm-demo.md) |
 
 ---
 
@@ -991,10 +991,10 @@ SOFTWARE.
 
 ### Essential Links
 
-- **Main Documentation:** [ROHY_SYSTEM_DOCUMENTATION.md](ROHY_SYSTEM_DOCUMENTATION.md) (this file)
-- **Quick Start:** [QUICKSTART.md](QUICKSTART.md)
-- **Lab System:** [LABORATORY_SYSTEM_GUIDE.md](LABORATORY_SYSTEM_GUIDE.md)
-- **Scenarios:** [SCENARIO_REPOSITORY_GUIDE.md](SCENARIO_REPOSITORY_GUIDE.md)
+- **Main Documentation:** [System Documentation](system-documentation.md) (this file)
+- **Quick Start:** [Quick Start](../getting-started/quickstart.md)
+- **Lab System:** [Laboratory System](../guides/laboratory-system.md)
+- **Scenarios:** [Scenario System](../guides/scenario-system.md)
 
 ### Ports
 

@@ -154,10 +154,9 @@ npm run dev
 ## Next Steps
 
 ### 📚 Learn More
-- **README_AUTHENTICATION.md** - Complete overview
-- **IMPLEMENTATION_SUMMARY.md** - Technical details
-- **AUTH_SETUP.md** - Developer guide
-- **ARCHITECTURAL_GUIDE.md** - System architecture
+- [Authentication Guide](authentication.md) - User management & security
+- [Architecture Guide](../reference/architecture.md) - System architecture
+- [System Documentation](../reference/system-documentation.md) - Complete reference
 
 ### 🎨 Customize
 - Configure LLM settings (Settings → LLM Settings)
@@ -165,7 +164,7 @@ npm run dev
 - Create complex clinical scenarios
 
 ### 🚀 Deploy
-See production checklist in `README_AUTHENTICATION.md`
+See production checklist in [System Documentation](../reference/system-documentation.md#deployment)
 
 ---
 

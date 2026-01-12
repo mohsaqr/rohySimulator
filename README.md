@@ -36,7 +36,7 @@ npm run dev
 3. **Create** a patient case or import demo
 4. **Start** simulating!
 
-📖 **Detailed Setup:** See [QUICKSTART.md](QUICKSTART.md)
+📖 **Detailed Setup:** See [Quick Start Guide](docs/getting-started/quickstart.md)
 
 ---
 
@@ -88,29 +88,26 @@ npm run dev
 
 ## 📚 Documentation
 
-### **📘 Start Here**
-👉 **[ROHY_SYSTEM_DOCUMENTATION.md](ROHY_SYSTEM_DOCUMENTATION.md)** - **Central Documentation Hub**
+All documentation is organized in the [`docs/`](docs/) folder.
 
-This is your main resource containing:
-- Complete system overview
-- Architecture details
-- All features explained
-- API reference
-- Database schema
-- Troubleshooting
-- Deployment guide
+### **📘 Quick Links**
 
-### **📖 Detailed Guides**
+| Document | Description |
+|----------|-------------|
+| [Documentation Index](docs/README.md) | Complete documentation overview |
+| [Quick Start](docs/getting-started/quickstart.md) | Get up and running in 3 minutes |
+| [System Documentation](docs/reference/system-documentation.md) | Complete system reference |
+
+### **📖 Guides**
 
 | Guide | Description |
 |-------|-------------|
-| [QUICKSTART.md](QUICKSTART.md) | Get up and running quickly |
-| [LABORATORY_SYSTEM_GUIDE.md](LABORATORY_SYSTEM_GUIDE.md) | Complete lab system documentation |
-| [SCENARIO_REPOSITORY_GUIDE.md](SCENARIO_REPOSITORY_GUIDE.md) | Scenario management |
-| [MONITOR_SETTINGS_GUIDE.md](MONITOR_SETTINGS_GUIDE.md) | Vital signs configuration |
-| [ECG_PATTERNS_GUIDE.md](ECG_PATTERNS_GUIDE.md) | ECG generation details |
-| [AUTH_SETUP.md](AUTH_SETUP.md) | Authentication system |
-| [LOGGING_SYSTEM.md](LOGGING_SYSTEM.md) | Event tracking & export |
+| [Laboratory System](docs/guides/laboratory-system.md) | Complete lab testing guide (77+ tests) |
+| [Scenario System](docs/guides/scenario-system.md) | Progressive patient deterioration |
+| [Monitor Settings](docs/guides/monitor-settings.md) | Vital signs configuration |
+| [ECG Patterns](docs/guides/ecg-patterns.md) | Clinical ECG reference |
+| [Authentication](docs/getting-started/authentication.md) | User management & security |
+| [Logging System](docs/guides/logging-system.md) | Event tracking & export |
 
 ---
 
@@ -136,7 +133,7 @@ This is your main resource containing:
 ## 📦 Project Structure
 
 ```
-VipSim/
+rohySimulator/
 ├── server/              # Backend (Node.js + Express)
 │   ├── server.js       # Entry point
 │   ├── db.js           # Database schema
@@ -147,8 +144,11 @@ VipSim/
 │   ├── services/       # API services
 │   ├── hooks/          # Custom hooks
 │   └── contexts/       # React contexts
-├── Lab_database.txt    # 77 lab tests database
-└── Documentation/      # All guides (*.md files)
+├── docs/               # Documentation
+│   ├── getting-started/  # Quick start & auth guides
+│   ├── guides/           # Feature guides
+│   └── reference/        # Technical reference
+└── Lab_database.json   # 77+ lab tests database
 ```
 
 ---
@@ -202,7 +202,7 @@ NODE_ENV=production node server/server.js
 - [ ] Set up database backups
 - [ ] Enable rate limiting
 
-📖 **Full Deployment Guide:** [ROHY_SYSTEM_DOCUMENTATION.md](ROHY_SYSTEM_DOCUMENTATION.md#deployment)
+📖 **Full Deployment Guide:** [System Documentation](docs/reference/system-documentation.md#deployment)
 
 ---
 
@@ -225,7 +225,7 @@ rm server/database.sqlite
 npm run server  # Will recreate
 ```
 
-📖 **Complete Troubleshooting:** [ROHY_SYSTEM_DOCUMENTATION.md](ROHY_SYSTEM_DOCUMENTATION.md#troubleshooting)
+📖 **Complete Troubleshooting:** [System Documentation](docs/reference/system-documentation.md#troubleshooting)
 
 ---
 
@@ -275,12 +275,12 @@ See [LICENSE](LICENSE) file for full details.
 
 ## 📞 Support
 
-- **Documentation:** [ROHY_SYSTEM_DOCUMENTATION.md](ROHY_SYSTEM_DOCUMENTATION.md)
-- **Issues:** Check troubleshooting guide
+- **Documentation:** [docs/](docs/README.md)
+- **Issues:** Check [troubleshooting guide](docs/reference/system-documentation.md#troubleshooting)
 - **Contact:** Mohammed Saqr via [www.saqr.me](https://www.saqr.me)
 
 ---
 
 **⭐ If you find Rohy useful, please consider giving it a star!**
 
-**📚 For complete documentation, start with [ROHY_SYSTEM_DOCUMENTATION.md](ROHY_SYSTEM_DOCUMENTATION.md)**
+**📚 For complete documentation, see the [docs/](docs/README.md) folder**

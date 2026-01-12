@@ -307,4 +307,4 @@ Planned features:
 
 ---
 
-**Need Help?** See `CLINICAL_FEATURES_GUIDE.md` for scenario mechanics or `SCENARIO_SELECTOR_GUIDE.md` for basic usage.
+**Need Help?** See [Clinical Features Guide](clinical-features.md) for scenario mechanics or [Scenario Selector Guide](scenario-selector.md) for basic usage.
