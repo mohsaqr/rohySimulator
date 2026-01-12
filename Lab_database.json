@@ -1,0 +1,1928 @@
+[
+  {
+    "test_name": "Hemoglobin",
+    "group": "Hematology (CBC)",
+    "category": "Female",
+    "min_value": 12.0,
+    "max_value": 16.0,
+    "unit": "g/dL",
+    "normal_samples": [12.5, 14.5, 13.8]
+  },
+  {
+    "test_name": "Hemoglobin",
+    "group": "Hematology (CBC)",
+    "category": "Male",
+    "min_value": 14.0,
+    "max_value": 18.0,
+    "unit": "g/dL",
+    "normal_samples": [14.5, 16.5, 15.5]
+  },
+  {
+    "test_name": "Hematocrit",
+    "group": "Hematology (CBC)",
+    "category": "Female",
+    "min_value": 36,
+    "max_value": 44,
+    "unit": "%",
+    "normal_samples": [38, 42, 40]
+  },
+  {
+    "test_name": "Hematocrit",
+    "group": "Hematology (CBC)",
+    "category": "Male",
+    "min_value": 40,
+    "max_value": 54,
+    "unit": "%",
+    "normal_samples": [42, 50, 46]
+  },
+  {
+    "test_name": "Red Blood Cell Count (RBC)",
+    "group": "Hematology (CBC)",
+    "category": "Female",
+    "min_value": 4.0,
+    "max_value": 5.5,
+    "unit": "x10^6/µL",
+    "normal_samples": [4.2, 5.0, 4.6]
+  },
+  {
+    "test_name": "Red Blood Cell Count (RBC)",
+    "group": "Hematology (CBC)",
+    "category": "Male",
+    "min_value": 4.5,
+    "max_value": 6.0,
+    "unit": "x10^6/µL",
+    "normal_samples": [4.8, 5.5, 5.2]
+  },
+  {
+    "test_name": "White Blood Cell Count (WBC)",
+    "group": "Hematology (CBC)",
+    "category": "General",
+    "min_value": 4000,
+    "max_value": 11000,
+    "unit": "/µL",
+    "normal_samples": [5500, 9000, 7200]
+  },
+  {
+    "test_name": "Platelet Count",
+    "group": "Hematology (CBC)",
+    "category": "General",
+    "min_value": 150000,
+    "max_value": 400000,
+    "unit": "/µL",
+    "normal_samples": [180000, 350000, 250000]
+  },
+  {
+    "test_name": "Mean Corpuscular Volume (MCV)",
+    "group": "Hematology (CBC)",
+    "category": "General",
+    "min_value": 80,
+    "max_value": 100,
+    "unit": "fL",
+    "normal_samples": [85, 95, 90]
+  },
+  {
+    "test_name": "Mean Corpuscular Hemoglobin (MCH)",
+    "group": "Hematology (CBC)",
+    "category": "General",
+    "min_value": 27,
+    "max_value": 33,
+    "unit": "pg",
+    "normal_samples": [28, 32, 30]
+  },
+  {
+    "test_name": "Mean Corpuscular Hemoglobin Concentration (MCHC)",
+    "group": "Hematology (CBC)",
+    "category": "General",
+    "min_value": 32,
+    "max_value": 36,
+    "unit": "g/dL",
+    "normal_samples": [33, 35, 34]
+  },
+  {
+    "test_name": "Red Cell Distribution Width (RDW)",
+    "group": "Hematology (CBC)",
+    "category": "General",
+    "min_value": 11.5,
+    "max_value": 14.5,
+    "unit": "%",
+    "normal_samples": [12, 14, 13]
+  },
+  {
+    "test_name": "Neutrophils, Absolute",
+    "group": "Hematology (Differential)",
+    "category": "General",
+    "min_value": 1500,
+    "max_value": 8000,
+    "unit": "/µL",
+    "normal_samples": [2500, 6500, 4500]
+  },
+  {
+    "test_name": "Neutrophils, Percentage",
+    "group": "Hematology (Differential)",
+    "category": "General",
+    "min_value": 40,
+    "max_value": 70,
+    "unit": "%",
+    "normal_samples": [50, 65, 58]
+  },
+  {
+    "test_name": "Lymphocytes, Absolute",
+    "group": "Hematology (Differential)",
+    "category": "General",
+    "min_value": 1000,
+    "max_value": 4800,
+    "unit": "/µL",
+    "normal_samples": [1500, 3500, 2500]
+  },
+  {
+    "test_name": "Lymphocytes, Percentage",
+    "group": "Hematology (Differential)",
+    "category": "General",
+    "min_value": 20,
+    "max_value": 40,
+    "unit": "%",
+    "normal_samples": [25, 35, 30]
+  },
+  {
+    "test_name": "Monocytes, Absolute",
+    "group": "Hematology (Differential)",
+    "category": "General",
+    "min_value": 200,
+    "max_value": 800,
+    "unit": "/µL",
+    "normal_samples": [300, 600, 450]
+  },
+  {
+    "test_name": "Monocytes, Percentage",
+    "group": "Hematology (Differential)",
+    "category": "General",
+    "min_value": 2,
+    "max_value": 8,
+    "unit": "%",
+    "normal_samples": [4, 7, 5]
+  },
+  {
+    "test_name": "Eosinophils, Absolute",
+    "group": "Hematology (Differential)",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 500,
+    "unit": "/µL",
+    "normal_samples": [100, 350, 200]
+  },
+  {
+    "test_name": "Eosinophils, Percentage",
+    "group": "Hematology (Differential)",
+    "category": "General",
+    "min_value": 1,
+    "max_value": 4,
+    "unit": "%",
+    "normal_samples": [1.5, 3, 2]
+  },
+  {
+    "test_name": "Basophils, Absolute",
+    "group": "Hematology (Differential)",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 200,
+    "unit": "/µL",
+    "normal_samples": [20, 100, 50]
+  },
+  {
+    "test_name": "Basophils, Percentage",
+    "group": "Hematology (Differential)",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 1,
+    "unit": "%",
+    "normal_samples": [0.3, 0.8, 0.5]
+  },
+  {
+    "test_name": "Reticulocyte Count",
+    "group": "Hematology (CBC)",
+    "category": "General",
+    "min_value": 0.5,
+    "max_value": 2.5,
+    "unit": "%",
+    "normal_samples": [0.8, 2.0, 1.2]
+  },
+  {
+    "test_name": "Sodium, serum",
+    "group": "Basic Metabolic Panel",
+    "category": "General",
+    "min_value": 136,
+    "max_value": 145,
+    "unit": "mEq/L",
+    "normal_samples": [138, 143, 140]
+  },
+  {
+    "test_name": "Potassium, serum",
+    "group": "Basic Metabolic Panel",
+    "category": "General",
+    "min_value": 3.5,
+    "max_value": 5.0,
+    "unit": "mEq/L",
+    "normal_samples": [3.8, 4.6, 4.2]
+  },
+  {
+    "test_name": "Chloride, serum",
+    "group": "Basic Metabolic Panel",
+    "category": "General",
+    "min_value": 98,
+    "max_value": 106,
+    "unit": "mEq/L",
+    "normal_samples": [100, 104, 102]
+  },
+  {
+    "test_name": "Bicarbonate (CO2), serum",
+    "group": "Basic Metabolic Panel",
+    "category": "General",
+    "min_value": 22,
+    "max_value": 29,
+    "unit": "mEq/L",
+    "normal_samples": [24, 27, 25]
+  },
+  {
+    "test_name": "Blood Urea Nitrogen (BUN)",
+    "group": "Basic Metabolic Panel",
+    "category": "General",
+    "min_value": 7,
+    "max_value": 20,
+    "unit": "mg/dL",
+    "normal_samples": [10, 18, 14]
+  },
+  {
+    "test_name": "Creatinine, serum",
+    "group": "Basic Metabolic Panel",
+    "category": "Female",
+    "min_value": 0.5,
+    "max_value": 1.1,
+    "unit": "mg/dL",
+    "normal_samples": [0.6, 1.0, 0.8]
+  },
+  {
+    "test_name": "Creatinine, serum",
+    "group": "Basic Metabolic Panel",
+    "category": "Male",
+    "min_value": 0.7,
+    "max_value": 1.3,
+    "unit": "mg/dL",
+    "normal_samples": [0.8, 1.2, 1.0]
+  },
+  {
+    "test_name": "Glucose, fasting",
+    "group": "Basic Metabolic Panel",
+    "category": "General",
+    "min_value": 70,
+    "max_value": 100,
+    "unit": "mg/dL",
+    "normal_samples": [75, 95, 85]
+  },
+  {
+    "test_name": "Glucose, random",
+    "group": "Basic Metabolic Panel",
+    "category": "General",
+    "min_value": 70,
+    "max_value": 140,
+    "unit": "mg/dL",
+    "normal_samples": [85, 120, 100]
+  },
+  {
+    "test_name": "Calcium, serum",
+    "group": "Basic Metabolic Panel",
+    "category": "General",
+    "min_value": 8.5,
+    "max_value": 10.5,
+    "unit": "mg/dL",
+    "normal_samples": [9.0, 10.0, 9.5]
+  },
+  {
+    "test_name": "Calcium, ionized",
+    "group": "Basic Metabolic Panel",
+    "category": "General",
+    "min_value": 4.5,
+    "max_value": 5.3,
+    "unit": "mg/dL",
+    "normal_samples": [4.6, 5.1, 4.9]
+  },
+  {
+    "test_name": "Magnesium, serum",
+    "group": "Basic Metabolic Panel",
+    "category": "General",
+    "min_value": 1.7,
+    "max_value": 2.2,
+    "unit": "mg/dL",
+    "normal_samples": [1.8, 2.1, 1.95]
+  },
+  {
+    "test_name": "Phosphorus, serum",
+    "group": "Basic Metabolic Panel",
+    "category": "General",
+    "min_value": 2.5,
+    "max_value": 4.5,
+    "unit": "mg/dL",
+    "normal_samples": [3.0, 4.0, 3.5]
+  },
+  {
+    "test_name": "Anion Gap",
+    "group": "Basic Metabolic Panel",
+    "category": "General",
+    "min_value": 8,
+    "max_value": 12,
+    "unit": "mEq/L",
+    "normal_samples": [9, 11, 10]
+  },
+  {
+    "test_name": "eGFR (Estimated GFR)",
+    "group": "Renal Function",
+    "category": "General",
+    "min_value": 90,
+    "max_value": 120,
+    "unit": "mL/min/1.73m²",
+    "normal_samples": [95, 115, 105]
+  },
+  {
+    "test_name": "BUN/Creatinine Ratio",
+    "group": "Renal Function",
+    "category": "General",
+    "min_value": 10,
+    "max_value": 20,
+    "unit": "ratio",
+    "normal_samples": [12, 18, 15]
+  },
+  {
+    "test_name": "Uric Acid, serum",
+    "group": "Renal Function",
+    "category": "Female",
+    "min_value": 2.5,
+    "max_value": 7.0,
+    "unit": "mg/dL",
+    "normal_samples": [3.5, 6.0, 4.8]
+  },
+  {
+    "test_name": "Uric Acid, serum",
+    "group": "Renal Function",
+    "category": "Male",
+    "min_value": 3.5,
+    "max_value": 8.0,
+    "unit": "mg/dL",
+    "normal_samples": [4.5, 7.0, 5.8]
+  },
+  {
+    "test_name": "Total Protein, serum",
+    "group": "Liver Function",
+    "category": "General",
+    "min_value": 6.0,
+    "max_value": 8.3,
+    "unit": "g/dL",
+    "normal_samples": [6.5, 7.8, 7.2]
+  },
+  {
+    "test_name": "Albumin, serum",
+    "group": "Liver Function",
+    "category": "General",
+    "min_value": 3.5,
+    "max_value": 5.0,
+    "unit": "g/dL",
+    "normal_samples": [3.8, 4.8, 4.3]
+  },
+  {
+    "test_name": "Globulin, serum",
+    "group": "Liver Function",
+    "category": "General",
+    "min_value": 2.0,
+    "max_value": 3.5,
+    "unit": "g/dL",
+    "normal_samples": [2.3, 3.2, 2.8]
+  },
+  {
+    "test_name": "Albumin/Globulin Ratio",
+    "group": "Liver Function",
+    "category": "General",
+    "min_value": 1.0,
+    "max_value": 2.5,
+    "unit": "ratio",
+    "normal_samples": [1.2, 2.0, 1.5]
+  },
+  {
+    "test_name": "Bilirubin, Total",
+    "group": "Liver Function",
+    "category": "General",
+    "min_value": 0.1,
+    "max_value": 1.2,
+    "unit": "mg/dL",
+    "normal_samples": [0.3, 1.0, 0.6]
+  },
+  {
+    "test_name": "Bilirubin, Direct",
+    "group": "Liver Function",
+    "category": "General",
+    "min_value": 0.0,
+    "max_value": 0.3,
+    "unit": "mg/dL",
+    "normal_samples": [0.05, 0.2, 0.1]
+  },
+  {
+    "test_name": "Bilirubin, Indirect",
+    "group": "Liver Function",
+    "category": "General",
+    "min_value": 0.1,
+    "max_value": 0.9,
+    "unit": "mg/dL",
+    "normal_samples": [0.2, 0.7, 0.5]
+  },
+  {
+    "test_name": "AST (SGOT)",
+    "group": "Liver Function",
+    "category": "General",
+    "min_value": 10,
+    "max_value": 40,
+    "unit": "U/L",
+    "normal_samples": [15, 35, 25]
+  },
+  {
+    "test_name": "ALT (SGPT)",
+    "group": "Liver Function",
+    "category": "General",
+    "min_value": 7,
+    "max_value": 56,
+    "unit": "U/L",
+    "normal_samples": [15, 45, 30]
+  },
+  {
+    "test_name": "Alkaline Phosphatase (ALP)",
+    "group": "Liver Function",
+    "category": "General",
+    "min_value": 44,
+    "max_value": 147,
+    "unit": "U/L",
+    "normal_samples": [60, 120, 90]
+  },
+  {
+    "test_name": "Gamma-Glutamyl Transferase (GGT)",
+    "group": "Liver Function",
+    "category": "Female",
+    "min_value": 9,
+    "max_value": 36,
+    "unit": "U/L",
+    "normal_samples": [12, 30, 22]
+  },
+  {
+    "test_name": "Gamma-Glutamyl Transferase (GGT)",
+    "group": "Liver Function",
+    "category": "Male",
+    "min_value": 12,
+    "max_value": 64,
+    "unit": "U/L",
+    "normal_samples": [18, 50, 35]
+  },
+  {
+    "test_name": "Lactate Dehydrogenase (LDH)",
+    "group": "Liver Function",
+    "category": "General",
+    "min_value": 140,
+    "max_value": 280,
+    "unit": "U/L",
+    "normal_samples": [160, 250, 200]
+  },
+  {
+    "test_name": "Prothrombin Time (PT)",
+    "group": "Coagulation",
+    "category": "General",
+    "min_value": 11,
+    "max_value": 13.5,
+    "unit": "seconds",
+    "normal_samples": [11.5, 13, 12.2]
+  },
+  {
+    "test_name": "INR",
+    "group": "Coagulation",
+    "category": "General",
+    "min_value": 0.8,
+    "max_value": 1.1,
+    "unit": "ratio",
+    "normal_samples": [0.9, 1.05, 1.0]
+  },
+  {
+    "test_name": "Partial Thromboplastin Time (PTT)",
+    "group": "Coagulation",
+    "category": "General",
+    "min_value": 25,
+    "max_value": 35,
+    "unit": "seconds",
+    "normal_samples": [27, 33, 30]
+  },
+  {
+    "test_name": "Activated PTT (aPTT)",
+    "group": "Coagulation",
+    "category": "General",
+    "min_value": 30,
+    "max_value": 40,
+    "unit": "seconds",
+    "normal_samples": [32, 38, 35]
+  },
+  {
+    "test_name": "Fibrinogen",
+    "group": "Coagulation",
+    "category": "General",
+    "min_value": 200,
+    "max_value": 400,
+    "unit": "mg/dL",
+    "normal_samples": [250, 350, 300]
+  },
+  {
+    "test_name": "D-dimer, plasma",
+    "group": "Coagulation",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 500,
+    "unit": "ng/mL FEU",
+    "normal_samples": [120, 350, 220]
+  },
+  {
+    "test_name": "Bleeding Time",
+    "group": "Coagulation",
+    "category": "General",
+    "min_value": 2,
+    "max_value": 7,
+    "unit": "minutes",
+    "normal_samples": [3, 6, 4.5]
+  },
+  {
+    "test_name": "Thrombin Time",
+    "group": "Coagulation",
+    "category": "General",
+    "min_value": 14,
+    "max_value": 19,
+    "unit": "seconds",
+    "normal_samples": [15, 18, 16.5]
+  },
+  {
+    "test_name": "TSH",
+    "group": "Thyroid Function",
+    "category": "General",
+    "min_value": 0.4,
+    "max_value": 4.0,
+    "unit": "mIU/L",
+    "normal_samples": [1.0, 3.5, 2.2]
+  },
+  {
+    "test_name": "Free T4, serum",
+    "group": "Thyroid Function",
+    "category": "General",
+    "min_value": 0.8,
+    "max_value": 1.8,
+    "unit": "ng/dL",
+    "normal_samples": [0.9, 1.6, 1.2]
+  },
+  {
+    "test_name": "Free T3, serum",
+    "group": "Thyroid Function",
+    "category": "General",
+    "min_value": 2.3,
+    "max_value": 4.2,
+    "unit": "pg/mL",
+    "normal_samples": [2.6, 3.9, 3.1]
+  },
+  {
+    "test_name": "Total T4",
+    "group": "Thyroid Function",
+    "category": "General",
+    "min_value": 5.0,
+    "max_value": 12.0,
+    "unit": "µg/dL",
+    "normal_samples": [6.0, 10.0, 8.0]
+  },
+  {
+    "test_name": "Total T3",
+    "group": "Thyroid Function",
+    "category": "General",
+    "min_value": 80,
+    "max_value": 200,
+    "unit": "ng/dL",
+    "normal_samples": [100, 180, 140]
+  },
+  {
+    "test_name": "Thyroglobulin",
+    "group": "Thyroid Function",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 55,
+    "unit": "ng/mL",
+    "normal_samples": [10, 40, 25]
+  },
+  {
+    "test_name": "Anti-TPO Antibodies",
+    "group": "Thyroid Function",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 35,
+    "unit": "IU/mL",
+    "normal_samples": [5, 25, 15]
+  },
+  {
+    "test_name": "pO2, arterial blood",
+    "group": "Blood Gases",
+    "category": "General",
+    "min_value": 80,
+    "max_value": 100,
+    "unit": "mmHg",
+    "normal_samples": [85, 95, 92]
+  },
+  {
+    "test_name": "pCO2, arterial blood",
+    "group": "Blood Gases",
+    "category": "General",
+    "min_value": 35,
+    "max_value": 45,
+    "unit": "mmHg",
+    "normal_samples": [38, 42, 40]
+  },
+  {
+    "test_name": "pH, arterial blood",
+    "group": "Blood Gases",
+    "category": "General",
+    "min_value": 7.35,
+    "max_value": 7.45,
+    "unit": "",
+    "normal_samples": [7.38, 7.42, 7.40]
+  },
+  {
+    "test_name": "Bicarbonate (HCO3), arterial",
+    "group": "Blood Gases",
+    "category": "General",
+    "min_value": 22,
+    "max_value": 26,
+    "unit": "mEq/L",
+    "normal_samples": [23, 25, 24]
+  },
+  {
+    "test_name": "Oxygen Saturation (SaO2)",
+    "group": "Blood Gases",
+    "category": "General",
+    "min_value": 95,
+    "max_value": 100,
+    "unit": "%",
+    "normal_samples": [96, 99, 98]
+  },
+  {
+    "test_name": "Base Excess",
+    "group": "Blood Gases",
+    "category": "General",
+    "min_value": -2,
+    "max_value": 2,
+    "unit": "mEq/L",
+    "normal_samples": [-1, 1, 0]
+  },
+  {
+    "test_name": "Lactate, plasma",
+    "group": "Blood Gases",
+    "category": "General",
+    "min_value": 0.5,
+    "max_value": 2.2,
+    "unit": "mmol/L",
+    "normal_samples": [0.8, 1.8, 1.2]
+  },
+  {
+    "test_name": "Troponin I, cardiac",
+    "group": "Cardiac Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 0.04,
+    "unit": "ng/mL",
+    "normal_samples": [0.01, 0.03, 0.02]
+  },
+  {
+    "test_name": "Troponin T, cardiac",
+    "group": "Cardiac Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 0.01,
+    "unit": "ng/mL",
+    "normal_samples": [0.003, 0.008, 0.005]
+  },
+  {
+    "test_name": "High-Sensitivity Troponin I",
+    "group": "Cardiac Markers",
+    "category": "Female",
+    "min_value": 0,
+    "max_value": 15,
+    "unit": "ng/L",
+    "normal_samples": [5, 12, 8]
+  },
+  {
+    "test_name": "High-Sensitivity Troponin I",
+    "group": "Cardiac Markers",
+    "category": "Male",
+    "min_value": 0,
+    "max_value": 20,
+    "unit": "ng/L",
+    "normal_samples": [8, 18, 12]
+  },
+  {
+    "test_name": "High-Sensitivity Troponin T",
+    "group": "Cardiac Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 14,
+    "unit": "ng/L",
+    "normal_samples": [5, 12, 8]
+  },
+  {
+    "test_name": "Creatine Kinase (CK), Total",
+    "group": "Cardiac Markers",
+    "category": "Female",
+    "min_value": 30,
+    "max_value": 135,
+    "unit": "U/L",
+    "normal_samples": [50, 110, 80]
+  },
+  {
+    "test_name": "Creatine Kinase (CK), Total",
+    "group": "Cardiac Markers",
+    "category": "Male",
+    "min_value": 55,
+    "max_value": 170,
+    "unit": "U/L",
+    "normal_samples": [70, 150, 110]
+  },
+  {
+    "test_name": "Creatine Kinase-MB (CK-MB)",
+    "group": "Cardiac Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 5,
+    "unit": "ng/mL",
+    "normal_samples": [1, 3.5, 2]
+  },
+  {
+    "test_name": "CK-MB Index",
+    "group": "Cardiac Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 3,
+    "unit": "%",
+    "normal_samples": [0.5, 2, 1.5]
+  },
+  {
+    "test_name": "Myoglobin, serum",
+    "group": "Cardiac Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 90,
+    "unit": "ng/mL",
+    "normal_samples": [25, 65, 45]
+  },
+  {
+    "test_name": "BNP (B-type Natriuretic Peptide)",
+    "group": "Cardiac Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 100,
+    "unit": "pg/mL",
+    "normal_samples": [20, 70, 45]
+  },
+  {
+    "test_name": "NT-proBNP",
+    "group": "Cardiac Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 300,
+    "unit": "pg/mL",
+    "normal_samples": [50, 200, 125]
+  },
+  {
+    "test_name": "CRP, serum",
+    "group": "Inflammatory Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 10,
+    "unit": "mg/L",
+    "normal_samples": [1.5, 5, 3]
+  },
+  {
+    "test_name": "High-Sensitivity CRP (hs-CRP)",
+    "group": "Inflammatory Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 3,
+    "unit": "mg/L",
+    "normal_samples": [0.5, 2, 1.2]
+  },
+  {
+    "test_name": "ESR, blood",
+    "group": "Inflammatory Markers",
+    "category": "Female",
+    "min_value": 0,
+    "max_value": 20,
+    "unit": "mm/hr",
+    "normal_samples": [5, 15, 10]
+  },
+  {
+    "test_name": "ESR, blood",
+    "group": "Inflammatory Markers",
+    "category": "Male",
+    "min_value": 0,
+    "max_value": 15,
+    "unit": "mm/hr",
+    "normal_samples": [3, 12, 7]
+  },
+  {
+    "test_name": "Procalcitonin, serum",
+    "group": "Inflammatory Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 0.5,
+    "unit": "ng/mL",
+    "normal_samples": [0.05, 0.3, 0.1]
+  },
+  {
+    "test_name": "Interleukin-6 (IL-6)",
+    "group": "Inflammatory Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 7,
+    "unit": "pg/mL",
+    "normal_samples": [1, 5, 3]
+  },
+  {
+    "test_name": "Ferritin, serum",
+    "group": "Iron Studies",
+    "category": "Female",
+    "min_value": 12,
+    "max_value": 150,
+    "unit": "ng/mL",
+    "normal_samples": [30, 120, 65]
+  },
+  {
+    "test_name": "Ferritin, serum",
+    "group": "Iron Studies",
+    "category": "Male",
+    "min_value": 12,
+    "max_value": 300,
+    "unit": "ng/mL",
+    "normal_samples": [50, 250, 140]
+  },
+  {
+    "test_name": "Iron, serum",
+    "group": "Iron Studies",
+    "category": "General",
+    "min_value": 60,
+    "max_value": 170,
+    "unit": "µg/dL",
+    "normal_samples": [80, 150, 110]
+  },
+  {
+    "test_name": "TIBC (Total Iron Binding Capacity)",
+    "group": "Iron Studies",
+    "category": "General",
+    "min_value": 250,
+    "max_value": 370,
+    "unit": "µg/dL",
+    "normal_samples": [280, 350, 310]
+  },
+  {
+    "test_name": "Transferrin Saturation",
+    "group": "Iron Studies",
+    "category": "General",
+    "min_value": 20,
+    "max_value": 50,
+    "unit": "%",
+    "normal_samples": [25, 45, 35]
+  },
+  {
+    "test_name": "Transferrin, serum",
+    "group": "Iron Studies",
+    "category": "General",
+    "min_value": 200,
+    "max_value": 360,
+    "unit": "mg/dL",
+    "normal_samples": [240, 330, 280]
+  },
+  {
+    "test_name": "Vitamin B12, serum",
+    "group": "Vitamins",
+    "category": "General",
+    "min_value": 200,
+    "max_value": 900,
+    "unit": "pg/mL",
+    "normal_samples": [300, 700, 500]
+  },
+  {
+    "test_name": "Folate, serum",
+    "group": "Vitamins",
+    "category": "General",
+    "min_value": 3,
+    "max_value": 17,
+    "unit": "ng/mL",
+    "normal_samples": [5, 14, 9]
+  },
+  {
+    "test_name": "Folate, RBC",
+    "group": "Vitamins",
+    "category": "General",
+    "min_value": 140,
+    "max_value": 628,
+    "unit": "ng/mL",
+    "normal_samples": [200, 550, 380]
+  },
+  {
+    "test_name": "Vitamin D, 25-Hydroxy",
+    "group": "Vitamins",
+    "category": "General",
+    "min_value": 30,
+    "max_value": 100,
+    "unit": "ng/mL",
+    "normal_samples": [40, 70, 55]
+  },
+  {
+    "test_name": "Vitamin D, 1,25-Dihydroxy",
+    "group": "Vitamins",
+    "category": "General",
+    "min_value": 18,
+    "max_value": 72,
+    "unit": "pg/mL",
+    "normal_samples": [30, 60, 45]
+  },
+  {
+    "test_name": "Total Cholesterol",
+    "group": "Lipid Panel",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 200,
+    "unit": "mg/dL",
+    "normal_samples": [150, 190, 170]
+  },
+  {
+    "test_name": "LDL Cholesterol",
+    "group": "Lipid Panel",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 100,
+    "unit": "mg/dL",
+    "normal_samples": [70, 95, 85]
+  },
+  {
+    "test_name": "HDL Cholesterol",
+    "group": "Lipid Panel",
+    "category": "Female",
+    "min_value": 50,
+    "max_value": 100,
+    "unit": "mg/dL",
+    "normal_samples": [55, 80, 65]
+  },
+  {
+    "test_name": "HDL Cholesterol",
+    "group": "Lipid Panel",
+    "category": "Male",
+    "min_value": 40,
+    "max_value": 100,
+    "unit": "mg/dL",
+    "normal_samples": [45, 70, 55]
+  },
+  {
+    "test_name": "Triglycerides",
+    "group": "Lipid Panel",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 150,
+    "unit": "mg/dL",
+    "normal_samples": [80, 130, 100]
+  },
+  {
+    "test_name": "VLDL Cholesterol",
+    "group": "Lipid Panel",
+    "category": "General",
+    "min_value": 5,
+    "max_value": 40,
+    "unit": "mg/dL",
+    "normal_samples": [10, 30, 20]
+  },
+  {
+    "test_name": "Non-HDL Cholesterol",
+    "group": "Lipid Panel",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 130,
+    "unit": "mg/dL",
+    "normal_samples": [90, 120, 105]
+  },
+  {
+    "test_name": "HbA1c (Glycated Hemoglobin)",
+    "group": "Diabetes",
+    "category": "General",
+    "min_value": 4.0,
+    "max_value": 5.6,
+    "unit": "%",
+    "normal_samples": [4.5, 5.4, 5.0]
+  },
+  {
+    "test_name": "Fasting Insulin",
+    "group": "Diabetes",
+    "category": "General",
+    "min_value": 2.6,
+    "max_value": 24.9,
+    "unit": "µIU/mL",
+    "normal_samples": [5, 18, 10]
+  },
+  {
+    "test_name": "C-Peptide",
+    "group": "Diabetes",
+    "category": "General",
+    "min_value": 0.8,
+    "max_value": 3.9,
+    "unit": "ng/mL",
+    "normal_samples": [1.2, 3.0, 2.0]
+  },
+  {
+    "test_name": "HOMA-IR",
+    "group": "Diabetes",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 2.5,
+    "unit": "index",
+    "normal_samples": [0.8, 2.0, 1.4]
+  },
+  {
+    "test_name": "Fructosamine",
+    "group": "Diabetes",
+    "category": "General",
+    "min_value": 200,
+    "max_value": 285,
+    "unit": "µmol/L",
+    "normal_samples": [220, 270, 245]
+  },
+  {
+    "test_name": "Ammonia, plasma",
+    "group": "Metabolic",
+    "category": "General",
+    "min_value": 15,
+    "max_value": 45,
+    "unit": "µg/dL",
+    "normal_samples": [20, 40, 30]
+  },
+  {
+    "test_name": "Osmolality, serum",
+    "group": "Metabolic",
+    "category": "General",
+    "min_value": 275,
+    "max_value": 295,
+    "unit": "mOsm/kg",
+    "normal_samples": [280, 292, 286]
+  },
+  {
+    "test_name": "Osmolality, urine",
+    "group": "Urinalysis",
+    "category": "General",
+    "min_value": 300,
+    "max_value": 900,
+    "unit": "mOsm/kg",
+    "normal_samples": [400, 800, 600]
+  },
+  {
+    "test_name": "Specific Gravity, urine",
+    "group": "Urinalysis",
+    "category": "General",
+    "min_value": 1.005,
+    "max_value": 1.030,
+    "unit": "",
+    "normal_samples": [1.010, 1.025, 1.018]
+  },
+  {
+    "test_name": "pH, urine",
+    "group": "Urinalysis",
+    "category": "General",
+    "min_value": 4.5,
+    "max_value": 8.0,
+    "unit": "",
+    "normal_samples": [5.5, 7.0, 6.0]
+  },
+  {
+    "test_name": "Protein, urine (qualitative)",
+    "group": "Urinalysis",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 0,
+    "unit": "mg/dL",
+    "normal_samples": [0, 0, 0]
+  },
+  {
+    "test_name": "Protein, urine (24-hour)",
+    "group": "Urinalysis",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 150,
+    "unit": "mg/24hr",
+    "normal_samples": [50, 100, 75]
+  },
+  {
+    "test_name": "Microalbumin, urine",
+    "group": "Urinalysis",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 30,
+    "unit": "mg/L",
+    "normal_samples": [5, 20, 12]
+  },
+  {
+    "test_name": "Albumin/Creatinine Ratio, urine",
+    "group": "Urinalysis",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 30,
+    "unit": "mg/g",
+    "normal_samples": [5, 20, 12]
+  },
+  {
+    "test_name": "Creatinine, urine (24-hour)",
+    "group": "Urinalysis",
+    "category": "Female",
+    "min_value": 600,
+    "max_value": 1800,
+    "unit": "mg/24hr",
+    "normal_samples": [800, 1500, 1100]
+  },
+  {
+    "test_name": "Creatinine, urine (24-hour)",
+    "group": "Urinalysis",
+    "category": "Male",
+    "min_value": 800,
+    "max_value": 2000,
+    "unit": "mg/24hr",
+    "normal_samples": [1000, 1800, 1400]
+  },
+  {
+    "test_name": "Creatinine Clearance",
+    "group": "Urinalysis",
+    "category": "Female",
+    "min_value": 80,
+    "max_value": 125,
+    "unit": "mL/min",
+    "normal_samples": [90, 115, 100]
+  },
+  {
+    "test_name": "Creatinine Clearance",
+    "group": "Urinalysis",
+    "category": "Male",
+    "min_value": 90,
+    "max_value": 140,
+    "unit": "mL/min",
+    "normal_samples": [100, 130, 115]
+  },
+  {
+    "test_name": "Amylase, serum",
+    "group": "Pancreatic",
+    "category": "General",
+    "min_value": 28,
+    "max_value": 100,
+    "unit": "U/L",
+    "normal_samples": [40, 85, 60]
+  },
+  {
+    "test_name": "Lipase, serum",
+    "group": "Pancreatic",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 160,
+    "unit": "U/L",
+    "normal_samples": [30, 120, 75]
+  },
+  {
+    "test_name": "Cortisol, AM",
+    "group": "Adrenal Function",
+    "category": "General",
+    "min_value": 6,
+    "max_value": 23,
+    "unit": "µg/dL",
+    "normal_samples": [10, 20, 15]
+  },
+  {
+    "test_name": "Cortisol, PM",
+    "group": "Adrenal Function",
+    "category": "General",
+    "min_value": 3,
+    "max_value": 16,
+    "unit": "µg/dL",
+    "normal_samples": [5, 12, 8]
+  },
+  {
+    "test_name": "ACTH",
+    "group": "Adrenal Function",
+    "category": "General",
+    "min_value": 7,
+    "max_value": 63,
+    "unit": "pg/mL",
+    "normal_samples": [15, 50, 30]
+  },
+  {
+    "test_name": "Aldosterone, serum",
+    "group": "Adrenal Function",
+    "category": "General",
+    "min_value": 3,
+    "max_value": 16,
+    "unit": "ng/dL",
+    "normal_samples": [5, 12, 8]
+  },
+  {
+    "test_name": "Renin Activity, plasma",
+    "group": "Adrenal Function",
+    "category": "General",
+    "min_value": 0.5,
+    "max_value": 4.0,
+    "unit": "ng/mL/hr",
+    "normal_samples": [1.0, 3.0, 2.0]
+  },
+  {
+    "test_name": "DHEA-S",
+    "group": "Adrenal Function",
+    "category": "Female",
+    "min_value": 35,
+    "max_value": 430,
+    "unit": "µg/dL",
+    "normal_samples": [80, 350, 200]
+  },
+  {
+    "test_name": "DHEA-S",
+    "group": "Adrenal Function",
+    "category": "Male",
+    "min_value": 80,
+    "max_value": 560,
+    "unit": "µg/dL",
+    "normal_samples": [150, 450, 300]
+  },
+  {
+    "test_name": "Testosterone, Total",
+    "group": "Reproductive Hormones",
+    "category": "Female",
+    "min_value": 15,
+    "max_value": 70,
+    "unit": "ng/dL",
+    "normal_samples": [25, 55, 40]
+  },
+  {
+    "test_name": "Testosterone, Total",
+    "group": "Reproductive Hormones",
+    "category": "Male",
+    "min_value": 270,
+    "max_value": 1070,
+    "unit": "ng/dL",
+    "normal_samples": [400, 850, 600]
+  },
+  {
+    "test_name": "Testosterone, Free",
+    "group": "Reproductive Hormones",
+    "category": "Male",
+    "min_value": 50,
+    "max_value": 210,
+    "unit": "pg/mL",
+    "normal_samples": [80, 180, 130]
+  },
+  {
+    "test_name": "Estradiol",
+    "group": "Reproductive Hormones",
+    "category": "Female",
+    "min_value": 15,
+    "max_value": 350,
+    "unit": "pg/mL",
+    "normal_samples": [50, 250, 150]
+  },
+  {
+    "test_name": "Estradiol",
+    "group": "Reproductive Hormones",
+    "category": "Male",
+    "min_value": 10,
+    "max_value": 40,
+    "unit": "pg/mL",
+    "normal_samples": [15, 35, 25]
+  },
+  {
+    "test_name": "Progesterone",
+    "group": "Reproductive Hormones",
+    "category": "Female",
+    "min_value": 0.1,
+    "max_value": 25,
+    "unit": "ng/mL",
+    "normal_samples": [0.5, 15, 5]
+  },
+  {
+    "test_name": "FSH",
+    "group": "Reproductive Hormones",
+    "category": "Female",
+    "min_value": 1.5,
+    "max_value": 12,
+    "unit": "mIU/mL",
+    "normal_samples": [3, 10, 6]
+  },
+  {
+    "test_name": "FSH",
+    "group": "Reproductive Hormones",
+    "category": "Male",
+    "min_value": 1.5,
+    "max_value": 12,
+    "unit": "mIU/mL",
+    "normal_samples": [2, 8, 5]
+  },
+  {
+    "test_name": "LH",
+    "group": "Reproductive Hormones",
+    "category": "Female",
+    "min_value": 1.0,
+    "max_value": 18,
+    "unit": "mIU/mL",
+    "normal_samples": [2, 12, 6]
+  },
+  {
+    "test_name": "LH",
+    "group": "Reproductive Hormones",
+    "category": "Male",
+    "min_value": 1.5,
+    "max_value": 9,
+    "unit": "mIU/mL",
+    "normal_samples": [2, 7, 4]
+  },
+  {
+    "test_name": "Prolactin",
+    "group": "Reproductive Hormones",
+    "category": "Female",
+    "min_value": 4,
+    "max_value": 23,
+    "unit": "ng/mL",
+    "normal_samples": [8, 20, 14]
+  },
+  {
+    "test_name": "Prolactin",
+    "group": "Reproductive Hormones",
+    "category": "Male",
+    "min_value": 4,
+    "max_value": 15,
+    "unit": "ng/mL",
+    "normal_samples": [6, 12, 9]
+  },
+  {
+    "test_name": "Beta-hCG",
+    "group": "Reproductive Hormones",
+    "category": "Female",
+    "min_value": 0,
+    "max_value": 5,
+    "unit": "mIU/mL",
+    "normal_samples": [0, 2, 1]
+  },
+  {
+    "test_name": "PSA, Total",
+    "group": "Tumor Markers",
+    "category": "Male",
+    "min_value": 0,
+    "max_value": 4.0,
+    "unit": "ng/mL",
+    "normal_samples": [0.5, 3.0, 1.5]
+  },
+  {
+    "test_name": "PSA, Free",
+    "group": "Tumor Markers",
+    "category": "Male",
+    "min_value": 0,
+    "max_value": 1.0,
+    "unit": "ng/mL",
+    "normal_samples": [0.2, 0.8, 0.5]
+  },
+  {
+    "test_name": "CA-125",
+    "group": "Tumor Markers",
+    "category": "Female",
+    "min_value": 0,
+    "max_value": 35,
+    "unit": "U/mL",
+    "normal_samples": [5, 25, 15]
+  },
+  {
+    "test_name": "CA 19-9",
+    "group": "Tumor Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 37,
+    "unit": "U/mL",
+    "normal_samples": [5, 30, 18]
+  },
+  {
+    "test_name": "CEA (Carcinoembryonic Antigen)",
+    "group": "Tumor Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 3.0,
+    "unit": "ng/mL",
+    "normal_samples": [0.5, 2.5, 1.5]
+  },
+  {
+    "test_name": "AFP (Alpha-Fetoprotein)",
+    "group": "Tumor Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 10,
+    "unit": "ng/mL",
+    "normal_samples": [2, 8, 5]
+  },
+  {
+    "test_name": "PTH (Parathyroid Hormone)",
+    "group": "Parathyroid",
+    "category": "General",
+    "min_value": 15,
+    "max_value": 65,
+    "unit": "pg/mL",
+    "normal_samples": [25, 55, 40]
+  },
+  {
+    "test_name": "Calcitonin",
+    "group": "Parathyroid",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 10,
+    "unit": "pg/mL",
+    "normal_samples": [2, 8, 5]
+  },
+  {
+    "test_name": "IgA",
+    "group": "Immunoglobulins",
+    "category": "General",
+    "min_value": 70,
+    "max_value": 400,
+    "unit": "mg/dL",
+    "normal_samples": [120, 350, 220]
+  },
+  {
+    "test_name": "IgG",
+    "group": "Immunoglobulins",
+    "category": "General",
+    "min_value": 700,
+    "max_value": 1600,
+    "unit": "mg/dL",
+    "normal_samples": [900, 1400, 1150]
+  },
+  {
+    "test_name": "IgM",
+    "group": "Immunoglobulins",
+    "category": "General",
+    "min_value": 40,
+    "max_value": 230,
+    "unit": "mg/dL",
+    "normal_samples": [70, 180, 120]
+  },
+  {
+    "test_name": "IgE, Total",
+    "group": "Immunoglobulins",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 100,
+    "unit": "IU/mL",
+    "normal_samples": [20, 70, 45]
+  },
+  {
+    "test_name": "Complement C3",
+    "group": "Immunoglobulins",
+    "category": "General",
+    "min_value": 90,
+    "max_value": 180,
+    "unit": "mg/dL",
+    "normal_samples": [110, 160, 135]
+  },
+  {
+    "test_name": "Complement C4",
+    "group": "Immunoglobulins",
+    "category": "General",
+    "min_value": 10,
+    "max_value": 40,
+    "unit": "mg/dL",
+    "normal_samples": [15, 35, 25]
+  },
+  {
+    "test_name": "ANA (Antinuclear Antibodies)",
+    "group": "Autoimmune",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 1,
+    "unit": "titer",
+    "normal_samples": [0, 0, 0]
+  },
+  {
+    "test_name": "Rheumatoid Factor",
+    "group": "Autoimmune",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 14,
+    "unit": "IU/mL",
+    "normal_samples": [3, 10, 6]
+  },
+  {
+    "test_name": "Anti-CCP Antibodies",
+    "group": "Autoimmune",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 20,
+    "unit": "U/mL",
+    "normal_samples": [3, 15, 8]
+  },
+  {
+    "test_name": "Anti-dsDNA",
+    "group": "Autoimmune",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 25,
+    "unit": "IU/mL",
+    "normal_samples": [5, 20, 12]
+  },
+  {
+    "test_name": "Homocysteine",
+    "group": "Cardiovascular Risk",
+    "category": "General",
+    "min_value": 5,
+    "max_value": 15,
+    "unit": "µmol/L",
+    "normal_samples": [7, 12, 9]
+  },
+  {
+    "test_name": "Lipoprotein(a)",
+    "group": "Cardiovascular Risk",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 30,
+    "unit": "mg/dL",
+    "normal_samples": [5, 25, 15]
+  },
+  {
+    "test_name": "Apolipoprotein A1",
+    "group": "Cardiovascular Risk",
+    "category": "General",
+    "min_value": 120,
+    "max_value": 180,
+    "unit": "mg/dL",
+    "normal_samples": [130, 170, 150]
+  },
+  {
+    "test_name": "Apolipoprotein B",
+    "group": "Cardiovascular Risk",
+    "category": "General",
+    "min_value": 50,
+    "max_value": 130,
+    "unit": "mg/dL",
+    "normal_samples": [70, 110, 90]
+  },
+  {
+    "test_name": "Copper, serum",
+    "group": "Trace Elements",
+    "category": "General",
+    "min_value": 70,
+    "max_value": 140,
+    "unit": "µg/dL",
+    "normal_samples": [85, 125, 105]
+  },
+  {
+    "test_name": "Zinc, serum",
+    "group": "Trace Elements",
+    "category": "General",
+    "min_value": 60,
+    "max_value": 120,
+    "unit": "µg/dL",
+    "normal_samples": [75, 110, 90]
+  },
+  {
+    "test_name": "Ceruloplasmin",
+    "group": "Trace Elements",
+    "category": "General",
+    "min_value": 20,
+    "max_value": 60,
+    "unit": "mg/dL",
+    "normal_samples": [30, 50, 40]
+  },
+  {
+    "test_name": "Lead, blood",
+    "group": "Toxicology",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 5,
+    "unit": "µg/dL",
+    "normal_samples": [1, 3, 2]
+  },
+  {
+    "test_name": "Mercury, blood",
+    "group": "Toxicology",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 10,
+    "unit": "µg/L",
+    "normal_samples": [2, 6, 4]
+  },
+  {
+    "test_name": "Arsenic, urine",
+    "group": "Toxicology",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 50,
+    "unit": "µg/L",
+    "normal_samples": [10, 35, 22]
+  },
+  {
+    "test_name": "Ethanol, blood",
+    "group": "Toxicology",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 0,
+    "unit": "mg/dL",
+    "normal_samples": [0, 0, 0]
+  },
+  {
+    "test_name": "Acetaminophen, serum",
+    "group": "Drug Levels",
+    "category": "General",
+    "min_value": 10,
+    "max_value": 30,
+    "unit": "µg/mL",
+    "normal_samples": [15, 25, 20]
+  },
+  {
+    "test_name": "Digoxin, serum",
+    "group": "Drug Levels",
+    "category": "General",
+    "min_value": 0.8,
+    "max_value": 2.0,
+    "unit": "ng/mL",
+    "normal_samples": [1.0, 1.8, 1.4]
+  },
+  {
+    "test_name": "Lithium, serum",
+    "group": "Drug Levels",
+    "category": "General",
+    "min_value": 0.6,
+    "max_value": 1.2,
+    "unit": "mEq/L",
+    "normal_samples": [0.7, 1.1, 0.9]
+  },
+  {
+    "test_name": "Phenytoin, serum",
+    "group": "Drug Levels",
+    "category": "General",
+    "min_value": 10,
+    "max_value": 20,
+    "unit": "µg/mL",
+    "normal_samples": [12, 18, 15]
+  },
+  {
+    "test_name": "Valproic Acid, serum",
+    "group": "Drug Levels",
+    "category": "General",
+    "min_value": 50,
+    "max_value": 100,
+    "unit": "µg/mL",
+    "normal_samples": [60, 90, 75]
+  },
+  {
+    "test_name": "Vancomycin, trough",
+    "group": "Drug Levels",
+    "category": "General",
+    "min_value": 10,
+    "max_value": 20,
+    "unit": "µg/mL",
+    "normal_samples": [12, 18, 15]
+  },
+  {
+    "test_name": "Gentamicin, peak",
+    "group": "Drug Levels",
+    "category": "General",
+    "min_value": 5,
+    "max_value": 10,
+    "unit": "µg/mL",
+    "normal_samples": [6, 9, 7.5]
+  },
+  {
+    "test_name": "Gentamicin, trough",
+    "group": "Drug Levels",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 2,
+    "unit": "µg/mL",
+    "normal_samples": [0.5, 1.5, 1.0]
+  },
+  {
+    "test_name": "Theophylline, serum",
+    "group": "Drug Levels",
+    "category": "General",
+    "min_value": 10,
+    "max_value": 20,
+    "unit": "µg/mL",
+    "normal_samples": [12, 18, 15]
+  },
+  {
+    "test_name": "Salicylate, serum",
+    "group": "Drug Levels",
+    "category": "General",
+    "min_value": 15,
+    "max_value": 30,
+    "unit": "mg/dL",
+    "normal_samples": [18, 28, 22]
+  },
+  {
+    "test_name": "CSF Glucose",
+    "group": "Cerebrospinal Fluid",
+    "category": "General",
+    "min_value": 40,
+    "max_value": 70,
+    "unit": "mg/dL",
+    "normal_samples": [50, 65, 58]
+  },
+  {
+    "test_name": "CSF Protein",
+    "group": "Cerebrospinal Fluid",
+    "category": "General",
+    "min_value": 15,
+    "max_value": 45,
+    "unit": "mg/dL",
+    "normal_samples": [25, 40, 32]
+  },
+  {
+    "test_name": "CSF WBC Count",
+    "group": "Cerebrospinal Fluid",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 5,
+    "unit": "/µL",
+    "normal_samples": [1, 3, 2]
+  },
+  {
+    "test_name": "CSF RBC Count",
+    "group": "Cerebrospinal Fluid",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 0,
+    "unit": "/µL",
+    "normal_samples": [0, 0, 0]
+  },
+  {
+    "test_name": "Pleural Fluid pH",
+    "group": "Body Fluids",
+    "category": "General",
+    "min_value": 7.4,
+    "max_value": 7.6,
+    "unit": "",
+    "normal_samples": [7.45, 7.55, 7.50]
+  },
+  {
+    "test_name": "Pleural Fluid LDH",
+    "group": "Body Fluids",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 200,
+    "unit": "U/L",
+    "normal_samples": [50, 150, 100]
+  },
+  {
+    "test_name": "Pleural Fluid Protein",
+    "group": "Body Fluids",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 3.0,
+    "unit": "g/dL",
+    "normal_samples": [1.0, 2.5, 1.8]
+  },
+  {
+    "test_name": "Ascitic Fluid Albumin",
+    "group": "Body Fluids",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 1.5,
+    "unit": "g/dL",
+    "normal_samples": [0.5, 1.2, 0.8]
+  },
+  {
+    "test_name": "SAAG (Serum-Ascites Albumin Gradient)",
+    "group": "Body Fluids",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 1.1,
+    "unit": "g/dL",
+    "normal_samples": [0.5, 0.9, 0.7]
+  },
+  {
+    "test_name": "Growth Hormone",
+    "group": "Pituitary",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 5,
+    "unit": "ng/mL",
+    "normal_samples": [0.5, 3, 1.5]
+  },
+  {
+    "test_name": "IGF-1 (Insulin-like Growth Factor)",
+    "group": "Pituitary",
+    "category": "General",
+    "min_value": 100,
+    "max_value": 300,
+    "unit": "ng/mL",
+    "normal_samples": [150, 260, 200]
+  },
+  {
+    "test_name": "ADH (Antidiuretic Hormone)",
+    "group": "Pituitary",
+    "category": "General",
+    "min_value": 1,
+    "max_value": 5,
+    "unit": "pg/mL",
+    "normal_samples": [2, 4, 3]
+  },
+  {
+    "test_name": "Cystatin C",
+    "group": "Renal Function",
+    "category": "General",
+    "min_value": 0.6,
+    "max_value": 1.0,
+    "unit": "mg/L",
+    "normal_samples": [0.7, 0.95, 0.82]
+  },
+  {
+    "test_name": "Beta-2 Microglobulin",
+    "group": "Renal Function",
+    "category": "General",
+    "min_value": 0.8,
+    "max_value": 2.2,
+    "unit": "mg/L",
+    "normal_samples": [1.0, 2.0, 1.5]
+  },
+  {
+    "test_name": "Haptoglobin",
+    "group": "Hemolysis Markers",
+    "category": "General",
+    "min_value": 30,
+    "max_value": 200,
+    "unit": "mg/dL",
+    "normal_samples": [60, 180, 120]
+  },
+  {
+    "test_name": "Direct Coombs Test",
+    "group": "Hemolysis Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 0,
+    "unit": "qualitative",
+    "normal_samples": [0, 0, 0]
+  },
+  {
+    "test_name": "Indirect Coombs Test",
+    "group": "Hemolysis Markers",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 0,
+    "unit": "qualitative",
+    "normal_samples": [0, 0, 0]
+  },
+  {
+    "test_name": "Protein S Activity",
+    "group": "Thrombophilia",
+    "category": "General",
+    "min_value": 60,
+    "max_value": 150,
+    "unit": "%",
+    "normal_samples": [75, 130, 100]
+  },
+  {
+    "test_name": "Protein C Activity",
+    "group": "Thrombophilia",
+    "category": "General",
+    "min_value": 70,
+    "max_value": 140,
+    "unit": "%",
+    "normal_samples": [85, 125, 105]
+  },
+  {
+    "test_name": "Antithrombin III",
+    "group": "Thrombophilia",
+    "category": "General",
+    "min_value": 80,
+    "max_value": 120,
+    "unit": "%",
+    "normal_samples": [90, 115, 100]
+  },
+  {
+    "test_name": "Factor V Leiden",
+    "group": "Thrombophilia",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 0,
+    "unit": "qualitative",
+    "normal_samples": [0, 0, 0]
+  },
+  {
+    "test_name": "Anti-Cardiolipin IgG",
+    "group": "Thrombophilia",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 15,
+    "unit": "GPL",
+    "normal_samples": [3, 12, 7]
+  },
+  {
+    "test_name": "Lupus Anticoagulant",
+    "group": "Thrombophilia",
+    "category": "General",
+    "min_value": 0,
+    "max_value": 0,
+    "unit": "qualitative",
+    "normal_samples": [0, 0, 0]
+  }
+]

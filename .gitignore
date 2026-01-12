@@ -23,12 +23,17 @@ dist-ssr
 *.sln
 *.sw?
 
+*.env
 # Server files
 server/.env
 server/database.sqlite
 
 # User uploads
 public/uploads/
+
+# Production files
+frontend/
+production/.env
 
 # Claude workspace
 .claude/

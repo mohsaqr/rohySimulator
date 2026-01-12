@@ -12,7 +12,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider, useToast } from './contexts/ToastContext';
 import { AuthService } from './services/authService';
 import EventLogger, { COMPONENTS } from './services/eventLogger';
-import { Settings, X, LogOut, User, RotateCcw, Stethoscope, ChevronDown } from 'lucide-react';
+import { Settings, X, LogOut, User, RotateCcw, ChevronDown } from 'lucide-react';
 import ManikinPanel from './components/examination/ManikinPanel';
 import BodyMapDebug from './components/examination/BodyMapDebug';
 
@@ -375,6 +375,10 @@ function MainApp() {
                sessionId={sessionId}
                onViewResult={handleViewResult}
                caseData={activeCase}
+               onOpenExamination={() => {
+                  setShowExamination(true);
+                  EventLogger.examPanelOpened();
+               }}
             />
          )}
 
@@ -390,20 +394,6 @@ function MainApp() {
                }}
                onClose={handleCloseLabResults}
             />
-         )}
-
-         {/* Physical Examination Button - Floating */}
-         {activeCase && sessionId && (
-            <button
-               onClick={() => {
-                  setShowExamination(true);
-                  EventLogger.examPanelOpened();
-               }}
-               className="fixed bottom-24 right-6 z-40 p-4 bg-cyan-600 hover:bg-cyan-500 text-white rounded-full shadow-lg transition-all hover:scale-105 flex items-center gap-2"
-               title="Physical Examination"
-            >
-               <Stethoscope className="w-6 h-6" />
-            </button>
          )}
 
          {/* Physical Examination Panel */}

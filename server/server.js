@@ -1,7 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import apiRoutes from './routes.js';
+import path from 'path';
+import fs from "fs";
+import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 4000;
 
@@ -15,8 +20,16 @@ app.use('/api', apiRoutes);
 
 // Health Check
 app.get('/', (req, res) => {
-    res.send('Virtual Patient Platform Backend is Running');
+    //res.send('Virtual Patient Platform Backend is Running');
+    const frontendPath = path.join(__dirname, "..", "frontend");
+
+    if (fs.existsSync(frontendPath)) {
+       res.sendFile(path.join(__dirname, "../frontend/index.html"));
+    } else {
+    console.error("Frontend folder does NOT exist but server is running", frontendPath);
+    }
 });
+app.use(express.static(path.join(__dirname, "..", "frontend")));
 
 // Start server with port fallback
 function startServer(port, maxRetries = 10) {

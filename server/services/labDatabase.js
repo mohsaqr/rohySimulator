@@ -10,7 +10,7 @@ let labDatabaseCache = null;
 let groupsCache = null;
 
 /**
- * Load and parse Lab_database.txt and additional lab files (e.g., heart.txt)
+ * Load and parse Lab_database.json and additional lab files (e.g., heart.txt)
  * @returns {Array} Array of lab test objects
  */
 export function loadLabDatabase() {
@@ -22,12 +22,12 @@ export function loadLabDatabase() {
 
     // Load main lab database
     try {
-        const labDbPath = path.resolve(__dirname, '../../Lab_database.txt');
+        const labDbPath = path.resolve(__dirname, '../../Lab_database.json');
         const data = fs.readFileSync(labDbPath, 'utf8');
         allTests = JSON.parse(data);
-        console.log(`Loaded ${allTests.length} lab tests from Lab_database.txt`);
+        console.log(`Loaded ${allTests.length} lab tests from Lab_database.json`);
     } catch (error) {
-        console.error('Error loading Lab_database.txt:', error);
+        console.error('Error loading Lab_database.json:', error);
     }
 
     // Load cardiac investigations from heart.txt
@@ -316,11 +316,11 @@ export function clearCache() {
  */
 export function saveLabDatabase() {
     try {
-        const labDbPath = path.resolve(__dirname, '../../Lab_database.txt');
+        const labDbPath = path.resolve(__dirname, '../../Lab_database.json');
         fs.writeFileSync(labDbPath, JSON.stringify(labDatabaseCache, null, 2), 'utf8');
         return true;
     } catch (error) {
-        console.error('Error saving Lab_database.txt:', error);
+        console.error('Error saving Lab_database.json:', error);
         return false;
     }
 }

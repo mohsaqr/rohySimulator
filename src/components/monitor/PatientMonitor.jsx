@@ -1035,7 +1035,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                      <span>
                         {caseData?.config?.demographics?.age ? `${caseData.config.demographics.age}y` : ''}
                         {caseData?.config?.demographics?.gender ? ` ${caseData.config.demographics.gender}` : ''}
-                        {caseData?.config?.demographics?.weight ? ` • ${caseData.config.demographics.weight}kg` : ''}
+                        {caseData?.config?.demographics?.weight ? ` • ${caseData.config.demographics.weight}` : ''}
                      </span>
                   </div>
                </div>
@@ -1128,7 +1128,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
             <div className="w-64 bg-neutral-900/50 backdrop-blur-sm border-l border-neutral-800 flex flex-col shrink-0 overflow-y-auto">
 
                {/* HR Box */}
-               <div className="flex-1 border-b border-neutral-800 p-4 flex flex-col justify-center relative overflow-hidden">
+               <div className="h-32 border-b border-neutral-800 p-4 flex flex-col justify-center relative overflow-hidden">
                   <div className="absolute top-2 left-3 text-green-500 font-bold text-sm flex items-center gap-1">
                      <Heart className="w-3 h-3" /> HR
                   </div>
