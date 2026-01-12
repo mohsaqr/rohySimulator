@@ -15,7 +15,7 @@
     "client": "vite",
     "server": "node server/server.js",
     "production": "NODE_ENV=production node server/server.js",
-    "build": "vite build && rm -rf frontend/* && mkdir -p frontend && cp -r dist/* frontend/",
+    "build": "vite build --base=/rohy/ && rm -rf frontend/* && mkdir -p frontend && cp -r dist/* frontend/",
     "lint": "eslint .",
     "preview": "vite preview"
   },
