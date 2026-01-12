@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
+import { apiUrl } from '../config/api';
 
 /**
  * Event Logger Hook
@@ -17,7 +18,7 @@ export const useEventLog = (sessionId) => {
 
     try {
       const token = localStorage.getItem('token');
-      await fetch('/api/events/batch', {
+      await fetch(apiUrl('/api/events/batch'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

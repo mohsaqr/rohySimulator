@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import defaultRegions from '../../utils/defaultRegions';
+import { apiUrl } from '../../config/api';
 // Storage key - must match BodyMapDebug
 const STORAGE_KEY = 'rohy_bodymap_regions';
 
@@ -35,7 +36,7 @@ export default function BodyMap({
         }
 
         // Try loading from server
-        fetch('/api/bodymap-regions')
+        fetch(apiUrl('/api/bodymap-regions'))
             .then(r => r.json())
             .then(data => {
                 if (data.regions) {

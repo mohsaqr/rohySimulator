@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Pill, X } from 'lucide-react';
 import { AuthService } from '../../services/authService';
+import { apiUrl } from '../../config/api';
 
 /**
  * Medication autocomplete search component
@@ -32,7 +33,7 @@ export default function MedicationSearch({ value, onChange, onSelect, placeholde
             setLoading(true);
             try {
                 const token = AuthService.getToken();
-                const res = await fetch(`/api/master/medications?search=${encodeURIComponent(query)}&limit=10`, {
+                const res = await fetch(apiUrl(`/api/master/medications?search=${encodeURIComponent(query)}&limit=10`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (res.ok) {

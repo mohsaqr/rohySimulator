@@ -4,6 +4,7 @@ import { LLMService } from '../../services/llmService';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthService } from '../../services/authService';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
+import { apiUrl } from '../../config/api';
 
 export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId }) {
     const [input, setInput] = useState('');
@@ -23,7 +24,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const loadChatSettings = async () => {
             try {
                 const token = AuthService.getToken();
-                const res = await fetch('/api/platform-settings/chat', {
+                const res = await fetch(apiUrl('/api/platform-settings/chat'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (res.ok) {
@@ -62,7 +63,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             if (restoredSessionId) {
                 try {
                     const token = AuthService.getToken();
-                    const res = await fetch(`/api/interactions/${restoredSessionId}`, {
+                    const res = await fetch(apiUrl(`/api/interactions/${restoredSessionId}`), {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
                     if (res.ok) {

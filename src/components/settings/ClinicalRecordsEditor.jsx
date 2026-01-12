@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Upload, FileText, Stethoscope, Pill, Syringe, ClipboardList, Image, Brain, Eye, EyeOff } from 'lucide-react';
 import { AuthService } from '../../services/authService';
+import { apiUrl } from '../../config/api';
 import MedicationSearch from './MedicationSearch';
 
 const RECORD_TABS = [
@@ -114,7 +115,7 @@ export default function ClinicalRecordsEditor({ caseData, setCaseData, updateCon
             const formData = new FormData();
             formData.append('photo', file);
             const token = AuthService.getToken();
-            const res = await fetch('/api/upload', {
+            const res = await fetch(apiUrl('/api/upload'), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData

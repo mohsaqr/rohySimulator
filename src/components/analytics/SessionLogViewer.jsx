@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { AuthService } from '../../services/authService';
 import { SEVERITY, CATEGORIES } from '../../services/eventLogger';
+import { apiUrl } from '../../config/api';
 
 // Icon mapping for different verbs
 const VERB_ICONS = {
@@ -392,8 +393,8 @@ export default function SessionLogViewer({ sessionId, userId, onClose, showAllSe
             const token = AuthService.getToken();
             // Always fetch all recent events, or filter by session if specified
             let url = sessionId
-                ? `/api/learning-events/session/${sessionId}`
-                : `/api/learning-events/all?limit=500`;
+                ? apiUrl(`/api/learning-events/session/${sessionId}`)
+                : apiUrl(`/api/learning-events/all?limit=500`);
 
             const res = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }

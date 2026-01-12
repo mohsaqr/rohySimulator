@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider, useToast } from './contexts/ToastContext';
 import { AuthService } from './services/authService';
 import EventLogger, { COMPONENTS } from './services/eventLogger';
+import { apiUrl } from './config/api';
 import { Settings, X, LogOut, User, RotateCcw, ChevronDown } from 'lucide-react';
 import ManikinPanel from './components/examination/ManikinPanel';
 import BodyMapDebug from './components/examination/BodyMapDebug';
@@ -46,7 +47,7 @@ function MainApp() {
    const loadDefaultCase = async () => {
       try {
          const token = AuthService.getToken();
-         const res = await fetch('/api/cases', {
+         const res = await fetch(apiUrl('/api/cases'), {
             headers: { 'Authorization': `Bearer ${token}` }
          });
          if (res.ok) {
@@ -93,7 +94,7 @@ function MainApp() {
             if (savedSessionId) {
                try {
                   const token = AuthService.getToken();
-                  const res = await fetch(`/api/sessions/${savedSessionId}`, {
+                  const res = await fetch(apiUrl(`/api/sessions/${savedSessionId}`), {
                      headers: { 'Authorization': `Bearer ${token}` }
                   });
 
@@ -190,7 +191,7 @@ function MainApp() {
          if (sessionId) {
             try {
                const token = AuthService.getToken();
-               await fetch(`/api/sessions/${sessionId}/end`, {
+               await fetch(apiUrl(`/api/sessions/${sessionId}/end`), {
                   method: 'PUT',
                   headers: { 'Authorization': `Bearer ${token}` }
                });

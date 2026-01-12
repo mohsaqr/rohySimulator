@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { AuthService } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
+import { apiUrl } from '../../config/api';
 
 /**
  * Medication Manager Component
@@ -43,7 +44,7 @@ export default function MedicationManager() {
         setLoading(true);
         try {
             const token = AuthService.getToken();
-            const res = await fetch('/api/master/medications', {
+            const res = await fetch(apiUrl('/api/master/medications'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -85,7 +86,7 @@ export default function MedicationManager() {
                 side_effects: newMed.side_effects ? newMed.side_effects.split(',').map(s => s.trim()) : []
             };
 
-            const res = await fetch('/api/master/medications', {
+            const res = await fetch(apiUrl('/api/master/medications'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -122,7 +123,7 @@ export default function MedicationManager() {
 
         try {
             const token = AuthService.getToken();
-            const res = await fetch(`/api/master/medications/${id}`, {
+            const res = await fetch(apiUrl(`/api/master/medications/${id}`), {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -142,7 +143,7 @@ export default function MedicationManager() {
 
         try {
             const token = AuthService.getToken();
-            const res = await fetch('/api/master/medications/all', {
+            const res = await fetch(apiUrl('/api/master/medications/all'), {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -171,7 +172,7 @@ export default function MedicationManager() {
 
         try {
             const token = AuthService.getToken();
-            const res = await fetch('/api/master/medications/bulk', {
+            const res = await fetch(apiUrl('/api/master/medications/bulk'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

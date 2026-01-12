@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ClipboardList, Clock, CheckCircle, Search, Filter, List, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import EventLogger, { VERBS, OBJECT_TYPES, COMPONENTS } from '../../services/eventLogger';
+import { apiUrl } from '../../config/api';
 
 const InvestigationPanel = ({ caseId, sessionId, onViewResult }) => {
   // Track when panel was opened for timing
@@ -25,7 +26,7 @@ const InvestigationPanel = ({ caseId, sessionId, onViewResult }) => {
     const fetchLabs = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`/api/sessions/${sessionId}/available-labs`, {
+        const response = await fetch(apiUrl(`/api/sessions/${sessionId}/available-labs`), {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -51,7 +52,7 @@ const InvestigationPanel = ({ caseId, sessionId, onViewResult }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/sessions/${sessionId}/orders`, {
+      const response = await fetch(apiUrl(`/api/sessions/${sessionId}/orders`), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -80,7 +81,7 @@ const InvestigationPanel = ({ caseId, sessionId, onViewResult }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/sessions/${sessionId}/order-labs`, {
+      const response = await fetch(apiUrl(`/api/sessions/${sessionId}/order-labs`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

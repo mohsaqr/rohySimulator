@@ -4,6 +4,7 @@ import BodyMap from '../examination/BodyMap';
 import { BODY_REGIONS, EXAM_TECHNIQUES, getDefaultFinding } from '../../data/examRegions';
 import { AuthService } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
+import { apiUrl } from '../../config/api';
 
 /**
  * Physical Examination Editor for Case Design
@@ -65,7 +66,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
 
         try {
             const token = AuthService.getToken();
-            const res = await fetch('/api/upload', {
+            const res = await fetch(apiUrl('/api/upload'), {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -143,7 +144,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
 
         try {
             const token = AuthService.getToken();
-            const res = await fetch('/api/upload', {
+            const res = await fetch(apiUrl('/api/upload'), {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`

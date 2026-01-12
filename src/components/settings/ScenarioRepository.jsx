@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Edit, Download, Upload, Globe, Lock, Play, X, Copy, Clock, ChevronDown, ChevronUp, Save, FileText } from 'lucide-react';
 import { AuthService } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
+import { apiUrl } from '../../config/api';
 import { SCENARIO_TEMPLATES } from '../../data/scenarioTemplates';
 
 const CATEGORIES = ['Cardiac', 'Respiratory', 'Sepsis', 'Trauma', 'General', 'Recovery', 'Pediatric'];
@@ -34,7 +35,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
     const loadScenarios = async () => {
         try {
             const token = AuthService.getToken();
-            const res = await fetch('/api/scenarios', {
+            const res = await fetch(apiUrl('/api/scenarios'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -52,7 +53,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
 
         try {
             const token = AuthService.getToken();
-            const res = await fetch('/api/scenarios/seed', {
+            const res = await fetch(apiUrl('/api/scenarios/seed'), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -71,7 +72,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
 
         try {
             const token = AuthService.getToken();
-            await fetch(`/api/scenarios/${id}`, {
+            await fetch(apiUrl(`/api/scenarios/${id}`), {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -96,8 +97,8 @@ export default function ScenarioRepository({ onSelectScenario }) {
             const token = AuthService.getToken();
             const method = editingScenario.id ? 'PUT' : 'POST';
             const url = editingScenario.id
-                ? `/api/scenarios/${editingScenario.id}`
-                : '/api/scenarios';
+                ? apiUrl(`/api/scenarios/${editingScenario.id}`)
+                : apiUrl('/api/scenarios');
 
             const res = await fetch(url, {
                 method,

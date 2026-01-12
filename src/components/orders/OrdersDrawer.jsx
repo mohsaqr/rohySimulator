@@ -7,6 +7,7 @@ import {
 import { useToast } from '../../contexts/ToastContext';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import ClinicalRecordsPanel from '../investigations/ClinicalRecordsPanel';
+import { apiUrl } from '../../config/api';
 
 /**
  * Bottom Orders Drawer
@@ -99,7 +100,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         const fetchLabs = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const response = await fetch(`/api/sessions/${sessionId}/available-labs`, {
+                const response = await fetch(apiUrl(`/api/sessions/${sessionId}/available-labs`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
@@ -130,7 +131,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         try {
             const token = localStorage.getItem('token');
             console.log(`[Orders] Fetching orders for session ${sessionId}...`);
-            const response = await fetch(`/api/sessions/${sessionId}/orders`, {
+            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/orders`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -190,7 +191,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                     globalTurnaround: labSettings.globalTurnaround
                 }
             });
-            const response = await fetch(`/api/sessions/${sessionId}/order-labs`, {
+            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/order-labs`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

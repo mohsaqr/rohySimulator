@@ -12,6 +12,7 @@
  */
 
 import { AuthService } from './authService';
+import { apiUrl } from '../config/api';
 
 // Severity levels for events
 export const SEVERITY = {
@@ -901,11 +902,11 @@ class EventLoggerService {
             // Use sendBeacon for immediate flush (page unload)
             if (immediate && navigator.sendBeacon) {
                 const blob = new Blob([JSON.stringify({ events })], { type: 'application/json' });
-                navigator.sendBeacon('/api/learning-events/batch', blob);
+                navigator.sendBeacon(apiUrl('/api/learning-events/batch'), blob);
                 return;
             }
 
-            const response = await fetch('/api/learning-events/batch', {
+            const response = await fetch(apiUrl('/api/learning-events/batch'), {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({ events })

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, ZoomIn, ZoomOut, FileText, AlertTriangle, TrendingUp, TrendingDown, Minus, Printer } from 'lucide-react';
 import { AuthService } from '../../services/authService';
+import { apiUrl } from '../../config/api';
 
 const LabResultsModal = ({ result, sessionId, patientInfo, onClose }) => {
   const [showRanges, setShowRanges] = useState(() => {
@@ -23,7 +24,7 @@ const LabResultsModal = ({ result, sessionId, patientInfo, onClose }) => {
   const markAsViewed = async () => {
     try {
       const token = AuthService.getToken();
-      await fetch(`/api/orders/${result.order_id}/view`, {
+      await fetch(apiUrl(`/api/orders/${result.order_id}/view`), {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}` }
       });

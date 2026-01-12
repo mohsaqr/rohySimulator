@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getAudioContext, resumeAudioContext } from '../../utils/alarmAudio';
 import LabValueEditor from '../investigations/LabValueEditor';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
+import { apiUrl } from '../../config/api';
 
 /**
  * ADVANCED ECG GENERATION UTILITIES
@@ -371,7 +372,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       const loadPlatformSettings = async () => {
          try {
             const token = localStorage.getItem('token');
-            const response = await fetch('/api/platform-settings/monitor', {
+            const response = await fetch(apiUrl('/api/platform-settings/monitor'), {
                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             if (response.ok) {

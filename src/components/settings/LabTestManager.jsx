@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { AuthService } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
+import { apiUrl } from '../../config/api';
 
 /**
  * Lab Test Manager Component
@@ -52,13 +53,13 @@ export default function LabTestManager() {
         try {
             const token = AuthService.getToken();
             const [testsRes, groupsRes, statsRes] = await Promise.all([
-                fetch('/api/labs/all?pageSize=1000', {
+                fetch(apiUrl('/api/labs/all?pageSize=1000'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 }),
-                fetch('/api/labs/groups', {
+                fetch(apiUrl('/api/labs/groups'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 }),
-                fetch('/api/labs/stats', {
+                fetch(apiUrl('/api/labs/stats'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 })
             ]);
@@ -145,7 +146,7 @@ export default function LabTestManager() {
                     : []
             };
 
-            const res = await fetch('/api/labs/test', {
+            const res = await fetch(apiUrl('/api/labs/test'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -180,7 +181,7 @@ export default function LabTestManager() {
     const handleUpdateTest = async (test) => {
         try {
             const token = AuthService.getToken();
-            const res = await fetch('/api/labs/test', {
+            const res = await fetch(apiUrl('/api/labs/test'), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -210,7 +211,7 @@ export default function LabTestManager() {
 
         try {
             const token = AuthService.getToken();
-            const res = await fetch('/api/labs/test', {
+            const res = await fetch(apiUrl('/api/labs/test'), {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -279,7 +280,7 @@ export default function LabTestManager() {
 
         try {
             const token = AuthService.getToken();
-            const res = await fetch('/api/labs/import', {
+            const res = await fetch(apiUrl('/api/labs/import'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

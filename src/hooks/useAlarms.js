@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { apiUrl } from '../config/api';
 
 // Default alarm thresholds
 const DEFAULT_THRESHOLDS = {
@@ -27,7 +28,7 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
     const loadConfig = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('/api/alarms/config/', {
+        const response = await fetch(apiUrl('/api/alarms/config/'), {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -146,7 +147,7 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
     
     try {
       const token = localStorage.getItem('token');
-      await fetch('/api/alarms/log', {
+      await fetch(apiUrl('/api/alarms/log'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -339,7 +340,7 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
       const token = localStorage.getItem('token');
       
       for (const [vital, config] of Object.entries(thresholds)) {
-        await fetch('/api/alarms/config', {
+        await fetch(apiUrl('/api/alarms/config'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

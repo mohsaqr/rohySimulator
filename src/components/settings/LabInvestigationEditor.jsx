@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { AuthService } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
+import { apiUrl } from '../../config/api';
 import { LAB_PANEL_TEMPLATES, getTemplateCategories, getTemplatesByCategory, SEARCH_ALIASES } from '../../data/labPanelTemplates';
 
 /**
@@ -44,7 +45,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
     // Load groups on mount
     useEffect(() => {
         const token = AuthService.getToken();
-        fetch('/api/labs/groups', {
+        fetch(apiUrl('/api/labs/groups'), {
             headers: { 'Authorization': `Bearer ${token}` }
         })
             .then(res => res.json())
@@ -74,7 +75,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
 
         // Search with multiple terms
         const searchPromises = expandedTerms.slice(0, 5).map(term =>
-            fetch(`/api/labs/search?q=${encodeURIComponent(term)}&limit=30`, {
+            fetch(apiUrl(`/api/labs/search?q=${encodeURIComponent(term)}&limit=30`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(res => res.json())
         );
@@ -160,7 +161,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
     const addGroupAsPanel = async (groupName) => {
         try {
             const token = AuthService.getToken();
-            const response = await fetch(`/api/labs/group/${encodeURIComponent(groupName)}`, {
+            const response = await fetch(apiUrl(`/api/labs/group/${encodeURIComponent(groupName)}`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -236,7 +237,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                 // Search for the test - extract key words for better matching
                 const searchTerms = testConfig.test_name.split(',')[0].trim(); // Use first part before comma
                 const response = await fetch(
-                    `/api/labs/search?q=${encodeURIComponent(searchTerms)}&limit=20`,
+                    apiUrl(`/api/labs/search?q=${encodeURIComponent(searchTerms)}&limit=20`),
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
 

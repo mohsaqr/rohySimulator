@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AuthService } from '../../services/authService';
 import DEFAULT_REGIONS from '../../utils/defaultRegions';
+import { apiUrl } from '../../config/api';
  
 // Storage key for localStorage
 const STORAGE_KEY = 'rohy_bodymap_regions';
@@ -37,7 +38,7 @@ export default function BodyMapDebug({ gender = 'male', view = 'anterior' }) {
     useEffect(() => {
         const hasLocalData = localStorage.getItem(STORAGE_KEY);
         if (!hasLocalData) {
-            fetch('/api/bodymap-regions')
+            fetch(apiUrl('/api/bodymap-regions'))
                 .then(r => r.json())
                 .then(data => {
                     if (data.regions) {
@@ -117,7 +118,7 @@ export default function BodyMapDebug({ gender = 'male', view = 'anterior' }) {
             // Also save to server for persistence
             const token = AuthService.getToken();
             if (token) {
-                await fetch('/api/bodymap-regions', {
+                await fetch(apiUrl('/api/bodymap-regions'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

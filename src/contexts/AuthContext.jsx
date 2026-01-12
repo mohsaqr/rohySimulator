@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AuthService } from '../services/authService';
+import { apiUrl } from '../config/api';
 
 const AuthContext = createContext(null);
 
@@ -49,7 +50,7 @@ export const AuthProvider = ({ children }) => {
         try {
             const token = AuthService.getToken();
             if (token) {
-                await fetch('/api/auth/logout', {
+                await fetch(apiUrl('/api/auth/logout'), {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`
