@@ -342,6 +342,15 @@
     "normal_samples": [95, 115, 105]
   },
   {
+    "test_name": "GFR (estimated)",
+    "group": "Renal Function",
+    "category": "General",
+    "min_value": 90,
+    "max_value": 120,
+    "unit": "mL/min/1.73m²",
+    "normal_samples": [95, 115, 105]
+  },
+  {
     "test_name": "BUN/Creatinine Ratio",
     "group": "Renal Function",
     "category": "General",
