@@ -1098,7 +1098,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
             <div className="flex-1 flex flex-col bg-black relative">
 
                {/* Channel 1: ECG */}
-               <div className="flex-1 min-h-[160px] border-b border-neutral-800/50 relative group">
+               <div className="h-32 min-h-[160px] border-b border-neutral-800/50 relative group">
                   <div className="absolute top-2 left-3 z-10 font-mono text-sm font-bold text-green-500 select-none">
                      II <span className="text-xs font-normal opacity-70 ml-1">1mV</span>
                   </div>

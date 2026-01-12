@@ -159,28 +159,31 @@ export default function BodyMap({
                                     )}
                                     {/* Label on hover/select */}
                                     {showLabel && (
-                                        <g>
-                                            <rect
-                                                x={centerX - 8}
-                                                y={centerY - 2.5}
-                                                width="16"
-                                                height="4"
-                                                rx="0.5"
-                                                fill="rgba(0, 0, 0, 0.85)"
-                                                stroke="rgba(255, 255, 255, 0.3)"
-                                                strokeWidth="0.2"
-                                            />
-                                            <text
-                                                x={centerX}
-                                                y={centerY + 0.8}
-                                                textAnchor="middle"
-                                                fontSize="2.2"
-                                                fill="white"
-                                                fontWeight="500"
-                                                style={{ pointerEvents: 'none' }}
-                                            >
-                                                {region.label}
-                                            </text>
+                                        <g transform={`translate(${centerX}, ${centerY})`} style={{ pointerEvents: 'none' }}>
+                                            {/* Counter-scale to fix text stretching (viewBox is 100x100 but container is 5:9 aspect ratio) */}
+                                            <g transform="scale(1.8, 1)">
+                                                <rect
+                                                    x="-8"
+                                                    y="-2.5"
+                                                    width="16"
+                                                    height="4"
+                                                    rx="0.5"
+                                                    fill="rgba(0, 0, 0, 0.85)"
+                                                    stroke="rgba(255, 255, 255, 0.3)"
+                                                    strokeWidth="0.2"
+                                                />
+                                                <text
+                                                    x="0"
+                                                    y="0.8"
+                                                    textAnchor="middle"
+                                                    fontSize="2.2"
+                                                    fill="white"
+                                                    fontWeight="500"
+                                                    style={{ pointerEvents: 'none' }}
+                                                >
+                                                    {region.label}
+                                                </text>
+                                            </g>
                                         </g>
                                     )}
                                 </g>
