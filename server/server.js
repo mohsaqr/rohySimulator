@@ -4,6 +4,8 @@ import apiRoutes from './routes.js';
 import path from 'path';
 import fs from "fs";
 import { fileURLToPath } from 'url';
+import db from './db.js';
+import { runSeeders, needsSeeding } from './seeders/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,8 +54,26 @@ function startServer(port, maxRetries = 10) {
     return server;
 }
 
-// Start the server
-startServer(PORT);
+// Run seeders if database is empty, then start server
+async function initializeAndStart() {
+    try {
+        // Wait a moment for database to initialize
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Check if seeding is needed and run seeders
+        const isEmpty = await needsSeeding(db);
+        if (isEmpty) {
+            await runSeeders(db);
+        }
+    } catch (err) {
+        console.error('[Startup] Seeder error (non-fatal):', err.message);
+    }
+
+    // Start the server
+    startServer(PORT);
+}
+
+initializeAndStart();
 
 // Keep process alive and handle errors
 process.on('uncaughtException', (err) => {

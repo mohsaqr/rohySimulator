@@ -1029,13 +1029,13 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                </div>
                <div>
                   <h1 className="text-lg font-bold tracking-tight text-white leading-tight">
-                     {caseData?.config?.patient_name || caseData?.name || 'ICU MONITOR'}
+                     {caseData?.patient_name || caseData?.config?.patient_name || caseData?.name || 'ICU MONITOR'}
                   </h1>
                   <div className="flex items-center gap-2 text-xs text-neutral-400">
                      <User className="w-3 h-3" />
                      <span>
-                        {caseData?.config?.demographics?.age ? `${caseData.config.demographics.age}y` : ''}
-                        {caseData?.config?.demographics?.gender ? ` ${caseData.config.demographics.gender}` : ''}
+                        {(caseData?.patient_age || caseData?.config?.demographics?.age) ? `${caseData?.patient_age || caseData.config.demographics.age}y` : ''}
+                        {(caseData?.patient_gender || caseData?.config?.demographics?.gender) ? ` ${caseData?.patient_gender || caseData.config.demographics.gender}` : ''}
                         {caseData?.config?.demographics?.weight ? ` • ${caseData.config.demographics.weight}` : ''}
                      </span>
                   </div>

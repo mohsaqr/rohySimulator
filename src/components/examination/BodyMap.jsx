@@ -105,24 +105,26 @@ export default function BodyMap({
         <div className="relative w-full h-full flex flex-col overflow-hidden">
             {/* Main container */}
             <div className="relative flex-1 flex items-center justify-center min-h-0 overflow-hidden bg-white">
+                {/*
+                    Container maintains 5:9 aspect ratio and centers content.
+                    Using width: auto with height constraints ensures it doesn't over-stretch on tall screens.
+                */}
                 <div
-                    className="relative"
+                    className="relative h-full"
                     style={{
                         aspectRatio: '5/9',
-                        height: '100%',
                         maxHeight: '100%',
-                        maxWidth: '100%'
+                        width: 'auto'
                     }}
                 >
-                    {/* PNG Body Image as background */}
+                    {/* PNG Body Image */}
                     <img
                         src={imageSrc}
                         alt={`${gender} body ${view} view`}
-                        className="absolute inset-0 w-full h-full select-none pointer-events-none"
-                        style={{ objectFit: 'contain' }}
+                        className="h-full w-full select-none pointer-events-none"
                         draggable={false}
                     />
-                    {/* SVG Overlay for clickable regions */}
+                    {/* SVG Overlay - positioned absolutely over the image */}
                     <svg
                         viewBox="0 0 100 100"
                         preserveAspectRatio="none"
@@ -167,7 +169,7 @@ export default function BodyMap({
                                                     x="-8"
                                                     y="-2.5"
                                                     width="16"
-                                                    height="4"
+                                                    height="5"
                                                     rx="0.5"
                                                     fill="rgba(0, 0, 0, 0.85)"
                                                     stroke="rgba(255, 255, 255, 0.3)"
@@ -180,7 +182,7 @@ export default function BodyMap({
                                                     fontSize="2.2"
                                                     fill="white"
                                                     fontWeight="500"
-                                                    style={{ pointerEvents: 'none' }}
+                                                    style={{ pointerEvents: 'none', fontFamily: 'inherit' }}
                                                 >
                                                     {region.label}
                                                 </text>

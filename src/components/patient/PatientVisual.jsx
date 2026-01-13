@@ -20,7 +20,7 @@ export default function PatientVisual({ image, context, caseData }) {
             </div>
 
             {/* Floating Context Bubble (Brief) - Only if exists */}
-            {(context || patientName) && (
+            {false && (context || patientName) && (
                 <div className="absolute bottom-6 left-6 max-w-[80%] z-10">
                     <div className="bg-black/60 backdrop-blur-md border border-white/10 p-4 rounded-xl text-white shadow-2xl animate-in fade-in slide-in-from-bottom-4">
                         {patientName && (
