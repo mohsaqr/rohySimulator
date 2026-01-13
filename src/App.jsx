@@ -261,7 +261,7 @@ function MainApp() {
             {/* Top Left: Patient Visual */}
             <div className="h-[45%] border-b border-neutral-800 relative">
                <PatientVisual
-                  image={activeCase?.image_url || "/patient_avatar.png"}
+                  image={activeCase?.image_url || "./patient_avatar.png"}
                   context={activeCase?.description}
                   caseData={activeCase}
                />
