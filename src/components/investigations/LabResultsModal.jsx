@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { X, ZoomIn, ZoomOut, FileText, AlertTriangle, TrendingUp, TrendingDown, Minus, Printer } from 'lucide-react';
 import { AuthService } from '../../services/authService';
 import { apiUrl } from '../../config/api';
+import { usePatientRecord } from '../../services/PatientRecord';
 
 const LabResultsModal = ({ result, sessionId, patientInfo, onClose }) => {
+  const { elicited } = usePatientRecord();
   const [showRanges, setShowRanges] = useState(() => {
     // Get setting from localStorage (default: true)
     const saved = localStorage.getItem('rohy_show_lab_ranges');
@@ -14,12 +16,21 @@ const LabResultsModal = ({ result, sessionId, patientInfo, onClose }) => {
     return saved !== null ? JSON.parse(saved) : true;
   });
 
-  // Mark as viewed when opened
+  // Mark as viewed when opened and record to PatientRecord
   useEffect(() => {
     if (result && !result.viewed_at) {
       markAsViewed();
+      // Record lab result viewing to PatientRecord
+      const isAbnormal = result.current_value < result.min_value || result.current_value > result.max_value;
+      elicited('lab', `${result.test_name}: ${result.current_value} ${result.unit || ''}`, isAbnormal, {
+        test_name: result.test_name,
+        value: String(result.current_value),
+        unit: result.unit,
+        reference_range: `${result.min_value}-${result.max_value}`,
+        significance: isAbnormal ? 'Abnormal result' : 'Normal result'
+      });
     }
-  }, [result]);
+  }, [result, elicited]);
 
   const markAsViewed = async () => {
     try {

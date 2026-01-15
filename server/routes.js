@@ -5286,4 +5286,239 @@ router.put('/llm/pricing', authenticateToken, requireAdmin, async (req, res) => 
     }
 });
 
+// ============================================
+// PATIENT RECORD MEMORY MODULE ENDPOINTS
+// ============================================
+
+// POST /api/patient-record/sync - Sync patient record (events + document)
+router.post('/patient-record/sync', async (req, res) => {
+    try {
+        const { session_id, record_id, events, document, patient_info, current_state, events_count } = req.body;
+
+        if (!session_id || !record_id) {
+            return res.status(400).json({ error: 'session_id and record_id are required' });
+        }
+
+        // Insert new events
+        if (events && events.length > 0) {
+            const insertEvent = db.prepare(`
+                INSERT OR IGNORE INTO patient_record_events
+                (session_id, record_id, event_id, verb, time_elapsed, category, region, source, item, content, finding, value, unit, abnormal, details)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            for (const event of events) {
+                insertEvent.run(
+                    session_id,
+                    record_id,
+                    event.id,
+                    event.verb,
+                    event.time,
+                    event.category || null,
+                    event.region || null,
+                    event.source || null,
+                    event.item || null,
+                    event.content || null,
+                    event.finding || null,
+                    event.value || null,
+                    event.unit || null,
+                    event.abnormal ? 1 : 0,
+                    JSON.stringify(event)
+                );
+            }
+            insertEvent.finalize();
+        }
+
+        // Upsert document
+        await new Promise((resolve, reject) => {
+            db.run(`
+                INSERT INTO patient_record_documents (session_id, record_id, patient_info, current_state, events_count, document, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    current_state = excluded.current_state,
+                    events_count = excluded.events_count,
+                    document = excluded.document,
+                    updated_at = CURRENT_TIMESTAMP
+            `, [
+                session_id,
+                record_id,
+                JSON.stringify(patient_info),
+                JSON.stringify(current_state),
+                events_count || 0,
+                JSON.stringify(document)
+            ], function(err) {
+                if (err) reject(err);
+                else resolve(this.changes);
+            });
+        });
+
+        res.json({
+            success: true,
+            message: 'Patient record synced',
+            events_synced: events?.length || 0
+        });
+    } catch (err) {
+        console.error('Patient record sync error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/patient-record/:sessionId - Get patient record document
+router.get('/patient-record/:sessionId', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        const record = await new Promise((resolve, reject) => {
+            db.get(
+                'SELECT * FROM patient_record_documents WHERE session_id = ?',
+                [sessionId],
+                (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row);
+                }
+            );
+        });
+
+        if (!record) {
+            return res.status(404).json({ error: 'Patient record not found' });
+        }
+
+        res.json({
+            session_id: record.session_id,
+            record_id: record.record_id,
+            patient_info: JSON.parse(record.patient_info || '{}'),
+            current_state: JSON.parse(record.current_state || '{}'),
+            events_count: record.events_count,
+            document: JSON.parse(record.document || '{}'),
+            created_at: record.created_at,
+            updated_at: record.updated_at
+        });
+    } catch (err) {
+        console.error('Patient record get error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/patient-record/:sessionId/events - Get patient record events
+router.get('/patient-record/:sessionId/events', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { verb } = req.query;
+
+        let query = 'SELECT * FROM patient_record_events WHERE session_id = ?';
+        const params = [sessionId];
+
+        if (verb) {
+            query += ' AND verb = ?';
+            params.push(verb);
+        }
+
+        query += ' ORDER BY time_elapsed ASC, id ASC';
+
+        const events = await new Promise((resolve, reject) => {
+            db.all(query, params, (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            });
+        });
+
+        // Parse details JSON for each event
+        const parsedEvents = events.map(e => ({
+            ...e,
+            details: JSON.parse(e.details || '{}'),
+            abnormal: e.abnormal === 1
+        }));
+
+        res.json({ events: parsedEvents });
+    } catch (err) {
+        console.error('Patient record events get error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/patient-record/:sessionId - Delete patient record
+router.delete('/patient-record/:sessionId', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        // Delete events
+        await new Promise((resolve, reject) => {
+            db.run('DELETE FROM patient_record_events WHERE session_id = ?', [sessionId], function(err) {
+                if (err) reject(err);
+                else resolve(this.changes);
+            });
+        });
+
+        // Delete document
+        await new Promise((resolve, reject) => {
+            db.run('DELETE FROM patient_record_documents WHERE session_id = ?', [sessionId], function(err) {
+                if (err) reject(err);
+                else resolve(this.changes);
+            });
+        });
+
+        res.json({ success: true, message: 'Patient record deleted' });
+    } catch (err) {
+        console.error('Patient record delete error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/patient-record/:sessionId/summary - Get patient record summary
+router.get('/patient-record/:sessionId/summary', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        // Get document
+        const record = await new Promise((resolve, reject) => {
+            db.get(
+                'SELECT * FROM patient_record_documents WHERE session_id = ?',
+                [sessionId],
+                (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row);
+                }
+            );
+        });
+
+        if (!record) {
+            return res.status(404).json({ error: 'Patient record not found' });
+        }
+
+        // Get verb counts
+        const verbCounts = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT verb, COUNT(*) as count FROM patient_record_events
+                 WHERE session_id = ? GROUP BY verb`,
+                [sessionId],
+                (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows || []);
+                }
+            );
+        });
+
+        const verbCountMap = {};
+        verbCounts.forEach(v => {
+            verbCountMap[v.verb] = v.count;
+        });
+
+        const document = JSON.parse(record.document || '{}');
+
+        res.json({
+            session_id: record.session_id,
+            record_id: record.record_id,
+            patient_name: document.patient?.name || 'Unknown',
+            events_count: record.events_count,
+            events_by_verb: verbCountMap,
+            current_state: JSON.parse(record.current_state || '{}'),
+            created_at: record.created_at,
+            updated_at: record.updated_at
+        });
+    } catch (err) {
+        console.error('Patient record summary error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;

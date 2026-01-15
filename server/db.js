@@ -1206,6 +1206,53 @@ function initDb() {
         });
         pricingStmt.finalize();
 
+        // ============================================
+        // PATIENT RECORD MEMORY MODULE TABLES
+        // ============================================
+
+        // Patient Record Events - Individual events with 8 verbs
+        db.run(`CREATE TABLE IF NOT EXISTS patient_record_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            record_id TEXT NOT NULL,
+            event_id TEXT NOT NULL UNIQUE,
+            verb TEXT NOT NULL CHECK(verb IN ('OBTAINED', 'EXAMINED', 'ELICITED', 'NOTED', 'ORDERED', 'ADMINISTERED', 'CHANGED', 'EXPRESSED')),
+            time_elapsed INTEGER NOT NULL,
+            category TEXT,
+            region TEXT,
+            source TEXT,
+            item TEXT,
+            content TEXT,
+            finding TEXT,
+            value TEXT,
+            unit TEXT,
+            abnormal BOOLEAN,
+            details JSON,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        )`);
+
+        // Patient Record Documents - Full formatted JSON document per session
+        db.run(`CREATE TABLE IF NOT EXISTS patient_record_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL UNIQUE,
+            record_id TEXT NOT NULL UNIQUE,
+            patient_info JSON NOT NULL,
+            current_state JSON,
+            events_count INTEGER DEFAULT 0,
+            document JSON NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        )`);
+
+        // Patient Record indexes
+        db.run(`CREATE INDEX IF NOT EXISTS idx_patient_record_events_session ON patient_record_events(session_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_patient_record_events_record ON patient_record_events(record_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_patient_record_events_verb ON patient_record_events(verb)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_patient_record_events_time ON patient_record_events(time_elapsed)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_patient_record_documents_session ON patient_record_documents(session_id)`);
+
         console.log('Database tables initialized with comprehensive schema, master data tables, audit trails, and performance indexes.');
     });
 }

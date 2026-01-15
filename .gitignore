@@ -42,3 +42,10 @@ production/.env
 nul
 .Rhistory
 *.svg.bak
+
+# Local documentation and fixes
+BROWSER_CACHE_CLEAR.md
+IMAGE_SERVING_FIX.md
+LATEST_UPDATES.md
+PORT_CONFIGURATION_FIX.md
+docs/plans/

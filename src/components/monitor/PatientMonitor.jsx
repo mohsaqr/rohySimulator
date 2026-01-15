@@ -9,6 +9,7 @@ import { getAudioContext, resumeAudioContext } from '../../utils/alarmAudio';
 import LabValueEditor from '../investigations/LabValueEditor';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { apiUrl } from '../../config/api';
+import { usePatientRecord } from '../../services/PatientRecord';
 
 /**
  * ADVANCED ECG GENERATION UTILITIES
@@ -241,6 +242,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
    const toast = useToast();
    const { isAdmin: isAdminAuth } = useAuth();
    const isAdmin = isAdminProp || isAdminAuth();
+   const { noted, changed, setInitialVitals } = usePatientRecord();
    // --- Refs for Canvas & Buffers ---
    const canvasRef = useRef(null);
    const ecgCanvasRef = useRef(null);
@@ -554,17 +556,29 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
 
    // Helper to update a vital and mark as overridden
    const updateVitalWithOverride = (vitalKey, value) => {
+      const prevValue = params[vitalKey];
       setParams(prev => ({ ...prev, [vitalKey]: value }));
       if (caseBaseline && trackOverrides) {
          setOverriddenVitals(prev => new Set([...prev, vitalKey]));
+      }
+      // Record vital change to PatientRecord if value actually changed
+      if (prevValue !== value) {
+         const units = { hr: 'bpm', spo2: '%', rr: '/min', bpSys: 'mmHg', bpDia: 'mmHg', temp: '°C', etco2: 'mmHg' };
+         const labels = { hr: 'Heart Rate', spo2: 'SpO2', rr: 'Respiratory Rate', bpSys: 'Systolic BP', bpDia: 'Diastolic BP', temp: 'Temperature', etco2: 'ETCO2' };
+         changed('vitals', labels[vitalKey] || vitalKey, prevValue, value, 'manual', units[vitalKey] || '');
       }
    };
 
    // Helper to update rhythm with override tracking
    const updateRhythmWithOverride = (newRhythm) => {
+      const prevRhythm = rhythm;
       setRhythm(newRhythm);
       if (caseBaselineRhythm && trackOverrides) {
          setOverriddenVitals(prev => new Set([...prev, 'rhythm']));
+      }
+      // Record rhythm change to PatientRecord
+      if (prevRhythm !== newRhythm) {
+         changed('vitals', 'Cardiac Rhythm', prevRhythm, newRhythm, 'manual');
       }
    };
 
@@ -773,11 +787,17 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
    const handleAcknowledgeAlarm = (alarmKey) => {
       alarmSystem.acknowledgeAlarm(alarmKey);
       EventLogger.alarmAcknowledged(alarmKey, COMPONENTS.PATIENT_MONITOR);
+      // Record to PatientRecord
+      noted('alarm', alarmKey.replace('_', ' ').toUpperCase(), 'alarm_fired', 'acknowledged');
    };
 
    const handleAcknowledgeAll = () => {
       alarmSystem.acknowledgeAll();
       EventLogger.buttonClicked('Acknowledge All Alarms', COMPONENTS.PATIENT_MONITOR);
+      // Record to PatientRecord
+      alarmSystem.activeAlarms.forEach(alarmKey => {
+         noted('alarm', alarmKey.replace('_', ' ').toUpperCase(), 'alarm_fired', 'acknowledged');
+      });
    };
 
    const handleSnoozeAlarm = (alarmKey) => {

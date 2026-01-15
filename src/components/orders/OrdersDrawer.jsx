@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     FlaskConical, Pill, X, ChevronUp, ChevronDown,
     Search, Clock, CheckCircle, Loader2, List,
-    Eye, FileText, Scan, Stethoscope
+    Eye, FileText, Scan, Stethoscope, Activity
 } from 'lucide-react';
+import PatientRecordViewer from '../PatientRecordViewer';
 import { useToast } from '../../contexts/ToastContext';
+import { usePatientRecord } from '../../services/PatientRecord';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import ClinicalRecordsPanel from '../investigations/ClinicalRecordsPanel';
 import { apiUrl } from '../../config/api';
@@ -21,6 +23,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     const [activeTab, setActiveTab] = useState('labs'); // labs, radiology, drugs, records
     const [drawerHeight, setDrawerHeight] = useState('50vh'); // 50vh or 80vh
     const toast = useToast();
+    const { ordered } = usePatientRecord();
 
     // Settings state - persist to localStorage
     const [labSettings, setLabSettings] = useState(() => {
@@ -208,6 +211,10 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                 selectedLabs.forEach(labId => {
                     const lab = availableLabs.find(l => l.id === labId);
                     EventLogger.labOrdered(labId, lab?.test_name || labId, COMPONENTS.ORDERS_DRAWER);
+                    // Record to PatientRecord
+                    ordered('lab', lab?.test_name || labId, {
+                        urgency: labSettings.instantResults ? 'stat' : 'routine'
+                    });
                 });
 
                 setSelectedLabs([]);
@@ -294,7 +301,8 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         { id: 'labs', label: 'Laboratory', icon: FlaskConical, count: readyOrders.length },
         { id: 'radiology', label: 'Radiology', icon: Scan, count: 0 },
         { id: 'drugs', label: 'Medications', icon: Pill, count: 0 },
-        { id: 'records', label: 'Records', icon: FileText, count: 0 }
+        { id: 'records', label: 'Records', icon: FileText, count: 0 },
+        { id: 'memory', label: 'Memory', icon: Activity, count: 0 }
     ];
 
     return (
@@ -437,6 +445,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                 tab.id === 'radiology' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' :
                                 tab.id === 'drugs' ? 'bg-green-600 hover:bg-green-500 text-white' :
                                 tab.id === 'records' ? 'bg-amber-600 hover:bg-amber-500 text-white' :
+                                tab.id === 'memory' ? 'bg-rose-600 hover:bg-rose-500 text-white' :
                                 'bg-neutral-700 hover:bg-neutral-600 text-white'
                             }`}
                         >
@@ -521,6 +530,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                               tab.id === 'radiology' ? 'bg-cyan-600 text-white' :
                                               tab.id === 'drugs' ? 'bg-green-600 text-white' :
                                               tab.id === 'records' ? 'bg-amber-600 text-white' :
+                                              tab.id === 'memory' ? 'bg-rose-600 text-white' :
                                               'bg-neutral-700 text-white'
                                             : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-white'
                                     }`}
@@ -953,6 +963,13 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                         {activeTab === 'records' && (
                             <div className="h-full">
                                 <ClinicalRecordsPanel caseConfig={caseData?.config} />
+                            </div>
+                        )}
+
+                        {/* Memory Tab - Patient Record Viewer */}
+                        {activeTab === 'memory' && (
+                            <div className="h-full">
+                                <PatientRecordViewer />
                             </div>
                         )}
                     </div>
