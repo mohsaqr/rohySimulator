@@ -6,6 +6,7 @@ import FindingDisplay from './FindingDisplay';
 import ExamLog from './ExamLog';
 import { BODY_REGIONS, getDefaultFinding, SAMPLE_ABNORMAL_EXAM } from '../../data/examRegions';
 import { useToast } from '../../contexts/ToastContext';
+import { usePatientRecord } from '../../services/PatientRecord';
 
 /**
  * Manikin Panel - Main Physical Examination Interface
@@ -26,6 +27,7 @@ export default function ManikinPanel({
     patientGender = 'male'
 }) {
     const toast = useToast();
+    const { examined, elicited } = usePatientRecord();
     // State
     const [view, setView] = useState('anterior'); // anterior | posterior
     const [gender, setGender] = useState(patientGender); // male | female
@@ -134,7 +136,16 @@ export default function ManikinPanel({
         if (onExamPerformed) {
             onExamPerformed(logEntry);
         }
-    }, [selectedRegion, examData, onExamPerformed]);
+
+        // Record to PatientRecord
+        examined(selectedRegion, examType, finding);
+        if (finding) {
+            elicited('exam', finding, abnormal, {
+                category: selectedRegion,
+                significance: abnormal ? 'Abnormal finding' : 'Normal finding'
+            });
+        }
+    }, [selectedRegion, examData, onExamPerformed, examined, elicited]);
 
     // Handle clicking on a log entry
     const handleSelectExam = useCallback((entry) => {

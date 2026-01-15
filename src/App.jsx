@@ -10,6 +10,7 @@ import LabResultsModal from './components/investigations/LabResultsModal';
 import UserProfilePanel from './components/settings/UserProfilePanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider, useToast } from './contexts/ToastContext';
+import { PatientRecordProvider, usePatientRecord } from './services/PatientRecord';
 import { AuthService } from './services/authService';
 import EventLogger, { COMPONENTS } from './services/eventLogger';
 import { apiUrl } from './config/api';
@@ -252,8 +253,22 @@ function MainApp() {
       );
    }
 
+   // Prepare patient info for PatientRecord
+   const patientInfo = activeCase ? {
+      name: activeCase.config?.patient_name || activeCase.name || 'Unknown Patient',
+      age: activeCase.config?.demographics?.age || null,
+      gender: activeCase.config?.demographics?.gender || null,
+      mrn: activeCase.config?.demographics?.mrn || null,
+      chief_complaint: activeCase.config?.structuredHistory?.chiefComplaint || activeCase.description || null
+   } : null;
+
    return (
-      <div className="flex h-screen w-screen bg-neutral-950 text-white overflow-hidden">
+      <PatientRecordProvider
+         sessionId={sessionId}
+         caseId={activeCase?.id}
+         patientInfo={patientInfo}
+      >
+         <div className="flex h-screen w-screen bg-neutral-950 text-white overflow-hidden">
 
          {/* Left Column (Visual + Chat) - 35% width on large screens */}
          <div className="w-[35%] min-w-[350px] flex flex-col border-r border-neutral-800 bg-neutral-900">
@@ -433,7 +448,8 @@ function MainApp() {
             </div>
          )}
 
-      </div>
+         </div>
+      </PatientRecordProvider>
    );
 }
 

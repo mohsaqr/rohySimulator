@@ -21,6 +21,7 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
   
   const alarmDebounce = useRef(new Map()); // vital -> last alarm time
   const snoozedAlarms = useRef(new Map()); // alarmKey -> snooze end time
+  const acknowledgedAlarms = useRef(new Set()); // alarmKey -> acknowledged (until vital normalizes)
   const oscillatorRef = useRef(null);
 
   // Load user's alarm config
@@ -98,13 +99,20 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
         thresholdValue = threshold.high;
       }
 
+      const alarmKey = `${vital}_${thresholdType || 'normal'}`;
+
       if (alarmTriggered) {
-        const alarmKey = `${vital}_${thresholdType}`;
-        console.log(`[Alarms] Threshold breach: ${vital}=${numValue} (${thresholdType} threshold: ${thresholdValue})`);
+        // console.log(`[Alarms] Threshold breach: ${vital}=${numValue} (${thresholdType} threshold: ${thresholdValue})`);
 
         // Skip if alarm is snoozed
         if (snoozedAlarms.current.has(alarmKey)) {
-          console.log(`[Alarms] ${alarmKey} is snoozed, skipping`);
+          // console.log(`[Alarms] ${alarmKey} is snoozed, skipping`);
+          return;
+        }
+
+        // Skip if alarm is acknowledged (until vital normalizes)
+        if (acknowledgedAlarms.current.has(alarmKey)) {
+          // console.log(`[Alarms] ${alarmKey} is acknowledged, skipping until normalized`);
           return;
         }
 
@@ -133,6 +141,19 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
         } else {
           // Keep existing alarm active
           newActiveAlarms.add(alarmKey);
+        }
+      } else {
+        // Vital is normal - clear any acknowledged state for this vital
+        // This allows alarm to re-trigger if vital goes out of range again
+        const lowKey = `${vital}_low`;
+        const highKey = `${vital}_high`;
+        if (acknowledgedAlarms.current.has(lowKey)) {
+          acknowledgedAlarms.current.delete(lowKey);
+          // console.log(`[Alarms] Cleared acknowledged state for ${lowKey} (vital normalized)`);
+        }
+        if (acknowledgedAlarms.current.has(highKey)) {
+          acknowledgedAlarms.current.delete(highKey);
+          // console.log(`[Alarms] Cleared acknowledged state for ${highKey} (vital normalized)`);
         }
       }
     });
@@ -233,8 +254,12 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
     console.log('[Alarms] Thresholds updated:', thresholds);
   }, [thresholds]);
 
-  // Acknowledge alarm
+  // Acknowledge alarm - prevents re-triggering until vital normalizes
   const acknowledgeAlarm = useCallback((alarmKey) => {
+    // Add to acknowledged set (prevents re-triggering until vital normalizes)
+    acknowledgedAlarms.current.add(alarmKey);
+
+    // Remove from active alarms
     setActiveAlarms(prev => {
       const newSet = new Set(prev);
       newSet.delete(alarmKey);
@@ -253,9 +278,17 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
     );
   }, []);
 
-  // Acknowledge all alarms
+  // Acknowledge all alarms - prevents re-triggering until vitals normalize
   const acknowledgeAll = useCallback(() => {
+    // Add all active alarms to acknowledged set
+    activeAlarms.forEach(alarmKey => {
+      acknowledgedAlarms.current.add(alarmKey);
+    });
+
+    // Clear active alarms
     setActiveAlarms(new Set());
+
+    // Update history
     setAlarmHistory(prev =>
       prev.map(alarm => ({
         ...alarm,
@@ -263,7 +296,7 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
         acknowledgedAt: new Date().toISOString()
       }))
     );
-  }, []);
+  }, [activeAlarms]);
 
   // Snooze alarm
   const snoozeAlarm = useCallback((alarmKey, durationMinutes = null) => {

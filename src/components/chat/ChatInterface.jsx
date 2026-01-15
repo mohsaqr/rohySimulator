@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { AuthService } from '../../services/authService';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { apiUrl } from '../../config/api';
+import { usePatientRecord } from '../../services/PatientRecord';
 
 export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId }) {
     const [input, setInput] = useState('');
@@ -13,6 +14,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const [messagesLoaded, setMessagesLoaded] = useState(false);
     const messagesEndRef = useRef(null);
     const { user } = useAuth();
+    const { obtained } = usePatientRecord();
     const [messages, setMessages] = useState([]);
     const [chatSettings, setChatSettings] = useState({
         doctorName: 'Dr. Carmen',
@@ -301,6 +303,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
         // Log assistant response received
         EventLogger.messageReceived(responseText, COMPONENTS.CHAT_INTERFACE);
+
+        // Record to PatientRecord - history item obtained
+        obtained('history', input.trim(), responseText);
 
         setLoading(false);
     };
