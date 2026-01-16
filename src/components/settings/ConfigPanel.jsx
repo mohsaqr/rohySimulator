@@ -8,10 +8,12 @@ import EventLog from '../monitor/EventLog';
 import SessionLogViewer from '../analytics/SessionLogViewer';
 import ScenarioRepository from './ScenarioRepository';
 import LabInvestigationEditor from './LabInvestigationEditor';
+import RadiologyEditor from './RadiologyEditor';
 import ClinicalRecordsEditor from './ClinicalRecordsEditor';
 import PhysicalExamEditor from './PhysicalExamEditor';
 import LabTestManager from './LabTestManager';
 import MedicationManager from './MedicationManager';
+import AgentTemplateManager from './AgentTemplateManager';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
@@ -298,6 +300,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                 className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'bodymap' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                             >
                                 <Image className="w-4 h-4" /> Body Map Editor
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('agents')}
+                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'agents' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                            >
+                                <Users className="w-4 h-4" /> Agent Personas
                             </button>
                         </>
                     )}
@@ -813,6 +821,11 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                 </div>
                             </div>
                         </div>
+                    )}
+
+                    {/* --- AGENT PERSONAS TAB (Admin Only) --- */}
+                    {activeTab === 'agents' && isAdmin() && (
+                        <AgentTemplateManager />
                     )}
 
                 </div>
@@ -3029,6 +3042,397 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
     );
 }
 
+// Case Agent Editor - Configure which agents are available per case
+function CaseAgentEditor({ caseId, caseData, setCaseData }) {
+    const [templates, setTemplates] = useState([]);
+    const [caseAgents, setCaseAgents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [editingAgent, setEditingAgent] = useState(null);
+    const toast = useToast();
+
+    // Load templates and case agents on mount
+    useEffect(() => {
+        loadData();
+    }, [caseId]);
+
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            // Load all templates
+            const token = localStorage.getItem('token');
+            const templatesRes = await fetch(apiUrl('/api/agents/templates'), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (templatesRes.ok) {
+                const data = await templatesRes.json();
+                setTemplates(data.templates || []);
+            }
+
+            // Load case agents if case has an ID
+            if (caseId) {
+                const agentsRes = await fetch(apiUrl(`/api/cases/${caseId}/agents`), {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (agentsRes.ok) {
+                    const data = await agentsRes.json();
+                    setCaseAgents(data.agents || []);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load agent data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAddDefaultAgents = async () => {
+        if (!caseId) {
+            toast.warning('Please save the case first before adding agents');
+            return;
+        }
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents/add-defaults`), {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(data.message);
+                loadData();
+            }
+        } catch (err) {
+            toast.error('Failed to add default agents');
+        }
+    };
+
+    const handleAddAgent = async (templateId) => {
+        if (!caseId) {
+            toast.warning('Please save the case first before adding agents');
+            return;
+        }
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents`), {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ agent_template_id: templateId })
+            });
+            if (res.ok) {
+                toast.success('Agent added');
+                loadData();
+            }
+        } catch (err) {
+            toast.error('Failed to add agent');
+        }
+    };
+
+    const handleRemoveAgent = async (agentId) => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents/${agentId}`), {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                toast.success('Agent removed');
+                loadData();
+            }
+        } catch (err) {
+            toast.error('Failed to remove agent');
+        }
+    };
+
+    const handleToggleEnabled = async (agent) => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents/${agent.id}`), {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ enabled: !agent.enabled })
+            });
+            if (res.ok) {
+                loadData();
+            }
+        } catch (err) {
+            toast.error('Failed to update agent');
+        }
+    };
+
+    const handleUpdateAgent = async (updates) => {
+        if (!editingAgent) return;
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents/${editingAgent.id}`), {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(updates)
+            });
+            if (res.ok) {
+                toast.success('Agent updated');
+                setEditingAgent(null);
+                loadData();
+            }
+        } catch (err) {
+            toast.error('Failed to update agent');
+        }
+    };
+
+    // Get available templates (not already added)
+    const addedTemplateIds = new Set(caseAgents.map(a => a.agent_template_id));
+    const availableTemplates = templates.filter(t => !addedTemplateIds.has(t.id));
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center p-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+            </div>
+        );
+    }
+
+    // Editing modal
+    if (editingAgent) {
+        return (
+            <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <h4 className="text-lg font-bold text-purple-400">Edit Agent: {editingAgent.name}</h4>
+                    <button
+                        onClick={() => setEditingAgent(null)}
+                        className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-sm"
+                    >
+                        Cancel
+                    </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm text-neutral-400 mb-1">Name Override</label>
+                            <input
+                                type="text"
+                                value={editingAgent.name_override || ''}
+                                onChange={(e) => setEditingAgent(prev => ({ ...prev, name_override: e.target.value }))}
+                                placeholder={editingAgent.template_name || editingAgent.name}
+                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm text-neutral-400 mb-1">Availability Type</label>
+                            <select
+                                value={editingAgent.availability_type || 'present'}
+                                onChange={(e) => setEditingAgent(prev => ({ ...prev, availability_type: e.target.value }))}
+                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                            >
+                                <option value="present">Present (Available immediately)</option>
+                                <option value="on-call">On-Call (Must be paged)</option>
+                                <option value="absent">Absent (Not available)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm text-neutral-400 mb-1">Available from minute</label>
+                            <input
+                                type="number"
+                                min="0"
+                                value={editingAgent.available_from_minute || 0}
+                                onChange={(e) => setEditingAgent(prev => ({ ...prev, available_from_minute: parseInt(e.target.value) || 0 }))}
+                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm text-neutral-400 mb-1">Depart at minute (0 = never)</label>
+                            <input
+                                type="number"
+                                min="0"
+                                value={editingAgent.depart_at_minute || 0}
+                                onChange={(e) => setEditingAgent(prev => ({ ...prev, depart_at_minute: parseInt(e.target.value) || null }))}
+                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-sm text-neutral-400 mb-1">Response time min (min)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={editingAgent.response_time_min || 0}
+                                    onChange={(e) => setEditingAgent(prev => ({ ...prev, response_time_min: parseInt(e.target.value) || 0 }))}
+                                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-neutral-400 mb-1">Response time max (min)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={editingAgent.response_time_max || 0}
+                                    onChange={(e) => setEditingAgent(prev => ({ ...prev, response_time_max: parseInt(e.target.value) || 0 }))}
+                                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm text-neutral-400 mb-1">System Prompt Override</label>
+                        <textarea
+                            value={editingAgent.system_prompt_override || ''}
+                            onChange={(e) => setEditingAgent(prev => ({ ...prev, system_prompt_override: e.target.value }))}
+                            placeholder="Leave empty to use template default..."
+                            className="w-full h-64 px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm font-mono resize-none"
+                        />
+                        <p className="text-xs text-neutral-500 mt-1">Override the default system prompt for this case</p>
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4 border-t border-neutral-800">
+                    <button
+                        onClick={() => handleUpdateAgent({
+                            name_override: editingAgent.name_override || null,
+                            system_prompt_override: editingAgent.system_prompt_override || null,
+                            availability_type: editingAgent.availability_type,
+                            available_from_minute: editingAgent.available_from_minute,
+                            depart_at_minute: editingAgent.depart_at_minute || null,
+                            response_time_min: editingAgent.response_time_min,
+                            response_time_max: editingAgent.response_time_max
+                        })}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded text-sm font-bold"
+                    >
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h4 className="text-lg font-bold text-purple-400">8. AI Agents</h4>
+                    <p className="text-xs text-neutral-500">Configure which AI agents are available in this case</p>
+                </div>
+                {!caseId ? (
+                    <span className="px-3 py-1.5 bg-amber-900/30 text-amber-400 rounded text-sm">
+                        Save case first to add agents
+                    </span>
+                ) : (
+                    <button
+                        onClick={handleAddDefaultAgents}
+                        disabled={caseAgents.length > 0}
+                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm flex items-center gap-1"
+                    >
+                        <Plus className="w-4 h-4" /> Add Default Agents
+                    </button>
+                )}
+            </div>
+
+            {/* Configured Agents */}
+            {caseAgents.length > 0 ? (
+                <div className="space-y-3">
+                    <h5 className="text-sm font-medium text-neutral-400">Configured Agents</h5>
+                    {caseAgents.map(agent => (
+                        <div
+                            key={agent.id}
+                            className={`p-4 rounded-lg border ${
+                                agent.enabled
+                                    ? 'bg-neutral-800/50 border-neutral-700'
+                                    : 'bg-neutral-900/50 border-neutral-800 opacity-60'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                        agent.agent_type === 'nurse' ? 'bg-blue-900/50 text-blue-400' :
+                                        agent.agent_type === 'consultant' ? 'bg-green-900/50 text-green-400' :
+                                        agent.agent_type === 'relative' ? 'bg-amber-900/50 text-amber-400' :
+                                        'bg-neutral-800 text-neutral-400'
+                                    }`}>
+                                        <Users className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <div className="font-medium flex items-center gap-2">
+                                            {agent.name}
+                                            {agent.has_name_override && (
+                                                <span className="px-1 py-0.5 bg-blue-900/50 text-blue-400 rounded text-xs">Override</span>
+                                            )}
+                                        </div>
+                                        <div className="text-sm text-neutral-500">
+                                            {agent.role_title || agent.agent_type} • {agent.availability_type}
+                                            {agent.available_from_minute > 0 && ` • From min ${agent.available_from_minute}`}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => handleToggleEnabled(agent)}
+                                        className={`px-2 py-1 rounded text-xs ${
+                                            agent.enabled
+                                                ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50'
+                                                : 'bg-neutral-700 text-neutral-400 hover:bg-neutral-600'
+                                        }`}
+                                    >
+                                        {agent.enabled ? 'Enabled' : 'Disabled'}
+                                    </button>
+                                    <button
+                                        onClick={() => setEditingAgent(agent)}
+                                        className="px-2 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
+                                        onClick={() => handleRemoveAgent(agent.id)}
+                                        className="px-2 py-1 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded text-xs"
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="text-center py-8 text-neutral-500 border border-dashed border-neutral-700 rounded-lg">
+                    <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>No agents configured for this case.</p>
+                    <p className="text-sm">Click "Add Default Agents" to get started.</p>
+                </div>
+            )}
+
+            {/* Available Templates to Add */}
+            {caseId && availableTemplates.length > 0 && (
+                <div className="space-y-3 pt-4 border-t border-neutral-800">
+                    <h5 className="text-sm font-medium text-neutral-400">Available Templates</h5>
+                    <div className="grid grid-cols-3 gap-3">
+                        {availableTemplates.map(template => (
+                            <button
+                                key={template.id}
+                                onClick={() => handleAddAgent(template.id)}
+                                className="p-3 bg-neutral-800/50 border border-neutral-700 rounded-lg hover:bg-neutral-800 hover:border-purple-600 transition-all text-left"
+                            >
+                                <div className="font-medium text-sm">{template.name}</div>
+                                <div className="text-xs text-neutral-500">{template.role_title || template.agent_type}</div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // Sub-component for the Wizard to keep code clean
 function CaseWizard({ caseData, setCaseData, onSave, onCancel, hasUnsavedChanges, lastSavedAt }) {
     const [step, setStep] = useState(1);
@@ -3196,8 +3600,10 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
         { num: 3, title: 'Scenario', icon: '📈' },
         { num: 4, title: 'Vitals', icon: '💓' },
         { num: 5, title: 'Labs', icon: '🧪' },
-        { num: 6, title: 'Exam', icon: '🩺' },
-        { num: 7, title: 'Records', icon: '📄' }
+        { num: 6, title: 'Radiology', icon: '📷' },
+        { num: 7, title: 'Exam', icon: '🩺' },
+        { num: 8, title: 'Records', icon: '📄' },
+        { num: 9, title: 'Agents', icon: '🤖' }
     ];
 
     // Helper to get vitals from scenario's first keyframe
@@ -4316,8 +4722,16 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     </div>
                 )}
 
-                {/* STEP 6: PHYSICAL EXAMINATION */}
+                {/* STEP 6: RADIOLOGY STUDIES */}
                 {step === 6 && (
+                    <RadiologyEditor
+                        caseData={caseData}
+                        setCaseData={setCaseData}
+                    />
+                )}
+
+                {/* STEP 7: PHYSICAL EXAMINATION */}
+                {step === 7 && (
                     <PhysicalExamEditor
                         caseData={caseData}
                         setCaseData={setCaseData}
@@ -4325,12 +4739,21 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     />
                 )}
 
-                {/* STEP 7: CLINICAL RECORDS */}
-                {step === 7 && (
+                {/* STEP 8: CLINICAL RECORDS */}
+                {step === 8 && (
                     <ClinicalRecordsEditor
                         caseData={caseData}
                         setCaseData={setCaseData}
                         updateConfig={updateConfig}
+                    />
+                )}
+
+                {/* STEP 9: AGENTS */}
+                {step === 9 && (
+                    <CaseAgentEditor
+                        caseId={caseData.id}
+                        caseData={caseData}
+                        setCaseData={setCaseData}
                     />
                 )}
 
@@ -4354,7 +4777,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     )}
                     
                     {/* Save Progress button on all steps except last */}
-                    {step < 7 && (
+                    {step < 8 && (
                         <button
                             onClick={onSave}
                             className="px-4 py-2 bg-blue-700 hover:bg-blue-600 rounded font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-900/20"
@@ -4363,7 +4786,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                         </button>
                     )}
 
-                    {step < 7 ? (
+                    {step < 8 ? (
                         <button 
                             onClick={async () => {
                                 // Auto-save before moving forward

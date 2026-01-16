@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    FlaskConical, Pill, X, ChevronUp, ChevronDown,
+    FlaskConical, X, ChevronUp, ChevronDown,
     Search, Clock, CheckCircle, Loader2, List,
     Eye, FileText, Scan, Stethoscope, Activity
 } from 'lucide-react';
@@ -83,18 +83,14 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     const [loadingLabs, setLoadingLabs] = useState(false);
     const [orderError, setOrderError] = useState(null);
 
-    // Drugs state (placeholder for future)
-    const [availableDrugs, setAvailableDrugs] = useState([
-        { id: 'aspirin', name: 'Aspirin 325mg', category: 'Antiplatelet', route: 'PO' },
-        { id: 'heparin', name: 'Heparin 5000 units', category: 'Anticoagulant', route: 'IV' },
-        { id: 'morphine', name: 'Morphine 2mg', category: 'Analgesic', route: 'IV' },
-        { id: 'nitro', name: 'Nitroglycerin 0.4mg', category: 'Vasodilator', route: 'SL' },
-        { id: 'metoprolol', name: 'Metoprolol 5mg', category: 'Beta-blocker', route: 'IV' },
-        { id: 'furosemide', name: 'Furosemide 40mg', category: 'Diuretic', route: 'IV' },
-        { id: 'ns', name: 'Normal Saline 1L', category: 'Fluid', route: 'IV' },
-        { id: 'dextrose', name: 'Dextrose 50% 50mL', category: 'Fluid', route: 'IV' },
-    ]);
-    const [selectedDrugs, setSelectedDrugs] = useState([]);
+    // Radiology state
+    const [availableRadiology, setAvailableRadiology] = useState([]);
+    const [radiologyGroups, setRadiologyGroups] = useState([]);
+    const [radiologyOrders, setRadiologyOrders] = useState([]);
+    const [selectedRadiology, setSelectedRadiology] = useState([]);
+    const [radiologySearchQuery, setRadiologySearchQuery] = useState('');
+    const [radiologySelectedGroup, setRadiologySelectedGroup] = useState('all');
+    const [loadingRadiology, setLoadingRadiology] = useState(false);
 
     // Fetch available labs
     useEffect(() => {
@@ -168,6 +164,112 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         const interval = setInterval(fetchLabOrders, intervalMs);
         return () => clearInterval(interval);
     }, [sessionId, labSettings.autoRefreshInterval]);
+
+    // Fetch available radiology studies from API
+    useEffect(() => {
+        if (!sessionId) return;
+
+        const fetchRadiology = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(apiUrl(`/api/sessions/${sessionId}/available-radiology`), {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    // Map to expected format
+                    const studies = (data.studies || []).map(study => ({
+                        id: study.id,
+                        test_name: study.name,
+                        test_group: study.modality,
+                        turnaround_minutes: study.turnaround_minutes,
+                        body_region: study.body_region,
+                        common_indications: study.common_indications
+                    }));
+                    setAvailableRadiology(studies);
+                    setRadiologyGroups(data.groups || []);
+                }
+            } catch (error) {
+                console.error('Failed to fetch radiology:', error);
+            }
+        };
+
+        fetchRadiology();
+    }, [sessionId]);
+
+    // Fetch radiology orders
+    const fetchRadiologyOrders = async () => {
+        if (!sessionId) return;
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/radiology-orders`), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setRadiologyOrders(data.orders || []);
+            }
+        } catch (error) {
+            console.error('Failed to fetch radiology orders:', error);
+        }
+    };
+
+    useEffect(() => {
+        fetchRadiologyOrders();
+        const interval = setInterval(fetchRadiologyOrders, 5000);
+        return () => clearInterval(interval);
+    }, [sessionId]);
+
+    // Order radiology
+    const handleOrderRadiology = async () => {
+        if (selectedRadiology.length === 0) return;
+
+        setLoadingRadiology(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/order-radiology`), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    radiology_ids: selectedRadiology,
+                    instant: labSettings.instantResults
+                })
+            });
+
+            if (response.ok) {
+                toast.success(`Ordered ${selectedRadiology.length} radiology study(s)`);
+                selectedRadiology.forEach(radId => {
+                    const study = availableRadiology.find(r => r.id === radId);
+                    ordered('radiology', study?.test_name || radId, { urgency: labSettings.instantResults ? 'stat' : 'routine' });
+                });
+                setSelectedRadiology([]);
+                await fetchRadiologyOrders();
+            } else {
+                const errData = await response.json();
+                toast.error(errData.error || 'Failed to order radiology');
+            }
+        } catch (error) {
+            toast.error('Failed to order radiology: ' + error.message);
+        } finally {
+            setLoadingRadiology(false);
+        }
+    };
+
+    // Filter radiology
+    const filteredRadiology = availableRadiology.filter(study => {
+        const matchesSearch = !radiologySearchQuery ||
+            study.test_name.toLowerCase().includes(radiologySearchQuery.toLowerCase()) ||
+            study.test_group.toLowerCase().includes(radiologySearchQuery.toLowerCase());
+        const matchesGroup = radiologySelectedGroup === 'all' || study.test_group === radiologySelectedGroup;
+        return matchesSearch && matchesGroup;
+    });
+
+    const pendingRadiology = radiologyOrders.filter(o => !o.is_ready);
+    const readyRadiology = radiologyOrders.filter(o => o.is_ready && !o.viewed_at);
 
     // Order labs
     const handleOrderLabs = async () => {
@@ -299,8 +401,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
 
     const tabs = [
         { id: 'labs', label: 'Laboratory', icon: FlaskConical, count: readyOrders.length },
-        { id: 'radiology', label: 'Radiology', icon: Scan, count: 0 },
-        { id: 'drugs', label: 'Medications', icon: Pill, count: 0 },
+        { id: 'radiology', label: 'Radiology', icon: Scan, count: readyRadiology.length },
         { id: 'records', label: 'Records', icon: FileText, count: 0 },
         { id: 'memory', label: 'Memory', icon: Activity, count: 0 }
     ];
@@ -443,7 +544,6 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                             className={`relative px-4 py-3 rounded-full flex items-center gap-2 font-bold text-sm shadow-lg transition-all hover:scale-105 ${
                                 tab.id === 'labs' ? 'bg-purple-600 hover:bg-purple-500 text-white' :
                                 tab.id === 'radiology' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' :
-                                tab.id === 'drugs' ? 'bg-green-600 hover:bg-green-500 text-white' :
                                 tab.id === 'records' ? 'bg-amber-600 hover:bg-amber-500 text-white' :
                                 tab.id === 'memory' ? 'bg-rose-600 hover:bg-rose-500 text-white' :
                                 'bg-neutral-700 hover:bg-neutral-600 text-white'
@@ -528,7 +628,6 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                         activeTab === tab.id
                                             ? tab.id === 'labs' ? 'bg-purple-600 text-white' :
                                               tab.id === 'radiology' ? 'bg-cyan-600 text-white' :
-                                              tab.id === 'drugs' ? 'bg-green-600 text-white' :
                                               tab.id === 'records' ? 'bg-amber-600 text-white' :
                                               tab.id === 'memory' ? 'bg-rose-600 text-white' :
                                               'bg-neutral-700 text-white'
@@ -935,25 +1034,208 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
 
                         {/* Radiology Tab */}
                         {activeTab === 'radiology' && (
-                            <div className="h-full">
-                                <ClinicalRecordsPanel caseConfig={caseData?.config} initialTab="radiology" />
-                            </div>
-                        )}
-
-                        {/* Drugs Tab */}
-                        {activeTab === 'drugs' && (
-                            <div className="h-full flex items-center justify-center">
-                                <div className="text-center">
-                                    <Pill className="w-16 h-16 mx-auto mb-4 text-neutral-600" />
-                                    <h3 className="text-lg font-bold text-neutral-400 mb-2">Medication Orders</h3>
-                                    <p className="text-sm text-neutral-500">Coming soon - Order medications for this case</p>
-                                    <div className="mt-6 grid grid-cols-2 gap-2 max-w-md mx-auto">
-                                        {availableDrugs.map(drug => (
-                                            <div key={drug.id} className="p-3 bg-neutral-800 border border-neutral-700 rounded text-left opacity-50">
-                                                <div className="text-sm text-white">{drug.name}</div>
-                                                <div className="text-xs text-neutral-400">{drug.category} - {drug.route}</div>
+                            <div className="h-full flex">
+                                {/* Left: Available Studies */}
+                                <div className="flex-1 flex flex-col border-r border-neutral-800">
+                                    {/* Search & Filter */}
+                                    <div className="p-4 space-y-3 border-b border-neutral-800">
+                                        <div className="flex gap-2">
+                                            <div className="flex-1 relative">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+                                                <input
+                                                    type="text"
+                                                    value={radiologySearchQuery}
+                                                    onChange={(e) => setRadiologySearchQuery(e.target.value)}
+                                                    placeholder="Search imaging studies..."
+                                                    className="w-full pl-10 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder-neutral-500 focus:border-cyan-500 focus:outline-none"
+                                                />
                                             </div>
-                                        ))}
+                                            <select
+                                                value={radiologySelectedGroup}
+                                                onChange={(e) => setRadiologySelectedGroup(e.target.value)}
+                                                className="px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:border-cyan-500 focus:outline-none"
+                                            >
+                                                <option value="all">All Modalities</option>
+                                                {radiologyGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={labSettings.instantResults}
+                                                    onChange={(e) => updateSetting('instantResults', e.target.checked)}
+                                                    className="w-3 h-3"
+                                                />
+                                                <span className={`text-xs ${labSettings.instantResults ? 'text-green-400 font-bold' : 'text-neutral-400'}`}>
+                                                    Instant Results
+                                                </span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {/* Studies List */}
+                                    <div className="flex-1 overflow-y-auto p-4">
+                                        {filteredRadiology.length === 0 ? (
+                                            <div className="text-center py-12">
+                                                <Scan className="w-12 h-12 mx-auto mb-2 text-neutral-600" />
+                                                <p className="text-sm text-neutral-400">No radiology studies available</p>
+                                                <p className="text-xs text-neutral-500 mt-1">Configure radiology in case settings</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {filteredRadiology.map(study => {
+                                                    const ordered = radiologyOrders.some(o => o.study_id === study.id);
+                                                    return (
+                                                        <label
+                                                            key={study.id}
+                                                            className={`flex items-center gap-3 p-3 rounded border transition-colors ${
+                                                                ordered ? 'opacity-50 cursor-not-allowed border-neutral-700' :
+                                                                selectedRadiology.includes(study.id) ? 'bg-cyan-900/30 border-cyan-600' :
+                                                                'bg-neutral-800/50 border-neutral-700 hover:bg-neutral-800 cursor-pointer'
+                                                            }`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedRadiology.includes(study.id)}
+                                                                onChange={() => !ordered && setSelectedRadiology(prev =>
+                                                                    prev.includes(study.id) ? prev.filter(id => id !== study.id) : [...prev, study.id]
+                                                                )}
+                                                                disabled={ordered}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <Scan className="w-5 h-5 text-cyan-400" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="text-sm font-bold text-white truncate">{study.test_name}</div>
+                                                                <div className="text-xs text-neutral-400">{study.test_group} - {study.turnaround_minutes}min</div>
+                                                            </div>
+                                                            {ordered && <span className="text-xs text-cyan-400">Ordered</span>}
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Order Button */}
+                                    {selectedRadiology.length > 0 && (
+                                        <div className="p-4 border-t border-neutral-800">
+                                            <button
+                                                onClick={handleOrderRadiology}
+                                                disabled={loadingRadiology}
+                                                className="w-full px-4 py-3 bg-cyan-600 hover:bg-cyan-500 disabled:bg-neutral-600 text-white rounded-lg font-bold flex items-center justify-center gap-2"
+                                            >
+                                                {loadingRadiology ? (
+                                                    <><Loader2 className="w-5 h-5 animate-spin" /> Ordering...</>
+                                                ) : (
+                                                    <>Order {selectedRadiology.length} Study{selectedRadiology.length > 1 ? 'ies' : 'y'}</>
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Right: Order Status */}
+                                <div className="w-80 flex flex-col bg-neutral-900/50">
+                                    <div className="p-4 border-b border-neutral-700 bg-neutral-800">
+                                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                            <Scan className="w-4 h-4 text-cyan-400" />
+                                            Order Status
+                                            {radiologyOrders.length > 0 && (
+                                                <span className="ml-auto text-xs text-neutral-400">
+                                                    {radiologyOrders.length} stud{radiologyOrders.length !== 1 ? 'ies' : 'y'}
+                                                </span>
+                                            )}
+                                        </h3>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto">
+                                        {radiologyOrders.length === 0 ? (
+                                            <div className="text-center py-12 text-neutral-500">
+                                                <Scan className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                                                <p className="text-sm">No studies ordered yet</p>
+                                            </div>
+                                        ) : (
+                                            <div className="divide-y divide-neutral-800">
+                                                {radiologyOrders.map(order => {
+                                                    const isViewed = !!order.viewed_at;
+                                                    const isReady = order.is_ready;
+                                                    // Parse result_data for findings
+                                                    let resultData = {};
+                                                    try {
+                                                        resultData = typeof order.result_data === 'string'
+                                                            ? JSON.parse(order.result_data)
+                                                            : (order.result_data || {});
+                                                    } catch (e) {}
+                                                    const hasFindings = resultData.findings || resultData.interpretation;
+                                                    return (
+                                                        <div
+                                                            key={order.id}
+                                                            className={`p-3 ${
+                                                                isReady && !isViewed ? 'bg-cyan-900/30 border-l-4 border-cyan-500' :
+                                                                isViewed ? 'bg-neutral-800/30 border-l-4 border-green-500/50' :
+                                                                'bg-neutral-800/50 border-l-4 border-yellow-500/50'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="text-sm font-medium text-white">{order.test_name}</div>
+                                                                    <div className="text-xs text-neutral-400">{order.modality}</div>
+                                                                    {!isReady && (
+                                                                        <div className="text-xs text-yellow-500 mt-1">
+                                                                            <Clock className="w-3 h-3 inline mr-1" />
+                                                                            {Math.ceil(order.minutes_remaining)} min remaining
+                                                                        </div>
+                                                                    )}
+                                                                    {isReady && !isViewed && (
+                                                                        <div className="text-xs text-cyan-400 mt-1">Ready - Click to view</div>
+                                                                    )}
+                                                                    {isViewed && (
+                                                                        <div className="text-xs text-green-400 mt-1">
+                                                                            <CheckCircle className="w-3 h-3 inline mr-1" />
+                                                                            Viewed
+                                                                        </div>
+                                                                    )}
+                                                                    {/* Show findings preview when viewed */}
+                                                                    {isViewed && hasFindings && (
+                                                                        <div className="mt-2 p-2 bg-neutral-900/50 rounded text-xs">
+                                                                            {resultData.interpretation && (
+                                                                                <div className="text-white font-medium mb-1">
+                                                                                    {resultData.interpretation.length > 100
+                                                                                        ? resultData.interpretation.substring(0, 100) + '...'
+                                                                                        : resultData.interpretation}
+                                                                                </div>
+                                                                            )}
+                                                                            {resultData.findings && !resultData.interpretation && (
+                                                                                <div className="text-neutral-300">
+                                                                                    {resultData.findings.length > 100
+                                                                                        ? resultData.findings.substring(0, 100) + '...'
+                                                                                        : resultData.findings}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                {isReady && (
+                                                                    <button
+                                                                        onClick={() => onViewResult({
+                                                                            ...order,
+                                                                            result_data: resultData
+                                                                        })}
+                                                                        className={`px-3 py-1.5 text-xs rounded font-bold shrink-0 ${
+                                                                            isViewed
+                                                                                ? 'bg-neutral-700 hover:bg-neutral-600 text-neutral-300'
+                                                                                : 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                                                                        }`}
+                                                                    >
+                                                                        {isViewed ? 'Review' : 'View'}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

@@ -7,6 +7,7 @@ import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
 import OrdersDrawer from './components/orders/OrdersDrawer';
 import LabResultsModal from './components/investigations/LabResultsModal';
+import RadiologyResultsModal from './components/investigations/RadiologyResultsModal';
 import UserProfilePanel from './components/settings/UserProfilePanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider, useToast } from './contexts/ToastContext';
@@ -398,18 +399,31 @@ function MainApp() {
             />
          )}
 
-         {/* Lab Results Modal */}
+         {/* Lab/Radiology Results Modal - renders based on result type */}
          {selectedResult && (
-            <LabResultsModal
-               result={selectedResult}
-               sessionId={sessionId}
-               patientInfo={{
-                  name: activeCase?.config?.patient_name || 'Unknown',
-                  age: activeCase?.config?.demographics?.age || 'Unknown',
-                  gender: activeCase?.config?.demographics?.gender || 'Unknown'
-               }}
-               onClose={handleCloseLabResults}
-            />
+            selectedResult.modality ? (
+               <RadiologyResultsModal
+                  result={selectedResult}
+                  sessionId={sessionId}
+                  patientInfo={{
+                     name: activeCase?.config?.patient_name || 'Unknown',
+                     age: activeCase?.config?.demographics?.age || 'Unknown',
+                     gender: activeCase?.config?.demographics?.gender || 'Unknown'
+                  }}
+                  onClose={handleCloseLabResults}
+               />
+            ) : (
+               <LabResultsModal
+                  result={selectedResult}
+                  sessionId={sessionId}
+                  patientInfo={{
+                     name: activeCase?.config?.patient_name || 'Unknown',
+                     age: activeCase?.config?.demographics?.age || 'Unknown',
+                     gender: activeCase?.config?.demographics?.gender || 'Unknown'
+                  }}
+                  onClose={handleCloseLabResults}
+               />
+            )
          )}
 
          {/* Physical Examination Panel */}
