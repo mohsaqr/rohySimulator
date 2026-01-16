@@ -1,0 +1,744 @@
+{
+  "studies": [
+    {
+      "id": "xray_chest_pa",
+      "name": "Chest X-Ray (PA/Lateral)",
+      "modality": "X-Ray",
+      "body_region": "Chest",
+      "turnaround_minutes": 15,
+      "common_indications": ["Pneumonia", "Heart failure", "Lung mass", "Rib fracture", "Pleural effusion"],
+      "normal_findings": "The lungs are clear bilaterally without focal consolidation, effusion, or pneumothorax. The cardiac silhouette is normal in size and contour. The mediastinum is unremarkable. The visualized osseous structures are intact. No acute cardiopulmonary abnormality.",
+      "normal_interpretation": "1. No acute cardiopulmonary disease.\n2. Normal heart size.\n3. Clear lungs bilaterally."
+    },
+    {
+      "id": "xray_chest_portable",
+      "name": "Chest X-Ray (Portable/AP)",
+      "modality": "X-Ray",
+      "body_region": "Chest",
+      "turnaround_minutes": 10,
+      "common_indications": ["ICU monitoring", "Post-procedure", "ETT placement", "Line placement"],
+      "normal_findings": "Portable AP chest radiograph demonstrates clear lungs without focal consolidation or effusion. The cardiac silhouette is within normal limits, allowing for portable technique. No pneumothorax. Support devices, if present, are in satisfactory position. The visualized osseous structures show no acute abnormality.",
+      "normal_interpretation": "1. No acute cardiopulmonary abnormality.\n2. Support devices in satisfactory position (if applicable).\n3. No pneumothorax."
+    },
+    {
+      "id": "xray_abdomen",
+      "name": "Abdominal X-Ray (KUB)",
+      "modality": "X-Ray",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 15,
+      "common_indications": ["Bowel obstruction", "Kidney stones", "Constipation", "Foreign body"],
+      "normal_findings": "The bowel gas pattern is nonobstructive. No dilated loops of small or large bowel. No free intraperitoneal air. No radiopaque calculi identified in the expected course of the ureters or bladder. The visualized osseous structures are unremarkable.",
+      "normal_interpretation": "1. Nonobstructive bowel gas pattern.\n2. No evidence of bowel obstruction.\n3. No radiopaque urinary calculi identified."
+    },
+    {
+      "id": "xray_cspine",
+      "name": "Cervical Spine X-Ray",
+      "modality": "X-Ray",
+      "body_region": "Spine",
+      "turnaround_minutes": 15,
+      "common_indications": ["Neck pain", "Trauma", "Degenerative disease"],
+      "normal_findings": "Cervical spine alignment is normal. Vertebral body heights are maintained. Disc spaces are preserved. No prevertebral soft tissue swelling. No fracture or subluxation identified. The atlantoaxial relationship is normal.",
+      "normal_interpretation": "1. Normal cervical spine alignment.\n2. No fracture or dislocation.\n3. Maintained disc spaces without significant degenerative changes."
+    },
+    {
+      "id": "xray_lspine",
+      "name": "Lumbar Spine X-Ray",
+      "modality": "X-Ray",
+      "body_region": "Spine",
+      "turnaround_minutes": 15,
+      "common_indications": ["Back pain", "Trauma", "Scoliosis"],
+      "normal_findings": "Lumbar spine alignment is maintained. Vertebral body heights are preserved. Disc spaces are maintained. No spondylolisthesis. Pedicles are intact. SI joints appear normal. No acute fracture identified.",
+      "normal_interpretation": "1. Normal lumbar spine alignment.\n2. No acute fracture or subluxation.\n3. Preserved disc heights without significant degenerative changes."
+    },
+    {
+      "id": "xray_tspine",
+      "name": "Thoracic Spine X-Ray",
+      "modality": "X-Ray",
+      "body_region": "Spine",
+      "turnaround_minutes": 15,
+      "common_indications": ["Back pain", "Trauma", "Compression fracture"],
+      "normal_findings": "Thoracic spine alignment is normal. Vertebral body heights are maintained without compression deformity. Disc spaces are preserved. No paravertebral soft tissue abnormality. The visualized ribs are intact.",
+      "normal_interpretation": "1. Normal thoracic spine alignment.\n2. No compression fracture.\n3. No significant degenerative changes."
+    },
+    {
+      "id": "xray_pelvis",
+      "name": "Pelvis X-Ray",
+      "modality": "X-Ray",
+      "body_region": "Pelvis",
+      "turnaround_minutes": 15,
+      "common_indications": ["Hip pain", "Trauma", "Arthritis"],
+      "normal_findings": "The pelvis is intact without fracture or dislocation. The hip joints are preserved bilaterally with normal joint spaces. The sacroiliac joints are unremarkable. The pubic symphysis is normal. No destructive bone lesions.",
+      "normal_interpretation": "1. No pelvic fracture or hip dislocation.\n2. Normal hip joint spaces bilaterally.\n3. No significant degenerative changes."
+    },
+    {
+      "id": "xray_hand",
+      "name": "Hand X-Ray",
+      "modality": "X-Ray",
+      "body_region": "Extremity",
+      "turnaround_minutes": 10,
+      "common_indications": ["Fracture", "Arthritis", "Foreign body"],
+      "normal_findings": "Osseous structures of the hand are intact without fracture or dislocation. Joint spaces are preserved. Soft tissues are unremarkable. No radiopaque foreign body identified.",
+      "normal_interpretation": "1. No fracture or dislocation.\n2. Normal joint spaces.\n3. No significant degenerative changes or erosions."
+    },
+    {
+      "id": "xray_wrist",
+      "name": "Wrist X-Ray",
+      "modality": "X-Ray",
+      "body_region": "Extremity",
+      "turnaround_minutes": 10,
+      "common_indications": ["Fracture", "Scaphoid injury", "Arthritis"],
+      "normal_findings": "The distal radius and ulna are intact. Carpal bones show normal alignment without fracture. The scaphoid appears intact. Joint spaces are preserved. No significant soft tissue swelling.",
+      "normal_interpretation": "1. No fracture of the distal radius, ulna, or carpal bones.\n2. Normal carpal alignment.\n3. Preserved joint spaces."
+    },
+    {
+      "id": "xray_ankle",
+      "name": "Ankle X-Ray",
+      "modality": "X-Ray",
+      "body_region": "Extremity",
+      "turnaround_minutes": 10,
+      "common_indications": ["Fracture", "Sprain", "Arthritis"],
+      "normal_findings": "The ankle mortise is intact with normal alignment. No fracture of the distal tibia, fibula, or talus. The ankle joint space is preserved. Soft tissues are unremarkable without significant swelling.",
+      "normal_interpretation": "1. No fracture or dislocation.\n2. Intact ankle mortise.\n3. Preserved joint space."
+    },
+    {
+      "id": "xray_knee",
+      "name": "Knee X-Ray",
+      "modality": "X-Ray",
+      "body_region": "Extremity",
+      "turnaround_minutes": 10,
+      "common_indications": ["Fracture", "Arthritis", "Effusion"],
+      "normal_findings": "No fracture or dislocation. The joint spaces are preserved. The patella is normally positioned. No significant joint effusion. No loose bodies identified. Mild degenerative changes may be age-appropriate.",
+      "normal_interpretation": "1. No acute fracture or dislocation.\n2. Preserved medial and lateral joint spaces.\n3. No significant joint effusion."
+    },
+    {
+      "id": "xray_shoulder",
+      "name": "Shoulder X-Ray",
+      "modality": "X-Ray",
+      "body_region": "Extremity",
+      "turnaround_minutes": 10,
+      "common_indications": ["Fracture", "Dislocation", "Arthritis"],
+      "normal_findings": "The glenohumeral joint is normally aligned. No fracture of the proximal humerus, clavicle, or scapula. The acromioclavicular joint is unremarkable. The joint space is preserved. No calcific tendinitis.",
+      "normal_interpretation": "1. No fracture or dislocation.\n2. Normal glenohumeral alignment.\n3. Intact AC joint."
+    },
+    {
+      "id": "xray_foot",
+      "name": "Foot X-Ray",
+      "modality": "X-Ray",
+      "body_region": "Extremity",
+      "turnaround_minutes": 10,
+      "common_indications": ["Fracture", "Foreign body", "Diabetic foot"],
+      "normal_findings": "The osseous structures of the foot are intact without fracture or dislocation. Joint spaces are preserved. The arch is maintained. No radiopaque foreign body. Soft tissues are unremarkable.",
+      "normal_interpretation": "1. No fracture or dislocation.\n2. Normal alignment and preserved joint spaces.\n3. No foreign body identified."
+    },
+    {
+      "id": "ct_head_noncon",
+      "name": "CT Head (Non-Contrast)",
+      "modality": "CT",
+      "body_region": "Head",
+      "turnaround_minutes": 30,
+      "common_indications": ["Stroke", "Head trauma", "Altered mental status", "Headache"],
+      "normal_findings": "No acute intracranial hemorrhage, mass effect, or midline shift. The ventricles and sulci are normal in size and configuration for the patient's age. Gray-white matter differentiation is preserved. No acute territorial infarct identified. The visualized paranasal sinuses and mastoid air cells are clear. The orbits are unremarkable. The calvarium is intact.",
+      "normal_interpretation": "1. No acute intracranial abnormality.\n2. No hemorrhage, mass, or acute infarct.\n3. Normal ventricular size and configuration."
+    },
+    {
+      "id": "ct_head_con",
+      "name": "CT Head (With Contrast)",
+      "modality": "CT",
+      "body_region": "Head",
+      "turnaround_minutes": 45,
+      "common_indications": ["Brain tumor", "Abscess", "Metastases"],
+      "normal_findings": "No abnormal parenchymal or meningeal enhancement. The ventricles and sulci are normal in size. No mass lesion or mass effect. Gray-white matter differentiation is preserved. The pituitary gland is normal in size. Major intracranial vessels enhance normally. No extra-axial collection.",
+      "normal_interpretation": "1. No abnormal intracranial enhancement.\n2. No mass lesion or metastatic disease.\n3. Normal ventricular system."
+    },
+    {
+      "id": "ct_chest_noncon",
+      "name": "CT Chest (Non-Contrast)",
+      "modality": "CT",
+      "body_region": "Chest",
+      "turnaround_minutes": 30,
+      "common_indications": ["Lung nodule", "Interstitial lung disease", "Emphysema"],
+      "normal_findings": "The lungs are clear without nodules, masses, or consolidation. No pleural effusion or pneumothorax. The airways are patent to the subsegmental level. The mediastinal structures are unremarkable. The heart size is normal. No pathologically enlarged lymph nodes. The visualized upper abdomen is unremarkable. Osseous structures show no suspicious lesions.",
+      "normal_interpretation": "1. Clear lungs without nodules or masses.\n2. No pleural effusion or pneumothorax.\n3. Normal mediastinal structures."
+    },
+    {
+      "id": "ct_chest_con",
+      "name": "CT Chest (With Contrast)",
+      "modality": "CT",
+      "body_region": "Chest",
+      "turnaround_minutes": 45,
+      "common_indications": ["Lung mass", "Mediastinal mass", "Staging"],
+      "normal_findings": "The lungs are clear bilaterally without masses or nodules. No pleural effusion. The mediastinum demonstrates normal vascular structures with no pathologic lymphadenopathy. The heart and pericardium are normal. The esophagus is unremarkable. The thoracic aorta is normal in caliber. The visualized upper abdomen is unremarkable.",
+      "normal_interpretation": "1. No pulmonary mass or nodule.\n2. No mediastinal lymphadenopathy.\n3. Normal thoracic vasculature."
+    },
+    {
+      "id": "ct_abdomen_pelvis",
+      "name": "CT Abdomen/Pelvis (With Contrast)",
+      "modality": "CT",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 45,
+      "common_indications": ["Abdominal pain", "Appendicitis", "Diverticulitis", "Abscess", "Tumor"],
+      "normal_findings": "The liver, spleen, pancreas, and adrenal glands are normal in size and attenuation. The gallbladder is unremarkable. No biliary dilatation. The kidneys enhance symmetrically without hydronephrosis, stones, or masses. The appendix is normal in caliber without periappendiceal inflammation. No bowel obstruction or wall thickening. No free fluid or free air. No pathologic lymphadenopathy. The bladder is unremarkable. The uterus/prostate (as applicable) appears normal. No pelvic mass.",
+      "normal_interpretation": "1. No acute abdominal or pelvic abnormality.\n2. Normal solid organs.\n3. No appendicitis, obstruction, or inflammatory process."
+    },
+    {
+      "id": "ct_abdomen_noncon",
+      "name": "CT Abdomen (Non-Contrast)",
+      "modality": "CT",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 30,
+      "common_indications": ["Kidney stones", "AAA screening"],
+      "normal_findings": "No renal or ureteral calculi identified. The kidneys are normal in size without hydronephrosis. The abdominal aorta is normal in caliber without aneurysm. The liver, spleen, and pancreas are unremarkable on this non-contrast study. No free fluid or free air.",
+      "normal_interpretation": "1. No urinary tract calculi.\n2. No hydronephrosis.\n3. Normal caliber abdominal aorta."
+    },
+    {
+      "id": "cta_head",
+      "name": "CT Angiography Head/Neck",
+      "modality": "CT",
+      "body_region": "Head",
+      "turnaround_minutes": 45,
+      "common_indications": ["Stroke", "Aneurysm", "Carotid stenosis", "Vascular malformation"],
+      "normal_findings": "The intracranial arteries including the bilateral anterior, middle, and posterior cerebral arteries are patent without stenosis, occlusion, or aneurysm. The circle of Willis is complete. The carotid and vertebral arteries are patent without significant stenosis. No vascular malformation identified. The dural venous sinuses are patent.",
+      "normal_interpretation": "1. No intracranial aneurysm or vascular malformation.\n2. Patent intracranial circulation without stenosis or occlusion.\n3. No significant carotid or vertebral artery stenosis."
+    },
+    {
+      "id": "cta_chest",
+      "name": "CT Angiography Chest (PE Protocol)",
+      "modality": "CT",
+      "body_region": "Chest",
+      "turnaround_minutes": 30,
+      "common_indications": ["Pulmonary embolism", "Aortic dissection"],
+      "normal_findings": "No filling defect within the main, lobar, segmental, or subsegmental pulmonary arteries to suggest pulmonary embolism. The thoracic aorta is normal in caliber without dissection or intramural hematoma. The heart size is normal. The lungs are clear. No pleural effusion or pneumothorax.",
+      "normal_interpretation": "1. No pulmonary embolism.\n2. No aortic dissection.\n3. Clear lungs without acute cardiopulmonary abnormality."
+    },
+    {
+      "id": "cta_abdomen",
+      "name": "CT Angiography Abdomen",
+      "modality": "CT",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 45,
+      "common_indications": ["AAA", "Mesenteric ischemia", "Renal artery stenosis"],
+      "normal_findings": "The abdominal aorta is normal in caliber without aneurysm or dissection. The celiac axis, superior mesenteric artery, and inferior mesenteric artery are patent without significant stenosis. The renal arteries are patent bilaterally. The iliac arteries are unremarkable. No active extravasation.",
+      "normal_interpretation": "1. Normal caliber abdominal aorta without aneurysm.\n2. Patent mesenteric and renal arteries.\n3. No active hemorrhage or vascular abnormality."
+    },
+    {
+      "id": "ct_cspine",
+      "name": "CT Cervical Spine",
+      "modality": "CT",
+      "body_region": "Spine",
+      "turnaround_minutes": 30,
+      "common_indications": ["Trauma", "Fracture", "Spinal stenosis"],
+      "normal_findings": "Normal cervical spine alignment. No fracture or subluxation from C1 through C7-T1. The vertebral body heights and disc spaces are maintained. The spinal canal is patent. No prevertebral soft tissue swelling. The atlantoaxial and atlantooccipital joints are normal.",
+      "normal_interpretation": "1. No cervical spine fracture or subluxation.\n2. Normal alignment and spinal canal.\n3. No evidence of acute traumatic injury."
+    },
+    {
+      "id": "ct_lspine",
+      "name": "CT Lumbar Spine",
+      "modality": "CT",
+      "body_region": "Spine",
+      "turnaround_minutes": 30,
+      "common_indications": ["Back pain", "Fracture", "Disc herniation"],
+      "normal_findings": "Normal lumbar spine alignment without fracture or subluxation. Vertebral body heights are maintained. The spinal canal and neural foramina are patent. Disc spaces are preserved without significant herniation. No spondylolisthesis. The paraspinal soft tissues are unremarkable.",
+      "normal_interpretation": "1. No lumbar spine fracture.\n2. Patent spinal canal without significant stenosis.\n3. No acute traumatic injury."
+    },
+    {
+      "id": "mri_brain",
+      "name": "MRI Brain (With/Without Contrast)",
+      "modality": "MRI",
+      "body_region": "Head",
+      "turnaround_minutes": 60,
+      "common_indications": ["Stroke", "MS", "Brain tumor", "Seizure", "Dementia"],
+      "normal_findings": "No abnormal signal or enhancement in the brain parenchyma. The ventricles and sulci are normal in size and configuration. No mass, mass effect, or midline shift. No acute infarct on diffusion-weighted imaging. No abnormal meningeal enhancement. The pituitary gland and sella are normal. The major intracranial vessels demonstrate normal flow voids. The orbits, paranasal sinuses, and mastoid air cells are unremarkable.",
+      "normal_interpretation": "1. No intracranial mass or abnormal enhancement.\n2. No acute infarct or hemorrhage.\n3. Normal ventricular system and brain parenchyma."
+    },
+    {
+      "id": "mri_brain_noncon",
+      "name": "MRI Brain (Non-Contrast)",
+      "modality": "MRI",
+      "body_region": "Head",
+      "turnaround_minutes": 45,
+      "common_indications": ["Acute stroke", "Headache", "TIA"],
+      "normal_findings": "No restricted diffusion to suggest acute infarct. No intracranial hemorrhage. The ventricles and sulci are normal in size. Gray-white matter differentiation is preserved. No mass or mass effect. The brainstem and cerebellum are normal. Flow voids are preserved in the major intracranial vessels.",
+      "normal_interpretation": "1. No acute infarct on diffusion-weighted imaging.\n2. No intracranial hemorrhage.\n3. Normal brain parenchyma."
+    },
+    {
+      "id": "mri_cspine",
+      "name": "MRI Cervical Spine",
+      "modality": "MRI",
+      "body_region": "Spine",
+      "turnaround_minutes": 45,
+      "common_indications": ["Radiculopathy", "Myelopathy", "Disc herniation", "Spinal cord lesion"],
+      "normal_findings": "Normal cervical spine alignment. The cervical spinal cord demonstrates normal signal intensity without myelomalacia or cord compression. The intervertebral discs show normal signal without significant bulge or herniation. Neural foramina are patent bilaterally at all levels. No abnormal paraspinal soft tissue mass. The vertebral body marrow signal is normal.",
+      "normal_interpretation": "1. Normal cervical spinal cord without signal abnormality.\n2. No significant disc herniation or canal stenosis.\n3. Patent neural foramina bilaterally."
+    },
+    {
+      "id": "mri_tspine",
+      "name": "MRI Thoracic Spine",
+      "modality": "MRI",
+      "body_region": "Spine",
+      "turnaround_minutes": 45,
+      "common_indications": ["Back pain", "Myelopathy", "Cord compression"],
+      "normal_findings": "Normal thoracic spine alignment. The thoracic spinal cord is normal in caliber and signal intensity. No cord compression or signal abnormality. The intervertebral discs are unremarkable. Vertebral body heights and marrow signal are maintained. No pathologic compression fracture. The paraspinal soft tissues are normal.",
+      "normal_interpretation": "1. Normal thoracic spinal cord.\n2. No cord compression or myelopathy.\n3. No pathologic compression fracture."
+    },
+    {
+      "id": "mri_lspine",
+      "name": "MRI Lumbar Spine",
+      "modality": "MRI",
+      "body_region": "Spine",
+      "turnaround_minutes": 45,
+      "common_indications": ["Back pain", "Sciatica", "Disc herniation", "Spinal stenosis"],
+      "normal_findings": "Normal lumbar lordosis. The conus medullaris terminates at a normal level (L1-L2). The cauda equina nerve roots are normal. The intervertebral discs demonstrate normal signal and height without significant bulge or herniation. The spinal canal and neural foramina are patent at all levels. Vertebral body heights and marrow signal are maintained. No spondylolisthesis. The paraspinal musculature is normal.",
+      "normal_interpretation": "1. No disc herniation or significant degenerative changes.\n2. Patent spinal canal and neural foramina.\n3. Normal conus medullaris and cauda equina."
+    },
+    {
+      "id": "mri_abdomen",
+      "name": "MRI Abdomen",
+      "modality": "MRI",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 60,
+      "common_indications": ["Liver lesion", "Pancreatic mass", "MRCP"],
+      "normal_findings": "The liver is normal in size and signal intensity without focal lesion. No biliary dilatation. The gallbladder is unremarkable. The pancreas is normal in size and signal without mass or ductal dilatation. The spleen is normal. The adrenal glands are normal. The kidneys demonstrate normal size and corticomedullary differentiation without hydronephrosis or mass.",
+      "normal_interpretation": "1. Normal liver without focal lesion.\n2. Normal pancreas and biliary system.\n3. Unremarkable kidneys, spleen, and adrenal glands."
+    },
+    {
+      "id": "mri_pelvis",
+      "name": "MRI Pelvis",
+      "modality": "MRI",
+      "body_region": "Pelvis",
+      "turnaround_minutes": 60,
+      "common_indications": ["Prostate cancer", "Uterine mass", "Rectal cancer staging"],
+      "normal_findings": "The pelvic organs are unremarkable. The bladder wall is normal without mass. The prostate/uterus (as applicable) is normal in size and signal intensity without focal lesion. The rectum is normal. No pelvic lymphadenopathy. The pelvic musculature and osseous structures are unremarkable. No free fluid.",
+      "normal_interpretation": "1. Normal pelvic organs without mass or focal lesion.\n2. No pelvic lymphadenopathy.\n3. Unremarkable pelvic structures."
+    },
+    {
+      "id": "mri_knee",
+      "name": "MRI Knee",
+      "modality": "MRI",
+      "body_region": "Extremity",
+      "turnaround_minutes": 45,
+      "common_indications": ["ACL tear", "Meniscus tear", "Ligament injury"],
+      "normal_findings": "The anterior cruciate ligament (ACL) is intact with normal signal and contour. The posterior cruciate ligament (PCL) is intact. The medial and lateral menisci are normal in morphology and signal without tear. The medial and lateral collateral ligaments are intact. The extensor mechanism is normal. The articular cartilage is preserved. No joint effusion. The osseous structures show no bone marrow edema or fracture.",
+      "normal_interpretation": "1. Intact ACL and PCL.\n2. Normal medial and lateral menisci without tear.\n3. No ligamentous injury or significant cartilage abnormality."
+    },
+    {
+      "id": "mri_shoulder",
+      "name": "MRI Shoulder",
+      "modality": "MRI",
+      "body_region": "Extremity",
+      "turnaround_minutes": 45,
+      "common_indications": ["Rotator cuff tear", "Labral tear", "Impingement"],
+      "normal_findings": "The rotator cuff tendons (supraspinatus, infraspinatus, subscapularis, and teres minor) are intact without tear or tendinosis. The biceps tendon is normal in position and signal. The labrum is intact without tear. The glenohumeral joint is normally aligned. The acromioclavicular joint is unremarkable. No significant subacromial/subdeltoid bursitis. The osseous structures are normal without bone marrow edema.",
+      "normal_interpretation": "1. Intact rotator cuff without tear.\n2. Normal labrum and biceps anchor.\n3. No significant bursitis or impingement."
+    },
+    {
+      "id": "mra_head",
+      "name": "MR Angiography Head",
+      "modality": "MRI",
+      "body_region": "Head",
+      "turnaround_minutes": 45,
+      "common_indications": ["Aneurysm", "AVM", "Vascular stenosis"],
+      "normal_findings": "The intracranial arteries including the internal carotid arteries, anterior cerebral arteries, middle cerebral arteries, posterior cerebral arteries, basilar artery, and vertebral arteries are patent without stenosis, occlusion, or aneurysm. The circle of Willis is complete and normal in configuration. No vascular malformation identified.",
+      "normal_interpretation": "1. No intracranial aneurysm.\n2. Patent intracranial circulation without stenosis.\n3. No arteriovenous malformation."
+    },
+    {
+      "id": "mrcp",
+      "name": "MRCP (MR Cholangiopancreatography)",
+      "modality": "MRI",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 45,
+      "common_indications": ["Biliary obstruction", "Choledocholithiasis", "Pancreatitis"],
+      "normal_findings": "The intrahepatic and extrahepatic bile ducts are normal in caliber without dilatation or filling defect. The common bile duct measures within normal limits. The gallbladder is unremarkable without stones or wall thickening. The main pancreatic duct is normal in caliber without dilatation. No choledocholithiasis or stricture identified.",
+      "normal_interpretation": "1. Normal biliary tree without obstruction or stones.\n2. Normal pancreatic duct.\n3. Unremarkable gallbladder."
+    },
+    {
+      "id": "us_abdomen",
+      "name": "Ultrasound Abdomen Complete",
+      "modality": "Ultrasound",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 30,
+      "common_indications": ["RUQ pain", "Gallstones", "Liver disease", "Ascites"],
+      "normal_findings": "The liver is normal in size and echogenicity without focal lesion. No intrahepatic biliary dilatation. The gallbladder is normal without stones, wall thickening, or pericholecystic fluid. The common bile duct is normal in caliber. The pancreas is normal where visualized. The spleen is normal in size. The kidneys are normal in size and echogenicity bilaterally without hydronephrosis, stones, or masses. The aorta is normal in caliber. No ascites.",
+      "normal_interpretation": "1. Normal liver and gallbladder without stones.\n2. Normal kidneys bilaterally.\n3. No ascites or abdominal abnormality identified."
+    },
+    {
+      "id": "us_ruq",
+      "name": "Ultrasound RUQ (Gallbladder)",
+      "modality": "Ultrasound",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 20,
+      "common_indications": ["Cholecystitis", "Gallstones", "Biliary colic"],
+      "normal_findings": "The gallbladder is normal in size without wall thickening (wall measures <3mm). No gallstones or sludge. No pericholecystic fluid. Murphy's sign is negative (if evaluated). The common bile duct is normal in caliber (measures <6mm). The liver parenchyma is normal in echogenicity without focal lesion.",
+      "normal_interpretation": "1. No cholelithiasis or acute cholecystitis.\n2. Normal gallbladder without wall thickening.\n3. Normal caliber common bile duct."
+    },
+    {
+      "id": "us_renal",
+      "name": "Ultrasound Renal",
+      "modality": "Ultrasound",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 20,
+      "common_indications": ["Hydronephrosis", "Renal mass", "Kidney stones"],
+      "normal_findings": "The right kidney measures within normal limits with normal cortical thickness and echogenicity. No hydronephrosis, stones, or masses. The left kidney measures within normal limits with normal cortical thickness and echogenicity. No hydronephrosis, stones, or masses. The bladder is unremarkable.",
+      "normal_interpretation": "1. Normal kidneys bilaterally without hydronephrosis.\n2. No renal calculi or masses.\n3. Unremarkable bladder."
+    },
+    {
+      "id": "us_pelvis",
+      "name": "Ultrasound Pelvis",
+      "modality": "Ultrasound",
+      "body_region": "Pelvis",
+      "turnaround_minutes": 30,
+      "common_indications": ["Pelvic pain", "Ovarian cyst", "Uterine mass", "Pregnancy"],
+      "normal_findings": "The uterus is normal in size and contour with homogeneous myometrium. The endometrium is appropriate for the stated menstrual phase. The ovaries are normal in size bilaterally without cyst or mass. No free pelvic fluid. No adnexal mass or tenderness.",
+      "normal_interpretation": "1. Normal uterus and endometrium.\n2. Normal ovaries bilaterally without cyst or mass.\n3. No free pelvic fluid or adnexal pathology."
+    },
+    {
+      "id": "us_thyroid",
+      "name": "Ultrasound Thyroid",
+      "modality": "Ultrasound",
+      "body_region": "Neck",
+      "turnaround_minutes": 20,
+      "common_indications": ["Thyroid nodule", "Goiter", "Thyroid cancer"],
+      "normal_findings": "The thyroid gland is normal in size and echogenicity. The right lobe measures within normal limits. The left lobe measures within normal limits. The isthmus is normal. No nodules or cysts identified. No cervical lymphadenopathy.",
+      "normal_interpretation": "1. Normal thyroid gland without nodules.\n2. Homogeneous thyroid parenchyma.\n3. No cervical lymphadenopathy."
+    },
+    {
+      "id": "us_carotid",
+      "name": "Carotid Doppler Ultrasound",
+      "modality": "Ultrasound",
+      "body_region": "Neck",
+      "turnaround_minutes": 30,
+      "common_indications": ["Carotid stenosis", "TIA", "Stroke workup"],
+      "normal_findings": "The right common carotid artery, internal carotid artery, and external carotid artery demonstrate normal caliber without stenosis or plaque. The right vertebral artery shows antegrade flow. The left common carotid artery, internal carotid artery, and external carotid artery demonstrate normal caliber without stenosis or plaque. The left vertebral artery shows antegrade flow. Spectral waveforms are normal bilaterally.",
+      "normal_interpretation": "1. No significant carotid stenosis bilaterally.\n2. No hemodynamically significant plaque.\n3. Normal vertebral artery flow bilaterally."
+    },
+    {
+      "id": "us_dvt_le",
+      "name": "Venous Doppler Lower Extremity",
+      "modality": "Ultrasound",
+      "body_region": "Extremity",
+      "turnaround_minutes": 30,
+      "common_indications": ["DVT", "Leg swelling", "Leg pain"],
+      "normal_findings": "The common femoral, femoral, popliteal, and calf veins are fully compressible with normal respiratory phasicity and augmentation. No intraluminal thrombus identified. No evidence of deep venous thrombosis. The superficial venous system is patent.",
+      "normal_interpretation": "1. No deep venous thrombosis in the examined extremity.\n2. Normal venous compressibility and flow.\n3. Patent deep and superficial venous systems."
+    },
+    {
+      "id": "us_dvt_ue",
+      "name": "Venous Doppler Upper Extremity",
+      "modality": "Ultrasound",
+      "body_region": "Extremity",
+      "turnaround_minutes": 30,
+      "common_indications": ["Upper extremity DVT", "Arm swelling", "Line-associated thrombus"],
+      "normal_findings": "The internal jugular, subclavian, axillary, brachial, basilic, and cephalic veins are patent and compressible with normal spectral waveforms. No intraluminal thrombus identified. No evidence of upper extremity deep venous thrombosis.",
+      "normal_interpretation": "1. No upper extremity deep venous thrombosis.\n2. Patent venous system with normal flow.\n3. No line-associated thrombus (if applicable)."
+    },
+    {
+      "id": "echo_tte",
+      "name": "Echocardiogram (TTE)",
+      "modality": "Ultrasound",
+      "body_region": "Chest",
+      "turnaround_minutes": 45,
+      "common_indications": ["Heart failure", "Murmur", "Chest pain", "Dyspnea", "Valve disease"],
+      "normal_findings": "Left ventricular size is normal with normal wall thickness. Left ventricular systolic function is normal with estimated ejection fraction of 55-60%. No regional wall motion abnormalities. The right ventricle is normal in size and function. The left atrium is normal in size. The right atrium is normal in size. The mitral valve is structurally normal without stenosis or significant regurgitation. The aortic valve is trileaflet and structurally normal without stenosis or regurgitation. The tricuspid valve is normal without significant regurgitation. The pulmonic valve is normal. No pericardial effusion. The aortic root is normal in size.",
+      "normal_interpretation": "1. Normal left ventricular size and systolic function (EF 55-60%).\n2. No significant valvular abnormality.\n3. No pericardial effusion."
+    },
+    {
+      "id": "echo_tee",
+      "name": "Echocardiogram (TEE)",
+      "modality": "Ultrasound",
+      "body_region": "Chest",
+      "turnaround_minutes": 60,
+      "common_indications": ["Endocarditis", "Atrial thrombus", "Valve surgery planning"],
+      "normal_findings": "The left atrium is normal in size without thrombus. The left atrial appendage is free of thrombus with normal emptying velocities. The interatrial septum is intact without patent foramen ovale or atrial septal defect on color Doppler and saline contrast study. The mitral valve is structurally normal without vegetation or significant regurgitation. The aortic valve is structurally normal without vegetation. The tricuspid valve is normal. The thoracic aorta is normal in caliber without atheroma, dissection, or aneurysm.",
+      "normal_interpretation": "1. No left atrial or left atrial appendage thrombus.\n2. No valvular vegetation.\n3. Intact interatrial septum."
+    },
+    {
+      "id": "echo_stress",
+      "name": "Stress Echocardiogram (Exercise)",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 60,
+      "common_indications": ["Coronary artery disease", "Chest pain", "Dyspnea on exertion", "Pre-operative cardiac risk"],
+      "normal_findings": "Resting images demonstrate normal left ventricular size and systolic function. All wall segments contract normally at rest. Exercise stress test: Patient achieved target heart rate (>85% of maximum predicted heart rate). No chest pain or significant ST changes during exercise. Peak stress images demonstrate appropriate augmentation of all wall segments without new wall motion abnormalities. No inducible ischemia.",
+      "normal_interpretation": "1. Negative stress echocardiogram for inducible ischemia.\n2. Normal left ventricular function at rest and stress.\n3. Appropriate hemodynamic response to exercise."
+    },
+    {
+      "id": "echo_dobutamine",
+      "name": "Dobutamine Stress Echocardiogram",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 60,
+      "common_indications": ["CAD evaluation (cannot exercise)", "Viability assessment", "Pre-operative risk"],
+      "normal_findings": "Resting images demonstrate normal left ventricular size and systolic function. Dobutamine infusion performed with incremental doses. Target heart rate achieved with atropine supplementation. No chest pain during infusion. Peak stress images demonstrate appropriate augmentation of all wall segments. No new wall motion abnormalities. No inducible ischemia.",
+      "normal_interpretation": "1. Negative dobutamine stress echocardiogram for inducible ischemia.\n2. Normal left ventricular contractile reserve.\n3. No evidence of coronary artery disease."
+    },
+    {
+      "id": "cardiac_mri",
+      "name": "Cardiac MRI",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 90,
+      "common_indications": ["Cardiomyopathy", "Myocarditis", "Cardiac mass", "Congenital heart disease", "Viability"],
+      "normal_findings": "Left ventricular size is normal with normal wall thickness. Left ventricular systolic function is normal with ejection fraction of 55-65%. No regional wall motion abnormality. Right ventricular size and function are normal. The atria are normal in size. No late gadolinium enhancement to suggest myocardial scar or fibrosis. No evidence of myocardial edema on T2-weighted images. The pericardium is normal. The cardiac valves are structurally normal. No intracardiac mass or thrombus.",
+      "normal_interpretation": "1. Normal biventricular size and systolic function.\n2. No myocardial late gadolinium enhancement (no scar/fibrosis).\n3. No evidence of cardiomyopathy or myocarditis."
+    },
+    {
+      "id": "cardiac_mri_stress",
+      "name": "Cardiac MRI (Stress Perfusion)",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 90,
+      "common_indications": ["Ischemia evaluation", "Coronary artery disease", "Chest pain"],
+      "normal_findings": "Rest perfusion images demonstrate normal myocardial perfusion in all coronary territories. Stress perfusion images (adenosine/regadenoson) demonstrate normal myocardial perfusion without perfusion defects in the LAD, LCx, or RCA territories. No inducible perfusion abnormality. Late gadolinium enhancement images show no myocardial scar. Left ventricular function is normal.",
+      "normal_interpretation": "1. Normal myocardial perfusion at rest and stress.\n2. No inducible ischemia.\n3. No myocardial scar."
+    },
+    {
+      "id": "ccta",
+      "name": "Coronary CT Angiography (CCTA)",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 45,
+      "common_indications": ["Chest pain", "Coronary artery disease", "Calcium scoring", "Anomalous coronaries"],
+      "normal_findings": "The coronary arteries arise normally. The left main coronary artery is patent without stenosis. The left anterior descending artery and its branches are patent without stenosis. The left circumflex artery and its branches are patent without stenosis. The right coronary artery is patent without stenosis. No coronary artery calcification. No significant coronary artery disease. Normal coronary anatomy.",
+      "normal_interpretation": "1. No coronary artery stenosis.\n2. Coronary Artery Disease-Reporting and Data System (CAD-RADS) 0.\n3. Normal coronary anatomy."
+    },
+    {
+      "id": "ct_calcium_score",
+      "name": "CT Coronary Calcium Score",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 20,
+      "common_indications": ["Cardiovascular risk assessment", "Asymptomatic CAD screening"],
+      "normal_findings": "No coronary artery calcification identified. Total Agatston score: 0. Individual vessel scores: Left main 0, LAD 0, LCx 0, RCA 0.",
+      "normal_interpretation": "1. Agatston calcium score: 0.\n2. No coronary artery calcification.\n3. Very low risk of significant coronary artery disease."
+    },
+    {
+      "id": "nuclear_stress_spect",
+      "name": "Nuclear Stress Test (SPECT MPI)",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 180,
+      "common_indications": ["Coronary artery disease", "Chest pain", "Dyspnea", "Pre-operative cardiac risk", "Post-MI evaluation"],
+      "normal_findings": "Stress images (exercise or pharmacologic) demonstrate normal myocardial perfusion throughout the left ventricle. Rest images demonstrate normal myocardial perfusion. No reversible or fixed perfusion defects in the LAD, LCx, or RCA territories. Gated SPECT demonstrates normal left ventricular wall motion and ejection fraction (EF 55-70%). Transient ischemic dilation ratio is normal.",
+      "normal_interpretation": "1. Normal myocardial perfusion imaging study.\n2. No evidence of inducible ischemia or prior infarct.\n3. Normal left ventricular systolic function."
+    },
+    {
+      "id": "nuclear_stress_pet",
+      "name": "Cardiac PET Perfusion",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 120,
+      "common_indications": ["Coronary artery disease", "Myocardial viability", "Equivocal SPECT"],
+      "normal_findings": "Rest and stress PET myocardial perfusion images demonstrate normal tracer uptake throughout the left ventricle. No perfusion defects. Myocardial blood flow and coronary flow reserve are within normal limits. Calculated coronary flow reserve >2.0. No evidence of microvascular dysfunction.",
+      "normal_interpretation": "1. Normal myocardial perfusion at rest and stress.\n2. Normal coronary flow reserve.\n3. No evidence of coronary artery disease."
+    },
+    {
+      "id": "cardiac_cath",
+      "name": "Coronary Angiography (Cardiac Catheterization)",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 120,
+      "common_indications": ["ACS/STEMI", "NSTEMI", "Unstable angina", "Positive stress test", "Heart failure workup"],
+      "normal_findings": "Left main coronary artery: Normal, no stenosis. Left anterior descending artery: Normal, no stenosis, normal TIMI 3 flow. Left circumflex artery: Normal, no stenosis, normal TIMI 3 flow. Right coronary artery: Normal, no stenosis, normal TIMI 3 flow. Left ventriculography (if performed): Normal left ventricular systolic function with estimated ejection fraction of 55-60%. No mitral regurgitation.",
+      "normal_interpretation": "1. Angiographically normal coronary arteries.\n2. No obstructive coronary artery disease.\n3. Normal left ventricular function."
+    },
+    {
+      "id": "right_heart_cath",
+      "name": "Right Heart Catheterization",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 60,
+      "common_indications": ["Pulmonary hypertension", "Heart failure", "Cardiogenic shock", "Pre-transplant evaluation"],
+      "normal_findings": "Right atrial pressure: 2-8 mmHg (mean 5 mmHg). Right ventricular pressure: 15-30/0-8 mmHg. Pulmonary artery pressure: 15-30/8-15 mmHg (mean 10-20 mmHg). Pulmonary capillary wedge pressure: 6-12 mmHg. Cardiac output: 4-8 L/min. Cardiac index: 2.5-4.0 L/min/m². Pulmonary vascular resistance: <3 Wood units.",
+      "normal_interpretation": "1. Normal right heart pressures.\n2. No pulmonary hypertension.\n3. Normal cardiac output and index."
+    },
+    {
+      "id": "pericardiocentesis",
+      "name": "Pericardiocentesis",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 30,
+      "common_indications": ["Pericardial effusion", "Cardiac tamponade", "Pericarditis with effusion"],
+      "normal_findings": "N/A - This is a therapeutic/diagnostic procedure. A normal pericardium would not require this procedure.",
+      "normal_interpretation": "N/A - Procedure performed for pericardial effusion drainage or diagnosis."
+    },
+    {
+      "id": "ecg_12lead",
+      "name": "12-Lead ECG",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 5,
+      "common_indications": ["Chest pain", "Arrhythmia", "Syncope", "Dyspnea", "ACS evaluation", "Palpitations"],
+      "normal_findings": "Normal sinus rhythm at 60-100 bpm. Normal axis. Normal PR interval (120-200 ms). Normal QRS duration (<120 ms). Normal QTc interval. No ST segment elevation or depression. No T wave inversions. No pathologic Q waves. No evidence of left or right ventricular hypertrophy. No bundle branch block.",
+      "normal_interpretation": "1. Normal sinus rhythm.\n2. No acute ischemic changes.\n3. Normal ECG."
+    },
+    {
+      "id": "holter_monitor",
+      "name": "Holter Monitor (24-48hr)",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 2880,
+      "common_indications": ["Palpitations", "Syncope", "Arrhythmia detection", "AFib burden"],
+      "normal_findings": "Monitoring period: 24 hours. Predominant rhythm: Normal sinus rhythm. Mean heart rate: 60-80 bpm. Minimum heart rate: 45-50 bpm (during sleep). Maximum heart rate: 100-120 bpm (during activity). Isolated PACs: <100/24hrs. Isolated PVCs: <500/24hrs. No sustained or non-sustained arrhythmias. No significant pauses (>3 seconds). No atrial fibrillation or flutter.",
+      "normal_interpretation": "1. Normal sinus rhythm throughout monitoring.\n2. No significant arrhythmias.\n3. Normal heart rate variability."
+    },
+    {
+      "id": "event_monitor",
+      "name": "Event Monitor (7-30 days)",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 10080,
+      "common_indications": ["Infrequent palpitations", "Syncope workup", "Cryptogenic stroke"],
+      "normal_findings": "Extended monitoring for [duration]. No atrial fibrillation or flutter detected. No sustained ventricular arrhythmias. Patient-activated recordings during symptoms show normal sinus rhythm. No significant bradycardia or pauses.",
+      "normal_interpretation": "1. No atrial fibrillation detected during monitoring period.\n2. Symptoms correlated with normal sinus rhythm.\n3. No significant arrhythmias identified."
+    },
+    {
+      "id": "tilt_table",
+      "name": "Tilt Table Test",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 60,
+      "common_indications": ["Syncope", "Orthostatic hypotension", "POTS evaluation"],
+      "normal_findings": "Baseline supine: BP normal, HR normal. Head-up tilt to 70 degrees performed. Blood pressure and heart rate maintained within normal physiologic parameters. No excessive heart rate increase (HR increase <30 bpm or HR <120 bpm within 10 minutes). No significant hypotension. No syncope or presyncope induced. Test negative.",
+      "normal_interpretation": "1. Negative tilt table test.\n2. No vasovagal syncope provoked.\n3. No evidence of orthostatic intolerance or POTS."
+    },
+    {
+      "id": "electrophysiology_study",
+      "name": "Electrophysiology Study (EPS)",
+      "modality": "Cardiac",
+      "body_region": "Chest",
+      "turnaround_minutes": 180,
+      "common_indications": ["Arrhythmia evaluation", "Ablation planning", "Syncope", "VT/VF evaluation"],
+      "normal_findings": "Sinus node function: Normal sinus node recovery time. AV conduction: Normal AH interval (55-125 ms) and HV interval (35-55 ms). No evidence of dual AV node physiology. Atrial and ventricular stimulation: No inducible supraventricular or ventricular tachycardia with programmed stimulation.",
+      "normal_interpretation": "1. Normal sinus and AV node function.\n2. No inducible arrhythmias.\n3. Negative electrophysiology study."
+    },
+    {
+      "id": "us_fast",
+      "name": "FAST Exam (Trauma)",
+      "modality": "Ultrasound",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 5,
+      "common_indications": ["Trauma", "Hemoperitoneum", "Pericardial effusion"],
+      "normal_findings": "Right upper quadrant (Morison's pouch): No free fluid. Left upper quadrant (perisplenic): No free fluid. Pelvis (pouch of Douglas/rectovesical): No free fluid. Subxiphoid cardiac view: No pericardial effusion. Normal cardiac contractility.",
+      "normal_interpretation": "1. Negative FAST examination.\n2. No free intraperitoneal fluid.\n3. No pericardial effusion."
+    },
+    {
+      "id": "us_aorta",
+      "name": "Ultrasound Aorta",
+      "modality": "Ultrasound",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 20,
+      "common_indications": ["AAA screening", "Aortic aneurysm"],
+      "normal_findings": "The abdominal aorta is visualized from the diaphragm to the bifurcation. The proximal aorta measures <3.0 cm. The mid aorta measures <3.0 cm. The distal aorta measures <3.0 cm. No aneurysmal dilatation. No intraluminal thrombus. The common iliac arteries are normal in caliber.",
+      "normal_interpretation": "1. Normal caliber abdominal aorta (no aneurysm).\n2. No evidence of aortic disease.\n3. Normal iliac arteries."
+    },
+    {
+      "id": "vq_scan",
+      "name": "VQ Scan (Ventilation/Perfusion)",
+      "modality": "Nuclear Medicine",
+      "body_region": "Chest",
+      "turnaround_minutes": 90,
+      "common_indications": ["Pulmonary embolism", "Contrast allergy"],
+      "normal_findings": "Ventilation images: Normal ventilation throughout both lungs. Perfusion images: Normal perfusion throughout both lungs. No segmental or subsegmental perfusion defects. Ventilation and perfusion are matched.",
+      "normal_interpretation": "1. Normal ventilation/perfusion scan.\n2. No evidence of pulmonary embolism.\n3. Low probability for PE."
+    },
+    {
+      "id": "bone_scan",
+      "name": "Bone Scan (Whole Body)",
+      "modality": "Nuclear Medicine",
+      "body_region": "Whole Body",
+      "turnaround_minutes": 180,
+      "common_indications": ["Metastases", "Occult fracture", "Osteomyelitis", "Paget's disease"],
+      "normal_findings": "Normal radiotracer distribution throughout the skeleton. Symmetric uptake in the axial and appendicular skeleton. No focal areas of abnormally increased or decreased uptake. Normal renal excretion. No evidence of osseous metastatic disease.",
+      "normal_interpretation": "1. No scintigraphic evidence of osseous metastases.\n2. No focal abnormalities to suggest fracture or infection.\n3. Normal bone scan."
+    },
+    {
+      "id": "hida_scan",
+      "name": "HIDA Scan (Hepatobiliary)",
+      "modality": "Nuclear Medicine",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 120,
+      "common_indications": ["Acute cholecystitis", "Biliary leak", "Biliary dyskinesia"],
+      "normal_findings": "Normal hepatic uptake and clearance of radiotracer. The gallbladder fills by 60 minutes. Normal transit into the common bile duct and small bowel. No evidence of biliary obstruction or leak. Gallbladder ejection fraction >35% after CCK stimulation (if performed).",
+      "normal_interpretation": "1. Normal gallbladder visualization (no acute cholecystitis).\n2. Normal hepatobiliary function.\n3. Patent biliary system without obstruction."
+    },
+    {
+      "id": "thyroid_scan",
+      "name": "Thyroid Scan & Uptake",
+      "modality": "Nuclear Medicine",
+      "body_region": "Neck",
+      "turnaround_minutes": 60,
+      "common_indications": ["Hyperthyroidism", "Thyroid nodule", "Graves disease"],
+      "normal_findings": "Normal thyroid size and configuration. Homogeneous radiotracer uptake throughout both thyroid lobes. No focal areas of increased or decreased uptake (hot or cold nodules). 24-hour radioiodine uptake: 10-30% (normal range).",
+      "normal_interpretation": "1. Normal thyroid uptake and scan.\n2. No thyroid nodules identified.\n3. Euthyroid pattern."
+    },
+    {
+      "id": "pet_ct",
+      "name": "PET-CT Scan",
+      "modality": "Nuclear Medicine",
+      "body_region": "Whole Body",
+      "turnaround_minutes": 180,
+      "common_indications": ["Cancer staging", "Lymphoma", "Lung cancer", "Melanoma"],
+      "normal_findings": "No abnormal FDG-avid lesions in the head, neck, chest, abdomen, or pelvis. Normal physiologic uptake in the brain, heart, liver, and urinary tract. No FDG-avid lymphadenopathy. No osseous lesions with abnormal metabolic activity. No evidence of metabolically active malignancy.",
+      "normal_interpretation": "1. No FDG-avid malignancy identified.\n2. No evidence of metastatic disease.\n3. Normal physiologic radiotracer distribution."
+    },
+    {
+      "id": "gastric_emptying",
+      "name": "Gastric Emptying Study",
+      "modality": "Nuclear Medicine",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 240,
+      "common_indications": ["Gastroparesis", "Nausea/vomiting", "Diabetic gastropathy"],
+      "normal_findings": "Following ingestion of radiolabeled solid meal: Normal gastric emptying at all time points. Gastric retention at 1 hour: <90%. Gastric retention at 2 hours: <60%. Gastric retention at 4 hours: <10%. Half-time of gastric emptying within normal limits.",
+      "normal_interpretation": "1. Normal solid gastric emptying.\n2. No evidence of gastroparesis.\n3. Normal gastric motility."
+    },
+    {
+      "id": "ugi_series",
+      "name": "Upper GI Series",
+      "modality": "Fluoroscopy",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 45,
+      "common_indications": ["Dysphagia", "GERD", "Hiatal hernia", "Ulcer"],
+      "normal_findings": "Oral pharyngeal swallowing function is normal. The esophagus demonstrates normal peristalsis with prompt passage of barium to the stomach. No stricture, web, or diverticulum. No hiatal hernia. The gastroesophageal junction is normal. The stomach is normal in contour without ulcer or mass. The duodenal bulb and loop are normal.",
+      "normal_interpretation": "1. Normal swallowing mechanism and esophageal motility.\n2. No hiatal hernia or gastroesophageal reflux.\n3. Normal stomach and duodenum."
+    },
+    {
+      "id": "barium_swallow",
+      "name": "Barium Swallow",
+      "modality": "Fluoroscopy",
+      "body_region": "Chest",
+      "turnaround_minutes": 30,
+      "common_indications": ["Dysphagia", "Esophageal stricture", "Achalasia"],
+      "normal_findings": "Oral and pharyngeal phases of swallowing are normal without aspiration. The esophagus demonstrates normal caliber and peristalsis. No stricture, web, ring, or diverticulum. Normal esophageal mucosal pattern. The gastroesophageal junction opens normally. No hiatal hernia or reflux observed.",
+      "normal_interpretation": "1. Normal swallowing function without aspiration.\n2. Normal esophageal caliber and motility.\n3. No structural abnormality."
+    },
+    {
+      "id": "barium_enema",
+      "name": "Barium Enema",
+      "modality": "Fluoroscopy",
+      "body_region": "Abdomen",
+      "turnaround_minutes": 60,
+      "common_indications": ["Colon obstruction", "Diverticulosis", "Intussusception"],
+      "normal_findings": "The rectum and entire colon to the cecum are visualized. Normal colonic caliber throughout. No stricture, mass, or filling defect. Normal haustral pattern. No diverticula identified. The terminal ileum refluxes normally (if visualized). No evidence of obstruction or volvulus.",
+      "normal_interpretation": "1. Normal barium enema examination.\n2. No colonic mass, stricture, or obstruction.\n3. No diverticulosis identified."
+    },
+    {
+      "id": "mammogram",
+      "name": "Mammogram (Bilateral)",
+      "modality": "Mammography",
+      "body_region": "Chest",
+      "turnaround_minutes": 30,
+      "common_indications": ["Breast screening", "Breast mass", "Breast pain"],
+      "normal_findings": "Bilateral mammogram performed. The breasts are composed of scattered fibroglandular densities. No suspicious masses, architectural distortion, or suspicious calcifications. No skin thickening or nipple retraction. Axillary lymph nodes are unremarkable.",
+      "normal_interpretation": "1. Negative mammogram - BI-RADS Category 1.\n2. No mammographic evidence of malignancy.\n3. Recommend routine screening."
+    },
+    {
+      "id": "dexa",
+      "name": "DEXA Scan (Bone Density)",
+      "modality": "DEXA",
+      "body_region": "Whole Body",
+      "turnaround_minutes": 20,
+      "common_indications": ["Osteoporosis screening", "Fracture risk assessment"],
+      "normal_findings": "Lumbar spine (L1-L4) bone mineral density and T-score are within normal limits (T-score > -1.0). Total hip bone mineral density and T-score are within normal limits. Femoral neck bone mineral density and T-score are within normal limits. No evidence of osteopenia or osteoporosis.",
+      "normal_interpretation": "1. Normal bone mineral density.\n2. T-score > -1.0 at all sites (normal).\n3. No osteoporosis or osteopenia."
+    }
+  ]
+}

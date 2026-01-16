@@ -1,23 +1,15 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Upload, FileText, Stethoscope, Pill, Syringe, ClipboardList, Image, Brain, Eye, EyeOff } from 'lucide-react';
-import { AuthService } from '../../services/authService';
-import { apiUrl } from '../../config/api';
+import { Plus, Trash2, FileText, Stethoscope, Pill, Syringe, ClipboardList, Brain, Eye, EyeOff } from 'lucide-react';
 import MedicationSearch from './MedicationSearch';
 
 const RECORD_TABS = [
     { id: 'history', label: 'History', icon: FileText },
     { id: 'physical', label: 'Past Physical Exam', icon: Stethoscope },
     { id: 'medications', label: 'Medications', icon: Pill },
-    { id: 'radiology', label: 'Radiology', icon: Image },
     { id: 'procedures', label: 'Procedures', icon: Syringe },
     { id: 'notes', label: 'Notes', icon: ClipboardList }
 ];
 
-const RADIOLOGY_TYPES = [
-    'Chest X-Ray', 'Abdominal X-Ray', 'CT Head', 'CT Chest', 'CT Abdomen/Pelvis',
-    'MRI Brain', 'MRI Spine', 'Ultrasound Abdomen', 'Echocardiogram', 'ECG/EKG',
-    'Angiogram', 'PET Scan', 'Bone Scan', 'Mammogram', 'Other'
-];
 
 const DEFAULT_AI_ACCESS = {
     history: true,
@@ -31,7 +23,6 @@ const DEFAULT_AI_ACCESS = {
 
 export default function ClinicalRecordsEditor({ caseData, setCaseData, updateConfig }) {
     const [activeTab, setActiveTab] = useState('history');
-    const [uploading, setUploading] = useState(false);
 
     // Helper to get/set clinical records
     const records = caseData.config?.clinicalRecords || {};
@@ -83,52 +74,6 @@ export default function ClinicalRecordsEditor({ caseData, setCaseData, updateCon
             dose: medication.typical_dose || updated[idx].dose || ''
         };
         updateRecords('medications', updated);
-    };
-
-    // Radiology helpers
-    const radiology = records.radiology || [];
-    const addRadiology = () => {
-        updateRecords('radiology', [...radiology, {
-            id: Date.now(),
-            type: 'Chest X-Ray',
-            name: '',
-            date: new Date().toISOString().split('T')[0],
-            imageUrl: '',
-            findings: '',
-            interpretation: ''
-        }]);
-    };
-    const updateRadiology = (idx, field, value) => {
-        const updated = [...radiology];
-        updated[idx] = { ...updated[idx], [field]: value };
-        updateRecords('radiology', updated);
-    };
-    const removeRadiology = (idx) => {
-        updateRecords('radiology', radiology.filter((_, i) => i !== idx));
-    };
-
-    // Image upload handler
-    const handleImageUpload = async (idx, file) => {
-        if (!file) return;
-        setUploading(true);
-        try {
-            const formData = new FormData();
-            formData.append('photo', file);
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/upload'), {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: formData
-            });
-            const data = await res.json();
-            if (data.imageUrl) {
-                updateRadiology(idx, 'imageUrl', data.imageUrl);
-            }
-        } catch (err) {
-            console.error('Upload failed:', err);
-        } finally {
-            setUploading(false);
-        }
     };
 
     // Procedures helpers
@@ -452,116 +397,6 @@ export default function ClinicalRecordsEditor({ caseData, setCaseData, updateCon
                                         <button onClick={() => removeMedication(idx)} className="text-neutral-500 hover:text-red-400 col-span-1">
                                             <Trash2 className="w-4 h-4" />
                                         </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* RADIOLOGY TAB */}
-                {activeTab === 'radiology' && (
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                            <p className="text-xs text-neutral-400">Imaging studies with uploadable images</p>
-                            <button onClick={addRadiology} className="btn-secondary text-xs">
-                                <Plus className="w-3 h-3 mr-1" /> Add Study
-                            </button>
-                        </div>
-                        {radiology.length === 0 ? (
-                            <div className="text-center py-8 text-neutral-500 border border-dashed border-neutral-700 rounded-lg">
-                                No radiology studies added
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {radiology.map((study, idx) => (
-                                    <div key={study.id} className="bg-neutral-900/50 p-4 rounded-lg border border-neutral-700">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <div className="flex gap-2 flex-1">
-                                                <select
-                                                    value={study.type}
-                                                    onChange={e => updateRadiology(idx, 'type', e.target.value)}
-                                                    className="input-dark text-xs"
-                                                >
-                                                    {RADIOLOGY_TYPES.map(t => <option key={t}>{t}</option>)}
-                                                </select>
-                                                <input
-                                                    type="text"
-                                                    value={study.name}
-                                                    onChange={e => updateRadiology(idx, 'name', e.target.value)}
-                                                    className="input-dark text-xs flex-1"
-                                                    placeholder="Study name/description"
-                                                />
-                                                <input
-                                                    type="date"
-                                                    value={study.date}
-                                                    onChange={e => updateRadiology(idx, 'date', e.target.value)}
-                                                    className="input-dark text-xs"
-                                                />
-                                            </div>
-                                            <button onClick={() => removeRadiology(idx)} className="text-neutral-500 hover:text-red-400 ml-2">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
-
-                                        {/* Image Upload */}
-                                        <div className="mb-3">
-                                            <label className="label-xs">Image</label>
-                                            <div className="flex items-center gap-3">
-                                                {study.imageUrl ? (
-                                                    <div className="relative group">
-                                                        <img
-                                                            src={study.imageUrl}
-                                                            alt={study.type}
-                                                            className="h-24 w-auto rounded border border-neutral-600 object-cover"
-                                                        />
-                                                        <button
-                                                            onClick={() => updateRadiology(idx, 'imageUrl', '')}
-                                                            className="absolute -top-2 -right-2 bg-red-600 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        >
-                                                            <Trash2 className="w-3 h-3 text-white" />
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <label className="flex items-center gap-2 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded cursor-pointer border border-dashed border-neutral-600">
-                                                        <Upload className="w-4 h-4 text-neutral-400" />
-                                                        <span className="text-xs text-neutral-400">
-                                                            {uploading ? 'Uploading...' : 'Upload Image'}
-                                                        </span>
-                                                        <input
-                                                            type="file"
-                                                            accept="image/*"
-                                                            onChange={e => handleImageUpload(idx, e.target.files[0])}
-                                                            className="hidden"
-                                                            disabled={uploading}
-                                                        />
-                                                    </label>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="label-xs">Findings</label>
-                                                <textarea
-                                                    rows={2}
-                                                    value={study.findings}
-                                                    onChange={e => updateRadiology(idx, 'findings', e.target.value)}
-                                                    className="input-dark text-xs"
-                                                    placeholder="Describe findings..."
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="label-xs">Interpretation</label>
-                                                <textarea
-                                                    rows={2}
-                                                    value={study.interpretation}
-                                                    onChange={e => updateRadiology(idx, 'interpretation', e.target.value)}
-                                                    className="input-dark text-xs"
-                                                    placeholder="Clinical interpretation..."
-                                                />
-                                            </div>
-                                        </div>
                                     </div>
                                 ))}
                             </div>

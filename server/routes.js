@@ -11,6 +11,19 @@ import * as labDb from './services/labDatabase.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Load radiology database
+let radiologyDatabase = [];
+try {
+    const radiologyPath = path.join(__dirname, 'data', 'radiology_database.json');
+    if (fs.existsSync(radiologyPath)) {
+        const data = JSON.parse(fs.readFileSync(radiologyPath, 'utf8'));
+        radiologyDatabase = data.studies || [];
+        console.log(`Loaded ${radiologyDatabase.length} radiology studies from database`);
+    }
+} catch (err) {
+    console.error('Failed to load radiology database:', err.message);
+}
+
 const router = express.Router();
 
 // ============================================
@@ -1458,11 +1471,18 @@ router.post('/events/batch', authenticateToken, (req, res) => {
         return res.status(400).json({ error: 'session_id and events array required' });
     }
 
-    const sql = `INSERT INTO event_log (session_id, event_type, description, vital_sign, old_value, new_value, timestamp) 
+    const sql = `INSERT INTO event_log (session_id, event_type, description, vital_sign, old_value, new_value, timestamp)
                  VALUES (?, ?, ?, ?, ?, ?, ?)`;
-    
+
     const stmt = db.prepare(sql);
     let inserted = 0;
+    let runError = null;
+    let pending = events.length;
+
+    if (pending === 0) {
+        stmt.finalize();
+        return res.json({ message: '0 events logged' });
+    }
 
     events.forEach(event => {
         stmt.run(
@@ -1472,16 +1492,27 @@ router.post('/events/batch', authenticateToken, (req, res) => {
             event.vital_sign || null,
             event.old_value || null,
             event.new_value || null,
-            event.timestamp
+            event.timestamp,
+            function(err) {
+                if (err && !runError) {
+                    runError = err;
+                } else if (!err) {
+                    inserted++;
+                }
+                pending--;
+                if (pending === 0) {
+                    stmt.finalize((finalizeErr) => {
+                        if (runError) {
+                            return res.status(500).json({ error: runError.message });
+                        }
+                        if (finalizeErr) {
+                            return res.status(500).json({ error: finalizeErr.message });
+                        }
+                        res.json({ message: `${inserted} events logged` });
+                    });
+                }
+            }
         );
-        inserted++;
-    });
-
-    stmt.finalize((err) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        res.json({ message: `${inserted} events logged` });
     });
 });
 
@@ -2049,22 +2080,39 @@ router.post('/sessions/:id/order', authenticateToken, (req, res) => {
         return res.status(400).json({ error: 'investigation_ids must be an array' });
     }
 
-    const sql = `INSERT INTO investigation_orders (session_id, investigation_id, available_at) 
+    const sql = `INSERT INTO investigation_orders (session_id, investigation_id, available_at)
                  VALUES (?, ?, datetime('now', '+' || (SELECT turnaround_minutes FROM case_investigations WHERE id = ?) || ' minutes'))`;
-    
+
     const stmt = db.prepare(sql);
     let inserted = 0;
+    let runError = null;
+    let pending = investigation_ids.length;
+
+    if (pending === 0) {
+        stmt.finalize();
+        return res.json({ message: '0 investigations ordered' });
+    }
 
     investigation_ids.forEach(invId => {
-        stmt.run(sessionId, invId, invId);
-        inserted++;
-    });
-
-    stmt.finalize((err) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        res.json({ message: `${inserted} investigations ordered` });
+        stmt.run(sessionId, invId, invId, function(err) {
+            if (err && !runError) {
+                runError = err;
+            } else if (!err) {
+                inserted++;
+            }
+            pending--;
+            if (pending === 0) {
+                stmt.finalize((finalizeErr) => {
+                    if (runError) {
+                        return res.status(500).json({ error: runError.message });
+                    }
+                    if (finalizeErr) {
+                        return res.status(500).json({ error: finalizeErr.message });
+                    }
+                    res.json({ message: `${inserted} investigations ordered` });
+                });
+            }
+        });
     });
 });
 
@@ -2966,16 +3014,282 @@ router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireAdmin, 
             }
         );
 
-        res.json({ 
+        res.json({
             message: 'Lab value updated',
             new_value: current_value
         });
     });
 });
 
+// --- RADIOLOGY ORDERING ENDPOINTS ---
+
+// GET /api/radiology-database - Get master radiology database for case designer
+router.get('/radiology-database', authenticateToken, (req, res) => {
+    const { search, modality } = req.query;
+
+    let filtered = radiologyDatabase;
+
+    // Filter by search term
+    if (search) {
+        const searchLower = search.toLowerCase();
+        filtered = filtered.filter(study =>
+            study.name.toLowerCase().includes(searchLower) ||
+            study.modality.toLowerCase().includes(searchLower) ||
+            study.body_region.toLowerCase().includes(searchLower) ||
+            (study.common_indications && study.common_indications.some(ind =>
+                ind.toLowerCase().includes(searchLower)
+            ))
+        );
+    }
+
+    // Filter by modality
+    if (modality && modality !== 'all') {
+        filtered = filtered.filter(study => study.modality === modality);
+    }
+
+    // Get unique modalities for filter dropdown
+    const modalities = [...new Set(radiologyDatabase.map(s => s.modality))].sort();
+
+    res.json({
+        studies: filtered,
+        modalities,
+        total: filtered.length,
+        totalAvailable: radiologyDatabase.length
+    });
+});
+
+// GET /api/sessions/:sessionId/available-radiology - Get available radiology studies
+router.get('/sessions/:sessionId/available-radiology', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+
+    // Get case config to include custom studies
+    db.get(
+        'SELECT c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?',
+        [sessionId],
+        (err, row) => {
+            if (err) {
+                console.error('Error fetching case config:', err);
+                return res.json({
+                    studies: radiologyDatabase,
+                    groups: [...new Set(radiologyDatabase.map(s => s.modality))].sort(),
+                    total: radiologyDatabase.length
+                });
+            }
+
+            let allStudies = [...radiologyDatabase];
+
+            // Parse case config and add custom studies
+            if (row?.config) {
+                try {
+                    const config = JSON.parse(row.config);
+                    const configuredRadiology = config.radiology || config.clinicalRecords?.radiology || [];
+
+                    // Add custom studies that aren't in the master database
+                    configuredRadiology.forEach(cr => {
+                        if (cr.isCustom && cr.studyId) {
+                            allStudies.push({
+                                id: cr.studyId,
+                                name: cr.studyName || 'Custom Study',
+                                modality: cr.modality || 'Other',
+                                body_region: cr.bodyRegion || '',
+                                turnaround_minutes: cr.turnaroundMinutes || 30,
+                                common_indications: [],
+                                isCustom: true
+                            });
+                        }
+                    });
+                } catch (e) {
+                    console.warn('Failed to parse case config:', e.message);
+                }
+            }
+
+            // Group by modality for easier display
+            const groups = [...new Set(allStudies.map(s => s.modality))].sort();
+
+            res.json({
+                studies: allStudies,
+                groups: groups,
+                total: allStudies.length
+            });
+        }
+    );
+});
+
+// GET /api/sessions/:sessionId/radiology-orders - Get radiology orders for session
+router.get('/sessions/:sessionId/radiology-orders', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+
+    const sql = `
+        SELECT
+            io.id,
+            io.investigation_id as study_id,
+            io.ordered_at,
+            io.available_at,
+            io.viewed_at,
+            ci.test_name,
+            ci.test_group as modality,
+            ci.image_url,
+            ci.result_data,
+            ci.turnaround_minutes,
+            CASE
+                WHEN datetime(io.available_at) <= datetime('now') THEN 1
+                ELSE 0
+            END as is_ready,
+            CASE
+                WHEN datetime(io.available_at) > datetime('now')
+                THEN ROUND((julianday(io.available_at) - julianday('now')) * 24 * 60, 1)
+                ELSE 0
+            END as minutes_remaining
+        FROM investigation_orders io
+        JOIN case_investigations ci ON io.investigation_id = ci.id
+        WHERE io.session_id = ? AND ci.investigation_type = 'radiology'
+        ORDER BY io.ordered_at DESC
+    `;
+
+    db.all(sql, [sessionId], (err, orders) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ orders: orders || [] });
+    });
+});
+
+// POST /api/sessions/:sessionId/order-radiology - Order radiology studies
+router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+    const { radiology_ids, instant } = req.body;
+
+    if (!Array.isArray(radiology_ids) || radiology_ids.length === 0) {
+        return res.status(400).json({ error: 'radiology_ids array is required' });
+    }
+
+    // Verify session exists and get case config
+    db.get('SELECT s.user_id, s.case_id, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?', [sessionId], (err, session) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+        if (session.user_id !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Parse case config to get configured radiology studies
+        let caseConfig = {};
+        try {
+            caseConfig = JSON.parse(session.config || '{}');
+        } catch (e) {
+            console.warn('Failed to parse case config:', e.message);
+        }
+        // Check both new location (config.radiology) and old location (clinicalRecords.radiology)
+        const configuredRadiology = caseConfig.radiology || caseConfig.clinicalRecords?.radiology || [];
+
+        let inserted = 0;
+        let pending = radiology_ids.length;
+        const orderIds = [];
+
+        if (pending === 0) {
+            return res.json({ message: '0 radiology studies ordered', orders: [] });
+        }
+
+        radiology_ids.forEach(radId => {
+            // Check if this is a custom study (ID starts with "custom_")
+            const isCustomStudy = typeof radId === 'string' && radId.startsWith('custom_');
+
+            // Find study in radiology database by ID (for non-custom studies)
+            const study = isCustomStudy ? null : radiologyDatabase.find(s => s.id === radId);
+
+            // Check if this study has configured results in the case config
+            const configuredResult = configuredRadiology.find(cr =>
+                cr.studyId === radId ||
+                (study && cr.studyName?.toLowerCase() === study.name?.toLowerCase()) ||
+                (study && cr.type?.toLowerCase() === study.name?.toLowerCase())
+            );
+
+            // For custom studies, we MUST have a configured result
+            if (!study && !configuredResult) {
+                console.warn(`Radiology study not found and no config: ${radId}`);
+                pending--;
+                if (pending === 0) {
+                    res.json({ message: `${inserted} radiology studies ordered`, orders: orderIds });
+                }
+                return;
+            }
+
+            // Get study details from master database or configured result
+            const testName = study?.name || configuredResult?.studyName || 'Unknown Study';
+            const modality = study?.modality || configuredResult?.modality || 'Other';
+            const bodyRegion = study?.body_region || configuredResult?.bodyRegion || '';
+            const defaultTurnaround = study?.turnaround_minutes || 30;
+
+            // Use configured turnaround time if available
+            const configuredTurnaround = configuredResult?.turnaroundMinutes;
+            const turnaround = instant ? 0 : (configuredTurnaround ?? defaultTurnaround);
+
+            // Use configured findings/interpretation if available, otherwise use normal defaults from master database
+            const findings = configuredResult?.findings || study?.normal_findings || '';
+            const interpretation = configuredResult?.interpretation || study?.normal_interpretation || '';
+            const imageUrl = configuredResult?.imageUrl || null;
+
+            // Build result data including configured findings
+            const resultData = {
+                indications: study?.common_indications || [],
+                body_region: bodyRegion,
+                findings: findings,
+                interpretation: interpretation,
+                hasConfiguredResult: !!configuredResult,
+                isCustomStudy: isCustomStudy,
+                isNormalDefault: !configuredResult?.findings && !configuredResult?.interpretation && !!study?.normal_findings
+            };
+
+            // First insert into case_investigations
+            const insertStudySql = `
+                INSERT INTO case_investigations (
+                    case_id, investigation_type, test_name, test_group,
+                    image_url, result_data, turnaround_minutes
+                ) VALUES (?, 'radiology', ?, ?, ?, ?, ?)
+            `;
+
+            db.run(insertStudySql, [
+                session.case_id,
+                testName,
+                modality,
+                imageUrl,
+                JSON.stringify(resultData),
+                turnaround
+            ], function(err) {
+                if (err) {
+                    console.error('Error inserting radiology study:', err);
+                    pending--;
+                    if (pending === 0) {
+                        res.json({ message: `${inserted} radiology studies ordered`, orders: orderIds });
+                    }
+                    return;
+                }
+
+                const investigationId = this.lastID;
+
+                // Now create the order
+                const orderSql = `
+                    INSERT INTO investigation_orders (session_id, investigation_id, available_at)
+                    VALUES (?, ?, datetime('now', '+' || ? || ' minutes'))
+                `;
+
+                db.run(orderSql, [sessionId, investigationId, turnaround], function(orderErr) {
+                    pending--;
+                    if (!orderErr) {
+                        inserted++;
+                        orderIds.push(this.lastID);
+                    }
+                    if (pending === 0) {
+                        res.json({ message: `${inserted} radiology studies ordered`, orders: orderIds });
+                    }
+                });
+            });
+        });
+    });
+});
+
 // --- LLM PROXY ROUTE with Authentication & Rate Limiting ---
 router.post('/proxy/llm', authenticateToken, async (req, res) => {
-    const { messages, system_prompt, session_id } = req.body;
+    const { messages, system_prompt, session_id, agent_llm_config } = req.body;
     const userId = req.user.id;
     const today = new Date().toISOString().split('T')[0];
     const startTime = Date.now();
@@ -3108,18 +3422,73 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             });
         }
 
-        // Merge: session settings override platform settings only if they have actual values
-        const provider = (sessionLlmSettings?.provider && sessionLlmSettings.provider.trim()) || platformProvider;
-        const model = (sessionLlmSettings?.model && sessionLlmSettings.model.trim()) || platformModel;
-        const baseUrl = (sessionLlmSettings?.baseUrl && sessionLlmSettings.baseUrl.trim()) || platformBaseUrl;
-        const apiKey = (sessionLlmSettings?.apiKey && sessionLlmSettings.apiKey.trim()) || platformApiKey;
+        // Merge: agent_llm_config > session settings > platform settings
+        // Agent-specific LLM config has highest priority
+        let agentProvider = null;
+        let agentModel = null;
+        let agentApiKey = null;
+        let agentEndpoint = null;
+
+        if (agent_llm_config && agent_llm_config.provider) {
+            // Agent has override settings
+            agentProvider = agent_llm_config.provider;
+            agentModel = agent_llm_config.model;
+            agentApiKey = agent_llm_config.api_key;
+            agentEndpoint = agent_llm_config.endpoint;
+            console.log(`[LLM Proxy] Using agent-specific LLM config: provider=${agentProvider}, model=${agentModel || '(default)'}`);
+        } else if (agent_llm_config?.agent_template_id) {
+            // Try to fetch agent template LLM config from DB
+            const agentTemplate = await new Promise((resolve, reject) => {
+                db.get('SELECT llm_provider, llm_model, llm_api_key, llm_endpoint FROM agent_templates WHERE id = ?',
+                    [agent_llm_config.agent_template_id], (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row);
+                });
+            });
+            if (agentTemplate && agentTemplate.llm_provider) {
+                agentProvider = agentTemplate.llm_provider;
+                agentModel = agentTemplate.llm_model;
+                agentApiKey = agentTemplate.llm_api_key;
+                agentEndpoint = agentTemplate.llm_endpoint;
+                console.log(`[LLM Proxy] Using agent template ${agent_llm_config.agent_template_id} LLM config: provider=${agentProvider}`);
+            }
+        }
+
+        // Priority: agent > session > platform
+        const provider = agentProvider || (sessionLlmSettings?.provider && sessionLlmSettings.provider.trim()) || platformProvider;
+        const model = agentModel || (sessionLlmSettings?.model && sessionLlmSettings.model.trim()) || platformModel;
+
+        // For API key and base URL, also consider agent settings
+        let baseUrl = platformBaseUrl;
+        let apiKey = platformApiKey;
+
+        // Handle provider-specific defaults for base URL
+        if (agentProvider) {
+            // Agent provider override
+            if (agentProvider === 'openai') {
+                baseUrl = 'https://api.openai.com/v1';
+            } else if (agentProvider === 'anthropic') {
+                baseUrl = 'https://api.anthropic.com/v1';
+            } else if (agentProvider === 'openrouter') {
+                baseUrl = 'https://openrouter.ai/api/v1';
+            } else if (agentProvider === 'custom' && agentEndpoint) {
+                baseUrl = agentEndpoint;
+            }
+            apiKey = agentApiKey || platformApiKey;
+        } else if (sessionLlmSettings?.baseUrl && sessionLlmSettings.baseUrl.trim()) {
+            baseUrl = sessionLlmSettings.baseUrl.trim();
+            apiKey = (sessionLlmSettings?.apiKey && sessionLlmSettings.apiKey.trim()) || platformApiKey;
+        } else {
+            apiKey = (sessionLlmSettings?.apiKey && sessionLlmSettings.apiKey.trim()) || platformApiKey;
+        }
+
         const maxOutputTokensRaw = sessionLlmSettings?.maxOutputTokens || platformMaxTokens;
         const temperatureRaw = sessionLlmSettings?.temperature || platformTemperature;
         const maxOutputTokens = maxOutputTokensRaw ? parseInt(maxOutputTokensRaw) : null;
         const temperature = temperatureRaw ? parseFloat(temperatureRaw) : null;
 
         // Debug logging
-        console.log(`[LLM Proxy] Settings: provider=${provider}, model=${model || '(default)'}, baseUrl=${baseUrl}`);
+        console.log(`[LLM Proxy] Final settings: provider=${provider}, model=${model || '(default)'}, baseUrl=${baseUrl}`);
         if (sessionLlmSettings && Object.keys(sessionLlmSettings).length > 0) {
             console.log(`[LLM Proxy] Using session overrides for session ${session_id}:`, Object.keys(sessionLlmSettings).filter(k => sessionLlmSettings[k]));
         }
@@ -5517,6 +5886,1024 @@ router.get('/patient-record/:sessionId/summary', async (req, res) => {
         });
     } catch (err) {
         console.error('Patient record summary error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// MULTI-AGENT SYSTEM ROUTES
+// ============================================
+
+// -------------------- AGENT TEMPLATES (Admin) --------------------
+
+// GET /api/agents/templates - List all agent templates
+router.get('/agents/templates', authenticateToken, async (req, res) => {
+    try {
+        const templates = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT * FROM agent_templates ORDER BY is_default DESC, agent_type ASC, name ASC`,
+                (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows || []);
+                }
+            );
+        });
+
+        const parsed = templates.map(t => ({
+            ...t,
+            config: JSON.parse(t.config || '{}'),
+            is_default: t.is_default === 1
+        }));
+
+        res.json({ templates: parsed });
+    } catch (err) {
+        console.error('Agent templates list error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/agents/templates/:id - Get single agent template
+router.get('/agents/templates/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const template = await new Promise((resolve, reject) => {
+            db.get(
+                'SELECT * FROM agent_templates WHERE id = ?',
+                [id],
+                (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row);
+                }
+            );
+        });
+
+        if (!template) {
+            return res.status(404).json({ error: 'Agent template not found' });
+        }
+
+        res.json({
+            ...template,
+            config: JSON.parse(template.config || '{}'),
+            is_default: template.is_default === 1
+        });
+    } catch (err) {
+        console.error('Agent template get error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/agents/templates - Create agent template (admin only)
+router.post('/agents/templates', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const {
+            agent_type,
+            name,
+            role_title,
+            avatar_url,
+            system_prompt,
+            context_filter = 'full',
+            communication_style,
+            config = {},
+            // LLM configuration
+            llm_provider,
+            llm_model,
+            llm_api_key,
+            llm_endpoint,
+            llm_config,
+            // Memory access configuration
+            memory_access
+        } = req.body;
+
+        if (!agent_type || !name || !system_prompt) {
+            return res.status(400).json({ error: 'agent_type, name, and system_prompt are required' });
+        }
+
+        const result = await new Promise((resolve, reject) => {
+            db.run(
+                `INSERT INTO agent_templates
+                 (agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style, config,
+                  llm_provider, llm_model, llm_api_key, llm_endpoint, llm_config, memory_access, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style,
+                    JSON.stringify(config),
+                    llm_provider || null, llm_model || null, llm_api_key || null, llm_endpoint || null,
+                    llm_config ? JSON.stringify(llm_config) : null,
+                    memory_access ? JSON.stringify(memory_access) : null,
+                    req.user.id
+                ],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve({ id: this.lastID });
+                }
+            );
+        });
+
+        logAudit({
+            userId: req.user.id,
+            username: req.user.username,
+            action: 'create_agent_template',
+            resourceType: 'agent_template',
+            resourceId: result.id.toString(),
+            resourceName: name,
+            newValue: { agent_type, name }
+        });
+
+        res.status(201).json({ id: result.id, message: 'Agent template created' });
+    } catch (err) {
+        console.error('Agent template create error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/agents/templates/:id - Update agent template (admin only)
+router.put('/agents/templates/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            agent_type,
+            name,
+            role_title,
+            avatar_url,
+            system_prompt,
+            context_filter,
+            communication_style,
+            config,
+            // LLM configuration
+            llm_provider,
+            llm_model,
+            llm_api_key,
+            llm_endpoint,
+            llm_config,
+            // Memory access configuration
+            memory_access
+        } = req.body;
+
+        // Build update query dynamically
+        const updates = [];
+        const params = [];
+
+        if (agent_type !== undefined) { updates.push('agent_type = ?'); params.push(agent_type); }
+        if (name !== undefined) { updates.push('name = ?'); params.push(name); }
+        if (role_title !== undefined) { updates.push('role_title = ?'); params.push(role_title); }
+        if (avatar_url !== undefined) { updates.push('avatar_url = ?'); params.push(avatar_url); }
+        if (system_prompt !== undefined) { updates.push('system_prompt = ?'); params.push(system_prompt); }
+        if (context_filter !== undefined) { updates.push('context_filter = ?'); params.push(context_filter); }
+        if (communication_style !== undefined) { updates.push('communication_style = ?'); params.push(communication_style); }
+        if (config !== undefined) { updates.push('config = ?'); params.push(JSON.stringify(config)); }
+        // LLM fields
+        if (llm_provider !== undefined) { updates.push('llm_provider = ?'); params.push(llm_provider || null); }
+        if (llm_model !== undefined) { updates.push('llm_model = ?'); params.push(llm_model || null); }
+        if (llm_api_key !== undefined) { updates.push('llm_api_key = ?'); params.push(llm_api_key || null); }
+        if (llm_endpoint !== undefined) { updates.push('llm_endpoint = ?'); params.push(llm_endpoint || null); }
+        if (llm_config !== undefined) { updates.push('llm_config = ?'); params.push(llm_config ? JSON.stringify(llm_config) : null); }
+        // Memory access
+        if (memory_access !== undefined) { updates.push('memory_access = ?'); params.push(memory_access ? JSON.stringify(memory_access) : null); }
+
+        updates.push('updated_at = CURRENT_TIMESTAMP');
+        params.push(id);
+
+        await new Promise((resolve, reject) => {
+            db.run(
+                `UPDATE agent_templates SET ${updates.join(', ')} WHERE id = ?`,
+                params,
+                function(err) {
+                    if (err) reject(err);
+                    else resolve(this.changes);
+                }
+            );
+        });
+
+        logAudit({
+            userId: req.user.id,
+            username: req.user.username,
+            action: 'update_agent_template',
+            resourceType: 'agent_template',
+            resourceId: id,
+            newValue: req.body
+        });
+
+        res.json({ success: true, message: 'Agent template updated' });
+    } catch (err) {
+        console.error('Agent template update error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/agents/templates/:id - Delete agent template (admin only)
+router.delete('/agents/templates/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Check if it's a default template
+        const template = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ?', [id], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
+        if (!template) {
+            return res.status(404).json({ error: 'Agent template not found' });
+        }
+
+        if (template.is_default === 1) {
+            return res.status(400).json({ error: 'Cannot delete default agent templates' });
+        }
+
+        await new Promise((resolve, reject) => {
+            db.run('DELETE FROM agent_templates WHERE id = ?', [id], function(err) {
+                if (err) reject(err);
+                else resolve(this.changes);
+            });
+        });
+
+        logAudit({
+            userId: req.user.id,
+            username: req.user.username,
+            action: 'delete_agent_template',
+            resourceType: 'agent_template',
+            resourceId: id,
+            resourceName: template.name
+        });
+
+        res.json({ success: true, message: 'Agent template deleted' });
+    } catch (err) {
+        console.error('Agent template delete error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/agents/templates/:id/test-llm - Test agent LLM configuration
+router.post('/agents/templates/:id/test-llm', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Get template with LLM config
+        const template = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ?', [id], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
+        if (!template) {
+            return res.status(404).json({ error: 'Agent template not found' });
+        }
+
+        // Get provider config - use template override or fall back to platform default
+        let provider = template.llm_provider;
+        let model = template.llm_model;
+        let apiKey = template.llm_api_key;
+        let endpoint = template.llm_endpoint;
+
+        // If no override, use platform defaults
+        if (!provider) {
+            const platformConfig = await new Promise((resolve, reject) => {
+                db.get('SELECT value FROM config WHERE key = ?', ['llm_provider'], (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row?.value || 'openai');
+                });
+            });
+            provider = platformConfig;
+        }
+
+        if (!model) {
+            const platformModel = await new Promise((resolve, reject) => {
+                db.get('SELECT value FROM config WHERE key = ?', ['llm_model'], (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row?.value || 'gpt-4o-mini');
+                });
+            });
+            model = platformModel;
+        }
+
+        if (!apiKey) {
+            const keyMap = {
+                'openai': 'openai_api_key',
+                'anthropic': 'anthropic_api_key',
+                'openrouter': 'openrouter_api_key'
+            };
+            const keyName = keyMap[provider] || 'openai_api_key';
+            const platformKey = await new Promise((resolve, reject) => {
+                db.get('SELECT value FROM config WHERE key = ?', [keyName], (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row?.value);
+                });
+            });
+            apiKey = platformKey;
+        }
+
+        if (!endpoint && provider === 'custom') {
+            const platformEndpoint = await new Promise((resolve, reject) => {
+                db.get('SELECT value FROM config WHERE key = ?', ['custom_llm_endpoint'], (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row?.value);
+                });
+            });
+            endpoint = platformEndpoint;
+        }
+
+        if (!apiKey && provider !== 'custom') {
+            return res.status(400).json({ error: `No API key configured for provider: ${provider}` });
+        }
+
+        // Build a simple test message
+        const testMessages = [
+            { role: 'system', content: template.system_prompt || 'You are a helpful assistant.' },
+            { role: 'user', content: 'Please respond with a single sentence confirming you are working correctly.' }
+        ];
+
+        let response;
+        const startTime = Date.now();
+
+        if (provider === 'openai') {
+            const OpenAI = (await import('openai')).default;
+            const openai = new OpenAI({ apiKey });
+            const completion = await openai.chat.completions.create({
+                model: model || 'gpt-4o-mini',
+                messages: testMessages,
+                max_tokens: 100
+            });
+            response = completion.choices[0]?.message?.content;
+        } else if (provider === 'anthropic') {
+            const Anthropic = (await import('@anthropic-ai/sdk')).default;
+            const anthropic = new Anthropic({ apiKey });
+            const completion = await anthropic.messages.create({
+                model: model || 'claude-3-5-sonnet-20241022',
+                max_tokens: 100,
+                system: testMessages[0].content,
+                messages: [{ role: 'user', content: testMessages[1].content }]
+            });
+            response = completion.content[0]?.text;
+        } else if (provider === 'openrouter') {
+            const OpenAI = (await import('openai')).default;
+            const openai = new OpenAI({
+                apiKey,
+                baseURL: 'https://openrouter.ai/api/v1'
+            });
+            const completion = await openai.chat.completions.create({
+                model: model || 'openai/gpt-4o-mini',
+                messages: testMessages,
+                max_tokens: 100
+            });
+            response = completion.choices[0]?.message?.content;
+        } else if (provider === 'custom' && endpoint) {
+            const OpenAI = (await import('openai')).default;
+            const openai = new OpenAI({
+                apiKey: apiKey || 'not-needed',
+                baseURL: endpoint
+            });
+            const completion = await openai.chat.completions.create({
+                model: model || 'default',
+                messages: testMessages,
+                max_tokens: 100
+            });
+            response = completion.choices[0]?.message?.content;
+        } else {
+            return res.status(400).json({ error: `Unsupported provider: ${provider}` });
+        }
+
+        const latency = Date.now() - startTime;
+
+        res.json({
+            success: true,
+            provider,
+            model,
+            latency_ms: latency,
+            response,
+            message: 'LLM connection test successful'
+        });
+    } catch (err) {
+        console.error('Agent LLM test error:', err);
+        res.status(500).json({
+            success: false,
+            error: err.message,
+            message: 'LLM connection test failed'
+        });
+    }
+});
+
+// POST /api/agents/templates/:id/duplicate - Duplicate an agent template
+router.post('/agents/templates/:id/duplicate', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name: newName } = req.body;
+
+        // Get original template
+        const original = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ?', [id], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
+        if (!original) {
+            return res.status(404).json({ error: 'Agent template not found' });
+        }
+
+        const duplicateName = newName || `${original.name} (Copy)`;
+
+        const result = await new Promise((resolve, reject) => {
+            db.run(
+                `INSERT INTO agent_templates
+                 (agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style, is_default, config, created_by,
+                  llm_provider, llm_model, llm_api_key, llm_endpoint, llm_config, memory_access)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    original.agent_type,
+                    duplicateName,
+                    original.role_title,
+                    original.avatar_url,
+                    original.system_prompt,
+                    original.context_filter,
+                    original.communication_style,
+                    original.config,
+                    req.user.id,
+                    original.llm_provider,
+                    original.llm_model,
+                    original.llm_api_key,
+                    original.llm_endpoint,
+                    original.llm_config,
+                    original.memory_access
+                ],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve({ id: this.lastID });
+                }
+            );
+        });
+
+        res.status(201).json({ id: result.id, message: 'Agent template duplicated' });
+    } catch (err) {
+        console.error('Agent template duplicate error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// -------------------- CASE AGENTS (Per-Case Config) --------------------
+
+// GET /api/cases/:caseId/agents - List agents configured for a case
+router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
+    try {
+        const { caseId } = req.params;
+
+        const agents = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT ca.*, at.name as template_name, at.role_title as template_role_title,
+                        at.system_prompt as template_system_prompt, at.agent_type,
+                        at.avatar_url as template_avatar, at.context_filter as template_context_filter,
+                        at.communication_style as template_communication_style, at.config as template_config
+                 FROM case_agents ca
+                 JOIN agent_templates at ON ca.agent_template_id = at.id
+                 WHERE ca.case_id = ?
+                 ORDER BY at.agent_type ASC`,
+                [caseId],
+                (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows || []);
+                }
+            );
+        });
+
+        // Merge template data with overrides
+        const parsed = agents.map(a => ({
+            id: a.id,
+            case_id: a.case_id,
+            agent_template_id: a.agent_template_id,
+            agent_type: a.agent_type,
+            enabled: a.enabled === 1,
+            // Use override if set, else template value
+            name: a.name_override || a.template_name,
+            role_title: a.template_role_title,
+            avatar_url: a.template_avatar,
+            system_prompt: a.system_prompt_override || a.template_system_prompt,
+            context_filter: a.template_context_filter,
+            communication_style: a.template_communication_style,
+            // Availability config
+            availability_type: a.availability_type,
+            available_from_minute: a.available_from_minute,
+            auto_arrive_minute: a.auto_arrive_minute,
+            depart_at_minute: a.depart_at_minute,
+            response_time_min: a.response_time_min,
+            response_time_max: a.response_time_max,
+            // Merged config
+            config: {
+                ...JSON.parse(a.template_config || '{}'),
+                ...JSON.parse(a.config_override || '{}')
+            },
+            // Keep override flags for editing
+            has_name_override: !!a.name_override,
+            has_prompt_override: !!a.system_prompt_override,
+            has_config_override: !!a.config_override
+        }));
+
+        res.json({ agents: parsed });
+    } catch (err) {
+        console.error('Case agents list error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/cases/:caseId/agents - Add agent to case
+router.post('/cases/:caseId/agents', authenticateToken, async (req, res) => {
+    try {
+        const { caseId } = req.params;
+        const {
+            agent_template_id,
+            enabled = true,
+            name_override,
+            system_prompt_override,
+            availability_type = 'present',
+            available_from_minute = 0,
+            auto_arrive_minute,
+            depart_at_minute,
+            response_time_min = 0,
+            response_time_max = 0,
+            config_override
+        } = req.body;
+
+        if (!agent_template_id) {
+            return res.status(400).json({ error: 'agent_template_id is required' });
+        }
+
+        // Check if template exists
+        const template = await new Promise((resolve, reject) => {
+            db.get('SELECT id FROM agent_templates WHERE id = ?', [agent_template_id], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
+        if (!template) {
+            return res.status(404).json({ error: 'Agent template not found' });
+        }
+
+        const result = await new Promise((resolve, reject) => {
+            db.run(
+                `INSERT INTO case_agents
+                 (case_id, agent_template_id, enabled, name_override, system_prompt_override,
+                  availability_type, available_from_minute, auto_arrive_minute, depart_at_minute,
+                  response_time_min, response_time_max, config_override)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    caseId, agent_template_id, enabled ? 1 : 0, name_override, system_prompt_override,
+                    availability_type, available_from_minute, auto_arrive_minute, depart_at_minute,
+                    response_time_min, response_time_max, config_override ? JSON.stringify(config_override) : null
+                ],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve({ id: this.lastID });
+                }
+            );
+        });
+
+        res.status(201).json({ id: result.id, message: 'Agent added to case' });
+    } catch (err) {
+        console.error('Case agent add error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/cases/:caseId/agents/:agentId - Update case agent config
+router.put('/cases/:caseId/agents/:agentId', authenticateToken, async (req, res) => {
+    try {
+        const { caseId, agentId } = req.params;
+        const {
+            enabled,
+            name_override,
+            system_prompt_override,
+            availability_type,
+            available_from_minute,
+            auto_arrive_minute,
+            depart_at_minute,
+            response_time_min,
+            response_time_max,
+            config_override
+        } = req.body;
+
+        const updates = [];
+        const params = [];
+
+        if (enabled !== undefined) { updates.push('enabled = ?'); params.push(enabled ? 1 : 0); }
+        if (name_override !== undefined) { updates.push('name_override = ?'); params.push(name_override || null); }
+        if (system_prompt_override !== undefined) { updates.push('system_prompt_override = ?'); params.push(system_prompt_override || null); }
+        if (availability_type !== undefined) { updates.push('availability_type = ?'); params.push(availability_type); }
+        if (available_from_minute !== undefined) { updates.push('available_from_minute = ?'); params.push(available_from_minute); }
+        if (auto_arrive_minute !== undefined) { updates.push('auto_arrive_minute = ?'); params.push(auto_arrive_minute); }
+        if (depart_at_minute !== undefined) { updates.push('depart_at_minute = ?'); params.push(depart_at_minute); }
+        if (response_time_min !== undefined) { updates.push('response_time_min = ?'); params.push(response_time_min); }
+        if (response_time_max !== undefined) { updates.push('response_time_max = ?'); params.push(response_time_max); }
+        if (config_override !== undefined) { updates.push('config_override = ?'); params.push(config_override ? JSON.stringify(config_override) : null); }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+
+        params.push(agentId, caseId);
+
+        await new Promise((resolve, reject) => {
+            db.run(
+                `UPDATE case_agents SET ${updates.join(', ')} WHERE id = ? AND case_id = ?`,
+                params,
+                function(err) {
+                    if (err) reject(err);
+                    else resolve(this.changes);
+                }
+            );
+        });
+
+        res.json({ success: true, message: 'Case agent updated' });
+    } catch (err) {
+        console.error('Case agent update error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/cases/:caseId/agents/:agentId - Remove agent from case
+router.delete('/cases/:caseId/agents/:agentId', authenticateToken, async (req, res) => {
+    try {
+        const { caseId, agentId } = req.params;
+
+        await new Promise((resolve, reject) => {
+            db.run(
+                'DELETE FROM case_agents WHERE id = ? AND case_id = ?',
+                [agentId, caseId],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve(this.changes);
+                }
+            );
+        });
+
+        res.json({ success: true, message: 'Agent removed from case' });
+    } catch (err) {
+        console.error('Case agent delete error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/cases/:caseId/agents/add-defaults - Add all default agents to case
+router.post('/cases/:caseId/agents/add-defaults', authenticateToken, async (req, res) => {
+    try {
+        const { caseId } = req.params;
+
+        // Get all default templates
+        const defaults = await new Promise((resolve, reject) => {
+            db.all('SELECT * FROM agent_templates WHERE is_default = 1', (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            });
+        });
+
+        // Insert each default agent for the case
+        let addedCount = 0;
+        for (const template of defaults) {
+            const config = JSON.parse(template.config || '{}');
+            try {
+                await new Promise((resolve, reject) => {
+                    db.run(
+                        `INSERT OR IGNORE INTO case_agents
+                         (case_id, agent_template_id, enabled, availability_type, available_from_minute,
+                          response_time_min, response_time_max)
+                         VALUES (?, ?, 1, ?, 0, ?, ?)`,
+                        [
+                            caseId,
+                            template.id,
+                            config.typical_availability || 'present',
+                            config.response_time?.min || 0,
+                            config.response_time?.max || 0
+                        ],
+                        function(err) {
+                            if (err) reject(err);
+                            else {
+                                if (this.changes > 0) addedCount++;
+                                resolve(this.changes);
+                            }
+                        }
+                    );
+                });
+            } catch (e) {
+                // Ignore duplicates
+            }
+        }
+
+        res.json({ success: true, added: addedCount, message: `Added ${addedCount} default agents to case` });
+    } catch (err) {
+        console.error('Add default agents error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// -------------------- AGENT SESSION STATE (Runtime) --------------------
+
+// GET /api/sessions/:sessionId/agents - Get agent states for session
+router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        // Get session to find case_id
+        const session = await new Promise((resolve, reject) => {
+            db.get('SELECT case_id FROM sessions WHERE id = ?', [sessionId], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
+        if (!session) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        // Get case agents with current session state
+        const agents = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT ca.*, at.name as template_name, at.role_title, at.agent_type,
+                        at.avatar_url, at.system_prompt as template_system_prompt,
+                        at.context_filter, at.communication_style, at.config as template_config,
+                        ass.status as session_status, ass.paged_at, ass.arrived_at, ass.departed_at
+                 FROM case_agents ca
+                 JOIN agent_templates at ON ca.agent_template_id = at.id
+                 LEFT JOIN agent_session_state ass ON ass.session_id = ? AND ass.agent_type = at.agent_type
+                 WHERE ca.case_id = ? AND ca.enabled = 1
+                 ORDER BY at.agent_type ASC`,
+                [sessionId, session.case_id],
+                (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows || []);
+                }
+            );
+        });
+
+        const parsed = agents.map(a => ({
+            agent_type: a.agent_type,
+            name: a.name_override || a.template_name,
+            role_title: a.role_title,
+            avatar_url: a.avatar_url,
+            system_prompt: a.system_prompt_override || a.template_system_prompt,
+            context_filter: a.context_filter,
+            communication_style: a.communication_style,
+            availability_type: a.availability_type,
+            available_from_minute: a.available_from_minute,
+            auto_arrive_minute: a.auto_arrive_minute,
+            depart_at_minute: a.depart_at_minute,
+            response_time_min: a.response_time_min,
+            response_time_max: a.response_time_max,
+            config: {
+                ...JSON.parse(a.template_config || '{}'),
+                ...JSON.parse(a.config_override || '{}')
+            },
+            // Session state
+            status: a.session_status || 'absent',
+            paged_at: a.paged_at,
+            arrived_at: a.arrived_at,
+            departed_at: a.departed_at
+        }));
+
+        res.json({ agents: parsed });
+    } catch (err) {
+        console.error('Session agents list error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/sessions/:sessionId/agents/:agentType/page - Page an agent
+router.post('/sessions/:sessionId/agents/:agentType/page', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId, agentType } = req.params;
+
+        // Upsert the session state
+        await new Promise((resolve, reject) => {
+            db.run(
+                `INSERT INTO agent_session_state (session_id, agent_type, status, paged_at)
+                 VALUES (?, ?, 'paged', CURRENT_TIMESTAMP)
+                 ON CONFLICT(session_id, agent_type) DO UPDATE SET
+                 status = 'paged', paged_at = CURRENT_TIMESTAMP`,
+                [sessionId, agentType],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve(this.changes);
+                }
+            );
+        });
+
+        res.json({ success: true, message: `Agent ${agentType} paged` });
+    } catch (err) {
+        console.error('Page agent error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/sessions/:sessionId/agents/:agentType/arrive - Mark agent as arrived
+router.post('/sessions/:sessionId/agents/:agentType/arrive', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId, agentType } = req.params;
+
+        await new Promise((resolve, reject) => {
+            db.run(
+                `INSERT INTO agent_session_state (session_id, agent_type, status, arrived_at)
+                 VALUES (?, ?, 'present', CURRENT_TIMESTAMP)
+                 ON CONFLICT(session_id, agent_type) DO UPDATE SET
+                 status = 'present', arrived_at = CURRENT_TIMESTAMP`,
+                [sessionId, agentType],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve(this.changes);
+                }
+            );
+        });
+
+        res.json({ success: true, message: `Agent ${agentType} arrived` });
+    } catch (err) {
+        console.error('Agent arrive error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/sessions/:sessionId/agents/:agentType/depart - Mark agent as departed
+router.post('/sessions/:sessionId/agents/:agentType/depart', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId, agentType } = req.params;
+
+        await new Promise((resolve, reject) => {
+            db.run(
+                `UPDATE agent_session_state SET status = 'departed', departed_at = CURRENT_TIMESTAMP
+                 WHERE session_id = ? AND agent_type = ?`,
+                [sessionId, agentType],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve(this.changes);
+                }
+            );
+        });
+
+        res.json({ success: true, message: `Agent ${agentType} departed` });
+    } catch (err) {
+        console.error('Agent depart error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/sessions/:sessionId/agents/:agentType/status - Get single agent status
+router.get('/sessions/:sessionId/agents/:agentType/status', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId, agentType } = req.params;
+
+        const state = await new Promise((resolve, reject) => {
+            db.get(
+                `SELECT * FROM agent_session_state WHERE session_id = ? AND agent_type = ?`,
+                [sessionId, agentType],
+                (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row);
+                }
+            );
+        });
+
+        res.json({
+            agent_type: agentType,
+            status: state?.status || 'absent',
+            paged_at: state?.paged_at || null,
+            arrived_at: state?.arrived_at || null,
+            departed_at: state?.departed_at || null
+        });
+    } catch (err) {
+        console.error('Agent status error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// -------------------- AGENT CONVERSATIONS --------------------
+
+// GET /api/sessions/:sessionId/agents/:agentType/conversation - Get conversation history
+router.get('/sessions/:sessionId/agents/:agentType/conversation', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId, agentType } = req.params;
+
+        const messages = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT * FROM agent_conversations
+                 WHERE session_id = ? AND agent_type = ?
+                 ORDER BY created_at ASC`,
+                [sessionId, agentType],
+                (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows || []);
+                }
+            );
+        });
+
+        res.json({ messages });
+    } catch (err) {
+        console.error('Agent conversation get error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/sessions/:sessionId/agents/:agentType/conversation - Add message to conversation
+router.post('/sessions/:sessionId/agents/:agentType/conversation', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId, agentType } = req.params;
+        const { role, content } = req.body;
+
+        if (!role || !content) {
+            return res.status(400).json({ error: 'role and content are required' });
+        }
+
+        const result = await new Promise((resolve, reject) => {
+            db.run(
+                `INSERT INTO agent_conversations (session_id, agent_type, role, content)
+                 VALUES (?, ?, ?, ?)`,
+                [sessionId, agentType, role, content],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve({ id: this.lastID });
+                }
+            );
+        });
+
+        res.status(201).json({ id: result.id, message: 'Message added' });
+    } catch (err) {
+        console.error('Agent conversation add error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/sessions/:sessionId/agents/:agentType/conversation - Clear conversation
+router.delete('/sessions/:sessionId/agents/:agentType/conversation', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId, agentType } = req.params;
+
+        await new Promise((resolve, reject) => {
+            db.run(
+                `DELETE FROM agent_conversations WHERE session_id = ? AND agent_type = ?`,
+                [sessionId, agentType],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve(this.changes);
+                }
+            );
+        });
+
+        res.json({ success: true, message: 'Conversation cleared' });
+    } catch (err) {
+        console.error('Agent conversation clear error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// -------------------- TEAM COMMUNICATIONS LOG --------------------
+
+// GET /api/sessions/:sessionId/team-communications - Get team communications log
+router.get('/sessions/:sessionId/team-communications', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        const log = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT * FROM team_communications_log
+                 WHERE session_id = ?
+                 ORDER BY created_at DESC`,
+                [sessionId],
+                (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows || []);
+                }
+            );
+        });
+
+        res.json({ log });
+    } catch (err) {
+        console.error('Team communications get error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/sessions/:sessionId/team-communications - Add entry to team log
+router.post('/sessions/:sessionId/team-communications', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { agent_type, key_points } = req.body;
+
+        if (!agent_type || !key_points) {
+            return res.status(400).json({ error: 'agent_type and key_points are required' });
+        }
+
+        const result = await new Promise((resolve, reject) => {
+            db.run(
+                `INSERT INTO team_communications_log (session_id, agent_type, key_points)
+                 VALUES (?, ?, ?)`,
+                [sessionId, agent_type, key_points],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve({ id: this.lastID });
+                }
+            );
+        });
+
+        res.status(201).json({ id: result.id, message: 'Entry added to team log' });
+    } catch (err) {
+        console.error('Team communications add error:', err);
         res.status(500).json({ error: err.message });
     }
 });

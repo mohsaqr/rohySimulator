@@ -17,6 +17,139 @@ const db = new sqlite.Database(dbPath, (err) => {
     }
 });
 
+// Seed default agent personas
+function seedDefaultAgents() {
+    const defaultAgents = [
+        {
+            agent_type: 'nurse',
+            name: 'Sarah Mitchell',
+            role_title: 'Bedside Nurse',
+            system_prompt: `You are Sarah Mitchell, an experienced bedside nurse with 8 years of experience in acute care. You are professional, attentive, and supportive.
+
+Your role:
+- You assist the medical student/resident with patient care tasks
+- You can provide vital signs, help with positioning, and assist with procedures
+- You alert the team to changes in patient status
+- You have knowledge of medications, dosing, and administration
+- You follow orders but will speak up if something seems unsafe
+
+Communication style:
+- Clear and professional
+- Use nursing terminology appropriately
+- Be helpful but don't do the doctor's job for them
+- Ask clarifying questions when orders are unclear
+- Report observations factually
+
+You have access to the patient's current vitals, recent events, and can see what has been ordered. Base your responses on actual patient data when available.`,
+            context_filter: 'full',
+            communication_style: 'professional',
+            is_default: 1,
+            config: JSON.stringify({
+                typical_availability: 'present',
+                can_be_paged: false,
+                response_time: { min: 0, max: 0 }
+            })
+        },
+        {
+            agent_type: 'consultant',
+            name: 'Dr. James Chen',
+            role_title: 'Senior Consultant',
+            system_prompt: `You are Dr. James Chen, a senior consultant physician with 20 years of experience. You are knowledgeable, thorough, and educational in your approach.
+
+Your role:
+- You provide expert consultation when called
+- You review the case, examine findings, and offer diagnostic and treatment recommendations
+- You teach and guide junior doctors through complex decisions
+- You may ask Socratic questions to help learners think through problems
+
+Communication style:
+- Thoughtful and measured
+- Use appropriate medical terminology
+- Explain your reasoning and differential diagnosis
+- Ask about relevant history and examination findings
+- Offer evidence-based recommendations
+
+When consulted:
+- Review the patient's current state and recent events
+- Ask clarifying questions about the presentation
+- Provide structured recommendations
+- Suggest further workup if needed
+- Be willing to discuss your reasoning
+
+You have access to the patient's full record. Base your assessment on the actual clinical data available.`,
+            context_filter: 'full',
+            communication_style: 'educational',
+            is_default: 1,
+            config: JSON.stringify({
+                typical_availability: 'on-call',
+                can_be_paged: true,
+                response_time: { min: 2, max: 5 }
+            })
+        },
+        {
+            agent_type: 'relative',
+            name: 'Family Member',
+            role_title: 'Patient\'s Relative',
+            system_prompt: `You are a close family member of the patient. You are concerned, emotional, and want the best for your loved one.
+
+Your role:
+- You can provide additional history about the patient
+- You may know details about medications, allergies, or past medical events
+- You express worry and need reassurance
+- You ask questions about what is happening and the plan
+- You may need things explained in simple terms
+
+Communication style:
+- Emotional and concerned
+- Use lay terms, not medical jargon
+- Ask for explanations when you don't understand
+- Express gratitude when given attention
+- May become anxious or upset if ignored
+
+Important behaviors:
+- You know the patient's daily life, habits, and recent symptoms before admission
+- You can clarify medication names or allergies if asked
+- You want to be kept informed about the plan
+- You may ask "Is my [family member] going to be okay?"
+- You appreciate when doctors take time to explain
+
+Respond based on the patient information available. If specific family relationship isn't defined, you can be a spouse, adult child, or sibling as appropriate.`,
+            context_filter: 'history',
+            communication_style: 'emotional',
+            is_default: 1,
+            config: JSON.stringify({
+                typical_availability: 'present',
+                can_be_paged: false,
+                response_time: { min: 0, max: 0 }
+            })
+        }
+    ];
+
+    // Insert default agents if they don't exist
+    const stmt = db.prepare(`
+        INSERT OR IGNORE INTO agent_templates
+        (agent_type, name, role_title, system_prompt, context_filter, communication_style, is_default, config)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    defaultAgents.forEach(agent => {
+        stmt.run(
+            agent.agent_type,
+            agent.name,
+            agent.role_title,
+            agent.system_prompt,
+            agent.context_filter,
+            agent.communication_style,
+            agent.is_default,
+            agent.config
+        );
+    });
+
+    stmt.finalize(() => {
+        console.log('Default agent personas seeded.');
+    });
+}
+
 function initDb() {
     db.serialize(() => {
     // 1. Users Table - Enhanced with audit fields
@@ -1252,6 +1385,106 @@ function initDb() {
         db.run(`CREATE INDEX IF NOT EXISTS idx_patient_record_events_verb ON patient_record_events(verb)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_patient_record_events_time ON patient_record_events(time_elapsed)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_patient_record_documents_session ON patient_record_documents(session_id)`);
+
+        // ==================== MULTI-AGENT SYSTEM ====================
+
+        // Agent Templates - reusable personas created by admin
+        db.run(`CREATE TABLE IF NOT EXISTS agent_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            role_title TEXT,
+            avatar_url TEXT,
+            system_prompt TEXT NOT NULL,
+            context_filter TEXT DEFAULT 'full',
+            communication_style TEXT,
+            is_default BOOLEAN DEFAULT 0,
+            config JSON,
+            -- LLM Configuration (optional override from platform default)
+            llm_provider TEXT,
+            llm_model TEXT,
+            llm_api_key TEXT,
+            llm_endpoint TEXT,
+            llm_config JSON,
+            -- Memory/PatientRecord Access Configuration
+            memory_access JSON,
+            created_by INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(created_by) REFERENCES users(id)
+        )`);
+
+        // Add columns to existing agent_templates table if they don't exist
+        db.run(`ALTER TABLE agent_templates ADD COLUMN llm_provider TEXT`, (err) => { if (err && !err.message.includes('duplicate')) console.error('Error adding llm_provider column:', err.message); });
+        db.run(`ALTER TABLE agent_templates ADD COLUMN llm_model TEXT`, (err) => { if (err && !err.message.includes('duplicate')) console.error('Error adding llm_model column:', err.message); });
+        db.run(`ALTER TABLE agent_templates ADD COLUMN llm_api_key TEXT`, (err) => { if (err && !err.message.includes('duplicate')) console.error('Error adding llm_api_key column:', err.message); });
+        db.run(`ALTER TABLE agent_templates ADD COLUMN llm_endpoint TEXT`, (err) => { if (err && !err.message.includes('duplicate')) console.error('Error adding llm_endpoint column:', err.message); });
+        db.run(`ALTER TABLE agent_templates ADD COLUMN llm_config JSON`, (err) => { if (err && !err.message.includes('duplicate')) console.error('Error adding llm_config column:', err.message); });
+        db.run(`ALTER TABLE agent_templates ADD COLUMN memory_access JSON`, (err) => { if (err && !err.message.includes('duplicate')) console.error('Error adding memory_access column:', err.message); });
+
+        // Case Agents - which agents are enabled per case with overrides
+        db.run(`CREATE TABLE IF NOT EXISTS case_agents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id INTEGER NOT NULL,
+            agent_template_id INTEGER NOT NULL,
+            enabled BOOLEAN DEFAULT 1,
+            name_override TEXT,
+            system_prompt_override TEXT,
+            availability_type TEXT DEFAULT 'present',
+            available_from_minute INTEGER DEFAULT 0,
+            auto_arrive_minute INTEGER,
+            depart_at_minute INTEGER,
+            response_time_min INTEGER DEFAULT 0,
+            response_time_max INTEGER DEFAULT 0,
+            config_override JSON,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE CASCADE,
+            FOREIGN KEY(agent_template_id) REFERENCES agent_templates(id)
+        )`);
+
+        // Agent Conversations - chat history per session per agent
+        db.run(`CREATE TABLE IF NOT EXISTS agent_conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            agent_type TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        )`);
+
+        // Agent Session State - runtime state per session
+        db.run(`CREATE TABLE IF NOT EXISTS agent_session_state (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            agent_type TEXT NOT NULL,
+            status TEXT DEFAULT 'absent',
+            paged_at DATETIME,
+            arrived_at DATETIME,
+            departed_at DATETIME,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+            UNIQUE(session_id, agent_type)
+        )`);
+
+        // Team Communications Log - shared context across agents
+        db.run(`CREATE TABLE IF NOT EXISTS team_communications_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            agent_type TEXT NOT NULL,
+            key_points TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        )`);
+
+        // Agent indexes
+        db.run(`CREATE INDEX IF NOT EXISTS idx_agent_templates_type ON agent_templates(agent_type)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_case_agents_case ON case_agents(case_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_agent_conv_session ON agent_conversations(session_id, agent_type)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_agent_state_session ON agent_session_state(session_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_team_log_session ON team_communications_log(session_id)`);
+
+        // ==================== SEED DEFAULT AGENT PERSONAS ====================
+        seedDefaultAgents();
 
         console.log('Database tables initialized with comprehensive schema, master data tables, audit trails, and performance indexes.');
     });
