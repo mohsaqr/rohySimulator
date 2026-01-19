@@ -5,8 +5,35 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcrypt';
+import rateLimit from 'express-rate-limit';
 import { authenticateToken, requireAdmin, requireAuth, generateToken } from './middleware/auth.js';
 import * as labDb from './services/labDatabase.js';
+
+// Rate limiters for security
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // 10 attempts per window
+    message: { error: 'Too many authentication attempts. Please try again in 15 minutes.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: false
+});
+
+const registerLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5, // 5 registrations per hour per IP
+    message: { error: 'Too many registration attempts. Please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+const generalLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 100, // 100 requests per minute
+    message: { error: 'Too many requests. Please slow down.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,6 +56,36 @@ const router = express.Router();
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+
+/**
+ * Validate password strength
+ * @param {string} password - Password to validate
+ * @returns {Object} - { valid: boolean, errors: string[] }
+ */
+function validatePassword(password) {
+    const errors = [];
+
+    if (!password || password.length < 8) {
+        errors.push('Password must be at least 8 characters long');
+    }
+    if (password.length > 128) {
+        errors.push('Password must not exceed 128 characters');
+    }
+    if (!/[a-z]/.test(password)) {
+        errors.push('Password must contain at least one lowercase letter');
+    }
+    if (!/[A-Z]/.test(password)) {
+        errors.push('Password must contain at least one uppercase letter');
+    }
+    if (!/[0-9]/.test(password)) {
+        errors.push('Password must contain at least one number');
+    }
+
+    return {
+        valid: errors.length === 0,
+        errors
+    };
+}
 
 /**
  * Log an action to the system audit log
@@ -105,7 +162,7 @@ function createCaseVersion(caseId, userId, changeType, description, configSnapsh
     );
 }
 
-// Configure Multer for local uploads
+// Configure Multer for local uploads with security validation
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         const uploadDir = path.join(__dirname, '../public/uploads');
@@ -115,17 +172,47 @@ const storage = multer.diskStorage({
         cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
+        // Sanitize filename - remove path traversal attempts
+        const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
+        cb(null, uniqueSuffix + '-' + sanitizedName);
     }
 });
 
-const upload = multer({ storage: storage });
+// File type validation
+const fileFilter = (req, file, cb) => {
+    // Allowed MIME types for images
+    const allowedMimes = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/svg+xml'
+    ];
+
+    // Allowed extensions
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    if (allowedMimes.includes(file.mimetype) && allowedExts.includes(ext)) {
+        cb(null, true);
+    } else {
+        cb(new Error(`Invalid file type. Allowed: ${allowedExts.join(', ')}`), false);
+    }
+};
+
+const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB max
+    }
+});
 
 // --- AUTHENTICATION ---
 
 // POST /api/auth/register - Register a new user
-router.post('/auth/register', async (req, res) => {
+router.post('/auth/register', registerLimiter, async (req, res) => {
     const { username, name, email, password, role = 'user' } = req.body;
 
     // Validation
@@ -133,8 +220,9 @@ router.post('/auth/register', async (req, res) => {
         return res.status(400).json({ error: 'Username, email, and password are required' });
     }
 
-    if (password.length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+        return res.status(400).json({ error: passwordValidation.errors.join('. ') });
     }
 
     // Only allow admin creation if the request is from an existing admin
@@ -194,8 +282,9 @@ router.post('/users/create', authenticateToken, requireAdmin, async (req, res) =
         return res.status(400).json({ error: 'Username, email, and password are required' });
     }
 
-    if (password.length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+        return res.status(400).json({ error: passwordValidation.errors.join('. ') });
     }
 
     try {
@@ -209,7 +298,7 @@ router.post('/users/create', authenticateToken, requireAdmin, async (req, res) =
                 if (err.message.includes('UNIQUE')) {
                     return res.status(409).json({ error: 'Username or email already exists' });
                 }
-                return res.status(500).json({ error: err.message });
+                return res.status(500).json({ error: 'Failed to create user' });
             }
 
             res.status(201).json({
@@ -218,7 +307,8 @@ router.post('/users/create', authenticateToken, requireAdmin, async (req, res) =
             });
         });
     } catch (err) {
-        res.status(500).json({ error: 'Error creating user', details: err.message });
+        console.error('[User Create] Error:', err.message);
+        res.status(500).json({ error: 'Failed to create user' });
     }
 });
 
@@ -249,12 +339,13 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
             continue;
         }
 
-        if (password.length < 6) {
-            results.failed.push({ 
+        const passwordValidation = validatePassword(password);
+        if (!passwordValidation.valid) {
+            results.failed.push({
                 username,
-                name, 
-                email, 
-                error: 'Password must be at least 6 characters' 
+                name,
+                email,
+                error: passwordValidation.errors.join('. ')
             });
             continue;
         }
@@ -297,7 +388,7 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
 });
 
 // POST /api/auth/login - Login user
-router.post('/auth/login', (req, res) => {
+router.post('/auth/login', authLimiter, (req, res) => {
     const { username, password } = req.body;
     const ipAddress = req.ip || req.connection.remoteAddress;
     const userAgent = req.headers['user-agent'];
@@ -964,10 +1055,11 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     const { username, name, email, role, password } = req.body;
 
     try {
-        // If password is provided, hash it
+        // If password is provided, validate and hash it
         if (password) {
-            if (password.length < 6) {
-                return res.status(400).json({ error: 'Password must be at least 6 characters' });
+            const passwordValidation = validatePassword(password);
+            if (!passwordValidation.valid) {
+                return res.status(400).json({ error: passwordValidation.errors.join('. ') });
             }
             const password_hash = await bcrypt.hash(password, 10);
             const sql = `UPDATE users SET username = ?, name = ?, email = ?, role = ?, password_hash = ? WHERE id = ?`;
@@ -976,7 +1068,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
                     if (err.message.includes('UNIQUE')) {
                         return res.status(409).json({ error: 'Username or email already exists' });
                     }
-                    return res.status(500).json({ error: err.message });
+                    return res.status(500).json({ error: 'Failed to update user' });
                 }
                 if (this.changes === 0) {
                     return res.status(404).json({ error: 'User not found' });
@@ -991,7 +1083,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
                     if (err.message.includes('UNIQUE')) {
                         return res.status(409).json({ error: 'Username or email already exists' });
                     }
-                    return res.status(500).json({ error: err.message });
+                    return res.status(500).json({ error: 'Failed to update user' });
                 }
                 if (this.changes === 0) {
                     return res.status(404).json({ error: 'User not found' });
@@ -1000,7 +1092,8 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
             });
         }
     } catch (err) {
-        res.status(500).json({ error: 'Error updating user', details: err.message });
+        console.error('[User Update] Error:', err.message);
+        res.status(500).json({ error: 'Failed to update user' });
     }
 });
 
@@ -5056,8 +5149,9 @@ router.put('/user/password', authenticateToken, async (req, res) => {
         return res.status(400).json({ error: 'Current password and new password are required' });
     }
 
-    if (new_password.length < 6) {
-        return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    const passwordValidation = validatePassword(new_password);
+    if (!passwordValidation.valid) {
+        return res.status(400).json({ error: passwordValidation.errors.join('. ') });
     }
 
     try {
