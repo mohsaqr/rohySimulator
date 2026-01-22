@@ -100,7 +100,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         const fetchLabs = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const response = await fetch(apiUrl(`/api/sessions/${sessionId}/available-labs`), {
+                const response = await fetch(apiUrl(`/sessions/${sessionId}/available-labs`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
@@ -131,7 +131,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         try {
             const token = localStorage.getItem('token');
             console.log(`[Orders] Fetching orders for session ${sessionId}...`);
-            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/orders`), {
+            const response = await fetch(apiUrl(`/sessions/${sessionId}/orders`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -173,7 +173,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         const fetchRadiology = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const response = await fetch(apiUrl(`/api/sessions/${sessionId}/available-radiology`), {
+                const response = await fetch(apiUrl(`/sessions/${sessionId}/available-radiology`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
@@ -204,7 +204,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         if (!sessionId) return;
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/radiology-orders`), {
+            const response = await fetch(apiUrl(`/sessions/${sessionId}/radiology-orders`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -229,7 +229,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         setLoadingRadiology(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/order-radiology`), {
+            const response = await fetch(apiUrl(`/sessions/${sessionId}/order-radiology`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -297,7 +297,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                     globalTurnaround: labSettings.globalTurnaround
                 }
             });
-            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/order-labs`), {
+            const response = await fetch(apiUrl(`/sessions/${sessionId}/order-labs`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

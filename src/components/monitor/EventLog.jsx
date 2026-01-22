@@ -15,7 +15,7 @@ const EventLog = ({ sessionId }) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(apiUrl(`/api/sessions/${sessionId}/events`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/events`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }

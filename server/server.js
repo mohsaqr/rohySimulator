@@ -24,6 +24,7 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: (origin, callback) => {
+        console.log(origin, callback)
         // Allow requests with no origin (mobile apps, curl, etc.) in development
         if (!origin && process.env.NODE_ENV !== 'production') {
             return callback(null, true);
@@ -56,7 +57,7 @@ app.get('/', (req, res) => {
     console.error("Frontend folder does NOT exist but server is running", frontendPath);
     }
 });
-app.use(express.static(path.join(__dirname, "..", "frontend")));
+app.use('/', express.static(path.join(__dirname, "..", "frontend")));
 
 // Start server with port fallback
 function startServer(port, maxRetries = 10) {

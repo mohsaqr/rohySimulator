@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Trash2, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { AuthService } from '../../services/authService';
@@ -18,14 +19,14 @@ import CaseTreatmentConfig from './CaseTreatmentConfig';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
-    const { user, isAdmin } = useAuth();
+    const { isAdmin } = useAuth();
     const toast = useToast();
     // Default to 'cases' tab for all users, admins can access 'platform' for LLM settings
     const [activeTab, setActiveTab] = useState('cases'); // cases, users, history, logs, platform, scenarios
 
     // Cases State
     const [cases, setCases] = useState([]);
-    const [selectedCaseId, setSelectedCaseId] = useState(null);
+    const [, setSelectedCaseId] = useState(null);
     const [editingCase, setEditingCase] = useState(() => {
         // Restore editing case from localStorage on mount
         const savedCase = localStorage.getItem('rohy_editing_case');
@@ -74,7 +75,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
     // Load Cases on Mount
     useEffect(() => {
         const token = AuthService.getToken();
-        fetch(apiUrl('/api/cases'), {
+        fetch(apiUrl('/cases'), {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -97,16 +98,16 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
         }
 
         const isUpdate = !!editingCase.id;
-        const url = isUpdate
-            ? `/api/cases/${editingCase.id}`
-            : '/api/cases';
+        const url = apiUrl(isUpdate
+            ? `/cases/${editingCase.id}`
+            : '/cases');
 
         // Auto-generate system prompt if empty
         const sysPrompt = editingCase.system_prompt || `You are ${editingCase.name}. ${editingCase.description}`;
-        
+
         // Ensure config exists
         const config = editingCase.config || {};
-        
+
         const payload = {
             ...editingCase,
             system_prompt: sysPrompt,
@@ -118,7 +119,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
         console.log('[ConfigPanel] Saving case with scenario:', editingCase.scenario ? 'present' : 'null');
 
         const token = AuthService.getToken();
-        
+
         if (!token) {
             toast.error('Authentication required. Please log in again.');
             return;
@@ -129,7 +130,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
         try {
             const res = await fetch(url, {
                 method: isUpdate ? 'PUT' : 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
@@ -159,12 +160,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
             const labs = editingCase.config?.investigations?.labs || [];
             if (labs.length > 0) {
                 const caseId = saved.id;
-                
+
                 // First, delete existing labs for this case (to handle updates)
                 // Then insert new ones
                 for (const lab of labs) {
                     try {
-                        await fetch(apiUrl(`/api/cases/${caseId}/labs`), {
+                        await fetch(apiUrl(`/cases/${caseId}/labs`), {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -206,7 +207,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
 
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl(`/api/cases/${caseId}`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}`), {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -340,31 +341,31 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             input.onchange = async (e) => {
                                                                 const file = e.target.files[0];
                                                                 if (!file) return;
-                                                                
+
                                                                 try {
                                                                     const text = await file.text();
                                                                     const caseData = JSON.parse(text);
-                                                                    
+
                                                                     // Validate
                                                                     if (!caseData.name || !caseData.description) {
                                                                         throw new Error('Invalid case file format');
                                                                     }
-                                                                    
+
                                                                     // Save to database
                                                                     const token = AuthService.getToken();
-                                                                    const res = await fetch(apiUrl('/api/cases'), {
+                                                                    const res = await fetch(apiUrl('/cases'), {
                                                                         method: 'POST',
-                                                                        headers: { 
+                                                                        headers: {
                                                                             'Content-Type': 'application/json',
                                                                             'Authorization': `Bearer ${token}`
                                                                         },
                                                                         body: JSON.stringify(caseData)
                                                                     });
-                                                                    
+
                                                                     if (res.ok) {
                                                                         toast.success('Case imported successfully!');
                                                                         // Reload cases
-                                                                        const casesRes = await fetch(apiUrl('/api/cases'), {
+                                                                        const casesRes = await fetch(apiUrl('/cases'), {
                                                                             headers: { 'Authorization': `Bearer ${token}` }
                                                                         });
                                                                         const data = await casesRes.json();
@@ -430,7 +431,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             onClick={async () => {
                                                                 try {
                                                                     const token = AuthService.getToken();
-                                                                    const res = await fetch(apiUrl(`/api/cases/${c.id}/availability`), {
+                                                                    const res = await fetch(apiUrl(`/cases/${c.id}/availability`), {
                                                                         method: 'PUT',
                                                                         headers: {
                                                                             'Content-Type': 'application/json',
@@ -440,7 +441,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                                     });
                                                                     if (res.ok) {
                                                                         // Refresh cases
-                                                                        const casesRes = await fetch(apiUrl('/api/cases'), {
+                                                                        const casesRes = await fetch(apiUrl('/cases'), {
                                                                             headers: { 'Authorization': `Bearer ${token}` }
                                                                         });
                                                                         const data = await casesRes.json();
@@ -462,7 +463,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             onClick={async () => {
                                                                 try {
                                                                     const token = AuthService.getToken();
-                                                                    const res = await fetch(apiUrl(`/api/cases/${c.id}/default`), {
+                                                                    const res = await fetch(apiUrl(`/cases/${c.id}/default`), {
                                                                         method: 'PUT',
                                                                         headers: {
                                                                             'Content-Type': 'application/json',
@@ -472,7 +473,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                                     });
                                                                     if (res.ok) {
                                                                         // Refresh cases
-                                                                        const casesRes = await fetch(apiUrl('/api/cases'), {
+                                                                        const casesRes = await fetch(apiUrl('/cases'), {
                                                                             headers: { 'Authorization': `Bearer ${token}` }
                                                                         });
                                                                         const data = await casesRes.json();
@@ -748,7 +749,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             const formData = new FormData();
                                                             formData.append('image', file);
                                                             formData.append('type', 'man-front');
-                                                            fetch(apiUrl('/api/upload-body-image'), {
+                                                            fetch(apiUrl('/upload-body-image'), {
                                                                 method: 'POST',
                                                                 headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
                                                                 body: formData
@@ -773,7 +774,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             const formData = new FormData();
                                                             formData.append('image', file);
                                                             formData.append('type', 'man-back');
-                                                            fetch(apiUrl('/api/upload-body-image'), {
+                                                            fetch(apiUrl('/upload-body-image'), {
                                                                 method: 'POST',
                                                                 headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
                                                                 body: formData
@@ -798,7 +799,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             const formData = new FormData();
                                                             formData.append('image', file);
                                                             formData.append('type', 'woman-front');
-                                                            fetch(apiUrl('/api/upload-body-image'), {
+                                                            fetch(apiUrl('/upload-body-image'), {
                                                                 method: 'POST',
                                                                 headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
                                                                 body: formData
@@ -823,7 +824,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             const formData = new FormData();
                                                             formData.append('image', file);
                                                             formData.append('type', 'woman-back');
-                                                            fetch(apiUrl('/api/upload-body-image'), {
+                                                            fetch(apiUrl('/upload-body-image'), {
                                                                 method: 'POST',
                                                                 headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
                                                                 body: formData
@@ -879,7 +880,7 @@ function PlatformSettings({ cases, setCases }) {
         setLoading(true);
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl(`/api/cases/${caseId}/default`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}/default`), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -888,7 +889,7 @@ function PlatformSettings({ cases, setCases }) {
                 body: JSON.stringify({ is_default: true })
             });
             if (res.ok) {
-                const casesRes = await fetch(apiUrl('/api/cases'), {
+                const casesRes = await fetch(apiUrl('/cases'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await casesRes.json();
@@ -906,7 +907,7 @@ function PlatformSettings({ cases, setCases }) {
         setLoading(true);
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl(`/api/cases/${defaultCaseId}/default`), {
+            const res = await fetch(apiUrl(`/cases/${defaultCaseId}/default`), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -915,7 +916,7 @@ function PlatformSettings({ cases, setCases }) {
                 body: JSON.stringify({ is_default: false })
             });
             if (res.ok) {
-                const casesRes = await fetch(apiUrl('/api/cases'), {
+                const casesRes = await fetch(apiUrl('/cases'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await casesRes.json();
@@ -940,11 +941,10 @@ function PlatformSettings({ cases, setCases }) {
                         <button
                             key={section.id}
                             onClick={() => setActiveSection(section.id)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
-                                activeSection === section.id
-                                    ? 'bg-neutral-800 text-cyan-400 border border-neutral-700 border-b-neutral-800 -mb-[13px]'
-                                    : 'text-neutral-400 hover:text-white hover:bg-neutral-800/50'
-                            }`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${activeSection === section.id
+                                ? 'bg-neutral-800 text-cyan-400 border border-neutral-700 border-b-neutral-800 -mb-[13px]'
+                                : 'text-neutral-400 hover:text-white hover:bg-neutral-800/50'
+                                }`}
                         >
                             <Icon className="w-4 h-4" />
                             {section.label}
@@ -1038,7 +1038,7 @@ function UserFieldConfiguration() {
     const loadFieldConfig = async () => {
         try {
             const token = AuthService.getToken();
-            const response = await fetch(apiUrl('/api/platform-settings/user-fields'), {
+            const response = await fetch(apiUrl('/platform-settings/user-fields'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -1069,7 +1069,7 @@ function UserFieldConfiguration() {
         setSaving(true);
         try {
             const token = AuthService.getToken();
-            const response = await fetch(apiUrl('/api/platform-settings/user-fields'), {
+            const response = await fetch(apiUrl('/platform-settings/user-fields'), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1136,9 +1136,8 @@ function UserFieldConfiguration() {
                     return (
                         <div
                             key={fieldKey}
-                            className={`grid grid-cols-12 gap-4 items-center px-4 py-3 rounded-lg ${
-                                config.enabled ? 'bg-neutral-700/30' : 'bg-neutral-800/50 opacity-60'
-                            }`}
+                            className={`grid grid-cols-12 gap-4 items-center px-4 py-3 rounded-lg ${config.enabled ? 'bg-neutral-700/30' : 'bg-neutral-800/50 opacity-60'
+                                }`}
                         >
                             <div className="col-span-4">
                                 <span className="text-sm text-white font-medium capitalize">
@@ -1165,9 +1164,8 @@ function UserFieldConfiguration() {
                                         disabled={fieldKey === 'name'}
                                         className="sr-only peer"
                                     />
-                                    <div className={`w-9 h-5 rounded-full peer-focus:ring-2 peer-focus:ring-purple-500 ${
-                                        config.enabled ? 'bg-purple-600' : 'bg-neutral-600'
-                                    } ${fieldKey === 'name' ? 'opacity-50 cursor-not-allowed' : ''} after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4`}></div>
+                                    <div className={`w-9 h-5 rounded-full peer-focus:ring-2 peer-focus:ring-purple-500 ${config.enabled ? 'bg-purple-600' : 'bg-neutral-600'
+                                        } ${fieldKey === 'name' ? 'opacity-50 cursor-not-allowed' : ''} after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4`}></div>
                                 </label>
                             </div>
                             <div className="col-span-3 text-center">
@@ -1179,9 +1177,8 @@ function UserFieldConfiguration() {
                                         disabled={fieldKey === 'name' || !config.enabled}
                                         className="sr-only peer"
                                     />
-                                    <div className={`w-9 h-5 rounded-full peer-focus:ring-2 peer-focus:ring-red-500 ${
-                                        config.required ? 'bg-red-600' : 'bg-neutral-600'
-                                    } ${(fieldKey === 'name' || !config.enabled) ? 'opacity-50 cursor-not-allowed' : ''} after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4`}></div>
+                                    <div className={`w-9 h-5 rounded-full peer-focus:ring-2 peer-focus:ring-red-500 ${config.required ? 'bg-red-600' : 'bg-neutral-600'
+                                        } ${(fieldKey === 'name' || !config.enabled) ? 'opacity-50 cursor-not-allowed' : ''} after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4`}></div>
                                 </label>
                                 {config.required && config.enabled && (
                                     <span className="text-xs text-red-400 ml-2">*</span>
@@ -1261,9 +1258,9 @@ function LLMConfiguration() {
         try {
             const token = AuthService.getToken();
             const [llmRes, limitsRes, usageRes] = await Promise.all([
-                fetch(apiUrl('/api/platform-settings/llm'), { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(apiUrl('/api/platform-settings/rate-limits'), { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(apiUrl('/api/llm/usage/platform'), { headers: { 'Authorization': `Bearer ${token}` } })
+                fetch(apiUrl('/platform-settings/llm'), { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(apiUrl('/platform-settings/rate-limits'), { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(apiUrl('/llm/usage/platform'), { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
             if (llmRes.ok) {
@@ -1300,7 +1297,7 @@ function LLMConfiguration() {
         setSaving(true);
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/platform-settings/llm'), {
+            const res = await fetch(apiUrl('/platform-settings/llm'), {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(llmConfig)
@@ -1321,7 +1318,7 @@ function LLMConfiguration() {
         setSaving(true);
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/platform-settings/rate-limits'), {
+            const res = await fetch(apiUrl('/platform-settings/rate-limits'), {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(rateLimits)
@@ -1343,14 +1340,14 @@ function LLMConfiguration() {
         try {
             // First save the current settings
             const token = AuthService.getToken();
-            await fetch(apiUrl('/api/platform-settings/llm'), {
+            await fetch(apiUrl('/platform-settings/llm'), {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(llmConfig)
             });
 
             // Then test
-            const res = await fetch(apiUrl('/api/platform-settings/llm/test'), {
+            const res = await fetch(apiUrl('/platform-settings/llm/test'), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
             });
@@ -1399,9 +1396,8 @@ function LLMConfiguration() {
                                 onChange={(e) => setLlmConfig(prev => ({ ...prev, enabled: e.target.checked }))}
                                 className="sr-only peer"
                             />
-                            <div className={`w-11 h-6 rounded-full peer-focus:ring-2 peer-focus:ring-cyan-500 ${
-                                llmConfig.enabled ? 'bg-cyan-600' : 'bg-neutral-600'
-                            } after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5`}></div>
+                            <div className={`w-11 h-6 rounded-full peer-focus:ring-2 peer-focus:ring-cyan-500 ${llmConfig.enabled ? 'bg-cyan-600' : 'bg-neutral-600'
+                                } after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5`}></div>
                         </label>
                     </div>
 
@@ -1698,7 +1694,7 @@ function ChatConfiguration() {
     const loadSettings = async () => {
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/platform-settings/chat'), {
+            const res = await fetch(apiUrl('/platform-settings/chat'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -1717,7 +1713,7 @@ function ChatConfiguration() {
         setSaving(true);
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/platform-settings/chat'), {
+            const res = await fetch(apiUrl('/platform-settings/chat'), {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(chatSettings)
@@ -1861,7 +1857,7 @@ function MonitorConfiguration() {
     const loadMonitorSettings = async () => {
         try {
             const token = AuthService.getToken();
-            const response = await fetch(apiUrl('/api/platform-settings/monitor'), {
+            const response = await fetch(apiUrl('/platform-settings/monitor'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -1883,7 +1879,7 @@ function MonitorConfiguration() {
         setSaving(true);
         try {
             const token = AuthService.getToken();
-            const response = await fetch(apiUrl('/api/platform-settings/monitor'), {
+            const response = await fetch(apiUrl('/platform-settings/monitor'), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1937,20 +1933,17 @@ function MonitorConfiguration() {
                             <div
                                 key={key}
                                 onClick={() => handleToggle(key)}
-                                className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                                    monitorSettings[key]
-                                        ? 'bg-cyan-900/30 border-cyan-600/50'
-                                        : 'bg-neutral-900/50 border-neutral-700 hover:border-neutral-600'
-                                }`}
+                                className={`p-4 rounded-lg border cursor-pointer transition-all ${monitorSettings[key]
+                                    ? 'bg-cyan-900/30 border-cyan-600/50'
+                                    : 'bg-neutral-900/50 border-neutral-700 hover:border-neutral-600'
+                                    }`}
                             >
                                 <div className="flex items-center justify-between mb-1">
                                     <span className="font-medium text-white">{label}</span>
-                                    <div className={`w-10 h-5 rounded-full transition-colors ${
-                                        monitorSettings[key] ? 'bg-cyan-600' : 'bg-neutral-600'
-                                    }`}>
-                                        <div className={`w-4 h-4 rounded-full bg-white m-0.5 transition-transform ${
-                                            monitorSettings[key] ? 'translate-x-5' : 'translate-x-0'
-                                        }`} />
+                                    <div className={`w-10 h-5 rounded-full transition-colors ${monitorSettings[key] ? 'bg-cyan-600' : 'bg-neutral-600'
+                                        }`}>
+                                        <div className={`w-4 h-4 rounded-full bg-white m-0.5 transition-transform ${monitorSettings[key] ? 'translate-x-5' : 'translate-x-0'
+                                            }`} />
                                     </div>
                                 </div>
                                 <p className="text-xs text-neutral-400">{description}</p>
@@ -1990,7 +1983,6 @@ function SystemLogs() {
     const [loading, setLoading] = useState(false);
     const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
     const [selectedSessionForEvents, setSelectedSessionForEvents] = useState(null);
-    const [selectedSessionForActivity, setSelectedSessionForActivity] = useState(null);
 
     useEffect(() => {
         if (activeLogTab === 'login') {
@@ -2012,7 +2004,7 @@ function SystemLogs() {
         setLoading(true);
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/api/analytics/login-logs?limit=200'), {
+            const res = await fetch(apiUrl('/analytics/login-logs?limit=200'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -2028,7 +2020,7 @@ function SystemLogs() {
         setLoading(true);
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/api/analytics/settings-logs?limit=200'), {
+            const res = await fetch(apiUrl('/analytics/settings-logs?limit=200'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -2044,7 +2036,7 @@ function SystemLogs() {
         setLoading(true);
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/api/analytics/sessions'), {
+            const res = await fetch(apiUrl('/analytics/sessions'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -2059,19 +2051,19 @@ function SystemLogs() {
     const downloadCSV = async (logType) => {
         const token = AuthService.getToken();
         let url = '';
-        
+
         switch (logType) {
             case 'login':
-                url = '/api/export/login-logs';
+                url = apiUrl('/export/login-logs');
                 break;
             case 'chat':
-                url = '/api/export/chat-logs';
+                url = apiUrl('/export/chat-logs');
                 break;
             case 'settings':
-                url = '/api/export/settings-logs';
+                url = apiUrl('/export/settings-logs');
                 break;
             case 'session-settings':
-                url = '/api/export/session-settings';
+                url = apiUrl('/export/session-settings');
                 break;
         }
 
@@ -2095,7 +2087,7 @@ function SystemLogs() {
 
             // Get the CSV content
             const blob = await response.blob();
-            
+
             // Create download link
             const downloadUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -2105,7 +2097,7 @@ function SystemLogs() {
             a.click();
             document.body.removeChild(a);
             window.URL.revokeObjectURL(downloadUrl);
-            
+
             toast.success(`${logType} logs exported successfully!`);
         } catch (error) {
             console.error('Export failed:', error);
@@ -2206,11 +2198,10 @@ function SystemLogs() {
                                             <td className="px-4 py-3 font-medium">{log.username || 'N/A'}</td>
                                             <td className="px-4 py-3 text-neutral-400">{log.email || 'N/A'}</td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                                    log.action === 'login' ? 'bg-green-900 text-green-200' :
+                                                <span className={`px-2 py-1 rounded text-xs font-bold ${log.action === 'login' ? 'bg-green-900 text-green-200' :
                                                     log.action === 'logout' ? 'bg-blue-900 text-blue-200' :
-                                                    'bg-red-900 text-red-200'
-                                                }`}>
+                                                        'bg-red-900 text-red-200'
+                                                    }`}>
                                                     {log.action}
                                                 </span>
                                             </td>
@@ -2251,15 +2242,14 @@ function SystemLogs() {
                                             <td className="px-4 py-3 text-neutral-400">{session.case_name}</td>
                                             <td className="px-4 py-3 text-neutral-400">{new Date(session.start_time).toLocaleString()}</td>
                                             <td className="px-4 py-3">
-                                                {session.duration ? 
-                                                    `${Math.floor(session.duration / 60)}m ${session.duration % 60}s` : 
+                                                {session.duration ?
+                                                    `${Math.floor(session.duration / 60)}m ${session.duration % 60}s` :
                                                     <span className="text-yellow-400">In Progress</span>
                                                 }
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                                    session.end_time ? 'bg-green-900 text-green-200' : 'bg-yellow-900 text-yellow-200'
-                                                }`}>
+                                                <span className={`px-2 py-1 rounded text-xs font-bold ${session.end_time ? 'bg-green-900 text-green-200' : 'bg-yellow-900 text-yellow-200'
+                                                    }`}>
                                                     {session.end_time ? 'Completed' : 'Active'}
                                                 </span>
                                             </td>
@@ -2403,7 +2393,7 @@ function UserManagement() {
         setLoading(true);
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/api/users'), {
+            const res = await fetch(apiUrl('/users'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -2419,9 +2409,9 @@ function UserManagement() {
         e.preventDefault();
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/api/users/create'), {
+            const res = await fetch(apiUrl('/users/create'), {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
@@ -2447,7 +2437,7 @@ function UserManagement() {
         const token = AuthService.getToken();
 
         try {
-            const res = await fetch(apiUrl(`/api/users/${editingUser.id}`), {
+            const res = await fetch(apiUrl(`/users/${editingUser.id}`), {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -2501,7 +2491,7 @@ function UserManagement() {
                 }
 
                 const token = AuthService.getToken();
-                const res = await fetch(apiUrl('/api/users/batch'), {
+                const res = await fetch(apiUrl('/users/batch'), {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -2529,7 +2519,7 @@ function UserManagement() {
 john_doe,John Doe,john@example.com,password123,user
 jane_admin,Jane Smith,jane@example.com,admin456,admin
 student1,Student One,student1@school.edu,stud123,user`;
-        
+
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -2547,7 +2537,7 @@ student1,Student One,student1@school.edu,stud123,user`;
 
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl(`/api/users/${userId}`), {
+            const res = await fetch(apiUrl(`/users/${userId}`), {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -2567,7 +2557,7 @@ student1,Student One,student1@school.edu,stud123,user`;
 
         try {
             const user = users.find(u => u.id === userId);
-            const res = await fetch(apiUrl(`/api/users/${userId}`), {
+            const res = await fetch(apiUrl(`/users/${userId}`), {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -2614,7 +2604,7 @@ student1,Student One,student1@school.edu,stud123,user`;
                         <input
                             type="text"
                             value={formData.username}
-                            onChange={(e) => setFormData({...formData, username: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                             required
                         />
@@ -2624,7 +2614,7 @@ student1,Student One,student1@school.edu,stud123,user`;
                         <input
                             type="text"
                             value={formData.name}
-                            onChange={(e) => setFormData({...formData, name: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                             placeholder="e.g. John Doe"
                         />
@@ -2634,7 +2624,7 @@ student1,Student One,student1@school.edu,stud123,user`;
                         <input
                             type="email"
                             value={formData.email}
-                            onChange={(e) => setFormData({...formData, email: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                             required
                         />
@@ -2644,7 +2634,7 @@ student1,Student One,student1@school.edu,stud123,user`;
                         <input
                             type="password"
                             value={formData.password}
-                            onChange={(e) => setFormData({...formData, password: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                             minLength={6}
                             required
@@ -2654,7 +2644,7 @@ student1,Student One,student1@school.edu,stud123,user`;
                         <label className="block text-sm font-bold mb-2">Role</label>
                         <select
                             value={formData.role}
-                            onChange={(e) => setFormData({...formData, role: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                         >
                             <option value="user">User</option>
@@ -2686,7 +2676,7 @@ student1,Student One,student1@school.edu,stud123,user`;
                         <input
                             type="text"
                             value={formData.username}
-                            onChange={(e) => setFormData({...formData, username: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                             required
                         />
@@ -2696,7 +2686,7 @@ student1,Student One,student1@school.edu,stud123,user`;
                         <input
                             type="text"
                             value={formData.name}
-                            onChange={(e) => setFormData({...formData, name: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                             placeholder="e.g. John Doe"
                         />
@@ -2706,7 +2696,7 @@ student1,Student One,student1@school.edu,stud123,user`;
                         <input
                             type="email"
                             value={formData.email}
-                            onChange={(e) => setFormData({...formData, email: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                             required
                         />
@@ -2716,7 +2706,7 @@ student1,Student One,student1@school.edu,stud123,user`;
                         <input
                             type="password"
                             value={formData.password}
-                            onChange={(e) => setFormData({...formData, password: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                             minLength={6}
                         />
@@ -2725,7 +2715,7 @@ student1,Student One,student1@school.edu,stud123,user`;
                         <label className="block text-sm font-bold mb-2">Role</label>
                         <select
                             value={formData.role}
-                            onChange={(e) => setFormData({...formData, role: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                         >
                             <option value="user">User</option>
@@ -2779,7 +2769,7 @@ student1,Student One,student1@school.edu,stud123,user`;
                     <div className="bg-blue-900/20 border border-blue-700/50 rounded p-4 text-sm">
                         <p className="font-bold mb-2">CSV Example:</p>
                         <pre className="text-xs text-neutral-300">
-{`username,name,email,password,role
+                            {`username,name,email,password,role
 john_doe,John Doe,john@example.com,password123,user
 jane_admin,Jane Smith,jane@example.com,admin456,admin`}
                         </pre>
@@ -2870,7 +2860,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
     // Load groups on mount
     useEffect(() => {
         const token = AuthService.getToken();
-        fetch(apiUrl('/api/labs/groups'), {
+        fetch(apiUrl('/labs/groups'), {
             headers: { 'Authorization': `Bearer ${token}` }
         })
             .then(res => res.json())
@@ -2887,7 +2877,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
 
         setIsSearching(true);
         const token = AuthService.getToken();
-        fetch(apiUrl(`/api/labs/search?q=${encodeURIComponent(searchQuery)}&limit=20`), {
+        fetch(apiUrl(`/labs/search?q=${encodeURIComponent(searchQuery)}&limit=20`), {
             headers: { 'Authorization': `Bearer ${token}` }
         })
             .then(res => res.json())
@@ -2944,7 +2934,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
         setAddingGroup(true);
         try {
             const token = AuthService.getToken();
-            const response = await fetch(apiUrl(`/api/labs/group/${encodeURIComponent(selectedGroup)}`), {
+            const response = await fetch(apiUrl(`/labs/group/${encodeURIComponent(selectedGroup)}`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -3080,7 +3070,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
         try {
             // Load all templates
             const token = localStorage.getItem('token');
-            const templatesRes = await fetch(apiUrl('/api/agents/templates'), {
+            const templatesRes = await fetch(apiUrl('/agents/templates'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (templatesRes.ok) {
@@ -3090,7 +3080,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
 
             // Load case agents if case has an ID
             if (caseId) {
-                const agentsRes = await fetch(apiUrl(`/api/cases/${caseId}/agents`), {
+                const agentsRes = await fetch(apiUrl(`/cases/${caseId}/agents`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (agentsRes.ok) {
@@ -3112,7 +3102,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
         }
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents/add-defaults`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}/agents/add-defaults`), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -3133,7 +3123,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
         }
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}/agents`), {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -3153,7 +3143,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
     const handleRemoveAgent = async (agentId) => {
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents/${agentId}`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}/agents/${agentId}`), {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -3169,7 +3159,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
     const handleToggleEnabled = async (agent) => {
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents/${agent.id}`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}/agents/${agent.id}`), {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -3189,7 +3179,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
         if (!editingAgent) return;
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents/${editingAgent.id}`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}/agents/${editingAgent.id}`), {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -3366,20 +3356,18 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
                     {caseAgents.map(agent => (
                         <div
                             key={agent.id}
-                            className={`p-4 rounded-lg border ${
-                                agent.enabled
-                                    ? 'bg-neutral-800/50 border-neutral-700'
-                                    : 'bg-neutral-900/50 border-neutral-800 opacity-60'
-                            }`}
+                            className={`p-4 rounded-lg border ${agent.enabled
+                                ? 'bg-neutral-800/50 border-neutral-700'
+                                : 'bg-neutral-900/50 border-neutral-800 opacity-60'
+                                }`}
                         >
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                        agent.agent_type === 'nurse' ? 'bg-blue-900/50 text-blue-400' :
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${agent.agent_type === 'nurse' ? 'bg-blue-900/50 text-blue-400' :
                                         agent.agent_type === 'consultant' ? 'bg-green-900/50 text-green-400' :
-                                        agent.agent_type === 'relative' ? 'bg-amber-900/50 text-amber-400' :
-                                        'bg-neutral-800 text-neutral-400'
-                                    }`}>
+                                            agent.agent_type === 'relative' ? 'bg-amber-900/50 text-amber-400' :
+                                                'bg-neutral-800 text-neutral-400'
+                                        }`}>
                                         <Users className="w-5 h-5" />
                                     </div>
                                     <div>
@@ -3398,11 +3386,10 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={() => handleToggleEnabled(agent)}
-                                        className={`px-2 py-1 rounded text-xs ${
-                                            agent.enabled
-                                                ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50'
-                                                : 'bg-neutral-700 text-neutral-400 hover:bg-neutral-600'
-                                        }`}
+                                        className={`px-2 py-1 rounded text-xs ${agent.enabled
+                                            ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50'
+                                            : 'bg-neutral-700 text-neutral-400 hover:bg-neutral-600'
+                                            }`}
                                     >
                                         {agent.enabled ? 'Enabled' : 'Disabled'}
                                     </button>
@@ -3457,6 +3444,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
 function CaseWizard({ caseData, setCaseData, onSave, onCancel, hasUnsavedChanges, lastSavedAt }) {
     const [step, setStep] = useState(1);
     const [uploading, setUploading] = useState(false);
+    const toast = useToast();
 
     // Format last saved time
     const formatLastSaved = () => {
@@ -3486,17 +3474,24 @@ function CaseWizard({ caseData, setCaseData, onSave, onCancel, hasUnsavedChanges
         formData.append('photo', file);
 
         try {
-            const res = await fetch(apiUrl('/api/upload'), {
+            const res = await fetch(apiUrl('/upload'), {
                 method: 'POST',
                 body: formData
             });
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.error || `Upload failed with status ${res.status}`);
+            }
             const data = await res.json();
             if (data.imageUrl) {
                 setCaseData(prev => ({ ...prev, image_url: data.imageUrl }));
+                toast.success("Photo uploaded successfully");
+            } else {
+                throw new Error('No image URL returned from server');
             }
         } catch (err) {
             console.error("Upload failed", err);
-            toast.error("Failed to upload photo");
+            toast.error(err.message || "Failed to upload photo");
         } finally {
             setUploading(false);
         }
@@ -3554,8 +3549,8 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 constraints: 'Stick to the provided history. If asked about tests or values, say you don\'t remember exact numbers unless specifically mentioned. Express appropriate concern about cardiac symptoms. Do not volunteer diagnosis - let the doctor make conclusions.',
                 greeting: 'Doctor, I\'ve been having this pressure in my chest... it\'s really worrying me.',
                 patient_name: 'Richard Thompson',
-                demographics: { 
-                    age: 62, 
+                demographics: {
+                    age: 62,
                     gender: 'Male',
                     weight: '85 kg',
                     height: '175 cm',
@@ -3647,38 +3642,51 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
     );
 
     return (
-        <div className="flex flex-col h-full max-w-3xl animate-in fade-in slide-in-from-right-4">
+        <div className="flex flex-col h-full max-w-5xl animate-in fade-in slide-in-from-right-4">
 
             {/* Wizard Header with Step Navigation */}
             <div className="border-b border-neutral-800 pb-4 mb-6">
                 <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <h3 className="text-xl font-bold text-white">Case Configuration</h3>
-                        <div className="flex items-center gap-3">
-                            <p className="text-xs text-neutral-500">{caseData.name || 'New Case'}</p>
-                            {lastSavedAt && (
-                                <span className="text-[10px] text-green-500 flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                                    Auto-saved {formatLastSaved()}
-                                </span>
-                            )}
+                    <div className="flex-1 mr-4">
+                        <div className="flex items-center gap-3 mb-1">
+                            <h3 className="text-lg font-bold text-white whitespace-nowrap">Case Title:</h3>
+                            <input
+                                type="text"
+                                value={caseData.name}
+                                onChange={e => setCaseData({ ...caseData, name: e.target.value })}
+                                className="input-dark flex-1 text-lg font-semibold"
+                                placeholder="e.g., Chest Pain - STEMI"
+                            />
                         </div>
+                        {lastSavedAt && (
+                            <span className="text-[10px] text-green-500 flex items-center gap-1 ml-[105px]">
+                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                                Auto-saved {formatLastSaved()}
+                            </span>
+                        )}
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={onSave}
-                            className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded-lg flex items-center gap-1"
-                        >
-                            <Save className="w-4 h-4" />
-                            Save
-                        </button>
-                        <button
-                            onClick={onCancel}
-                            className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 text-white text-sm font-bold rounded-lg flex items-center gap-1"
-                        >
-                            <X className="w-4 h-4" />
-                            Exit
-                        </button>
+                    <div className="flex-0 mr-4">
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={onSave}
+                                className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded-lg flex items-center gap-1"
+                            >
+                                <Save className="w-4 h-4" />
+                                Save
+                            </button>
+                            <button
+                                onClick={onCancel}
+                                className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 text-white text-sm font-bold rounded-lg flex items-center gap-1"
+                            >
+                                <X className="w-4 h-4" />
+                                Exit
+                            </button>
+                        </div>
+                        {lastSavedAt && (
+                            <span className="text-[10px] text-green-500 flex items-center gap-1 ml-[105px]">
+                                &nbsp;
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -3692,13 +3700,12 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                 await onSave();
                                 setStep(s.num);
                             }}
-                            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${
-                                step === s.num
-                                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/30'
-                                    : step > s.num
+                            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${step === s.num
+                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/30'
+                                : step > s.num
                                     ? 'bg-green-900/30 text-green-300 hover:bg-green-900/50 border border-green-700/50'
                                     : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-white'
-                            }`}
+                                }`}
                         >
                             <span>{s.icon}</span>
                             <span className="hidden sm:inline">{s.title}</span>
@@ -3761,27 +3768,15 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         placeholder="e.g., John Smith"
                                     />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="label-xs">Case Title (Internal)</label>
-                                        <input
-                                            type="text"
-                                            value={caseData.name}
-                                            onChange={e => setCaseData({ ...caseData, name: e.target.value })}
-                                            className="input-dark"
-                                            placeholder="e.g., Chest Pain - STEMI"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="label-xs">MRN</label>
-                                        <input
-                                            type="text"
-                                            value={caseData.config?.demographics?.mrn || ''}
-                                            onChange={e => updateDemographics('mrn', e.target.value)}
-                                            className="input-dark"
-                                            placeholder="e.g., 12345678"
-                                        />
-                                    </div>
+                                <div>
+                                    <label className="label-xs">MRN</label>
+                                    <input
+                                        type="text"
+                                        value={caseData.config?.demographics?.mrn || ''}
+                                        onChange={e => updateDemographics('mrn', e.target.value)}
+                                        className="input-dark"
+                                        placeholder="e.g., 12345678"
+                                    />
                                 </div>
                                 <div className="grid grid-cols-3 gap-3">
                                     <div>
@@ -4122,21 +4117,19 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                 <div className="flex bg-neutral-800 rounded-lg p-1">
                                     <button
                                         onClick={() => updateConfig('storyMode', 'freeform')}
-                                        className={`px-3 py-1 text-xs font-bold rounded transition-colors ${
-                                            (caseData.config?.storyMode || 'freeform') === 'freeform'
-                                                ? 'bg-purple-600 text-white'
-                                                : 'text-neutral-400 hover:text-white'
-                                        }`}
+                                        className={`px-3 py-1 text-xs font-bold rounded transition-colors ${(caseData.config?.storyMode || 'freeform') === 'freeform'
+                                            ? 'bg-purple-600 text-white'
+                                            : 'text-neutral-400 hover:text-white'
+                                            }`}
                                     >
                                         Freeform
                                     </button>
                                     <button
                                         onClick={() => updateConfig('storyMode', 'structured')}
-                                        className={`px-3 py-1 text-xs font-bold rounded transition-colors ${
-                                            caseData.config?.storyMode === 'structured'
-                                                ? 'bg-purple-600 text-white'
-                                                : 'text-neutral-400 hover:text-white'
-                                        }`}
+                                        className={`px-3 py-1 text-xs font-bold rounded transition-colors ${caseData.config?.storyMode === 'structured'
+                                            ? 'bg-purple-600 text-white'
+                                            : 'text-neutral-400 hover:text-white'
+                                            }`}
                                     >
                                         Structured
                                     </button>
@@ -4280,11 +4273,10 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                         <h4 className="text-lg font-bold text-purple-400">4. Initial Vitals & Alarms</h4>
 
                         {/* Scenario/Vitals status indicator */}
-                        <div className={`p-3 rounded-lg border ${
-                            hasScenario
-                                ? (vitalsOverridden ? 'bg-orange-900/20 border-orange-700/50' : 'bg-blue-900/20 border-blue-700/50')
-                                : (caseData.config?.initialVitals ? 'bg-green-900/20 border-green-700/50' : 'bg-neutral-800 border-neutral-700')
-                        }`}>
+                        <div className={`p-3 rounded-lg border ${hasScenario
+                            ? (vitalsOverridden ? 'bg-orange-900/20 border-orange-700/50' : 'bg-blue-900/20 border-blue-700/50')
+                            : (caseData.config?.initialVitals ? 'bg-green-900/20 border-green-700/50' : 'bg-neutral-800 border-neutral-700')
+                            }`}>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     {hasScenario ? (
@@ -4504,11 +4496,10 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     <button
                                         key={r}
                                         onClick={() => updateConfig('initialVitals', { ...(caseData.config?.initialVitals || {}), rhythm: r })}
-                                        className={`px-3 py-2 rounded text-xs font-bold transition-all ${
-                                            (caseData.config?.initialVitals?.rhythm || 'NSR') === r
-                                                ? 'bg-purple-600 text-white'
-                                                : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
-                                        }`}
+                                        className={`px-3 py-2 rounded text-xs font-bold transition-all ${(caseData.config?.initialVitals?.rhythm || 'NSR') === r
+                                            ? 'bg-purple-600 text-white'
+                                            : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
+                                            }`}
                                     >
                                         {r}
                                     </button>
@@ -4580,7 +4571,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     <div className="space-y-6">
                         <h4 className="text-lg font-bold text-purple-400">3. Progression Scenario (Optional)</h4>
                         <p className="text-xs text-neutral-500">Add automatic deterioration or improvement over time. Choose from quick templates or browse the full repository.</p>
-                        
+
                         {/* Scenario Selector */}
                         <div className="space-y-4">
                             {/* Repository Browser */}
@@ -4628,8 +4619,8 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             setCaseData(prev => ({ ...prev, scenario_template: null, scenario: null, scenario_from_repository: null }));
                                         } else {
                                             // Set template name (will be built on duration change)
-                                            setCaseData(prev => ({ 
-                                                ...prev, 
+                                            setCaseData(prev => ({
+                                                ...prev,
                                                 scenario_template: templateName,
                                                 scenario_duration: SCENARIO_TEMPLATES[templateName]?.duration || 30,
                                                 scenario_from_repository: null
@@ -4661,8 +4652,8 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             const template = SCENARIO_TEMPLATES[caseData.scenario_template];
                                             if (template) {
                                                 const scaledScenario = scaleScenarioTimeline(template, duration);
-                                                setCaseData(prev => ({ 
-                                                    ...prev, 
+                                                setCaseData(prev => ({
+                                                    ...prev,
                                                     scenario_duration: duration,
                                                     scenario: scaledScenario
                                                 }));
@@ -4810,18 +4801,18 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 <button onClick={onCancel} className="text-neutral-500 hover:text-white px-4">Cancel</button>
                 <div className="flex gap-2">
                     {step > 1 && (
-                        <button 
+                        <button
                             onClick={async () => {
                                 // Auto-save before going back
                                 await onSave();
                                 setStep(s => s - 1);
-                            }} 
+                            }}
                             className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded font-bold text-sm"
                         >
                             Back
                         </button>
                     )}
-                    
+
                     {/* Save Progress button on all steps except last */}
                     {step < 8 && (
                         <button
@@ -4833,23 +4824,23 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     )}
 
                     {step < 8 ? (
-                        <button 
+                        <button
                             onClick={async () => {
                                 // Auto-save before moving forward
                                 await onSave();
                                 setStep(s => s + 1);
-                            }} 
+                            }}
                             className="px-6 py-2 bg-purple-600 hover:bg-purple-500 rounded font-bold text-sm"
                         >
                             Next
                         </button>
                     ) : (
-                        <button 
+                        <button
                             onClick={async () => {
                                 await onSave();
                                 // Close wizard after final save
                                 setTimeout(() => onCancel(), 500);
-                            }} 
+                            }}
                             className="px-6 py-2 bg-green-600 hover:bg-green-500 rounded font-bold text-sm shadow-lg shadow-green-900/20 flex items-center gap-2"
                         >
                             <Save className="w-4 h-4" /> Save & Finish

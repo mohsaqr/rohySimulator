@@ -411,7 +411,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       const loadPlatformSettings = async () => {
          try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/api/platform-settings/monitor'), {
+            const response = await fetch(apiUrl('/platform-settings/monitor'), {
                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             if (response.ok) {

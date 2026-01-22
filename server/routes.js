@@ -508,7 +508,7 @@ router.post('/upload', upload.single('photo'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
-    const imageUrl = `/uploads/${req.file.filename}`;
+    const imageUrl = (process.env.NODE_ENV == 'production' ? '/rohy':"") + `/uploads/${req.file.filename}`;
     res.json({ imageUrl });
 });
 

@@ -5,8 +5,6 @@
 
 import { apiUrl } from "../config/api";
 
-const API_URL = '/api';
-
 export const LLMService = {
 
     /**
@@ -26,7 +24,7 @@ export const LLMService = {
      */
     async startSession(caseId, studentName = 'Student', monitorSettings = {}) {
         try {
-            const res = await fetch(apiUrl(`${API_URL}/sessions`), {
+            const res = await fetch(apiUrl(`/sessions`), {
                 method: 'POST',
                 headers: this.getAuthHeaders(),
                 body: JSON.stringify({
@@ -51,7 +49,7 @@ export const LLMService = {
      */
     async endSession(sessionId) {
         try {
-            const res = await fetch(apiUrl(`${API_URL}/sessions/${sessionId}/end`), {
+            const res = await fetch(apiUrl(`/sessions/${sessionId}/end`), {
                 method: 'PUT',
                 headers: this.getAuthHeaders()
             });
@@ -79,7 +77,7 @@ export const LLMService = {
         try {
             // 2. Call LLM via authenticated proxy
             // Server handles: LLM config, rate limiting, usage tracking
-            const response = await fetch(apiUrl(`${API_URL}/proxy/llm`), {
+            const response = await fetch(apiUrl(`/proxy/llm`), {
                 method: 'POST',
                 headers: this.getAuthHeaders(),
                 body: JSON.stringify({
@@ -126,7 +124,7 @@ export const LLMService = {
      */
     async getUsage() {
         try {
-            const response = await fetch(apiUrl(`${API_URL}/llm/usage`), {
+            const response = await fetch(apiUrl(`/llm/usage`), {
                 headers: this.getAuthHeaders()
             });
             if (!response.ok) {
@@ -142,7 +140,7 @@ export const LLMService = {
     async logInteraction(sessionId, role, content) {
         if (!sessionId) return;
         try {
-            await fetch(apiUrl(`${API_URL}/interactions`), {
+            await fetch(apiUrl(`/interactions`), {
                 method: 'POST',
                 headers: this.getAuthHeaders(),
                 body: JSON.stringify({ session_id: sessionId, role, content })

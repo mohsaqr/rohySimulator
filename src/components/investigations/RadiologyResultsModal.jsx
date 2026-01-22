@@ -37,7 +37,7 @@ const RadiologyResultsModal = ({ result, sessionId, patientInfo, onClose }) => {
   const markAsViewed = async () => {
     try {
       const token = AuthService.getToken();
-      await fetch(apiUrl(`/api/orders/${result.id}/view`), {
+      await fetch(apiUrl(`/orders/${result.id}/view`), {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}` }
       });

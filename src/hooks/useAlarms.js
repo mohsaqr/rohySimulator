@@ -29,7 +29,7 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
     const loadConfig = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(apiUrl('/api/alarms/config/'), {
+        const response = await fetch(apiUrl('/alarms/config/'), {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -168,7 +168,7 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
     
     try {
       const token = localStorage.getItem('token');
-      await fetch(apiUrl('/api/alarms/log'), {
+      await fetch(apiUrl('/alarms/log'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -373,7 +373,7 @@ export const useAlarms = (vitals, sessionId, audioContext) => {
       const token = localStorage.getItem('token');
       
       for (const [vital, config] of Object.entries(thresholds)) {
-        await fetch(apiUrl('/api/alarms/config'), {
+        await fetch(apiUrl('/alarms/config'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

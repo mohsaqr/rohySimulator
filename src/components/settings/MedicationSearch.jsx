@@ -33,14 +33,17 @@ export default function MedicationSearch({ value, onChange, onSelect, placeholde
             setLoading(true);
             try {
                 const token = AuthService.getToken();
-                const res = await fetch(apiUrl(`/api/master/medications?search=${encodeURIComponent(query)}&limit=10`), {
+                const res = await fetch(apiUrl(`/master/medications?search=${encodeURIComponent(query)}&limit=10`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (res.ok) {
                     const data = await res.json();
+                    console.log('Medication search results:', data);
                     setResults(data.medications || []);
                     setIsOpen(true);
                     setSelectedIndex(-1);
+                } else {
+                    console.error('Medication search failed:', res.status, await res.text());
                 }
             } catch (err) {
                 console.error('Failed to search medications:', err);

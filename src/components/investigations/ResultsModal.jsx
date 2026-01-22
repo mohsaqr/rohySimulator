@@ -15,7 +15,7 @@ const ResultsModal = ({ order, onClose }) => {
   const markAsViewed = async () => {
     try {
       const token = localStorage.getItem('token');
-      await fetch(apiUrl(`/api/orders/${order.id}/view`), {
+      await fetch(apiUrl(`/orders/${order.id}/view`), {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}` }
       });

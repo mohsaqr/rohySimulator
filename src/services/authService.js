@@ -1,10 +1,10 @@
-const API_BASE = '/api';
+
 import { apiUrl } from '../config/api';
 
 export const AuthService = {
     // Register a new user
     async register(username, email, password) {
-        const response = await fetch(apiUrl(`${API_BASE}/auth/register`), {
+        const response = await fetch(apiUrl(`/auth/register`), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, email, password })
@@ -27,7 +27,7 @@ export const AuthService = {
     async login(username, password) {
         let response;
         try {
-            response = await fetch(apiUrl(`${API_BASE}/auth/login`), {
+            response = await fetch(apiUrl(`/auth/login`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
@@ -67,7 +67,7 @@ export const AuthService = {
         if (!token) return null;
 
         try {
-            const response = await fetch(apiUrl(`${API_BASE}/auth/verify`), {
+            const response = await fetch(apiUrl(`/auth/verify`), {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -91,7 +91,7 @@ export const AuthService = {
         const token = localStorage.getItem('token');
         if (!token) return null;
 
-        const response = await fetch(apiUrl(`${API_BASE}/auth/profile`), {
+        const response = await fetch(apiUrl(`/auth/profile`), {
             headers: {
                 'Authorization': `Bearer ${token}`
             }

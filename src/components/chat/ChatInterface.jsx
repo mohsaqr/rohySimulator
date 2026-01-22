@@ -36,7 +36,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const loadChatSettings = async () => {
             try {
                 const token = AuthService.getToken();
-                const res = await fetch(apiUrl('/api/platform-settings/chat'), {
+                const res = await fetch(apiUrl('/platform-settings/chat'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (res.ok) {
@@ -175,7 +175,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             if (restoredSessionId) {
                 try {
                     const token = AuthService.getToken();
-                    const res = await fetch(apiUrl(`/api/interactions/${restoredSessionId}`), {
+                    const res = await fetch(apiUrl(`/interactions/${restoredSessionId}`), {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
                     if (res.ok) {
@@ -635,7 +635,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                 }`}>
                                     {activeTab === 'patient' ? (
                                         patientAvatar ? (
-                                            <img src={patientAvatar} alt={patientName} className="w-full h-full object-cover" />
+                                            <img src={BASE_PATH + patientAvatar} alt={patientName} className="w-full h-full object-cover" />
                                         ) : (
                                             <Bot className="w-5 h-5 text-emerald-400" />
                                         )

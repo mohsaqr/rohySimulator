@@ -76,7 +76,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
     const loadScenarios = async () => {
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/scenarios'), {
+            const res = await fetch(apiUrl('/scenarios'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -164,7 +164,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
 
         try {
             const token = AuthService.getToken();
-            await fetch(apiUrl(`/api/scenarios/${id}`), {
+            await fetch(apiUrl(`/scenarios/${id}`), {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -191,8 +191,8 @@ export default function ScenarioRepository({ onSelectScenario }) {
             const isNew = !editingScenario.id || editingScenario.id.startsWith('builtin_');
             const method = isNew ? 'POST' : 'PUT';
             const url = isNew
-                ? apiUrl('/api/scenarios')
-                : apiUrl(`/api/scenarios/${editingScenario.id}`);
+                ? apiUrl('/scenarios')
+                : apiUrl(`/scenarios/${editingScenario.id}`);
 
             const res = await fetch(url, {
                 method,

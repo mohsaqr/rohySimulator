@@ -66,7 +66,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
 
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/upload'), {
+            const res = await fetch(apiUrl('/upload'), {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -144,7 +144,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
 
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/upload'), {
+            const res = await fetch(apiUrl('/upload'), {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
