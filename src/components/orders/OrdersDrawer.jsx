@@ -409,7 +409,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         const fetchTreatmentCount = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const response = await fetch(apiUrl(`/api/sessions/${sessionId}/treatment-orders?status=ordered`), {
+                const response = await fetch(apiUrl(`/sessions/${sessionId}/treatment-orders?status=ordered`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (response.ok) {
