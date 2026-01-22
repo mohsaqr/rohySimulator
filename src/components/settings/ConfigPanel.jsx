@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Trash2, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { AuthService } from '../../services/authService';
@@ -17,14 +17,14 @@ import AgentTemplateManager from './AgentTemplateManager';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
-    const { user, isAdmin } = useAuth();
+    const { isAdmin } = useAuth();
     const toast = useToast();
     // Default to 'cases' tab for all users, admins can access 'platform' for LLM settings
     const [activeTab, setActiveTab] = useState('cases'); // cases, users, history, logs, platform, scenarios
 
     // Cases State
     const [cases, setCases] = useState([]);
-    const [selectedCaseId, setSelectedCaseId] = useState(null);
+    const [, setSelectedCaseId] = useState(null);
     const [editingCase, setEditingCase] = useState(() => {
         // Restore editing case from localStorage on mount
         const savedCase = localStorage.getItem('rohy_editing_case');
@@ -1970,7 +1970,6 @@ function SystemLogs() {
     const [loading, setLoading] = useState(false);
     const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
     const [selectedSessionForEvents, setSelectedSessionForEvents] = useState(null);
-    const [selectedSessionForActivity, setSelectedSessionForActivity] = useState(null);
 
     useEffect(() => {
         if (activeLogTab === 'login') {
@@ -3437,6 +3436,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
 function CaseWizard({ caseData, setCaseData, onSave, onCancel, hasUnsavedChanges, lastSavedAt }) {
     const [step, setStep] = useState(1);
     const [uploading, setUploading] = useState(false);
+    const toast = useToast();
 
     // Format last saved time
     const formatLastSaved = () => {
@@ -3470,13 +3470,20 @@ function CaseWizard({ caseData, setCaseData, onSave, onCancel, hasUnsavedChanges
                 method: 'POST',
                 body: formData
             });
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.error || `Upload failed with status ${res.status}`);
+            }
             const data = await res.json();
             if (data.imageUrl) {
                 setCaseData(prev => ({ ...prev, image_url: data.imageUrl }));
+                toast.success("Photo uploaded successfully");
+            } else {
+                throw new Error('No image URL returned from server');
             }
         } catch (err) {
             console.error("Upload failed", err);
-            toast.error("Failed to upload photo");
+            toast.error(err.message || "Failed to upload photo");
         } finally {
             setUploading(false);
         }
@@ -3626,38 +3633,51 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
     );
 
     return (
-        <div className="flex flex-col h-full max-w-3xl animate-in fade-in slide-in-from-right-4">
+        <div className="flex flex-col h-full max-w-5xl animate-in fade-in slide-in-from-right-4">
 
             {/* Wizard Header with Step Navigation */}
             <div className="border-b border-neutral-800 pb-4 mb-6">
                 <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <h3 className="text-xl font-bold text-white">Case Configuration</h3>
-                        <div className="flex items-center gap-3">
-                            <p className="text-xs text-neutral-500">{caseData.name || 'New Case'}</p>
-                            {lastSavedAt && (
-                                <span className="text-[10px] text-green-500 flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                                    Auto-saved {formatLastSaved()}
-                                </span>
-                            )}
+                    <div className="flex-1 mr-4">
+                        <div className="flex items-center gap-3 mb-1">
+                            <h3 className="text-lg font-bold text-white whitespace-nowrap">Case Title:</h3>
+                            <input
+                                type="text"
+                                value={caseData.name}
+                                onChange={e => setCaseData({ ...caseData, name: e.target.value })}
+                                className="input-dark flex-1 text-lg font-semibold"
+                                placeholder="e.g., Chest Pain - STEMI"
+                            />
                         </div>
+                        {lastSavedAt && (
+                            <span className="text-[10px] text-green-500 flex items-center gap-1 ml-[105px]">
+                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                                Auto-saved {formatLastSaved()}
+                            </span>
+                        )}
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={onSave}
-                            className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded-lg flex items-center gap-1"
-                        >
-                            <Save className="w-4 h-4" />
-                            Save
-                        </button>
-                        <button
-                            onClick={onCancel}
-                            className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 text-white text-sm font-bold rounded-lg flex items-center gap-1"
-                        >
-                            <X className="w-4 h-4" />
-                            Exit
-                        </button>
+                    <div className="flex-0 mr-4">
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={onSave}
+                                className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded-lg flex items-center gap-1"
+                            >
+                                <Save className="w-4 h-4" />
+                                Save
+                            </button>
+                            <button
+                                onClick={onCancel}
+                                className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 text-white text-sm font-bold rounded-lg flex items-center gap-1"
+                            >
+                                <X className="w-4 h-4" />
+                                Exit
+                            </button>
+                        </div>
+                        {lastSavedAt && (
+                            <span className="text-[10px] text-green-500 flex items-center gap-1 ml-[105px]">
+                                &nbsp;
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -3740,27 +3760,15 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         placeholder="e.g., John Smith"
                                     />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="label-xs">Case Title (Internal)</label>
-                                        <input
-                                            type="text"
-                                            value={caseData.name}
-                                            onChange={e => setCaseData({ ...caseData, name: e.target.value })}
-                                            className="input-dark"
-                                            placeholder="e.g., Chest Pain - STEMI"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="label-xs">MRN</label>
-                                        <input
-                                            type="text"
-                                            value={caseData.config?.demographics?.mrn || ''}
-                                            onChange={e => updateDemographics('mrn', e.target.value)}
-                                            className="input-dark"
-                                            placeholder="e.g., 12345678"
-                                        />
-                                    </div>
+                                <div>
+                                    <label className="label-xs">MRN</label>
+                                    <input
+                                        type="text"
+                                        value={caseData.config?.demographics?.mrn || ''}
+                                        onChange={e => updateDemographics('mrn', e.target.value)}
+                                        className="input-dark"
+                                        placeholder="e.g., 12345678"
+                                    />
                                 </div>
                                 <div className="grid grid-cols-3 gap-3">
                                     <div>

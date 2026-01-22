@@ -38,9 +38,12 @@ export default function MedicationSearch({ value, onChange, onSelect, placeholde
                 });
                 if (res.ok) {
                     const data = await res.json();
+                    console.log('Medication search results:', data);
                     setResults(data.medications || []);
                     setIsOpen(true);
                     setSelectedIndex(-1);
+                } else {
+                    console.error('Medication search failed:', res.status, await res.text());
                 }
             } catch (err) {
                 console.error('Failed to search medications:', err);

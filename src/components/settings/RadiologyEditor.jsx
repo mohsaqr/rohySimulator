@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Upload, Loader2, Scan, Clock, AlertCircle, RefreshCw, PenLine } from 'lucide-react';
 import { AuthService } from '../../services/authService';
 import { apiUrl } from '../../config/api';
+import { useToast } from '../../contexts/ToastContext';
 
 // Default modalities for custom studies
 const MODALITIES = ['X-Ray', 'CT', 'MRI', 'Ultrasound', 'Nuclear Medicine', 'Fluoroscopy', 'Cardiac', 'Other'];
@@ -11,6 +12,7 @@ const MODALITIES = ['X-Ray', 'CT', 'MRI', 'Ultrasound', 'Nuclear Medicine', 'Flu
  * Allows selecting from master database and configuring results
  */
 export default function RadiologyEditor({ caseData, setCaseData }) {
+    const toast = useToast();
     const [uploading, setUploading] = useState(false);
     const [uploadingIdx, setUploadingIdx] = useState(null);
     const [studies, setStudies] = useState([]);
@@ -159,12 +161,20 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.error || `Upload failed with status ${res.status}`);
+            }
             const data = await res.json();
             if (data.imageUrl) {
                 updateStudy(idx, 'imageUrl', data.imageUrl);
+                toast.success('Image uploaded successfully');
+            } else {
+                throw new Error('No image URL returned from server');
             }
         } catch (err) {
             console.error('Upload failed:', err);
+            toast.error(err.message || 'Failed to upload image');
         } finally {
             setUploading(false);
             setUploadingIdx(null);
