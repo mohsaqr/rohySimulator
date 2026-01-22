@@ -47,7 +47,7 @@ export function useTreatmentEffects(sessionId, options = {}) {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/active-effects`), {
+            const response = await fetch(apiUrl(`/sessions/${sessionId}/active-effects`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 

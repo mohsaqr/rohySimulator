@@ -42,7 +42,7 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
     const fetchTreatments = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/api/treatment-effects'), {
+            const response = await fetch(apiUrl('/treatment-effects'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -120,7 +120,7 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
         setSaving(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/api/cases/${caseId}/treatments`), {
+            const response = await fetch(apiUrl(`/cases/${caseId}/treatments`), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

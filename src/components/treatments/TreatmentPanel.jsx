@@ -60,7 +60,7 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
         try {
             const token = localStorage.getItem('token');
             console.log('[TreatmentPanel] Fetching treatments for session:', sessionId);
-            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/available-treatments`), {
+            const response = await fetch(apiUrl(`/sessions/${sessionId}/available-treatments`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -83,7 +83,7 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
     const fetchOrders = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/treatment-orders`), {
+            const response = await fetch(apiUrl(`/sessions/${sessionId}/treatment-orders`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -128,7 +128,7 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
                 notes: orderForm.notes || null
             };
 
-            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/order-treatment`), {
+            const response = await fetch(apiUrl(`/sessions/${sessionId}/order-treatment`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -195,7 +195,7 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
     const handleAdminister = async (orderId) => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/administer/${orderId}`), {
+            const response = await fetch(apiUrl(`/sessions/${sessionId}/administer/${orderId}`), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -238,7 +238,7 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
     const handleDiscontinue = async (orderId) => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/discontinue/${orderId}`), {
+            const response = await fetch(apiUrl(`/sessions/${sessionId}/discontinue/${orderId}`), {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}` }
             });

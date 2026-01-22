@@ -26,7 +26,7 @@ export default function ActiveEffectsIndicator({ sessionId, refreshTrigger, comp
     const fetchEffects = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/api/sessions/${sessionId}/active-effects`), {
+            const response = await fetch(apiUrl(`/sessions/${sessionId}/active-effects`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
