@@ -17,19 +17,23 @@ const BASE_URL = rawBaseUrl.endsWith('/') ? rawBaseUrl.slice(0, -1) : rawBaseUrl
  * @param {string} path - API path (e.g., '/api/cases' or 'api/cases')
  * @returns {string} Full URL with base path
  */
+export const API_BASE_URL = "/api";
 export const apiUrl = (path) => {
+    // Ensure path starts with /
+    const normalizedPath = path.startsWith('/') ? path : '/' + path;
+    return `${BASE_URL}${API_BASE_URL}${normalizedPath}`;
+};
+export const baseUrl = (path) => {
     // Ensure path starts with /
     const normalizedPath = path.startsWith('/') ? path : '/' + path;
     return `${BASE_URL}${normalizedPath}`;
 };
 
-// For backwards compatibility
-export const API_BASE_URL = BASE_URL;
+
 
 export default {
-    BASE_URL,
-    API_BASE_URL,
     apiUrl,
+    baseUrl,
     // Alias for convenience
     url: apiUrl
 };

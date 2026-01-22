@@ -49,7 +49,7 @@ function MainApp() {
    const loadDefaultCase = async () => {
       try {
          const token = AuthService.getToken();
-         const res = await fetch(apiUrl('/api/cases'), {
+         const res = await fetch(apiUrl('/cases'), {
             headers: { 'Authorization': `Bearer ${token}` }
          });
          if (res.ok) {
@@ -96,7 +96,7 @@ function MainApp() {
             if (savedSessionId) {
                try {
                   const token = AuthService.getToken();
-                  const res = await fetch(apiUrl(`/api/sessions/${savedSessionId}`), {
+                  const res = await fetch(apiUrl(`/sessions/${savedSessionId}`), {
                      headers: { 'Authorization': `Bearer ${token}` }
                   });
 
@@ -193,7 +193,7 @@ function MainApp() {
          if (sessionId) {
             try {
                const token = AuthService.getToken();
-               await fetch(apiUrl(`/api/sessions/${sessionId}/end`), {
+               await fetch(apiUrl(`/sessions/${sessionId}/end`), {
                   method: 'PUT',
                   headers: { 'Authorization': `Bearer ${token}` }
                });

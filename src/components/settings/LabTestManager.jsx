@@ -53,13 +53,13 @@ export default function LabTestManager() {
         try {
             const token = AuthService.getToken();
             const [testsRes, groupsRes, statsRes] = await Promise.all([
-                fetch(apiUrl('/api/labs/all?pageSize=1000'), {
+                fetch(apiUrl('/labs/all?pageSize=1000'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 }),
-                fetch(apiUrl('/api/labs/groups'), {
+                fetch(apiUrl('/labs/groups'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 }),
-                fetch(apiUrl('/api/labs/stats'), {
+                fetch(apiUrl('/labs/stats'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 })
             ]);
@@ -146,7 +146,7 @@ export default function LabTestManager() {
                     : []
             };
 
-            const res = await fetch(apiUrl('/api/labs/test'), {
+            const res = await fetch(apiUrl('/labs/test'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -181,7 +181,7 @@ export default function LabTestManager() {
     const handleUpdateTest = async (test) => {
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/labs/test'), {
+            const res = await fetch(apiUrl('/labs/test'), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -211,7 +211,7 @@ export default function LabTestManager() {
 
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/labs/test'), {
+            const res = await fetch(apiUrl('/labs/test'), {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -280,7 +280,7 @@ export default function LabTestManager() {
 
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/labs/import'), {
+            const res = await fetch(apiUrl('/labs/import'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

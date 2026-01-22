@@ -24,6 +24,7 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: (origin, callback) => {
+        console.log(origin, callback)
         // Allow requests with no origin (mobile apps, curl, etc.) in development
         if (!origin && process.env.NODE_ENV !== 'production') {
             return callback(null, true);
@@ -43,10 +44,12 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Routes
-app.use('/api', apiRoutes);
+process.env.NODE_ENV == 'production' && app.get('/', (req,res)=>res.redirect("/rohy"));
+
+app.use((process.env.NODE_ENV == 'production'? '/rohy/':'/') + 'api', apiRoutes);
 
 // Health Check
-app.get('/', (req, res) => {
+app.get(process.env.NODE_ENV == 'production'? '/rohy/':'/', (req, res) => {
     //res.send('Virtual Patient Platform Backend is Running');
     const frontendPath = path.join(__dirname, "..", "frontend");
 
@@ -56,7 +59,7 @@ app.get('/', (req, res) => {
     console.error("Frontend folder does NOT exist but server is running", frontendPath);
     }
 });
-app.use(express.static(path.join(__dirname, "..", "frontend")));
+app.use(process.env.NODE_ENV == 'production'? '/rohy/':'/', express.static(path.join(__dirname, "..", "frontend")));
 
 // Start server with port fallback
 function startServer(port, maxRetries = 10) {

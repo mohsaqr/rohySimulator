@@ -18,7 +18,7 @@ export const useEventLog = (sessionId) => {
 
     try {
       const token = localStorage.getItem('token');
-      await fetch(apiUrl('/api/events/batch'), {
+      await fetch(apiUrl('/events/batch'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -73,7 +73,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
     // Load Cases on Mount
     useEffect(() => {
         const token = AuthService.getToken();
-        fetch(apiUrl('/api/cases'), {
+        fetch(apiUrl('/cases'), {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -96,9 +96,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
         }
 
         const isUpdate = !!editingCase.id;
-        const url = isUpdate
-            ? `/api/cases/${editingCase.id}`
-            : '/api/cases';
+        const url = apiUrl(isUpdate
+            ? `/cases/${editingCase.id}`
+            : '/cases');
 
         // Auto-generate system prompt if empty
         const sysPrompt = editingCase.system_prompt || `You are ${editingCase.name}. ${editingCase.description}`;
@@ -163,7 +163,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                 // Then insert new ones
                 for (const lab of labs) {
                     try {
-                        await fetch(apiUrl(`/api/cases/${caseId}/labs`), {
+                        await fetch(apiUrl(`/cases/${caseId}/labs`), {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -205,7 +205,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
 
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl(`/api/cases/${caseId}`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}`), {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -351,7 +351,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                                     
                                                                     // Save to database
                                                                     const token = AuthService.getToken();
-                                                                    const res = await fetch(apiUrl('/api/cases'), {
+                                                                    const res = await fetch(apiUrl('/cases'), {
                                                                         method: 'POST',
                                                                         headers: { 
                                                                             'Content-Type': 'application/json',
@@ -363,7 +363,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                                     if (res.ok) {
                                                                         toast.success('Case imported successfully!');
                                                                         // Reload cases
-                                                                        const casesRes = await fetch(apiUrl('/api/cases'), {
+                                                                        const casesRes = await fetch(apiUrl('/cases'), {
                                                                             headers: { 'Authorization': `Bearer ${token}` }
                                                                         });
                                                                         const data = await casesRes.json();
@@ -429,7 +429,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             onClick={async () => {
                                                                 try {
                                                                     const token = AuthService.getToken();
-                                                                    const res = await fetch(apiUrl(`/api/cases/${c.id}/availability`), {
+                                                                    const res = await fetch(apiUrl(`/cases/${c.id}/availability`), {
                                                                         method: 'PUT',
                                                                         headers: {
                                                                             'Content-Type': 'application/json',
@@ -439,7 +439,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                                     });
                                                                     if (res.ok) {
                                                                         // Refresh cases
-                                                                        const casesRes = await fetch(apiUrl('/api/cases'), {
+                                                                        const casesRes = await fetch(apiUrl('/cases'), {
                                                                             headers: { 'Authorization': `Bearer ${token}` }
                                                                         });
                                                                         const data = await casesRes.json();
@@ -461,7 +461,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             onClick={async () => {
                                                                 try {
                                                                     const token = AuthService.getToken();
-                                                                    const res = await fetch(apiUrl(`/api/cases/${c.id}/default`), {
+                                                                    const res = await fetch(apiUrl(`/cases/${c.id}/default`), {
                                                                         method: 'PUT',
                                                                         headers: {
                                                                             'Content-Type': 'application/json',
@@ -471,7 +471,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                                     });
                                                                     if (res.ok) {
                                                                         // Refresh cases
-                                                                        const casesRes = await fetch(apiUrl('/api/cases'), {
+                                                                        const casesRes = await fetch(apiUrl('/cases'), {
                                                                             headers: { 'Authorization': `Bearer ${token}` }
                                                                         });
                                                                         const data = await casesRes.json();
@@ -728,7 +728,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             const formData = new FormData();
                                                             formData.append('image', file);
                                                             formData.append('type', 'man-front');
-                                                            fetch(apiUrl('/api/upload-body-image'), {
+                                                            fetch(apiUrl('/upload-body-image'), {
                                                                 method: 'POST',
                                                                 headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
                                                                 body: formData
@@ -753,7 +753,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             const formData = new FormData();
                                                             formData.append('image', file);
                                                             formData.append('type', 'man-back');
-                                                            fetch(apiUrl('/api/upload-body-image'), {
+                                                            fetch(apiUrl('/upload-body-image'), {
                                                                 method: 'POST',
                                                                 headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
                                                                 body: formData
@@ -778,7 +778,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             const formData = new FormData();
                                                             formData.append('image', file);
                                                             formData.append('type', 'woman-front');
-                                                            fetch(apiUrl('/api/upload-body-image'), {
+                                                            fetch(apiUrl('/upload-body-image'), {
                                                                 method: 'POST',
                                                                 headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
                                                                 body: formData
@@ -803,7 +803,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                             const formData = new FormData();
                                                             formData.append('image', file);
                                                             formData.append('type', 'woman-back');
-                                                            fetch(apiUrl('/api/upload-body-image'), {
+                                                            fetch(apiUrl('/upload-body-image'), {
                                                                 method: 'POST',
                                                                 headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
                                                                 body: formData
@@ -859,7 +859,7 @@ function PlatformSettings({ cases, setCases }) {
         setLoading(true);
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl(`/api/cases/${caseId}/default`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}/default`), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -868,7 +868,7 @@ function PlatformSettings({ cases, setCases }) {
                 body: JSON.stringify({ is_default: true })
             });
             if (res.ok) {
-                const casesRes = await fetch(apiUrl('/api/cases'), {
+                const casesRes = await fetch(apiUrl('/cases'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await casesRes.json();
@@ -886,7 +886,7 @@ function PlatformSettings({ cases, setCases }) {
         setLoading(true);
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl(`/api/cases/${defaultCaseId}/default`), {
+            const res = await fetch(apiUrl(`/cases/${defaultCaseId}/default`), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -895,7 +895,7 @@ function PlatformSettings({ cases, setCases }) {
                 body: JSON.stringify({ is_default: false })
             });
             if (res.ok) {
-                const casesRes = await fetch(apiUrl('/api/cases'), {
+                const casesRes = await fetch(apiUrl('/cases'), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await casesRes.json();
@@ -1018,7 +1018,7 @@ function UserFieldConfiguration() {
     const loadFieldConfig = async () => {
         try {
             const token = AuthService.getToken();
-            const response = await fetch(apiUrl('/api/platform-settings/user-fields'), {
+            const response = await fetch(apiUrl('/platform-settings/user-fields'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -1049,7 +1049,7 @@ function UserFieldConfiguration() {
         setSaving(true);
         try {
             const token = AuthService.getToken();
-            const response = await fetch(apiUrl('/api/platform-settings/user-fields'), {
+            const response = await fetch(apiUrl('/platform-settings/user-fields'), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1241,9 +1241,9 @@ function LLMConfiguration() {
         try {
             const token = AuthService.getToken();
             const [llmRes, limitsRes, usageRes] = await Promise.all([
-                fetch(apiUrl('/api/platform-settings/llm'), { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(apiUrl('/api/platform-settings/rate-limits'), { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(apiUrl('/api/llm/usage/platform'), { headers: { 'Authorization': `Bearer ${token}` } })
+                fetch(apiUrl('/platform-settings/llm'), { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(apiUrl('/platform-settings/rate-limits'), { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(apiUrl('/llm/usage/platform'), { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
             if (llmRes.ok) {
@@ -1280,7 +1280,7 @@ function LLMConfiguration() {
         setSaving(true);
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/platform-settings/llm'), {
+            const res = await fetch(apiUrl('/platform-settings/llm'), {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(llmConfig)
@@ -1301,7 +1301,7 @@ function LLMConfiguration() {
         setSaving(true);
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/platform-settings/rate-limits'), {
+            const res = await fetch(apiUrl('/platform-settings/rate-limits'), {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(rateLimits)
@@ -1323,14 +1323,14 @@ function LLMConfiguration() {
         try {
             // First save the current settings
             const token = AuthService.getToken();
-            await fetch(apiUrl('/api/platform-settings/llm'), {
+            await fetch(apiUrl('/platform-settings/llm'), {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(llmConfig)
             });
 
             // Then test
-            const res = await fetch(apiUrl('/api/platform-settings/llm/test'), {
+            const res = await fetch(apiUrl('/platform-settings/llm/test'), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
             });
@@ -1678,7 +1678,7 @@ function ChatConfiguration() {
     const loadSettings = async () => {
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/platform-settings/chat'), {
+            const res = await fetch(apiUrl('/platform-settings/chat'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -1697,7 +1697,7 @@ function ChatConfiguration() {
         setSaving(true);
         try {
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/platform-settings/chat'), {
+            const res = await fetch(apiUrl('/platform-settings/chat'), {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(chatSettings)
@@ -1841,7 +1841,7 @@ function MonitorConfiguration() {
     const loadMonitorSettings = async () => {
         try {
             const token = AuthService.getToken();
-            const response = await fetch(apiUrl('/api/platform-settings/monitor'), {
+            const response = await fetch(apiUrl('/platform-settings/monitor'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -1863,7 +1863,7 @@ function MonitorConfiguration() {
         setSaving(true);
         try {
             const token = AuthService.getToken();
-            const response = await fetch(apiUrl('/api/platform-settings/monitor'), {
+            const response = await fetch(apiUrl('/platform-settings/monitor'), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1991,7 +1991,7 @@ function SystemLogs() {
         setLoading(true);
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/api/analytics/login-logs?limit=200'), {
+            const res = await fetch(apiUrl('/analytics/login-logs?limit=200'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -2007,7 +2007,7 @@ function SystemLogs() {
         setLoading(true);
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/api/analytics/settings-logs?limit=200'), {
+            const res = await fetch(apiUrl('/analytics/settings-logs?limit=200'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -2023,7 +2023,7 @@ function SystemLogs() {
         setLoading(true);
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/api/analytics/sessions'), {
+            const res = await fetch(apiUrl('/analytics/sessions'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -2041,16 +2041,16 @@ function SystemLogs() {
         
         switch (logType) {
             case 'login':
-                url = '/api/export/login-logs';
+                url = apiUrl('/export/login-logs');
                 break;
             case 'chat':
-                url = '/api/export/chat-logs';
+                url = apiUrl('/export/chat-logs');
                 break;
             case 'settings':
-                url = '/api/export/settings-logs';
+                url = apiUrl('/export/settings-logs');
                 break;
             case 'session-settings':
-                url = '/api/export/session-settings';
+                url = apiUrl('/export/session-settings');
                 break;
         }
 
@@ -2382,7 +2382,7 @@ function UserManagement() {
         setLoading(true);
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/api/users'), {
+            const res = await fetch(apiUrl('/users'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -2398,7 +2398,7 @@ function UserManagement() {
         e.preventDefault();
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/api/users/create'), {
+            const res = await fetch(apiUrl('/users/create'), {
                 method: 'POST',
                 headers: { 
                     'Authorization': `Bearer ${token}`,
@@ -2426,7 +2426,7 @@ function UserManagement() {
         const token = AuthService.getToken();
 
         try {
-            const res = await fetch(apiUrl(`/api/users/${editingUser.id}`), {
+            const res = await fetch(apiUrl(`/users/${editingUser.id}`), {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -2480,7 +2480,7 @@ function UserManagement() {
                 }
 
                 const token = AuthService.getToken();
-                const res = await fetch(apiUrl('/api/users/batch'), {
+                const res = await fetch(apiUrl('/users/batch'), {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -2526,7 +2526,7 @@ student1,Student One,student1@school.edu,stud123,user`;
 
         const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl(`/api/users/${userId}`), {
+            const res = await fetch(apiUrl(`/users/${userId}`), {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -2546,7 +2546,7 @@ student1,Student One,student1@school.edu,stud123,user`;
 
         try {
             const user = users.find(u => u.id === userId);
-            const res = await fetch(apiUrl(`/api/users/${userId}`), {
+            const res = await fetch(apiUrl(`/users/${userId}`), {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -2849,7 +2849,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
     // Load groups on mount
     useEffect(() => {
         const token = AuthService.getToken();
-        fetch(apiUrl('/api/labs/groups'), {
+        fetch(apiUrl('/labs/groups'), {
             headers: { 'Authorization': `Bearer ${token}` }
         })
             .then(res => res.json())
@@ -2866,7 +2866,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
 
         setIsSearching(true);
         const token = AuthService.getToken();
-        fetch(apiUrl(`/api/labs/search?q=${encodeURIComponent(searchQuery)}&limit=20`), {
+        fetch(apiUrl(`/labs/search?q=${encodeURIComponent(searchQuery)}&limit=20`), {
             headers: { 'Authorization': `Bearer ${token}` }
         })
             .then(res => res.json())
@@ -2923,7 +2923,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
         setAddingGroup(true);
         try {
             const token = AuthService.getToken();
-            const response = await fetch(apiUrl(`/api/labs/group/${encodeURIComponent(selectedGroup)}`), {
+            const response = await fetch(apiUrl(`/labs/group/${encodeURIComponent(selectedGroup)}`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -3059,7 +3059,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
         try {
             // Load all templates
             const token = localStorage.getItem('token');
-            const templatesRes = await fetch(apiUrl('/api/agents/templates'), {
+            const templatesRes = await fetch(apiUrl('/agents/templates'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (templatesRes.ok) {
@@ -3069,7 +3069,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
 
             // Load case agents if case has an ID
             if (caseId) {
-                const agentsRes = await fetch(apiUrl(`/api/cases/${caseId}/agents`), {
+                const agentsRes = await fetch(apiUrl(`/cases/${caseId}/agents`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (agentsRes.ok) {
@@ -3091,7 +3091,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
         }
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents/add-defaults`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}/agents/add-defaults`), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -3112,7 +3112,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
         }
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}/agents`), {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -3132,7 +3132,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
     const handleRemoveAgent = async (agentId) => {
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents/${agentId}`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}/agents/${agentId}`), {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -3148,7 +3148,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
     const handleToggleEnabled = async (agent) => {
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents/${agent.id}`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}/agents/${agent.id}`), {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -3168,7 +3168,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
         if (!editingAgent) return;
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/api/cases/${caseId}/agents/${editingAgent.id}`), {
+            const res = await fetch(apiUrl(`/cases/${caseId}/agents/${editingAgent.id}`), {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -3466,7 +3466,7 @@ function CaseWizard({ caseData, setCaseData, onSave, onCancel, hasUnsavedChanges
         formData.append('photo', file);
 
         try {
-            const res = await fetch(apiUrl('/api/upload'), {
+            const res = await fetch(apiUrl('/upload'), {
                 method: 'POST',
                 body: formData
             });

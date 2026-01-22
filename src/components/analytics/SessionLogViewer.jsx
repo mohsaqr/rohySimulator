@@ -393,8 +393,8 @@ export default function SessionLogViewer({ sessionId, userId, onClose, showAllSe
             const token = AuthService.getToken();
             // Always fetch all recent events, or filter by session if specified
             let url = sessionId
-                ? apiUrl(`/api/learning-events/session/${sessionId}`)
-                : apiUrl(`/api/learning-events/all?limit=500`);
+                ? apiUrl(`/learning-events/session/${sessionId}`)
+                : apiUrl(`/learning-events/all?limit=500`);
 
             const res = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }

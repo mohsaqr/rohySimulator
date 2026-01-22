@@ -52,7 +52,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
             if (!token) {
                 throw new Error('Not authenticated');
             }
-            const res = await fetch(apiUrl('/api/radiology-database'), {
+            const res = await fetch(apiUrl('/radiology-database'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!res.ok) {
@@ -156,7 +156,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
             const formData = new FormData();
             formData.append('photo', file);
             const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/api/upload'), {
+            const res = await fetch(apiUrl('/upload'), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData

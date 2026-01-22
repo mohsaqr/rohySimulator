@@ -33,7 +33,7 @@ export default function MedicationSearch({ value, onChange, onSelect, placeholde
             setLoading(true);
             try {
                 const token = AuthService.getToken();
-                const res = await fetch(apiUrl(`/api/master/medications?search=${encodeURIComponent(query)}&limit=10`), {
+                const res = await fetch(apiUrl(`/master/medications?search=${encodeURIComponent(query)}&limit=10`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (res.ok) {

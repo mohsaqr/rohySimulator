@@ -66,7 +66,7 @@ export default function UserProfilePanel({ onClose }) {
     const loadProfile = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/api/user/profile'), {
+            const response = await fetch(apiUrl('/user/profile'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -96,7 +96,7 @@ export default function UserProfilePanel({ onClose }) {
     const loadFieldConfig = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/api/platform-settings/user-fields'), {
+            const response = await fetch(apiUrl('/platform-settings/user-fields'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -112,7 +112,7 @@ export default function UserProfilePanel({ onClose }) {
     const loadAiSettings = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/api/users/preferences'), {
+            const response = await fetch(apiUrl('/users/preferences'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -143,7 +143,7 @@ export default function UserProfilePanel({ onClose }) {
         setSaving(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/api/users/preferences'), {
+            const response = await fetch(apiUrl('/users/preferences'), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -190,7 +190,7 @@ export default function UserProfilePanel({ onClose }) {
         setSaving(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/api/user/profile'), {
+            const response = await fetch(apiUrl('/user/profile'), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -239,7 +239,7 @@ export default function UserProfilePanel({ onClose }) {
         setSaving(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/api/user/password'), {
+            const response = await fetch(apiUrl('/user/password'), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

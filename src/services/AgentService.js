@@ -11,7 +11,6 @@
 
 import { apiUrl } from '../config/api';
 
-const API_URL = '/api';
 
 export const AgentService = {
   /**
@@ -33,7 +32,7 @@ export const AgentService = {
    */
   async getTemplates() {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/agents/templates`), {
+      const response = await fetch(apiUrl(`/agents/templates`), {
         headers: this.getAuthHeaders()
       });
       if (!response.ok) throw new Error('Failed to fetch agent templates');
@@ -50,7 +49,7 @@ export const AgentService = {
    */
   async getTemplate(templateId) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/agents/templates/${templateId}`), {
+      const response = await fetch(apiUrl(`/agents/templates/${templateId}`), {
         headers: this.getAuthHeaders()
       });
       if (!response.ok) throw new Error('Failed to fetch agent template');
@@ -66,7 +65,7 @@ export const AgentService = {
    */
   async createTemplate(templateData) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/agents/templates`), {
+      const response = await fetch(apiUrl(`/agents/templates`), {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(templateData)
@@ -87,7 +86,7 @@ export const AgentService = {
    */
   async updateTemplate(templateId, templateData) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/agents/templates/${templateId}`), {
+      const response = await fetch(apiUrl(`/agents/templates/${templateId}`), {
         method: 'PUT',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(templateData)
@@ -108,7 +107,7 @@ export const AgentService = {
    */
   async deleteTemplate(templateId) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/agents/templates/${templateId}`), {
+      const response = await fetch(apiUrl(`/agents/templates/${templateId}`), {
         method: 'DELETE',
         headers: this.getAuthHeaders()
       });
@@ -128,7 +127,7 @@ export const AgentService = {
    */
   async duplicateTemplate(templateId, newName) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/agents/templates/${templateId}/duplicate`), {
+      const response = await fetch(apiUrl(`/agents/templates/${templateId}/duplicate`), {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify({ name: newName })
@@ -149,7 +148,7 @@ export const AgentService = {
    */
   async testLLM(templateId) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/agents/templates/${templateId}/test-llm`), {
+      const response = await fetch(apiUrl(`/agents/templates/${templateId}/test-llm`), {
         method: 'POST',
         headers: this.getAuthHeaders()
       });
@@ -171,7 +170,7 @@ export const AgentService = {
    */
   async getCaseAgents(caseId) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/cases/${caseId}/agents`), {
+      const response = await fetch(apiUrl(`/cases/${caseId}/agents`), {
         headers: this.getAuthHeaders()
       });
       if (!response.ok) throw new Error('Failed to fetch case agents');
@@ -188,7 +187,7 @@ export const AgentService = {
    */
   async addAgentToCase(caseId, agentConfig) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/cases/${caseId}/agents`), {
+      const response = await fetch(apiUrl(`/cases/${caseId}/agents`), {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(agentConfig)
@@ -209,7 +208,7 @@ export const AgentService = {
    */
   async updateCaseAgent(caseId, agentId, updates) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/cases/${caseId}/agents/${agentId}`), {
+      const response = await fetch(apiUrl(`/cases/${caseId}/agents/${agentId}`), {
         method: 'PUT',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(updates)
@@ -230,7 +229,7 @@ export const AgentService = {
    */
   async removeAgentFromCase(caseId, agentId) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/cases/${caseId}/agents/${agentId}`), {
+      const response = await fetch(apiUrl(`/cases/${caseId}/agents/${agentId}`), {
         method: 'DELETE',
         headers: this.getAuthHeaders()
       });
@@ -250,7 +249,7 @@ export const AgentService = {
    */
   async addDefaultAgentsToCase(caseId) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/cases/${caseId}/agents/add-defaults`), {
+      const response = await fetch(apiUrl(`/cases/${caseId}/agents/add-defaults`), {
         method: 'POST',
         headers: this.getAuthHeaders()
       });
@@ -272,7 +271,7 @@ export const AgentService = {
    */
   async getSessionAgents(sessionId) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/sessions/${sessionId}/agents`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/agents`), {
         headers: this.getAuthHeaders()
       });
       if (!response.ok) throw new Error('Failed to fetch session agents');
@@ -289,7 +288,7 @@ export const AgentService = {
    */
   async pageAgent(sessionId, agentType) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/sessions/${sessionId}/agents/${agentType}/page`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/agents/${agentType}/page`), {
         method: 'POST',
         headers: this.getAuthHeaders()
       });
@@ -306,7 +305,7 @@ export const AgentService = {
    */
   async arriveAgent(sessionId, agentType) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/sessions/${sessionId}/agents/${agentType}/arrive`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/agents/${agentType}/arrive`), {
         method: 'POST',
         headers: this.getAuthHeaders()
       });
@@ -323,7 +322,7 @@ export const AgentService = {
    */
   async departAgent(sessionId, agentType) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/sessions/${sessionId}/agents/${agentType}/depart`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/agents/${agentType}/depart`), {
         method: 'POST',
         headers: this.getAuthHeaders()
       });
@@ -340,7 +339,7 @@ export const AgentService = {
    */
   async getAgentStatus(sessionId, agentType) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/sessions/${sessionId}/agents/${agentType}/status`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/agents/${agentType}/status`), {
         headers: this.getAuthHeaders()
       });
       if (!response.ok) throw new Error('Failed to get agent status');
@@ -358,7 +357,7 @@ export const AgentService = {
    */
   async getConversation(sessionId, agentType) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/sessions/${sessionId}/agents/${agentType}/conversation`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/agents/${agentType}/conversation`), {
         headers: this.getAuthHeaders()
       });
       if (!response.ok) throw new Error('Failed to fetch conversation');
@@ -375,7 +374,7 @@ export const AgentService = {
    */
   async addMessage(sessionId, agentType, role, content) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/sessions/${sessionId}/agents/${agentType}/conversation`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/agents/${agentType}/conversation`), {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify({ role, content })
@@ -393,7 +392,7 @@ export const AgentService = {
    */
   async clearConversation(sessionId, agentType) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/sessions/${sessionId}/agents/${agentType}/conversation`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/agents/${agentType}/conversation`), {
         method: 'DELETE',
         headers: this.getAuthHeaders()
       });
@@ -412,7 +411,7 @@ export const AgentService = {
    */
   async getTeamCommunications(sessionId) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/sessions/${sessionId}/team-communications`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/team-communications`), {
         headers: this.getAuthHeaders()
       });
       if (!response.ok) throw new Error('Failed to fetch team communications');
@@ -429,7 +428,7 @@ export const AgentService = {
    */
   async addTeamCommunication(sessionId, agentType, keyPoints) {
     try {
-      const response = await fetch(apiUrl(`${API_URL}/sessions/${sessionId}/team-communications`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/team-communications`), {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify({ agent_type: agentType, key_points: keyPoints })
@@ -608,7 +607,7 @@ export const AgentService = {
         };
       }
 
-      const response = await fetch(apiUrl(`${API_URL}/proxy/llm`), {
+      const response = await fetch(apiUrl(`/proxy/llm`), {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(requestBody)

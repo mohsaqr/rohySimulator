@@ -26,7 +26,7 @@ const InvestigationPanel = ({ caseId, sessionId, onViewResult }) => {
     const fetchLabs = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(apiUrl(`/api/sessions/${sessionId}/available-labs`), {
+        const response = await fetch(apiUrl(`/sessions/${sessionId}/available-labs`), {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -52,7 +52,7 @@ const InvestigationPanel = ({ caseId, sessionId, onViewResult }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(apiUrl(`/api/sessions/${sessionId}/orders`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/orders`), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -81,7 +81,7 @@ const InvestigationPanel = ({ caseId, sessionId, onViewResult }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(apiUrl(`/api/sessions/${sessionId}/order-labs`), {
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/order-labs`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -102,7 +102,7 @@ const InvestigationPanel = ({ caseId, sessionId, onViewResult }) => {
         setSelectedTests([]);
         await fetchOrders();
       } else {
-        EventLogger.apiError('/api/sessions/order-labs', response.status, 'Failed to order labs', COMPONENTS.INVESTIGATION_PANEL);
+        EventLogger.apiError(apiUrl('/sessions/order-labs'), response.status, 'Failed to order labs', COMPONENTS.INVESTIGATION_PANEL);
       }
     } catch (error) {
       console.error('Failed to order tests:', error);

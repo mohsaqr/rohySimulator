@@ -44,7 +44,7 @@ export async function syncPatientRecord(patientRecord) {
     events_count: patientRecord.getEventCount()
   };
 
-  const response = await fetch(apiUrl('/api/patient-record/sync'), {
+  const response = await fetch(apiUrl('/patient-record/sync'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -72,7 +72,7 @@ export async function loadPatientRecord(sessionId) {
   }
 
   try {
-    const response = await fetch(apiUrl(`/api/patient-record/${sessionId}`), {
+    const response = await fetch(apiUrl(`/patient-record/${sessionId}`), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -108,7 +108,7 @@ export async function getPatientRecordEvents(sessionId) {
   }
 
   try {
-    const response = await fetch(apiUrl(`/api/patient-record/${sessionId}/events`), {
+    const response = await fetch(apiUrl(`/patient-record/${sessionId}/events`), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -140,7 +140,7 @@ export async function getPatientRecordEventsByVerb(sessionId, verb) {
   }
 
   try {
-    const response = await fetch(apiUrl(`/api/patient-record/${sessionId}/events?verb=${verb}`), {
+    const response = await fetch(apiUrl(`/patient-record/${sessionId}/events?verb=${verb}`), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -170,7 +170,7 @@ export async function deletePatientRecord(sessionId) {
   }
 
   try {
-    const response = await fetch(apiUrl(`/api/patient-record/${sessionId}`), {
+    const response = await fetch(apiUrl(`/patient-record/${sessionId}`), {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json'

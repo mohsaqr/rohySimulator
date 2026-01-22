@@ -38,7 +38,7 @@ export default function BodyMapDebug({ gender = 'male', view = 'anterior' }) {
     useEffect(() => {
         const hasLocalData = localStorage.getItem(STORAGE_KEY);
         if (!hasLocalData) {
-            fetch(apiUrl('/api/bodymap-regions'))
+            fetch(apiUrl('/bodymap-regions'))
                 .then(r => r.json())
                 .then(data => {
                     if (data.regions) {
@@ -118,7 +118,7 @@ export default function BodyMapDebug({ gender = 'male', view = 'anterior' }) {
             // Also save to server for persistence
             const token = AuthService.getToken();
             if (token) {
-                await fetch(apiUrl('/api/bodymap-regions'), {
+                await fetch(apiUrl('/bodymap-regions'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

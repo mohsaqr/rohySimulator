@@ -36,7 +36,7 @@ export default function BodyMap({
         }
 
         // Try loading from server
-        fetch(apiUrl('/api/bodymap-regions'))
+        fetch(apiUrl('/bodymap-regions'))
             .then(r => r.json())
             .then(data => {
                 if (data.regions) {
