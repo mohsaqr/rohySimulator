@@ -3380,6 +3380,547 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
     });
 });
 
+// ==================== TREATMENT MODULE API ENDPOINTS ====================
+
+// GET /api/sessions/:sessionId/available-treatments - Get available treatments for session's case
+router.get('/sessions/:sessionId/available-treatments', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+    const { type } = req.query; // Optional filter: medication, iv_fluid, oxygen, nursing
+
+    db.get('SELECT s.case_id, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?', [sessionId], (err, session) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+
+        let caseConfig = {};
+        try {
+            caseConfig = JSON.parse(session.config || '{}');
+        } catch (e) {
+            console.warn('[Treatments] Failed to parse case config:', e.message);
+        }
+
+        // Get case-specific treatment configuration
+        const treatmentConfig = caseConfig.treatments || {};
+
+        // Get all treatment effects (master data) as available treatments
+        let effectsSql = `SELECT * FROM treatment_effects WHERE is_active = 1`;
+        const params = [];
+        if (type) {
+            effectsSql += ` AND treatment_type = ?`;
+            params.push(type);
+        }
+        effectsSql += ` ORDER BY treatment_type, treatment_name`;
+
+        db.all(effectsSql, params, (err, effects) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            // Get case-specific treatments (restrictions/expected)
+            db.all(`SELECT * FROM case_treatments WHERE case_id = ?`, [session.case_id], (err, caseTreatments) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                // Build treatment map with case-specific overrides
+                const caseTreatmentMap = {};
+                caseTreatments.forEach(ct => {
+                    caseTreatmentMap[`${ct.treatment_type}:${ct.treatment_name}`] = ct;
+                });
+
+                // Merge master data with case-specific configuration
+                const treatments = effects.map(effect => {
+                    const key = `${effect.treatment_type}:${effect.treatment_name}`;
+                    const caseOverride = caseTreatmentMap[key];
+
+                    return {
+                        ...effect,
+                        is_available: caseOverride?.is_available ?? true,
+                        is_expected: caseOverride?.is_expected ?? false,
+                        is_contraindicated: caseOverride?.is_contraindicated ?? false,
+                        points_if_ordered: caseOverride?.points_if_ordered ?? 0,
+                        feedback_if_ordered: caseOverride?.feedback_if_ordered ?? null,
+                        feedback_if_missed: caseOverride?.feedback_if_missed ?? null,
+                        custom_effect_override: caseOverride?.custom_effect_override ? JSON.parse(caseOverride.custom_effect_override) : null
+                    };
+                });
+
+                // Group by type - use treatment_type values as keys for consistency
+                const grouped = {
+                    medication: treatments.filter(t => t.treatment_type === 'medication'),
+                    iv_fluid: treatments.filter(t => t.treatment_type === 'iv_fluid'),
+                    oxygen: treatments.filter(t => t.treatment_type === 'oxygen'),
+                    nursing: treatments.filter(t => t.treatment_type === 'nursing')
+                };
+
+                res.json({
+                    treatments: type ? treatments : grouped,
+                    config: treatmentConfig
+                });
+            });
+        });
+    });
+});
+
+// POST /api/sessions/:sessionId/order-treatment - Order a treatment
+router.post('/sessions/:sessionId/order-treatment', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+    const {
+        treatment_type,
+        treatment_name,
+        medication_id,
+        dose,
+        dose_value,
+        dose_unit,
+        route,
+        frequency,
+        rate,
+        rate_value,
+        rate_unit,
+        duration_minutes,
+        urgency = 'routine',
+        notes
+    } = req.body;
+
+    if (!treatment_type || !treatment_name) {
+        return res.status(400).json({ error: 'treatment_type and treatment_name are required' });
+    }
+
+    // Verify session and access
+    db.get('SELECT s.user_id, s.case_id, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?', [sessionId], (err, session) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+        if (session.user_id !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Check for contraindication
+        db.get(`SELECT * FROM case_treatments WHERE case_id = ? AND treatment_type = ? AND treatment_name = ?`,
+            [session.case_id, treatment_type, treatment_name], (err, caseConfig) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const isContraindicated = caseConfig?.is_contraindicated ?? false;
+            const isExpected = caseConfig?.is_expected ?? false;
+            const pointsIfOrdered = caseConfig?.points_if_ordered ?? 0;
+            const feedback = caseConfig?.feedback_if_ordered ?? null;
+
+            // Get treatment effect data
+            db.get(`SELECT * FROM treatment_effects WHERE treatment_type = ? AND treatment_name = ? AND is_active = 1`,
+                [treatment_type, treatment_name], (err, effect) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                const isHighAlert = effect?.treatment_name?.match(/epinephrine|norepinephrine|insulin|heparin|morphine|fentanyl|propofol/i) !== null;
+
+                // Insert the order
+                const insertSql = `
+                    INSERT INTO treatment_orders (
+                        session_id, treatment_type, medication_id, treatment_item,
+                        dose, dose_value, dose_unit, route, frequency,
+                        rate, rate_value, rate_unit, duration_minutes,
+                        urgency, is_high_alert, notes, feedback, points_awarded
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `;
+
+                db.run(insertSql, [
+                    sessionId, treatment_type, medication_id || null, treatment_name,
+                    dose || null, dose_value || null, dose_unit || null,
+                    route || effect?.route || null, frequency || null,
+                    rate || null, rate_value || null, rate_unit || null,
+                    duration_minutes || null, urgency, isHighAlert ? 1 : 0,
+                    notes || null, feedback, isExpected ? pointsIfOrdered : 0
+                ], function(err) {
+                    if (err) return res.status(500).json({ error: err.message });
+
+                    const orderId = this.lastID;
+
+                    // Log to audit
+                    logAudit({
+                        userId: req.user.id,
+                        username: req.user.username,
+                        action: 'ORDERED_TREATMENT',
+                        resourceType: 'treatment_order',
+                        resourceId: orderId,
+                        resourceName: treatment_name,
+                        sessionId: parseInt(sessionId),
+                        metadata: { treatment_type, dose, route, urgency, isContraindicated, isExpected }
+                    });
+
+                    res.status(201).json({
+                        message: 'Treatment ordered successfully',
+                        order_id: orderId,
+                        treatment_name,
+                        treatment_type,
+                        is_contraindicated: isContraindicated,
+                        contraindication_feedback: isContraindicated ? feedback : null,
+                        is_expected: isExpected,
+                        points_awarded: isExpected ? pointsIfOrdered : 0,
+                        is_high_alert: isHighAlert,
+                        effect: effect ? {
+                            onset_minutes: effect.onset_minutes,
+                            peak_minutes: effect.peak_minutes,
+                            duration_minutes: effect.duration_minutes
+                        } : null
+                    });
+                });
+            });
+        });
+    });
+});
+
+// POST /api/sessions/:sessionId/administer/:orderId - Administer an ordered treatment
+router.post('/sessions/:sessionId/administer/:orderId', authenticateToken, (req, res) => {
+    const { sessionId, orderId } = req.params;
+
+    // Verify session and order
+    db.get(`SELECT t.*, s.user_id, s.case_id FROM treatment_orders t
+            JOIN sessions s ON t.session_id = s.id
+            WHERE t.id = ? AND t.session_id = ?`, [orderId, sessionId], (err, order) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        if (order.status !== 'ordered') {
+            return res.status(400).json({ error: `Cannot administer order with status: ${order.status}` });
+        }
+
+        // Get treatment effect
+        db.get(`SELECT * FROM treatment_effects WHERE treatment_type = ? AND treatment_name = ? AND is_active = 1`,
+            [order.treatment_type, order.treatment_item], (err, effect) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const now = new Date().toISOString();
+            const isContinuous = order.treatment_type === 'oxygen' ||
+                               (order.treatment_type === 'nursing' && order.treatment_item.includes('Position')) ||
+                               (effect?.duration_minutes === -1);
+
+            // Update order status
+            db.run(`UPDATE treatment_orders SET status = ?, administered_at = ? WHERE id = ?`,
+                [isContinuous ? 'in_progress' : 'administered', now, orderId], (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                // Create active treatment effect if effect data exists
+                if (effect) {
+                    // Calculate dose multiplier for dose-dependent medications
+                    let doseMultiplier = 1.0;
+                    if (effect.dose_dependent && effect.base_dose && order.dose_value) {
+                        doseMultiplier = Math.min(order.dose_value / effect.base_dose, effect.max_effect_multiplier || 2.0);
+                    }
+
+                    // Calculate expiration time
+                    let expiresAt = null;
+                    if (!isContinuous && effect.duration_minutes > 0) {
+                        const expireDate = new Date();
+                        expireDate.setMinutes(expireDate.getMinutes() + effect.duration_minutes);
+                        expiresAt = expireDate.toISOString();
+                    }
+
+                    const insertEffectSql = `
+                        INSERT INTO active_treatments (
+                            session_id, treatment_order_id, effect_id, started_at,
+                            phase, current_effect_strength, dose_multiplier,
+                            peak_hr_effect, peak_bp_sys_effect, peak_bp_dia_effect,
+                            peak_rr_effect, peak_spo2_effect, peak_temp_effect,
+                            expires_at, is_continuous
+                        ) VALUES (?, ?, ?, ?, 'onset', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `;
+
+                    db.run(insertEffectSql, [
+                        sessionId, orderId, effect.id, now,
+                        doseMultiplier,
+                        Math.round(effect.hr_effect * doseMultiplier),
+                        Math.round(effect.bp_sys_effect * doseMultiplier),
+                        Math.round(effect.bp_dia_effect * doseMultiplier),
+                        Math.round(effect.rr_effect * doseMultiplier),
+                        Math.round(effect.spo2_effect * doseMultiplier),
+                        effect.temp_effect * doseMultiplier,
+                        expiresAt, isContinuous ? 1 : 0
+                    ], function(err) {
+                        if (err) {
+                            console.error('[Treatments] Failed to create active effect:', err.message);
+                        }
+
+                        res.json({
+                            message: 'Treatment administered',
+                            order_id: parseInt(orderId),
+                            treatment_name: order.treatment_item,
+                            status: isContinuous ? 'in_progress' : 'administered',
+                            administered_at: now,
+                            effect_active: true,
+                            active_treatment_id: this?.lastID,
+                            effect_details: {
+                                onset_minutes: effect.onset_minutes,
+                                peak_minutes: effect.peak_minutes,
+                                duration_minutes: effect.duration_minutes,
+                                is_continuous: isContinuous,
+                                hr_effect: Math.round(effect.hr_effect * doseMultiplier),
+                                bp_sys_effect: Math.round(effect.bp_sys_effect * doseMultiplier),
+                                bp_dia_effect: Math.round(effect.bp_dia_effect * doseMultiplier),
+                                rr_effect: Math.round(effect.rr_effect * doseMultiplier),
+                                spo2_effect: Math.round(effect.spo2_effect * doseMultiplier)
+                            }
+                        });
+                    });
+                } else {
+                    res.json({
+                        message: 'Treatment administered (no effect data)',
+                        order_id: parseInt(orderId),
+                        treatment_name: order.treatment_item,
+                        status: isContinuous ? 'in_progress' : 'administered',
+                        administered_at: now,
+                        effect_active: false
+                    });
+                }
+            });
+        });
+    });
+});
+
+// PUT /api/sessions/:sessionId/discontinue/:orderId - Discontinue a treatment
+router.put('/sessions/:sessionId/discontinue/:orderId', authenticateToken, (req, res) => {
+    const { sessionId, orderId } = req.params;
+
+    db.get(`SELECT t.*, s.user_id FROM treatment_orders t
+            JOIN sessions s ON t.session_id = s.id
+            WHERE t.id = ? AND t.session_id = ?`, [orderId, sessionId], (err, order) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        const now = new Date().toISOString();
+
+        // Update order status
+        db.run(`UPDATE treatment_orders SET status = 'discontinued', discontinued_at = ? WHERE id = ?`,
+            [now, orderId], (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            // Mark active treatment as expired
+            db.run(`UPDATE active_treatments SET phase = 'expired', expires_at = ? WHERE treatment_order_id = ?`,
+                [now, orderId], (err) => {
+                if (err) console.error('[Treatments] Failed to expire active treatment:', err.message);
+
+                res.json({
+                    message: 'Treatment discontinued',
+                    order_id: parseInt(orderId),
+                    discontinued_at: now
+                });
+            });
+        });
+    });
+});
+
+// GET /api/sessions/:sessionId/treatment-orders - Get all treatment orders for session
+router.get('/sessions/:sessionId/treatment-orders', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+    const { status } = req.query;
+
+    db.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+
+        let sql = `SELECT * FROM treatment_orders WHERE session_id = ?`;
+        const params = [sessionId];
+        if (status) {
+            sql += ` AND status = ?`;
+            params.push(status);
+        }
+        sql += ` ORDER BY ordered_at DESC`;
+
+        db.all(sql, params, (err, orders) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            res.json({ orders });
+        });
+    });
+});
+
+// GET /api/sessions/:sessionId/active-effects - Get current active treatment effects
+router.get('/sessions/:sessionId/active-effects', authenticateToken, (req, res) => {
+    const { sessionId } = req.params;
+
+    db.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+
+        // Get all active (non-expired) treatments
+        const sql = `
+            SELECT
+                at.*,
+                t.treatment_item, t.treatment_type, t.dose, t.route,
+                te.onset_minutes, te.peak_minutes, te.duration_minutes, te.description
+            FROM active_treatments at
+            JOIN treatment_orders t ON at.treatment_order_id = t.id
+            LEFT JOIN treatment_effects te ON at.effect_id = te.id
+            WHERE at.session_id = ? AND at.phase != 'expired'
+            ORDER BY at.started_at DESC
+        `;
+
+        db.all(sql, [sessionId], (err, activeEffects) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const now = new Date();
+
+            // Calculate current effect strength for each treatment
+            const effectsWithStrength = activeEffects.map(effect => {
+                const startedAt = new Date(effect.started_at);
+                const elapsedMinutes = (now - startedAt) / 60000;
+
+                let phase = 'onset';
+                let strength = 0;
+
+                if (effect.is_continuous || effect.duration_minutes === -1) {
+                    // Continuous treatments maintain peak effect
+                    if (elapsedMinutes >= effect.peak_minutes) {
+                        phase = 'peak';
+                        strength = 1.0;
+                    } else if (elapsedMinutes >= effect.onset_minutes) {
+                        phase = 'peak';
+                        strength = 1.0;
+                    } else {
+                        phase = 'onset';
+                        strength = elapsedMinutes / effect.onset_minutes;
+                    }
+                } else {
+                    // Calculate phase based on elapsed time
+                    if (elapsedMinutes < effect.onset_minutes) {
+                        phase = 'onset';
+                        strength = elapsedMinutes / effect.onset_minutes;
+                    } else if (elapsedMinutes < effect.peak_minutes) {
+                        phase = 'peak';
+                        strength = 1.0;
+                    } else if (elapsedMinutes < effect.duration_minutes) {
+                        phase = 'decline';
+                        const declineProgress = (elapsedMinutes - effect.peak_minutes) / (effect.duration_minutes - effect.peak_minutes);
+                        strength = Math.exp(-3 * declineProgress); // Exponential decay
+                    } else {
+                        phase = 'expired';
+                        strength = 0;
+                    }
+                }
+
+                return {
+                    ...effect,
+                    current_phase: phase,
+                    current_strength: Math.max(0, Math.min(1, strength)),
+                    elapsed_minutes: elapsedMinutes,
+                    current_hr_effect: Math.round(effect.peak_hr_effect * strength),
+                    current_bp_sys_effect: Math.round(effect.peak_bp_sys_effect * strength),
+                    current_bp_dia_effect: Math.round(effect.peak_bp_dia_effect * strength),
+                    current_rr_effect: Math.round(effect.peak_rr_effect * strength),
+                    current_spo2_effect: Math.round(effect.peak_spo2_effect * strength),
+                    current_temp_effect: effect.peak_temp_effect * strength
+                };
+            });
+
+            // Calculate aggregate effects
+            const aggregateEffects = effectsWithStrength.reduce((acc, effect) => {
+                acc.hr_effect += effect.current_hr_effect || 0;
+                acc.bp_sys_effect += effect.current_bp_sys_effect || 0;
+                acc.bp_dia_effect += effect.current_bp_dia_effect || 0;
+                acc.rr_effect += effect.current_rr_effect || 0;
+                acc.spo2_effect += effect.current_spo2_effect || 0;
+                acc.temp_effect += effect.current_temp_effect || 0;
+                return acc;
+            }, {
+                hr_effect: 0,
+                bp_sys_effect: 0,
+                bp_dia_effect: 0,
+                rr_effect: 0,
+                spo2_effect: 0,
+                temp_effect: 0
+            });
+
+            res.json({
+                active_treatments: effectsWithStrength,
+                aggregate_effects: aggregateEffects,
+                treatment_count: effectsWithStrength.length
+            });
+        });
+    });
+});
+
+// PUT /api/cases/:caseId/treatments - Configure case treatments (admin)
+router.put('/cases/:caseId/treatments', authenticateToken, requireAdmin, (req, res) => {
+    const { caseId } = req.params;
+    const { treatments } = req.body;
+
+    if (!Array.isArray(treatments)) {
+        return res.status(400).json({ error: 'treatments array is required' });
+    }
+
+    // Verify case exists
+    db.get('SELECT id FROM cases WHERE id = ?', [caseId], (err, caseRow) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!caseRow) return res.status(404).json({ error: 'Case not found' });
+
+        // Delete existing case treatments and insert new ones
+        db.run('DELETE FROM case_treatments WHERE case_id = ?', [caseId], (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            if (treatments.length === 0) {
+                return res.json({ message: 'Case treatments cleared', count: 0 });
+            }
+
+            const insertSql = `
+                INSERT INTO case_treatments (
+                    case_id, treatment_type, medication_id, treatment_name,
+                    is_available, is_expected, is_contraindicated,
+                    points_if_ordered, feedback_if_ordered, feedback_if_missed,
+                    custom_effect_override
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+
+            let inserted = 0;
+            let pending = treatments.length;
+
+            treatments.forEach(t => {
+                db.run(insertSql, [
+                    caseId,
+                    t.treatment_type,
+                    t.medication_id || null,
+                    t.treatment_name,
+                    t.is_available ?? 1,
+                    t.is_expected ?? 0,
+                    t.is_contraindicated ?? 0,
+                    t.points_if_ordered ?? 0,
+                    t.feedback_if_ordered || null,
+                    t.feedback_if_missed || null,
+                    t.custom_effect_override ? JSON.stringify(t.custom_effect_override) : null
+                ], function(err) {
+                    if (!err) inserted++;
+                    pending--;
+                    if (pending === 0) {
+                        logAudit({
+                            userId: req.user.id,
+                            username: req.user.username,
+                            action: 'CONFIGURED_CASE_TREATMENTS',
+                            resourceType: 'case',
+                            resourceId: caseId,
+                            metadata: { treatment_count: inserted }
+                        });
+                        res.json({ message: `Case treatments configured`, count: inserted });
+                    }
+                });
+            });
+        });
+    });
+});
+
+// GET /api/treatment-effects - Get all treatment effects (master data)
+router.get('/treatment-effects', authenticateToken, (req, res) => {
+    const { type } = req.query;
+
+    let sql = 'SELECT * FROM treatment_effects WHERE is_active = 1';
+    const params = [];
+    if (type) {
+        sql += ' AND treatment_type = ?';
+        params.push(type);
+    }
+    sql += ' ORDER BY treatment_type, treatment_name';
+
+    db.all(sql, params, (err, effects) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ effects });
+    });
+});
+
 // --- LLM PROXY ROUTE with Authentication & Rate Limiting ---
 router.post('/proxy/llm', authenticateToken, async (req, res) => {
     const { messages, system_prompt, session_id, agent_llm_config } = req.body;

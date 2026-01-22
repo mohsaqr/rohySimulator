@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     FlaskConical, X, ChevronUp, ChevronDown,
     Search, Clock, CheckCircle, Loader2, List,
-    Eye, FileText, Scan, Stethoscope, Activity
+    Eye, FileText, Scan, Stethoscope, Activity, Syringe
 } from 'lucide-react';
 import PatientRecordViewer from '../PatientRecordViewer';
 import { useToast } from '../../contexts/ToastContext';
 import { usePatientRecord } from '../../services/PatientRecord';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import ClinicalRecordsPanel from '../investigations/ClinicalRecordsPanel';
+import { TreatmentPanel } from '../treatments';
 import { apiUrl } from '../../config/api';
 
 /**
@@ -399,9 +400,35 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
 
     if (!caseId || !sessionId) return null;
 
+    // State for treatment orders count
+    const [treatmentOrdersCount, setTreatmentOrdersCount] = useState(0);
+
+    // Fetch treatment orders count
+    useEffect(() => {
+        if (!sessionId) return;
+        const fetchTreatmentCount = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(apiUrl(`/api/sessions/${sessionId}/treatment-orders?status=ordered`), {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setTreatmentOrdersCount(data.orders?.length || 0);
+                }
+            } catch (error) {
+                console.error('Failed to fetch treatment orders count:', error);
+            }
+        };
+        fetchTreatmentCount();
+        const interval = setInterval(fetchTreatmentCount, 10000);
+        return () => clearInterval(interval);
+    }, [sessionId]);
+
     const tabs = [
         { id: 'labs', label: 'Laboratory', icon: FlaskConical, count: readyOrders.length },
         { id: 'radiology', label: 'Radiology', icon: Scan, count: readyRadiology.length },
+        { id: 'treatments', label: 'Treatments', icon: Syringe, count: treatmentOrdersCount },
         { id: 'records', label: 'Records', icon: FileText, count: 0 },
         { id: 'memory', label: 'Memory', icon: Activity, count: 0 }
     ];
@@ -1238,6 +1265,17 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                         )}
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Treatments Tab */}
+                        {activeTab === 'treatments' && (
+                            <div className="h-full">
+                                <TreatmentPanel
+                                    sessionId={sessionId}
+                                    caseId={caseId}
+                                    onEffectsUpdate={() => setTreatmentOrdersCount(c => c)} // Trigger re-fetch
+                                />
                             </div>
                         )}
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Trash2, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw } from 'lucide-react';
+import { Settings, Save, Plus, Trash2, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { AuthService } from '../../services/authService';
@@ -14,6 +14,7 @@ import PhysicalExamEditor from './PhysicalExamEditor';
 import LabTestManager from './LabTestManager';
 import MedicationManager from './MedicationManager';
 import AgentTemplateManager from './AgentTemplateManager';
+import CaseTreatmentConfig from './CaseTreatmentConfig';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
@@ -534,6 +535,25 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                                                 console.log('[ConfigPanel] Editing case:', c.name, 'scenario:', c.scenario ? 'present' : 'null');
                                                                 setEditingCase(c);
                                                             }} className="p-2 bg-neutral-700 rounded text-xs hover:bg-neutral-600">Edit</button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    // Duplicate case - create a copy without ID
+                                                                    const duplicatedCase = {
+                                                                        ...c,
+                                                                        name: `${c.name} (Copy)`,
+                                                                        id: undefined // Remove ID so it creates a new case
+                                                                    };
+                                                                    delete duplicatedCase.id;
+                                                                    localStorage.removeItem('rohy_editing_case');
+                                                                    console.log('[ConfigPanel] Duplicating case:', c.name);
+                                                                    setEditingCase(duplicatedCase);
+                                                                    toast.success(`Duplicated "${c.name}" - Edit and save as new case`);
+                                                                }}
+                                                                className="p-2 bg-purple-900/30 text-purple-400 rounded text-xs hover:bg-purple-900/50"
+                                                                title="Duplicate case"
+                                                            >
+                                                                <Copy className="w-4 h-4" />
+                                                            </button>
                                                             <button onClick={() => handleDeleteCase(c.id)} className="p-2 bg-red-900/30 text-red-400 rounded text-xs hover:bg-red-900/50">Delete</button>
                                                         </>
                                                     )}
@@ -3603,7 +3623,8 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
         { num: 6, title: 'Radiology', icon: '📷' },
         { num: 7, title: 'Exam', icon: '🩺' },
         { num: 8, title: 'Records', icon: '📄' },
-        { num: 9, title: 'Agents', icon: '🤖' }
+        { num: 9, title: 'Treatments', icon: '💊' },
+        { num: 10, title: 'Agents', icon: '🤖' }
     ];
 
     // Helper to get vitals from scenario's first keyframe
@@ -4748,8 +4769,33 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     />
                 )}
 
-                {/* STEP 9: AGENTS */}
+                {/* STEP 9: TREATMENTS */}
                 {step === 9 && (
+                    <div className="space-y-6">
+                        <h4 className="text-lg font-bold text-purple-400">9. Treatment Configuration</h4>
+                        <p className="text-xs text-neutral-500">
+                            Configure which treatments are expected, contraindicated, or hidden for this case.
+                            Assign points for correct treatment decisions and provide feedback for learning.
+                        </p>
+
+                        <CaseTreatmentConfig
+                            caseId={caseData.id}
+                            caseTreatments={caseData.config?.treatments || []}
+                            onUpdate={(treatments) => {
+                                setCaseData(prev => ({
+                                    ...prev,
+                                    config: {
+                                        ...prev.config,
+                                        treatments
+                                    }
+                                }));
+                            }}
+                        />
+                    </div>
+                )}
+
+                {/* STEP 10: AGENTS */}
+                {step === 10 && (
                     <CaseAgentEditor
                         caseId={caseData.id}
                         caseData={caseData}

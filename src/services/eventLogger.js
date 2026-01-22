@@ -73,6 +73,17 @@ export const VERBS = {
     CANCELLED_MEDICATION: 'CANCELLED_MEDICATION',
     ORDERED_TREATMENT: 'ORDERED_TREATMENT',
     PERFORMED_INTERVENTION: 'PERFORMED_INTERVENTION',
+    ORDERED_IV_FLUID: 'ORDERED_IV_FLUID',
+    STARTED_OXYGEN: 'STARTED_OXYGEN',
+    STOPPED_OXYGEN: 'STOPPED_OXYGEN',
+    ORDERED_NURSING: 'ORDERED_NURSING',
+    DISCONTINUED_TREATMENT: 'DISCONTINUED_TREATMENT',
+    TREATMENT_EFFECT_STARTED: 'TREATMENT_EFFECT_STARTED',
+    TREATMENT_EFFECT_PEAKED: 'TREATMENT_EFFECT_PEAKED',
+    TREATMENT_EFFECT_ENDED: 'TREATMENT_EFFECT_ENDED',
+    CONTRAINDICATED_TREATMENT_ORDERED: 'CONTRAINDICATED_TREATMENT_ORDERED',
+    EXPECTED_TREATMENT_GIVEN: 'EXPECTED_TREATMENT_GIVEN',
+    EXPECTED_TREATMENT_MISSED: 'EXPECTED_TREATMENT_MISSED',
 
     // Physical Examination
     PERFORMED_PHYSICAL_EXAM: 'PERFORMED_PHYSICAL_EXAM',
@@ -165,6 +176,17 @@ const VERB_METADATA = {
     CANCELLED_MEDICATION: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
     ORDERED_TREATMENT: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
     PERFORMED_INTERVENTION: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
+    ORDERED_IV_FLUID: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
+    STARTED_OXYGEN: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
+    STOPPED_OXYGEN: { severity: SEVERITY.ACTION, category: CATEGORIES.CLINICAL },
+    ORDERED_NURSING: { severity: SEVERITY.ACTION, category: CATEGORIES.CLINICAL },
+    DISCONTINUED_TREATMENT: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
+    TREATMENT_EFFECT_STARTED: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
+    TREATMENT_EFFECT_PEAKED: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
+    TREATMENT_EFFECT_ENDED: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
+    CONTRAINDICATED_TREATMENT_ORDERED: { severity: SEVERITY.CRITICAL, category: CATEGORIES.CLINICAL },
+    EXPECTED_TREATMENT_GIVEN: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.ASSESSMENT },
+    EXPECTED_TREATMENT_MISSED: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.ASSESSMENT },
 
     // Physical Examination
     PERFORMED_PHYSICAL_EXAM: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
@@ -236,7 +258,12 @@ export const OBJECT_TYPES = {
     PANEL: 'panel',
     SCENARIO: 'scenario',
     COMPONENT: 'component',
-    PHYSICAL_EXAM: 'physical_exam'
+    PHYSICAL_EXAM: 'physical_exam',
+    TREATMENT: 'treatment',
+    MEDICATION: 'medication',
+    IV_FLUID: 'iv_fluid',
+    OXYGEN_THERAPY: 'oxygen_therapy',
+    NURSING_INTERVENTION: 'nursing_intervention'
 };
 
 // Component names for tracking
@@ -758,6 +785,105 @@ class EventLoggerService {
             objectName: interventionName,
             component: componentName,
             result
+        });
+    }
+
+    // IV Fluid events
+    ivFluidOrdered(orderId, fluidName, rate, componentName) {
+        this.log(VERBS.ORDERED_IV_FLUID, OBJECT_TYPES.COMPONENT, {
+            objectId: String(orderId),
+            objectName: fluidName,
+            component: componentName,
+            context: { rate }
+        });
+    }
+
+    // Oxygen therapy events
+    oxygenStarted(orderId, oxygenType, flowRate, componentName) {
+        this.log(VERBS.STARTED_OXYGEN, OBJECT_TYPES.COMPONENT, {
+            objectId: String(orderId),
+            objectName: oxygenType,
+            component: componentName,
+            context: { flowRate }
+        });
+    }
+
+    oxygenStopped(orderId, oxygenType, componentName) {
+        this.log(VERBS.STOPPED_OXYGEN, OBJECT_TYPES.COMPONENT, {
+            objectId: String(orderId),
+            objectName: oxygenType,
+            component: componentName
+        });
+    }
+
+    // Nursing intervention events
+    nursingOrdered(orderId, interventionName, componentName) {
+        this.log(VERBS.ORDERED_NURSING, OBJECT_TYPES.COMPONENT, {
+            objectId: String(orderId),
+            objectName: interventionName,
+            component: componentName
+        });
+    }
+
+    // Treatment discontinued
+    treatmentDiscontinued(orderId, treatmentName, componentName, reason = null) {
+        this.log(VERBS.DISCONTINUED_TREATMENT, OBJECT_TYPES.COMPONENT, {
+            objectId: String(orderId),
+            objectName: treatmentName,
+            component: componentName,
+            context: { reason }
+        });
+    }
+
+    // Treatment effect lifecycle
+    treatmentEffectStarted(treatmentName, effects, componentName) {
+        this.log(VERBS.TREATMENT_EFFECT_STARTED, OBJECT_TYPES.COMPONENT, {
+            objectName: treatmentName,
+            component: componentName,
+            context: effects
+        });
+    }
+
+    treatmentEffectPeaked(treatmentName, effects, componentName) {
+        this.log(VERBS.TREATMENT_EFFECT_PEAKED, OBJECT_TYPES.COMPONENT, {
+            objectName: treatmentName,
+            component: componentName,
+            context: effects
+        });
+    }
+
+    treatmentEffectEnded(treatmentName, componentName) {
+        this.log(VERBS.TREATMENT_EFFECT_ENDED, OBJECT_TYPES.COMPONENT, {
+            objectName: treatmentName,
+            component: componentName
+        });
+    }
+
+    // Contraindication warning
+    contraindicatedTreatmentOrdered(orderId, treatmentName, feedback, componentName) {
+        this.log(VERBS.CONTRAINDICATED_TREATMENT_ORDERED, OBJECT_TYPES.COMPONENT, {
+            objectId: String(orderId),
+            objectName: treatmentName,
+            component: componentName,
+            context: { feedback },
+            severity: SEVERITY.CRITICAL
+        });
+    }
+
+    // Expected treatment tracking
+    expectedTreatmentGiven(treatmentName, points, componentName) {
+        this.log(VERBS.EXPECTED_TREATMENT_GIVEN, OBJECT_TYPES.COMPONENT, {
+            objectName: treatmentName,
+            component: componentName,
+            context: { points }
+        });
+    }
+
+    expectedTreatmentMissed(treatmentName, feedback, componentName) {
+        this.log(VERBS.EXPECTED_TREATMENT_MISSED, OBJECT_TYPES.COMPONENT, {
+            objectName: treatmentName,
+            component: componentName,
+            context: { feedback }
         });
     }
 

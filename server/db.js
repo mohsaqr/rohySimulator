@@ -150,6 +150,580 @@ Respond based on the patient information available. If specific family relations
     });
 }
 
+// Seed default treatment effects for pharmacokinetic simulation
+function seedDefaultTreatmentEffects() {
+    const defaultEffects = [
+        // Emergency Medications
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Epinephrine',
+            route: 'IV',
+            onset_minutes: 1,
+            peak_minutes: 3,
+            duration_minutes: 10,
+            hr_effect: 30,
+            bp_sys_effect: 25,
+            bp_dia_effect: 15,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 1,
+            base_dose: 1,
+            base_dose_unit: 'mg',
+            description: 'Sympathomimetic - increases HR and BP'
+        },
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Atropine',
+            route: 'IV',
+            onset_minutes: 1,
+            peak_minutes: 2,
+            duration_minutes: 30,
+            hr_effect: 25,
+            bp_sys_effect: 5,
+            bp_dia_effect: 0,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 1,
+            base_dose: 0.5,
+            base_dose_unit: 'mg',
+            description: 'Anticholinergic - increases HR'
+        },
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Adenosine',
+            route: 'IV',
+            onset_minutes: 0.1,
+            peak_minutes: 0.3,
+            duration_minutes: 0.5,
+            hr_effect: -60,
+            bp_sys_effect: -10,
+            bp_dia_effect: -5,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 0,
+            description: 'Antiarrhythmic - causes transient AV block'
+        },
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Amiodarone',
+            route: 'IV',
+            onset_minutes: 5,
+            peak_minutes: 20,
+            duration_minutes: 240,
+            hr_effect: -15,
+            bp_sys_effect: -10,
+            bp_dia_effect: -5,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 1,
+            base_dose: 150,
+            base_dose_unit: 'mg',
+            description: 'Antiarrhythmic - slows HR, mild hypotension'
+        },
+        // Beta Blockers
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Metoprolol',
+            route: 'IV',
+            onset_minutes: 2,
+            peak_minutes: 10,
+            duration_minutes: 60,
+            hr_effect: -20,
+            bp_sys_effect: -15,
+            bp_dia_effect: -10,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 1,
+            base_dose: 5,
+            base_dose_unit: 'mg',
+            description: 'Beta blocker - decreases HR and BP'
+        },
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Esmolol',
+            route: 'IV',
+            onset_minutes: 1,
+            peak_minutes: 5,
+            duration_minutes: 15,
+            hr_effect: -25,
+            bp_sys_effect: -15,
+            bp_dia_effect: -10,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 1,
+            base_dose: 500,
+            base_dose_unit: 'mcg/kg',
+            description: 'Short-acting beta blocker'
+        },
+        // Vasopressors
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Norepinephrine',
+            route: 'IV',
+            onset_minutes: 1,
+            peak_minutes: 3,
+            duration_minutes: 5,
+            hr_effect: 5,
+            bp_sys_effect: 30,
+            bp_dia_effect: 20,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 1,
+            base_dose: 0.1,
+            base_dose_unit: 'mcg/kg/min',
+            description: 'Alpha agonist - primarily increases BP'
+        },
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Dopamine',
+            route: 'IV',
+            onset_minutes: 2,
+            peak_minutes: 5,
+            duration_minutes: 10,
+            hr_effect: 15,
+            bp_sys_effect: 20,
+            bp_dia_effect: 10,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 1,
+            base_dose: 5,
+            base_dose_unit: 'mcg/kg/min',
+            description: 'Dose-dependent effects on HR and BP'
+        },
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Vasopressin',
+            route: 'IV',
+            onset_minutes: 1,
+            peak_minutes: 5,
+            duration_minutes: 30,
+            hr_effect: 0,
+            bp_sys_effect: 20,
+            bp_dia_effect: 15,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 0,
+            description: 'Non-catecholamine vasopressor'
+        },
+        // Antihypertensives
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Labetalol',
+            route: 'IV',
+            onset_minutes: 2,
+            peak_minutes: 10,
+            duration_minutes: 180,
+            hr_effect: -10,
+            bp_sys_effect: -25,
+            bp_dia_effect: -15,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 1,
+            base_dose: 20,
+            base_dose_unit: 'mg',
+            description: 'Alpha/beta blocker - reduces BP and HR'
+        },
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Hydralazine',
+            route: 'IV',
+            onset_minutes: 5,
+            peak_minutes: 20,
+            duration_minutes: 240,
+            hr_effect: 10,
+            bp_sys_effect: -25,
+            bp_dia_effect: -20,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 1,
+            base_dose: 10,
+            base_dose_unit: 'mg',
+            description: 'Vasodilator - reflex tachycardia'
+        },
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Nitroglycerin',
+            route: 'IV',
+            onset_minutes: 1,
+            peak_minutes: 3,
+            duration_minutes: 5,
+            hr_effect: 5,
+            bp_sys_effect: -20,
+            bp_dia_effect: -10,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 1,
+            base_dose: 50,
+            base_dose_unit: 'mcg/min',
+            description: 'Venodilator - reduces preload'
+        },
+        // Sedatives/Analgesics
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Morphine',
+            route: 'IV',
+            onset_minutes: 3,
+            peak_minutes: 15,
+            duration_minutes: 240,
+            hr_effect: -5,
+            bp_sys_effect: -10,
+            bp_dia_effect: -5,
+            rr_effect: -4,
+            spo2_effect: -2,
+            dose_dependent: 1,
+            base_dose: 2,
+            base_dose_unit: 'mg',
+            description: 'Opioid - respiratory depression, mild hypotension'
+        },
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Fentanyl',
+            route: 'IV',
+            onset_minutes: 1,
+            peak_minutes: 5,
+            duration_minutes: 60,
+            hr_effect: -5,
+            bp_sys_effect: -5,
+            bp_dia_effect: -5,
+            rr_effect: -4,
+            spo2_effect: -2,
+            dose_dependent: 1,
+            base_dose: 50,
+            base_dose_unit: 'mcg',
+            description: 'Potent opioid - respiratory depression'
+        },
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Midazolam',
+            route: 'IV',
+            onset_minutes: 2,
+            peak_minutes: 5,
+            duration_minutes: 60,
+            hr_effect: 0,
+            bp_sys_effect: -10,
+            bp_dia_effect: -5,
+            rr_effect: -3,
+            spo2_effect: -2,
+            dose_dependent: 1,
+            base_dose: 2,
+            base_dose_unit: 'mg',
+            description: 'Benzodiazepine - sedation, respiratory depression'
+        },
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Propofol',
+            route: 'IV',
+            onset_minutes: 0.5,
+            peak_minutes: 1,
+            duration_minutes: 10,
+            hr_effect: 0,
+            bp_sys_effect: -20,
+            bp_dia_effect: -15,
+            rr_effect: -5,
+            spo2_effect: -3,
+            dose_dependent: 1,
+            base_dose: 1,
+            base_dose_unit: 'mg/kg',
+            description: 'Hypnotic - significant hypotension'
+        },
+        // Diuretics
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Furosemide',
+            route: 'IV',
+            onset_minutes: 5,
+            peak_minutes: 30,
+            duration_minutes: 120,
+            hr_effect: 0,
+            bp_sys_effect: -10,
+            bp_dia_effect: -5,
+            rr_effect: 0,
+            spo2_effect: 2,
+            dose_dependent: 1,
+            base_dose: 40,
+            base_dose_unit: 'mg',
+            description: 'Loop diuretic - reduces preload'
+        },
+        // Bronchodilators
+        {
+            treatment_type: 'medication',
+            treatment_name: 'Albuterol',
+            route: 'inhaled',
+            onset_minutes: 5,
+            peak_minutes: 30,
+            duration_minutes: 240,
+            hr_effect: 10,
+            bp_sys_effect: 0,
+            bp_dia_effect: 0,
+            rr_effect: -2,
+            spo2_effect: 3,
+            dose_dependent: 0,
+            description: 'Beta-2 agonist - bronchodilation, mild tachycardia'
+        },
+        // IV Fluids
+        {
+            treatment_type: 'iv_fluid',
+            treatment_name: 'Normal Saline 500ml Bolus',
+            route: 'IV',
+            onset_minutes: 5,
+            peak_minutes: 20,
+            duration_minutes: 60,
+            hr_effect: -5,
+            bp_sys_effect: 10,
+            bp_dia_effect: 5,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 0,
+            description: 'Crystalloid - volume expansion'
+        },
+        {
+            treatment_type: 'iv_fluid',
+            treatment_name: 'Normal Saline 1000ml Bolus',
+            route: 'IV',
+            onset_minutes: 10,
+            peak_minutes: 30,
+            duration_minutes: 90,
+            hr_effect: -10,
+            bp_sys_effect: 15,
+            bp_dia_effect: 8,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 0,
+            description: 'Crystalloid - significant volume expansion'
+        },
+        {
+            treatment_type: 'iv_fluid',
+            treatment_name: 'Lactated Ringers 500ml Bolus',
+            route: 'IV',
+            onset_minutes: 5,
+            peak_minutes: 20,
+            duration_minutes: 60,
+            hr_effect: -5,
+            bp_sys_effect: 10,
+            bp_dia_effect: 5,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 0,
+            description: 'Balanced crystalloid - volume expansion'
+        },
+        {
+            treatment_type: 'iv_fluid',
+            treatment_name: 'D5W 500ml',
+            route: 'IV',
+            onset_minutes: 10,
+            peak_minutes: 30,
+            duration_minutes: 60,
+            hr_effect: 0,
+            bp_sys_effect: 0,
+            bp_dia_effect: 0,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 0,
+            description: 'Dextrose water - free water replacement'
+        },
+        {
+            treatment_type: 'iv_fluid',
+            treatment_name: 'Albumin 5% 250ml',
+            route: 'IV',
+            onset_minutes: 5,
+            peak_minutes: 15,
+            duration_minutes: 120,
+            hr_effect: -5,
+            bp_sys_effect: 12,
+            bp_dia_effect: 8,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 0,
+            description: 'Colloid - oncotic pressure support'
+        },
+        // Oxygen Therapy
+        {
+            treatment_type: 'oxygen',
+            treatment_name: 'Nasal Cannula 2L/min',
+            route: 'inhaled',
+            onset_minutes: 2,
+            peak_minutes: 5,
+            duration_minutes: -1,
+            hr_effect: 0,
+            bp_sys_effect: 0,
+            bp_dia_effect: 0,
+            rr_effect: 0,
+            spo2_effect: 4,
+            dose_dependent: 0,
+            description: 'FiO2 ~28%'
+        },
+        {
+            treatment_type: 'oxygen',
+            treatment_name: 'Nasal Cannula 4L/min',
+            route: 'inhaled',
+            onset_minutes: 2,
+            peak_minutes: 5,
+            duration_minutes: -1,
+            hr_effect: 0,
+            bp_sys_effect: 0,
+            bp_dia_effect: 0,
+            rr_effect: 0,
+            spo2_effect: 8,
+            dose_dependent: 0,
+            description: 'FiO2 ~36%'
+        },
+        {
+            treatment_type: 'oxygen',
+            treatment_name: 'Nasal Cannula 6L/min',
+            route: 'inhaled',
+            onset_minutes: 2,
+            peak_minutes: 5,
+            duration_minutes: -1,
+            hr_effect: 0,
+            bp_sys_effect: 0,
+            bp_dia_effect: 0,
+            rr_effect: 0,
+            spo2_effect: 10,
+            dose_dependent: 0,
+            description: 'FiO2 ~44%'
+        },
+        {
+            treatment_type: 'oxygen',
+            treatment_name: 'Simple Face Mask 8L/min',
+            route: 'inhaled',
+            onset_minutes: 1,
+            peak_minutes: 3,
+            duration_minutes: -1,
+            hr_effect: 0,
+            bp_sys_effect: 0,
+            bp_dia_effect: 0,
+            rr_effect: 0,
+            spo2_effect: 12,
+            dose_dependent: 0,
+            description: 'FiO2 ~50-60%'
+        },
+        {
+            treatment_type: 'oxygen',
+            treatment_name: 'Non-Rebreather Mask 15L/min',
+            route: 'inhaled',
+            onset_minutes: 1,
+            peak_minutes: 3,
+            duration_minutes: -1,
+            hr_effect: 0,
+            bp_sys_effect: 0,
+            bp_dia_effect: 0,
+            rr_effect: 0,
+            spo2_effect: 15,
+            dose_dependent: 0,
+            description: 'FiO2 ~80-100%'
+        },
+        // Nursing Interventions
+        {
+            treatment_type: 'nursing',
+            treatment_name: 'Trendelenburg Position',
+            route: 'position',
+            onset_minutes: 1,
+            peak_minutes: 3,
+            duration_minutes: -1,
+            hr_effect: -5,
+            bp_sys_effect: 10,
+            bp_dia_effect: 5,
+            rr_effect: 0,
+            spo2_effect: -1,
+            dose_dependent: 0,
+            description: 'Improves venous return, may compromise breathing'
+        },
+        {
+            treatment_type: 'nursing',
+            treatment_name: 'Fowler Position (45°)',
+            route: 'position',
+            onset_minutes: 1,
+            peak_minutes: 2,
+            duration_minutes: -1,
+            hr_effect: 5,
+            bp_sys_effect: -5,
+            bp_dia_effect: -3,
+            rr_effect: -2,
+            spo2_effect: 2,
+            dose_dependent: 0,
+            description: 'Improves breathing, reduces preload'
+        },
+        {
+            treatment_type: 'nursing',
+            treatment_name: 'High Fowler Position (90°)',
+            route: 'position',
+            onset_minutes: 1,
+            peak_minutes: 2,
+            duration_minutes: -1,
+            hr_effect: 8,
+            bp_sys_effect: -8,
+            bp_dia_effect: -5,
+            rr_effect: -3,
+            spo2_effect: 3,
+            dose_dependent: 0,
+            description: 'Maximum breathing comfort, reduces preload'
+        },
+        {
+            treatment_type: 'nursing',
+            treatment_name: 'Supine Position',
+            route: 'position',
+            onset_minutes: 1,
+            peak_minutes: 2,
+            duration_minutes: -1,
+            hr_effect: 0,
+            bp_sys_effect: 0,
+            bp_dia_effect: 0,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 0,
+            description: 'Neutral position'
+        },
+        {
+            treatment_type: 'nursing',
+            treatment_name: 'Left Lateral Position',
+            route: 'position',
+            onset_minutes: 1,
+            peak_minutes: 2,
+            duration_minutes: -1,
+            hr_effect: 0,
+            bp_sys_effect: 5,
+            bp_dia_effect: 3,
+            rr_effect: 0,
+            spo2_effect: 0,
+            dose_dependent: 0,
+            description: 'Improves cardiac output in pregnancy'
+        }
+    ];
+
+    const stmt = db.prepare(`
+        INSERT OR IGNORE INTO treatment_effects
+        (treatment_type, treatment_name, route, onset_minutes, peak_minutes, duration_minutes,
+         hr_effect, bp_sys_effect, bp_dia_effect, rr_effect, spo2_effect, temp_effect,
+         dose_dependent, base_dose, base_dose_unit, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    defaultEffects.forEach(effect => {
+        stmt.run(
+            effect.treatment_type,
+            effect.treatment_name,
+            effect.route || null,
+            effect.onset_minutes,
+            effect.peak_minutes,
+            effect.duration_minutes,
+            effect.hr_effect || 0,
+            effect.bp_sys_effect || 0,
+            effect.bp_dia_effect || 0,
+            effect.rr_effect || 0,
+            effect.spo2_effect || 0,
+            effect.temp_effect || 0,
+            effect.dose_dependent || 0,
+            effect.base_dose || null,
+            effect.base_dose_unit || null,
+            effect.description || null
+        );
+    });
+
+    stmt.finalize(() => {
+        console.log('Default treatment effects seeded.');
+    });
+}
+
 function initDb() {
     db.serialize(() => {
     // 1. Users Table - Enhanced with audit fields
@@ -1482,6 +2056,127 @@ function initDb() {
         db.run(`CREATE INDEX IF NOT EXISTS idx_agent_conv_session ON agent_conversations(session_id, agent_type)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_agent_state_session ON agent_session_state(session_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_team_log_session ON team_communications_log(session_id)`);
+
+        // ==================== TREATMENT MODULE TABLES ====================
+
+        // Treatment Orders - Track all treatment orders per session
+        db.run(`CREATE TABLE IF NOT EXISTS treatment_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            treatment_type TEXT NOT NULL CHECK(treatment_type IN ('medication', 'iv_fluid', 'oxygen', 'nursing')),
+            medication_id INTEGER,
+            treatment_item TEXT NOT NULL,
+            dose TEXT,
+            dose_value REAL,
+            dose_unit TEXT,
+            route TEXT,
+            frequency TEXT,
+            rate TEXT,
+            rate_value REAL,
+            rate_unit TEXT,
+            duration_minutes INTEGER,
+            urgency TEXT CHECK(urgency IN ('stat', 'routine', 'prn')) DEFAULT 'routine',
+            is_high_alert BOOLEAN DEFAULT 0,
+            ordered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            administered_at DATETIME,
+            completed_at DATETIME,
+            discontinued_at DATETIME,
+            status TEXT CHECK(status IN ('ordered', 'administered', 'in_progress', 'completed', 'discontinued', 'held')) DEFAULT 'ordered',
+            notes TEXT,
+            feedback TEXT,
+            points_awarded INTEGER DEFAULT 0,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+            FOREIGN KEY(medication_id) REFERENCES medications(id)
+        )`);
+
+        // Treatment Effects - Define how treatments affect vitals (master data)
+        db.run(`CREATE TABLE IF NOT EXISTS treatment_effects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            medication_id INTEGER,
+            treatment_type TEXT NOT NULL CHECK(treatment_type IN ('medication', 'iv_fluid', 'oxygen', 'nursing')),
+            treatment_name TEXT NOT NULL,
+            route TEXT,
+            onset_minutes REAL NOT NULL DEFAULT 5,
+            peak_minutes REAL NOT NULL DEFAULT 15,
+            duration_minutes REAL NOT NULL DEFAULT 60,
+            hr_effect INTEGER DEFAULT 0,
+            bp_sys_effect INTEGER DEFAULT 0,
+            bp_dia_effect INTEGER DEFAULT 0,
+            rr_effect INTEGER DEFAULT 0,
+            spo2_effect INTEGER DEFAULT 0,
+            temp_effect REAL DEFAULT 0,
+            etco2_effect INTEGER DEFAULT 0,
+            dose_dependent BOOLEAN DEFAULT 0,
+            base_dose REAL,
+            base_dose_unit TEXT,
+            max_effect_multiplier REAL DEFAULT 2.0,
+            description TEXT,
+            is_active BOOLEAN DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(treatment_name, route),
+            FOREIGN KEY(medication_id) REFERENCES medications(id)
+        )`);
+
+        // Active Treatments - Track treatment effects in real-time per session
+        db.run(`CREATE TABLE IF NOT EXISTS active_treatments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            treatment_order_id INTEGER NOT NULL,
+            effect_id INTEGER,
+            started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            phase TEXT CHECK(phase IN ('onset', 'peak', 'decline', 'expired')) DEFAULT 'onset',
+            current_effect_strength REAL DEFAULT 0,
+            dose_multiplier REAL DEFAULT 1.0,
+            peak_hr_effect INTEGER DEFAULT 0,
+            peak_bp_sys_effect INTEGER DEFAULT 0,
+            peak_bp_dia_effect INTEGER DEFAULT 0,
+            peak_rr_effect INTEGER DEFAULT 0,
+            peak_spo2_effect INTEGER DEFAULT 0,
+            peak_temp_effect REAL DEFAULT 0,
+            peak_etco2_effect INTEGER DEFAULT 0,
+            expires_at DATETIME,
+            is_continuous BOOLEAN DEFAULT 0,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+            FOREIGN KEY(treatment_order_id) REFERENCES treatment_orders(id) ON DELETE CASCADE,
+            FOREIGN KEY(effect_id) REFERENCES treatment_effects(id)
+        )`);
+
+        // Case Treatments - Per-case treatment configuration
+        db.run(`CREATE TABLE IF NOT EXISTS case_treatments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id INTEGER NOT NULL,
+            treatment_type TEXT NOT NULL CHECK(treatment_type IN ('medication', 'iv_fluid', 'oxygen', 'nursing')),
+            medication_id INTEGER,
+            treatment_name TEXT NOT NULL,
+            is_available BOOLEAN DEFAULT 1,
+            is_expected BOOLEAN DEFAULT 0,
+            is_contraindicated BOOLEAN DEFAULT 0,
+            points_if_ordered INTEGER DEFAULT 0,
+            feedback_if_ordered TEXT,
+            feedback_if_missed TEXT,
+            custom_effect_override JSON,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE CASCADE,
+            FOREIGN KEY(medication_id) REFERENCES medications(id)
+        )`);
+
+        // Treatment indexes
+        db.run(`CREATE INDEX IF NOT EXISTS idx_treatment_orders_session ON treatment_orders(session_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_treatment_orders_status ON treatment_orders(status)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_treatment_orders_type ON treatment_orders(treatment_type)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_treatment_effects_type ON treatment_effects(treatment_type)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_treatment_effects_medication ON treatment_effects(medication_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_active_treatments_session ON active_treatments(session_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_active_treatments_order ON active_treatments(treatment_order_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_case_treatments_case ON case_treatments(case_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_case_treatments_type ON case_treatments(treatment_type)`, [], function(err) {
+            if (err) {
+                console.error('Error creating treatment indexes:', err);
+            }
+            // ==================== SEED DEFAULT TREATMENT EFFECTS ====================
+            // Seed after indexes are created to ensure tables exist
+            seedDefaultTreatmentEffects();
+        });
 
         // ==================== SEED DEFAULT AGENT PERSONAS ====================
         seedDefaultAgents();

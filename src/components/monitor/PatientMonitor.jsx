@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Heart, Activity, Wind, Thermometer, Bell, Settings, Play, Pause, AlertCircle, Menu, X, Monitor, User, FileJson, FastForward, Save, Download, Upload, BellOff, Volume2, VolumeX, Pencil } from 'lucide-react';
+import { Heart, Activity, Wind, Thermometer, Bell, Settings, Play, Pause, AlertCircle, Menu, X, Monitor, User, FileJson, FastForward, Save, Download, Upload, BellOff, Volume2, VolumeX, Pencil, Pill } from 'lucide-react';
 import defaultSettings from '../../settings.json';
 import { useEventLog } from '../../hooks/useEventLog';
 import { useAlarms } from '../../hooks/useAlarms';
+import { useTreatmentEffects } from '../../hooks/useTreatmentEffects';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { getAudioContext, resumeAudioContext } from '../../utils/alarmAudio';
@@ -326,23 +327,59 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
 
    // Physics params ref to avoid dependency loops in animation
    const simulationParams = useRef(params);
-   
+
    // Event Logging Hook
    const eventLog = useEventLog(sessionId);
-   
+
+   // Treatment Effects Hook - Real-time pharmacokinetic effects
+   const treatmentEffects = useTreatmentEffects(sessionId, {
+      pollInterval: 5000,
+      updateInterval: 1000,
+      enabled: !!sessionId
+   });
+
    // Alarm System Hook
    const alarmSystem = useAlarms(displayVitals, sessionId, audioContextRef.current);
-   
+
    // Previous vitals for change detection
    const prevVitalsRef = useRef(displayVitals);
 
-   // Sync params changes to simulation ref immediately
+   // Sync params changes to simulation ref immediately (including treatment effects)
    useEffect(() => {
       console.log('[PatientMonitor] Params changed, syncing:', params.hr, 'activeScenario:', activeScenario);
       simulationParams.current = params;
+
+      // Apply treatment effects to base params
+      const treatmentAggregates = treatmentEffects.aggregate || {};
+      const vitalsWithEffects = {
+         hr: Math.max(20, Math.min(250, params.hr + (treatmentAggregates.hr || 0))),
+         spo2: Math.max(50, Math.min(100, params.spo2 + (treatmentAggregates.spo2 || 0))),
+         rr: Math.max(4, Math.min(60, params.rr + (treatmentAggregates.rr || 0))),
+         bpSys: Math.max(40, Math.min(300, params.bpSys + (treatmentAggregates.bp_sys || 0))),
+         bpDia: Math.max(20, Math.min(200, params.bpDia + (treatmentAggregates.bp_dia || 0))),
+         temp: params.temp + (treatmentAggregates.temp || 0),
+         etco2: params.etco2 + (treatmentAggregates.etco2 || 0)
+      };
+
       // Always sync displayVitals when params change (scenario will override via its own loop)
-      setDisplayVitals(params);
-   }, [params]);
+      setDisplayVitals(vitalsWithEffects);
+   }, [params, treatmentEffects.aggregate]);
+
+   // Update displayVitals when treatment effects change (separate from params sync)
+   useEffect(() => {
+      if (!treatmentEffects.count) return; // No active treatments
+
+      const treatmentAggregates = treatmentEffects.aggregate || {};
+      setDisplayVitals(prev => ({
+         hr: Math.max(20, Math.min(250, simulationParams.current.hr + (treatmentAggregates.hr || 0))),
+         spo2: Math.max(50, Math.min(100, simulationParams.current.spo2 + (treatmentAggregates.spo2 || 0))),
+         rr: Math.max(4, Math.min(60, simulationParams.current.rr + (treatmentAggregates.rr || 0))),
+         bpSys: Math.max(40, Math.min(300, simulationParams.current.bpSys + (treatmentAggregates.bp_sys || 0))),
+         bpDia: Math.max(20, Math.min(200, simulationParams.current.bpDia + (treatmentAggregates.bp_dia || 0))),
+         temp: simulationParams.current.temp + (treatmentAggregates.temp || 0),
+         etco2: (simulationParams.current.etco2 || 38) + (treatmentAggregates.etco2 || 0)
+      }));
+   }, [treatmentEffects.aggregate, treatmentEffects.count]);
    
    // Log vital changes
    useEffect(() => {
@@ -1226,6 +1263,40 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                      <div className="text-neutral-500 text-xs">mmHg</div>
                   </div>
                </div>
+
+               {/* Treatment Effects Indicator */}
+               {treatmentEffects.count > 0 && (
+                  <div className="p-3 bg-pink-900/20 border-t border-pink-800/50">
+                     <div className="flex items-center gap-2 mb-2">
+                        <Pill className="w-4 h-4 text-pink-400" />
+                        <span className="text-xs font-bold text-pink-300">
+                           {treatmentEffects.count} Active Treatment{treatmentEffects.count > 1 ? 's' : ''}
+                        </span>
+                     </div>
+                     <div className="grid grid-cols-3 gap-1 text-xs">
+                        {treatmentEffects.aggregate.hr !== 0 && (
+                           <div className={`${treatmentEffects.aggregate.hr > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              HR {treatmentEffects.aggregate.hr > 0 ? '+' : ''}{treatmentEffects.aggregate.hr}
+                           </div>
+                        )}
+                        {treatmentEffects.aggregate.bp_sys !== 0 && (
+                           <div className={`${treatmentEffects.aggregate.bp_sys > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              BP {treatmentEffects.aggregate.bp_sys > 0 ? '+' : ''}{treatmentEffects.aggregate.bp_sys}
+                           </div>
+                        )}
+                        {treatmentEffects.aggregate.spo2 !== 0 && (
+                           <div className={`${treatmentEffects.aggregate.spo2 > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              SpO2 {treatmentEffects.aggregate.spo2 > 0 ? '+' : ''}{treatmentEffects.aggregate.spo2}%
+                           </div>
+                        )}
+                        {treatmentEffects.aggregate.rr !== 0 && (
+                           <div className={`${treatmentEffects.aggregate.rr > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              RR {treatmentEffects.aggregate.rr > 0 ? '+' : ''}{treatmentEffects.aggregate.rr}
+                           </div>
+                        )}
+                     </div>
+                  </div>
+               )}
 
             </div>
          </div>
