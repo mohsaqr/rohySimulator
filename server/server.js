@@ -44,12 +44,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Routes
-process.env.NODE_ENV == 'production' && app.get('/', (req,res)=>res.redirect("/rohy"));
-
-app.use((process.env.NODE_ENV == 'production'? '/rohy/':'/') + 'api', apiRoutes);
+app.use('/api', apiRoutes);
 
 // Health Check
-app.get(process.env.NODE_ENV == 'production'? '/rohy/':'/', (req, res) => {
+app.get('/', (req, res) => {
     //res.send('Virtual Patient Platform Backend is Running');
     const frontendPath = path.join(__dirname, "..", "frontend");
 
@@ -59,7 +57,7 @@ app.get(process.env.NODE_ENV == 'production'? '/rohy/':'/', (req, res) => {
     console.error("Frontend folder does NOT exist but server is running", frontendPath);
     }
 });
-app.use(process.env.NODE_ENV == 'production'? '/rohy/':'/', express.static(path.join(__dirname, "..", "frontend")));
+app.use('/', express.static(path.join(__dirname, "..", "frontend")));
 
 // Start server with port fallback
 function startServer(port, maxRetries = 10) {
