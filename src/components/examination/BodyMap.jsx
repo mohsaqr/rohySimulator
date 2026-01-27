@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import defaultRegions from '../../utils/defaultRegions';
-import { apiUrl } from '../../config/api';
+import { apiUrl, baseUrl } from '../../config/api';
 // Storage key - must match BodyMapDebug
 const STORAGE_KEY = 'rohy_bodymap_regions';
 

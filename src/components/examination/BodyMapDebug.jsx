@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AuthService } from '../../services/authService';
 import DEFAULT_REGIONS from '../../utils/defaultRegions';
-import { apiUrl } from '../../config/api';
+import { apiUrl, baseUrl } from '../../config/api';
  
 // Storage key for localStorage
 const STORAGE_KEY = 'rohy_bodymap_regions';
