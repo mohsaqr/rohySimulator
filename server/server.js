@@ -57,6 +57,8 @@ app.get('/', (req, res) => {
     console.error("Frontend folder does NOT exist but server is running", frontendPath);
     }
 });
+
+app.use('/uploads', express.static(path.join(__dirname, "..", "public","uploads")));
 app.use('/', express.static(path.join(__dirname, "..", "frontend")));
 
 // Start server with port fallback

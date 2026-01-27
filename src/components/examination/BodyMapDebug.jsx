@@ -54,9 +54,9 @@ export default function BodyMapDebug({ gender = 'male', view = 'anterior' }) {
 
     const getImageSrc = () => {
         if (gender === 'female') {
-            return view === 'posterior' ? '/woman-back.png' : '/woman-front.png';
+            return baseUrl(view === 'posterior' ? '/woman-back.png' : '/woman-front.png');
         }
-        return view === 'posterior' ? '/man-back.png' : '/man-front.png';
+        return baseUrl(view === 'posterior' ? '/man-back.png' : '/man-front.png');
     };
 
     const getSvgCoords = (e) => {

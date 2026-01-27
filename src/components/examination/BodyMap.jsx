@@ -70,7 +70,7 @@ export default function BodyMap({
     };
 
     const currentRegions = getRegionsForView();
-    const getImageSrc = () => { if (gender === 'female') return view === 'posterior' ? '/woman-back.png' : '/woman-front.png'; return view === 'posterior' ? '/man-back.png' : '/man-front.png'; }; const imageSrc = getImageSrc();
+    const getImageSrc = () => { if (gender === 'female') return baseUrl(view === 'posterior' ? '/woman-back.png' : '/woman-front.png'); return baseUrl(view === 'posterior' ? '/man-back.png' : '/man-front.png'); }; const imageSrc = getImageSrc();
     // Convert points array to SVG polygon points string
     const pointsToString = (points) => {
         return points.map(([x, y]) => `${x},${y}`).join(' ');

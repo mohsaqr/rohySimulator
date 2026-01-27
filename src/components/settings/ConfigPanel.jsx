@@ -741,7 +741,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium">Male Front</label>
                                             <div className="flex gap-2">
-                                                <img src="/man-front.png" alt="Male front" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
+                                                <img src="./man-front.png" alt="Male front" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
                                                 <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-purple-500 transition-colors">
                                                     <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
                                                         const file = e.target.files?.[0];
@@ -766,7 +766,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium">Male Back</label>
                                             <div className="flex gap-2">
-                                                <img src="/man-back.png" alt="Male back" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
+                                                <img src="./man-back.png" alt="Male back" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
                                                 <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-purple-500 transition-colors">
                                                     <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
                                                         const file = e.target.files?.[0];
@@ -791,7 +791,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium">Female Front</label>
                                             <div className="flex gap-2">
-                                                <img src="/woman-front.png" alt="Female front" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
+                                                <img src="./woman-front.png" alt="Female front" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
                                                 <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-purple-500 transition-colors">
                                                     <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
                                                         const file = e.target.files?.[0];
@@ -816,7 +816,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium">Female Back</label>
                                             <div className="flex gap-2">
-                                                <img src="/woman-back.png" alt="Female back" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
+                                                <img src="./woman-back.png" alt="Female back" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
                                                 <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-purple-500 transition-colors">
                                                     <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
                                                         const file = e.target.files?.[0];
