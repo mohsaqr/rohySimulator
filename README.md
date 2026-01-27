@@ -191,7 +191,7 @@ npm run dev
 
 ### Production
 ```bash
-npm run build
+NODE_ENV=production npm run build
 NODE_ENV=production node server/server.js
 ```
 
