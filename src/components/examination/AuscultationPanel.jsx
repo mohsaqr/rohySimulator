@@ -10,8 +10,8 @@ import EventLogger from '../../services/eventLogger';
 
 // Default audio files for normal findings
 const DEFAULT_SOUNDS = {
-    heart: '/sounds/normal-heart.mp3',
-    lung: '/sounds/normal-lung.mp3'
+    heart: './sounds/normal-heart.mp3',
+    lung: './sounds/normal-lung.mp3'
 };
 
 // Auscultation points on the chest (percentage coordinates)
