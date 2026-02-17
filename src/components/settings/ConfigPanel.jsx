@@ -16,6 +16,7 @@ import LabTestManager from './LabTestManager';
 import MedicationManager from './MedicationManager';
 import AgentTemplateManager from './AgentTemplateManager';
 import CaseTreatmentConfig from './CaseTreatmentConfig';
+import TnaDashboard from '../analytics/tna/TnaDashboard';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
@@ -308,6 +309,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                 className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'agents' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                             >
                                 <Users className="w-4 h-4" /> Agent Personas
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('tna')}
+                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'tna' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                            >
+                                <Activity className="w-4 h-4" /> TNA Analytics
                             </button>
                         </>
                     )}
@@ -847,6 +854,11 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                     {/* --- AGENT PERSONAS TAB (Admin Only) --- */}
                     {activeTab === 'agents' && isAdmin() && (
                         <AgentTemplateManager />
+                    )}
+
+                    {/* --- TNA ANALYTICS TAB (Admin Only) --- */}
+                    {activeTab === 'tna' && isAdmin() && (
+                        <TnaDashboard />
                     )}
 
                 </div>

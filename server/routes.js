@@ -7543,4 +7543,196 @@ router.post('/sessions/:sessionId/team-communications', authenticateToken, async
     }
 });
 
+// ============================================
+// TNA (Transition Network Analysis) ENDPOINTS
+// ============================================
+
+const TNA_VERB_MERGE_MAP = {
+    // Navigation
+    'VIEWED': 'NAVIGATION',
+    'OPENED': 'NAVIGATION',
+    'CLOSED': 'NAVIGATION',
+    'NAVIGATED': 'NAVIGATION',
+    'SWITCHED_TAB': 'NAVIGATION',
+    'CLICKED': 'NAVIGATION',
+    'SELECTED': 'NAVIGATION',
+    'DESELECTED': 'NAVIGATION',
+    'TOGGLED': 'NAVIGATION',
+    'EXPANDED': 'NAVIGATION',
+    'COLLAPSED': 'NAVIGATION',
+    'SCROLLED': 'NAVIGATION',
+    // Lab/Investigation
+    'ORDERED_LAB': 'ORDERED_LAB',
+    'SEARCHED_LABS': 'ORDERED_LAB',
+    'FILTERED_LABS': 'ORDERED_LAB',
+    'CANCELLED_LAB': 'ORDERED_LAB',
+    // Lab results
+    'VIEWED_LAB_RESULT': 'VIEWED_LAB_RESULT',
+    'LAB_RESULT_READY': 'VIEWED_LAB_RESULT',
+    // Treatment
+    'ORDERED_MEDICATION': 'TREATMENT',
+    'ADMINISTERED_MEDICATION': 'TREATMENT',
+    'CANCELLED_MEDICATION': 'TREATMENT',
+    'ORDERED_TREATMENT': 'TREATMENT',
+    'PERFORMED_INTERVENTION': 'TREATMENT',
+    'ORDERED_IV_FLUID': 'TREATMENT',
+    'STARTED_OXYGEN': 'TREATMENT',
+    'STOPPED_OXYGEN': 'TREATMENT',
+    'ORDERED_NURSING': 'TREATMENT',
+    'DISCONTINUED_TREATMENT': 'TREATMENT',
+    'CONTRAINDICATED_TREATMENT_ORDERED': 'TREATMENT',
+    'EXPECTED_TREATMENT_GIVEN': 'TREATMENT',
+    'EXPECTED_TREATMENT_MISSED': 'TREATMENT',
+    // Examination
+    'PERFORMED_PHYSICAL_EXAM': 'EXAMINATION',
+    'OPENED_EXAM_PANEL': 'EXAMINATION',
+    'CLOSED_EXAM_PANEL': 'EXAMINATION',
+    // Communication
+    'SENT_MESSAGE': 'SENT_MESSAGE',
+    'RECEIVED_MESSAGE': 'RECEIVED_MESSAGE',
+    'COPIED_MESSAGE': 'SENT_MESSAGE',
+    'EDITED_MESSAGE': 'SENT_MESSAGE',
+    // Monitoring
+    'ADJUSTED_VITAL': 'MONITORING',
+    'VIEWED_TRENDS': 'MONITORING',
+    // Alarm response
+    'ACKNOWLEDGED_ALARM': 'ALARM_RESPONSE',
+    'SILENCED_ALARM': 'ALARM_RESPONSE',
+    'ALARM_TRIGGERED': 'ALARM_RESPONSE',
+    // Patient records
+    'VIEWED_PATIENT_SUMMARY': 'REVIEWED_RECORDS',
+    'VIEWED_HISTORY': 'REVIEWED_RECORDS',
+    'VIEWED_MEDICATIONS': 'REVIEWED_RECORDS',
+    'VIEWED_ALLERGIES': 'REVIEWED_RECORDS',
+    'VIEWED_PATIENT_INFO': 'REVIEWED_RECORDS',
+    'VIEWED_RECORDS': 'REVIEWED_RECORDS',
+    // System/config verbs excluded (mapped to null)
+    'STARTED_SESSION': null,
+    'ENDED_SESSION': null,
+    'RESUMED_SESSION': null,
+    'IDLE_TIMEOUT': null,
+    'CHANGED_SETTING': null,
+    'SAVED_SETTING': null,
+    'RESET_SETTING': null,
+    'LOADED_CASE': null,
+    'STARTED_SCENARIO': null,
+    'PAUSED_SCENARIO': null,
+    'RESUMED_SCENARIO': null,
+    'SUBMITTED': null,
+    'ANSWERED': null,
+    'ATTEMPTED': null,
+    'TREATMENT_EFFECT_STARTED': null,
+    'TREATMENT_EFFECT_PEAKED': null,
+    'TREATMENT_EFFECT_ENDED': null,
+};
+
+// GET /api/analytics/tna-sequences - Extract TNA sequences from learning events
+router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, (req, res) => {
+    const { case_id, start_date, end_date, min_verb_pct = '0.05' } = req.query;
+    const minPct = parseFloat(min_verb_pct) || 0.05;
+
+    let sql = `
+        SELECT user_id, verb, timestamp
+        FROM learning_events
+        WHERE 1=1
+    `;
+    const params = [];
+
+    if (case_id) {
+        sql += ` AND case_id = ?`;
+        params.push(case_id);
+    }
+    if (start_date) {
+        sql += ` AND timestamp >= ?`;
+        params.push(start_date);
+    }
+    if (end_date) {
+        sql += ` AND timestamp <= ?`;
+        params.push(end_date);
+    }
+
+    sql += ` ORDER BY user_id, timestamp ASC LIMIT 50000`;
+
+    db.all(sql, params, (err, rows) => {
+        if (err) {
+            console.error('TNA sequences query error:', err);
+            return res.status(500).json({ error: err.message });
+        }
+
+        if (!rows || rows.length === 0) {
+            return res.json({
+                sequences: [],
+                metadata: { totalUsers: 0, totalEvents: 0, uniqueVerbs: [], dateRange: { start: start_date || null, end: end_date || null } }
+            });
+        }
+
+        // Step 1: Apply verb merge map
+        const merged = [];
+        for (const row of rows) {
+            const mapped = TNA_VERB_MERGE_MAP.hasOwnProperty(row.verb)
+                ? TNA_VERB_MERGE_MAP[row.verb]
+                : row.verb; // Keep unmapped verbs as-is
+            if (mapped !== null) {
+                merged.push({ user_id: row.user_id, verb: mapped });
+            }
+        }
+
+        // Step 2: Count verb frequencies for rare-verb filtering
+        const verbCounts = Object.create(null);
+        for (const m of merged) {
+            verbCounts[m.verb] = (verbCounts[m.verb] || 0) + 1;
+        }
+        const totalMerged = merged.length;
+        const rareVerbs = new Set();
+        for (const [verb, count] of Object.entries(verbCounts)) {
+            if (count / totalMerged < minPct) {
+                rareVerbs.add(verb);
+            }
+        }
+
+        // Step 3: Replace rare verbs with OTHER, collapse consecutive duplicates
+        const processed = merged.map(m => ({
+            user_id: m.user_id,
+            verb: rareVerbs.has(m.verb) ? 'OTHER' : m.verb
+        }));
+
+        // Step 4: Group by user_id into sequences, collapse consecutive duplicates
+        const userSeqs = Object.create(null);
+        for (const p of processed) {
+            if (!userSeqs[p.user_id]) {
+                userSeqs[p.user_id] = [];
+            }
+            const seq = userSeqs[p.user_id];
+            // Collapse consecutive duplicates
+            if (seq.length === 0 || seq[seq.length - 1] !== p.verb) {
+                seq.push(p.verb);
+            }
+        }
+
+        // Step 5: Filter sequences with length < 2
+        const sequences = Object.values(userSeqs).filter(s => s.length >= 2);
+
+        // Collect unique verbs from final sequences
+        const uniqueVerbSet = new Set();
+        for (const seq of sequences) {
+            for (const v of seq) {
+                uniqueVerbSet.add(v);
+            }
+        }
+
+        res.json({
+            sequences,
+            metadata: {
+                totalUsers: sequences.length,
+                totalEvents: rows.length,
+                uniqueVerbs: Array.from(uniqueVerbSet).sort(),
+                dateRange: {
+                    start: start_date || (rows[0] ? rows[0].timestamp : null),
+                    end: end_date || (rows[rows.length - 1] ? rows[rows.length - 1].timestamp : null)
+                }
+            }
+        });
+    });
+});
+
 export default router;
