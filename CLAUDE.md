@@ -95,8 +95,20 @@ npm run client       # Vite dev server only
 - No state management library — React useState/useEffect/useContext only
 - No data fetching library — plain fetch with AuthService token
 
+## TNA Analytics Dashboard
+Located in `src/components/analytics/tna/`:
+- `tnaUtils.js` — `tna()`, `prune()`, `maxWeight()` pure computation functions
+- `tnaColors.js` — 9-color palette, `getNodeColor()`, edge/arrow color constants
+- `NetworkGraph.jsx` — Circular SVG network graph with donut nodes, Bezier edges, self-loops, polygon arrows, collapsible settings
+- `DistributionPlot.jsx` — SVG stacked bar chart (action proportions per timestep)
+- `FrequencyChart.jsx` — SVG horizontal bar chart (action frequency counts)
+- `TnaDashboard.jsx` — Container with filters, stats, data fetching, memoized TNA computation
+
+Backend: `GET /api/analytics/tna-sequences` in `server/routes.js` (admin-only). Merges 50+ raw verbs into 10 clinical labels via `TNA_VERB_MERGE_MAP`, filters rare verbs, collapses consecutive duplicates. Guide spec: `tnadepguide.md`.
+
 ## Important Notes
-- `server/routes.js` is very large (~7600 lines). Use grep/search to find sections, don't try to read it all.
+- `server/routes.js` is very large (~7700 lines). Use grep/search to find sections, don't try to read it all.
 - Vite proxies `/api` requests to `http://localhost:3000` in dev mode.
 - Production build uses `--base=/rohy/` for deployment under a subpath.
 - The `.env` file (`server/.env`) is required for JWT_SECRET. Copy from `.env.example`.
+- When adding new analytics visualizations, follow the TNA pattern: backend endpoint extracts/transforms data, frontend computes model in `useMemo`, SVG components render with `viewBox` + `width="100%"` for responsiveness.
