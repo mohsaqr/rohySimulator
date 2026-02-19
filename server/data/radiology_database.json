@@ -551,16 +551,6 @@
       "normal_interpretation": "1. Normal right heart pressures.\n2. No pulmonary hypertension.\n3. Normal cardiac output and index."
     },
     {
-      "id": "pericardiocentesis",
-      "name": "Pericardiocentesis",
-      "modality": "Cardiac",
-      "body_region": "Chest",
-      "turnaround_minutes": 30,
-      "common_indications": ["Pericardial effusion", "Cardiac tamponade", "Pericarditis with effusion"],
-      "normal_findings": "N/A - This is a therapeutic/diagnostic procedure. A normal pericardium would not require this procedure.",
-      "normal_interpretation": "N/A - Procedure performed for pericardial effusion drainage or diagnosis."
-    },
-    {
       "id": "ecg_12lead",
       "name": "12-Lead ECG",
       "modality": "Cardiac",
