@@ -2178,6 +2178,23 @@ function initDb() {
             seedDefaultTreatmentEffects();
         });
 
+        // ==================== EMOTION LOGS ====================
+        db.run(`CREATE TABLE IF NOT EXISTS emotion_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER,
+            user_id INTEGER,
+            case_id INTEGER,
+            emotion TEXT NOT NULL,
+            intensity INTEGER NOT NULL CHECK(intensity BETWEEN 1 AND 5),
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(session_id) REFERENCES sessions(id),
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(case_id) REFERENCES cases(id)
+        )`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_emotion_logs_session ON emotion_logs(session_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_emotion_logs_user ON emotion_logs(user_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_emotion_logs_timestamp ON emotion_logs(timestamp DESC)`);
+
         // ==================== SEED DEFAULT AGENT PERSONAS ====================
         seedDefaultAgents();
 

@@ -135,6 +135,9 @@ export const VERBS = {
     CORRECT_ANSWER: 'CORRECT_ANSWER',
     INCORRECT_ANSWER: 'INCORRECT_ANSWER',
 
+    // Emotion
+    EXPRESSED_EMOTION: 'EXPRESSED_EMOTION',
+
     // Errors and issues
     ERROR_OCCURRED: 'ERROR_OCCURRED',
     API_ERROR: 'API_ERROR',
@@ -235,6 +238,9 @@ const VERB_METADATA = {
     CORRECT_ANSWER: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.ASSESSMENT },
     INCORRECT_ANSWER: { severity: SEVERITY.INFO, category: CATEGORIES.ASSESSMENT },
 
+    // Emotion
+    EXPRESSED_EMOTION: { severity: SEVERITY.ACTION, category: CATEGORIES.COMMUNICATION },
+
     // Errors
     ERROR_OCCURRED: { severity: SEVERITY.CRITICAL, category: CATEGORIES.ERROR },
     API_ERROR: { severity: SEVERITY.CRITICAL, category: CATEGORIES.ERROR },
@@ -263,7 +269,8 @@ export const OBJECT_TYPES = {
     MEDICATION: 'medication',
     IV_FLUID: 'iv_fluid',
     OXYGEN_THERAPY: 'oxygen_therapy',
-    NURSING_INTERVENTION: 'nursing_intervention'
+    NURSING_INTERVENTION: 'nursing_intervention',
+    EMOTION: 'emotion'
 };
 
 // Component names for tracking
@@ -640,6 +647,16 @@ class EventLoggerService {
     messageCopied(componentName) {
         this.log(VERBS.COPIED_MESSAGE, OBJECT_TYPES.CHAT_MESSAGE, {
             component: componentName
+        });
+    }
+
+    // Emotion events
+    emotionExpressed(emotion, intensity, componentName) {
+        this.log(VERBS.EXPRESSED_EMOTION, OBJECT_TYPES.EMOTION, {
+            objectName: emotion,
+            component: componentName,
+            result: `Intensity: ${intensity}/5`,
+            context: { emotion, intensity }
         });
     }
 

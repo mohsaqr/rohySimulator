@@ -1646,7 +1646,9 @@ const LEARNING_VERBS = [
     // Scenario interactions
     'STARTED_SCENARIO', 'PAUSED_SCENARIO', 'RESUMED_SCENARIO',
     // Submissions
-    'SUBMITTED', 'ANSWERED', 'ATTEMPTED'
+    'SUBMITTED', 'ANSWERED', 'ATTEMPTED',
+    // Emotion
+    'EXPRESSED_EMOTION'
 ];
 
 // POST /api/learning-events - Log a learning event
@@ -7732,6 +7734,60 @@ router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, (req, re
                 }
             }
         });
+    });
+});
+
+// ============================================================
+// EMOTION LOGS
+// ============================================================
+
+// POST /api/emotion-logs - Log a doctor emotion during a session
+router.post('/emotion-logs', authenticateToken, (req, res) => {
+    const { session_id, case_id, emotion, intensity } = req.body;
+    const user_id = req.user.id;
+
+    if (!emotion || typeof emotion !== 'string' || !emotion.trim()) {
+        return res.status(400).json({ error: 'emotion is required' });
+    }
+
+    const intValue = parseInt(intensity);
+    if (isNaN(intValue) || intValue < 1 || intValue > 5) {
+        return res.status(400).json({ error: 'intensity must be an integer between 1 and 5' });
+    }
+
+    db.run(
+        `INSERT INTO emotion_logs (session_id, user_id, case_id, emotion, intensity) VALUES (?, ?, ?, ?, ?)`,
+        [session_id || null, user_id, case_id || null, emotion.trim(), intValue],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID });
+        }
+    );
+});
+
+// GET /api/emotion-logs - Retrieve all emotion logs (admin only)
+router.get('/emotion-logs', authenticateToken, requireAdmin, (req, res) => {
+    const sql = `
+        SELECT
+            el.id,
+            el.timestamp,
+            el.emotion,
+            el.intensity,
+            el.session_id,
+            el.case_id,
+            u.username,
+            u.name AS student_name,
+            u.email,
+            c.name AS case_name
+        FROM emotion_logs el
+        LEFT JOIN users u ON el.user_id = u.id
+        LEFT JOIN cases c ON el.case_id = c.id
+        ORDER BY el.timestamp DESC
+        LIMIT 2000
+    `;
+    db.all(sql, [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
     });
 });
 

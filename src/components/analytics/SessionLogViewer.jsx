@@ -4,7 +4,7 @@ import {
     MessageSquare, Bell, Settings, Eye, ChevronDown, ChevronRight,
     Play, Pause, CheckCircle, AlertCircle, X, RefreshCw, Clipboard,
     Calendar, Activity, MousePointer, ToggleLeft, BarChart3, AlertTriangle,
-    Info, Bug, Zap, TrendingUp, PieChart
+    Info, Bug, Zap, TrendingUp, PieChart, SmilePlus
 } from 'lucide-react';
 import { AuthService } from '../../services/authService';
 import { SEVERITY, CATEGORIES } from '../../services/eventLogger';
@@ -48,6 +48,7 @@ const VERB_ICONS = {
     LOADED_CASE: FileText,
     SAVED_CASE: FileText,
     EXPORTED_CASE: Download,
+    EXPRESSED_EMOTION: SmilePlus,
     STARTED_SCENARIO: Play,
     COMPLETED_SCENARIO: CheckCircle,
     ERROR_OCCURRED: AlertCircle,
@@ -92,6 +93,7 @@ const VERB_COLORS = {
     CLOSED: 'text-neutral-400 bg-neutral-800/50 border-neutral-700',
     SWITCHED_TAB: 'text-indigo-400 bg-indigo-900/30 border-indigo-700',
     LOADED_CASE: 'text-amber-400 bg-amber-900/30 border-amber-700',
+    EXPRESSED_EMOTION: 'text-pink-400 bg-pink-900/30 border-pink-700',
     DEFAULT: 'text-neutral-400 bg-neutral-800/50 border-neutral-700',
 };
 
