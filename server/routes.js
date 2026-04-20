@@ -1559,13 +1559,14 @@ function convertCompleteSessionToCSV(data) {
 // POST /api/events/batch - Log multiple events at once
 router.post('/events/batch', authenticateToken, (req, res) => {
     const { session_id, events } = req.body;
-    
+    const user_id = req.user.id;
+
     if (!session_id || !events || !Array.isArray(events)) {
         return res.status(400).json({ error: 'session_id and events array required' });
     }
 
-    const sql = `INSERT INTO event_log (session_id, event_type, description, vital_sign, old_value, new_value, timestamp)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO event_log (session_id, user_id, event_type, description, vital_sign, old_value, new_value, timestamp)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
 
     const stmt = db.prepare(sql);
     let inserted = 0;
@@ -1580,6 +1581,7 @@ router.post('/events/batch', authenticateToken, (req, res) => {
     events.forEach(event => {
         stmt.run(
             session_id,
+            user_id,
             event.event_type,
             event.description,
             event.vital_sign || null,
@@ -1612,9 +1614,17 @@ router.post('/events/batch', authenticateToken, (req, res) => {
 // GET /api/sessions/:id/events - Get all events for a session
 router.get('/sessions/:id/events', authenticateToken, (req, res) => {
     const sessionId = req.params.id;
-    
-    const sql = `SELECT * FROM event_log WHERE session_id = ? ORDER BY timestamp ASC`;
-    
+
+    const sql = `
+        SELECT el.id, el.session_id, el.event_type, el.description,
+               el.vital_sign, el.old_value, el.new_value, el.timestamp,
+               el.user_id, u.username AS user_name, u.email AS user_email
+        FROM event_log el
+        LEFT JOIN users u ON el.user_id = u.id
+        WHERE el.session_id = ?
+        ORDER BY el.timestamp ASC
+    `;
+
     db.all(sql, [sessionId], (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });
@@ -7782,6 +7792,131 @@ router.get('/emotion-logs', authenticateToken, requireAdmin, (req, res) => {
     db.all(sql, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
+    });
+});
+
+// ─── Reflection Questionnaire ────────────────────────────────────────────────
+
+// GET /api/export/questionnaire-responses - Export questionnaire responses as CSV (admin only)
+router.get('/export/questionnaire-responses', authenticateToken, requireAdmin, (req, res) => {
+    const { start_date, end_date } = req.query;
+
+    let sql = `
+        SELECT
+            qr.id,
+            qr.session_id,
+            qr.user_id,
+            u.username,
+            u.email,
+            qr.case_id,
+            c.name AS case_name,
+            qr.submitted_at,
+            qr.responses
+        FROM questionnaire_responses qr
+        LEFT JOIN users u ON qr.user_id = u.id
+        LEFT JOIN cases c ON qr.case_id = c.id
+        WHERE 1=1
+    `;
+    const params = [];
+    if (start_date) { sql += ' AND qr.submitted_at >= ?'; params.push(start_date); }
+    if (end_date)   { sql += ' AND qr.submitted_at <= ?'; params.push(end_date); }
+    sql += ' ORDER BY qr.submitted_at DESC';
+
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        // Flatten responses JSON into individual columns
+        const flat = rows.map(row => {
+            let resp = {};
+            try { resp = typeof row.responses === 'string' ? JSON.parse(row.responses) : (row.responses || {}); } catch {}
+            const arrToStr = v => Array.isArray(v) ? v.join('; ') : (v !== null && v !== undefined ? String(v) : '');
+            return {
+                id: row.id,
+                session_id: row.session_id ?? '',
+                user_id: row.user_id,
+                username: row.username ?? '',
+                email: row.email ?? '',
+                case_id: row.case_id ?? '',
+                case_name: row.case_name ?? '',
+                submitted_at: row.submitted_at,
+                diagnosis: arrToStr(resp.diagnosis),
+                diagnosis_confidence: resp.diagnosisConfidence !== undefined ? resp.diagnosisConfidence : '',
+                how_decision_was_made: arrToStr(resp.decisionProcess),
+                key_factors: arrToStr(resp.keyFactors),
+                possible_treatment: arrToStr(resp.treatment),
+                treatment_confidence: resp.treatmentConfidence !== undefined ? resp.treatmentConfidence : '',
+                areas_to_improve: arrToStr(resp.improvements),
+                would_do_differently: arrToStr(resp.doDifferently),
+            };
+        });
+
+        const HEADERS = [
+            'id','session_id','user_id','username','email','case_id','case_name','submitted_at',
+            'diagnosis','diagnosis_confidence','how_decision_was_made','key_factors',
+            'possible_treatment','treatment_confidence','areas_to_improve','would_do_differently',
+        ];
+        const csv = flat.length > 0
+            ? convertToCSV(flat)
+            : HEADERS.map(h => `"${h}"`).join(',');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=questionnaire_responses.csv');
+        res.send(csv);
+    });
+});
+
+// POST /api/questionnaire-responses - Save a questionnaire submission
+router.post('/questionnaire-responses', authenticateToken, (req, res) => {
+    const { session_id, case_id, responses } = req.body;
+    const user_id = req.user.id;
+
+    if (!responses || typeof responses !== 'object') {
+        return res.status(400).json({ error: 'responses is required and must be an object' });
+    }
+
+    const sql = `
+        INSERT INTO questionnaire_responses (session_id, user_id, case_id, responses)
+        VALUES (?, ?, ?, ?)
+    `;
+    db.run(sql, [session_id || null, user_id, case_id || null, JSON.stringify(responses)], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ id: this.lastID });
+    });
+});
+
+// GET /api/questionnaire-responses - Get questionnaire responses (admin: all; user: own)
+router.get('/questionnaire-responses', authenticateToken, (req, res) => {
+    let sql, params;
+
+    if (req.user.role === 'admin') {
+        sql = `
+            SELECT qr.id, qr.session_id, qr.case_id, qr.submitted_at, qr.responses,
+                   u.username, u.email,
+                   c.name as case_name
+            FROM questionnaire_responses qr
+            LEFT JOIN users u ON qr.user_id = u.id
+            LEFT JOIN cases c ON qr.case_id = c.id
+            ORDER BY qr.submitted_at DESC
+        `;
+        params = [];
+    } else {
+        sql = `
+            SELECT qr.id, qr.session_id, qr.case_id, qr.submitted_at, qr.responses,
+                   c.name as case_name
+            FROM questionnaire_responses qr
+            LEFT JOIN cases c ON qr.case_id = c.id
+            WHERE qr.user_id = ?
+            ORDER BY qr.submitted_at DESC
+        `;
+        params = [req.user.id];
+    }
+
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const parsed = rows.map(r => ({
+            ...r,
+            responses: typeof r.responses === 'string' ? JSON.parse(r.responses) : r.responses,
+        }));
+        res.json({ responses: parsed });
     });
 });
 

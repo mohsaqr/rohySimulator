@@ -18,6 +18,7 @@ import { apiUrl } from './config/api';
 import { Settings, X, LogOut, User, RotateCcw, ChevronDown } from 'lucide-react';
 import ManikinPanel from './components/examination/ManikinPanel';
 import BodyMapDebug from './components/examination/BodyMapDebug';
+import EndSessionQuestionnaire from './components/common/EndSessionQuestionnaire';
 
 // Session expiry time in milliseconds (default 30 minutes)
 const SESSION_EXPIRY_MS = parseInt(localStorage.getItem('rohy_session_expiry_minutes') || '30') * 60 * 1000;
@@ -37,6 +38,8 @@ function MainApp() {
    const [sessionId, setSessionId] = useState(null);
    const [selectedResult, setSelectedResult] = useState(null);
    const [showExamination, setShowExamination] = useState(false);
+   const [showEndQuestionnaire, setShowEndQuestionnaire] = useState(false);
+   const [showEndConfirm, setShowEndConfirm] = useState(false);
 
    // Set user context for EventLogger when user logs in
    useEffect(() => {
@@ -178,35 +181,61 @@ function MainApp() {
    }, [activeCase, sessionId, sessionValidated]);
 
    // End session properly (call backend)
-   const handleEndSession = async () => {
-      const confirmed = await toast.confirm(
-         'End this simulation session? Chat history will be preserved in your session history.',
-         { title: 'End Session', confirmText: 'End Session', type: 'warning' }
-      );
-      if (confirmed) {
-         // Log session end before clearing
-         const sessionStartTime = lastActivityRef.current;
-         const duration = Date.now() - sessionStartTime;
-         EventLogger.sessionEnded(duration);
-
-         // Call backend to end session
-         if (sessionId) {
-            try {
-               const token = AuthService.getToken();
-               await fetch(apiUrl(`/sessions/${sessionId}/end`), {
-                  method: 'PUT',
-                  headers: { 'Authorization': `Bearer ${token}` }
-               });
-            } catch (err) {
-               console.error('Failed to end session in backend:', err);
-            }
-         }
-         localStorage.removeItem('rohy_active_session');
-         localStorage.removeItem('rohy_chat_history');
-         setActiveCase(null);
-         setSessionId(null);
-      }
+   const handleEndSession = () => {
+      setShowEndConfirm(true);
    };
+
+   const handleEndConfirmed = () => {
+      setShowEndConfirm(false);
+      setShowEndQuestionnaire(true);
+   };
+
+   const handleEndConfirmCancel = () => {
+      setShowEndConfirm(false);
+   };
+
+   const handleQuestionnaireSubmit = async (answers) => {
+      setShowEndQuestionnaire(false);
+
+      // Save questionnaire responses (capture before state is cleared)
+      try {
+         const token = AuthService.getToken();
+         await fetch(apiUrl('/questionnaire-responses'), {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+               session_id: sessionId,
+               case_id: activeCase?.id,
+               responses: answers,
+            }),
+         });
+      } catch (err) {
+         console.error('Failed to save questionnaire responses:', err);
+      }
+
+      // Log session end before clearing
+      const sessionStartTime = lastActivityRef.current;
+      const duration = Date.now() - sessionStartTime;
+      EventLogger.sessionEnded(duration);
+
+      // Call backend to end session
+      if (sessionId) {
+         try {
+            const token = AuthService.getToken();
+            await fetch(apiUrl(`/sessions/${sessionId}/end`), {
+               method: 'PUT',
+               headers: { 'Authorization': `Bearer ${token}` }
+            });
+         } catch (err) {
+            console.error('Failed to end session in backend:', err);
+         }
+      }
+      localStorage.removeItem('rohy_active_session');
+      localStorage.removeItem('rohy_chat_history');
+      setActiveCase(null);
+      setSessionId(null);
+   };
+
 
    const handleLoadCase = (caseData) => {
       // Clear previous session data when loading new case
@@ -445,6 +474,52 @@ function MainApp() {
                );
             }}
          />
+
+         {/* End Session — Confirmation Dialog */}
+         {showEndConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+               <div className="bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl w-full max-w-md flex flex-col">
+                  <div className="px-6 py-5 border-b border-neutral-700">
+                     <h2 className="text-base font-semibold text-white">End Simulation Session?</h2>
+                  </div>
+                  <div className="px-6 py-5 space-y-3">
+                     <p className="text-sm text-neutral-300">
+                        Are you sure you want to end this session?
+                     </p>
+                     <p className="text-sm text-amber-400 font-medium">
+                        Once you proceed, you will not be able to return to or resume this simulation.
+                     </p>
+                     <p className="text-sm text-neutral-400">
+                        You will be asked to complete a short reflection questionnaire before the session is closed.
+                     </p>
+                  </div>
+                  <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-neutral-700">
+                     <button
+                        type="button"
+                        onClick={handleEndConfirmCancel}
+                        className="px-4 py-2 text-sm rounded border border-neutral-600 text-neutral-300 hover:text-white hover:border-neutral-500 transition-colors"
+                     >
+                        Go Back
+                     </button>
+                     <button
+                        type="button"
+                        onClick={handleEndConfirmed}
+                        className="px-4 py-2 text-sm rounded bg-red-700 hover:bg-red-600 text-white font-semibold transition-colors"
+                     >
+                        Yes, End Session
+                     </button>
+                  </div>
+               </div>
+            </div>
+         )}
+
+         {/* End Session Questionnaire (one-way: shown only after confirmation) */}
+         {showEndQuestionnaire && (
+            <EndSessionQuestionnaire
+               onSubmit={handleQuestionnaireSubmit}
+               hideCancel
+            />
+         )}
 
          {/* User Profile Modal */}
          {showUserProfile && (

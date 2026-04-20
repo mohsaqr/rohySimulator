@@ -906,14 +906,22 @@ function initDb() {
         db.run(`CREATE TABLE IF NOT EXISTS event_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id INTEGER,
+            user_id INTEGER,
             event_type TEXT,
             description TEXT,
             vital_sign TEXT,
             old_value TEXT,
             new_value TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(session_id) REFERENCES sessions(id)
+            FOREIGN KEY(session_id) REFERENCES sessions(id),
+            FOREIGN KEY(user_id) REFERENCES users(id)
         )`);
+        db.all("PRAGMA table_info(event_log)", (err, cols) => {
+            if (err || !cols) return;
+            if (!cols.some(c => c.name === 'user_id')) {
+                db.run("ALTER TABLE event_log ADD COLUMN user_id INTEGER REFERENCES users(id)");
+            }
+        });
 
         // 9. Alarm Events Table - Track alarm triggers and acknowledgments
         db.run(`CREATE TABLE IF NOT EXISTS alarm_events (
@@ -2222,6 +2230,21 @@ function initDb() {
         db.run(`CREATE INDEX IF NOT EXISTS idx_emotion_logs_session ON emotion_logs(session_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_emotion_logs_user ON emotion_logs(user_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_emotion_logs_timestamp ON emotion_logs(timestamp DESC)`);
+
+        // ==================== REFLECTION QUESTIONNAIRE ====================
+        db.run(`CREATE TABLE IF NOT EXISTS questionnaire_responses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER,
+            user_id INTEGER NOT NULL,
+            case_id INTEGER,
+            submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            responses JSON NOT NULL,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE SET NULL
+        )`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_questionnaire_user ON questionnaire_responses(user_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_questionnaire_session ON questionnaire_responses(session_id)`);
 
         // ==================== SEED DEFAULT AGENT PERSONAS ====================
         seedDefaultAgents();

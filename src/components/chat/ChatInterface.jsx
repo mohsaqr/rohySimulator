@@ -417,14 +417,15 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         setShowQuestionnaire(false);
         startQuestionnaireTimer();
         EventLogger.emotionExpressed(emotion, COMPONENTS.CHAT_INTERFACE);
+        const token = AuthService.getToken();
+        const headers = {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        };
         try {
-            const token = AuthService.getToken();
             await fetch(apiUrl('/emotion-logs'), {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
+                headers,
                 body: JSON.stringify({
                     session_id: sessionId,
                     case_id: activeCase?.id,
@@ -433,6 +434,22 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             });
         } catch (err) {
             console.error('Failed to log emotion:', err);
+        }
+        try {
+            await fetch(apiUrl('/events/batch'), {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    events: [{
+                        event_type: 'emotion_selected',
+                        description: `Emotion: ${emotion}`,
+                        timestamp: new Date().toISOString()
+                    }]
+                })
+            });
+        } catch (err) {
+            console.error('Failed to log emotion to event log:', err);
         }
     };
 

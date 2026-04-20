@@ -10,7 +10,7 @@ import { runSeeders, needsSeeding } from './seeders/index.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
-const PORT = parseInt(process.env.PORT, 10) || 4000;
+const PORT = parseInt(process.env.PORT, 10) || 3000;
 
 // CORS Configuration - restrict to allowed origins
 const allowedOrigins = [
@@ -19,6 +19,8 @@ const allowedOrigins = [
     'http://localhost:4000',      // Alternative port
     'http://127.0.0.1:5173',
     'http://127.0.0.1:3000',
+    'http://[::1]:5173',          // IPv6 loopback - Vite dev server
+    'http://[::1]:3000',          // IPv6 loopback - local production
     process.env.FRONTEND_URL      // Production URL from env
 ].filter(Boolean);
 
@@ -60,9 +62,9 @@ app.get('/', (req, res) => {
 app.use('/uploads', express.static(path.join(__dirname, "..", "public","uploads")));
 app.use('/', express.static(path.join(__dirname, "..", "frontend")));
 
-// Start server with port fallback
+// Start server with port fallback — bind to :: with ipv6Only:false for dual-stack (IPv4 + IPv6)
 function startServer(port, maxRetries = 10) {
-    const server = app.listen(port, '0.0.0.0', () => {
+        const server = app.listen(port, '0.0.0.0', () => {
         console.log(`Server is running on http://0.0.0.0:${port}`);
         console.log(`Access from local network using your IP address`);
     });

@@ -24,6 +24,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
     const toast = useToast();
     // Default to 'cases' tab for all users, admins can access 'platform' for LLM settings
     const [activeTab, setActiveTab] = useState('cases'); // cases, users, history, logs, platform, scenarios
+    const [wizardInitialStep, setWizardInitialStep] = useState(1);
 
     // Cases State
     const [cases, setCases] = useState([]);
@@ -580,6 +581,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                 <CaseWizard
                                     caseData={editingCase}
                                     setCaseData={setEditingCase}
+                                    setActiveTab={setActiveTab}
+                                    initialStep={wizardInitialStep}
+                                    onStepLoaded={() => setWizardInitialStep(1)}
                                     onSave={handleSaveCase}
                                     onCancel={async () => {
                                         if (hasUnsavedChanges) {
@@ -646,12 +650,14 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                             ...prev,
                                             scenario: scaledScenario,
                                             scenario_duration: scenario.duration_minutes,
+                                            scenario_template: null,
                                             scenario_from_repository: {
                                                 id: scenario.id,
                                                 name: scenario.name
                                             }
                                         }));
 
+                                        setWizardInitialStep(3);
                                         setActiveTab('cases');
                                         toast.success(`Scenario "${scenario.name}" applied to case!`);
                                     } else {
@@ -1988,10 +1994,13 @@ function MonitorConfiguration() {
 
 // System Logs Component (Admin Only)
 function SystemLogs() {
-    const [activeLogTab, setActiveLogTab] = useState('activity'); // activity, login, sessions, settings, events
+    const toast = useToast();
+    const [activeLogTab, setActiveLogTab] = useState('activity'); // activity, login, sessions, settings, events, questionnaire
     const [loginLogs, setLoginLogs] = useState([]);
     const [settingsLogs, setSettingsLogs] = useState([]);
     const [sessionsList, setSessionsList] = useState([]);
+    const [questionnaireResponses, setQuestionnaireResponses] = useState([]);
+    const [expandedQRow, setExpandedQRow] = useState(null);
     const [loading, setLoading] = useState(false);
     const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
     const [selectedSessionForEvents, setSelectedSessionForEvents] = useState(null);
@@ -2009,6 +2018,8 @@ function SystemLogs() {
         } else if (activeLogTab === 'activity') {
             // Load sessions for activity log selector
             loadSessions();
+        } else if (activeLogTab === 'questionnaire') {
+            loadQuestionnaireResponses();
         }
     }, [activeLogTab, dateFilter]);
 
@@ -2060,6 +2071,22 @@ function SystemLogs() {
         }
     };
 
+    const loadQuestionnaireResponses = async () => {
+        setLoading(true);
+        const token = AuthService.getToken();
+        try {
+            const res = await fetch(apiUrl('/questionnaire-responses'), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            setQuestionnaireResponses(data.responses || []);
+        } catch (err) {
+            console.error('Failed to load questionnaire responses', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const downloadCSV = async (logType) => {
         const token = AuthService.getToken();
         let url = '';
@@ -2076,6 +2103,9 @@ function SystemLogs() {
                 break;
             case 'session-settings':
                 url = apiUrl('/export/session-settings');
+                break;
+            case 'questionnaire':
+                url = apiUrl('/export/questionnaire-responses');
                 break;
         }
 
@@ -2171,6 +2201,12 @@ function SystemLogs() {
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'events' ? 'border-orange-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     Event Log
+                </button>
+                <button
+                    onClick={() => setActiveLogTab('questionnaire')}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'questionnaire' ? 'border-teal-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                >
+                    Reflection Questionnaire ({questionnaireResponses.length})
                 </button>
             </div>
 
@@ -2342,6 +2378,91 @@ function SystemLogs() {
                             </div>
                         )}
                     </div>
+                ) : activeLogTab === 'questionnaire' ? (
+                    <div className="overflow-x-auto">
+                        <div className="flex justify-end mb-3">
+                            <button
+                                onClick={() => downloadCSV('questionnaire')}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-teal-700 hover:bg-teal-600 text-white rounded text-sm font-medium transition-colors"
+                            >
+                                <Download className="w-4 h-4" />
+                                Download CSV
+                            </button>
+                        </div>
+                        {questionnaireResponses.length === 0 ? (
+                            <div className="text-center py-12 text-neutral-500 text-sm">
+                                No questionnaire responses recorded yet.
+                            </div>
+                        ) : (
+                            <table className="w-full text-sm">
+                                <thead className="bg-neutral-800 sticky top-0">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left font-bold">ID</th>
+                                        <th className="px-4 py-3 text-left font-bold">User</th>
+                                        <th className="px-4 py-3 text-left font-bold">Case</th>
+                                        <th className="px-4 py-3 text-left font-bold">Session</th>
+                                        <th className="px-4 py-3 text-left font-bold">Submitted At</th>
+                                        <th className="px-4 py-3 text-left font-bold">Responses</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {questionnaireResponses.map((row) => {
+                                        const isExpanded = expandedQRow === row.id;
+                                        const FIELD_LABELS = {
+                                            diagnosis: 'Diagnosis',
+                                            diagnosisConfidence: 'Diagnosis Confidence (0–5)',
+                                            decisionProcess: 'How decision was made',
+                                            keyFactors: 'Key factors influencing decision',
+                                            treatment: 'Possible treatment for next step',
+                                            treatmentConfidence: 'Treatment Confidence (0–5)',
+                                            improvements: 'Areas to improve in the future',
+                                            doDifferently: 'What would be done differently',
+                                        };
+                                        return (
+                                            <React.Fragment key={row.id}>
+                                                <tr className="border-b border-neutral-800 hover:bg-neutral-800/50">
+                                                    <td className="px-4 py-3 font-mono text-neutral-400">#{row.id}</td>
+                                                    <td className="px-4 py-3 font-medium">{row.username || row.email || '—'}</td>
+                                                    <td className="px-4 py-3 text-neutral-400">{row.case_name || '—'}</td>
+                                                    <td className="px-4 py-3 font-mono text-neutral-400">{row.session_id ? `#${row.session_id}` : '—'}</td>
+                                                    <td className="px-4 py-3 text-neutral-400">{new Date(row.submitted_at).toLocaleString()}</td>
+                                                    <td className="px-4 py-3">
+                                                        <button
+                                                            onClick={() => setExpandedQRow(isExpanded ? null : row.id)}
+                                                            className="px-2 py-1 text-xs rounded bg-teal-900/60 border border-teal-700 text-teal-300 hover:bg-teal-800 transition-colors"
+                                                        >
+                                                            {isExpanded ? 'Hide' : 'View'}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                {isExpanded && (
+                                                    <tr className="border-b border-neutral-700 bg-neutral-800/30">
+                                                        <td colSpan="6" className="px-6 py-4">
+                                                            <div className="space-y-3">
+                                                                <p className="text-xs font-bold uppercase tracking-wide text-teal-400 mb-2">Reflection Questionnaire — Full Responses</p>
+                                                                {Object.entries(row.responses).map(([key, value]) => {
+                                                                    const label = FIELD_LABELS[key] || key;
+                                                                    const displayValue = Array.isArray(value)
+                                                                        ? value.length > 0 ? value.join(', ') : '—'
+                                                                        : value !== null && value !== undefined ? String(value) : '—';
+                                                                    return (
+                                                                        <div key={key} className="flex gap-3">
+                                                                            <span className="text-xs font-semibold text-neutral-400 w-56 shrink-0">{label}</span>
+                                                                            <span className="text-xs text-neutral-200">{displayValue}</span>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                 ) : null}
             </div>
 
@@ -2379,6 +2500,13 @@ function SystemLogs() {
                     >
                         <Download className="w-4 h-4" />
                         Session Settings
+                    </button>
+                    <button
+                        onClick={() => downloadCSV('questionnaire')}
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded text-sm font-medium"
+                    >
+                        <Download className="w-4 h-4" />
+                        Questionnaire
                     </button>
                 </div>
             </div>
@@ -3453,10 +3581,33 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
 }
 
 // Sub-component for the Wizard to keep code clean
-function CaseWizard({ caseData, setCaseData, onSave, onCancel, hasUnsavedChanges, lastSavedAt }) {
-    const [step, setStep] = useState(1);
+function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, hasUnsavedChanges, lastSavedAt, initialStep, onStepLoaded }) {
+    const [step, setStep] = useState(initialStep || 1);
     const [uploading, setUploading] = useState(false);
+    const [publicScenarios, setPublicScenarios] = useState([]);
     const toast = useToast();
+
+    // Consume initialStep once on mount, then reset it in the parent so future
+    // mounts (e.g. opening a different case) start at step 1 again.
+    useEffect(() => { onStepLoaded?.(); }, []);
+
+    // Fetch public (custom) scenarios for the Quick Templates dropdown
+    useEffect(() => {
+        const token = AuthService.getToken();
+        fetch(apiUrl('/scenarios'), { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(r => r.ok ? r.json() : Promise.reject())
+            .then(data => {
+                const rows = Array.isArray(data) ? data : (data.scenarios || []);
+                setPublicScenarios(
+                    rows.filter(s => s.is_public && !s.is_builtin)
+                        .map(s => ({
+                            ...s,
+                            timeline: typeof s.timeline === 'string' ? JSON.parse(s.timeline) : s.timeline
+                        }))
+                );
+            })
+            .catch(() => {});
+    }, []);
 
     // Format last saved time
     const formatLastSaved = () => {
@@ -4604,13 +4755,33 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         Browse Repository
                                     </button>
                                 </div>
-                                {caseData.scenario_from_repository && (
-                                    <div className="mt-3 bg-green-900/20 border border-green-700/50 rounded p-3">
-                                        <p className="text-xs text-green-300">
-                                            ✓ Using scenario from repository: <strong>{caseData.scenario_from_repository.name}</strong>
-                                        </p>
-                                    </div>
-                                )}
+                                {(caseData.scenario_from_repository || caseData.scenario_template) && (() => {
+                                    const isRepo = !!caseData.scenario_from_repository;
+                                    const name = isRepo
+                                        ? caseData.scenario_from_repository.name
+                                        : SCENARIO_TEMPLATES[caseData.scenario_template]?.name;
+                                    const source = isRepo ? 'Repository' : 'Built-in Template';
+                                    return (
+                                        <div className="mt-3 bg-green-900/20 border border-green-700/50 rounded p-3 flex items-center justify-between gap-3">
+                                            <p className="text-xs text-green-300">
+                                                ✓ <span className="text-green-400">[{source}]</span> <strong>{name}</strong>
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCaseData(prev => ({
+                                                    ...prev,
+                                                    scenario: null,
+                                                    scenario_duration: undefined,
+                                                    scenario_template: null,
+                                                    scenario_from_repository: null
+                                                }))}
+                                                className="shrink-0 text-xs px-2 py-1 rounded border border-red-700 text-red-400 hover:bg-red-900/40 hover:text-red-300 transition-colors"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             {/* OR divider */}
@@ -4623,18 +4794,33 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             <div>
                                 <label className="label-xs">Quick Templates</label>
                                 <select
-                                    value={caseData.scenario_template || 'none'}
+                                    value={caseData.scenario_from_repository ? '_repository' : (caseData.scenario_template || 'none')}
                                     onChange={(e) => {
-                                        const templateName = e.target.value;
-                                        if (templateName === 'none') {
-                                            // Remove scenario
-                                            setCaseData(prev => ({ ...prev, scenario_template: null, scenario: null, scenario_from_repository: null }));
+                                        const val = e.target.value;
+                                        if (val === 'none') {
+                                            setCaseData(prev => ({ ...prev, scenario_template: null, scenario: null, scenario_duration: undefined, scenario_from_repository: null }));
+                                        } else if (val === '_repository') {
+                                            // no-op — already applied via repository panel
+                                        } else if (val.startsWith('_db_')) {
+                                            const id = parseInt(val.replace('_db_', ''), 10);
+                                            const s = publicScenarios.find(x => x.id === id);
+                                            if (s) {
+                                                setCaseData(prev => ({
+                                                    ...prev,
+                                                    scenario: { enabled: true, autoStart: false, timeline: s.timeline },
+                                                    scenario_duration: s.duration_minutes,
+                                                    scenario_template: null,
+                                                    scenario_from_repository: { id: s.id, name: s.name }
+                                                }));
+                                            }
                                         } else {
-                                            // Set template name (will be built on duration change)
+                                            const tmpl = SCENARIO_TEMPLATES[val];
+                                            const dur = tmpl?.duration || 30;
                                             setCaseData(prev => ({
                                                 ...prev,
-                                                scenario_template: templateName,
-                                                scenario_duration: SCENARIO_TEMPLATES[templateName]?.duration || 30,
+                                                scenario_template: val,
+                                                scenario_duration: dur,
+                                                scenario: tmpl ? scaleScenarioTimeline(tmpl, dur) : null,
                                                 scenario_from_repository: null
                                             }));
                                         }
@@ -4642,18 +4828,36 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     className="input-dark"
                                 >
                                     <option value="none">No Scenario (Static Patient)</option>
-                                    {Object.entries(SCENARIO_TEMPLATES).map(([key, template]) => (
-                                        <option key={key} value={key}>
-                                            {template.name} - {template.description}
+                                    {caseData.scenario_from_repository && (
+                                        <option value="_repository">
+                                            {caseData.scenario_from_repository.name} (Repository)
                                         </option>
-                                    ))}
+                                    )}
+                                    {publicScenarios.length > 0 && (
+                                        <optgroup label="Public Scenarios">
+                                            {publicScenarios.map(s => (
+                                                <option key={s.id} value={`_db_${s.id}`}>
+                                                    {s.name}{s.category ? ` — ${s.category}` : ''}
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    )}
+                                    <optgroup label="Built-in Templates">
+                                        {Object.entries(SCENARIO_TEMPLATES).map(([key, template]) => (
+                                            <option key={key} value={key}>
+                                                {template.name} - {template.description}
+                                            </option>
+                                        ))}
+                                    </optgroup>
                                 </select>
                                 <p className="text-xs text-neutral-500 mt-1">
-                                    Built-in templates (not from database)
+                                    {caseData.scenario_from_repository
+                                        ? 'Currently using a scenario from the repository'
+                                        : 'Choose a public scenario or a built-in template'}
                                 </p>
                             </div>
 
-                            {/* Duration Selector */}
+                            {/* Duration Selector — only for built-in templates, not repository scenarios */}
                             {caseData.scenario_template && caseData.scenario_template !== 'none' && (
                                 <div>
                                     <label className="label-xs">Progression Duration</label>
