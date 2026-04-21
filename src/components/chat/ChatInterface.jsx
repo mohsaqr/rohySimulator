@@ -8,8 +8,8 @@ import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { apiUrl } from '../../config/api';
 import { usePatientRecord } from '../../services/PatientRecord';
 
-const EMOTIONS_ROW1 = ['Active', 'Determined', 'Attentive', 'Inspired', 'Alert'];
-const EMOTIONS_ROW2 = ['Afraid', 'Nervous', 'Upset', 'Hostile', 'Ashamed'];
+const EMOTIONS_ROW1 = ['Inspired', 'Alert', 'Excited', 'Enthusiastic', 'Determined'];
+const EMOTIONS_ROW2 = ['Afraid', 'Upset', 'Nervous', 'Scared', 'Distressed'];
 
 export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, currentVitals }) {
     const [input, setInput] = useState('');
@@ -19,10 +19,11 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const messagesEndRef = useRef(null);
     const { user } = useAuth();
 
-    // Emotion state
-    const [emotionPopover, setEmotionPopover] = useState(null); // { emotion, intensity }
-    const popoverTimerRef = useRef(null);
-    const emotionBtnRefs = useRef({});
+    // Recurring emotion questionnaire
+    const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+    const questionnaireTimerRef = useRef(null);
+    const QUESTIONNAIRE_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+
     const patientRecord = usePatientRecord();
     const { obtained } = patientRecord;
     const [messages, setMessages] = useState([]);
@@ -389,12 +390,33 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         return richSystemPrompt;
     };
 
-    // Emotion logging
-    const logEmotion = async (emotion, intensity) => {
+    // Schedule the next questionnaire appearance (2 min from now)
+    const startQuestionnaireTimer = useCallback(() => {
+        if (questionnaireTimerRef.current) clearTimeout(questionnaireTimerRef.current);
+        questionnaireTimerRef.current = setTimeout(() => {
+            setShowQuestionnaire(true);
+        }, QUESTIONNAIRE_INTERVAL_MS);
+    }, [QUESTIONNAIRE_INTERVAL_MS]);
+
+    // Start timer when session becomes active; clean up when it ends or on unmount
+    useEffect(() => {
+        if (sessionId) {
+            startQuestionnaireTimer();
+        } else {
+            if (questionnaireTimerRef.current) clearTimeout(questionnaireTimerRef.current);
+            setShowQuestionnaire(false);
+        }
+        return () => {
+            if (questionnaireTimerRef.current) clearTimeout(questionnaireTimerRef.current);
+        };
+    }, [sessionId, startQuestionnaireTimer]);
+
+    // Emotion logging — hides questionnaire and resets the 2-minute timer
+    const handleEmotionClick = async (emotion) => {
         if (!sessionId) return;
-        // Log to learning_events — makes it visible in System Logs
-        EventLogger.emotionExpressed(emotion, intensity, COMPONENTS.CHAT_INTERFACE);
-        // Also persist to dedicated emotion_logs table
+        setShowQuestionnaire(false);
+        startQuestionnaireTimer();
+        EventLogger.emotionExpressed(emotion, COMPONENTS.CHAT_INTERFACE);
         try {
             const token = AuthService.getToken();
             await fetch(apiUrl('/emotion-logs'), {
@@ -406,44 +428,13 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 body: JSON.stringify({
                     session_id: sessionId,
                     case_id: activeCase?.id,
-                    emotion,
-                    intensity
+                    emotion
                 })
             });
         } catch (err) {
             console.error('Failed to log emotion:', err);
         }
     };
-
-    const handleEmotionClick = (emotion) => {
-        if (popoverTimerRef.current) clearTimeout(popoverTimerRef.current);
-
-        if (emotionPopover?.emotion === emotion) {
-            // Same button: dismiss without logging
-            setEmotionPopover(null);
-            return;
-        }
-
-        setEmotionPopover({ emotion, intensity: 3 });
-
-        // Auto-confirm with current intensity after 3 s if no dot clicked
-        popoverTimerRef.current = setTimeout(() => {
-            setEmotionPopover(prev => {
-                if (prev) logEmotion(prev.emotion, prev.intensity);
-                return null;
-            });
-        }, 3000);
-    };
-
-    const handleIntensitySelect = (intensity) => {
-        if (!emotionPopover) return;
-        if (popoverTimerRef.current) clearTimeout(popoverTimerRef.current);
-        logEmotion(emotionPopover.emotion, intensity);
-        setEmotionPopover(null);
-    };
-
-    // Cleanup timer on unmount
-    useEffect(() => () => { if (popoverTimerRef.current) clearTimeout(popoverTimerRef.current); }, []);
 
     const handleSend = async (e) => {
         e.preventDefault();
@@ -773,61 +764,37 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Emotion Bar */}
-            <div className="px-4 pt-3 pb-1 bg-neutral-900/90 border-t border-neutral-800">
-                <div className="flex flex-col gap-1">
-                    {[EMOTIONS_ROW1, EMOTIONS_ROW2].map((row, rowIdx) => (
-                        <div key={rowIdx} className="flex gap-1">
-                            {row.map((emotion) => {
-                                const isOpen = emotionPopover?.emotion === emotion;
-                                const isPositive = rowIdx === 0;
-                                return (
-                                    <div key={emotion} className="relative flex-1">
-                                        {isOpen && (
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 bg-neutral-800 border border-neutral-600 rounded-lg px-2.5 py-2 shadow-xl whitespace-nowrap">
-                                                <div className="flex gap-2 items-center justify-center">
-                                                    {[1, 2, 3, 4, 5].map(i => (
-                                                        <button
-                                                            key={i}
-                                                            type="button"
-                                                            onClick={() => handleIntensitySelect(i)}
-                                                            className={`rounded-full transition-all focus:outline-none ${
-                                                                i === emotionPopover.intensity
-                                                                    ? `scale-125 ${isPositive ? 'bg-blue-400' : 'bg-orange-400'}`
-                                                                    : 'bg-neutral-600 hover:bg-neutral-400'
-                                                            }`}
-                                                            style={{ width: `${8 + i * 2}px`, height: `${8 + i * 2}px` }}
-                                                            title={`Intensity ${i}`}
-                                                        />
-                                                    ))}
-                                                </div>
-                                                <div className="text-[9px] text-neutral-500 text-center mt-1 select-none">mild → intense</div>
-                                                {/* Arrow */}
-                                                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-neutral-600" />
-                                            </div>
-                                        )}
+            {/* Recurring Emotion Questionnaire — appears every 2 minutes */}
+            {showQuestionnaire && (
+                <div className="px-4 pt-3 pb-2 border-t border-indigo-800/60 bg-indigo-950/40">
+                    <p className="text-[11px] font-semibold text-indigo-300 text-center mb-2 tracking-wide">
+                        How are you feeling right now?
+                    </p>
+                    <div className="flex flex-col gap-1">
+                        {[EMOTIONS_ROW1, EMOTIONS_ROW2].map((row, rowIdx) => (
+                            <div key={rowIdx} className="flex gap-1">
+                                {row.map((emotion) => {
+                                    const isPositive = rowIdx === 0;
+                                    return (
                                         <button
+                                            key={emotion}
                                             type="button"
                                             onClick={() => handleEmotionClick(emotion)}
-                                            className={`w-full text-[10px] font-medium px-1 py-0.5 rounded transition-all truncate ${
-                                                isOpen
-                                                    ? isPositive
-                                                        ? 'bg-blue-600 text-white'
-                                                        : 'bg-orange-600 text-white'
-                                                    : isPositive
-                                                        ? 'bg-neutral-800 text-blue-300 hover:bg-blue-900/40 hover:text-blue-200 border border-neutral-700 hover:border-blue-700'
-                                                        : 'bg-neutral-800 text-orange-300 hover:bg-orange-900/40 hover:text-orange-200 border border-neutral-700 hover:border-orange-700'
+                                            className={`flex-1 text-[10px] font-medium px-1 py-1 rounded transition-colors truncate border ${
+                                                isPositive
+                                                    ? 'bg-neutral-800 text-blue-300 hover:bg-blue-900/50 hover:text-blue-100 border-neutral-700 hover:border-blue-600'
+                                                    : 'bg-neutral-800 text-orange-300 hover:bg-orange-900/50 hover:text-orange-100 border-neutral-700 hover:border-orange-600'
                                             }`}
                                         >
                                             {emotion}
                                         </button>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ))}
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Input */}
             <div className="px-4 pb-4 pt-1 bg-neutral-900/90">

@@ -2179,18 +2179,46 @@ function initDb() {
         });
 
         // ==================== EMOTION LOGS ====================
+        // Create table (no intensity column)
         db.run(`CREATE TABLE IF NOT EXISTS emotion_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id INTEGER,
             user_id INTEGER,
             case_id INTEGER,
             emotion TEXT NOT NULL,
-            intensity INTEGER NOT NULL CHECK(intensity BETWEEN 1 AND 5),
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(session_id) REFERENCES sessions(id),
             FOREIGN KEY(user_id) REFERENCES users(id),
             FOREIGN KEY(case_id) REFERENCES cases(id)
         )`);
+        // Migrate: drop intensity column if it exists (recreate table without it)
+        db.all("PRAGMA table_info(emotion_logs)", (err, cols) => {
+            if (err || !cols) return;
+            const hasIntensity = cols.some(c => c.name === 'intensity');
+            if (hasIntensity) {
+                db.serialize(() => {
+                    db.run(`CREATE TABLE IF NOT EXISTS emotion_logs_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id INTEGER,
+                        user_id INTEGER,
+                        case_id INTEGER,
+                        emotion TEXT NOT NULL,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(session_id) REFERENCES sessions(id),
+                        FOREIGN KEY(user_id) REFERENCES users(id),
+                        FOREIGN KEY(case_id) REFERENCES cases(id)
+                    )`);
+                    db.run(`INSERT INTO emotion_logs_new (id, session_id, user_id, case_id, emotion, timestamp)
+                            SELECT id, session_id, user_id, case_id, emotion, timestamp FROM emotion_logs`);
+                    db.run(`DROP TABLE emotion_logs`);
+                    db.run(`ALTER TABLE emotion_logs_new RENAME TO emotion_logs`);
+                    db.run(`CREATE INDEX IF NOT EXISTS idx_emotion_logs_session ON emotion_logs(session_id)`);
+                    db.run(`CREATE INDEX IF NOT EXISTS idx_emotion_logs_user ON emotion_logs(user_id)`);
+                    db.run(`CREATE INDEX IF NOT EXISTS idx_emotion_logs_timestamp ON emotion_logs(timestamp DESC)`);
+                    console.log('[DB] emotion_logs migrated: intensity column removed.');
+                });
+            }
+        });
         db.run(`CREATE INDEX IF NOT EXISTS idx_emotion_logs_session ON emotion_logs(session_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_emotion_logs_user ON emotion_logs(user_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_emotion_logs_timestamp ON emotion_logs(timestamp DESC)`);

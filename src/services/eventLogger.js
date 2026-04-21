@@ -651,12 +651,11 @@ class EventLoggerService {
     }
 
     // Emotion events
-    emotionExpressed(emotion, intensity, componentName) {
+    emotionExpressed(emotion, componentName) {
         this.log(VERBS.EXPRESSED_EMOTION, OBJECT_TYPES.EMOTION, {
             objectName: emotion,
             component: componentName,
-            result: `Intensity: ${intensity}/5`,
-            context: { emotion, intensity }
+            context: { emotion }
         });
     }
 

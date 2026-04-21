@@ -7761,21 +7761,16 @@ router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, (req, re
 
 // POST /api/emotion-logs - Log a doctor emotion during a session
 router.post('/emotion-logs', authenticateToken, (req, res) => {
-    const { session_id, case_id, emotion, intensity } = req.body;
+    const { session_id, case_id, emotion } = req.body;
     const user_id = req.user.id;
 
     if (!emotion || typeof emotion !== 'string' || !emotion.trim()) {
         return res.status(400).json({ error: 'emotion is required' });
     }
 
-    const intValue = parseInt(intensity);
-    if (isNaN(intValue) || intValue < 1 || intValue > 5) {
-        return res.status(400).json({ error: 'intensity must be an integer between 1 and 5' });
-    }
-
     db.run(
-        `INSERT INTO emotion_logs (session_id, user_id, case_id, emotion, intensity) VALUES (?, ?, ?, ?, ?)`,
-        [session_id || null, user_id, case_id || null, emotion.trim(), intValue],
+        `INSERT INTO emotion_logs (session_id, user_id, case_id, emotion) VALUES (?, ?, ?, ?)`,
+        [session_id || null, user_id, case_id || null, emotion.trim()],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ id: this.lastID });
@@ -7790,7 +7785,6 @@ router.get('/emotion-logs', authenticateToken, requireAdmin, (req, res) => {
             el.id,
             el.timestamp,
             el.emotion,
-            el.intensity,
             el.session_id,
             el.case_id,
             u.username,
