@@ -239,7 +239,7 @@ const importSettingsFromJSON = (file, setRhythm, setConditions, setParams) => {
    });
 };
 
-export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmin: isAdminProp = false }) {
+export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmin: isAdminProp = false, onStageChange }) {
    const toast = useToast();
    const { isAdmin: isAdminAuth } = useAuth();
    const isAdmin = isAdminProp || isAdminAuth();
@@ -440,6 +440,12 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
    const [activeScenario, setActiveScenario] = useState(null); // 'mi_progression', etc.
    const [scenarioTime, setScenarioTime] = useState(0); // seconds
    const [scenarioPlaying, setScenarioPlaying] = useState(false);
+   const lastStageIdxRef = useRef(-1); // tracks current timeline stage to detect transitions
+
+   // Reset stage tracker whenever the scenario selection changes
+   useEffect(() => {
+      lastStageIdxRef.current = -1;
+   }, [activeScenario]);
 
    // Load Scenarios into State (to allow custom additions)
    const [scenarioList, setScenarioList] = useState(defaultSettings.scenarios);
@@ -646,7 +652,10 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
 
    // Engine Loop
    useEffect(() => {
-      if (!activeScenario || !scenarioPlaying) return;
+      if (!activeScenario || !scenarioPlaying) {
+         lastStageIdxRef.current = -1;
+         return;
+      }
 
       const interval = setInterval(() => {
          setScenarioTime(t => {
@@ -661,6 +670,14 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
             // keyframe A <= time < keyframe B
             let idx = timeline.findIndex(k => k.time > nextTime);
             if (idx === -1) idx = timeline.length; // Past last frame
+
+            // Detect stage transition and fire onStageChange callback
+            const stageIdx = Math.min(Math.max(idx - 1, 0), timeline.length - 1);
+            if (stageIdx !== lastStageIdxRef.current) {
+               lastStageIdxRef.current = stageIdx;
+               const stageLabel = timeline[stageIdx]?.label;
+               onStageChange?.(stageIdx, stageLabel);
+            }
 
             const toFrame = timeline[idx < timeline.length ? idx : timeline.length - 1];
             const fromFrame = timeline[idx > 0 ? idx - 1 : 0];

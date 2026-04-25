@@ -181,17 +181,25 @@ const storage = multer.diskStorage({
 
 // File type validation
 const fileFilter = (req, file, cb) => {
-    // Allowed MIME types for images
+    // Allowed MIME types for images and audio
     const allowedMimes = [
         'image/jpeg',
         'image/png',
         'image/gif',
         'image/webp',
-        'image/svg+xml'
+        'image/svg+xml',
+        'audio/mpeg',
+        'audio/mp3',
+        'audio/wav',
+        'audio/ogg',
+        'audio/aac',
+        'audio/x-wav',
+        'audio/wave',
+        'video/mp4'
     ];
 
     // Allowed extensions
-    const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.mp3', '.wav', '.ogg', '.aac', '.mp4'];
     const ext = path.extname(file.originalname).toLowerCase();
 
     if (allowedMimes.includes(file.mimetype) && allowedExts.includes(ext)) {
@@ -508,7 +516,7 @@ router.post('/upload', upload.single('photo'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
-    const imageUrl =  `./uploads/${req.file.filename}`;
+    const imageUrl = `/uploads/${req.file.filename}`;
     res.json({ imageUrl });
 });
 
@@ -7880,6 +7888,213 @@ router.post('/questionnaire-responses', authenticateToken, (req, res) => {
     db.run(sql, [session_id || null, user_id, case_id || null, JSON.stringify(responses)], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ id: this.lastID });
+    });
+});
+
+// POST /api/cra-responses - Save CRA items (one row per question)
+const CRA_QUESTIONS = [
+    'I know the reference values for heart rate, blood pressure, respiratory rate, and body temperature.',
+    'I can interpret an ECG of a patient with an emergency medical condition.',
+    'I can assess a patient using the ABCDE scheme.',
+    'I can conduct a focused history taking in clinical emergency.',
+    'I can perform a focused physical examination in a clinical emergency.',
+    'I can recognize a critically ill patient.',
+    'I can request the most important laboratory parameters in a clinical emergency based on the clinical presentation of a patient.',
+    'I can interpret the laboratory findings in a patient with an emergency medical condition.',
+    'I can correctly assess the indications for performing an X-ray in a patient with an emergency medical condition.',
+    'I can interpret X-rays of a patient with an emergency medical condition.',
+    'I can prioritize tasks in emergency situations according to importance.',
+    'I know the most important medications that must be administered in clinical emergencies.',
+    'I can correctly determine the indication for further diagnostic and therapeutic interventions in clinical emergencies (e.g., endoscopy, cardiac catheterization).',
+    'I have a good time management in treating patients with emergency medical conditions.',
+    'I can perform and interpret a focused emergency ultrasound in a patient.',
+    'I know the dosages of the most important medications that must be administered in clinical emergencies.',
+    'I question how, what and why I do things in practice.',
+    'I cope well with change.',
+    'I can function with uncertainty.',
+    'I make decisions about practice based on my experience.',
+];
+
+const CRA_STAGES = [
+    'Consider the Patient Situation',            // Item 1
+    'Process Information',                        // Item 2
+    'Collect Cues / Information',                 // Item 3
+    'Collect Cues / Information',                 // Item 4
+    'Collect Cues / Information',                 // Item 5
+    'Identify Problems / Issues',                 // Item 6
+    'Collect Cues / Information',                 // Item 7
+    'Process Information',                        // Item 8
+    'Establish Goals / Plan Action',              // Item 9
+    'Process Information',                        // Item 10
+    'Establish Goals',                            // Item 11
+    'Take Action',                                // Item 12
+    'Take Action',                                // Item 13
+    'Take Action',                                // Item 14
+    'Collect Cues / Information + Process Information', // Item 15
+    'Take Action',                                // Item 16
+    'Reflect on Process / New Learning',          // Item 17
+    'Reflect on Process / New Learning',          // Item 18
+    'Reflect on Process / New Learning',          // Item 19
+    'Reflect on Process / New Learning',          // Item 20
+];
+
+router.post('/cra-responses', authenticateToken, (req, res) => {
+    const { session_id, answers } = req.body;
+    const user_id = req.user.id;
+
+    if (!answers || typeof answers !== 'object') {
+        return res.status(400).json({ error: 'answers is required and must be an object' });
+    }
+
+    db.get('SELECT username, name, email FROM users WHERE id = ?', [user_id], (err, user) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        const user_name = user?.name || user?.username || null;
+        const user_email = user?.email || null;
+        const timestamp = new Date().toISOString();
+
+        const stmt = db.prepare(`
+            INSERT INTO cra_responses (session_id, user_id, user_name, user_email, question, user_answer, cr_stage, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        const rows = CRA_QUESTIONS.map((question, i) => ({
+            question,
+            user_answer: answers[`cra_${i}`] ?? null,
+            cr_stage: CRA_STAGES[i],
+        }));
+
+        let insertErr = null;
+        rows.forEach(({ question, user_answer, cr_stage }) => {
+            stmt.run(
+                [session_id || null, user_id, user_name, user_email, question, user_answer, cr_stage, timestamp],
+                (e) => { if (e) insertErr = e; }
+            );
+        });
+
+        stmt.finalize((e) => {
+            if (e || insertErr) return res.status(500).json({ error: (e || insertErr).message });
+            res.json({ inserted: rows.length });
+        });
+    });
+});
+
+// POST /api/ux-responses - Save User Experience items (one row per question)
+const UX_QUESTIONS = [
+    'Working through the virtual patient was a valuable learning experience.',
+    'The virtual patient helped me to improve my clinical reasoning skills.',
+    'The virtual patient helped me to make diagnostic decisions.',
+    'The virtual patient helped me to plan patient management.',
+    'The virtual patient case was realistic.',
+    'The patient encounter felt authentic.',
+    'The clinical situation resembled real practice.',
+    'I was motivated to work through the virtual patient.',
+    'The virtual patient kept my attention.',
+    'I enjoyed learning with the virtual patient.',
+    'The virtual patient system was easy to use.',
+    'Navigation through the case was clear.',
+    'I could use the system without difficulty.',
+    'I would like to use virtual patients again in future learning.',
+    'I would recommend this virtual patient to other students.',
+];
+
+router.post('/ux-responses', authenticateToken, (req, res) => {
+    const { session_id, answers } = req.body;
+    const user_id = req.user.id;
+
+    if (!answers || typeof answers !== 'object') {
+        return res.status(400).json({ error: 'answers is required and must be an object' });
+    }
+
+    db.get('SELECT username, name, email FROM users WHERE id = ?', [user_id], (err, user) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        const user_name = user?.name || user?.username || null;
+        const user_email = user?.email || null;
+        const timestamp = new Date().toISOString();
+
+        const stmt = db.prepare(`
+            INSERT INTO ux_responses (session_id, user_id, user_name, user_email, question, user_answer, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        const rows = UX_QUESTIONS.map((question, i) => ({
+            question,
+            user_answer: answers[`ux_${i}`] ?? null,
+        }));
+
+        let insertErr = null;
+        rows.forEach(({ question, user_answer }) => {
+            stmt.run(
+                [session_id || null, user_id, user_name, user_email, question, user_answer, timestamp],
+                (e) => { if (e) insertErr = e; }
+            );
+        });
+
+        stmt.finalize((e) => {
+            if (e || insertErr) return res.status(500).json({ error: (e || insertErr).message });
+            res.json({ inserted: rows.length });
+        });
+    });
+});
+
+// GET /api/cra-responses - admin: all rows; user: own rows
+router.get('/cra-responses', authenticateToken, (req, res) => {
+    const user_id = req.user.id;
+    const isAdmin = req.user.role === 'admin';
+    const sql = isAdmin
+        ? `SELECT * FROM cra_responses ORDER BY timestamp DESC`
+        : `SELECT * FROM cra_responses WHERE user_id = ? ORDER BY timestamp DESC`;
+    const params = isAdmin ? [] : [user_id];
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ responses: rows });
+    });
+});
+
+// GET /api/ux-responses - admin: all rows; user: own rows
+router.get('/ux-responses', authenticateToken, (req, res) => {
+    const user_id = req.user.id;
+    const isAdmin = req.user.role === 'admin';
+    const sql = isAdmin
+        ? `SELECT * FROM ux_responses ORDER BY timestamp DESC`
+        : `SELECT * FROM ux_responses WHERE user_id = ? ORDER BY timestamp DESC`;
+    const params = isAdmin ? [] : [user_id];
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ responses: rows });
+    });
+});
+
+// GET /api/export/cra-responses - CSV export (admin only)
+router.get('/export/cra-responses', authenticateToken, requireAdmin, (req, res) => {
+    db.all(`SELECT * FROM cra_responses ORDER BY timestamp DESC`, [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const headers = ['id','session_id','user_id','user_name','user_email','question','user_answer','cr_stage','timestamp'];
+        const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const lines = [
+            headers.map(escape).join(','),
+            ...rows.map(r => headers.map(h => escape(r[h])).join(',')),
+        ];
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=cra_responses.csv');
+        res.send(lines.join('\n'));
+    });
+});
+
+// GET /api/export/ux-responses - CSV export (admin only)
+router.get('/export/ux-responses', authenticateToken, requireAdmin, (req, res) => {
+    db.all(`SELECT * FROM ux_responses ORDER BY timestamp DESC`, [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const headers = ['id','session_id','user_id','user_name','user_email','question','user_answer','timestamp'];
+        const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const lines = [
+            headers.map(escape).join(','),
+            ...rows.map(r => headers.map(h => escape(r[h])).join(',')),
+        ];
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=ux_responses.csv');
+        res.send(lines.join('\n'));
     });
 });
 

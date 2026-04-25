@@ -19,7 +19,7 @@ import CaseTreatmentConfig from './CaseTreatmentConfig';
 import TnaDashboard from '../analytics/tna/TnaDashboard';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
-export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
+export default function ConfigPanel({ onClose, onLoadCase, onCaseUpdated, fullPage = false }) {
     const { isAdmin } = useAuth();
     const toast = useToast();
     // Default to 'cases' tab for all users, admins can access 'platform' for LLM settings
@@ -196,6 +196,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
             clearAutoSave();
 
             toast.success('Case saved successfully!');
+
+            // Silently refresh activeCase in simulation if this case is currently loaded
+            if (onCaseUpdated) onCaseUpdated(saved);
 
         } catch (err) {
             console.error(err);
@@ -1999,7 +2002,8 @@ function SystemLogs() {
     const [loginLogs, setLoginLogs] = useState([]);
     const [settingsLogs, setSettingsLogs] = useState([]);
     const [sessionsList, setSessionsList] = useState([]);
-    const [questionnaireResponses, setQuestionnaireResponses] = useState([]);
+    const [craResponses, setCraResponses] = useState([]);
+    const [uxResponses, setUxResponses] = useState([]);
     const [expandedQRow, setExpandedQRow] = useState(null);
     const [loading, setLoading] = useState(false);
     const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
@@ -2074,12 +2078,15 @@ function SystemLogs() {
     const loadQuestionnaireResponses = async () => {
         setLoading(true);
         const token = AuthService.getToken();
+        const headers = { 'Authorization': `Bearer ${token}` };
         try {
-            const res = await fetch(apiUrl('/questionnaire-responses'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            setQuestionnaireResponses(data.responses || []);
+            const [craRes, uxRes] = await Promise.all([
+                fetch(apiUrl('/cra-responses'), { headers }),
+                fetch(apiUrl('/ux-responses'), { headers }),
+            ]);
+            const [craData, uxData] = await Promise.all([craRes.json(), uxRes.json()]);
+            setCraResponses(craData.responses || []);
+            setUxResponses(uxData.responses || []);
         } catch (err) {
             console.error('Failed to load questionnaire responses', err);
         } finally {
@@ -2104,8 +2111,11 @@ function SystemLogs() {
             case 'session-settings':
                 url = apiUrl('/export/session-settings');
                 break;
-            case 'questionnaire':
-                url = apiUrl('/export/questionnaire-responses');
+            case 'cra':
+                url = apiUrl('/export/cra-responses');
+                break;
+            case 'ux':
+                url = apiUrl('/export/ux-responses');
                 break;
         }
 
@@ -2206,7 +2216,7 @@ function SystemLogs() {
                     onClick={() => setActiveLogTab('questionnaire')}
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'questionnaire' ? 'border-teal-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
-                    Reflection Questionnaire ({questionnaireResponses.length})
+                    End Questionnaire ({new Set([...craResponses, ...uxResponses].map(r => `${r.session_id}|${r.user_id}`)).size})
                 </button>
             </div>
 
@@ -2378,92 +2388,160 @@ function SystemLogs() {
                             </div>
                         )}
                     </div>
-                ) : activeLogTab === 'questionnaire' ? (
-                    <div className="overflow-x-auto">
-                        <div className="flex justify-end mb-3">
-                            <button
-                                onClick={() => downloadCSV('questionnaire')}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-teal-700 hover:bg-teal-600 text-white rounded text-sm font-medium transition-colors"
-                            >
-                                <Download className="w-4 h-4" />
-                                Download CSV
-                            </button>
-                        </div>
-                        {questionnaireResponses.length === 0 ? (
-                            <div className="text-center py-12 text-neutral-500 text-sm">
-                                No questionnaire responses recorded yet.
+                ) : activeLogTab === 'questionnaire' ? (() => {
+                    const LIKERT = { 1: 'SD', 2: 'D', 3: 'U', 4: 'A', 5: 'SA' };
+                    const likertLabel = (v) => v != null ? `${v} (${LIKERT[v] || '?'})` : '—';
+
+                    const CR_STAGES = [
+                        'Consider the Patient Situation',
+                        'Process Information',
+                        'Collect Cues / Information',
+                        'Collect Cues / Information',
+                        'Collect Cues / Information',
+                        'Identify Problems / Issues',
+                        'Collect Cues / Information',
+                        'Process Information',
+                        'Establish Goals / Plan Action',
+                        'Process Information',
+                        'Establish Goals',
+                        'Take Action',
+                        'Take Action',
+                        'Take Action',
+                        'Collect Cues / Information + Process Information',
+                        'Take Action',
+                        'Reflect on Process / New Learning',
+                        'Reflect on Process / New Learning',
+                        'Reflect on Process / New Learning',
+                        'Reflect on Process / New Learning',
+                    ];
+
+                    // Group rows by session_id|user_id
+                    const groupBy = (arr) => arr.reduce((acc, r) => {
+                        const key = `${r.session_id ?? 'null'}|${r.user_id}`;
+                        (acc[key] = acc[key] || []).push(r);
+                        return acc;
+                    }, {});
+                    const craByKey = groupBy(craResponses);
+                    const uxByKey  = groupBy(uxResponses);
+                    const allKeys  = [...new Set([...Object.keys(craByKey), ...Object.keys(uxByKey)])];
+                    // Sort by most recent timestamp
+                    allKeys.sort((a, b) => {
+                        const ta = (craByKey[a] || uxByKey[a])[0].timestamp;
+                        const tb = (craByKey[b] || uxByKey[b])[0].timestamp;
+                        return new Date(tb) - new Date(ta);
+                    });
+
+                    const isEmpty = allKeys.length === 0;
+                    return (
+                        <div className="overflow-x-auto">
+                            <div className="flex justify-end gap-2 mb-3">
+                                <button onClick={() => downloadCSV('cra')} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white rounded text-sm font-medium transition-colors">
+                                    <Download className="w-4 h-4" /> CRA CSV
+                                </button>
+                                <button onClick={() => downloadCSV('ux')} className="flex items-center gap-2 px-3 py-1.5 bg-teal-700 hover:bg-teal-600 text-white rounded text-sm font-medium transition-colors">
+                                    <Download className="w-4 h-4" /> UX CSV
+                                </button>
                             </div>
-                        ) : (
-                            <table className="w-full text-sm">
-                                <thead className="bg-neutral-800 sticky top-0">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left font-bold">ID</th>
-                                        <th className="px-4 py-3 text-left font-bold">User</th>
-                                        <th className="px-4 py-3 text-left font-bold">Case</th>
-                                        <th className="px-4 py-3 text-left font-bold">Session</th>
-                                        <th className="px-4 py-3 text-left font-bold">Submitted At</th>
-                                        <th className="px-4 py-3 text-left font-bold">Responses</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {questionnaireResponses.map((row) => {
-                                        const isExpanded = expandedQRow === row.id;
-                                        const FIELD_LABELS = {
-                                            diagnosis: 'Diagnosis',
-                                            diagnosisConfidence: 'Diagnosis Confidence (0–5)',
-                                            decisionProcess: 'How decision was made',
-                                            keyFactors: 'Key factors influencing decision',
-                                            treatment: 'Possible treatment for next step',
-                                            treatmentConfidence: 'Treatment Confidence (0–5)',
-                                            improvements: 'Areas to improve in the future',
-                                            doDifferently: 'What would be done differently',
-                                        };
-                                        return (
-                                            <React.Fragment key={row.id}>
-                                                <tr className="border-b border-neutral-800 hover:bg-neutral-800/50">
-                                                    <td className="px-4 py-3 font-mono text-neutral-400">#{row.id}</td>
-                                                    <td className="px-4 py-3 font-medium">{row.username || row.email || '—'}</td>
-                                                    <td className="px-4 py-3 text-neutral-400">{row.case_name || '—'}</td>
-                                                    <td className="px-4 py-3 font-mono text-neutral-400">{row.session_id ? `#${row.session_id}` : '—'}</td>
-                                                    <td className="px-4 py-3 text-neutral-400">{new Date(row.submitted_at).toLocaleString()}</td>
-                                                    <td className="px-4 py-3">
-                                                        <button
-                                                            onClick={() => setExpandedQRow(isExpanded ? null : row.id)}
-                                                            className="px-2 py-1 text-xs rounded bg-teal-900/60 border border-teal-700 text-teal-300 hover:bg-teal-800 transition-colors"
-                                                        >
-                                                            {isExpanded ? 'Hide' : 'View'}
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                                {isExpanded && (
-                                                    <tr className="border-b border-neutral-700 bg-neutral-800/30">
-                                                        <td colSpan="6" className="px-6 py-4">
-                                                            <div className="space-y-3">
-                                                                <p className="text-xs font-bold uppercase tracking-wide text-teal-400 mb-2">Reflection Questionnaire — Full Responses</p>
-                                                                {Object.entries(row.responses).map(([key, value]) => {
-                                                                    const label = FIELD_LABELS[key] || key;
-                                                                    const displayValue = Array.isArray(value)
-                                                                        ? value.length > 0 ? value.join(', ') : '—'
-                                                                        : value !== null && value !== undefined ? String(value) : '—';
-                                                                    return (
-                                                                        <div key={key} className="flex gap-3">
-                                                                            <span className="text-xs font-semibold text-neutral-400 w-56 shrink-0">{label}</span>
-                                                                            <span className="text-xs text-neutral-200">{displayValue}</span>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
+                            {isEmpty ? (
+                                <div className="text-center py-12 text-neutral-500 text-sm">No end-questionnaire responses recorded yet.</div>
+                            ) : (
+                                <table className="w-full text-sm">
+                                    <thead className="bg-neutral-800 sticky top-0">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left font-bold">User</th>
+                                            <th className="px-4 py-3 text-left font-bold">Email</th>
+                                            <th className="px-4 py-3 text-left font-bold">Session</th>
+                                            <th className="px-4 py-3 text-left font-bold">Submitted At</th>
+                                            <th className="px-4 py-3 text-left font-bold">CRA items</th>
+                                            <th className="px-4 py-3 text-left font-bold">UX items</th>
+                                            <th className="px-4 py-3 text-left font-bold">Detail</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {allKeys.map((key) => {
+                                            const craRows = (craByKey[key] || []).sort((a, b) => a.id - b.id);
+                                            const uxRows  = (uxByKey[key]  || []).sort((a, b) => a.id - b.id);
+                                            const sample  = craRows[0] || uxRows[0];
+                                            const isExpanded = expandedQRow === key;
+                                            return (
+                                                <React.Fragment key={key}>
+                                                    <tr className="border-b border-neutral-800 hover:bg-neutral-800/50">
+                                                        <td className="px-4 py-3 font-medium">{sample.user_name || '—'}</td>
+                                                        <td className="px-4 py-3 text-neutral-400 text-xs">{sample.user_email || '—'}</td>
+                                                        <td className="px-4 py-3 font-mono text-neutral-400">{sample.session_id ? `#${sample.session_id}` : '—'}</td>
+                                                        <td className="px-4 py-3 text-neutral-400">{new Date(sample.timestamp).toLocaleString()}</td>
+                                                        <td className="px-4 py-3 text-neutral-400">{craRows.length} / 20</td>
+                                                        <td className="px-4 py-3 text-neutral-400">{uxRows.length} / 15</td>
+                                                        <td className="px-4 py-3">
+                                                            <button
+                                                                onClick={() => setExpandedQRow(isExpanded ? null : key)}
+                                                                className="px-2 py-1 text-xs rounded bg-teal-900/60 border border-teal-700 text-teal-300 hover:bg-teal-800 transition-colors"
+                                                            >
+                                                                {isExpanded ? 'Hide' : 'View'}
+                                                            </button>
                                                         </td>
                                                     </tr>
-                                                )}
-                                            </React.Fragment>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        )}
-                    </div>
-                ) : null}
+                                                    {isExpanded && (
+                                                        <tr className="border-b border-neutral-700 bg-neutral-800/30">
+                                                            <td colSpan="7" className="px-6 py-5">
+                                                                {/* CRA section */}
+                                                                <p className="text-xs font-bold uppercase tracking-wide text-indigo-400 mb-2">Clinical Reasoning Assessment (1 = SD, 2 = D, 3 = U, 4 = A, 5 = SA)</p>
+                                                                <table className="w-full text-xs mb-5">
+                                                                    <thead>
+                                                                        <tr className="text-neutral-400">
+                                                                            <th className="text-left pb-1 pr-3 w-6">#</th>
+                                                                            <th className="text-left pb-1 pr-3">Question</th>
+                                                                            <th className="text-left pb-1 pr-3 w-64">CR Stage</th>
+                                                                            <th className="text-left pb-1 w-16">Answer</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        {craRows.map((r, i) => (
+                                                                            <tr key={r.id} className="border-t border-neutral-700/50">
+                                                                                <td className="py-1.5 pr-3 text-neutral-500">{i + 1}</td>
+                                                                                <td className="py-1.5 pr-3 text-neutral-200">{r.question}</td>
+                                                                                <td className="py-1.5 pr-3">
+                                                                                    <span className="px-1.5 py-0.5 rounded bg-indigo-900/50 border border-indigo-700/50 text-indigo-300 text-xs">
+                                                                                        {r.cr_stage || CR_STAGES[i] || '—'}
+                                                                                    </span>
+                                                                                </td>
+                                                                                <td className="py-1.5 font-semibold text-white">{likertLabel(r.user_answer)}</td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                                {/* UX section */}
+                                                                <p className="text-xs font-bold uppercase tracking-wide text-teal-400 mb-2">User Experience (1 = SD, 2 = D, 3 = U, 4 = A, 5 = SA)</p>
+                                                                <table className="w-full text-xs">
+                                                                    <thead>
+                                                                        <tr className="text-neutral-400">
+                                                                            <th className="text-left pb-1 pr-3 w-6">#</th>
+                                                                            <th className="text-left pb-1 pr-3">Question</th>
+                                                                            <th className="text-left pb-1 w-16">Answer</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        {uxRows.map((r, i) => (
+                                                                            <tr key={r.id} className="border-t border-neutral-700/50">
+                                                                                <td className="py-1.5 pr-3 text-neutral-500">{i + 1}</td>
+                                                                                <td className="py-1.5 pr-3 text-neutral-200">{r.question}</td>
+                                                                                <td className="py-1.5 font-semibold text-white">{likertLabel(r.user_answer)}</td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    );
+                })() : null}
             </div>
 
             {/* Export Section */}
@@ -2502,11 +2580,18 @@ function SystemLogs() {
                         Session Settings
                     </button>
                     <button
-                        onClick={() => downloadCSV('questionnaire')}
+                        onClick={() => downloadCSV('cra')}
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-indigo-700 hover:bg-indigo-600 text-white rounded text-sm font-medium"
+                    >
+                        <Download className="w-4 h-4" />
+                        CRA Responses
+                    </button>
+                    <button
+                        onClick={() => downloadCSV('ux')}
                         className="flex items-center justify-center gap-2 px-3 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded text-sm font-medium"
                     >
                         <Download className="w-4 h-4" />
-                        Questionnaire
+                        UX Responses
                     </button>
                 </div>
             </div>

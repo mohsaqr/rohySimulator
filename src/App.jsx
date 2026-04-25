@@ -40,6 +40,11 @@ function MainApp() {
    const [showExamination, setShowExamination] = useState(false);
    const [showEndQuestionnaire, setShowEndQuestionnaire] = useState(false);
    const [showEndConfirm, setShowEndConfirm] = useState(false);
+   const [scenarioStageVersion, setScenarioStageVersion] = useState(0);
+
+   const handleScenarioStageChange = useCallback(() => {
+      setScenarioStageVersion(v => v + 1);
+   }, []);
 
    // Set user context for EventLogger when user logs in
    useEffect(() => {
@@ -200,15 +205,27 @@ function MainApp() {
       // Save questionnaire responses (capture before state is cleared)
       try {
          const token = AuthService.getToken();
-         await fetch(apiUrl('/questionnaire-responses'), {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-               session_id: sessionId,
-               case_id: activeCase?.id,
-               responses: answers,
+         const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+         const craAnswers = Object.fromEntries(
+            Object.entries(answers).filter(([k]) => k.startsWith('cra_'))
+         );
+         const uxAnswers = Object.fromEntries(
+            Object.entries(answers).filter(([k]) => k.startsWith('ux_'))
+         );
+
+         await Promise.all([
+            fetch(apiUrl('/cra-responses'), {
+               method: 'POST',
+               headers,
+               body: JSON.stringify({ session_id: sessionId, answers: craAnswers }),
             }),
-         });
+            fetch(apiUrl('/ux-responses'), {
+               method: 'POST',
+               headers,
+               body: JSON.stringify({ session_id: sessionId, answers: uxAnswers }),
+            }),
+         ]);
       } catch (err) {
          console.error('Failed to save questionnaire responses:', err);
       }
@@ -248,6 +265,11 @@ function MainApp() {
       EventLogger.caseLoaded(caseData?.id, caseData?.name);
    };
 
+   // Silently refresh activeCase when a case is saved (no session/history side effects)
+   const handleCaseUpdated = (caseData) => {
+      setActiveCase(prev => prev?.id === caseData.id ? caseData : prev);
+   };
+
    // Handle settings panel open/close with logging
    const handleOpenSettings = () => {
       setShowFullPageSettings(true);
@@ -277,6 +299,7 @@ function MainApp() {
             <ConfigPanel
                onClose={handleCloseSettings}
                onLoadCase={handleLoadCase}
+               onCaseUpdated={handleCaseUpdated}
                fullPage={true}
             />
          </div>
@@ -398,6 +421,7 @@ function MainApp() {
                      activeCase={activeCase}
                      onSessionStart={setSessionId}
                      restoredSessionId={sessionId}
+                     scenarioStageVersion={scenarioStageVersion}
                   />
                )}
             </div>
@@ -411,6 +435,7 @@ function MainApp() {
                caseData={activeCase}
                sessionId={sessionId}
                isAdmin={isAdmin()}
+               onStageChange={handleScenarioStageChange}
             />
          </div>
 

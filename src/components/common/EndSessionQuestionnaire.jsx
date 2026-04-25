@@ -1,159 +1,121 @@
 import React, { useState } from 'react';
-import { X, CheckCircle, ChevronRight } from 'lucide-react';
+import { X, ChevronRight } from 'lucide-react';
 
-// ─── Page 1: Questions ───────────────────────────────────────────────────────
+// ─── Page 1: Clinical Reasoning Assessment (20 items, Likert 1–5) ─────────────
 
-const QUESTIONS = [
-  {
-    id: 'diagnosis',
-    label: 'What is your diagnosis of the case',
-    maxSelect: 1,
-    required: true,
-    options: [
-      'Panic attack',
-      'Ischemic heart disease',
-      'Nonspecific chest pain',
-      'Gastrointestinal disease',
-      'Acute myocardial infarction',
-      'Musculoskeletal pain',
-      'Arrhythmias',
-      'No idea',
-      'Others',
-    ],
-  },
-  {
-    id: 'diagnosisConfidence',
-    label: 'What is your confidence level in your diagnosis',
-    sublabel: '(0 = not confident, 5 = very confident)',
-    type: 'rating',
-    required: true,
-    min: 0,
-    max: 5,
-  },
-  {
-    id: 'decisionProcess',
-    label: 'How did you mainly make your decision',
-    maxSelect: 2,
-    required: true,
-    options: [
-      'I have seen similar cases or patients before',
-      'I worked through the information provided by the virtual patient step by step',
-      'I tried to rule out serious conditions',
-      'I was not sure',
-      'Others',
-    ],
-  },
-  {
-    id: 'keyFactors',
-    label: 'What are the key factors influencing your decision',
-    maxSelect: 3,
-    required: true,
-    options: [
-      'Symptoms (e.g., vital signs and patient expressions)',
-      'History',
-      'Lab results',
-      'Radiology results',
-      'Physical examinations',
-      'Others',
-    ],
-  },
-  {
-    id: 'treatment',
-    label: 'What is your possible treatment for the next step',
-    maxSelect: 3,
-    required: true,
-    options: [
-      'Administer aspirin',
-      'Arrange urgent reperfusion therapy (PCI/thrombolysis)',
-      'Initiate anti-anginal therapy',
-      'Provide reassurance and symptomatic treatment',
-      'Prescribe proton pump inhibitors or antacids',
-      'Provide anxiolytics and reassurance',
-      'Arrange oxygen therapy',
-      'Prescribe NSAIDs and recommend rest/physical therapy',
-      'Initiate antiarrhythmic therapy or rate/rhythm control',
-      'Others',
-    ],
-  },
-  {
-    id: 'treatmentConfidence',
-    label: 'What is your confidence level in your further treatments',
-    sublabel: '(0 = not confident, 5 = very confident)',
-    type: 'rating',
-    required: true,
-    min: 0,
-    max: 5,
-  },
+const CRA_QUESTIONS = [
+  'I know the reference values for heart rate, blood pressure, respiratory rate, and body temperature.',
+  'I can interpret an ECG of a patient with an emergency medical condition.',
+  'I can assess a patient using the ABCDE scheme.',
+  'I can conduct a focused history taking in clinical emergency.',
+  'I can perform a focused physical examination in a clinical emergency.',
+  'I can recognize a critically ill patient.',
+  'I can request the most important laboratory parameters in a clinical emergency based on the clinical presentation of a patient.',
+  'I can interpret the laboratory findings in a patient with an emergency medical condition.',
+  'I can correctly assess the indications for performing an X-ray in a patient with an emergency medical condition.',
+  'I can interpret X-rays of a patient with an emergency medical condition.',
+  'I can prioritize tasks in emergency situations according to importance.',
+  'I know the most important medications that must be administered in clinical emergencies.',
+  'I can correctly determine the indication for further diagnostic and therapeutic interventions in clinical emergencies (e.g., endoscopy, cardiac catheterization).',
+  'I have a good time management in treating patients with emergency medical conditions.',
+  'I can perform and interpret a focused emergency ultrasound in a patient.',
+  'I know the dosages of the most important medications that must be administered in clinical emergencies.',
+  'I question how, what and why I do things in practice.',
+  'I cope well with change.',
+  'I can function with uncertainty.',
+  'I make decisions about practice based on my experience.',
 ];
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Page 2: User Experience (15 items, Likert 1–5) ──────────────────────────
 
-function RatingInput({ value, onChange, min, max }) {
+const UX_QUESTIONS = [
+  'Working through the virtual patient was a valuable learning experience.',
+  'The virtual patient helped me to improve my clinical reasoning skills.',
+  'The virtual patient helped me to make diagnostic decisions.',
+  'The virtual patient helped me to plan patient management.',
+  'The virtual patient case was realistic.',
+  'The patient encounter felt authentic.',
+  'The clinical situation resembled real practice.',
+  'I was motivated to work through the virtual patient.',
+  'The virtual patient kept my attention.',
+  'I enjoyed learning with the virtual patient.',
+  'The virtual patient system was easy to use.',
+  'Navigation through the case was clear.',
+  'I could use the system without difficulty.',
+  'I would like to use virtual patients again in future learning.',
+  'I would recommend this virtual patient to other students.',
+];
+
+// ─── Shared sub-components ────────────────────────────────────────────────────
+
+const LIKERT_LEGEND = [
+  ['1', 'SD', 'Strongly Disagree'],
+  ['2', 'D',  'Disagree'],
+  ['3', 'U',  'Undecided'],
+  ['4', 'A',  'Agree'],
+  ['5', 'SA', 'Strongly Agree'],
+];
+
+function LikertLegend() {
   return (
-    <div className="flex gap-2 flex-wrap">
-      {Array.from({ length: max - min + 1 }, (_, i) => i + min).map((n) => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onChange(n)}
-          className={`w-9 h-9 rounded text-sm font-semibold border transition-colors ${
-            value === n
-              ? 'bg-blue-600 border-blue-500 text-white'
-              : 'bg-neutral-800 border-neutral-600 text-neutral-300 hover:border-blue-500 hover:text-blue-300'
-          }`}
-        >
-          {n}
-        </button>
-      ))}
-      {value !== null && value !== undefined && (
-        <span className="self-center text-xs text-neutral-400 ml-1">
-          {value === 0 ? 'Not confident' : value === max ? 'Very confident' : `Level ${value}`}
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-300 bg-neutral-800/60 border border-neutral-700 rounded px-4 py-3">
+      {LIKERT_LEGEND.map(([num, short, long]) => (
+        <span key={num}>
+          <span className="text-white font-semibold">{num} = {short}</span>
+          <span className="text-neutral-400"> ({long})</span>
         </span>
-      )}
+      ))}
     </div>
   );
 }
 
-function MultiSelectInput({ options, selected, maxSelect, onChange }) {
-  const toggle = (option) => {
-    if (selected.includes(option)) {
-      onChange(selected.filter((o) => o !== option));
-    } else if (selected.length < maxSelect) {
-      onChange([...selected, option]);
-    }
-  };
-
+function LikertInput({ value, onChange }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      {options.map((option) => {
-        const isSelected = selected.includes(option);
-        const isDisabled = !isSelected && selected.length >= maxSelect;
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-neutral-400 shrink-0">1 = Strongly Disagree</span>
+      {[1, 2, 3, 4, 5].map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onChange(v)}
+          className={`w-9 h-9 rounded text-sm font-semibold border transition-colors ${
+            value === v
+              ? 'bg-blue-600 border-blue-500 text-white'
+              : 'bg-neutral-800 border-neutral-600 text-neutral-300 hover:border-blue-500 hover:text-blue-300'
+          }`}
+        >
+          {v}
+        </button>
+      ))}
+      <span className="text-xs text-neutral-400 shrink-0">5 = Strongly Agree</span>
+    </div>
+  );
+}
+
+function LikertPage({ questions, prefix, answers, setAnswer, errors }) {
+  return (
+    <div className="space-y-5">
+      <LikertLegend />
+      {questions.map((label, i) => {
+        const key = `${prefix}_${i}`;
         return (
-          <button
-            key={option}
-            type="button"
-            onClick={() => toggle(option)}
-            disabled={isDisabled}
-            className={`text-left px-3 py-2 rounded border text-sm transition-colors ${
-              isSelected
-                ? 'bg-blue-900/60 border-blue-500 text-blue-100'
-                : isDisabled
-                ? 'bg-neutral-900/40 border-neutral-700 text-neutral-600 cursor-not-allowed'
-                : 'bg-neutral-800/60 border-neutral-700 text-neutral-300 hover:border-neutral-500 hover:text-neutral-100'
-            }`}
-          >
-            <span className={`inline-block w-4 h-4 mr-2 rounded-sm border align-middle ${
-              isSelected ? 'bg-blue-500 border-blue-400' : 'border-neutral-500'
-            }`} />
-            {option}
-          </button>
+          <div key={key} id={`item-${key}`} className="space-y-2">
+            <p className="text-sm font-medium text-neutral-100">
+              <span className="text-neutral-400 mr-1">{i + 1}.</span>
+              {label}
+              <span className="text-red-400 ml-1">*</span>
+            </p>
+            <LikertInput value={answers[key]} onChange={(v) => setAnswer(key, v)} />
+            {errors[key] && (
+              <p className="text-xs text-red-400">{errors[key]}</p>
+            )}
+          </div>
         );
       })}
     </div>
   );
 }
 
-// Step indicator shown in header
 function StepIndicator({ current, total }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -179,149 +141,55 @@ function StepIndicator({ current, total }) {
   );
 }
 
-// ─── Page 2: Case Results ─────────────────────────────────────────────────────
-
-function ResultsPage() {
-  return (
-    <div className="flex flex-col items-center justify-center py-10 space-y-4 text-center">
-      <div className="flex items-start gap-3 p-5 bg-green-900/30 border border-green-600/50 rounded-lg w-full">
-        <CheckCircle className="w-6 h-6 text-green-400 shrink-0 mt-0.5" />
-        <div className="text-left">
-          <p className="text-xs font-semibold uppercase tracking-wide text-green-400 mb-1">Correct Diagnosis</p>
-          <p className="text-lg font-bold text-white">Acute Inferior Myocardial Infarction</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Page 3: Reflection questions ────────────────────────────────────────────
-
-const REFLECTION_QUESTIONS = [
-  {
-    id: 'improvements',
-    label: 'Based on this simulation, where do you think you need to improve in the future',
-    maxSelect: 3,
-    required: true,
-    options: [
-      'Interpreting radiology results',
-      'Interpreting lab results',
-      'Clinical examination skills',
-      'Treatment planning',
-      'Managing uncertainty',
-      'Communication skills',
-      'I don\'t think I need improvement in this case',
-      'Others',
-    ],
-  },
-  {
-    id: 'doDifferently',
-    label: 'If you could do this case again, what would you do differently',
-    maxSelect: 3,
-    required: true,
-    options: [
-      'Make a different diagnosis',
-      'Pay more attention to collecting history-related information',
-      'Pay more attention to communicating with the patient',
-      'Order different tests',
-      'Arrange different treatments',
-      'Pay more attention to analysing lab test results',
-      'Pay more attention to analysing radiology results',
-      'I would not change anything',
-      'Others',
-    ],
-  },
-];
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
-const PAGE_TITLES = [
-  'Self-Assessment',
-  'Case Results',
-  'Reflection',
-];
+const PAGE_TITLES = ['Clinical Reasoning Assessment', 'User Experience'];
+const TOTAL_PAGES = 2;
 
-export default function EndSessionQuestionnaire({
-  onSubmit,
-  onCancel,
-  hideCancel = false,
-}) {
+const initAnswers = (questions, prefix) =>
+  Object.fromEntries(questions.map((_, i) => [`${prefix}_${i}`, null]));
+
+const validatePage = (questions, prefix, answers) => {
+  const errors = {};
+  questions.forEach((_, i) => {
+    const key = `${prefix}_${i}`;
+    if (answers[key] == null) errors[key] = 'Please select a rating.';
+  });
+  return errors;
+};
+
+export default function EndSessionQuestionnaire({ onSubmit, onCancel, hideCancel = false }) {
   const [page, setPage] = useState(1);
-  const TOTAL_PAGES = 3;
-
-  const [answers, setAnswers] = useState({
-    diagnosis: [],
-    diagnosisConfidence: null,
-    decisionProcess: [],
-    keyFactors: [],
-    treatment: [],
-    treatmentConfidence: null,
-  });
-  const [reflectionAnswers, setReflectionAnswers] = useState({
-    improvements: [],
-    doDifferently: [],
-  });
-  const [errors, setErrors] = useState({});
+  const [craAnswers, setCraAnswers] = useState(() => initAnswers(CRA_QUESTIONS, 'cra'));
+  const [uxAnswers, setUxAnswers]   = useState(() => initAnswers(UX_QUESTIONS,  'ux'));
+  const [errors, setErrors]         = useState({});
   const [submitting, setSubmitting] = useState(false);
 
-  const setAnswer = (id, value) => {
-    setAnswers((prev) => ({ ...prev, [id]: value }));
-    setErrors((prev) => ({ ...prev, [id]: undefined }));
-  };
-
-  const setReflectionAnswer = (id, value) => {
-    setReflectionAnswers((prev) => ({ ...prev, [id]: value }));
-    setErrors((prev) => ({ ...prev, [id]: undefined }));
-  };
-
-  const validatePage1 = () => {
-    const newErrors = {};
-    QUESTIONS.forEach((q) => {
-      if (!q.required) return;
-      const val = answers[q.id];
-      if (q.type === 'rating') {
-        if (val === null || val === undefined) newErrors[q.id] = 'Please select a rating.';
-      } else {
-        if (!val || val.length === 0) newErrors[q.id] = 'Please select at least one option.';
-      }
-    });
-    return newErrors;
-  };
-
-  const validatePage3 = () => {
-    const newErrors = {};
-    REFLECTION_QUESTIONS.forEach((q) => {
-      if (!q.required) return;
-      const val = reflectionAnswers[q.id];
-      if (!val || val.length === 0) newErrors[q.id] = 'Please select at least one option.';
-    });
-    return newErrors;
+  const setAnswer = (setter) => (key, value) => {
+    setter((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => ({ ...prev, [key]: undefined }));
   };
 
   const handleNext = () => {
-    if (page === 1) {
-      const newErrors = validatePage1();
-      if (Object.keys(newErrors).length > 0) {
-        setErrors(newErrors);
-        const firstErrId = Object.keys(newErrors)[0];
-        document.getElementById(`q-${firstErrId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
+    const newErrors = validatePage(CRA_QUESTIONS, 'cra', craAnswers);
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      document.getElementById(`item-${Object.keys(newErrors)[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
     }
     setErrors({});
-    setPage((p) => p + 1);
+    setPage(2);
   };
 
   const handleSubmit = async () => {
-    const newErrors = validatePage3();
+    const newErrors = validatePage(UX_QUESTIONS, 'ux', uxAnswers);
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      const firstErrId = Object.keys(newErrors)[0];
-      document.getElementById(`rq-${firstErrId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById(`item-${Object.keys(newErrors)[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     setSubmitting(true);
-    await onSubmit({ ...answers, ...reflectionAnswers });
+    await onSubmit({ ...craAnswers, ...uxAnswers });
     setSubmitting(false);
   };
 
@@ -332,12 +200,8 @@ export default function EndSessionQuestionnaire({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-700 shrink-0">
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <StepIndicator current={page} total={TOTAL_PAGES} />
-            </div>
-            <h2 className="text-base font-semibold text-white">
-              {PAGE_TITLES[page - 1]}
-            </h2>
+            <StepIndicator current={page} total={TOTAL_PAGES} />
+            <h2 className="text-base font-semibold text-white">{PAGE_TITLES[page - 1]}</h2>
           </div>
           {!hideCancel && (
             <button
@@ -353,81 +217,28 @@ export default function EndSessionQuestionnaire({
         {/* Body */}
         <div className="overflow-y-auto flex-1 px-5 py-4">
           {page === 1 && (
-            <div className="space-y-6">
-              {QUESTIONS.map((q, idx) => (
-                <div key={q.id} id={`q-${q.id}`} className="space-y-2">
-                  <p className="text-sm font-medium text-neutral-100">
-                    <span className="text-neutral-400 mr-1">{idx + 1}.</span>
-                    {q.label}
-                    {q.maxSelect && (
-                      <span className="text-neutral-400 ml-1 font-normal">
-                        (select a maximum of {q.maxSelect})
-                      </span>
-                    )}
-                    {q.sublabel && (
-                      <span className="text-neutral-400 ml-1 font-normal">{q.sublabel}</span>
-                    )}
-                    <span className="text-red-400 ml-1">*</span>
-                  </p>
-                  {q.type === 'rating' ? (
-                    <RatingInput
-                      value={answers[q.id]}
-                      onChange={(v) => setAnswer(q.id, v)}
-                      min={q.min}
-                      max={q.max}
-                    />
-                  ) : (
-                    <MultiSelectInput
-                      options={q.options}
-                      selected={answers[q.id]}
-                      maxSelect={q.maxSelect}
-                      onChange={(v) => setAnswer(q.id, v)}
-                    />
-                  )}
-                  {errors[q.id] && (
-                    <p className="text-xs text-red-400">{errors[q.id]}</p>
-                  )}
-                </div>
-              ))}
-            </div>
+            <LikertPage
+              questions={CRA_QUESTIONS}
+              prefix="cra"
+              answers={craAnswers}
+              setAnswer={setAnswer(setCraAnswers)}
+              errors={errors}
+            />
           )}
-
-          {page === 2 && <ResultsPage />}
-
-          {page === 3 && (
-            <div className="space-y-6">
-              {REFLECTION_QUESTIONS.map((q, idx) => (
-                <div key={q.id} id={`rq-${q.id}`} className="space-y-2">
-                  <p className="text-sm font-medium text-neutral-100">
-                    <span className="text-neutral-400 mr-1">{idx + 1}.</span>
-                    {q.label}
-                    {q.maxSelect && (
-                      <span className="text-neutral-400 ml-1 font-normal">
-                        (select a maximum of {q.maxSelect})
-                      </span>
-                    )}
-                    <span className="text-red-400 ml-1">*</span>
-                  </p>
-                  <MultiSelectInput
-                    options={q.options}
-                    selected={reflectionAnswers[q.id]}
-                    maxSelect={q.maxSelect}
-                    onChange={(v) => setReflectionAnswer(q.id, v)}
-                  />
-                  {errors[q.id] && (
-                    <p className="text-xs text-red-400">{errors[q.id]}</p>
-                  )}
-                </div>
-              ))}
-            </div>
+          {page === 2 && (
+            <LikertPage
+              questions={UX_QUESTIONS}
+              prefix="ux"
+              answers={uxAnswers}
+              setAnswer={setAnswer(setUxAnswers)}
+              errors={errors}
+            />
           )}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-neutral-700 shrink-0">
-          <div className="text-xs text-neutral-500">
-            Page {page} of {TOTAL_PAGES}
-          </div>
+          <div className="text-xs text-neutral-500">Page {page} of {TOTAL_PAGES}</div>
           <div className="flex items-center gap-3">
             {!hideCancel && page === 1 && (
               <button

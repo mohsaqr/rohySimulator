@@ -11,7 +11,7 @@ import { usePatientRecord } from '../../services/PatientRecord';
 const EMOTIONS_ROW1 = ['Inspired', 'Alert', 'Excited', 'Enthusiastic', 'Determined'];
 const EMOTIONS_ROW2 = ['Afraid', 'Upset', 'Nervous', 'Scared', 'Distressed'];
 
-export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, currentVitals }) {
+export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, currentVitals, scenarioStageVersion }) {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [sessionId, setSessionId] = useState(null);
@@ -19,10 +19,8 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const messagesEndRef = useRef(null);
     const { user } = useAuth();
 
-    // Recurring emotion questionnaire
+    // Emotion questionnaire — shown on each scenario stage change
     const [showQuestionnaire, setShowQuestionnaire] = useState(false);
-    const questionnaireTimerRef = useRef(null);
-    const QUESTIONNAIRE_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
     const patientRecord = usePatientRecord();
     const { obtained } = patientRecord;
@@ -390,32 +388,17 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         return richSystemPrompt;
     };
 
-    // Schedule the next questionnaire appearance (2 min from now)
-    const startQuestionnaireTimer = useCallback(() => {
-        if (questionnaireTimerRef.current) clearTimeout(questionnaireTimerRef.current);
-        questionnaireTimerRef.current = setTimeout(() => {
-            setShowQuestionnaire(true);
-        }, QUESTIONNAIRE_INTERVAL_MS);
-    }, [QUESTIONNAIRE_INTERVAL_MS]);
-
-    // Start timer when session becomes active; clean up when it ends or on unmount
+    // Show emotion questionnaire whenever the scenario advances to a new stage
     useEffect(() => {
-        if (sessionId) {
-            startQuestionnaireTimer();
-        } else {
-            if (questionnaireTimerRef.current) clearTimeout(questionnaireTimerRef.current);
-            setShowQuestionnaire(false);
+        if (scenarioStageVersion > 0 && sessionId) {
+            setShowQuestionnaire(true);
         }
-        return () => {
-            if (questionnaireTimerRef.current) clearTimeout(questionnaireTimerRef.current);
-        };
-    }, [sessionId, startQuestionnaireTimer]);
+    }, [scenarioStageVersion]);
 
-    // Emotion logging — hides questionnaire and resets the 2-minute timer
+    // Emotion logging — hides questionnaire until the next stage change
     const handleEmotionClick = async (emotion) => {
         if (!sessionId) return;
         setShowQuestionnaire(false);
-        startQuestionnaireTimer();
         EventLogger.emotionExpressed(emotion, COMPONENTS.CHAT_INTERFACE);
         const token = AuthService.getToken();
         const headers = {
@@ -781,7 +764,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Recurring Emotion Questionnaire — appears every 2 minutes */}
+            {/* Emotion Questionnaire — appears on each scenario stage change */}
             {showQuestionnaire && (
                 <div className="px-4 pt-3 pb-2 border-t border-indigo-800/60 bg-indigo-950/40">
                     <p className="text-[11px] font-semibold text-indigo-300 text-center mb-2 tracking-wide">

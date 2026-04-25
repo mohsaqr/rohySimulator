@@ -2246,6 +2246,39 @@ function initDb() {
         db.run(`CREATE INDEX IF NOT EXISTS idx_questionnaire_user ON questionnaire_responses(user_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_questionnaire_session ON questionnaire_responses(session_id)`);
 
+        // ==================== CRA RESPONSES ====================
+        db.run(`CREATE TABLE IF NOT EXISTS cra_responses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER,
+            user_id INTEGER NOT NULL,
+            user_name TEXT,
+            user_email TEXT,
+            question TEXT NOT NULL,
+            user_answer INTEGER,
+            cr_stage TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_cra_user ON cra_responses(user_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_cra_session ON cra_responses(session_id)`);
+
+        // ==================== UX RESPONSES ====================
+        db.run(`CREATE TABLE IF NOT EXISTS ux_responses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER,
+            user_id INTEGER NOT NULL,
+            user_name TEXT,
+            user_email TEXT,
+            question TEXT NOT NULL,
+            user_answer INTEGER,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_ux_user ON ux_responses(user_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_ux_session ON ux_responses(session_id)`);
+
         // ==================== SEED DEFAULT AGENT PERSONAS ====================
         seedDefaultAgents();
 

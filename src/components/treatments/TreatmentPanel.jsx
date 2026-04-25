@@ -592,10 +592,6 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
                                     className={`w-full text-left p-3 rounded border transition-all ${
                                         isSelected
                                             ? `bg-${color}-900/30 border-${color}-600`
-                                            : treatment.is_contraindicated
-                                            ? 'bg-red-900/10 border-red-800/50 hover:bg-red-900/20'
-                                            : treatment.is_expected
-                                            ? 'bg-green-900/10 border-green-800/50 hover:bg-green-900/20'
                                             : 'bg-neutral-800/50 border-neutral-700 hover:bg-neutral-800'
                                     }`}
                                 >
@@ -603,12 +599,6 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
                                         <div>
                                             <div className="font-medium text-white flex items-center gap-2">
                                                 {treatment.treatment_name}
-                                                {treatment.is_contraindicated && (
-                                                    <span className="text-xs px-1.5 py-0.5 bg-red-600/30 text-red-300 rounded">CI</span>
-                                                )}
-                                                {treatment.is_expected && (
-                                                    <span className="text-xs px-1.5 py-0.5 bg-green-600/30 text-green-300 rounded">Expected</span>
-                                                )}
                                             </div>
                                             {treatment.description && (
                                                 <p className="text-xs text-neutral-400 mt-1">{treatment.description}</p>

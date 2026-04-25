@@ -378,51 +378,72 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                         )}
 
                                         {/* Audio upload for auscultation */}
-                                        {isAuscultation && (
+                                        {isAuscultation && (() => {
+                                            const isAbdomen  = selectedRegion === 'abdomen';
+                                            const isPosterior = ['backUpper', 'scapulaLeft', 'scapulaRight'].includes(selectedRegion);
+                                            const isNeck     = ['headNeck', 'neck'].includes(selectedRegion);
+                                            const isChest    = !isAbdomen && !isPosterior && !isNeck;
+
+                                            const primaryLabel  = isAbdomen ? 'Bowel / Abdominal Sounds (all quadrants)'
+                                                                : isNeck    ? 'Vascular Sound (carotid / thyroid bruit)'
+                                                                : isPosterior ? 'Lung Sound – posterior (all fields)'
+                                                                : 'Heart Sound (all cardiac points)';
+                                            const primaryColor  = isAbdomen ? { dot: 'bg-amber-500', border: 'border-amber-700/30', icon: 'text-amber-400', text: 'text-amber-400' }
+                                                                : isNeck    ? { dot: 'bg-purple-500', border: 'border-purple-700/30', icon: 'text-purple-400', text: 'text-purple-400' }
+                                                                : isPosterior ? { dot: 'bg-cyan-500', border: 'border-cyan-700/30', icon: 'text-cyan-400', text: 'text-cyan-400' }
+                                                                : { dot: 'bg-red-500', border: 'border-red-700/30', icon: 'text-red-400', text: 'text-red-400' };
+                                            const primaryUploadLabel = isAbdomen  ? 'Upload bowel / abdominal sound'
+                                                                     : isNeck     ? 'Upload vascular sound'
+                                                                     : isPosterior ? 'Upload posterior lung sound'
+                                                                     : 'Upload custom heart sound';
+                                            const primaryField = isPosterior ? 'lungAudio' : 'heartAudio';
+
+                                            return (
                                             <div className="mt-3 pt-3 border-t border-neutral-700 space-y-3">
                                                 <div className="text-xs text-cyan-400 font-medium">Auscultation Audio Files</div>
 
-                                                {/* Default sounds info */}
-                                                {!examData.abnormal && (
+                                                {/* Default sounds info (chest only) */}
+                                                {isChest && !examData.abnormal && (
                                                     <div className="bg-emerald-900/20 border border-emerald-700/30 rounded p-2 text-xs text-emerald-300">
                                                         Normal findings use default heart/lung sounds automatically
                                                     </div>
                                                 )}
 
-                                                {/* Heart Sound */}
+                                                {/* Primary audio slot (context-aware) */}
                                                 <div className="space-y-1">
-                                                    <label className="text-xs text-red-400 flex items-center gap-1">
-                                                        <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                                                        Heart Sound (all cardiac points)
+                                                    <label className={`text-xs flex items-center gap-1 ${primaryColor.text}`}>
+                                                        <span className={`w-2 h-2 rounded-full ${primaryColor.dot}`}></span>
+                                                        {primaryLabel}
                                                     </label>
-                                                    {examData.heartAudio ? (
+                                                    {examData[primaryField] ? (
                                                         <div className="flex items-center gap-2 bg-neutral-900 p-2 rounded">
-                                                            <audio controls src={examData.heartAudio} className="h-7 flex-1" />
+                                                            <audio controls src={examData[primaryField]} className="h-7 flex-1" />
                                                             <button
-                                                                onClick={() => updateAuscultationAudio(selectedRegion, examType, 'heartAudio', null)}
+                                                                onClick={() => updateAuscultationAudio(selectedRegion, examType, primaryField, null)}
                                                                 className="p-1 text-red-400 hover:text-red-300"
                                                             >
                                                                 <Trash2 className="w-3 h-3" />
                                                             </button>
                                                         </div>
                                                     ) : (
-                                                        <label className="flex items-center gap-2 px-2 py-1.5 bg-neutral-800 border border-dashed border-red-700/30 rounded cursor-pointer hover:bg-neutral-700 transition-colors">
-                                                            <Upload className="w-3 h-3 text-red-400" />
+                                                        <label className={`flex items-center gap-2 px-2 py-1.5 bg-neutral-800 border border-dashed ${primaryColor.border} rounded cursor-pointer hover:bg-neutral-700 transition-colors`}>
+                                                            <Upload className={`w-3 h-3 ${primaryColor.icon}`} />
                                                             <span className="text-xs text-neutral-400">
-                                                                {uploading ? 'Uploading...' : 'Upload custom heart sound'}
+                                                                {uploading ? 'Uploading...' : primaryUploadLabel}
                                                             </span>
                                                             <input
                                                                 type="file"
                                                                 accept="audio/*"
                                                                 className="hidden"
-                                                                onChange={(e) => handleAuscultationAudioUpload(selectedRegion, examType, 'heartAudio', e.target.files[0])}
+                                                                onChange={(e) => handleAuscultationAudioUpload(selectedRegion, examType, primaryField, e.target.files[0])}
                                                                 disabled={uploading}
                                                             />
                                                         </label>
                                                     )}
                                                 </div>
 
-                                                {/* Lung Sound */}
+                                                {/* Secondary lung sound slot – chest anterior only */}
+                                                {isChest && (
                                                 <div className="space-y-1">
                                                     <label className="text-xs text-cyan-400 flex items-center gap-1">
                                                         <span className="w-2 h-2 bg-cyan-500 rounded-full"></span>
@@ -454,12 +475,17 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                                         </label>
                                                     )}
                                                 </div>
+                                                )}
 
                                                 <p className="text-[10px] text-neutral-500">
-                                                    Custom audio overrides defaults. Heart sounds play at cardiac points, lung sounds at lung fields.
+                                                    {isAbdomen  ? 'Audio plays at all abdominal quadrant points.'
+                                                     : isNeck   ? 'Audio plays at carotid and thyroid points.'
+                                                     : isPosterior ? 'Audio plays at all posterior lung field points.'
+                                                     : 'Heart sounds play at cardiac points, lung sounds at lung fields.'}
                                                 </p>
                                             </div>
-                                        )}
+                                        );
+                                        })()}
                                     </div>
                                 );
                             })}
