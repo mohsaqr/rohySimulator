@@ -53,6 +53,42 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
             .catch(err => console.error('Failed to load groups:', err));
     }, []);
 
+    // Refresh reference ranges for all configured labs when patientGender changes
+    useEffect(() => {
+        const labs = caseData.config?.investigations?.labs || [];
+        if (!patientGender || labs.length === 0) return;
+        const names = labs.map(l => l.test_name).join('|');
+        const token = AuthService.getToken();
+        fetch(apiUrl(`/labs/ranges?gender=${encodeURIComponent(patientGender)}&names=${encodeURIComponent(names)}`), {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+            .then(res => res.json())
+            .then(data => {
+                const ranges = data.ranges || {};
+                const updatedLabs = labs.map(lab => {
+                    const ref = ranges[lab.test_name];
+                    if (!ref) return lab;
+                    return {
+                        ...lab,
+                        gender_category: ref.gender_category,
+                        min_value: ref.min_value,
+                        max_value: ref.max_value
+                    };
+                });
+                setCaseData(prev => ({
+                    ...prev,
+                    config: {
+                        ...prev.config,
+                        investigations: {
+                            ...(prev.config?.investigations || {}),
+                            labs: updatedLabs
+                        }
+                    }
+                }));
+            })
+            .catch(err => console.error('Failed to refresh lab ranges:', err));
+    }, [patientGender]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // Smart search with aliases
     useEffect(() => {
         if (!searchQuery || searchQuery.trim().length < 2) {

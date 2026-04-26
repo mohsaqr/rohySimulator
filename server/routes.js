@@ -2233,56 +2233,66 @@ router.post('/sessions/:id/order', authenticateToken, (req, res) => {
 router.get('/sessions/:id/orders', authenticateToken, (req, res) => {
     const sessionId = req.params.id;
 
-    // Calculate is_ready directly in SQLite to avoid timezone issues
-    const sql = `
-        SELECT
-            io.*,
-            ci.investigation_type,
-            ci.test_name,
-            ci.test_group,
-            ci.gender_category,
-            ci.min_value,
-            ci.max_value,
-            ci.current_value,
-            ci.unit,
-            ci.result_data,
-            ci.image_url,
-            ci.turnaround_minutes,
-            ci.is_abnormal,
-            CASE WHEN datetime(io.available_at) <= datetime('now') THEN 1 ELSE 0 END as is_ready_db,
-            (julianday(io.available_at) - julianday('now')) * 24 * 60 as minutes_remaining
-        FROM investigation_orders io
-        JOIN case_investigations ci ON io.investigation_id = ci.id
-        WHERE io.session_id = ?
-        ORDER BY io.ordered_at DESC
-    `;
+    db.get(
+        `SELECT c.patient_gender FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?`,
+        [sessionId],
+        (err, session) => {
+            if (err) return res.status(500).json({ error: err.message });
+            const patientGender = session?.patient_gender || 'Male';
 
-    db.all(sql, [sessionId], (err, rows) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+            // Calculate is_ready directly in SQLite to avoid timezone issues
+            const sql = `
+                SELECT
+                    io.*,
+                    ci.investigation_type,
+                    ci.test_name,
+                    ci.test_group,
+                    ci.gender_category,
+                    ci.min_value,
+                    ci.max_value,
+                    ci.current_value,
+                    ci.unit,
+                    ci.result_data,
+                    ci.image_url,
+                    ci.turnaround_minutes,
+                    ci.is_abnormal,
+                    CASE WHEN datetime(io.available_at) <= datetime('now') THEN 1 ELSE 0 END as is_ready_db,
+                    (julianday(io.available_at) - julianday('now')) * 24 * 60 as minutes_remaining
+                FROM investigation_orders io
+                JOIN case_investigations ci ON io.investigation_id = ci.id
+                WHERE io.session_id = ?
+                ORDER BY io.ordered_at DESC
+            `;
+
+            db.all(sql, [sessionId], (err, rows) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                console.log(`[Orders API] Session ${sessionId}: ${rows.length} raw rows from DB`);
+
+                const orders = rows.map(row => {
+                    const genderRef = row.investigation_type === 'lab'
+                        ? labDb.getGenderSpecificTest(row.test_name, patientGender)
+                        : null;
+                    const order = {
+                        ...row,
+                        result_data: row.result_data ? JSON.parse(row.result_data) : null,
+                        is_ready: row.is_ready_db === 1,
+                        minutes_remaining: Math.max(0, Math.ceil(row.minutes_remaining || 0)),
+                        test_group: row.test_group || 'General',
+                        unit: row.unit || '',
+                        gender_category: genderRef?.category ?? row.gender_category,
+                        min_value: genderRef?.min_value ?? row.min_value ?? null,
+                        max_value: genderRef?.max_value ?? row.max_value ?? null,
+                        current_value: row.current_value ?? null
+                    };
+                    console.log(`  [Order] ${row.test_name}: is_ready=${order.is_ready}, mins_remaining_raw=${row.minutes_remaining?.toFixed(2)}, available_at=${row.available_at}`);
+                    return order;
+                });
+
+                res.json({ orders });
+            });
         }
-
-        console.log(`[Orders API] Session ${sessionId}: ${rows.length} raw rows from DB`);
-
-        // Parse JSON result_data and ensure all values are present
-        const orders = rows.map(row => {
-            const order = {
-                ...row,
-                result_data: row.result_data ? JSON.parse(row.result_data) : null,
-                is_ready: row.is_ready_db === 1,
-                minutes_remaining: Math.max(0, Math.ceil(row.minutes_remaining || 0)),
-                test_group: row.test_group || 'General',
-                unit: row.unit || '',
-                min_value: row.min_value ?? null,
-                max_value: row.max_value ?? null,
-                current_value: row.current_value ?? null
-            };
-            console.log(`  [Order] ${row.test_name}: is_ready=${order.is_ready}, mins_remaining_raw=${row.minutes_remaining?.toFixed(2)}, available_at=${row.available_at}`);
-            return order;
-        });
-
-        res.json({ orders });
-    });
+    );
 });
 
 // PUT /api/orders/:id/view - Mark investigation as viewed
@@ -2417,6 +2427,26 @@ router.get('/labs/all', authenticateToken, (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Error fetching all tests', details: error.message });
     }
+});
+
+// GET /api/labs/ranges - Get gender-specific reference ranges for a list of test names
+// Query params: gender=Male&names=Test1|Test2|Test3
+router.get('/labs/ranges', authenticateToken, (req, res) => {
+    const { gender = 'Male', names = '' } = req.query;
+    const testNames = names.split('|').map(n => n.trim()).filter(Boolean);
+    const result = {};
+    testNames.forEach(name => {
+        const ref = labDb.getGenderSpecificTest(name, gender);
+        if (ref) {
+            result[name] = {
+                gender_category: ref.category,
+                min_value: ref.min_value,
+                max_value: ref.max_value,
+                unit: ref.unit
+            };
+        }
+    });
+    res.json({ ranges: result });
 });
 
 // GET /api/labs/grouped - Get tests grouped by name
@@ -2736,15 +2766,18 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, (req, res) 
                 Object.entries(uniqueTests).forEach(([testName, variations]) => {
                     // Check if this test has a configured abnormal value
                     if (configuredMap[testName]) {
-                        // Use configured abnormal value
+                        // Use configured abnormal value but re-evaluate reference range by current patient gender
                         const configLab = configuredMap[testName];
-                        // normal_samples might be array (config JSON) or string (DB)
                         const normalSamples = Array.isArray(configLab.normal_samples)
                             ? configLab.normal_samples
                             : (typeof configLab.normal_samples === 'string' ? JSON.parse(configLab.normal_samples || '[]') : []);
+                        const genderRef = labDb.getGenderSpecificTest(testName, patientGender);
                         responseLabs.push({
                             ...configLab,
                             normal_samples: normalSamples,
+                            gender_category: genderRef?.category ?? configLab.gender_category,
+                            min_value: genderRef?.min_value ?? configLab.min_value,
+                            max_value: genderRef?.max_value ?? configLab.max_value,
                             source: configLab.source || 'configured'
                         });
                     } else {
@@ -2983,16 +3016,17 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
 
                     if (configLab) {
                         pendingOps++;
+                        const genderRef = labDb.getGenderSpecificTest(configLab.test_name, patientGender);
                         db.run(insertLabSql, [
                             session.case_id, 'lab',
                             configLab.test_name,
-                            configLab.test_group || 'General',
-                            configLab.gender_category || 'Both',
-                            configLab.min_value,
-                            configLab.max_value,
+                            configLab.test_group || genderRef?.group || 'General',
+                            genderRef?.category ?? configLab.gender_category ?? 'Both',
+                            genderRef?.min_value ?? configLab.min_value,
+                            genderRef?.max_value ?? configLab.max_value,
                             configLab.current_value,
-                            configLab.unit || '',
-                            JSON.stringify(configLab.normal_samples || []),
+                            configLab.unit || genderRef?.unit || '',
+                            JSON.stringify(configLab.normal_samples || genderRef?.normal_samples || []),
                             configLab.is_abnormal ? 1 : 0,
                             getTurnaround(configLab.turnaround_minutes)
                         ], function(err) {
@@ -3058,44 +3092,61 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
 // GET /api/sessions/:sessionId/lab-results - Get completed lab results
 router.get('/sessions/:sessionId/lab-results', authenticateToken, (req, res) => {
     const { sessionId } = req.params;
-    
-    const sql = `
-        SELECT 
-            io.id as order_id,
-            io.ordered_at,
-            io.available_at,
-            io.viewed_at,
-            ci.id as lab_id,
-            ci.test_name,
-            ci.test_group,
-            ci.unit,
-            ci.current_value,
-            ci.min_value,
-            ci.max_value,
-            ci.is_abnormal,
-            ci.gender_category
-        FROM investigation_orders io
-        JOIN case_investigations ci ON io.investigation_id = ci.id
-        WHERE io.session_id = ? AND ci.investigation_type = 'lab'
-        AND datetime(io.available_at) <= datetime('now')
-        ORDER BY io.available_at DESC
-    `;
-    
-    db.all(sql, [sessionId], (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+
+    db.get(
+        `SELECT s.case_id, c.patient_gender FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?`,
+        [sessionId],
+        (err, session) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!session) return res.status(404).json({ error: 'Session not found' });
+
+            const patientGender = session.patient_gender || 'Male';
+
+            const sql = `
+                SELECT
+                    io.id as order_id,
+                    io.ordered_at,
+                    io.available_at,
+                    io.viewed_at,
+                    ci.id as lab_id,
+                    ci.test_name,
+                    ci.test_group,
+                    ci.unit,
+                    ci.current_value,
+                    ci.min_value,
+                    ci.max_value,
+                    ci.is_abnormal,
+                    ci.gender_category
+                FROM investigation_orders io
+                JOIN case_investigations ci ON io.investigation_id = ci.id
+                WHERE io.session_id = ? AND ci.investigation_type = 'lab'
+                AND datetime(io.available_at) <= datetime('now')
+                ORDER BY io.available_at DESC
+            `;
+
+            db.all(sql, [sessionId], (err, results) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                const processedResults = results.map(result => {
+                    const genderRef = labDb.getGenderSpecificTest(result.test_name, patientGender);
+                    const minValue = genderRef?.min_value ?? result.min_value;
+                    const maxValue = genderRef?.max_value ?? result.max_value;
+                    const genderCategory = genderRef?.category ?? result.gender_category;
+                    return {
+                        ...result,
+                        gender_category: genderCategory,
+                        min_value: minValue,
+                        max_value: maxValue,
+                        status: labDb.evaluateValue(result.current_value, minValue, maxValue),
+                        flag: labDb.getValueFlag(labDb.evaluateValue(result.current_value, minValue, maxValue)),
+                        is_ready: true
+                    };
+                });
+
+                res.json({ results: processedResults });
+            });
         }
-        
-        // Evaluate each result
-        const processedResults = results.map(result => ({
-            ...result,
-            status: labDb.evaluateValue(result.current_value, result.min_value, result.max_value),
-            flag: labDb.getValueFlag(labDb.evaluateValue(result.current_value, result.min_value, result.max_value)),
-            is_ready: true
-        }));
-        
-        res.json({ results: processedResults });
-    });
+    );
 });
 
 // PUT /api/sessions/:sessionId/labs/:labId - Instructor edit lab value during simulation (Admin only)
