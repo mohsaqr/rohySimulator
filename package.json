@@ -31,7 +31,8 @@
     "multer": "^2.0.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "tnaj": "github:mohsaqr/tna-js"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

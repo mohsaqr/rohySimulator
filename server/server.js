@@ -24,13 +24,13 @@ const allowedOrigins = [
     process.env.FRONTEND_URL      // Production URL from env
 ].filter(Boolean);
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, curl, etc.) in development
-        if (!origin && process.env.NODE_ENV !== 'production') {
-            return callback(null, true);
-        }
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (!origin) return callback(null, true);
+        if (isDev) return callback(null, true);
+        if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
             console.warn(`[CORS] Blocked request from origin: ${origin}`);

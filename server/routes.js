@@ -7739,8 +7739,12 @@ router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, (req, re
             }
         }
 
-        // Step 5: Filter sequences with length < 2
-        const sequences = Object.values(userSeqs).filter(s => s.length >= 2);
+        // Step 5: Filter sequences with length < 2, preserving user_id mapping
+        const userSequences = {};
+        for (const [userId, seq] of Object.entries(userSeqs)) {
+            if (seq.length >= 2) userSequences[userId] = seq;
+        }
+        const sequences = Object.values(userSequences);
 
         // Collect unique verbs from final sequences
         const uniqueVerbSet = new Set();
@@ -7752,6 +7756,7 @@ router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, (req, re
 
         res.json({
             sequences,
+            userSequences,
             metadata: {
                 totalUsers: sequences.length,
                 totalEvents: rows.length,

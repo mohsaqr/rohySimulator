@@ -1,0 +1,35 @@
+# Project Learnings
+
+### 2026-02-18
+- [sqlite3]: Project uses `sqlite3` (async callback API), not `better-sqlite3`. Use `db.all(sql, params, callback)` and `db.run()` patterns. Cannot use `better-sqlite3` in inline node scripts.
+- [database seeding]: To insert test data for multiple users, must use SQLite directly via `node --input-type=module` with the `sqlite3` import, since the POST `/api/learning-events` endpoint assigns `user_id` from the JWT token (always the logged-in user).
+- [verb merging]: The `eventLogger.js` defines 50+ xAPI verbs. For TNA analysis, these are merged server-side into 10 clinical labels: NAVIGATION, ORDERED_LAB, VIEWED_LAB_RESULT, TREATMENT, EXAMINATION, SENT_MESSAGE, RECEIVED_MESSAGE, MONITORING, ALARM_RESPONSE, REVIEWED_RECORDS. System/config verbs (STARTED_SESSION, CHANGED_SETTING, etc.) are excluded (mapped to null).
+- [ConfigPanel structure]: ConfigPanel.jsx is ~4860 lines. Sidebar tabs are inside an `isAdmin()` conditional block ending around line 313. Tab content is rendered conditionally before line ~855. The `Activity` icon is already imported from lucide-react.
+- [routes.js size]: `server/routes.js` is ~7600 lines. The `export default router;` line is at the very end. New endpoints should be inserted before it.
+- [env setup]: Server requires `server/.env` with `JWT_SECRET`. Without it, server exits immediately with FATAL error. Copy from `server/.env.example` and generate a key.
+- [vite proxy]: Vite dev server proxies `/api` to `http://localhost:3000`. API calls through the frontend go through this proxy, not directly to port 3000.
+- [TNA computation]: TNA model computed client-side in `useMemo` keyed on `[data, pruneThreshold]`. Avoids refetching when only prune threshold changes. The computation (transition matrix + initial probability vector) is fast even for hundreds of sequences.
+- [SVG rendering]: Used polygon arrows instead of SVG `<marker>` elements — markers don't scale per-edge and are hard to style. Bidirectional edges must be curved (Bezier) or they overlap. Self-loops rendered as circular arcs outside nodes pointing away from graph center.
+- [rare verb filtering]: Verbs below the `min_verb_pct` threshold (default 5%) are replaced with "OTHER", then consecutive duplicates collapsed. This prevents graph noise from infrequent actions.
+- [dev server startup]: Must run `npm install` first if `node_modules/.bin/vite` is missing. The `npm run dev` uses `concurrently` to run both server and Vite client. Server fails immediately without `server/.env`.
+- [login after db recreate]: When the SQLite database is deleted/recreated, the seeder runs automatically on server start and re-creates default users (admin/admin123, student/student123). Passwords are bcrypt-hashed independently of JWT_SECRET, so changing the secret doesn't invalidate passwords — only existing JWT tokens.
+- [npm run build]: Production build command is `vite build --base=/rohy/` — the `/rohy/` base path is hardcoded for deployment. The `apiUrl()` helper in `src/config/api.js` prepends this base path automatically.
+
+### 2026-02-19
+- [clustering approach]: K-means on transition matrices does NOT work well — with ~10 labels, the 100-dimensional transition vectors are too similar and all clusters end up identical. The correct approach (matching the R `tna` package) is Levenshtein edit distance on raw sequences + Ward's D2 hierarchical clustering.
+- [Ward's D2 clustering]: Implemented with Lance-Williams update formula for O(n³) efficiency. Key: operates on squared Levenshtein distances. The naive approach (recomputing all pairwise inter-cluster distances each step) is O(n⁴) and freezes the browser.
+- [k-medoids failure]: K-medoids (PAM) with Levenshtein distances failed because tied distances (common in categorical sequences) caused `d < minD` (strict less-than) to always keep the first medoid, assigning all users to cluster 0.
+- [full-page pattern]: Full-page views in App.jsx use early-return pattern: `if (showX) return <div className="h-screen w-screen ..."><Component onClose={() => setShowX(false)} /></div>`. Stacked in order after `showFullPageSettings`.
+- [self-loop arrow bug]: Self-loop arrows in NetworkGraph.jsx were using radial direction (toNode vector) instead of arc tangent. Fix: compute tangent from `endAngle` with dot-product check to ensure it points toward the node.
+- [API backward compat]: Adding `userSequences` to the TNA API response alongside existing `sequences` is backward-compatible — old frontends ignore the extra field.
+- [cluster navigation]: Tab-based navigation (one cluster visible at a time) works better than showing all clusters on one page. Each tab shows colored dot + student count. 2×2 grid per cluster: Network | Distribution / InStrength Centrality | Frequency.
+- [InStrength centrality]: Sum of incoming edge weights per node. Computed via `centralities()` in tnaUtils.js. Rendered as horizontal bar chart sorted descending. Matches R `tna` package's `centralities()` function.
+
+### 2026-02-20
+- [index plot]: Sequence index plot (TraMineR's seqIplot) shows one row per sequence, colored by action at each timestep. Toggle between distribution plot and index plot via button in controls bar.
+- [users table]: Schema uses `password_hash` (not `password`), `name` (not `full_name`), role CHECK constraint is `IN ('admin', 'user')` — not 'student'.
+- [learning_events table]: Uses `duration_ms` not `duration`. Columns: session_id, user_id, case_id, timestamp, verb, object_type, object_id, object_name, component, parent_component, result, duration_ms, context, message_content, message_role, severity, category.
+- [tnaj package]: Install from GitHub: `npm install github:mohsaqr/tna-js`. Exports: `tna`, `ftna`, `ctna`, `atna`, `prune`, `clusterSequences`, `centralities`, `communities`, `cliques`, `compareSequences`, `colorPalette`, etc. Weights are `_Matrix` objects with `.get(i,j)` — must convert to 2D arrays for code that uses `weights[i][j]`. `clusterSequences(seqs, k, { dissimilarity: 'lv', method: 'pam' })` returns `{ assignments, silhouette, sizes }`.
+- [Express 5 + Object.create(null)]: Express 5's `res.json()` silently drops properties that are `Object.create(null)` objects. Use `{}` instead. This caused `userSequences` to be missing from TNA API responses.
+- [TNA theme toggle]: Scoped light/dark theme via CSS custom properties on `[data-tna-theme]` attribute. Defined in `tnaTheme.css`. Theme state persisted via `localStorage.getItem('tna-theme')`. All Tailwind color classes in TNA components replaced with inline `style={{ color: 'var(--tna-token)' }}`. SVG hex colors replaced with `var()` references. Layout/spacing Tailwind classes kept unchanged. Hover effects use `onMouseEnter`/`onMouseLeave` inline handlers since CSS vars can't be used directly in Tailwind hover: classes.
+- [SVG CSS vars]: SVG `fill` and `stroke` attributes accept CSS `var()` references directly (e.g., `fill="var(--tna-svg-label)"`). No need for inline `style` prop. The `rgba()` donut background color works as a single CSS var value including opacity.

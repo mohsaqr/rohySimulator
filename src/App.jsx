@@ -15,10 +15,11 @@ import { PatientRecordProvider, usePatientRecord } from './services/PatientRecor
 import { AuthService } from './services/authService';
 import EventLogger, { COMPONENTS } from './services/eventLogger';
 import { apiUrl } from './config/api';
-import { Settings, X, LogOut, User, RotateCcw, ChevronDown } from 'lucide-react';
+import { Settings, X, LogOut, User, RotateCcw, ChevronDown, Activity } from 'lucide-react';
 import ManikinPanel from './components/examination/ManikinPanel';
 import BodyMapDebug from './components/examination/BodyMapDebug';
 import EndSessionQuestionnaire from './components/common/EndSessionQuestionnaire';
+import TnaDashboard from './components/analytics/tna/TnaDashboard';
 
 // Session expiry time in milliseconds (default 30 minutes)
 const SESSION_EXPIRY_MS = parseInt(localStorage.getItem('rohy_session_expiry_minutes') || '30') * 60 * 1000;
@@ -28,6 +29,7 @@ function MainApp() {
    const [showFullPageSettings, setShowFullPageSettings] = useState(false);
    const [showUserProfile, setShowUserProfile] = useState(false);
    const [showUserMenu, setShowUserMenu] = useState(false);
+   const [showTnaAnalytics, setShowTnaAnalytics] = useState(false);
    const { user, logout, isAdmin } = useAuth();
    const toast = useToast();
    const [sessionValidated, setSessionValidated] = useState(false);
@@ -283,6 +285,15 @@ function MainApp() {
       );
    }
 
+   // Show full-page TNA analytics
+   if (showTnaAnalytics) {
+      return (
+         <div className="h-screen w-screen overflow-hidden">
+            <TnaDashboard onClose={() => setShowTnaAnalytics(false)} />
+         </div>
+      );
+   }
+
    // Prepare patient info for PatientRecord
    const patientInfo = activeCase ? {
       name: activeCase.config?.patient_name || activeCase.name || 'Unknown Patient',
@@ -356,6 +367,18 @@ function MainApp() {
                                  <Settings className="w-4 h-4 text-neutral-400" />
                                  Settings
                               </button>
+                              {isAdmin() && (
+                                 <button
+                                    onClick={() => {
+                                       setShowTnaAnalytics(true);
+                                       setShowUserMenu(false);
+                                    }}
+                                    className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
+                                 >
+                                    <Activity className="w-4 h-4 text-purple-400" />
+                                    TNA Analytics
+                                 </button>
+                              )}
                               <div className="border-t border-neutral-700" />
                               <button
                                  onClick={() => {
