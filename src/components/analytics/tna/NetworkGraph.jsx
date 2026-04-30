@@ -120,7 +120,10 @@ export default function NetworkGraph({ model, onPruneChange, pruneThreshold }) {
       <div className="flex justify-end mb-2">
         <button
           onClick={() => setSettingsOpen(!settingsOpen)}
-          className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 transition-colors"
+          className="flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors"
+          style={{ color: 'var(--tna-text-secondary)', backgroundColor: 'var(--tna-bg-card)' }}
+          onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--tna-bg-hover)'; e.currentTarget.style.color = 'var(--tna-text)'; }}
+          onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'var(--tna-bg-card)'; e.currentTarget.style.color = 'var(--tna-text-secondary)'; }}
         >
           <Settings className="w-3.5 h-3.5" />
           Graph Settings
@@ -130,7 +133,7 @@ export default function NetworkGraph({ model, onPruneChange, pruneThreshold }) {
 
       {/* Collapsible settings panel */}
       {settingsOpen && (
-        <div className="bg-neutral-800 rounded-lg p-3 mb-3 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs text-neutral-300">
+        <div className="rounded-lg p-3 mb-3 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs" style={{ backgroundColor: 'var(--tna-bg-card)', color: 'var(--tna-text-secondary)' }}>
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -210,13 +213,14 @@ export default function NetworkGraph({ model, onPruneChange, pruneThreshold }) {
           const ex = loopCenterX + loopRadius * Math.cos(endAngle);
           const ey = loopCenterY + loopRadius * Math.sin(endAngle);
 
-          // Arrow direction at end point (tangent to circle at endpoint, pointing toward node)
-          const tangentX = -Math.sin(endAngle);
-          const tangentY = Math.cos(endAngle);
-          // The arrow should point towards the node
+          // Arrow direction: use arc tangent at endpoint with dot-product check
+          const arrowDirX = Math.sin(endAngle);
+          const arrowDirY = -Math.cos(endAngle);
           const toNodeX = node.x - ex;
           const toNodeY = node.y - ey;
-          const toNodeDist = Math.sqrt(toNodeX * toNodeX + toNodeY * toNodeY) || 1;
+          const dot = arrowDirX * toNodeX + arrowDirY * toNodeY;
+          const finalDirX = dot >= 0 ? arrowDirX : -arrowDirX;
+          const finalDirY = dot >= 0 ? arrowDirY : -arrowDirY;
 
           const opacity = Math.min(edgeOpacity(sl.weight) + 0.15, 0.8);
           const width = Math.max(edgeWidth(sl.weight), 1.2);
@@ -232,7 +236,7 @@ export default function NetworkGraph({ model, onPruneChange, pruneThreshold }) {
                 opacity={opacity}
               />
               <polygon
-                points={arrowPoly(ex, ey, toNodeX / toNodeDist, toNodeY / toNodeDist, ARROW_SIZE * 0.8)}
+                points={arrowPoly(ex, ey, finalDirX, finalDirY, ARROW_SIZE * 0.8)}
                 fill={ARROW_COLOR}
                 opacity={opacity}
               />
@@ -242,7 +246,7 @@ export default function NetworkGraph({ model, onPruneChange, pruneThreshold }) {
                   y={loopCenterY + dirY * (loopRadius + 8)}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fill="#555566"
+                  fill="var(--tna-svg-edge-label)"
                   fontSize={7}
                 >
                   {sl.weight.toFixed(2).replace(/^0/, '')}
@@ -327,7 +331,7 @@ export default function NetworkGraph({ model, onPruneChange, pruneThreshold }) {
                   y={labelPos.y}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fill="#555566"
+                  fill="var(--tna-svg-edge-label)"
                   fontSize={7}
                 >
                   {e.weight.toFixed(2).replace(/^0/, '')}
@@ -352,9 +356,8 @@ export default function NetworkGraph({ model, onPruneChange, pruneThreshold }) {
               <circle
                 r={ringRadius}
                 fill="none"
-                stroke="#e0e0e0"
+                stroke="var(--tna-svg-donut-bg)"
                 strokeWidth={rimWidth}
-                opacity={0.3}
               />
               {/* Donut ring arc (init probability) */}
               {arcPath && (
@@ -370,7 +373,7 @@ export default function NetworkGraph({ model, onPruneChange, pruneThreshold }) {
               <circle
                 r={nodeRadius}
                 fill={node.color}
-                stroke="white"
+                stroke="var(--tna-svg-node-stroke)"
                 strokeWidth={2.5}
                 opacity={0.9}
               />
@@ -378,7 +381,7 @@ export default function NetworkGraph({ model, onPruneChange, pruneThreshold }) {
               <text
                 textAnchor="middle"
                 dominantBaseline="central"
-                fill="white"
+                fill="var(--tna-svg-node-stroke)"
                 fontSize={fontSize}
                 fontWeight={600}
               >

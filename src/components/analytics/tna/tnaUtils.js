@@ -1,60 +1,48 @@
 /**
- * Transition Network Analysis (TNA) computation utilities.
- * Builds transition probability matrices from categorical action sequences.
+ * TNA computation utilities — thin wrappers around the tnaj package.
+ * Converts tnaj Matrix objects to plain 2D arrays so downstream
+ * components (NetworkGraph, CentralityChart) can use weights[i][j].
  */
+import {
+  tna as tnajTna,
+  prune as tnajPrune,
+  clusterSequences as tnajCluster,
+  centralities as tnajCentralities,
+} from 'tnaj';
 
 /**
- * Compute a TNA model from sequences of categorical actions.
- * @param {string[][]} sequences - Array of action sequences
- * @param {{ labels: string[] }} options - Options with ordered label list
+ * Convert a tnaj Matrix to a plain 2D array.
+ */
+function matrixTo2D(matrix, n) {
+  const arr = [];
+  for (let i = 0; i < n; i++) {
+    const row = [];
+    for (let j = 0; j < n; j++) {
+      row.push(matrix.get(i, j));
+    }
+    arr.push(row);
+  }
+  return arr;
+}
+
+/**
+ * Compute a TNA model from sequences.
+ * @param {string[][]} sequences
+ * @param {{ labels: string[] }} options
  * @returns {{ labels: string[], weights: number[][], inits: Float64Array }}
  */
 export function tna(sequences, { labels }) {
-  const n = labels.length;
-  const labelIndex = Object.create(null);
-  labels.forEach((l, i) => { labelIndex[l] = i; });
-
-  // Transition counts: counts[i][j] = number of i→j transitions
-  const counts = Array.from({ length: n }, () => new Float64Array(n));
-  // Initial counts
-  const initCounts = new Float64Array(n);
-
-  for (const seq of sequences) {
-    if (seq.length === 0) continue;
-    const firstIdx = labelIndex[seq[0]];
-    if (firstIdx !== undefined) {
-      initCounts[firstIdx]++;
-    }
-    for (let k = 0; k < seq.length - 1; k++) {
-      const from = labelIndex[seq[k]];
-      const to = labelIndex[seq[k + 1]];
-      if (from !== undefined && to !== undefined) {
-        counts[from][to]++;
-      }
-    }
-  }
-
-  // Normalize rows to probabilities
-  const weights = counts.map(row => {
-    const sum = row.reduce((a, b) => a + b, 0);
-    if (sum === 0) return Array.from(row);
-    return Array.from(row, v => v / sum);
-  });
-
-  // Normalize initial probabilities
-  const initSum = initCounts.reduce((a, b) => a + b, 0);
-  const inits = initSum > 0
-    ? new Float64Array(initCounts.map(v => v / initSum))
-    : new Float64Array(n);
-
-  return { labels, weights, inits };
+  const model = tnajTna(sequences);
+  const n = model.labels.length;
+  return {
+    labels: model.labels,
+    weights: matrixTo2D(model.weights, n),
+    inits: model.inits,
+  };
 }
 
 /**
  * Prune weak transitions below threshold (set to 0).
- * @param {{ labels: string[], weights: number[][], inits: Float64Array }} model
- * @param {number} threshold - Minimum weight to keep (0-0.5)
- * @returns {{ labels: string[], weights: number[][], inits: Float64Array }}
  */
 export function prune(model, threshold) {
   const prunedWeights = model.weights.map(row =>
@@ -65,8 +53,6 @@ export function prune(model, threshold) {
 
 /**
  * Find the maximum value in a 2D weight matrix.
- * @param {number[][]} weights - N x N matrix
- * @returns {number}
  */
 export function maxWeight(weights) {
   let max = 0;
@@ -76,4 +62,72 @@ export function maxWeight(weights) {
     }
   }
   return max;
+}
+
+/**
+ * Cluster user sequences using tnaj's clusterSequences (PAM + Levenshtein).
+ * @param {Object} userSequences - { userId: string[] } mapping
+ * @param {string[]} labels - Ordered label list
+ * @param {number} k - Number of clusters
+ * @returns {{ id: number, userIds: string[], sequences: string[][] }[]}
+ */
+export function clusterSequences(userSequences, labels, k) {
+  const userIds = Object.keys(userSequences);
+  const seqs = userIds.map(uid => userSequences[uid]);
+  const m = seqs.length;
+
+  if (m <= k) {
+    return seqs.map((seq, i) => ({
+      id: i,
+      userIds: [userIds[i]],
+      sequences: [seq],
+    }));
+  }
+
+  const result = tnajCluster(seqs, k, {
+    dissimilarity: 'lv',
+    method: 'pam',
+  });
+
+  // Group by cluster assignment
+  const groups = new Map();
+  for (let i = 0; i < m; i++) {
+    const c = result.assignments[i];
+    if (!groups.has(c)) groups.set(c, { userIds: [], sequences: [] });
+    const g = groups.get(c);
+    g.userIds.push(userIds[i]);
+    g.sequences.push(seqs[i]);
+  }
+
+  const clusters = [];
+  for (const [, g] of groups) {
+    clusters.push({ id: clusters.length, userIds: g.userIds, sequences: g.sequences });
+  }
+  return clusters;
+}
+
+/**
+ * Compute centrality metrics using tnaj.
+ */
+export function centralities(model) {
+  // Build a tnaj model from our 2D array weights
+  const n = model.labels.length;
+  const tnajModel = tnajTna([['_dummy']]);
+  // Instead, compute centralities manually from our 2D weights
+  // (tnaj centralities expects a tnaj model with Matrix weights)
+  const { labels, weights } = model;
+
+  return labels.map((label, i) => {
+    let outStrength = 0;
+    let inStrength = 0;
+    for (let j = 0; j < n; j++) {
+      outStrength += weights[i][j];
+      inStrength += weights[j][i];
+    }
+    return {
+      label,
+      inStrength: Math.round(inStrength * 1000) / 1000,
+      outStrength: Math.round(outStrength * 1000) / 1000,
+    };
+  }).sort((a, b) => b.inStrength - a.inStrength);
 }

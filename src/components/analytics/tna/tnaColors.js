@@ -26,3 +26,21 @@ export const ARROW_COLOR = '#3a6a9f';
 export function getNodeColor(index) {
   return NODE_COLORS[index % NODE_COLORS.length];
 }
+
+/** Accent colors for cluster panels (max k=5). */
+export const CLUSTER_COLORS = [
+  '#6366f1', // Indigo
+  '#f59e0b', // Amber
+  '#10b981', // Emerald
+  '#ef4444', // Red
+  '#8b5cf6', // Violet
+];
+
+/**
+ * Get accent color for a cluster index.
+ * @param {number} index
+ * @returns {string}
+ */
+export function getClusterColor(index) {
+  return CLUSTER_COLORS[index % CLUSTER_COLORS.length];
+}

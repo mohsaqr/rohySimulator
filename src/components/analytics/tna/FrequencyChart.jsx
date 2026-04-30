@@ -49,7 +49,7 @@ export default function FrequencyChart({ sequences, labels }) {
               y={y + BAR_HEIGHT / 2}
               textAnchor="end"
               dominantBaseline="central"
-              fill="#d1d5db"
+              fill="var(--tna-svg-bar-label)"
               fontSize={11}
               fontWeight={500}
             >
@@ -68,7 +68,7 @@ export default function FrequencyChart({ sequences, labels }) {
               x={LEFT_MARGIN + barWidth + 6}
               y={y + BAR_HEIGHT / 2}
               dominantBaseline="central"
-              fill="#9ca3af"
+              fill="var(--tna-svg-bar-value)"
               fontSize={10}
               fontWeight={500}
             >

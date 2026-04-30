@@ -12,8 +12,7 @@ export default function DistributionPlot({ sequences, labels }) {
     if (!sequences || sequences.length === 0) return { timesteps: [], maxTimestep: 0 };
 
     const maxLen = Math.max(...sequences.map(s => s.length));
-    const totalSeqs = sequences.length;
-    const coverageThreshold = 0.05;
+    const minTimesteps = 20; // always show at least 20 timesteps
     const steps = [];
 
     for (let t = 0; t < maxLen; t++) {
@@ -25,8 +24,9 @@ export default function DistributionPlot({ sequences, labels }) {
           total++;
         }
       }
-      // Cut off timesteps with < 5% coverage
-      if (total / totalSeqs < coverageThreshold) break;
+      if (total === 0) break;
+      // After 20 timesteps, cut off when only 1 sequence remains
+      if (t >= minTimesteps && total <= 1) break;
 
       const proportions = Object.create(null);
       for (const [label, count] of Object.entries(counts)) {
@@ -65,7 +65,7 @@ export default function DistributionPlot({ sequences, labels }) {
               y1={y}
               x2={svgWidth - RIGHT_MARGIN}
               y2={y}
-              stroke="#374151"
+              stroke="var(--tna-svg-grid)"
               strokeWidth={0.5}
             />
             <text
@@ -73,7 +73,7 @@ export default function DistributionPlot({ sequences, labels }) {
               y={y}
               textAnchor="end"
               dominantBaseline="central"
-              fill="#6b7280"
+              fill="var(--tna-svg-axis)"
               fontSize={10}
             >
               {(tick * 100).toFixed(0)}%
@@ -117,7 +117,7 @@ export default function DistributionPlot({ sequences, labels }) {
               x={x + barWidth / 2}
               y={TOP_MARGIN + plotHeight + 14}
               textAnchor="middle"
-              fill="#6b7280"
+              fill="var(--tna-svg-axis)"
               fontSize={10}
             >
               {ts.step}
@@ -131,7 +131,7 @@ export default function DistributionPlot({ sequences, labels }) {
         x={LEFT_MARGIN + plotWidth / 2}
         y={TOP_MARGIN + plotHeight + 32}
         textAnchor="middle"
-        fill="#9ca3af"
+        fill="var(--tna-svg-label)"
         fontSize={11}
       >
         Timestep
@@ -145,7 +145,7 @@ export default function DistributionPlot({ sequences, labels }) {
         return (
           <g key={label}>
             <rect x={legendX} y={legendY} width={10} height={10} fill={colorMap[label] || '#888'} rx={2} />
-            <text x={legendX + 14} y={legendY + 5} dominantBaseline="central" fill="#9ca3af" fontSize={9}>
+            <text x={legendX + 14} y={legendY + 5} dominantBaseline="central" fill="var(--tna-svg-label)" fontSize={9}>
               {label.length > 10 ? label.slice(0, 9) + '…' : label}
             </text>
           </g>
