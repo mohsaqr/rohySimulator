@@ -67,7 +67,7 @@ export const LLMService = {
      * Send Message to LLM via authenticated server proxy
      * Server handles LLM configuration and rate limiting
      */
-    async sendMessage(sessionId, messages, systemPrompt) {
+    async sendMessage(sessionId, messages, systemPrompt, sessionMode) {
         // 1. Log User Message
         const lastMsg = messages[messages.length - 1];
         if (lastMsg.role === 'user') {
@@ -77,14 +77,17 @@ export const LLMService = {
         try {
             // 2. Call LLM via authenticated proxy
             // Server handles: LLM config, rate limiting, usage tracking
+            const body = {
+                session_id: sessionId,
+                messages: messages,
+                system_prompt: systemPrompt || 'You are a patient.'
+            };
+            if (sessionMode) body.session_mode = sessionMode;
+
             const response = await fetch(apiUrl(`/proxy/llm`), {
                 method: 'POST',
                 headers: this.getAuthHeaders(),
-                body: JSON.stringify({
-                    session_id: sessionId,
-                    messages: messages,
-                    system_prompt: systemPrompt || 'You are a patient.'
-                })
+                body: JSON.stringify(body)
             });
 
             // Handle rate limiting

@@ -8,6 +8,7 @@ import bcrypt from 'bcrypt';
 import rateLimit from 'express-rate-limit';
 import { authenticateToken, requireAdmin, requireAuth, generateToken } from './middleware/auth.js';
 import * as labDb from './services/labDatabase.js';
+import { spawn } from 'node:child_process';
 
 // Rate limiters for security
 const authLimiter = rateLimit({
@@ -3952,7 +3953,7 @@ router.get('/treatment-effects', authenticateToken, (req, res) => {
 
 // --- LLM PROXY ROUTE with Authentication & Rate Limiting ---
 router.post('/proxy/llm', authenticateToken, async (req, res) => {
-    const { messages, system_prompt, session_id, agent_llm_config } = req.body;
+    const { messages, system_prompt, session_id, agent_llm_config, session_mode } = req.body;
     const userId = req.user.id;
     const today = new Date().toISOString().split('T')[0];
     const startTime = Date.now();
@@ -4119,7 +4120,22 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
 
         // Priority: agent > session > platform
         const provider = agentProvider || (sessionLlmSettings?.provider && sessionLlmSettings.provider.trim()) || platformProvider;
-        const model = agentModel || (sessionLlmSettings?.model && sessionLlmSettings.model.trim()) || platformModel;
+        const baseModel = agentModel || (sessionLlmSettings?.model && sessionLlmSettings.model.trim()) || platformModel;
+
+        // Voice-mode model override: when client sends session_mode='voice' AND admin has set
+        // llm_model_voice in platform settings, swap to that model for this call only.
+        // Voice mode often needs a smaller/faster model to keep round-trip latency under 2s.
+        let voiceModelOverride = null;
+        if (session_mode === 'voice') {
+            const stored = await getPlatformSetting('llm_model_voice');
+            if (stored && typeof stored === 'string' && stored.trim()) {
+                voiceModelOverride = stored.trim();
+            }
+        }
+        const model = voiceModelOverride || baseModel;
+        if (voiceModelOverride) {
+            console.log(`[LLM Proxy] Voice-mode override active: model=${voiceModelOverride}`);
+        }
 
         // For API key and base URL, also consider agent settings
         let baseUrl = platformBaseUrl;
@@ -6162,6 +6178,311 @@ router.put('/platform-settings/chat', authenticateToken, requireAdmin, async (re
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+
+// ============================================
+// VOICE SETTINGS (Stack T)
+// ============================================
+// All fields are nullable except voice_mode_enabled (defaults false).
+// No frontend defaults — admin must populate before voice mode is usable.
+
+const VOICE_TTS_PROVIDERS = ['piper', 'browser'];
+const VOICE_STT_PROVIDERS = ['browser'];
+const VOICE_AVATAR_TYPES = ['3d_head', 'none'];
+
+const isSafeVoiceFilename = (s) => {
+    if (typeof s !== 'string' || s.length === 0 || s.length > 200) return false;
+    if (s.includes('/') || s.includes('\\') || s.includes('..') || s.startsWith('.')) return false;
+    return s.endsWith('.onnx');
+};
+
+const isBcp47 = (s) => typeof s === 'string' && /^[a-zA-Z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(s) && s.length <= 35;
+
+// GET /api/platform-settings/voice - Get voice settings (any authed user)
+router.get('/platform-settings/voice', authenticateToken, async (req, res) => {
+    try {
+        const keys = [
+            'voice_mode_enabled', 'tts_provider',
+            'piper_voice_male', 'piper_voice_female', 'piper_voice_child',
+            'tts_rate', 'tts_pitch',
+            'stt_provider', 'stt_language',
+            'avatar_type', 'llm_model_voice'
+        ];
+        const raw = {};
+        for (const k of keys) raw[k] = await getPlatformSetting(k);
+
+        const toFloat = (v) => v === null || v === undefined || v === '' ? null : parseFloat(v);
+
+        res.json({
+            voice_mode_enabled: raw.voice_mode_enabled === 'true',
+            tts_provider: raw.tts_provider || null,
+            piper_voice_male: raw.piper_voice_male || null,
+            piper_voice_female: raw.piper_voice_female || null,
+            piper_voice_child: raw.piper_voice_child || null,
+            tts_rate: toFloat(raw.tts_rate),
+            tts_pitch: toFloat(raw.tts_pitch),
+            stt_provider: raw.stt_provider || null,
+            stt_language: raw.stt_language || null,
+            avatar_type: raw.avatar_type || null,
+            llm_model_voice: raw.llm_model_voice || null
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/platform-settings/voice - Update voice settings (Admin only)
+router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const allowed = new Set([
+            'voice_mode_enabled', 'tts_provider',
+            'piper_voice_male', 'piper_voice_female', 'piper_voice_child',
+            'tts_rate', 'tts_pitch',
+            'stt_provider', 'stt_language',
+            'avatar_type', 'llm_model_voice'
+        ]);
+
+        for (const key of Object.keys(body)) {
+            if (!allowed.has(key)) {
+                return res.status(400).json({ error: `Unknown setting: ${key}` });
+            }
+        }
+
+        const validateRate = (v) => {
+            if (v === null || v === undefined || v === '') return null;
+            const f = parseFloat(v);
+            if (!Number.isFinite(f) || f < 0.5 || f > 1.5) return undefined;
+            return String(f);
+        };
+
+        const writes = [];
+        const setIfPresent = (key, val) => writes.push([key, val]);
+
+        if ('voice_mode_enabled' in body) {
+            if (typeof body.voice_mode_enabled !== 'boolean') {
+                return res.status(400).json({ error: 'voice_mode_enabled must be boolean' });
+            }
+            setIfPresent('voice_mode_enabled', body.voice_mode_enabled ? 'true' : 'false');
+        }
+        if ('tts_provider' in body) {
+            if (body.tts_provider !== null && !VOICE_TTS_PROVIDERS.includes(body.tts_provider)) {
+                return res.status(400).json({ error: `tts_provider must be one of ${VOICE_TTS_PROVIDERS.join(', ')}` });
+            }
+            setIfPresent('tts_provider', body.tts_provider || '');
+        }
+        for (const k of ['piper_voice_male', 'piper_voice_female', 'piper_voice_child']) {
+            if (k in body) {
+                if (body[k] !== null && body[k] !== '' && !isSafeVoiceFilename(body[k])) {
+                    return res.status(400).json({ error: `${k} must be a safe .onnx filename` });
+                }
+                setIfPresent(k, body[k] || '');
+            }
+        }
+        for (const k of ['tts_rate', 'tts_pitch']) {
+            if (k in body) {
+                const v = validateRate(body[k]);
+                if (v === undefined) {
+                    return res.status(400).json({ error: `${k} must be between 0.5 and 1.5` });
+                }
+                setIfPresent(k, v ?? '');
+            }
+        }
+        if ('stt_provider' in body) {
+            if (body.stt_provider !== null && !VOICE_STT_PROVIDERS.includes(body.stt_provider)) {
+                return res.status(400).json({ error: `stt_provider must be one of ${VOICE_STT_PROVIDERS.join(', ')}` });
+            }
+            setIfPresent('stt_provider', body.stt_provider || '');
+        }
+        if ('stt_language' in body) {
+            if (body.stt_language !== null && body.stt_language !== '' && !isBcp47(body.stt_language)) {
+                return res.status(400).json({ error: 'stt_language must be a BCP-47 locale tag' });
+            }
+            setIfPresent('stt_language', body.stt_language || '');
+        }
+        if ('avatar_type' in body) {
+            if (body.avatar_type !== null && !VOICE_AVATAR_TYPES.includes(body.avatar_type)) {
+                return res.status(400).json({ error: `avatar_type must be one of ${VOICE_AVATAR_TYPES.join(', ')}` });
+            }
+            setIfPresent('avatar_type', body.avatar_type || '');
+        }
+        if ('llm_model_voice' in body) {
+            if (body.llm_model_voice !== null && (typeof body.llm_model_voice !== 'string' || body.llm_model_voice.length > 200)) {
+                return res.status(400).json({ error: 'llm_model_voice must be a string ≤ 200 chars or null' });
+            }
+            setIfPresent('llm_model_voice', body.llm_model_voice || '');
+        }
+
+        for (const [k, v] of writes) {
+            await setPlatformSetting(k, v, req.user.id);
+        }
+
+        res.json({ message: 'Voice settings updated successfully', updated: writes.map(w => w[0]) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// LLM MODELS REGISTRY
+// ============================================
+// Per VOICE_AVATAR_PLAN.md §6, this endpoint is the single allowed home for
+// hardcoded Anthropic model identifiers. Frontend code reads from here rather
+// than embedding strings.
+const LLM_MODEL_REGISTRY = [
+    { id: 'claude-opus-4-7',           label: 'Claude Opus 4.7',          tier: 'flagship' },
+    { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6',        tier: 'balanced' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',         tier: 'fast' },
+    { id: 'claude-3-5-sonnet-20241022',label: 'Claude 3.5 Sonnet (legacy)', tier: 'legacy' },
+    { id: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku (legacy)',  tier: 'legacy' }
+];
+
+router.get('/llm/models', authenticateToken, (req, res) => {
+    res.json({ models: LLM_MODEL_REGISTRY });
+});
+
+// ============================================
+// TTS (Piper) ROUTES
+// ============================================
+
+const PIPER_DIR = path.join(__dirname, 'data', 'piper');
+const PIPER_BIN = process.env.PIPER_BIN || path.join(PIPER_DIR, 'piper', 'piper');
+const TTS_TEXT_LIMIT = 2000;
+
+const readVoiceSidecar = (filename) => {
+    const sidecar = path.join(PIPER_DIR, filename + '.json');
+    if (!fs.existsSync(sidecar)) return null;
+    try { return JSON.parse(fs.readFileSync(sidecar, 'utf8')); }
+    catch { return null; }
+};
+
+const buildWavHeader = (pcmByteLength, sampleRate) => {
+    const numChannels = 1, bitsPerSample = 16;
+    const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+    const blockAlign = numChannels * bitsPerSample / 8;
+    const buf = Buffer.alloc(44);
+    buf.write('RIFF', 0);
+    buf.writeUInt32LE(36 + pcmByteLength, 4);
+    buf.write('WAVE', 8);
+    buf.write('fmt ', 12);
+    buf.writeUInt32LE(16, 16);
+    buf.writeUInt16LE(1, 20);          // PCM
+    buf.writeUInt16LE(numChannels, 22);
+    buf.writeUInt32LE(sampleRate, 24);
+    buf.writeUInt32LE(byteRate, 28);
+    buf.writeUInt16LE(blockAlign, 32);
+    buf.writeUInt16LE(bitsPerSample, 34);
+    buf.write('data', 36);
+    buf.writeUInt32LE(pcmByteLength, 40);
+    return buf;
+};
+
+// GET /api/tts/voices - list installed Piper voices
+router.get('/tts/voices', authenticateToken, (req, res) => {
+    const piperInstalled = fs.existsSync(PIPER_BIN);
+    if (!fs.existsSync(PIPER_DIR)) {
+        return res.json({ voices: [], piperInstalled });
+    }
+    let files;
+    try {
+        files = fs.readdirSync(PIPER_DIR).filter(f => f.endsWith('.onnx'));
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+    const voices = files.map(filename => {
+        const sidecar = readVoiceSidecar(filename);
+        const language = sidecar?.language?.code || sidecar?.language?.name_native || 'unknown';
+        const sampleRate = sidecar?.audio?.sample_rate || 22050;
+        const m = filename.match(/^([a-z]{2}_[A-Z]{2})-([^-]+)-/);
+        const speaker = m?.[2] || filename.replace(/\.onnx$/, '');
+        return { filename, displayName: speaker, language, sampleRate };
+    });
+    res.json({ voices, piperInstalled });
+});
+
+// POST /api/tts - synthesize speech via Piper (returns audio/wav)
+router.post('/tts', authenticateToken, async (req, res) => {
+    const { text, voice, rate } = req.body || {};
+
+    if (typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'text required' });
+    }
+    if (text.length > TTS_TEXT_LIMIT) {
+        return res.status(400).json({ error: `text exceeds ${TTS_TEXT_LIMIT} character limit` });
+    }
+    if (typeof voice !== 'string' || !voice) {
+        return res.status(400).json({ error: 'voice required' });
+    }
+    if (voice.includes('/') || voice.includes('\\') || voice.includes('..') || !voice.endsWith('.onnx')) {
+        return res.status(400).json({ error: 'invalid voice filename' });
+    }
+
+    const voiceFile = path.join(PIPER_DIR, voice);
+    if (!voiceFile.startsWith(PIPER_DIR + path.sep) || !fs.existsSync(voiceFile)) {
+        return res.status(400).json({ error: 'unknown voice' });
+    }
+    if (!fs.existsSync(PIPER_BIN)) {
+        return res.status(503).json({ error: 'Piper TTS binary not installed on server' });
+    }
+
+    const sidecar = readVoiceSidecar(voice);
+    const sampleRate = sidecar?.audio?.sample_rate || 22050;
+
+    const args = ['--model', voiceFile, '--output-raw', '--quiet'];
+    if (rate !== undefined && rate !== null) {
+        const r = parseFloat(rate);
+        if (Number.isFinite(r) && r >= 0.5 && r <= 1.5) {
+            args.push('--length-scale', String(1 / r));
+        }
+    }
+
+    let piper;
+    try {
+        piper = spawn(PIPER_BIN, args);
+    } catch (err) {
+        console.error('[piper] spawn failed', err);
+        return res.status(500).json({ error: 'Failed to start Piper' });
+    }
+
+    const chunks = [];
+    let totalLen = 0;
+    let stderrBuf = '';
+    let aborted = false;
+
+    piper.stdout.on('data', (c) => {
+        chunks.push(c);
+        totalLen += c.length;
+        if (totalLen > 50 * 1024 * 1024) { // 50 MB safety cap
+            aborted = true;
+            try { piper.kill('SIGTERM'); } catch {}
+        }
+    });
+    piper.stderr.on('data', (d) => { stderrBuf += d.toString(); });
+    piper.on('error', (err) => {
+        console.error('[piper] process error', err);
+        if (!res.headersSent) res.status(500).json({ error: 'Piper process error' });
+    });
+    piper.on('close', (code) => {
+        if (res.headersSent) return;
+        if (aborted) return res.status(500).json({ error: 'TTS output exceeded size limit' });
+        if (code !== 0) {
+            console.warn('[piper] exited non-zero', code, stderrBuf.slice(0, 500));
+            return res.status(500).json({ error: 'Piper synthesis failed' });
+        }
+        const pcm = Buffer.concat(chunks, totalLen);
+        const header = buildWavHeader(pcm.length, sampleRate);
+        res.set('Content-Type', 'audio/wav');
+        res.set('Cache-Control', 'no-store');
+        res.set('Content-Length', String(header.length + pcm.length));
+        res.write(header);
+        res.end(pcm);
+    });
+
+    piper.stdin.on('error', (err) => {
+        console.warn('[piper] stdin error', err.message);
+    });
+    piper.stdin.write(text);
+    piper.stdin.end();
 });
 
 // GET /api/llm/usage - Get current user's usage

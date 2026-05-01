@@ -1,0 +1,15 @@
+{
+  "_comment": "Populated by Task 13 (sourceRPM head GLBs). Place .glb files alongside this file and list them under the demographic buckets below.",
+  "female": {
+    "young":   [],
+    "middle":  [],
+    "elderly": []
+  },
+  "male": {
+    "young":   [],
+    "middle":  [],
+    "elderly": []
+  },
+  "child":    [],
+  "fallback": []
+}

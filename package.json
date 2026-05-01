@@ -20,6 +20,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
     "@tailwindcss/postcss": "^4.1.18",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
@@ -32,7 +34,9 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "sqlite3": "^5.1.7",
-    "tnaj": "github:mohsaqr/tna-js"
+    "three": "^0.184.0",
+    "tnaj": "github:mohsaqr/tna-js",
+    "wawa-lipsync": "^0.0.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

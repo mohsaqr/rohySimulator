@@ -1,12 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, MessageCircle, X } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, MessageCircle, X, Mic, MicOff, Volume2 } from 'lucide-react';
 import { LLMService } from '../../services/llmService';
 import { AgentService } from '../../services/AgentService';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthService } from '../../services/authService';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
-import { apiUrl } from '../../config/api';
+import { apiUrl, baseUrl } from '../../config/api';
 import { usePatientRecord } from '../../services/PatientRecord';
+import { VoiceService } from '../../services/voiceService';
+
+// Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
+// only when a user actually toggles voice mode on for the first time.
+const PatientAvatar = lazy(() => import('./PatientAvatar'));
 
 const EMOTIONS_ROW1 = ['Inspired', 'Alert', 'Excited', 'Enthusiastic', 'Determined'];
 const EMOTIONS_ROW2 = ['Afraid', 'Upset', 'Nervous', 'Scared', 'Distressed'];
@@ -31,6 +36,16 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         doctorName: 'Dr. Carmen',
         doctorAvatar: ''
     });
+
+    // Voice mode (Stack T) — voiceSettings is loaded from /api/platform-settings/voice.
+    // Defaults are intentionally absent in the frontend; voice mode only activates
+    // when the admin has explicitly enabled it AND configured voices.
+    const [voiceSettings, setVoiceSettings] = useState(null);
+    const [headManifest, setHeadManifest] = useState(null);
+    const [voiceMode, setVoiceMode] = useState(false);
+    const [listening, setListening] = useState(false);
+    const [speaking, setSpeaking] = useState(false);
+    const [visemes, setVisemes] = useState({ viseme_sil: 1 });
 
     // Multi-agent state
     const [activeTab, setActiveTab] = useState('patient'); // 'patient' or agent_type
@@ -58,6 +73,47 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         };
         loadChatSettings();
     }, []);
+
+    // Load voice settings + avatar manifest in parallel.
+    useEffect(() => {
+        const token = AuthService.getToken();
+        let cancelled = false;
+        (async () => {
+            try {
+                const [voiceRes, manifestRes] = await Promise.allSettled([
+                    fetch(apiUrl('/platform-settings/voice'), { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch(baseUrl('/avatars/heads/manifest.json'))
+                ]);
+                if (cancelled) return;
+                if (voiceRes.status === 'fulfilled' && voiceRes.value.ok) {
+                    setVoiceSettings(await voiceRes.value.json());
+                }
+                if (manifestRes.status === 'fulfilled' && manifestRes.value.ok) {
+                    setHeadManifest(await manifestRes.value.json());
+                }
+            } catch (err) {
+                console.warn('Voice/avatar config load failed:', err);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    // If admin disables voice mode platform-wide, drop the local toggle too.
+    useEffect(() => {
+        if (voiceSettings && !voiceSettings.voice_mode_enabled && voiceMode) {
+            setVoiceMode(false);
+            VoiceService.cancelSpeech();
+            VoiceService.stopListening();
+        }
+    }, [voiceSettings, voiceMode]);
+
+    // Cleanup voice resources when the case changes or component unmounts.
+    useEffect(() => {
+        return () => {
+            VoiceService.cancelSpeech();
+            VoiceService.stopListening();
+        };
+    }, [activeCase?.id]);
 
     // Load agents for this case/session
     useEffect(() => {
@@ -466,12 +522,50 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         }
     };
 
-    const handleSendToPatient = async () => {
-        const userMsg = { role: 'user', content: input };
+    // Pick the right Piper voice for this patient based on age/gender.
+    // Falls back across configured voices so a partial setup still works.
+    const pickVoiceFile = () => {
+        if (!voiceSettings) return null;
+        const cfg = activeCase?.config || {};
+        const ageRaw = cfg.patient_age ?? activeCase?.age;
+        const age = Number.isFinite(Number(ageRaw)) ? Number(ageRaw) : 35;
+        const gender = cfg.patient_gender || activeCase?.gender || '';
+        const isFemale = /^f/i.test(gender);
+        if (age < 13 && voiceSettings.piper_voice_child) return voiceSettings.piper_voice_child;
+        if (isFemale) return voiceSettings.piper_voice_female || voiceSettings.piper_voice_male || null;
+        return voiceSettings.piper_voice_male || voiceSettings.piper_voice_female || null;
+    };
+
+    const speakResponse = (text) => {
+        const voice = pickVoiceFile();
+        if (!voice || !text) return;
+        VoiceService.speak({
+            text,
+            voice,
+            rate: voiceSettings?.tts_rate ?? undefined,
+            pitch: voiceSettings?.tts_pitch ?? undefined,
+            onStart: () => setSpeaking(true),
+            onVisemes: setVisemes,
+            onEnd: () => {
+                setSpeaking(false);
+                setVisemes({ viseme_sil: 1 });
+            },
+            onError: (err) => {
+                console.error('TTS error:', err);
+                setSpeaking(false);
+            }
+        });
+    };
+
+    const handleSendToPatient = async (overrideText) => {
+        const text = (overrideText ?? input).trim();
+        if (!text) return;
+
+        const userMsg = { role: 'user', content: text };
         setMessages(prev => [...prev, userMsg]);
 
         // Log user message sent
-        EventLogger.messageSent(input, COMPONENTS.CHAT_INTERFACE);
+        EventLogger.messageSent(text, COMPONENTS.CHAT_INTERFACE);
 
         setInput('');
         setLoading(true);
@@ -481,7 +575,8 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const responseText = await LLMService.sendMessage(
             sessionId,
             [...messages, userMsg],
-            richSystemPrompt
+            richSystemPrompt,
+            voiceMode ? 'voice' : undefined
         );
 
         setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
@@ -490,9 +585,47 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         EventLogger.messageReceived(responseText, COMPONENTS.CHAT_INTERFACE);
 
         // Record to PatientRecord - history item obtained
-        obtained('history', input.trim(), responseText);
+        obtained('history', text, responseText);
 
         setLoading(false);
+
+        if (voiceMode) speakResponse(responseText);
+    };
+
+    const startVoiceTurn = () => {
+        if (!voiceSettings?.stt_language) {
+            console.warn('No STT language configured');
+            return;
+        }
+        if (listening) {
+            VoiceService.stopListening();
+            return;
+        }
+        // Stop any in-flight playback so the patient stops talking when we start.
+        VoiceService.cancelSpeech();
+        setSpeaking(false);
+        setVisemes({ viseme_sil: 1 });
+        setListening(true);
+
+        VoiceService.startListening({
+            lang: voiceSettings.stt_language,
+            onResult: ({ final, interim, isFinal }) => {
+                setInput(interim || final);
+                if (isFinal && final) {
+                    VoiceService.stopListening();
+                }
+            },
+            onError: (err) => {
+                console.warn('STT error:', err.message);
+                setListening(false);
+            },
+            onEnd: ({ final }) => {
+                setListening(false);
+                if (final) {
+                    handleSendToPatient(final);
+                }
+            }
+        });
     };
 
     const handleSendToAgent = async (agentType) => {
@@ -605,6 +738,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         }
     };
 
+    const voiceModeAvailable = !!voiceSettings?.voice_mode_enabled;
+    const sttSupported = VoiceService.isSttSupported();
+
     return (
         <div className="flex flex-col h-full bg-neutral-900 text-white font-sans border-t border-neutral-800">
             {/* Tab Bar */}
@@ -619,7 +755,50 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         status
                     );
                 })}
+                {voiceModeAvailable && (
+                    <button
+                        onClick={() => {
+                            const next = !voiceMode;
+                            setVoiceMode(next);
+                            if (!next) {
+                                VoiceService.cancelSpeech();
+                                VoiceService.stopListening();
+                                setSpeaking(false);
+                                setListening(false);
+                            }
+                        }}
+                        title={voiceMode ? 'Switch to text mode' : 'Switch to voice mode'}
+                        className={`ml-auto mb-1 px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                            voiceMode
+                                ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                                : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300'
+                        }`}
+                    >
+                        {voiceMode ? <Volume2 className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                        {voiceMode ? 'Voice on' : 'Voice'}
+                    </button>
+                )}
             </div>
+
+            {/* Avatar (voice mode, patient tab only) — lazy-loaded chunk */}
+            {voiceMode && activeTab === 'patient' && voiceSettings?.avatar_type !== 'none' && (
+                <div className="flex justify-center py-3 bg-neutral-950/50 border-b border-neutral-800">
+                    <Suspense fallback={
+                        <div className="rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center" style={{ width: 200, height: 200 }}>
+                            <Loader2 className="w-6 h-6 animate-spin text-neutral-500" />
+                        </div>
+                    }>
+                        <PatientAvatar
+                            patient={activeCase?.config || activeCase}
+                            speaking={speaking}
+                            listening={listening}
+                            visemes={visemes}
+                            avatarType={voiceSettings?.avatar_type}
+                            headManifest={headManifest}
+                        />
+                    </Suspense>
+                </div>
+            )}
 
             {/* Agent Status Bar (when on agent tab) */}
             {activeTab !== 'patient' && currentAgent && agentStatus && (
@@ -815,27 +994,74 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
             {/* Input */}
             <div className="px-4 pb-4 pt-1 bg-neutral-900/90">
-                <form onSubmit={handleSend} className="relative">
-                    <input
-                        type="text"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        disabled={loading || (activeTab !== 'patient' && !agentStatus?.canChat)}
-                        placeholder={
-                            loading ? "Waiting for response..." :
-                            activeTab !== 'patient' && !agentStatus?.canChat ? `${currentAgent?.name} is not available` :
-                            `Message ${activeTab === 'patient' ? patientName : currentAgent?.name}...`
-                        }
-                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-4 pr-12 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-neutral-600 disabled:opacity-50"
-                    />
-                    <button
-                        type="submit"
-                        disabled={loading || !input.trim() || (activeTab !== 'patient' && !agentStatus?.canChat)}
-                        className="absolute right-2 top-2 p-1.5 bg-blue-600 rounded-md hover:bg-blue-500 transition-colors text-white disabled:bg-neutral-700 disabled:text-neutral-500"
-                    >
-                        <Send className="w-4 h-4" />
-                    </button>
-                </form>
+                {voiceMode && activeTab === 'patient' ? (
+                    <div className="flex flex-col gap-2">
+                        <button
+                            type="button"
+                            onClick={startVoiceTurn}
+                            disabled={loading || !sttSupported || speaking}
+                            className={`w-full py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
+                                listening
+                                    ? 'bg-green-600 hover:bg-green-500 text-white'
+                                    : speaking
+                                    ? 'bg-blue-700 text-white cursor-not-allowed'
+                                    : 'bg-purple-600 hover:bg-purple-500 text-white disabled:bg-neutral-700 disabled:text-neutral-500'
+                            }`}
+                        >
+                            {listening ? (
+                                <>
+                                    <Mic className="w-4 h-4 animate-pulse" />
+                                    Listening… click to stop
+                                </>
+                            ) : speaking ? (
+                                <>
+                                    <Volume2 className="w-4 h-4 animate-pulse" />
+                                    Patient speaking…
+                                </>
+                            ) : !sttSupported ? (
+                                <>
+                                    <MicOff className="w-4 h-4" />
+                                    Speech recognition not supported in this browser
+                                </>
+                            ) : loading ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Thinking…
+                                </>
+                            ) : (
+                                <>
+                                    <Mic className="w-4 h-4" />
+                                    Click to talk to {patientName}
+                                </>
+                            )}
+                        </button>
+                        {input && (
+                            <div className="text-xs text-neutral-500 px-1 italic truncate">{input}</div>
+                        )}
+                    </div>
+                ) : (
+                    <form onSubmit={handleSend} className="relative">
+                        <input
+                            type="text"
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            disabled={loading || (activeTab !== 'patient' && !agentStatus?.canChat)}
+                            placeholder={
+                                loading ? "Waiting for response..." :
+                                activeTab !== 'patient' && !agentStatus?.canChat ? `${currentAgent?.name} is not available` :
+                                `Message ${activeTab === 'patient' ? patientName : currentAgent?.name}...`
+                            }
+                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-4 pr-12 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-neutral-600 disabled:opacity-50"
+                        />
+                        <button
+                            type="submit"
+                            disabled={loading || !input.trim() || (activeTab !== 'patient' && !agentStatus?.canChat)}
+                            className="absolute right-2 top-2 p-1.5 bg-blue-600 rounded-md hover:bg-blue-500 transition-colors text-white disabled:bg-neutral-700 disabled:text-neutral-500"
+                        >
+                            <Send className="w-4 h-4" />
+                        </button>
+                    </form>
+                )}
             </div>
         </div>
     );

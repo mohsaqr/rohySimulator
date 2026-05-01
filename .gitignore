@@ -49,3 +49,7 @@ IMAGE_SERVING_FIX.md
 LATEST_UPDATES.md
 PORT_CONFIGURATION_FIX.md
 docs/plans/
+
+# Piper TTS — large binaries and voice models, downloaded by server/scripts/install-piper.sh
+server/data/piper/
+public/avatars/heads/*.glb
