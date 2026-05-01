@@ -97,15 +97,22 @@ export const LLMService = {
                 return `Rate limit exceeded: ${errorData.error}. ${errorData.resetsAt ? `Resets at ${errorData.resetsAt}.` : ''}`;
             }
 
-            // Handle service disabled
+            // Handle service disabled / config error
             if (response.status === 503) {
-                const errorData = await response.json();
-                return `AI service unavailable: ${errorData.error}`;
+                const errorData = await response.json().catch(() => ({}));
+                return `AI service unavailable: ${errorData.error || 'unknown'}`;
             }
 
             if (!response.ok) {
                 const errText = await response.text();
-                throw new Error(`LLM API Error (${response.status}): ${errText}`);
+                console.error(`[LLMService] ${response.status} from /proxy/llm:`, errText);
+                // Return the actual server error so admins can see what's wrong.
+                let detail = errText;
+                try {
+                    const j = JSON.parse(errText);
+                    detail = j.error || j.message || errText;
+                } catch { /* errText was not json */ }
+                return `Error: ${detail}`;
             }
 
             const data = await response.json();

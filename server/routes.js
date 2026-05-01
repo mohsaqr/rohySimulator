@@ -3,6 +3,7 @@ import db from './db.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import os from 'node:os';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcrypt';
 import rateLimit from 'express-rate-limit';
@@ -4119,7 +4120,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         }
 
         // Priority: agent > session > platform
-        const provider = agentProvider || (sessionLlmSettings?.provider && sessionLlmSettings.provider.trim()) || platformProvider;
+        let provider = agentProvider || (sessionLlmSettings?.provider && sessionLlmSettings.provider.trim()) || platformProvider;
         const baseModel = agentModel || (sessionLlmSettings?.model && sessionLlmSettings.model.trim()) || platformModel;
 
         // Voice-mode model override: when client sends session_mode='voice' AND admin has set
@@ -4159,6 +4160,52 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             apiKey = (sessionLlmSettings?.apiKey && sessionLlmSettings.apiKey.trim()) || platformApiKey;
         } else {
             apiKey = (sessionLlmSettings?.apiKey && sessionLlmSettings.apiKey.trim()) || platformApiKey;
+        }
+
+        // Voice override may pick a model from a different vendor than the
+        // platform default (e.g. user picked "Claude Haiku" while platform is
+        // OpenAI). The model name alone isn't enough — we have to swap the
+        // provider+endpoint+key too, otherwise the Claude model id gets sent
+        // to OpenAI's endpoint and 500s. Crucially: do NOT fall back to the
+        // platform key when its vendor doesn't match the new provider, or we
+        // end up sending an OpenAI sk-proj-* to Anthropic and get a confusing
+        // 401 invalid-x-api-key.
+        if (voiceModelOverride) {
+            const m = voiceModelOverride.toLowerCase();
+            const platformVendor = (agentProvider || platformProvider || '').toLowerCase();
+            if (m.startsWith('claude-')) {
+                provider = 'anthropic';
+                baseUrl = 'https://api.anthropic.com/v1';
+                apiKey = process.env.ANTHROPIC_API_KEY
+                    || (platformVendor === 'anthropic' ? apiKey : '');
+                console.log(`[LLM Proxy] Voice override is a Claude model → routing to Anthropic`);
+            } else if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('o3-')) {
+                provider = 'openai';
+                baseUrl = 'https://api.openai.com/v1';
+                apiKey = process.env.OPENAI_API_KEY
+                    || (platformVendor === 'openai' ? apiKey : '');
+                console.log(`[LLM Proxy] Voice override is an OpenAI model → routing to OpenAI`);
+            }
+            if (!apiKey) {
+                const envName = provider === 'anthropic' ? 'ANTHROPIC_API_KEY'
+                    : provider === 'openai' ? 'OPENAI_API_KEY'
+                    : `${provider.toUpperCase()}_API_KEY`;
+                return res.status(503).json({
+                    error: `Voice mode wants to use "${voiceModelOverride}" via ${provider}, but no matching API key is configured. Either (a) set ${envName} in server/.env and restart the server, or (b) change the voice-mode model in Settings → Voice & Avatar to "inherit platform" so it uses your existing platform LLM (${platformVendor || 'unset'}).`
+                });
+            }
+            // Catch the cross-vendor mistake (e.g. an OpenAI sk-proj-* key in
+            // the Anthropic field) before Anthropic returns a confusing 401.
+            if (provider === 'anthropic' && !apiKey.startsWith('sk-ant-')) {
+                return res.status(503).json({
+                    error: `The API key being used for Anthropic doesn't have the expected "sk-ant-" prefix (got "${apiKey.slice(0, 7)}…"). Get one at console.anthropic.com and set ANTHROPIC_API_KEY in server/.env.`
+                });
+            }
+            if (provider === 'openai' && !apiKey.startsWith('sk-')) {
+                return res.status(503).json({
+                    error: `The API key being used for OpenAI doesn't have the expected "sk-" prefix (got "${apiKey.slice(0, 7)}…"). Set OPENAI_API_KEY in server/.env or fix the platform LLM API key field.`
+                });
+            }
         }
 
         const maxOutputTokensRaw = sessionLlmSettings?.maxOutputTokens || platformMaxTokens;
@@ -6428,7 +6475,19 @@ router.post('/tts', authenticateToken, async (req, res) => {
     const sidecar = readVoiceSidecar(voice);
     const sampleRate = sidecar?.audio?.sample_rate || 22050;
 
-    const args = ['--model', voiceFile, '--output-raw', '--quiet'];
+    // piper-tts 1.x (Python rewrite) truncates stdin synthesis to ~0.6s
+    // regardless of input length. The `-i FILE` path doesn't have this bug,
+    // so we write the prompt to a temp file and feed it that way.
+    const tmpDir = os.tmpdir();
+    const tmpFile = path.join(tmpDir, `rohy-tts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`);
+    try {
+        fs.writeFileSync(tmpFile, text, 'utf8');
+    } catch (err) {
+        console.error('[piper] failed to write temp input', err);
+        return res.status(500).json({ error: 'Failed to prepare TTS input' });
+    }
+
+    const args = ['--model', voiceFile, '-i', tmpFile, '--output-raw', '--quiet'];
     if (rate !== undefined && rate !== null) {
         const r = parseFloat(rate);
         if (Number.isFinite(r) && r >= 0.5 && r <= 1.5) {
@@ -6441,6 +6500,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
         piper = spawn(PIPER_BIN, args);
     } catch (err) {
         console.error('[piper] spawn failed', err);
+        try { fs.unlinkSync(tmpFile); } catch { /* noop */ }
         return res.status(500).json({ error: 'Failed to start Piper' });
     }
 
@@ -6449,20 +6509,26 @@ router.post('/tts', authenticateToken, async (req, res) => {
     let stderrBuf = '';
     let aborted = false;
 
+    const cleanup = () => {
+        try { fs.unlinkSync(tmpFile); } catch { /* noop */ }
+    };
+
     piper.stdout.on('data', (c) => {
         chunks.push(c);
         totalLen += c.length;
-        if (totalLen > 50 * 1024 * 1024) { // 50 MB safety cap
+        if (totalLen > 50 * 1024 * 1024) {
             aborted = true;
-            try { piper.kill('SIGTERM'); } catch {}
+            try { piper.kill('SIGTERM'); } catch { /* noop */ }
         }
     });
     piper.stderr.on('data', (d) => { stderrBuf += d.toString(); });
     piper.on('error', (err) => {
         console.error('[piper] process error', err);
+        cleanup();
         if (!res.headersSent) res.status(500).json({ error: 'Piper process error' });
     });
     piper.on('close', (code) => {
+        cleanup();
         if (res.headersSent) return;
         if (aborted) return res.status(500).json({ error: 'TTS output exceeded size limit' });
         if (code !== 0) {
@@ -6477,12 +6543,6 @@ router.post('/tts', authenticateToken, async (req, res) => {
         res.write(header);
         res.end(pcm);
     });
-
-    piper.stdin.on('error', (err) => {
-        console.warn('[piper] stdin error', err.message);
-    });
-    piper.stdin.write(text);
-    piper.stdin.end();
 });
 
 // GET /api/llm/usage - Get current user's usage

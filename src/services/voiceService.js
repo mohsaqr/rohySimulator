@@ -3,8 +3,11 @@
 //   - Server Piper for TTS (POST /api/tts → audio/wav)
 //   - wawa-lipsync drives a per-frame dominant viseme stream
 //
-// No defaults here. The caller passes language, voice filename, rate, and
-// pitch; all of those originate from /api/platform-settings/voice.
+// We bypass wawa's connectAudio() (which uses createMediaElementSource on a
+// blob: URL — broken on some Chrome versions: audio plays but the analyser
+// sees zeros). Instead we decode the WAV ourselves and feed an
+// AudioBufferSourceNode straight into wawa's internal analyser. That's the
+// canonical Web Audio path and works reliably.
 
 import { Lipsync } from 'wawa-lipsync';
 import { apiUrl } from '../config/api.js';
@@ -15,9 +18,8 @@ const SR = (typeof window !== 'undefined')
     : null;
 
 let _recognition = null;
-let _audio = null;
-let _audioUrl = null;
 let _lipsync = null;
+let _bufferSource = null;
 let _rafId = null;
 let _started = false;
 
@@ -26,14 +28,10 @@ function teardown() {
         cancelAnimationFrame(_rafId);
         _rafId = null;
     }
-    if (_audio) {
-        try { _audio.pause(); } catch { /* noop */ }
-        try { _audio.removeAttribute('src'); _audio.load(); } catch { /* noop */ }
-        _audio = null;
-    }
-    if (_audioUrl) {
-        try { URL.revokeObjectURL(_audioUrl); } catch { /* noop */ }
-        _audioUrl = null;
+    if (_bufferSource) {
+        try { _bufferSource.stop(); } catch { /* noop, already stopped */ }
+        try { _bufferSource.disconnect(); } catch { /* noop */ }
+        _bufferSource = null;
     }
     _lipsync = null;
     _started = false;
@@ -97,7 +95,6 @@ export const VoiceService = {
     },
 
     async speak({ text, voice, rate, pitch, onVisemes, onStart, onEnd, onError }) {
-        // Cancel any in-flight playback before starting a new one.
         this.cancelSpeech();
 
         if (!text || typeof text !== 'string') {
@@ -132,48 +129,46 @@ export const VoiceService = {
                 throw new Error(errMsg);
             }
 
-            const blob = await res.blob();
-            _audioUrl = URL.createObjectURL(blob);
+            const arrayBuffer = await res.arrayBuffer();
 
-            const audio = new Audio(_audioUrl);
-            audio.crossOrigin = 'anonymous';
-            audio.preload = 'auto';
-            _audio = audio;
-
-            // wawa-lipsync owns its own AudioContext and connects the
-            // MediaElementSource itself; we must not pre-connect the audio.
+            // Build the lipsync analyser — wawa creates its own AudioContext
+            // and analyser internally. We reuse those rather than calling
+            // connectAudio (which expects an HTMLMediaElement).
             _lipsync = new Lipsync({ fftSize: 1024, historySize: 8 });
-            _lipsync.connectAudio(audio);
+            const audioCtx = _lipsync.audioContext;
+            const analyser = _lipsync.analyser;
+            await audioCtx.resume();
+
+            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+            const source = audioCtx.createBufferSource();
+            source.buffer = audioBuffer;
+
+            // Single chain: source → analyser → destination. The analyser is
+            // a transparent observer node; audio passes through unchanged on
+            // its way to the speakers, but the analyser also gets to read
+            // frequency data each frame.
+            source.connect(analyser);
+            analyser.connect(audioCtx.destination);
+            _bufferSource = source;
 
             const tick = () => {
-                if (!_lipsync || !_audio) return;
+                if (!_lipsync || !_bufferSource) return;
                 _lipsync.processAudio();
-                const dominant = _lipsync.viseme;       // e.g. "viseme_aa" or undefined
-                if (dominant) {
-                    // Emit weighted map with dominant=1; the avatar handles decay.
-                    onVisemes?.({ [dominant]: 1 });
-                }
+                const dominant = _lipsync.viseme;
+                if (dominant) onVisemes?.({ [dominant]: 1 });
                 _rafId = requestAnimationFrame(tick);
             };
 
-            audio.onplay = () => {
-                if (_started) return;
-                _started = true;
-                onStart?.();
-                tick();
-            };
-            audio.onended = () => {
+            source.onended = () => {
                 onVisemes?.({ viseme_sil: 1 });
                 teardown();
                 onEnd?.();
             };
-            audio.onerror = () => {
-                const err = new Error('audio playback failed');
-                teardown();
-                onError?.(err);
-            };
 
-            await audio.play();
+            _started = true;
+            onStart?.();
+            source.start();
+            tick();
         } catch (err) {
             teardown();
             onError?.(err);
@@ -185,6 +180,6 @@ export const VoiceService = {
     },
 
     isSpeaking() {
-        return _started && !!_audio;
+        return _started && !!_bufferSource;
     }
 };
