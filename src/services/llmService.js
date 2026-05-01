@@ -130,6 +130,85 @@ export const LLMService = {
     },
 
     /**
+     * Streaming variant of sendMessage. Calls /proxy/llm with stream=1, parses
+     * SSE deltas, and invokes onDelta(text) for each token chunk. Returns the
+     * accumulated full text on completion. Falls back to non-streaming if the
+     * server doesn't return text/event-stream.
+     */
+    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal } = {}) {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg?.role === 'user') {
+            this.logInteraction(sessionId, 'user', lastMsg.content);
+        }
+        try {
+            const body = {
+                session_id: sessionId,
+                messages,
+                system_prompt: systemPrompt || 'You are a patient.',
+                stream: true
+            };
+            if (sessionMode) body.session_mode = sessionMode;
+
+            const response = await fetch(apiUrl('/proxy/llm?stream=1'), {
+                method: 'POST',
+                headers: { ...this.getAuthHeaders(), 'Accept': 'text/event-stream' },
+                body: JSON.stringify(body),
+                signal
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                let detail = errText;
+                try { detail = JSON.parse(errText).error || errText; } catch { /* not json */ }
+                return `Error: ${detail}`;
+            }
+            const ctype = response.headers.get('Content-Type') || '';
+            if (!ctype.includes('text/event-stream')) {
+                // Server didn't actually stream — fall back.
+                const data = await response.json().catch(() => ({}));
+                const text = data.choices?.[0]?.message?.content || '';
+                if (text) onDelta?.(text);
+                return text;
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffered = '';
+            let acc = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffered += decoder.decode(value, { stream: true });
+                let sep;
+                while ((sep = buffered.indexOf('\n\n')) >= 0) {
+                    const block = buffered.slice(0, sep);
+                    buffered = buffered.slice(sep + 2);
+                    for (const line of block.split('\n')) {
+                        if (!line.startsWith('data:')) continue;
+                        const dataStr = line.slice(5).trim();
+                        if (dataStr === '[DONE]') continue;
+                        let evt;
+                        try { evt = JSON.parse(dataStr); } catch { continue; }
+                        if (evt.delta) {
+                            acc += evt.delta;
+                            onDelta?.(evt.delta);
+                        }
+                        // evt.done arrives just before [DONE] — nothing to do
+                    }
+                }
+            }
+
+            this.logInteraction(sessionId, 'assistant', acc);
+            return acc;
+        } catch (err) {
+            if (err.name === 'AbortError') return '';
+            console.error('[LLMService] streamMessage error', err);
+            return `Error: ${err.message}`;
+        }
+    },
+
+    /**
      * Get current user's LLM usage
      */
     async getUsage() {

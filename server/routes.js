@@ -4210,7 +4210,13 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
 
         const maxOutputTokensRaw = sessionLlmSettings?.maxOutputTokens || platformMaxTokens;
         const temperatureRaw = sessionLlmSettings?.temperature || platformTemperature;
-        const maxOutputTokens = maxOutputTokensRaw ? parseInt(maxOutputTokensRaw) : null;
+        let maxOutputTokens = maxOutputTokensRaw ? parseInt(maxOutputTokensRaw) : null;
+        // In voice mode every extra word adds synthesis time. Cap responses
+        // hard so the patient stays terse and TTS turnaround stays under ~3s.
+        if (session_mode === 'voice') {
+            const cap = 180;
+            maxOutputTokens = maxOutputTokens ? Math.min(maxOutputTokens, cap) : cap;
+        }
         const temperature = temperatureRaw ? parseFloat(temperatureRaw) : null;
 
         // Debug logging
@@ -4292,6 +4298,117 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
 
         // 10. Make LLM request
         console.log(`[LLM Proxy] User ${userId} sending request to ${provider}${model ? '/' + model : ' (default model)'} at ${endpoint}`);
+
+        // Streaming branch — emit SSE deltas from the upstream provider.
+        // Client requests it via Accept: text/event-stream OR ?stream=1.
+        const wantStream = req.query.stream === '1'
+            || req.body?.stream === true
+            || (req.headers.accept || '').includes('text/event-stream');
+        if (wantStream) {
+            const streamPayload = { ...requestPayload, stream: true };
+            const upstream = await fetch(endpoint, {
+                method: 'POST',
+                headers: llmHeaders,
+                body: JSON.stringify(streamPayload)
+            });
+            if (!upstream.ok) {
+                const errText = await upstream.text();
+                console.error(`[LLM Proxy] Stream error ${upstream.status}: ${errText.slice(0, 200)}`);
+                db.run('INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms) VALUES (?, ?, ?, ?, ?, ?)',
+                    [userId, session_id, model, 'error', errText.substring(0, 500), Date.now() - startTime]);
+                return res.status(upstream.status).json({ error: errText });
+            }
+
+            res.set('Content-Type', 'text/event-stream');
+            res.set('Cache-Control', 'no-store');
+            res.set('X-Accel-Buffering', 'no');
+            res.flushHeaders?.();
+            if (res.socket) res.socket.setNoDelay(true);
+
+            const sse = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+
+            let accText = '';
+            let promptTokens = 0;
+            let completionTokens = 0;
+            const decoder = new TextDecoder();
+            let buffered = '';
+
+            try {
+                for await (const chunk of upstream.body) {
+                    buffered += decoder.decode(chunk, { stream: true });
+                    // SSE messages are separated by blank lines; data: lines accumulate
+                    let sep;
+                    while ((sep = buffered.indexOf('\n\n')) >= 0) {
+                        const block = buffered.slice(0, sep);
+                        buffered = buffered.slice(sep + 2);
+                        // Each block can have event: ... and data: ... lines
+                        const dataLines = [];
+                        let eventName = '';
+                        for (const line of block.split('\n')) {
+                            if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+                            else if (line.startsWith('event:')) eventName = line.slice(6).trim();
+                        }
+                        if (dataLines.length === 0) continue;
+                        const dataStr = dataLines.join('\n');
+                        if (dataStr === '[DONE]') break;
+                        let evt;
+                        try { evt = JSON.parse(dataStr); } catch { continue; }
+
+                        // Anthropic format
+                        if (provider === 'anthropic') {
+                            if (eventName === 'content_block_delta' && evt?.delta?.type === 'text_delta') {
+                                const t = evt.delta.text || '';
+                                if (t) { accText += t; sse({ delta: t }); }
+                            } else if (eventName === 'message_delta' && evt?.usage) {
+                                completionTokens = evt.usage.output_tokens || completionTokens;
+                            } else if (eventName === 'message_start' && evt?.message?.usage) {
+                                promptTokens = evt.message.usage.input_tokens || 0;
+                            }
+                        } else {
+                            // OpenAI / OpenAI-compatible
+                            const delta = evt?.choices?.[0]?.delta?.content || '';
+                            if (delta) { accText += delta; sse({ delta }); }
+                            if (evt?.usage) {
+                                promptTokens = evt.usage.prompt_tokens || promptTokens;
+                                completionTokens = evt.usage.completion_tokens || completionTokens;
+                            }
+                        }
+                    }
+                }
+            } catch (streamErr) {
+                console.error('[LLM Proxy] stream interrupted', streamErr);
+            }
+
+            // Final usage + log
+            const totalTokens = promptTokens + completionTokens;
+            const responseTimeStream = Date.now() - startTime;
+            const pricing = await new Promise((resolve) => {
+                db.get('SELECT * FROM llm_model_pricing WHERE provider = ? AND (model = ? OR model = ?)',
+                    [provider, model, 'default'], (err, row) => {
+                    resolve(row || { input_cost_per_1k: 0, output_cost_per_1k: 0 });
+                });
+            });
+            const estCost = (promptTokens / 1000) * pricing.input_cost_per_1k
+                + (completionTokens / 1000) * pricing.output_cost_per_1k;
+            db.run(`INSERT INTO llm_usage (user_id, date, prompt_tokens, completion_tokens, total_tokens, estimated_cost, model, request_count, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, date) DO UPDATE SET
+                prompt_tokens = llm_usage.prompt_tokens + excluded.prompt_tokens,
+                completion_tokens = llm_usage.completion_tokens + excluded.completion_tokens,
+                total_tokens = llm_usage.total_tokens + excluded.total_tokens,
+                estimated_cost = llm_usage.estimated_cost + excluded.estimated_cost,
+                request_count = llm_usage.request_count + 1,
+                updated_at = CURRENT_TIMESTAMP`,
+                [userId, today, promptTokens, completionTokens, totalTokens, estCost, model]);
+            db.run(`INSERT INTO llm_request_log (user_id, session_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, response_time_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [userId, session_id, model, promptTokens, completionTokens, totalTokens, estCost, 'success', responseTimeStream]);
+
+            sse({ done: true, usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: totalTokens } });
+            res.write('data: [DONE]\n\n');
+            return res.end();
+        }
+
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: llmHeaders,
@@ -6233,14 +6350,18 @@ router.put('/platform-settings/chat', authenticateToken, requireAdmin, async (re
 // All fields are nullable except voice_mode_enabled (defaults false).
 // No frontend defaults — admin must populate before voice mode is usable.
 
-const VOICE_TTS_PROVIDERS = ['piper', 'browser'];
+const VOICE_TTS_PROVIDERS = ['piper', 'kokoro', 'browser'];
 const VOICE_STT_PROVIDERS = ['browser'];
 const VOICE_AVATAR_TYPES = ['3d_head', 'none'];
 
+// Path-traversal-proof voice id check. Piper voices end in .onnx; Kokoro
+// voice ids are short slugs like "af_heart". Both must avoid path separators.
 const isSafeVoiceFilename = (s) => {
     if (typeof s !== 'string' || s.length === 0 || s.length > 200) return false;
     if (s.includes('/') || s.includes('\\') || s.includes('..') || s.startsWith('.')) return false;
-    return s.endsWith('.onnx');
+    // Either a Piper .onnx filename, or a short alphanumeric/underscore slug
+    // matching Kokoro's voice id format (e.g. "af_heart", "bm_george").
+    return s.endsWith('.onnx') || /^[a-zA-Z0-9_-]+$/.test(s);
 };
 
 const isBcp47 = (s) => typeof s === 'string' && /^[a-zA-Z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(s) && s.length <= 35;
@@ -6321,7 +6442,7 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
         for (const k of ['piper_voice_male', 'piper_voice_female', 'piper_voice_child']) {
             if (k in body) {
                 if (body[k] !== null && body[k] !== '' && !isSafeVoiceFilename(body[k])) {
-                    return res.status(400).json({ error: `${k} must be a safe .onnx filename` });
+                    return res.status(400).json({ error: `${k} must be a safe voice id (Piper .onnx filename or Kokoro slug)` });
                 }
                 setIfPresent(k, body[k] || '');
             }
@@ -6424,11 +6545,33 @@ const buildWavHeader = (pcmByteLength, sampleRate) => {
     return buf;
 };
 
-// GET /api/tts/voices - list installed Piper voices
-router.get('/tts/voices', authenticateToken, (req, res) => {
+// GET /api/tts/voices - list voices for the active TTS provider.
+// Accepts ?provider=kokoro|piper to preview voices for an unsaved provider
+// choice; otherwise falls back to the platform setting.
+router.get('/tts/voices', authenticateToken, async (req, res) => {
+    const queryProvider = typeof req.query.provider === 'string' ? req.query.provider : '';
+    const ttsProvider = VOICE_TTS_PROVIDERS.includes(queryProvider)
+        ? queryProvider
+        : (await getPlatformSetting('tts_provider')) || 'piper';
+
+    if (ttsProvider === 'kokoro') {
+        try {
+            const { loadKokoro, listKokoroVoices } = await import('./services/kokoroTts.js');
+            await loadKokoro();
+            return res.json({
+                provider: 'kokoro',
+                voices: listKokoroVoices(),
+                piperInstalled: fs.existsSync(PIPER_BIN)
+            });
+        } catch (err) {
+            console.error('[kokoro] failed to load for voice listing', err);
+            return res.status(503).json({ error: `Kokoro failed to load: ${err.message}` });
+        }
+    }
+
     const piperInstalled = fs.existsSync(PIPER_BIN);
     if (!fs.existsSync(PIPER_DIR)) {
-        return res.json({ voices: [], piperInstalled });
+        return res.json({ provider: 'piper', voices: [], piperInstalled });
     }
     let files;
     try {
@@ -6444,10 +6587,13 @@ router.get('/tts/voices', authenticateToken, (req, res) => {
         const speaker = m?.[2] || filename.replace(/\.onnx$/, '');
         return { filename, displayName: speaker, language, sampleRate };
     });
-    res.json({ voices, piperInstalled });
+    res.json({ provider: 'piper', voices, piperInstalled });
 });
 
-// POST /api/tts - synthesize speech via Piper (returns audio/wav)
+// POST /api/tts - synthesize speech (returns audio/wav)
+// Dispatches to either Piper (subprocess, ~25 MB voices, very fast, robotic)
+// or Kokoro (kokoro-js, ~330 MB model, ~0.7× realtime, much more natural)
+// based on the `tts_provider` platform setting.
 router.post('/tts', authenticateToken, async (req, res) => {
     const { text, voice, rate } = req.body || {};
 
@@ -6460,6 +6606,81 @@ router.post('/tts', authenticateToken, async (req, res) => {
     if (typeof voice !== 'string' || !voice) {
         return res.status(400).json({ error: 'voice required' });
     }
+
+    const ttsProvider = (await getPlatformSetting('tts_provider')) || 'piper';
+
+    if (ttsProvider === 'kokoro') {
+        // Streaming path: emit a custom binary frame per Kokoro sentence so
+        // the browser can start playing the first sentence while later ones
+        // are still being synthesized.
+        //
+        // Wire format (little-endian throughout):
+        //   header: 4 bytes — sampleRate (uint32)
+        //   then repeating frames:
+        //       4 bytes — pcm byte length (uint32, 0 = end-of-stream)
+        //       N bytes — int16 PCM samples
+        const stream = req.query.stream === '1' || req.headers.accept?.includes('application/x-rohy-pcm-stream');
+        const speed = (rate !== undefined && rate !== null && Number.isFinite(parseFloat(rate)))
+            ? Math.max(0.5, Math.min(1.5, parseFloat(rate)))
+            : 1;
+
+        if (stream) {
+            try {
+                const { synthesizeKokoroStream } = await import('./services/kokoroTts.js');
+                res.set('Content-Type', 'application/x-rohy-pcm-stream');
+                res.set('Cache-Control', 'no-store');
+                res.set('X-Accel-Buffering', 'no'); // bypass nginx buffering if proxied
+                res.flushHeaders?.();
+                if (res.socket) res.socket.setNoDelay(true);
+                let headerSent = false;
+                for await (const { sampleRate, pcm } of synthesizeKokoroStream({ text, voice, speed })) {
+                    if (!headerSent) {
+                        const hdr = Buffer.alloc(4);
+                        hdr.writeUInt32LE(sampleRate, 0);
+                        res.write(hdr);
+                        headerSent = true;
+                    }
+                    const lenBuf = Buffer.alloc(4);
+                    lenBuf.writeUInt32LE(pcm.length, 0);
+                    res.write(lenBuf);
+                    res.write(pcm);
+                }
+                if (!headerSent) {
+                    // No chunks at all — client expects header. Send dummy.
+                    const hdr = Buffer.alloc(4);
+                    hdr.writeUInt32LE(24000, 0);
+                    res.write(hdr);
+                }
+                const eof = Buffer.alloc(4);
+                eof.writeUInt32LE(0, 0);
+                res.write(eof);
+                return res.end();
+            } catch (err) {
+                console.error('[kokoro] streaming synthesis failed', err);
+                if (!res.headersSent) {
+                    const status = err.code === 'UNKNOWN_VOICE' ? 400 : 500;
+                    return res.status(status).json({ error: err.message || 'Kokoro synthesis failed' });
+                }
+                return res.end();
+            }
+        }
+
+        // Non-streaming fallback: full WAV in one response.
+        try {
+            const { synthesizeKokoro } = await import('./services/kokoroTts.js');
+            const wav = await synthesizeKokoro({ text, voice, speed });
+            res.set('Content-Type', 'audio/wav');
+            res.set('Cache-Control', 'no-store');
+            res.set('Content-Length', String(wav.length));
+            return res.end(wav);
+        } catch (err) {
+            console.error('[kokoro] synthesis failed', err);
+            const msg = err.code === 'UNKNOWN_VOICE' ? err.message : 'Kokoro synthesis failed';
+            return res.status(err.code === 'UNKNOWN_VOICE' ? 400 : 500).json({ error: msg });
+        }
+    }
+
+    // ---- Piper path ----
     if (voice.includes('/') || voice.includes('\\') || voice.includes('..') || !voice.endsWith('.onnx')) {
         return res.status(400).json({ error: 'invalid voice filename' });
     }

@@ -11,6 +11,7 @@ import RadiologyResultsModal from './components/investigations/RadiologyResultsM
 import UserProfilePanel from './components/settings/UserProfilePanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider, useToast } from './contexts/ToastContext';
+import { VoiceProvider } from './contexts/VoiceContext';
 import { PatientRecordProvider, usePatientRecord } from './services/PatientRecord';
 import { AuthService } from './services/authService';
 import EventLogger, { COMPONENTS } from './services/eventLogger';
@@ -18,7 +19,6 @@ import { apiUrl } from './config/api';
 import { Settings, X, LogOut, User, RotateCcw, ChevronDown, Activity } from 'lucide-react';
 import ManikinPanel from './components/examination/ManikinPanel';
 import BodyMapDebug from './components/examination/BodyMapDebug';
-import EndSessionQuestionnaire from './components/common/EndSessionQuestionnaire';
 import TnaDashboard from './components/analytics/tna/TnaDashboard';
 
 // Session expiry time in milliseconds (default 30 minutes)
@@ -40,7 +40,6 @@ function MainApp() {
    const [sessionId, setSessionId] = useState(null);
    const [selectedResult, setSelectedResult] = useState(null);
    const [showExamination, setShowExamination] = useState(false);
-   const [showEndQuestionnaire, setShowEndQuestionnaire] = useState(false);
    const [showEndConfirm, setShowEndConfirm] = useState(false);
 
    // Set user context for EventLogger when user logs in
@@ -187,40 +186,13 @@ function MainApp() {
       setShowEndConfirm(true);
    };
 
-   const handleEndConfirmed = () => {
+   const handleEndConfirmed = async () => {
       setShowEndConfirm(false);
-      setShowEndQuestionnaire(true);
-   };
 
-   const handleEndConfirmCancel = () => {
-      setShowEndConfirm(false);
-   };
-
-   const handleQuestionnaireSubmit = async (answers) => {
-      setShowEndQuestionnaire(false);
-
-      // Save questionnaire responses (capture before state is cleared)
-      try {
-         const token = AuthService.getToken();
-         await fetch(apiUrl('/questionnaire-responses'), {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-               session_id: sessionId,
-               case_id: activeCase?.id,
-               responses: answers,
-            }),
-         });
-      } catch (err) {
-         console.error('Failed to save questionnaire responses:', err);
-      }
-
-      // Log session end before clearing
       const sessionStartTime = lastActivityRef.current;
       const duration = Date.now() - sessionStartTime;
       EventLogger.sessionEnded(duration);
 
-      // Call backend to end session
       if (sessionId) {
          try {
             const token = AuthService.getToken();
@@ -236,6 +208,10 @@ function MainApp() {
       localStorage.removeItem('rohy_chat_history');
       setActiveCase(null);
       setSessionId(null);
+   };
+
+   const handleEndConfirmCancel = () => {
+      setShowEndConfirm(false);
    };
 
 
@@ -536,14 +512,6 @@ function MainApp() {
             </div>
          )}
 
-         {/* End Session Questionnaire (one-way: shown only after confirmation) */}
-         {showEndQuestionnaire && (
-            <EndSessionQuestionnaire
-               onSubmit={handleQuestionnaireSubmit}
-               hideCancel
-            />
-         )}
-
          {/* User Profile Modal */}
          {showUserProfile && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -593,10 +561,12 @@ export default function App() {
    return (
       <AuthProvider>
          <ToastProvider>
-            <AuthenticatedApp
-               showRegister={showRegister}
-               setShowRegister={setShowRegister}
-            />
+            <VoiceProvider>
+               <AuthenticatedApp
+                  showRegister={showRegister}
+                  setShowRegister={setShowRegister}
+               />
+            </VoiceProvider>
          </ToastProvider>
       </AuthProvider>
    );

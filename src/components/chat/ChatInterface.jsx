@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, MessageCircle, X, Mic, MicOff, Volume2 } from 'lucide-react';
 import { LLMService } from '../../services/llmService';
 import { AgentService } from '../../services/AgentService';
@@ -8,10 +8,10 @@ import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { apiUrl, baseUrl } from '../../config/api';
 import { usePatientRecord } from '../../services/PatientRecord';
 import { VoiceService } from '../../services/voiceService';
+import { useVoice } from '../../contexts/VoiceContext';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
 // only when a user actually toggles voice mode on for the first time.
-const PatientAvatar = lazy(() => import('./PatientAvatar'));
 
 const EMOTIONS_ROW1 = ['Inspired', 'Alert', 'Excited', 'Enthusiastic', 'Determined'];
 const EMOTIONS_ROW2 = ['Afraid', 'Upset', 'Nervous', 'Scared', 'Distressed'];
@@ -40,12 +40,18 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // Voice mode (Stack T) — voiceSettings is loaded from /api/platform-settings/voice.
     // Defaults are intentionally absent in the frontend; voice mode only activates
     // when the admin has explicitly enabled it AND configured voices.
-    const [voiceSettings, setVoiceSettings] = useState(null);
-    const [headManifest, setHeadManifest] = useState(null);
-    const [voiceMode, setVoiceMode] = useState(false);
-    const [listening, setListening] = useState(false);
-    const [speaking, setSpeaking] = useState(false);
-    const [visemes, setVisemes] = useState({ viseme_sil: 1 });
+    // Voice/avatar state lives in VoiceContext so PatientVisual (a sibling
+    // up in App.jsx) can render the live 3D head where the patient photo is.
+    // ChatInterface owns the writes; visemes / headManifest are consumed by
+    // PatientVisual directly so we don't read them here.
+    const {
+        voiceMode, setVoiceMode,
+        listening, setListening,
+        speaking, setSpeaking,
+        setVisemes,
+        voiceSettings, setVoiceSettings,
+        setHeadManifest
+    } = useVoice();
 
     // Multi-agent state
     const [activeTab, setActiveTab] = useState('patient'); // 'patient' or agent_type
@@ -536,27 +542,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         return voiceSettings.piper_voice_male || voiceSettings.piper_voice_female || null;
     };
 
-    const speakResponse = (text) => {
-        const voice = pickVoiceFile();
-        if (!voice || !text) return;
-        VoiceService.speak({
-            text,
-            voice,
-            rate: voiceSettings?.tts_rate ?? undefined,
-            pitch: voiceSettings?.tts_pitch ?? undefined,
-            onStart: () => setSpeaking(true),
-            onVisemes: setVisemes,
-            onEnd: () => {
-                setSpeaking(false);
-                setVisemes({ viseme_sil: 1 });
-            },
-            onError: (err) => {
-                console.error('TTS error:', err);
-                setSpeaking(false);
-            }
-        });
-    };
-
     const handleSendToPatient = async (overrideText) => {
         const text = (overrideText ?? input).trim();
         if (!text) return;
@@ -564,7 +549,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const userMsg = { role: 'user', content: text };
         setMessages(prev => [...prev, userMsg]);
 
-        // Log user message sent
         EventLogger.messageSent(text, COMPONENTS.CHAT_INTERFACE);
 
         setInput('');
@@ -572,24 +556,61 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
         const richSystemPrompt = buildPatientSystemPrompt();
 
-        const responseText = await LLMService.sendMessage(
+        // Append an empty assistant message and grow it as tokens stream in
+        // (typewriter effect). Voice TTS waits for the full response then
+        // does one streaming TTS call — simpler and more reliable than the
+        // per-sentence pipeline we tried.
+        let assistantIdx = -1;
+        setMessages(prev => {
+            assistantIdx = prev.length;
+            return [...prev, { role: 'assistant', content: '' }];
+        });
+
+        let acc = '';
+        const responseText = await LLMService.streamMessage(
             sessionId,
             [...messages, userMsg],
             richSystemPrompt,
-            voiceMode ? 'voice' : undefined
+            voiceMode ? 'voice' : undefined,
+            {
+                onDelta: (delta) => {
+                    acc += delta;
+                    setMessages(prev => {
+                        const copy = [...prev];
+                        copy[assistantIdx] = { role: 'assistant', content: acc };
+                        return copy;
+                    });
+                }
+            }
         );
 
-        setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
-
-        // Log assistant response received
         EventLogger.messageReceived(responseText, COMPONENTS.CHAT_INTERFACE);
-
-        // Record to PatientRecord - history item obtained
         obtained('history', text, responseText);
-
         setLoading(false);
 
-        if (voiceMode) speakResponse(responseText);
+        // Voice playback: one call, full response. The streaming WAV path in
+        // voiceService still gives gapless first-sentence-fast playback.
+        if (voiceMode) {
+            const voice = pickVoiceFile();
+            if (voice && responseText && !responseText.startsWith('Error:')) {
+                VoiceService.speak({
+                    text: responseText,
+                    voice,
+                    rate: voiceSettings?.tts_rate ?? undefined,
+                    pitch: voiceSettings?.tts_pitch ?? undefined,
+                    onStart: () => setSpeaking(true),
+                    onVisemes: setVisemes,
+                    onEnd: () => {
+                        setSpeaking(false);
+                        setVisemes({ viseme_sil: 1 });
+                    },
+                    onError: (err) => {
+                        console.error('TTS error:', err);
+                        setSpeaking(false);
+                    }
+                });
+            }
+        }
     };
 
     const startVoiceTurn = () => {
@@ -779,26 +800,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     </button>
                 )}
             </div>
-
-            {/* Avatar (voice mode, patient tab only) — lazy-loaded chunk */}
-            {voiceMode && activeTab === 'patient' && voiceSettings?.avatar_type !== 'none' && (
-                <div className="flex justify-center py-3 bg-neutral-950/50 border-b border-neutral-800">
-                    <Suspense fallback={
-                        <div className="rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center" style={{ width: 200, height: 200 }}>
-                            <Loader2 className="w-6 h-6 animate-spin text-neutral-500" />
-                        </div>
-                    }>
-                        <PatientAvatar
-                            patient={activeCase?.config || activeCase}
-                            speaking={speaking}
-                            listening={listening}
-                            visemes={visemes}
-                            avatarType={voiceSettings?.avatar_type}
-                            headManifest={headManifest}
-                        />
-                    </Suspense>
-                </div>
-            )}
 
             {/* Agent Status Bar (when on agent tab) */}
             {activeTab !== 'patient' && currentAgent && agentStatus && (

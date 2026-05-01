@@ -1,16 +1,43 @@
-import React from 'react';
-import { User } from 'lucide-react';
+import { lazy, Suspense } from 'react';
+import { User, Loader2 } from 'lucide-react';
+import { useVoice } from '../../contexts/VoiceContext';
+
+// Lazy-load the 3D head — only needed when voice mode is on, and pulls in
+// three.js / r3f / drei (~250 KB gzip).
+const PatientAvatar = lazy(() => import('../chat/PatientAvatar'));
 
 export default function PatientVisual({ image, context, caseData }) {
     const config = caseData?.config || {};
     const demo = config.demographics || {};
     const patientName = config.patient_name || caseData?.name;
+    const { voiceMode, speaking, listening, visemes, voiceSettings, headManifest } = useVoice();
+
+    const showLiveHead = voiceMode
+        && voiceSettings?.avatar_type !== 'none'
+        && headManifest;
 
     return (
         <div className="h-full flex flex-col bg-neutral-900 overflow-hidden relative">
-            {/* Full Height Image Area */}
-            <div className="absolute inset-0 bg-black/50">
-                {image ? (
+            {/* Full Height Image Area — replaced by the 3D head when voice is on */}
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                {showLiveHead ? (
+                    <Suspense fallback={
+                        <div className="rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center" style={{ width: 240, height: 240 }}>
+                            <Loader2 className="w-6 h-6 animate-spin text-neutral-500" />
+                        </div>
+                    }>
+                        <div style={{ width: 280, height: 280 }}>
+                            <PatientAvatar
+                                patient={config}
+                                speaking={speaking}
+                                listening={listening}
+                                visemes={visemes}
+                                avatarType={voiceSettings?.avatar_type}
+                                headManifest={headManifest}
+                            />
+                        </div>
+                    </Suspense>
+                ) : image ? (
                     <img src={image} alt="Patient" className="w-full h-full object-cover opacity-80" />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-neutral-700">

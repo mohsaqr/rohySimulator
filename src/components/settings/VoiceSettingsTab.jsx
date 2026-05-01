@@ -44,15 +44,16 @@ export default function VoiceSettingsTab() {
     const loadAll = async () => {
         setLoading(true);
         try {
-            const [s, v, m] = await Promise.all([
+            const [s, m] = await Promise.all([
                 fetch(apiUrl('/platform-settings/voice'), { headers: auth() }).then(r => r.json()),
-                fetch(apiUrl('/tts/voices'), { headers: auth() }).then(r => r.json()),
                 fetch(apiUrl('/llm/models'), { headers: auth() }).then(r => r.json())
             ]);
+            const provider = s.tts_provider || 'piper';
+            const v = await fetch(apiUrl(`/tts/voices?provider=${provider}`), { headers: auth() }).then(r => r.json());
 
             setSettings({
                 voice_mode_enabled: !!s.voice_mode_enabled,
-                tts_provider: s.tts_provider || 'piper',
+                tts_provider: provider,
                 piper_voice_male: s.piper_voice_male || '',
                 piper_voice_female: s.piper_voice_female || '',
                 piper_voice_child: s.piper_voice_child || '',
@@ -76,7 +77,30 @@ export default function VoiceSettingsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { loadAll(); }, []);
 
-    const update = (key, value) => setSettings(prev => ({ ...prev, [key]: value }));
+    const refetchVoices = async (provider) => {
+        try {
+            const v = await fetch(apiUrl(`/tts/voices?provider=${provider}`), { headers: auth() }).then(r => r.json());
+            setVoices(v.voices || []);
+            setPiperInstalled(v.piperInstalled !== false);
+        } catch (err) {
+            toast.error?.(`Failed to load ${provider} voices: ${err.message}`);
+        }
+    };
+
+    const update = (key, value) => {
+        setSettings(prev => {
+            const next = { ...prev, [key]: value };
+            // Switching providers invalidates the previously-selected voice
+            // ids (Piper .onnx filenames don't exist in Kokoro and vice versa).
+            if (key === 'tts_provider' && value !== prev.tts_provider) {
+                next.piper_voice_male = '';
+                next.piper_voice_female = '';
+                next.piper_voice_child = '';
+            }
+            return next;
+        });
+        if (key === 'tts_provider') refetchVoices(value);
+    };
 
     const save = async () => {
         setSaving(true);
@@ -119,9 +143,12 @@ export default function VoiceSettingsTab() {
 
     const voiceOptions = voices.map(v => (
         <option key={v.filename} value={v.filename}>
-            {v.displayName} — {v.language}
+            {v.displayName}{v.gender ? ` (${v.gender})` : ''} — {v.language}
         </option>
     ));
+
+    const isKokoro = settings.tts_provider === 'kokoro';
+    const showPiperWarning = settings.tts_provider === 'piper' && !piperInstalled;
 
     return (
         <div className="space-y-6 max-w-3xl">
@@ -131,11 +158,11 @@ export default function VoiceSettingsTab() {
                     <h3 className="text-lg font-bold">Voice & Avatar</h3>
                 </div>
                 <span className="text-xs text-neutral-500">
-                    Stack T — local Piper TTS + browser STT + 3D avatar
+                    Stack T — local TTS + browser STT + 3D avatar
                 </span>
             </div>
 
-            {!piperInstalled && (
+            {showPiperWarning && (
                 <div className="flex items-start gap-2 p-3 rounded border border-amber-700 bg-amber-950/40 text-amber-200 text-sm">
                     <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                     <div>
@@ -145,6 +172,25 @@ export default function VoiceSettingsTab() {
                     </div>
                 </div>
             )}
+
+            {/* TTS provider */}
+            <label className="block max-w-md">
+                <span className="text-xs text-neutral-400 block mb-1">TTS engine</span>
+                <select
+                    value={settings.tts_provider}
+                    onChange={(e) => update('tts_provider', e.target.value)}
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1.5 text-sm text-white"
+                >
+                    <option value="piper">Piper — fast (~0.5 s), robotic, ~25 MB voices</option>
+                    <option value="kokoro">Kokoro-82M — slower (~0.7× realtime), expressive, ~330 MB model</option>
+                </select>
+                {isKokoro && (
+                    <span className="text-xs text-neutral-500 mt-1 block">
+                        First synthesis after server restart loads the model (~3 s) and may download
+                        ~330 MB to the Hugging Face cache.
+                    </span>
+                )}
+            </label>
 
             {/* Master toggle */}
             <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -164,11 +210,15 @@ export default function VoiceSettingsTab() {
 
             {/* TTS voices */}
             <fieldset className="space-y-3">
-                <legend className="text-sm font-bold text-white">Patient voices (Piper)</legend>
+                <legend className="text-sm font-bold text-white">
+                    Patient voices ({isKokoro ? 'Kokoro' : 'Piper'})
+                </legend>
                 {voices.length === 0 ? (
                     <div className="text-sm text-neutral-500">
-                        No voices installed. Drop <code>.onnx</code> + <code>.onnx.json</code> files into{' '}
-                        <code>server/data/piper/</code> and refresh.
+                        {isKokoro
+                            ? 'No Kokoro voices loaded yet. The model loads on first request — try saving and synthesizing once.'
+                            : <>No voices installed. Drop <code>.onnx</code> + <code>.onnx.json</code> files into <code>server/data/piper/</code> and refresh.</>
+                        }
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
