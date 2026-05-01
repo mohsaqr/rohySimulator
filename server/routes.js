@@ -6188,7 +6188,7 @@ router.put('/platform-settings/chat', authenticateToken, requireAdmin, async (re
 
 const VOICE_TTS_PROVIDERS = ['piper', 'browser'];
 const VOICE_STT_PROVIDERS = ['browser'];
-const VOICE_AVATAR_TYPES = ['3d_head', 'procedural', 'none'];
+const VOICE_AVATAR_TYPES = ['3d_head', 'none'];
 
 const isSafeVoiceFilename = (s) => {
     if (typeof s !== 'string' || s.length === 0 || s.length > 200) return false;

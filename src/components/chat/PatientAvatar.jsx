@@ -2,7 +2,6 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import { baseUrl } from '../../config/api.js';
-import ProceduralHead from './ProceduralHead';
 
 // TalkingHead demo GLBs are full-body rigs. Eyes sit around y=1.62, top of
 // head ~y=1.72. Frame on the face: aim slightly above mid-face, dolly back
@@ -149,19 +148,6 @@ export default function PatientAvatar({
     }, []);
 
     if (avatarType === 'none' || avatarType == null) return null;
-
-    // Procedural fallback — no GLB needed, ships in the same chunk as drei.
-    if (avatarType === 'procedural') {
-        return (
-            <ProceduralHead
-                patient={patient}
-                speaking={speaking}
-                listening={listening}
-                visemes={visemes}
-            />
-        );
-    }
-
     if (!headManifest) return null;
 
     const filename = pickHeadFile(patient, headManifest);
