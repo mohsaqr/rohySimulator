@@ -1,8 +1,24 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
-import * as THREE from 'three';
 import { baseUrl } from '../../config/api.js';
+import ProceduralHead from './ProceduralHead';
+
+// TalkingHead demo GLBs are full-body rigs. Eyes sit around y=1.62, top of
+// head ~y=1.72. Frame on the face: aim slightly above mid-face, dolly back
+// just enough to fit the head plus a hint of shoulder.
+const HEAD_LOOK_Y = 1.62;
+const CAMERA_POS = [0, 1.62, 1.05];
+
+function CameraAim() {
+    const { camera } = useThree();
+    useEffect(() => {
+        camera.position.set(...CAMERA_POS);
+        camera.lookAt(0, HEAD_LOOK_Y, 0);
+        camera.updateProjectionMatrix();
+    }, [camera]);
+    return null;
+}
 
 const VISEME_KEYS = [
     'viseme_sil', 'viseme_PP', 'viseme_FF', 'viseme_TH', 'viseme_DD',
@@ -133,6 +149,19 @@ export default function PatientAvatar({
     }, []);
 
     if (avatarType === 'none' || avatarType == null) return null;
+
+    // Procedural fallback — no GLB needed, ships in the same chunk as drei.
+    if (avatarType === 'procedural') {
+        return (
+            <ProceduralHead
+                patient={patient}
+                speaking={speaking}
+                listening={listening}
+                visemes={visemes}
+            />
+        );
+    }
+
     if (!headManifest) return null;
 
     const filename = pickHeadFile(patient, headManifest);
@@ -163,7 +192,8 @@ export default function PatientAvatar({
                 transition: 'box-shadow 200ms'
             }}
         >
-            <Canvas camera={{ position: [0, 1.6, 0.55], fov: 22 }}>
+            <Canvas camera={{ position: CAMERA_POS, fov: 22 }}>
+                <CameraAim />
                 <ambientLight intensity={1.0} />
                 <directionalLight position={[2, 3, 2]} intensity={1.2} />
                 <Suspense fallback={null}>

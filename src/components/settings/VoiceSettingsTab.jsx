@@ -240,7 +240,11 @@ export default function VoiceSettingsTab() {
             <fieldset>
                 <legend className="text-xs text-neutral-400 mb-2">Avatar</legend>
                 <div className="flex gap-4">
-                    {[['3d_head', '3D head'], ['none', 'None']].map(([val, label]) => (
+                    {[
+                        ['3d_head',    '3D head (GLB)'],
+                        ['procedural', 'Procedural (no GLB)'],
+                        ['none',       'None']
+                    ].map(([val, label]) => (
                         <label key={val} className="flex items-center gap-2 text-sm cursor-pointer">
                             <input
                                 type="radio"

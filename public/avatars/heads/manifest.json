@@ -1,15 +1,15 @@
 {
-  "_comment": "Populated by Task 13 (sourceRPM head GLBs). Place .glb files alongside this file and list them under the demographic buckets below.",
+  "_comment": "Demo heads from met4citizen/TalkingHead (MIT licensed). All have the 15 Oculus viseme morph targets and ARKit blendshapes. Genders are taken from the upstream siteconfig.js. Age buckets are coarse: a single avatar serves all ages of its gender, since the demo set lacks dedicated child/elderly variants.",
   "female": {
-    "young":   [],
-    "middle":  [],
-    "elderly": []
+    "young":   ["vroid.glb", "avaturn.glb"],
+    "middle":  ["brunette.glb", "mpfb.glb"],
+    "elderly": ["brunette-t.glb"]
   },
   "male": {
-    "young":   [],
-    "middle":  [],
-    "elderly": []
+    "young":   ["avatarsdk.glb"],
+    "middle":  ["avatarsdk.glb"],
+    "elderly": ["avatarsdk.glb"]
   },
   "child":    [],
-  "fallback": []
+  "fallback": ["avatarsdk.glb", "brunette.glb"]
 }
