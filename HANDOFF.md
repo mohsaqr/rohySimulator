@@ -62,6 +62,39 @@ register, validation works, admin guard works, full client bundle builds and lin
 | Production `vite build` | 1.96 MB / 507 KB gzip — well under plan's 1 MB gzip cap ✓ |
 | ESLint on new files | clean ✓ |
 
+## Live browser verification (Playwright, 2026-05-01)
+
+Drove the real app at `localhost:5173` (vite) → `localhost:3000` (express) with
+Piper installed via `pipx install piper-tts`. Results:
+
+- ✅ `/api/tts` end-to-end: 200, Content-Type `audio/wav`, valid RIFF/WAVE
+  16-bit mono 22050 Hz, 28 KB for a 13-word sentence.
+- ✅ Admin login → ConfigPanel → "Voice & Avatar" tab renders all controls,
+  populated with the 3 installed Piper voices (jenny_dioco / amy / ryan), 7
+  STT locales, all 5 LLM models, both sliders, both avatar radios.
+- ✅ "Piper not installed" warning correctly absent (binary detected).
+- ✅ Save round-trip: clicking Save in the UI persists to DB; subsequent GET
+  returns the exact payload set in the form.
+- ✅ Voice toggle button appears in chat tab bar after enabling voice mode
+  platform-wide; disappears when toggled platform-wide off.
+- ✅ Click "Voice" → push-to-talk button replaces text input, displays
+  "Click to talk to John Martinez" (per-patient name interpolation works).
+- ✅ Click "Voice on" → reverts to text input, push-to-talk gone.
+- ✅ Lazy chunk: `PatientAvatar.jsx` (24 KB transfer) loaded only on first
+  voice-mode toggle, never sooner.
+- ✅ Avatar shell renders with the "no avatar configured" placeholder
+  (manifest has empty arrays — Task 13 still pending).
+- ✅ Student account → ConfigPanel sidebar contains zero admin tabs
+  (Voice & Avatar correctly hidden along with all others).
+
+What couldn't be verified in headless Playwright:
+
+- Real microphone capture / SpeechRecognition (browser permission gate).
+- Audio playback through speakers (no audio device).
+- Live viseme animation on a populated head (no GLB sourced yet).
+- LLM call in voice-mode (LLM not configured with an API key on this dev
+  install).
+
 ## Open / not yet done
 
 ### Task 13 — RPM head GLBs (manual only)
