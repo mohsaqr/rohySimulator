@@ -573,7 +573,7 @@ export default function App() {
 
    return (
       <AuthProvider>
-         <NotificationProvider>
+         <ScopedNotificationProvider>
             {/* Bridge so non-React producers (EventLogger singleton) can call notify() */}
             <NotificationApiBridge />
             <ToastProvider>
@@ -591,8 +591,21 @@ export default function App() {
                   <BackendSurfaceBridge />
                </VoiceProvider>
             </ToastProvider>
-         </NotificationProvider>
+         </ScopedNotificationProvider>
       </AuthProvider>
+   );
+}
+
+// NotificationProvider's storage (acked/snoozed/prefs) is per-user. Keying on
+// user.id triggers a remount on login/logout/user-switch so the new instance
+// loads from the new user's bucket — preventing user A's silenced alarms from
+// carrying over to user B on a shared workstation.
+function ScopedNotificationProvider({ children }) {
+   const { user } = useAuth();
+   return (
+      <NotificationProvider key={user?.id ?? 'anon'}>
+         {children}
+      </NotificationProvider>
    );
 }
 

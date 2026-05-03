@@ -8,13 +8,21 @@ import {
     loadAckedSync, saveAckedSync,
 } from './persistence';
 import { NotificationContextObject } from './NotificationContextObject';
+import { useAuth } from '../contexts/AuthContext';
 
 let idCounter = 0;
 const nextId = () => `n_${Date.now()}_${++idCounter}`;
 
 export function NotificationProvider({ children }) {
+    // Current user — drives per-user storage scoping so user A's acks/snoozes
+    // don't carry over to user B on a shared workstation. The provider is
+    // keyed on user.id by ScopedNotificationProvider in App.jsx, so userId
+    // is constant for this instance's lifetime: a user switch remounts us.
+    const { user } = useAuth();
+    const userId = user?.id ?? null;
+
     // --- Prefs (synchronous from localStorage, then merged from server async).
-    const [prefs, setPrefsState] = useState(loadPrefsSync);
+    const [prefs, setPrefsState] = useState(() => loadPrefsSync(userId));
 
     useEffect(() => {
         let cancelled = false;
@@ -22,22 +30,22 @@ export function NotificationProvider({ children }) {
             if (cancelled || !remote) return;
             setPrefsState(prev => {
                 const merged = { ...prev, ...remote };
-                savePrefsSync(merged);
+                savePrefsSync(merged, userId);
                 return merged;
             });
         });
         return () => { cancelled = true; };
-    }, []);
+    }, [userId]);
 
     const setPrefs = useCallback((patch) => {
         setPrefsState(prev => {
             const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch };
-            savePrefsSync(next);
+            savePrefsSync(next, userId);
             // Fire-and-forget remote save; failure leaves localStorage as source of truth.
             savePrefsRemote(next);
             return next;
         });
-    }, []);
+    }, [userId]);
 
     // --- Active notifications (currently visible/alive, keyed by `key`).
     // Map preserves insertion order so the toast surface renders oldest-first.
@@ -48,8 +56,15 @@ export function NotificationProvider({ children }) {
 
     // --- Snoozed + acked persisted across reloads. State (not refs) so the
     // exposed snoozedList / ackedList re-render correctly when they change.
-    const [snoozed, setSnoozed] = useState(() => loadSnoozedSync());
-    const [acked, setAcked] = useState(() => loadAckedSync());
+    const [snoozed, setSnoozed] = useState(() => loadSnoozedSync(userId));
+    const [acked, setAcked] = useState(() => loadAckedSync(userId));
+
+    // Mirror userId into a ref so save* call sites can reach the current
+    // user's storage bucket without forcing every callback's dep list to
+    // include userId. (userId is constant for this provider instance, but the
+    // ref keeps every save call self-contained.)
+    const userIdRef = useRef(userId);
+    useEffect(() => { userIdRef.current = userId; }, [userId]);
 
     // External subscribers (audio surface, backend surface, console surface).
     // They get notified of *every* event that survives routing.
@@ -149,7 +164,7 @@ export function NotificationProvider({ children }) {
             if (!prev.has(key)) return prev;
             const next = new Set(prev);
             next.delete(key);
-            saveAckedSync(next);
+            saveAckedSync(next, userIdRef.current);
             return next;
         });
         subscribersRef.current.forEach(fn => {
@@ -166,7 +181,7 @@ export function NotificationProvider({ children }) {
         setAcked(prev => {
             const next = new Set(prev);
             next.add(key);
-            saveAckedSync(next);
+            saveAckedSync(next, userIdRef.current);
             return next;
         });
         setActive(prev => {
@@ -185,7 +200,7 @@ export function NotificationProvider({ children }) {
             setAcked(prevAcked => {
                 const next = new Set(prevAcked);
                 for (const key of prevActive.keys()) next.add(key);
-                saveAckedSync(next);
+                saveAckedSync(next, userIdRef.current);
                 return next;
             });
             return new Map();
@@ -200,7 +215,7 @@ export function NotificationProvider({ children }) {
         setSnoozed(prev => {
             const next = new Map(prev);
             next.set(key, until);
-            saveSnoozedSync(next);
+            saveSnoozedSync(next, userIdRef.current);
             return next;
         });
         setActive(prev => {
@@ -217,7 +232,7 @@ export function NotificationProvider({ children }) {
                     if (prev.get(key) !== until) return prev;
                     const next = new Map(prev);
                     next.delete(key);
-                    saveSnoozedSync(next);
+                    saveSnoozedSync(next, userIdRef.current);
                     return next;
                 });
             }, remaining + 50);
@@ -234,7 +249,7 @@ export function NotificationProvider({ children }) {
             setSnoozed(prevSnoozed => {
                 const next = new Map(prevSnoozed);
                 for (const key of prevActive.keys()) next.set(key, until);
-                saveSnoozedSync(next);
+                saveSnoozedSync(next, userIdRef.current);
                 return next;
             });
             return new Map();
@@ -341,7 +356,7 @@ export function NotificationProvider({ children }) {
                         changed = true;
                     }
                 }
-                if (changed) saveSnoozedSync(next);
+                if (changed) saveSnoozedSync(next, userIdRef.current);
                 return changed ? next : prev;
             });
         }, 30000);
