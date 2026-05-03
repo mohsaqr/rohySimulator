@@ -1,0 +1,46 @@
+{
+  "name": "talking-avatars-kit",
+  "version": "1.0.0",
+  "description": "Talking head avatars with real-time lipsync — GLBs, FFT-based viseme detector, multi-provider TTS (Kokoro local, Google cloud), and the conversion pipeline.",
+  "private": true,
+  "type": "module",
+  "main": "client/index.js",
+  "exports": {
+    "./client/PatientAvatar": "./client/PatientAvatar.jsx",
+    "./client/VoiceContext": "./client/VoiceContext.jsx",
+    "./client/voiceService": "./client/voiceService.js",
+    "./client/visemes": "./client/visemes.js",
+    "./client/resolveAvatar": "./client/resolveAvatar.js",
+    "./client/avatarFraming": "./client/avatarFraming.js",
+    "./client/config": "./client/config.js",
+    "./client/authService": "./client/authService.js",
+    "./server/ttsRoute": "./server/ttsRoute.js",
+    "./server/kokoroTts": "./server/kokoroTts.js",
+    "./server/googleTts": "./server/googleTts.js",
+    "./server/wav": "./server/wav.js"
+  },
+  "scripts": {
+    "_comment": "This kit is meant to be lifted into your project, not installed as a package. Use the deps below as the install list for your own package.json. The pipeline has its own package.json under pipeline/.",
+    "convert-avatars": "cd pipeline && npm install && npm run convert"
+  },
+  "peerDependencies": {
+    "_comment": "What the client/ files expect to be available in your bundler.",
+    "react": ">=18 <20",
+    "react-dom": ">=18 <20",
+    "three": "*",
+    "@react-three/fiber": "*",
+    "@react-three/drei": "*",
+    "wawa-lipsync": "*"
+  },
+  "optionalDependencies": {
+    "_comment_kokoro": "Only needed if you use the Kokoro provider in server/.",
+    "kokoro-js": "*",
+    "@huggingface/transformers": "*",
+    "_comment_express": "Only needed if you use server/ttsRoute.js as-is.",
+    "express": ">=4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

@@ -563,7 +563,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
 
             {/* Floating Action Buttons */}
             {!isOpen && (
-                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex gap-2">
+                <div className="fixed bottom-4 right-4 z-40 flex gap-2">
                     {tabs.map(tab => (
                         <button
                             key={tab.id}

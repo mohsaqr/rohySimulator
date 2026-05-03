@@ -1,163 +1,281 @@
-# Session Handoff — 2026-05-01
+# Session Handoff — 2026-05-02
+
+Branch `feat/voice-avatars`, **nothing committed this session**. Latest commit on branch: `b546e11 feat(voice): Kokoro TTS provider, LLM streaming, avatar in patient visual`.
+
+The branch now carries **four contiguous in-progress workstreams**:
+
+- **A.** Patient/agent visual identity rewrite (morning — 2026-05-02 AM).
+- **B.** Avatar library expansion + simplify cleanup (afternoon — 2026-05-02 mid-day).
+- **C.** Central NotificationCenter + producer migrations (this session — 2026-05-02 PM, the bulk of new code).
+- **D.** Google TTS quality upgrade + standalone Talking-Avatars Kit (this session, late).
+
+They land together as one large piece of work — 24 modified files, ~120 new files, ~3,500 LOC net change. Splitting into multiple PRs is possible but not required.
+
+---
 
 ## Completed
 
-Built and shipped the full Stack T voice + 3D avatar feature on `feat/voice-avatars` (also pushed to `Withvoice`). PR #8 open against `main` at https://github.com/mohsaqr/rohySimulator/pull/8.
+### A. Patient/agent visual identity rewrite (AM)
 
-Four commits, current head `50b10eb`:
-- `2b52056` — backend routes, voice service, ConfigPanel tab, ChatInterface wiring
-- `661dd08` — Playwright live-verification handoff record
-- `3108d21` — 6 MIT-licensed GLB heads from met4citizen/TalkingHead + procedural fallback
-- `50b10eb` — revert of the procedural fallback (looked uncanny)
+- Photos removed end-to-end (`cases.image_url` ALTER, `/api/upload` deleted, all `<img src=image_url>` gone).
+- `src/utils/resolveAvatar.js` is the single source of truth for "which GLB?" — explicit `avatarId` → platform default by gender → demographic hash → `manifest.fallback[0]`.
+- `src/components/settings/AvatarsSettingsTab.jsx` and `AgentTemplateManager.jsx` have unified Avatar & Voice blocks (gender, avatar dropdown, framing sliders, TTS engine, voice id, speech rate).
+- `activeParticipant` slot in VoiceContext lets PatientVisual mirror whoever the trainee is currently talking to.
+- `src/utils/stageDirections.js` strips `*nods*`-style stage directions from display *and* TTS.
+- `agent_templates` table dedup'd 90 → 3 rows; UNIQUE INDEX added.
 
-### Backend (`server/routes.js`)
-- `GET/PUT /api/platform-settings/voice` — admin-only writes, strict validation (path traversal blocked on voice filenames, range checks on rate/pitch, allowlist on enums, unknown-key rejection).
-- `POST /api/tts` — spawns Piper with `--output-raw`, prepends a 44-byte WAV header at the voice's native sample rate (read from the `.onnx.json` sidecar), streams `audio/wav`. 50 MB safety cap, 2000 char text cap.
-- `GET /api/tts/voices` — scans `server/data/piper/*.onnx`, always reports `piperInstalled` flag (caught via early smoke test).
-- `GET /api/llm/models` — single allowed home for Anthropic model IDs per plan §6 (Opus 4.7, Sonnet 4.6, Haiku 4.5, plus two legacy 3.5 entries).
-- `POST /api/proxy/llm` — accepts `session_mode: 'voice'`; when set + `llm_model_voice` configured, swaps in the override model for that single call.
+### B. Avatar library expansion + cleanup (mid-day)
 
-### Frontend
-- `src/services/voiceService.js` — wawa-lipsync 0.0.2 owns the audio graph (do NOT pre-create `AudioContext` or `MediaElementSource`; each audio element can only feed one source node). Emits dominant Oculus viseme each frame.
-- `src/components/chat/PatientAvatar.jsx` — Three.js + r3f + drei. Loads RPM-style GLB via `useGLTF`, clones the scene per instance, drives morph influences with smooth lerp (rise=12/s, decay=8/s) so the mouth doesn't flicker. Idle blink every 3.5–5 s. Glow ring colored by listening/speaking. Camera framed at `(0, 1.62, 1.05)` looking at `(0, 1.62, 0)` for head-and-shoulders shot of full-body GLBs.
-- `src/components/settings/VoiceSettingsTab.jsx` — admin-only ConfigPanel tab. Loads voice settings + `/api/tts/voices` + `/api/llm/models` in parallel. Shows "Piper not installed" warning when binary is missing.
-- `src/components/chat/ChatInterface.jsx` — voice toggle in tab bar, push-to-talk replaces text input on patient tab, avatar pane above messages. Cleanup on case change and unmount. `LLMService.sendMessage()` takes a 4th `sessionMode` arg threaded into the proxy/llm body.
+- 22 viseme-rigged RocketBox GLBs now in `public/avatars/heads/rb_*.glb` (10 morning + 12 afternoon, all carrying the canonical 17 morph targets in Oculus order).
+- Reproducible RocketBox pipeline at `scripts/rocketbox-convert/` (replaces `/tmp` one-shot). Idempotent + additive; `--force` overrides; `--only=` runs subset.
+- `src/utils/visemes.js` extracted as the single source of truth for `VISEME_KEYS` (15 entries). Both `PatientAvatar.jsx` and `convert.mjs` import from it.
+- `manifest.json` extended to 28 entries.
+- `/simplify` cleanup: viseme dedup, per-material `Promise.all` texture fetches, `MIME_PNG` constant.
 
-### Setup
-- `server/scripts/install-piper.sh` — downloads three starter Piper voices into `server/data/piper/`. Apple Silicon path: `pipx install piper-tts` then add `PIPER_BIN=$(which piper)` to `server/.env`.
-- `.gitignore` — ignores `server/data/piper/` (binaries + onnx are large) but **NOT** `public/avatars/heads/*.glb` (committed because Ready Player Me shut down).
-- 6 MIT-licensed GLB heads in `public/avatars/heads/` (~71 MB total): `avatarsdk.glb` (M), `avaturn.glb`, `brunette.glb`, `brunette-t.glb`, `mpfb.glb`, `vroid.glb` (all F). Manifest distributes them across age buckets.
+### C. Central NotificationCenter (this session — main body of work)
+
+Replaced four parallel notification systems (`ToastContext`, `useAlarms` self-contained alarm hook, `EventLogger` singleton with own batching, native `alert()`) with **one** central `NotificationCenter` that every producer reports to.
+
+**Core (new)** — `src/notifications/`:
+
+- `types.js` — `SOURCES` (clinical/system/user/telemetry), `SEVERITIES` (debug→critical), `SURFACES` (toast/banner/audio/history/backend/console), `AUDIO_PATTERNS` (urgent/beep/chime/none).
+- `defaults.js` — `DEFAULT_ROUTING` matrix (severity × source → surfaces[]), `DEFAULT_PREFS` (DND, mutes, severity threshold, audio frequencies, dedup window, max visible toasts), `DEFAULT_TTL_MS`, `DEFAULT_AUDIO_PATTERN`.
+- `routing.js` — `routeNotification(notification, prefs, transient)` applies the mute hierarchy: `acked` → `snoozed` → `DND/paused` (clinical critical bypasses) → `minSeverity` → `mutedSources` → per-surface mutes.
+- `persistence.js` — localStorage (sync) + `/api/notification-prefs` (async) for `prefs`, `snoozed`, `acked`.
+- `NotificationContextObject.js` — bare `createContext(null)` so the provider file is component-only (HMR-friendly).
+- `NotificationContext.jsx` — `<NotificationProvider>` with `notify`, `resolve`, `ack`, `ackAll`, `snooze`, `snoozeAll`, `dismiss`, `pause`, `resume`, `subscribe`, plus state: `active`, `history`, `snoozed`, `acked`, `prefs`.
+- `useNotifications.js` — the hook (split for HMR rule).
+- `externalApi.js` — module-level `setExternalApi`/`getExternalApi` so non-React producers (EventLogger singleton) can dispatch.
+- `index.js` — barrel.
+
+**Surfaces (new)** — `src/notifications/surfaces/`:
+
+- `ToastSurface.jsx` — bottom-right cards. Hover/focus → `pause(id)`; mouse-leave/blur → `resume(id)` (fresh full TTL). Click-anywhere-to-dismiss.
+- `BannerSurface.jsx` — top sticky banner for clinical critical/error/warning. Acknowledge + Snooze buttons.
+- `AudioSurface.jsx` — single oscillator manager owned by the surface (NOT useAlarms). Listens for click/keydown/touchstart/visibilitychange to resume the AudioContext globally — fixes the legacy "alarms silent unless you click PatientMonitor first" bug. Picks loudest pattern (URGENT > BEEP > CHIME) when multiple alarms active.
+- `BackendSurface.js` — bounded queue (500 cap) batches POSTs to `/api/alarms/log` (clinical) or `/api/learning-events/batch` (telemetry). `sendBeacon` on hide/unload for telemetry.
+- `ConsoleSurface.js` — colour-tagged console output gated by `prefs.consoleMuted`.
+- `HistorySurface.jsx` — embeddable component listing the rolling history (200-cap).
+- `index.js` — barrel.
+
+**Producers refactored**:
+
+- `src/contexts/ToastContext.jsx` — rewritten as backwards-compat shim. 243 existing `toast.success/error/warning/info/confirm` call sites work unchanged. `useToast` lives in `src/contexts/useToast.js`; context object in `src/contexts/ToastContextObject.js` (HMR rule). `ConfirmModal` now closes on ESC.
+- `src/hooks/useAlarms.js` — gutted from a 419-line self-contained hook to a ~210-line thin producer. Reads vitals, calls `notify({source: 'clinical', severity, key: 'alarm:hr_high', requiresAck: true, ttlMs: 0, data: {...}})` on threshold breaches, `resolve(key)` when vital normalises. Severity picked per breach (critical for severe out-of-range, warning for edge). Audio context, oscillator, mute persistence, ack/snooze tracking — ALL gone (center owns them now). Exposes the same shape PatientMonitor expected (`activeAlarms`, `snoozedAlarms`, `isMuted`, `setIsMuted`, `acknowledgeAlarm`, etc) so the alarm tab UI renders unchanged.
+- `src/services/eventLogger.js` — same 130+ xAPI verbs and convenience methods preserved. `log()` now routes to `notify({source: 'telemetry', ...})` via `getExternalApi()`. Pre-mount events go into a 1000-cap buffer that replays on first center-bound `log()` call after mount. Removed: own batch queue, periodic flush, visibility/unload listeners, console-color block (BackendSurface and ConsoleSurface own those now).
+- `src/components/examination/BodyMapDebug.jsx` — two `alert()` calls replaced with `toast.success()`.
+
+**Wiring** — `src/App.jsx`:
+
+- Mounted `<NotificationProvider>` wrapping `<ToastProvider>` (the shim depends on it).
+- `<NotificationApiBridge />` — calls `setExternalApi(api)` on mount so EventLogger can dispatch.
+- Surfaces mounted at root: `<ToastSurface />`, `<BannerSurface />`, `<AudioSurface />`, `<ConsoleSurface />`, `<BackendSurfaceBridge />` (which reads sessionId/userId/caseId from EventLogger.getStatus + useAuth and passes them to `<BackendSurface>`).
+
+**UI** — `src/components/settings/NotificationsSettingsTab.jsx`:
+
+- New settings tab. Sections: DND, Pause for X min, Min severity, Source mutes, Surface mutes (Audio/Banner/Console), Audio tuning (volume + per-pattern frequency sliders), Snooze duration, Live state (acked/snoozed/history counts + Clear all ACKs), Reset, Recent activity history.
+- Wired into `ConfigPanel.jsx` sidebar — visible to **every user**, not just admins (a clinician needs to be able to mute their own alarms).
+- `nowTick` state ticks every 30s so the "Paused (Nm left)" countdown updates without breaking React's purity rule.
+
+**PatientMonitor changes** — `src/components/monitor/PatientMonitor.jsx`:
+
+- Removed the `audioContextRef` and the click-handler audio init (AudioSurface owns this now globally).
+- `useAlarms` call signature: `useAlarms(displayVitals, sessionId)` (was `useAlarms(displayVitals, sessionId, audioContextRef.current)`).
+- Alarm tab UI unchanged — the legacy `alarmSystem.{activeAlarms, snoozedAlarms, isMuted, ...}` shape is preserved by the refactored hook.
+
+**Server**:
+
+- `server/routes.js` — added `GET/PUT /api/notification-prefs`. Stored as JSON in the existing `user_preferences.notification_settings` column (no schema migration needed — `user_preferences` already existed at `db.js:1267-1280`). Upsert via `ON CONFLICT(user_id) DO UPDATE`.
+- `server/routes.js` — **restored `POST /api/upload`** (with `authenticateToken` middleware this time). Codex review flagged it as a regression from the morning's photo removal: `PhysicalExamEditor.jsx:69,147` and `RadiologyEditor.jsx:167` still POST to `/api/upload` for auscultation audio and study images. Field name is `photo` (kept for compat).
+
+### D. Google TTS upgrade + Talking-Avatars Kit (this session, late)
+
+**Google TTS quality fixes** — `server/services/googleTts.js` + `server/routes.js`:
+
+- Added 8 **Chirp 3 HD** voices (Aoede, Kore, Leda, Zephyr, Charon, Puck, Orus, Fenrir). Same pricing tier as Neural2 ($16/1M chars after 1M free) but dramatically more natural prosody. Reordered the catalog so Chirp 3 HD sorts first, then Chirp HD, then Neural2 (kept for backwards compat).
+- `effectsProfileId: ['headphone-class-device']` added to every synthesis request — free per-request EQ profile, noticeably improves perceived quality on headphones.
+- Speed clamp widened from 0.5–1.5 to 0.7–1.3 (`routes.js:6989`).
+- Did NOT add Studio voices (~10× more expensive — separate "Studio" tier — and Chirp 3 HD is roughly comparable for free).
+
+**Talking-Avatars Kit** — `kits/talking-avatars/`:
+
+Self-contained, drop-in-portable bundle of the entire talking-head + lipsync + TTS pipeline. Built on user request as a "lift this into another project" deliverable.
+
+- `README.md` — 933-line reference doc (17 sections): architecture, asset model, the 15 Oculus visemes, the conversion pipeline, runtime morph driver internals (refs vs props, critically-damped interpolation, scene cloning), wawa-lipsync's FFT approach, Kokoro vs Google comparison, the custom `application/x-rohy-pcm-stream` wire format, single-shared-AudioContext rationale, camera framing, blink animation, avatar selection priority chain, browser STT, setup checklist, troubleshooting, licensing, why-not-RPM/Polly/ElevenLabs.
+- `INSTALL.md` — 7-step drop-in walkthrough for a fresh project.
+- `package.json` — peerDependencies + exports map (kit is BYO-package — meant to be lifted, not installed).
+- `glbs/` — all 28 GLBs + manifest.json (~226 MB).
+- `client/` — `PatientAvatar.jsx`, `voiceService.js`, `VoiceContext.jsx`, `visemes.js`, `resolveAvatar.js`, `avatarFraming.js` plus **NEW** `config.js` (apiUrl/baseUrl env-configurable stubs) + `authService.js` (token-getter stub). All imports rewritten to use sibling-relative paths so the kit is self-contained.
+- `server/` — `kokoroTts.js`, `googleTts.js`, `wav.js` plus **NEW** `ttsRoute.js` (drop-in Express router that wires both providers, the streaming format, and the voices catalog endpoint).
+- `examples/standalone.html` — 422-line single-file vanilla-JS demo that re-implements the kit's pipeline without React. Importmap pulls three.js + wawa-lipsync from esm.sh. Same morph driver, same wire-format parser, same critically-damped interpolation. Sanity-check before integration.
+- `examples/README.md` — how to run the demo.
+- `pipeline/` — copies of `convert.mjs`, `avatars.json`, `package.json`, `README.md`, `.gitignore`.
+- **Tarball** at `kits/talking-avatars.tar.gz` (180 MB) — single-file transport, excludes `node_modules` and `work/`.
+
+**Toast hover-pause** — final polish this session:
+
+User reported "the notification is so fast I can't get to acknowledge it." Two fixes in `src/notifications/`:
+
+- Bumped `DEFAULT_TTL_MS` (`defaults.js`): debug 2→3s, success 3→5s, info 4→6s, warning 6→10s, error 8→15s, critical stays sticky.
+- Added `pause(id)` and `resume(id)` to `NotificationContext.jsx`. `ToastSurface.jsx` wires `onMouseEnter`/`onFocus` → pause, `onMouseLeave`/`onBlur` → resume (with fresh full TTL — over-generous on purpose). Subtle white ring on paused toasts. Click-anywhere-to-dismiss (whole card is now a target, not just the X). `tabIndex={0}` + `aria-live="polite"` for keyboard / screen-reader users. Expiry `useEffect` skips notifications where `n.paused === true`.
+
+### Codex review status
+
+A working-tree review ran through `/codex:review` and surfaced 3 issues:
+
+1. **[P1]** `/api/upload` removed but still used by PhysicalExamEditor + RadiologyEditor — **fixed** (restored with auth, see C above).
+2. **[P1]** `routing.js:19-27` — clinical critical bypassed acked/snoozed checks, making Acknowledge/Snooze buttons useless on those banners — **fixed**. Now: `acked`/`snoozed` are explicit user actions on a specific key and *always* honoured (even for critical). Only blanket rules (DND/severity/source-mute) let critical clinical escape.
+3. **[P3]** `useAlarms.js:162-169` — `snoozedAlarms.remaining` was reading a non-existent `s.remainingMin` from the center, rendering "Returns in undefined min" — **fixed**. `useAlarms` now keeps a `nowTick` state (30s interval) and computes `remaining = Math.max(0, Math.ceil((s.until - nowTick) / 60000))`.
+
+User declined to run a deeper full-codebase Codex audit when offered. The Google TTS upgrades and toast hover-pause changes have NOT yet been Codex-reviewed.
+
+---
 
 ## Current State
 
-### What works (verified live, this session)
-- Server boots cleanly, all routes register.
-- Admin login → ConfigPanel → "Voice & Avatar" tab fully populated: 3 Piper voices, 7 STT locales, all 5 LLM models, both sliders, both avatar radios. No false "Piper not installed" warning.
-- UI Save button persists settings round-trip through DB.
-- Voice toggle appears in chat tab bar with `voice_mode_enabled=true`; disappears when toggled platform-wide off.
-- Push-to-talk button replaces text input, displays patient name interpolated.
-- `PatientAvatar.jsx` lazy chunk (~24 KB transfer in dev / 261 KB gzip in prod) fetched only on first voice-mode toggle.
-- GLB head renders correctly framed (head-and-shoulders) — male `avatarsdk.glb` was rendered live and looked correct.
-- Real Piper synthesis via `pipx install piper-tts`: `POST /api/tts` returned valid 28 KB RIFF/WAVE 16-bit mono 22050 Hz from "Hello doctor, I have been feeling chest pain since this morning."
-- Student account: `PUT /platform-settings/voice` returns 403; Voice tab hidden in ConfigPanel sidebar.
-- All validation paths return 400 with the right error message (path traversal, out-of-range rate, unknown key).
+- **API server**: started this session, listening on `:3000` (PID 26436, log at `/tmp/rohy-server.log`). `node --watch server/server.js` so it auto-reloads on file changes. Migrations all clean — `cases.image_url` dropped, `idx_agent_templates_type_name` created, default agent personas seeded, lab/cardiac/radiology fixtures loaded.
+- **Vite client**: started this session, ready in 2.5s on `:5173` (background task `bflpqt7en`, log at `/tmp/rohy-client.log`). HTTP 200, no compile errors. HMR active.
+- **Build**: `npx vite build --logLevel=error` passes clean (warnings: pre-existing chunk-size only).
+- **Lint**: clean on every file touched this session. AuthContext / VoiceContext have a pre-existing `react-refresh/only-export-components` warning that's intentionally left alone (matches established repo pattern; my new contexts follow the split-into-component-and-hook pattern to avoid the warning).
+- **`/api/notification-prefs`**: live and authenticated. Confirmed via `curl` — 401 without token, 200 with valid one.
+- **`/api/upload`**: live and authenticated. Confirmed — 401 no auth, 403 bad token.
+- **Google TTS Chirp 3 HD voices**: live; `GET /api/tts/voices?provider=google` returns the new catalog. Behaviour change: every Google synthesis request now sets `effectsProfileId: ['headphone-class-device']`.
 
-### What's NOT yet verified
-- Real microphone capture / `SpeechRecognition` transcript (browser permission gated; Playwright headless can't grant).
-- Audio playback through speakers and viseme animation on the rendered avatar.
-- LLM call in voice mode end-to-end (LLM not configured with an API key on this dev install).
-- The actual simulation flow — does voice mode feel right when interleaved with patient-record events, agent paging, monitor alarms, etc.? Untouched in this session.
+### Files modified (24)
 
-### What was tried and reverted
-- **Procedural three.js head** (`ProceduralHead.jsx`, deleted in `50b10eb`): tried building a face from primitives as a fallback when no GLB is configured. Result was uncanny — eyes looked like Pac-Man ghosts, mouth dominated lower face. Removed the file, the radio option, the allow-list entry, and the dispatch branch. Avatar choices are back to plan's two: `3d_head` or `none`.
+```
+M HANDOFF.md
+M package.json
+M public/avatars/heads/manifest.json
+M server/db.js
+M server/routes.js                        (notification-prefs, /upload restored, google speed clamp)
+M server/server.js
+M server/services/kokoroTts.js
+M src/App.jsx                             (NotificationProvider + 5 surfaces + bridges)
+M src/components/chat/ChatInterface.jsx
+M src/components/chat/PatientAvatar.jsx
+M src/components/examination/BodyMapDebug.jsx  (alert() → toast.success())
+M src/components/monitor/PatientMonitor.jsx     (audioContextRef + click handler removed; useAlarms signature)
+M src/components/orders/OrdersDrawer.jsx
+M src/components/patient/PatientVisual.jsx
+M src/components/settings/AgentTemplateManager.jsx
+M src/components/settings/ConfigPanel.jsx       (Notifications sidebar tab)
+M src/components/settings/VoiceSettingsTab.jsx
+M src/contexts/ToastContext.jsx                 (rewritten as shim over notify())
+M src/contexts/VoiceContext.jsx
+M src/hooks/useAlarms.js                        (gutted to thin producer, oscillator removed)
+M src/services/authService.js
+M src/services/eventLogger.js                   (routes through center, preserves API)
+M src/services/llmService.js
+M src/services/voiceService.js
+```
+
+### Files added — counts (full list via `git status --short`)
+
+- 22 RocketBox GLBs in `public/avatars/heads/rb_*.glb` (untracked from earlier sessions, still uncommitted).
+- 19 NEW notification-system files in `src/notifications/`, `src/contexts/`, `src/components/settings/NotificationsSettingsTab.jsx`.
+- 5 NEW utilities: `src/utils/{avatarFraming,parseConfig,resolveAvatar,stageDirections,visemes}.js`.
+- 4 NEW server services: `server/services/{googleTts,openaiTts,voiceFallbacks,wav}.js`.
+- 4 NEW settings components: `src/components/settings/{AvatarFraming,AvatarsSettingsTab,CaseAvatarVoicePicker}.jsx`.
+- `scripts/rocketbox-convert/` directory.
+- `kits/talking-avatars/` directory (~73 files including 28 GLBs) plus `kits/talking-avatars.tar.gz` (180 MB).
+- `server/database.sqlite.backup-20260502-102313` — keep a few days then delete.
+
+`git status --short` reports **140 lines** of changes (modified + untracked).
+
+---
 
 ## Key Decisions
 
-- **Switched GLB source from Ready Player Me to met4citizen/TalkingHead.** RPM was acquired by Netflix in December 2025 and shut down for public use on 2026-01-31; the plan doc's Task 13 instructions are no longer executable. TalkingHead ships 6 demo GLBs under MIT, all explicitly designed with the 15-viseme Oculus blend shape set + ARKit blendshapes. Verified visemes are present via `strings $f | grep viseme_` on each binary.
-- **Committed the GLBs to git rather than using LFS or hosting externally.** ~71 MB is acceptable; LFS would add deploy/CI complexity for assets that won't change.
-- **Lazy-loaded the PatientAvatar chunk via `React.lazy`.** Three.js + r3f + drei add ~261 KB gzip. Students who never enable voice mode pay none of it. The chunk is fetched only on first voice toggle.
-- **wawa-lipsync as the lipsync algorithm.** For audio without phoneme timings (Piper's default output), all FFT-based libraries hit the same ~6/10 quality ceiling — TalkingHead's audio analyzer is no better. The real upgrade path is server-side espeak phoneme timings (queued as Task #10), not a different library.
-- **No procedural fallback.** A fallback that looks worse than the absence of the thing it falls back to is negative value.
-- **Defense-in-depth on admin guard.** Server returns 403 on PUT for non-admins AND the UI hides the tab. Either layer alone would suffice; both means a curious student can't even discover voice settings exist.
+- **Two fixed platform defaults beat demographic hash** for `avatar_id` fallback. Predictability over variety. Hash remains as step 3 of resolver.
+- **Avatar always renders, voice mode or not.** Photos are gone — no static-image idle path.
+- **Per-agent voice override layered on top of global.** Same shape as per-case (`config.voice = { tts_provider, case_voice, tts_rate }`).
+- **Agent gender stored explicitly in `config.gender`.** Falling back to a name regex was fragile.
+- **RocketBox is the canonical avatar source.** Ready Player Me unavailable (memory note).
+- **Pipeline lives in the repo** (`scripts/rocketbox-convert/`), not `/tmp`. Reproducible from a fresh clone.
+- **NotificationCenter design — separate event from surface.** A producer says "I want to fire this notification with this severity from this source"; the center decides which surfaces render it based on user prefs. This is what makes mute/DND/severity-threshold work consistently across toast, banner, audio, history, backend, console.
+- **Backwards compat via `useToast` shim.** 243 call sites stayed unchanged. The engine swapped silently. Made the migration a "swap the engine" project, not a "rewrite the car" project.
+- **Acked/snoozed wins over critical clinical.** When a clinician explicitly clicks Acknowledge or Snooze on a critical alarm, suppress it. Codex caught this (originally bypassed). DND/severity/source-mute (blanket rules) still let critical clinical escape — those aren't user actions on the specific alarm.
+- **Hover-pause restarts with fresh full TTL on resume**, not remaining time. Sonner-style precise resume feels worse for clinical UX where users glance away. Generous resume = a forgiving system.
+- **Toast click-anywhere-to-dismiss.** Bigger hit target. X button stays for users who learned that pattern.
+- **AudioSurface listens globally** (click/keydown/touchstart/visibilitychange) for the resume gesture. Legacy `useAlarms` listened only on `document.click` inside PatientMonitor — broke when users navigated without clicking. Now any gesture anywhere unlocks audio.
+- **`/api/upload` restored with auth** rather than updating the editors to use a different endpoint. The endpoint is the right shape for a generic media upload; the morning's deletion was over-eager.
+- **Chirp 3 HD voices for Google.** Same price tier as Neural2, dramatically better quality. Studio voices skipped (10× pricier; Chirp 3 HD is comparable).
+- **Talking-Avatars Kit gets duplicate GLBs.** 226 MB of avatars copied into `kits/talking-avatars/glbs/` rather than symlinked. Symlinks are fragile across zip/copy/network filesystems. Duplication is the right tradeoff for a portable bundle.
+- **Standalone HTML demo uses vanilla JS via importmap.** No React, no bundler. Demonstrates the mechanics without the production wiring; serves as a sanity-check before integrating the React kit. Accepts the small `VISEME_KEYS` duplication as documented non-canonical.
+
+---
 
 ## Open Issues
 
-1. **Audio + video flow not yet exercised end-to-end by a human.** This is the single most important open thread. Until somebody clicks the mic, speaks, and hears + sees the patient respond, we don't know whether the integration is actually shippable.
-2. **Procedural avatar removal** could leave a stale `avatar_type='procedural'` in some deployer's DB if they tested the previous commit (`3108d21`). The component currently treats unknown values as "render GLB" rather than failing loud, so it self-heals on the next save. Worth being aware of.
-3. **No child-age GLBs.** Demo set has no children; the `child` bucket in `manifest.json` is empty. A pediatric case would render the fallback adult.
-4. **5 of 6 GLBs are female.** Diversity skewed by what TalkingHead happened to ship.
-5. **Pre-existing lint issues in `ChatInterface.jsx`** (`BASE_PATH is not defined` at line ~880, `set-state-in-effect` at line ~460) were not touched — they predate this work and are out of scope.
+- **No browser smoke test of the full notification pipeline.** Toast dedup, banner ack/snooze, audio mute behaviour, DND, persistence across reload, snooze countdown — none of these have been clicked through manually since the build went green. The risk surface here is large; this is the highest-priority pre-commit verification.
+- **`rb_business_female_02.glb` glasses lens** — renders the FBX2glTF placeholder white PNG because `f015_glasses_color.tga` doesn't exist in the source. Probably invisible (transparent lens) but worth eyeballing.
+- **`rb_male_adult_15.glb` in two buckets** of `manifest.json` (`male.middle` and `male.elderly`) — pre-existing from morning, cosmetic.
+- **3 seeded default agents have no `config.gender`** until an admin opens the persona editor.
+- **Other machines with the pre-fix DB state** will accumulate the same 90-row `agent_templates` duplication. The `UNIQUE INDEX` creation in `db.js` will fail silently on first boot if duplicates still exist. They need to dedup first.
+- **No follow-up Codex audit run** on the notification system, Google TTS upgrades, kit, or hover-pause changes. The first Codex review caught 3 P1/P3 issues — there may be more in code that hasn't been re-reviewed yet.
+- **Talking-Avatars Kit GLBs duplicate the canonical copies** in `public/avatars/heads/`. Adds ~226 MB to the working tree. If we commit, we should probably gitignore `kits/talking-avatars/glbs/*.glb` and `kits/talking-avatars.tar.gz`, OR move the canonical copies under `kits/` and have the runtime fetch from `/avatars/heads/` via a server route that reads from the kit folder.
+- **EventLogger ACTION → notification severity 'info' mapping** — the legacy xAPI severity ladder was DEBUG/INFO/ACTION/IMPORTANT/CRITICAL; ACTION is now mapped to 'info' in the SEV_MAP. Worth verifying nothing relies on ACTION being distinct from INFO in stored events.
+- **`/api/notification-prefs` PUT has no body validation.** A malicious user could PUT a 50 MB JSON blob into `user_preferences.notification_settings`. Should enforce a size cap (~10 KB) and validate keys against `DEFAULT_PREFS`.
+- **NotificationsSettingsTab is in ConfigPanel sidebar for all users.** The other admin tabs (users, platform, logs, etc) are gated by `isAdmin()`. Notifications is intentionally NOT (every user needs to control their own DND), but the gating boundary in ConfigPanel could become inconsistent — keep an eye on it.
+- **No audit on whether `pause(id)` / `resume(id)` race conditions exist** when a toast dedups during hover. Theoretical: hover at t=0 → pause → key re-fires at t=2s (dedup window) → `setActive` updates `lastSeenAt` to now, but the existing `paused: true` is preserved (spread copies it). Should be fine but unverified.
 
-## Next Steps (priority order for next session)
+---
 
-### 1. Live audio + video test — HIGHEST PRIORITY
-The whole feature is currently unproven from a user's perspective. Before any further work:
+## Next Steps
 
-```bash
-# Start the dev stack
-cd /Users/mohammedsaqr/Documents/Github/rohySimulator
-PORT=3000 node server/server.js &
-npx vite &
-open http://localhost:5173/
-```
+1. **Browser smoke test before commit.** End-to-end:
+   - Trigger a toast (any error path) → confirm dedup if repeated
+   - Hover the toast → white ring appears, timer pauses → mouse off → fresh full TTL
+   - Click anywhere on a toast → dismisses
+   - Settings → Notifications → toggle DND → all subsequent non-critical notifications silenced
+   - Settings → Notifications → Pause for 5m → resumes after 5 min OR after clicking Resume
+   - Load case → push HR > 120 → red banner + beep + history entry → click Acknowledge → silenced
+   - Acknowledge a critical alarm → silenced even though HR still high
+   - Drop HR into range, push back high → re-fires (proves `resolve()` cleared the ack)
+   - Toggle Audio off → banner + history continue, beep stops
+   - Refresh page → DND, mute, snooze, ack states all persist
+   - Settings → Voice → preview a Chirp 3 HD voice → confirm noticeably more natural than Neural2
+   - Admin → Body Map → Copy → toast appears (no native alert)
+2. **Commit.** Suggested split (or squash if preferred):
+   - **(a)** Photo removal + avatar resolver + AvatarsSettingsTab + utils (resolveAvatar, avatarFraming, parseConfig, stageDirections, visemes).
+   - **(b)** Agent editor avatar/voice + agent TTS + CaseAvatarVoicePicker.
+   - **(c)** DB dedup + unique index + migration in `server/db.js`.
+   - **(d)** RocketBox pipeline (`scripts/rocketbox-convert/`) + 12 new GLBs + manifest expansion.
+   - **(e)** **NotificationCenter (the big one)** — `src/notifications/` + ToastContext shim + useAlarms refactor + EventLogger refactor + PatientMonitor audio init removal + NotificationsSettingsTab + App.jsx wiring + `/api/notification-prefs` route + `/api/upload` restoration.
+   - **(f)** Google TTS Chirp 3 HD + effectsProfileId + speed widening.
+   - **(g)** Talking-Avatars Kit (`kits/talking-avatars/` + tarball) — large; consider gitignoring the GLBs and tarball.
+3. **Push to remote** when verified.
+4. **Optional follow-ups**:
+   - Run a deeper Codex audit on the notification system + Google upgrades + hover-pause (user declined this earlier in the session but it's still worth doing).
+   - Add validation on `PUT /api/notification-prefs` body (size cap + key whitelist).
+   - SSML mapping for stage directions → `<emphasis>` / `<break>` / `<prosody>` tags before sending to Google. Half-hour change. Notable perceived-quality win on emotional patients.
+   - Server-side espeak phoneme timings for accurate lipsync (long-standing). wawa-lipsync FFT is good but imperceptible TH/FF/PP confusion.
+   - Other machines: dedup their `agent_templates` rows before pulling this branch.
+   - Delete `server/database.sqlite.backup-20260502-102313` once dedup is confirmed safe.
 
-Walkthrough (also in PR description):
-1. Login as `admin` / `admin123`.
-2. Confirm voice settings still saved (admin → Settings → Voice & Avatar).
-3. Pick the Acute Chest Pain - STEMI case (or any case).
-4. Click "Voice" in the chat tab bar — avatar should appear above messages.
-5. Click "Click to talk to John Martinez" — grant mic permission.
-6. Speak: *"Hello, can you tell me about your chest pain?"*
-7. Click the green "Listening… click to stop" button.
-8. **Watch and listen for:**
-   - Transcript appears in the input area
-   - Auto-submits to Claude
-   - Claude response renders as a chat message
-   - Audio plays through speakers
-   - Avatar's mouth animates while audio plays
-   - Eyes blink periodically
-   - Glow ring transitions: green (listening) → off → blue (speaking) → off
-
-If any step fails, capture: browser console errors, Network tab `/api/tts` and `/api/proxy/llm` payloads, and which avatar GLB is being loaded.
-
-### 2. Look at how voice mode meshes with the rest of the simulation
-Once audio + video work in isolation, **observe the simulation**: does voice mode feel right when:
-- Monitor alarms fire mid-patient-speech?
-- The student pages an agent (nurse/consultant/relative) — should agent tab disable voice?
-- Vital signs change while patient is talking?
-- A scenario timeline event triggers (e.g., chest pain worsening)?
-- The student switches between patient and agent tabs — does voice cleanup correctly?
-
-Cleanup hooks are in place (cancel speech / stop listening on case change and unmount), but the multi-agent flow may need additional cleanup glue. **Do this with the simulation actually running**, not from reading code.
-
-### 3. Decide on Task #10 (server-side espeak phoneme timings)
-If the FFT-based lipsync looks visibly approximate during the live test (mouth opens but doesn't track specific phonemes), bump Task #10 to high priority. Implementation outline in the task description: piggyback espeak-ng on the same text Piper synthesizes, return `{audio, phonemes: [{p, t}]}`, drive visemes on a timeline synced with `audio.currentTime`. Adds ~50 ms server time.
-
-### 4. Pediatric and male GLBs
-If the simulation includes pediatric cases or needs more male diversity, source additional GLBs:
-- Microsoft RocketBox (MIT, 100+ characters, but needs Mixamo re-rigging)
-- Avaturn (free tier, has API)
-- Generated via TalkingHead's blender scripts on RocketBox source
-
-### 5. PR #8
-Currently open. After live verification passes, merge or request review. The PR description is up to date as of `50b10eb`.
+---
 
 ## Context
 
-### Environment
-- Node 25.5, npm; Apple Silicon Mac (Darwin arm64).
-- Default seeded users: `admin/admin123`, `student/student123`.
-- Branch: `feat/voice-avatars` (and identical mirror `Withvoice`) at `50b10eb`, both pushed to `origin`.
-- Default ports: express :3000, vite :5173 (proxies `/api` to express).
-
-### Dependencies added this session
-- `wawa-lipsync@0.0.2`
-- `three`
-- `@react-three/fiber`
-- `@react-three/drei@10.7.7`
-
-### Piper install (Apple Silicon)
-```bash
-pipx install piper-tts
-echo "PIPER_BIN=$(which piper)" >> server/.env
-```
-The `server/scripts/install-piper.sh` only downloads voice models on Apple Silicon (no prebuilt arm64 binary from upstream).
-
-### Files of interest
-- Plan: `VOICE_AVATAR_PLAN.md` (committed; note Task 13's RPM steps are obsolete, the implementation pivoted to TalkingHead GLBs)
-- Voice settings registry: keys in `platform_settings` table prefixed `voice_`, `tts_`, `piper_`, `stt_`, `avatar_`, `llm_model_voice`
-- 6 GLBs in `public/avatars/heads/`, manifest at `public/avatars/heads/manifest.json`
-- Piper voices in `server/data/piper/` (gitignored): en_US-amy-medium, en_US-ryan-medium, en_GB-jenny_dioco-medium
-
-### Things explicitly NOT in scope (per plan §12)
-- Grading / scoring / evaluation
-- Real-time interruption / barge-in
-- Multi-language LLM responses
-- Cloud TTS (ElevenLabs, OpenAI, Cartesia)
-- Cloud avatars (D-ID, HeyGen, Synthesia, Tavus)
-- Webcam-based facial tracking
-- Voice cloning from real patients
-- Persistent per-patient voice/avatar overrides
-
-### Task tracker state
-Task #10 is the only pending item: "Follow-up: server-side espeak phoneme timings for accurate lipsync". All Task 6–14 items are complete.
+- **Branch**: `feat/voice-avatars` off `main`. Latest commit `b546e11`. ~140 lines of `git status --short` output.
+- **Stack**: React 19 + Vite frontend, Express + sqlite3 backend, Three.js / @react-three/fiber / drei for 3D, wawa-lipsync (FFT-based viseme detection), Piper / Kokoro-82M / Google Cloud TTS / OpenAI for TTS, browser SpeechRecognition for STT.
+- **Dev servers running**: API on `:3000` (PID 26436, foreground-from-this-session); Vite on `:5173` (background task `bflpqt7en`, log `/tmp/rohy-client.log`).
+- **Plan files from earlier sessions**: `/Users/mohammedsaqr/.claude-claudef/plans/magical-spinning-sprout.md` covers AM photo removal + AvatarsSettingsTab work — does NOT cover this PM's NotificationCenter work or the kit.
+- **Memory notes**:
+   - Ready Player Me unavailable (`/Users/mohammedsaqr/.claude-claudef/projects/-Users-mohammedsaqr-Documents-Github-rohySimulator/memory/project_no_readyplayerme.md`). Do not suggest as avatar source.
+- **NotificationCenter file map** (single source of truth for next-session navigation):
+   ```
+   src/notifications/
+     types.js, defaults.js, routing.js, persistence.js
+     NotificationContextObject.js, NotificationContext.jsx, useNotifications.js
+     externalApi.js, index.js
+     surfaces/{Toast,Banner,Audio,Backend,Console,History}Surface.{jsx,js} + index.js
+   src/contexts/
+     ToastContext.jsx (shim), useToast.js, ToastContextObject.js
+   src/components/settings/NotificationsSettingsTab.jsx
+   src/hooks/useAlarms.js (now a producer, not self-contained)
+   src/services/eventLogger.js (routes via getExternalApi())
+   ```
+- **Talking-Avatars Kit reproducibility**: from a fresh clone, `cd kits/talking-avatars && cat README.md` for the full reference doc; `cat INSTALL.md` for the 7-step drop-in walkthrough; `cd pipeline && npm install && npm run convert` to rebuild any GLB; `examples/standalone.html` is a no-build sanity-check.
+- **Tarball**: `kits/talking-avatars.tar.gz` — 180 MB, single-file transport for sharing the kit to another project.

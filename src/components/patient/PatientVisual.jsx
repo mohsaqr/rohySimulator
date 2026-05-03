@@ -1,73 +1,80 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { User, Loader2 } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
 
-// Lazy-load the 3D head — only needed when voice mode is on, and pulls in
-// three.js / r3f / drei (~250 KB gzip).
+// Lazy-load the 3D head — pulls in three.js / r3f / drei (~250 KB gzip).
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar'));
 
-export default function PatientVisual({ image, context, caseData }) {
-    const config = caseData?.config || {};
-    const demo = config.demographics || {};
-    const patientName = config.patient_name || caseData?.name;
-    const { voiceMode, speaking, listening, visemes, voiceSettings, headManifest } = useVoice();
+// Renders the active speaker's avatar in the patient panel. The active
+// speaker is provided via the `participant` prop — it can be the patient
+// (derived from caseData) or any agent (Nurse / Consultant / Relative)
+// when the trainee switches tabs in the multi-agent UI.
+//
+// Participant shape:
+//   {
+//     avatar_id?:    string  — GLB filename
+//     avatar_camera?: { pos, lookY, fov }
+//     gender?:       string  — for platform-default fallback resolution
+//     name?:         string
+//     age?:          number  — for the demographic auto-pick fallback
+//   }
+//
+// For backward compatibility, if no `participant` is passed but `caseData`
+// is, we synthesise a participant from caseData.config.
+export default function PatientVisual({ caseData, participant }) {
+    const { speaking, listening, visemes, voiceSettings, headManifest, platformAvatars, activeParticipant } = useVoice();
 
-    const showLiveHead = voiceMode
-        && voiceSettings?.avatar_type !== 'none'
-        && headManifest;
+    // Stable fallback when no explicit/context participant is supplied — memo
+    // keeps the same object reference across re-renders so PatientAvatar
+    // doesn't re-resolve / re-mount the GLB on each parent render.
+    const caseFallback = useMemo(() => {
+        const c = caseData?.config || {};
+        return {
+            avatar_id: c.avatar_id || null,
+            avatar_camera: c.avatar_camera || null,
+            gender: c.demographics?.gender,
+            name: c.patient_name,
+            age: c.demographics?.age,
+            id: caseData?.id
+        };
+    }, [caseData?.id, caseData?.config]);
+
+    const p = participant || activeParticipant || caseFallback;
+
+    // Always render the avatar when the manifest is loaded — every case now
+    // resolves to a GLB (explicit, platform-default, or demographic auto-pick).
+    // The `avatar_type === 'none'` global toggle still wins as a kill switch.
+    const showLiveHead = !!headManifest && voiceSettings?.avatar_type !== 'none';
 
     return (
         <div className="h-full flex flex-col bg-neutral-900 overflow-hidden relative">
-            {/* Full Height Image Area — replaced by the 3D head when voice is on */}
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center p-4">
                 {showLiveHead ? (
                     <Suspense fallback={
-                        <div className="rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center" style={{ width: 240, height: 240 }}>
+                        <div className="aspect-square h-full max-h-full max-w-full rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center">
                             <Loader2 className="w-6 h-6 animate-spin text-neutral-500" />
                         </div>
                     }>
-                        <div style={{ width: 280, height: 280 }}>
+                        <div className="aspect-square h-full max-h-full max-w-full">
                             <PatientAvatar
-                                patient={config}
+                                patient={p}
                                 speaking={speaking}
                                 listening={listening}
                                 visemes={visemes}
-                                avatarType={voiceSettings?.avatar_type}
+                                avatarType={voiceSettings?.avatar_type || '3d'}
                                 headManifest={headManifest}
+                                avatarId={p.avatar_id}
+                                cameraOverride={p.avatar_camera}
+                                platformAvatars={platformAvatars}
                             />
                         </div>
                     </Suspense>
-                ) : image ? (
-                    <img src={image} alt="Patient" className="w-full h-full object-cover opacity-80" />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-neutral-700">
                         <User className="w-24 h-24" />
                     </div>
                 )}
             </div>
-
-            {/* Floating Context Bubble (Brief) - Only if exists */}
-            {false && (context || patientName) && (
-                <div className="absolute bottom-6 left-6 max-w-[80%] z-10">
-                    <div className="bg-black/60 backdrop-blur-md border border-white/10 p-4 rounded-xl text-white shadow-2xl animate-in fade-in slide-in-from-bottom-4">
-                        {patientName && (
-                            <div className="mb-2">
-                                <span className="text-xl font-bold text-white tracking-tight">{patientName}</span>
-                                {demo.age && (
-                                    <span className="ml-2 text-sm text-neutral-400 font-medium">
-                                        {demo.age}y {demo.gender}
-                                    </span>
-                                )}
-                            </div>
-                        )}
-                        {context && (
-                            <p className="font-light text-sm text-neutral-300 leading-relaxed italic border-l-2 border-purple-500/50 pl-3">
-                                "{context}"
-                            </p>
-                        )}
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AuthService } from '../../services/authService';
 import DEFAULT_REGIONS from '../../utils/defaultRegions';
 import { apiUrl, baseUrl } from '../../config/api';
+import { useToast } from '../../contexts/ToastContext';
  
 // Storage key for localStorage
 const STORAGE_KEY = 'rohy_bodymap_regions';
@@ -12,6 +13,7 @@ const STORAGE_KEY = 'rohy_bodymap_regions';
  * Changes are saved to localStorage and server
  */
 export default function BodyMapDebug({ gender = 'male', view = 'anterior' }) {
+    const toast = useToast();
     const [clickCoords, setClickCoords] = useState(null);
     const [showGrid, setShowGrid] = useState(true);
     const [showRegions, setShowRegions] = useState(true);
@@ -153,13 +155,13 @@ export default function BodyMapDebug({ gender = 'male', view = 'anterior' }) {
     const copyToClipboard = () => {
         const data = JSON.stringify(regions[view][gender], null, 2);
         navigator.clipboard.writeText(data);
-        alert('Copied current regions to clipboard!');
+        toast.success('Copied current regions to clipboard');
     };
 
     const exportAll = () => {
         const data = JSON.stringify(regions, null, 2);
         navigator.clipboard.writeText(data);
-        alert('Copied ALL regions to clipboard!');
+        toast.success('Copied ALL regions to clipboard');
     };
 
     return (

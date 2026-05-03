@@ -1,0 +1,14 @@
+[
+  { "srcGroup": "Adults",      "srcName": "Female_Adult_01", "dstName": "rb_female_adult_01",  "label": "Adult woman 01",       "gender": "female", "age": "adult" },
+  { "srcGroup": "Adults",      "srcName": "Female_Adult_08", "dstName": "rb_female_adult_08",  "label": "Adult woman 08",       "gender": "female", "age": "adult" },
+  { "srcGroup": "Adults",      "srcName": "Female_Adult_17", "dstName": "rb_female_adult_17",  "label": "Adult woman 17",       "gender": "female", "age": "adult" },
+  { "srcGroup": "Adults",      "srcName": "Male_Adult_04",   "dstName": "rb_male_adult_04",    "label": "Adult man 04",         "gender": "male",   "age": "adult" },
+  { "srcGroup": "Adults",      "srcName": "Male_Adult_09",   "dstName": "rb_male_adult_09",    "label": "Adult man 09",         "gender": "male",   "age": "adult" },
+  { "srcGroup": "Adults",      "srcName": "Male_Adult_21",   "dstName": "rb_male_adult_21",    "label": "Adult man 21",         "gender": "male",   "age": "adult" },
+  { "srcGroup": "Children",    "srcName": "Female_Child_01", "dstName": "rb_female_child_01",  "label": "Female child 01",      "gender": "female", "age": "child" },
+  { "srcGroup": "Children",    "srcName": "Male_Child_02",   "dstName": "rb_male_child_02",    "label": "Male child 02",        "gender": "male",   "age": "child" },
+  { "srcGroup": "Professions", "srcName": "Business_Female_02","dstName": "rb_business_female_02","label": "Professional woman 02","gender": "female","age": "adult" },
+  { "srcGroup": "Professions", "srcName": "Business_Male_07","dstName": "rb_business_male_07", "label": "Professional man 07",  "gender": "male",   "age": "adult" },
+  { "srcGroup": "Professions", "srcName": "Sports_Male_02",  "dstName": "rb_sports_male_02",   "label": "Athlete (male)",       "gender": "male",   "age": "adult" },
+  { "srcGroup": "Professions", "srcName": "Delivery_Male_01","dstName": "rb_delivery_male_01", "label": "Delivery worker (male)","gender": "male",  "age": "adult" }
+]

@@ -10,6 +10,7 @@ import { Buffer } from 'node:buffer';
 import os from 'node:os';
 import { env as TRANSFORMERS_ENV } from '@huggingface/transformers';
 import { KokoroTTS, TextSplitterStream } from 'kokoro-js';
+import { buildWavHeader, float32ToInt16Buffer } from './wav.js';
 
 // onnxruntime-web (which @huggingface/transformers uses on Node) defaults to
 // single-threaded WASM. Benchmarked at ~20% faster at 4 threads vs 1; past
@@ -50,38 +51,6 @@ export function isKokoroLoaded() {
     return !!_instance;
 }
 
-// Pack a Float32Array of mono PCM samples (range -1..1) into a 16-bit
-// little-endian WAV buffer. Browsers decode this directly.
-export function float32ToWav(float32, sampleRate) {
-    const numSamples = float32.length;
-    const dataBytes = numSamples * 2;
-    const buf = Buffer.alloc(44 + dataBytes);
-
-    buf.write('RIFF', 0);
-    buf.writeUInt32LE(36 + dataBytes, 4);
-    buf.write('WAVE', 8);
-    buf.write('fmt ', 12);
-    buf.writeUInt32LE(16, 16);
-    buf.writeUInt16LE(1, 20);
-    buf.writeUInt16LE(1, 22);
-    buf.writeUInt32LE(sampleRate, 24);
-    buf.writeUInt32LE(sampleRate * 2, 28);
-    buf.writeUInt16LE(2, 32);
-    buf.writeUInt16LE(16, 34);
-    buf.write('data', 36);
-    buf.writeUInt32LE(dataBytes, 40);
-
-    // Convert Float32 -1..1 to Int16 -32768..32767 with clipping.
-    let offset = 44;
-    for (let i = 0; i < numSamples; i++) {
-        let s = Math.max(-1, Math.min(1, float32[i]));
-        s = s < 0 ? s * 0x8000 : s * 0x7fff;
-        buf.writeInt16LE(s | 0, offset);
-        offset += 2;
-    }
-    return buf;
-}
-
 export async function synthesizeKokoro({ text, voice, speed }) {
     const tts = await loadKokoro();
     if (!tts.voices[voice]) {
@@ -93,17 +62,8 @@ export async function synthesizeKokoro({ text, voice, speed }) {
         voice,
         speed: typeof speed === 'number' ? speed : 1
     });
-    return float32ToWav(out.audio, out.sampling_rate);
-}
-
-// Convert Float32 -1..1 PCM to little-endian Int16 bytes.
-function float32ToInt16Buffer(float32) {
-    const buf = Buffer.alloc(float32.length * 2);
-    for (let i = 0; i < float32.length; i++) {
-        let s = Math.max(-1, Math.min(1, float32[i]));
-        buf.writeInt16LE((s < 0 ? s * 0x8000 : s * 0x7fff) | 0, i * 2);
-    }
-    return buf;
+    const pcm = float32ToInt16Buffer(out.audio);
+    return Buffer.concat([buildWavHeader(pcm.length, out.sampling_rate), pcm]);
 }
 
 // Streaming synthesis: yields per-sentence chunks so the client can start
@@ -149,4 +109,12 @@ export function listKokoroVoices() {
         traits: meta.traits || '',
         sampleRate: 24000
     }));
+}
+
+// Async because the model has to be loaded before we know the voice list.
+// First call may take ~3s (download + load); subsequent calls are O(1).
+export async function isKokoroVoice(name) {
+    if (typeof name !== 'string' || !name) return false;
+    const tts = await loadKokoro();
+    return !!tts.voices[name];
 }

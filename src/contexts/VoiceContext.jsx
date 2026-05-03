@@ -14,6 +14,15 @@ export function VoiceProvider({ children }) {
     const [visemes, setVisemes] = useState({ viseme_sil: 1 });
     const [voiceSettings, setVoiceSettings] = useState(null);
     const [headManifest, setHeadManifest] = useState(null);
+    // Platform-wide default avatars (per-gender). Used when a case has no
+    // explicit avatar_id. Loaded once at app start; refreshed when admin
+    // saves the Avatars settings tab.
+    const [platformAvatars, setPlatformAvatars] = useState(null);
+    // Active participant in the chat — patient or one of the agents. Lets
+    // PatientVisual (sibling of ChatInterface in App.jsx) mirror whoever
+    // the trainee is currently talking to. Shape:
+    //   { avatar_id, avatar_camera, gender, name, age, id }
+    const [activeParticipant, setActiveParticipant] = useState(null);
 
     const value = useMemo(() => ({
         voiceMode, setVoiceMode,
@@ -21,25 +30,16 @@ export function VoiceProvider({ children }) {
         speaking, setSpeaking,
         visemes, setVisemes,
         voiceSettings, setVoiceSettings,
-        headManifest, setHeadManifest
-    }), [voiceMode, listening, speaking, visemes, voiceSettings, headManifest]);
+        headManifest, setHeadManifest,
+        platformAvatars, setPlatformAvatars,
+        activeParticipant, setActiveParticipant
+    }), [voiceMode, listening, speaking, visemes, voiceSettings, headManifest, platformAvatars, activeParticipant]);
 
     return <VoiceContext.Provider value={value}>{children}</VoiceContext.Provider>;
 }
 
 export function useVoice() {
     const ctx = useContext(VoiceContext);
-    if (!ctx) {
-        // Safe defaults if used outside the provider — avoids crashes during
-        // refactor or in storybook-style isolated mounts.
-        return {
-            voiceMode: false, setVoiceMode: () => {},
-            listening: false, setListening: () => {},
-            speaking: false, setSpeaking: () => {},
-            visemes: { viseme_sil: 1 }, setVisemes: () => {},
-            voiceSettings: null, setVoiceSettings: () => {},
-            headManifest: null, setHeadManifest: () => {}
-        };
-    }
+    if (!ctx) throw new Error('useVoice must be used within VoiceProvider');
     return ctx;
 }

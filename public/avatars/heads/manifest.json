@@ -1,15 +1,45 @@
 {
-  "_comment": "Demo heads from met4citizen/TalkingHead (MIT licensed). All have the 15 Oculus viseme morph targets and ARKit blendshapes. Genders are taken from the upstream siteconfig.js. Age buckets are coarse: a single avatar serves all ages of its gender, since the demo set lacks dedicated child/elderly variants.",
+  "_comment": "Heads come from two sources: (1) met4citizen/TalkingHead demo set (MIT) — the original 6 GLBs. (2) Microsoft RocketBox (MIT, github.com/microsoft/Microsoft-Rocketbox) — converted via FBX2glTF + custom post-process that injects textures (1024px PNG) and remaps the AA_VI_NN_* / AK_NN_* blendshape names to the Oculus naming our PatientAvatar expects (viseme_PP, eyeBlinkLeft, etc). Non-viseme/non-blink shapes are pruned for size. The reproducible RocketBox pipeline lives in scripts/rocketbox-convert/. `all` is the flat picker catalogue used by the case editor; the per-gender/age buckets are the demographic auto-pick fallback when a case has no avatar_id (see PatientAvatar.jsx:81 pickHeadFile).",
+  "all": [
+    { "id": "avatarsdk.glb",            "label": "AvatarSDK — male",          "gender": "male",   "age": "adult" },
+    { "id": "brunette.glb",             "label": "Brunette — middle-aged",    "gender": "female", "age": "middle" },
+    { "id": "brunette-t.glb",           "label": "Brunette — elderly",        "gender": "female", "age": "elderly" },
+    { "id": "vroid.glb",                "label": "VRoid — young",             "gender": "female", "age": "young" },
+    { "id": "avaturn.glb",              "label": "Avaturn — young",           "gender": "female", "age": "young" },
+    { "id": "mpfb.glb",                 "label": "MPFB — middle-aged",        "gender": "female", "age": "middle" },
+    { "id": "rb_medical_male_03.glb",   "label": "Doctor / clinician (male)", "gender": "male",   "age": "adult" },
+    { "id": "rb_medical_female_01.glb", "label": "Doctor / clinician (female)","gender":"female", "age": "adult" },
+    { "id": "rb_business_female_03.glb","label": "Professional woman",         "gender":"female", "age": "adult" },
+    { "id": "rb_female_adult_02.glb",   "label": "Adult woman 02",             "gender":"female", "age": "adult" },
+    { "id": "rb_female_adult_05.glb",   "label": "Adult woman 05",             "gender":"female", "age": "adult" },
+    { "id": "rb_female_adult_07.glb",   "label": "Adult woman 07",             "gender":"female", "age": "adult" },
+    { "id": "rb_female_adult_10.glb",   "label": "Adult woman 10",             "gender":"female", "age": "adult" },
+    { "id": "rb_male_adult_03.glb",     "label": "Adult man 03",               "gender":"male",   "age": "adult" },
+    { "id": "rb_male_adult_08.glb",     "label": "Adult man 08",               "gender":"male",   "age": "adult" },
+    { "id": "rb_male_adult_15.glb",     "label": "Adult man 15",               "gender":"male",   "age": "adult" },
+    { "id": "rb_female_adult_01.glb",   "label": "Adult woman 01",             "gender":"female", "age": "adult" },
+    { "id": "rb_female_adult_08.glb",   "label": "Adult woman 08",             "gender":"female", "age": "adult" },
+    { "id": "rb_female_adult_17.glb",   "label": "Adult woman 17",             "gender":"female", "age": "adult" },
+    { "id": "rb_male_adult_04.glb",     "label": "Adult man 04",               "gender":"male",   "age": "adult" },
+    { "id": "rb_male_adult_09.glb",     "label": "Adult man 09",               "gender":"male",   "age": "adult" },
+    { "id": "rb_male_adult_21.glb",     "label": "Adult man 21",               "gender":"male",   "age": "adult" },
+    { "id": "rb_female_child_01.glb",   "label": "Female child 01",            "gender":"female", "age": "child" },
+    { "id": "rb_male_child_02.glb",     "label": "Male child 02",              "gender":"male",   "age": "child" },
+    { "id": "rb_business_female_02.glb","label": "Professional woman 02",      "gender":"female", "age": "adult" },
+    { "id": "rb_business_male_07.glb",  "label": "Professional man 07",        "gender":"male",   "age": "adult" },
+    { "id": "rb_sports_male_02.glb",    "label": "Athlete (male)",             "gender":"male",   "age": "adult" },
+    { "id": "rb_delivery_male_01.glb",  "label": "Delivery worker (male)",     "gender":"male",   "age": "adult" }
+  ],
   "female": {
     "young":   ["vroid.glb", "avaturn.glb"],
-    "middle":  ["brunette.glb", "mpfb.glb"],
+    "middle":  ["brunette.glb", "mpfb.glb", "rb_female_adult_02.glb", "rb_female_adult_05.glb", "rb_female_adult_07.glb", "rb_female_adult_10.glb", "rb_business_female_03.glb", "rb_female_adult_01.glb", "rb_female_adult_08.glb", "rb_female_adult_17.glb", "rb_business_female_02.glb"],
     "elderly": ["brunette-t.glb"]
   },
   "male": {
-    "young":   ["avatarsdk.glb"],
-    "middle":  ["avatarsdk.glb"],
-    "elderly": ["avatarsdk.glb"]
+    "young":   ["rb_male_adult_03.glb"],
+    "middle":  ["avatarsdk.glb", "rb_male_adult_08.glb", "rb_male_adult_15.glb", "rb_medical_male_03.glb", "rb_male_adult_04.glb", "rb_male_adult_09.glb", "rb_male_adult_21.glb", "rb_business_male_07.glb", "rb_sports_male_02.glb", "rb_delivery_male_01.glb"],
+    "elderly": ["rb_male_adult_15.glb"]
   },
-  "child":    [],
+  "child":    ["rb_female_child_01.glb", "rb_male_child_02.glb"],
   "fallback": ["avatarsdk.glb", "brunette.glb"]
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, MessageCircle, X, Mic, MicOff, Volume2 } from 'lucide-react';
+import { Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, MessageCircle, X, Mic, MicOff, Volume2, Eye, EyeOff } from 'lucide-react';
 import { LLMService } from '../../services/llmService';
 import { AgentService } from '../../services/AgentService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,9 +9,74 @@ import { apiUrl, baseUrl } from '../../config/api';
 import { usePatientRecord } from '../../services/PatientRecord';
 import { VoiceService } from '../../services/voiceService';
 import { useVoice } from '../../contexts/VoiceContext';
+import { stripStageDirections } from '../../utils/stageDirections';
+import { parseConfig } from '../../utils/parseConfig';
+import { extractCompleteSentences } from '../../utils/sentenceSplit';
+import { PROVIDER_FALLBACK_VOICE } from '../../utils/voiceFallbacks';
+import { useToast } from '../../contexts/ToastContext';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
 // only when a user actually toggles voice mode on for the first time.
+
+// Build a participant {avatar_id, avatar_camera, gender, name, id} from the
+// chat's current "who's talking" state — patient (from caseData) or one of
+// the agents (from the agents list). Pushed into VoiceContext for PatientVisual.
+function deriveActiveParticipant(activeTab, activeCase, agents) {
+    if (activeTab === 'patient') {
+        const c = activeCase?.config || {};
+        return {
+            avatar_id: c.avatar_id || null,
+            avatar_camera: c.avatar_camera || null,
+            gender: c.demographics?.gender || null,
+            name: c.patient_name || null,
+            age: c.demographics?.age || null,
+            id: activeCase?.id ? `case:${activeCase.id}` : null
+        };
+    }
+    const agent = agents.find(a => a.agent_type === activeTab);
+    if (!agent) return null;
+    const cfg = parseConfig(agent.config);
+    // Agents lack a stored gender today — use cfg.gender if set, otherwise
+    // fall back to a name/role heuristic so the platform-default fallback in
+    // resolveAvatarId still routes male vs female correctly when avatar_url is blank.
+    const guessedFemale = /female|relative/i.test(`${agent.name} ${agent.role_title || ''}`);
+    return {
+        avatar_id: agent.avatar_url || null,
+        avatar_camera: cfg.avatar_camera || null,
+        gender: cfg.gender || (guessedFemale ? 'female' : 'male'),
+        name: agent.name,
+        id: `agent:${agent.id}`
+    };
+}
+
+// Shallow equality on the fields PatientAvatar reads. Lets the activeParticipant
+// useEffect early-out when an agent-list refresh produced an equivalent shape.
+function sameParticipant(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    if (a.avatar_id !== b.avatar_id || a.gender !== b.gender || a.id !== b.id || a.name !== b.name) return false;
+    const ac = a.avatar_camera, bc = b.avatar_camera;
+    if (ac === bc) return true;
+    if (!ac || !bc) return false;
+    return ac.lookY === bc.lookY && ac.fov === bc.fov
+        && ac.pos?.[0] === bc.pos?.[0] && ac.pos?.[1] === bc.pos?.[1] && ac.pos?.[2] === bc.pos?.[2];
+}
+
+// Friendly TTS error → toast translation. The server bakes the upstream
+// error message into err.message; we just rephrase the common cases so the
+// admin knows where to look. Anything we don't recognise falls through with
+// the raw message so we never silently swallow problems.
+function ttsErrorToast(toast, err) {
+    if (!toast?.error) return;
+    const msg = err?.message || 'TTS failed';
+    if (/unknown.*voice|not in catalog/i.test(msg)) {
+        toast.error('Voice not valid for this engine. Set a default in admin → Avatars & voices.');
+    } else if (/api.?key|API_KEY/i.test(msg)) {
+        toast.error('Cloud TTS is missing an API key. Set it in admin → Voice & Avatar.');
+    } else {
+        toast.error(`Voice playback failed: ${msg}`);
+    }
+}
 
 const EMOTIONS_ROW1 = ['Inspired', 'Alert', 'Excited', 'Enthusiastic', 'Determined'];
 const EMOTIONS_ROW2 = ['Afraid', 'Upset', 'Nervous', 'Scared', 'Distressed'];
@@ -23,6 +88,14 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const [messagesLoaded, setMessagesLoaded] = useState(false);
     const messagesEndRef = useRef(null);
     const { user } = useAuth();
+    const toast = useToast();
+
+    // Voice-mode transcript curtain. The transcript is the textual log of
+    // what was said. Showing it during a real patient interaction feels
+    // unnatural — you don't see captions in real life. So in voice mode we
+    // hide it by default behind a clickable curtain; users can reveal it
+    // explicitly when they want to review what was said.
+    const [showTranscript, setShowTranscript] = useState(true);
 
     // Recurring emotion questionnaire
     const [showQuestionnaire, setShowQuestionnaire] = useState(false);
@@ -50,8 +123,14 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         speaking, setSpeaking,
         setVisemes,
         voiceSettings, setVoiceSettings,
-        setHeadManifest
+        setHeadManifest,
+        platformAvatars, setPlatformAvatars,
+        setActiveParticipant
     } = useVoice();
+
+    // Raw global voice settings live separately so per-case overrides can be
+    // re-merged on top whenever the active case changes.
+    const [globalVoiceSettings, setGlobalVoiceSettings] = useState(null);
 
     // Multi-agent state
     const [activeTab, setActiveTab] = useState('patient'); // 'patient' or agent_type
@@ -80,22 +159,26 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         loadChatSettings();
     }, []);
 
-    // Load voice settings + avatar manifest in parallel.
+    // Load voice settings + avatar manifest + platform default avatars in parallel.
     useEffect(() => {
         const token = AuthService.getToken();
         let cancelled = false;
         (async () => {
             try {
-                const [voiceRes, manifestRes] = await Promise.allSettled([
-                    fetch(apiUrl('/platform-settings/voice'), { headers: { 'Authorization': `Bearer ${token}` } }),
-                    fetch(baseUrl('/avatars/heads/manifest.json'))
+                const [voiceRes, manifestRes, avatarsRes] = await Promise.allSettled([
+                    fetch(apiUrl('/platform-settings/voice'),   { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch(baseUrl('/avatars/heads/manifest.json')),
+                    fetch(apiUrl('/platform-settings/avatars'), { headers: { 'Authorization': `Bearer ${token}` } })
                 ]);
                 if (cancelled) return;
                 if (voiceRes.status === 'fulfilled' && voiceRes.value.ok) {
-                    setVoiceSettings(await voiceRes.value.json());
+                    setGlobalVoiceSettings(await voiceRes.value.json());
                 }
                 if (manifestRes.status === 'fulfilled' && manifestRes.value.ok) {
                     setHeadManifest(await manifestRes.value.json());
+                }
+                if (avatarsRes.status === 'fulfilled' && avatarsRes.value.ok) {
+                    setPlatformAvatars(await avatarsRes.value.json());
                 }
             } catch (err) {
                 console.warn('Voice/avatar config load failed:', err);
@@ -103,6 +186,32 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         })();
         return () => { cancelled = true; };
     }, []);
+
+    // Merge per-case voice override (caseData.config.voice) on top of the
+    // global blob. Empty / undefined per-case fields inherit from global.
+    // Pushed into VoiceContext so consumers (this component, downstream) all
+    // see the effective settings.
+    useEffect(() => {
+        if (!globalVoiceSettings) return;
+        const override = activeCase?.config?.voice;
+        if (override && typeof override === 'object') {
+            const merged = { ...globalVoiceSettings };
+            for (const [k, v] of Object.entries(override)) {
+                if (v !== undefined && v !== null && v !== '') merged[k] = v;
+            }
+            setVoiceSettings(merged);
+        } else {
+            setVoiceSettings(globalVoiceSettings);
+        }
+    }, [globalVoiceSettings, activeCase?.id, setVoiceSettings]);
+
+    // Push the active participant into VoiceContext so PatientVisual mirrors
+    // whoever the trainee is talking to. Updates skip when nothing changed
+    // to avoid re-rendering every useVoice consumer on agents-list refreshes.
+    useEffect(() => {
+        const next = deriveActiveParticipant(activeTab, activeCase, agents);
+        setActiveParticipant(prev => sameParticipant(prev, next) ? prev : next);
+    }, [activeTab, activeCase?.id, activeCase?.config, agents, setActiveParticipant]);
 
     // If admin disables voice mode platform-wide, drop the local toggle too.
     useEffect(() => {
@@ -150,7 +259,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         };
 
         loadAgents();
-    }, [sessionId, activeCase]);
+    }, [sessionId, activeCase?.id]);
 
     // Load agent conversations when switching tabs
     useEffect(() => {
@@ -343,6 +452,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
         richSystemPrompt += `\n## INSTRUCTIONS\n`;
         richSystemPrompt += `${activeCase.system_prompt || 'You are a patient.'}\n`;
+        richSystemPrompt += `\nSpeak only what the patient would say aloud. Never use stage directions, narration, or asterisk-wrapped action descriptors (e.g. "*nods*", "*clutches chest*", "*sighs*"). Express feelings through words alone.\n`;
 
         if (config.constraints) {
             richSystemPrompt += `\n## CONSTRAINTS\n${config.constraints}\n`;
@@ -528,18 +638,72 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         }
     };
 
-    // Pick the right Piper voice for this patient based on age/gender.
-    // Falls back across configured voices so a partial setup still works.
-    const pickVoiceFile = () => {
+    // Pick the voice for this patient. A per-case `case_voice` (merged in from
+    // Resolve which voice should speak given a per-speaker override (case or
+    // agent) layered on top of the global gender/age slots. Returns the
+    // effective settings the speak() call uses.
+    const resolveSpeakerSettings = (override) => {
         if (!voiceSettings) return null;
-        const cfg = activeCase?.config || {};
-        const ageRaw = cfg.patient_age ?? activeCase?.age;
-        const age = Number.isFinite(Number(ageRaw)) ? Number(ageRaw) : 35;
-        const gender = cfg.patient_gender || activeCase?.gender || '';
-        const isFemale = /^f/i.test(gender);
-        if (age < 13 && voiceSettings.piper_voice_child) return voiceSettings.piper_voice_child;
-        if (isFemale) return voiceSettings.piper_voice_female || voiceSettings.piper_voice_male || null;
-        return voiceSettings.piper_voice_male || voiceSettings.piper_voice_female || null;
+        const merged = { ...voiceSettings };
+        if (override && typeof override === 'object') {
+            for (const [k, v] of Object.entries(override)) {
+                if (v !== undefined && v !== null && v !== '') merged[k] = v;
+            }
+        }
+        return merged;
+    };
+
+    // Voice resolution precedence (most → least specific):
+    //   case override (case_voice)
+    //     → platform persona default for active provider+gender (default_voice_<provider>_<gender>)
+    //     → platform voice slot for active provider+gender   (voice_<provider>_<gender>)
+    //     → hardcoded fallback per provider                     (PROVIDER_FALLBACK_VOICE)
+    //
+    // Voice IDs are provider-specific so everything that's NOT case_voice has
+    // to be looked up under the active provider's namespace; the server runs
+    // a final upfront-validation that swaps in the same fallback if a stale
+    // voice slips through (e.g. case_voice was set under a different
+    // provider). See server/services/voiceFallbacks.js.
+    const pickVoiceFile = (settings, gender, age) => {
+        if (!settings) return null;
+        if (settings.case_voice) return settings.case_voice;
+        const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
+        const slot = safeAge < 13 ? 'child' : (/^f/i.test(gender || '') ? 'female' : 'male');
+        const provider = settings.tts_provider || 'piper';
+
+        const personaDefault = platformAvatars?.[`default_voice_${provider}_${slot}`];
+        if (personaDefault) return personaDefault;
+
+        const voiceSlot = settings[`voice_${provider}_${slot}`];
+        if (voiceSlot) return voiceSlot;
+
+        return PROVIDER_FALLBACK_VOICE[provider]?.[slot] || null;
+    };
+
+    // Effective rate/pitch for the active speaker. Override (case/agent) wins;
+    // otherwise inherit from platform persona default for this gender; final
+    // fallback is the global tts_rate or 1.0.
+    const resolveRatePitch = (override, gender, age) => {
+        const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
+        const slot = safeAge < 13 ? 'child' : (/^f/i.test(gender || '') ? 'female' : 'male');
+        // Rate and pitch stay flat (provider-independent) — they're scalar
+        // factors that work the same on any TTS engine.
+        const personaRate  = platformAvatars?.[`default_rate_${slot}`];
+        const personaPitch = platformAvatars?.[`default_pitch_${slot}`];
+
+        const pickNum = (...vals) => {
+            for (const v of vals) {
+                if (v == null || v === '') continue;
+                const n = Number(v);
+                if (Number.isFinite(n)) return n;
+            }
+            return undefined;
+        };
+
+        return {
+            rate:  pickNum(override?.tts_rate,  personaRate,  voiceSettings?.tts_rate),
+            pitch: pickNum(override?.tts_pitch, personaPitch, voiceSettings?.tts_pitch)
+        };
     };
 
     const handleSendToPatient = async (overrideText) => {
@@ -557,47 +721,33 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const richSystemPrompt = buildPatientSystemPrompt();
 
         // Append an empty assistant message and grow it as tokens stream in
-        // (typewriter effect). Voice TTS waits for the full response then
-        // does one streaming TTS call — simpler and more reliable than the
-        // per-sentence pipeline we tried.
+        // (typewriter effect for the chat bubble).
         let assistantIdx = -1;
         setMessages(prev => {
             assistantIdx = prev.length;
             return [...prev, { role: 'assistant', content: '' }];
         });
 
-        let acc = '';
-        const responseText = await LLMService.streamMessage(
-            sessionId,
-            [...messages, userMsg],
-            richSystemPrompt,
-            voiceMode ? 'voice' : undefined,
-            {
-                onDelta: (delta) => {
-                    acc += delta;
-                    setMessages(prev => {
-                        const copy = [...prev];
-                        copy[assistantIdx] = { role: 'assistant', content: acc };
-                        return copy;
-                    });
-                }
-            }
-        );
-
-        EventLogger.messageReceived(responseText, COMPONENTS.CHAT_INTERFACE);
-        obtained('history', text, responseText);
-        setLoading(false);
-
-        // Voice playback: one call, full response. The streaming WAV path in
-        // voiceService still gives gapless first-sentence-fast playback.
+        // In voice mode, open a per-sentence speech session up-front so each
+        // completed sentence can fire its own TTS request as soon as the
+        // LLM finishes that sentence — not after the whole reply. This
+        // collapses perceived latency from "full LLM duration" to
+        // "first-sentence duration + first Kokoro chunk RTT".
+        let speech = null;
+        let voiceErrored = false;
         if (voiceMode) {
-            const voice = pickVoiceFile();
-            if (voice && responseText && !responseText.startsWith('Error:')) {
-                VoiceService.speak({
-                    text: responseText,
-                    voice,
-                    rate: voiceSettings?.tts_rate ?? undefined,
-                    pitch: voiceSettings?.tts_pitch ?? undefined,
+            const override = activeCase?.config?.voice;
+            const rawGender = activeCase?.config?.demographics?.gender;
+            const age      = activeCase?.config?.demographics?.age;
+            const safeAge  = Number.isFinite(Number(age)) ? Number(age) : 35;
+            const slotGender = safeAge < 13 ? 'child' : (/^f/i.test(rawGender || '') ? 'female' : 'male');
+            const settings = resolveSpeakerSettings(override);
+            const voice    = pickVoiceFile(settings, rawGender, age);
+            if (voice) {
+                const { rate, pitch } = resolveRatePitch(override, rawGender, age);
+                speech = VoiceService.beginSpeechSession({
+                    voice, rate, pitch,
+                    gender: slotGender,
                     onStart: () => setSpeaking(true),
                     onVisemes: setVisemes,
                     onEnd: () => {
@@ -606,11 +756,107 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     },
                     onError: (err) => {
                         console.error('TTS error:', err);
+                        voiceErrored = true;
                         setSpeaking(false);
+                        ttsErrorToast(toast, err);
                     }
                 });
             }
         }
+
+        let acc = '';            // raw accumulator (for chat bubble + bubble-final)
+        let speechBuffer = '';   // sentence detector buffer (TTS only)
+
+        const responseText = await LLMService.streamMessage(
+            sessionId,
+            [...messages, userMsg],
+            richSystemPrompt,
+            voiceMode ? 'voice' : undefined,
+            {
+                onDelta: (delta) => {
+                    acc += delta;
+                    const display = stripStageDirections(acc);
+                    setMessages(prev => {
+                        const copy = [...prev];
+                        copy[assistantIdx] = { role: 'assistant', content: display };
+                        return copy;
+                    });
+
+                    if (!speech || voiceErrored) return;
+                    speechBuffer += delta;
+                    const { sentences, remainder } = extractCompleteSentences(speechBuffer);
+                    speechBuffer = remainder;
+                    for (const s of sentences) {
+                        const spoken = stripStageDirections(s).trim();
+                        if (spoken) speech.enqueue(spoken);
+                    }
+                }
+            }
+        );
+
+        // Make the bubble actually reflect what came back. Three paths:
+        //   - Error: show the error text in red so the user sees it
+        //   - Empty: tell the user nothing was returned (catches silent hangs)
+        //   - Success but onDelta never fired (server returned JSON not SSE):
+        //     overwrite the bubble with responseText so it's not stuck blank
+        const isError = typeof responseText === 'string' && responseText.startsWith('Error:');
+        const finalDisplay = isError
+            ? responseText
+            : (acc ? stripStageDirections(acc) : (responseText ? stripStageDirections(responseText) : '(no response from LLM — check server logs)'));
+        setMessages(prev => {
+            const copy = [...prev];
+            if (assistantIdx >= 0 && copy[assistantIdx]?.role === 'assistant') {
+                copy[assistantIdx] = { role: 'assistant', content: finalDisplay, error: isError || !responseText };
+            }
+            return copy;
+        });
+
+        EventLogger.messageReceived(responseText, COMPONENTS.CHAT_INTERFACE);
+        obtained('history', text, responseText);
+        setLoading(false);
+
+        if (speech) {
+            // Flush trailing partial sentence (e.g. an unterminated final clause)
+            // and surface any error state to skip TTS for error responses.
+            if (isError || !responseText) {
+                speech.cancel();
+            } else {
+                const tail = stripStageDirections(speechBuffer).trim();
+                if (tail) speech.enqueue(tail);
+                speech.flush();
+            }
+        }
+    };
+
+    // Shared speak helper used by the agent send path (which doesn't expose an
+    // LLM streaming hook today, so it stays single-shot). Layered override >
+    // platform persona default > global, applied to voice/rate/pitch.
+    const speakResponse = (responseText, { override, gender, age }) => {
+        const settings = resolveSpeakerSettings(override);
+        const voice = pickVoiceFile(settings, gender, age);
+        const spokenText = stripStageDirections(responseText);
+        if (!voice || !spokenText || responseText.startsWith('Error:')) return;
+        const { rate, pitch } = resolveRatePitch(override, gender, age);
+        const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
+        const slotGender = safeAge < 13 ? 'child' : (/^f/i.test(gender || '') ? 'female' : 'male');
+        VoiceService.speak({
+            text: spokenText,
+            voice,
+            rate,
+            pitch,
+            gender: slotGender,
+            onStart: () => setSpeaking(true),
+            onVisemes: setVisemes,
+            onEnd: () => {
+                setSpeaking(false);
+                setVisemes({ viseme_sil: 1 });
+            },
+            onError: (err) => {
+                console.error('TTS error:', err);
+                setSpeaking(false);
+                ttsErrorToast(toast, err);
+            }
+        });
     };
 
     const startVoiceTurn = () => {
@@ -685,6 +931,19 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             // Reload team log after agent response
             const updatedLog = await AgentService.getTeamCommunications(sessionId);
             setTeamLog(updatedLog);
+
+            // Voice playback — agents speak with their own per-agent override
+            // (config.voice) on top of global. Visemes flow into the active
+            // participant avatar (which is this agent because the trainee is
+            // on their tab).
+            if (voiceMode) {
+                const cfg = parseConfig(agent.config);
+                speakResponse(responseText, {
+                    override: cfg.voice,
+                    gender: cfg.gender,
+                    age: undefined
+                });
+            }
         } catch (err) {
             console.error('Failed to send message to agent:', err);
             // Use functional update with fallback to empty array
@@ -777,27 +1036,45 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     );
                 })}
                 {voiceModeAvailable && (
-                    <button
-                        onClick={() => {
-                            const next = !voiceMode;
-                            setVoiceMode(next);
-                            if (!next) {
-                                VoiceService.cancelSpeech();
-                                VoiceService.stopListening();
-                                setSpeaking(false);
-                                setListening(false);
-                            }
-                        }}
-                        title={voiceMode ? 'Switch to text mode' : 'Switch to voice mode'}
-                        className={`ml-auto mb-1 px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition-colors ${
-                            voiceMode
-                                ? 'bg-purple-600 hover:bg-purple-500 text-white'
-                                : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300'
-                        }`}
-                    >
-                        {voiceMode ? <Volume2 className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                        {voiceMode ? 'Voice on' : 'Voice'}
-                    </button>
+                    <div className="ml-auto mb-1 flex items-center gap-1.5">
+                        {voiceMode && (
+                            <button
+                                onClick={() => setShowTranscript(s => !s)}
+                                title={showTranscript ? 'Hide transcript (more immersive)' : 'Show transcript'}
+                                className="px-2.5 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition-colors"
+                            >
+                                {showTranscript
+                                    ? <><EyeOff className="w-3.5 h-3.5" /> Hide</>
+                                    : <><Eye className="w-3.5 h-3.5" /> Show</>}
+                            </button>
+                        )}
+                        <button
+                            onClick={() => {
+                                const next = !voiceMode;
+                                setVoiceMode(next);
+                                if (next) {
+                                    // Voice mode → curtain the transcript by default
+                                    setShowTranscript(false);
+                                } else {
+                                    VoiceService.cancelSpeech();
+                                    VoiceService.stopListening();
+                                    setSpeaking(false);
+                                    setListening(false);
+                                    // Back to text mode → always show messages
+                                    setShowTranscript(true);
+                                }
+                            }}
+                            title={voiceMode ? 'Switch to text mode' : 'Switch to voice mode'}
+                            className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                                voiceMode
+                                    ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                                    : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300'
+                            }`}
+                        >
+                            {voiceMode ? <Volume2 className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                            {voiceMode ? 'Voice on' : 'Voice'}
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -836,8 +1113,15 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 </div>
             )}
 
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Chat Messages — curtained in voice mode for immersion. The
+                transcript still streams in the background; the curtain just
+                hides the visual stream so the user focuses on the voice and
+                avatar. Click the curtain to peek; toggle in the header to
+                pin it open or shut. */}
+            <div className="flex-1 relative overflow-hidden">
+                <div className={`absolute inset-0 overflow-y-auto p-4 space-y-4 transition-opacity ${
+                    voiceMode && !showTranscript ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                }`}>
                 {/* Empty state hint */}
                 {currentMessages.length === 0 && !loading && (
                     <div className="flex flex-col items-center justify-center h-full text-center px-6">
@@ -903,6 +1187,8 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
                         <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${msg.role === 'user'
                             ? 'bg-blue-600 text-white rounded-br-none'
+                            : msg.error
+                            ? 'bg-red-950/40 text-red-200 border border-red-800/60 rounded-bl-none'
                             : activeTab === 'patient'
                             ? 'bg-neutral-800 text-neutral-200 border border-neutral-700 rounded-bl-none'
                             : currentAgent?.agent_type === 'nurse' ? 'bg-blue-900/20 text-blue-100 border border-blue-800/50 rounded-bl-none'
@@ -959,6 +1245,28 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     </div>
                 )}
                 <div ref={messagesEndRef} />
+                </div>
+
+                {/* Curtain — covers the transcript in voice mode. Clicking
+                    anywhere on the curtain reveals the transcript (matches
+                    the toggle button in the header). */}
+                {voiceMode && !showTranscript && (
+                    <button
+                        type="button"
+                        onClick={() => setShowTranscript(true)}
+                        className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-900/85 backdrop-blur-md hover:bg-neutral-900/75 transition-colors group"
+                    >
+                        <div className="w-12 h-12 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center mb-3 group-hover:bg-neutral-700 transition-colors">
+                            <Eye className="w-5 h-5 text-neutral-400 group-hover:text-purple-300" />
+                        </div>
+                        <p className="text-sm text-neutral-400 group-hover:text-neutral-200 font-medium">
+                            Transcript hidden
+                        </p>
+                        <p className="text-xs text-neutral-600 mt-1">
+                            Click anywhere to show what's been said
+                        </p>
+                    </button>
+                )}
             </div>
 
             {/* Recurring Emotion Questionnaire — appears every 2 minutes */}

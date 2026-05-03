@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "client": "vite",
-    "server": "node server/server.js",
+    "server": "node --watch server/server.js",
     "production": "NODE_ENV=production node server/server.js",
     "build": "vite build --base=/rohy/ && rm -rf frontend/* && mkdir -p frontend && cp -r dist/* frontend/",
     "lint": "eslint .",

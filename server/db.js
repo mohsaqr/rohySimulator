@@ -774,10 +774,14 @@ function initDb() {
             FOREIGN KEY(last_modified_by) REFERENCES users(id)
         )`);
 
-        // Migration Check: Add image_url if it doesn't exist
+        // Drop the legacy image_url column if still present. Idempotent.
         db.all("PRAGMA table_info(cases)", (err, rows) => {
-            if (rows && !rows.find(r => r.name === 'image_url')) {
-                db.run("ALTER TABLE cases ADD COLUMN image_url TEXT");
+            if (rows && rows.find(r => r.name === 'image_url')) {
+                db.run("ALTER TABLE cases DROP COLUMN image_url", (err) => {
+                    if (err && !err.message.includes('no such column')) {
+                        console.error('image_url drop failed:', err.message);
+                    }
+                });
             }
         });
 
@@ -1867,6 +1871,28 @@ function initDb() {
             FOREIGN KEY(user_id) REFERENCES users(id)
         )`);
 
+        // TTS Usage — daily char-count aggregates per user, per provider.
+        // Mirrors llm_usage; the unit is characters of input text, since
+        // every cloud TTS provider we support (OpenAI, Google) bills per
+        // input char. estimated_cost rolls in cents → dollars based on
+        // hardcoded per-provider rates inside the route handler (no
+        // db-driven price table for TTS — prices are simpler and stable).
+        // provider is part of the unique key so the same user using both
+        // Kokoro and Google in one day gets two rows, not a merged one.
+        db.run(`CREATE TABLE IF NOT EXISTS tts_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            date DATE NOT NULL,
+            provider TEXT NOT NULL,
+            char_count INTEGER DEFAULT 0,
+            request_count INTEGER DEFAULT 0,
+            estimated_cost REAL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, date, provider),
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )`);
+
         // LLM Request Log - Detailed audit trail
         db.run(`CREATE TABLE IF NOT EXISTS llm_request_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1995,6 +2021,11 @@ function initDb() {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(created_by) REFERENCES users(id)
         )`);
+
+        // Without this index, seedDefaultAgents' INSERT OR IGNORE has no
+        // uniqueness to honour and re-inserts the 3 defaults on every boot.
+        db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_templates_type_name
+                ON agent_templates(agent_type, name)`);
 
         // Add columns to existing agent_templates table if they don't exist
         db.run(`ALTER TABLE agent_templates ADD COLUMN llm_provider TEXT`, (err) => { if (err && !err.message.includes('duplicate')) console.error('Error adding llm_provider column:', err.message); });
@@ -2248,6 +2279,34 @@ function initDb() {
 
         // ==================== SEED DEFAULT AGENT PERSONAS ====================
         seedDefaultAgents();
+
+        // ==================== SEED AVATAR DEFAULTS ====================
+        // Platform-wide default avatars (male/female) used when a case has no
+        // explicit config.avatar_id. Set once; admin can change via the
+        // Avatars settings tab. INSERT OR IGNORE is idempotent.
+        const avatarSettings = [
+            ['default_avatar_male',   'rb_male_adult_03.glb'],
+            ['default_avatar_female', 'rb_female_adult_07.glb']
+        ];
+        const psStmt = db.prepare(
+            `INSERT OR IGNORE INTO platform_settings (setting_key, setting_value) VALUES (?, ?)`
+        );
+        avatarSettings.forEach(([k, v]) => psStmt.run(k, v));
+        psStmt.finalize();
+
+        // Backfill avatar_url on the 3 default agents, only when blank — so
+        // an admin's custom pick survives restarts.
+        const defaultAgentAvatars = [
+            ['Sarah Mitchell', 'rb_medical_female_01.glb'],
+            ['Dr. James Chen', 'rb_medical_male_03.glb'],
+            ['Family Member',  'rb_female_adult_07.glb']
+        ];
+        const aaStmt = db.prepare(
+            `UPDATE agent_templates SET avatar_url = ?
+             WHERE name = ? AND (avatar_url IS NULL OR avatar_url = '')`
+        );
+        defaultAgentAvatars.forEach(([name, file]) => aaStmt.run(file, name));
+        aaStmt.finalize();
 
         console.log('Database tables initialized with comprehensive schema, master data tables, audit trails, and performance indexes.');
     });

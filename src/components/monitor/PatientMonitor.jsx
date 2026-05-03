@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Heart, Activity, Wind, Thermometer, Bell, Settings, Play, Pause, AlertCircle, Menu, X, Monitor, User, FileJson, FastForward, Save, Download, Upload, BellOff, Volume2, VolumeX, Pencil, Pill } from 'lucide-react';
 import defaultSettings from '../../settings.json';
-import { useEventLog } from '../../hooks/useEventLog';
 import { useAlarms } from '../../hooks/useAlarms';
 import { useTreatmentEffects } from '../../hooks/useTreatmentEffects';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { getAudioContext, resumeAudioContext } from '../../utils/alarmAudio';
+// Audio for alarms is owned by the central NotificationCenter's AudioSurface
+// (mounted in App.jsx); the legacy alarmAudio helpers are no longer needed
+// here. Imports and audio init click-handler removed below.
 import LabValueEditor from '../investigations/LabValueEditor';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { apiUrl } from '../../config/api';
@@ -269,30 +270,6 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
    const plethBuffer = useRef(new Array(ECG_BUFFER_LEN).fill(0));
    const respBuffer = useRef(new Array(ECG_BUFFER_LEN).fill(0));
    
-   // Audio context for alarms
-   const audioContextRef = useRef(null);
-   
-   // Initialize audio context on first user interaction
-   useEffect(() => {
-      const initAudio = async () => {
-         try {
-            audioContextRef.current = getAudioContext();
-            await resumeAudioContext();
-         } catch (error) {
-            console.error('Failed to initialize audio:', error);
-         }
-      };
-      
-      // Wait for user interaction
-      const handleInteraction = () => {
-         initAudio();
-         document.removeEventListener('click', handleInteraction);
-      };
-      document.addEventListener('click', handleInteraction);
-      
-      return () => document.removeEventListener('click', handleInteraction);
-   }, []);
-
    // --- Simulation State ---
    const [isPlaying, setIsPlaying] = useState(true);
    const [lastFrameTime, setLastFrameTime] = useState(0);
@@ -340,9 +317,10 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
 
    // Physics params ref to avoid dependency loops in animation
    const simulationParams = useRef(params);
-
-   // Event Logging Hook
-   const eventLog = useEventLog(sessionId);
+   // Conditions ref read by the scenario engine — keeps that effect's deps
+   // stable so its setInterval doesn't get destroyed/recreated on every
+   // keyframe update (which would cause the 1s tick clock to drift).
+   const conditionsRef = useRef(conditions);
 
    // Treatment Effects Hook - Real-time pharmacokinetic effects
    const treatmentEffects = useTreatmentEffects(sessionId, {
@@ -351,11 +329,16 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       enabled: !!sessionId
    });
 
-   // Alarm System Hook
-   const alarmSystem = useAlarms(displayVitals, sessionId, audioContextRef.current);
+   // Alarm System Hook — audio context, persistence, mute, ack/snooze all
+   // live in the central NotificationCenter now; this hook just produces.
+   const alarmSystem = useAlarms(displayVitals, sessionId);
 
    // Previous vitals for change detection
    const prevVitalsRef = useRef(displayVitals);
+
+   // Mirror conditions into the ref so the scenario engine reads current
+   // values without taking a closure-dependency on `conditions`.
+   useEffect(() => { conditionsRef.current = conditions; }, [conditions]);
 
    // Sync params changes to simulation ref immediately (including treatment effects)
    useEffect(() => {
@@ -394,22 +377,28 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       }));
    }, [treatmentEffects.aggregate, treatmentEffects.count]);
    
-   // Log vital changes
+   // Log significant vital changes via the EventLogger (which routes through
+   // the central NotificationCenter). Per-vital deadbands match the legacy
+   // useEventLog thresholds so the event-volume profile is unchanged.
    useEffect(() => {
-      if (!sessionId || !eventLog.logVitalChange) return;
-      
+      if (!sessionId) return;
+
       const prev = prevVitalsRef.current;
       const current = displayVitals;
-      
-      // Log significant changes
+      const DEADBAND = { hr: 10, spo2: 5, bpSys: 10, bpDia: 10, rr: 3, temp: 0.5 };
+
       Object.keys(current).forEach(vital => {
-         if (prev[vital] !== current[vital]) {
-            eventLog.logVitalChange(vital, prev[vital], current[vital]);
+         const oldV = parseFloat(prev[vital]);
+         const newV = parseFloat(current[vital]);
+         if (!Number.isFinite(oldV) || !Number.isFinite(newV)) return;
+         const threshold = DEADBAND[vital] ?? 5;
+         if (Math.abs(newV - oldV) >= threshold) {
+            EventLogger.vitalAdjusted(vital, oldV, newV, COMPONENTS.PATIENT_MONITOR);
          }
       });
-      
+
       prevVitalsRef.current = displayVitals;
-   }, [displayVitals, sessionId, eventLog]);
+   }, [displayVitals, sessionId]);
 
    // Session timer — increments by 1 each second.
    useEffect(() => {
@@ -564,10 +553,8 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
             }
          }
 
-         // Log case load
-         if (eventLog.logCaseLoad) {
-            eventLog.logCaseLoad(caseData.name);
-         }
+         // case-load is already logged by App.jsx (EventLogger.caseLoaded)
+         // when the case is selected, so we don't double-log here.
       }
    }, [caseData]);
 
@@ -685,11 +672,11 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
 
                const lerp = (start, end, p) => start + (end - start) * p;
 
-               // Interpolate Params
-               const newParams = { ...params }; // Start with current or base? 
-               // Better: Interpolate between the *values defined in the frames*.
-               // If a value is missing in 'from', use current state? No, assume defined or carry over.
-               // Simplified: We interpolate everything defined in 'toFrame'.
+               // Read live params/conditions via refs so this effect doesn't
+               // depend on those state values — that prevents the 1s setInterval
+               // from being destroyed/recreated each time setParams fires.
+               const livePrev = simulationParams.current;
+               const liveConds = conditionsRef.current;
 
                const getVal = (obj, key, def) => (obj && obj[key] !== undefined) ? obj[key] : def;
 
@@ -697,7 +684,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                const interpolatedParams = {};
 
                pKeys.forEach(key => {
-                  const startVal = getVal(fromFrame.params, key, params[key]);
+                  const startVal = getVal(fromFrame.params, key, livePrev[key]);
                   const endVal = getVal(toFrame.params, key, startVal);
                   interpolatedParams[key] = Math.round(lerp(startVal, endVal, progress));
                });
@@ -709,18 +696,13 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                const cKeys = ['stElev', 'noise'];
                const interpolatedConds = {};
                cKeys.forEach(key => {
-                  const startVal = getVal(fromFrame.conditions, key, conditions[key]);
+                  const startVal = getVal(fromFrame.conditions, key, liveConds[key]);
                   const endVal = getVal(toFrame.conditions, key, startVal);
                   interpolatedConds[key] = parseFloat(lerp(startVal, endVal, progress).toFixed(2));
                });
 
-               // Discrete switches happening EXACTLY at frame time
-               // We check if we just crossed a frame time
-               // Or simplified: Use 'fromFrame' discrete values as the "current state"
-               // But better: If we are close to 'fromFrame.time', apply its discrete settings one-shot?
-               // Actually, 'fromFrame' is the state we are LEAVING or IN.
-               // We should ensure the discrete state matches 'fromFrame'.
-
+               // Discrete switches happening EXACTLY at frame time:
+               // copy the leaving-frame's discrete values verbatim.
                const discKeys = ['pvc', 'wideQRS', 'tInv'];
                discKeys.forEach(key => {
                   if (fromFrame.conditions && fromFrame.conditions[key] !== undefined) {
@@ -746,9 +728,9 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       }, 1000); // Update scenario logic every second (interpolation granularity)
 
       return () => clearInterval(interval);
-   }, [activeScenario, scenarioPlaying, params, conditions]); // Params/conditions deps might cause jitter logic loops needed? 
-   // Actually, we are calling setParams, which triggers the other useEffect that updates simulationParams.
-   // That's fine.
+   }, [activeScenario, scenarioPlaying, scenarioList]);
+   // Deliberately omits params/conditions/rhythm: the engine reads them via
+   // refs (simulationParams, conditionsRef) so the interval stays stable.
 
    // Vital Signs Fluctuation Loop (Jitter)
    useEffect(() => {
@@ -1193,15 +1175,15 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
             <div className="w-64 bg-neutral-900/50 backdrop-blur-sm border-l border-neutral-800 flex flex-col shrink-0 overflow-y-auto">
 
                {/* HR Box */}
-               <div className="h-32 border-b border-neutral-800 p-4 flex flex-col justify-center relative overflow-hidden">
-                  <div className="absolute top-2 left-3 text-green-500 font-bold text-sm flex items-center gap-1">
+               <div className="h-24 border-b border-neutral-800 p-3 flex flex-col justify-center relative overflow-hidden">
+                  <div className="absolute top-1.5 left-3 text-green-500 font-bold text-xs flex items-center gap-1">
                      <Heart className="w-3 h-3" /> HR
                   </div>
                   <div className="text-right relative z-10">
-                     <div className={`text-7xl font-mono font-bold tracking-tighter ${rhythm === 'Asystole' ? 'text-red-500' : 'text-green-500'}`}>
+                     <div className={`text-5xl font-mono font-bold tracking-tighter leading-none ${rhythm === 'Asystole' ? 'text-red-500' : 'text-green-500'}`}>
                         {rhythm === 'Asystole' || rhythm === 'VFib' ? '---' : displayVitals.hr}
                      </div>
-                     <div className="text-neutral-500 text-xs mt-[-5px]">bpm</div>
+                     <div className="text-neutral-500 text-[10px] mt-0.5">bpm</div>
                   </div>
                </div>
 
@@ -1261,13 +1243,13 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                </div>
 
                {/* EtCO2 Box */}
-               <div className="h-32 border-b border-neutral-800 p-4 flex flex-col justify-center relative">
-                  <div className="absolute top-2 left-3 text-yellow-500 font-bold text-sm">EtCO<sub className="text-xs">2</sub></div>
+               <div className="h-24 border-b border-neutral-800 p-3 flex flex-col justify-center relative">
+                  <div className="absolute top-1.5 left-3 text-yellow-500 font-bold text-xs">EtCO<sub className="text-[9px]">2</sub></div>
                   <div className="text-right">
-                     <div className="text-5xl font-mono font-bold tracking-tighter text-yellow-500">
+                     <div className="text-4xl font-mono font-bold tracking-tighter leading-none text-yellow-500">
                         {displayVitals.etco2 || 38}
                      </div>
-                     <div className="text-neutral-500 text-xs">mmHg</div>
+                     <div className="text-neutral-500 text-[10px] mt-0.5">mmHg</div>
                   </div>
                </div>
 
@@ -1402,9 +1384,13 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                                                    if (step.conditions) {
                                                       setConditions(c => ({ ...c, ...step.conditions }));
                                                    }
-                                                   if (eventLog.logScenarioStep) {
-                                                      eventLog.logScenarioStep(step.label || `Step ${index + 1}`, scenario.name);
-                                                   }
+                                                   // Log scenario-step jump as an admin "click" event so it's
+                                                   // visible in the analytics timeline without a dedicated verb.
+                                                   EventLogger.buttonClicked(
+                                                      `scenario-step-jump:${step.label || `Step ${index + 1}`}`,
+                                                      COMPONENTS.PATIENT_MONITOR,
+                                                      { scenarioName: scenario.name, time: step.time }
+                                                   );
                                                 }}
                                                 className={`w-full text-left p-2 rounded text-xs transition-colors ${
                                                    isCurrentStep 

@@ -2,28 +2,20 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import { baseUrl } from '../../config/api.js';
+import { resolveAvatarId } from '../../utils/resolveAvatar.js';
+import { resolveCamera } from '../../utils/avatarFraming.js';
+import { VISEME_KEYS } from '../../utils/visemes.js';
 
-// TalkingHead demo GLBs are full-body rigs. Eyes sit around y=1.62, top of
-// head ~y=1.72. Frame on the face: aim slightly above mid-face, dolly back
-// just enough to fit the head plus a hint of shoulder.
-const HEAD_LOOK_Y = 1.62;
-const CAMERA_POS = [0, 1.62, 1.05];
-
-function CameraAim() {
+function CameraAim({ pos, lookY }) {
     const { camera } = useThree();
+    const [px, py, pz] = pos;
     useEffect(() => {
-        camera.position.set(...CAMERA_POS);
-        camera.lookAt(0, HEAD_LOOK_Y, 0);
+        camera.position.set(px, py, pz);
+        camera.lookAt(0, lookY, 0);
         camera.updateProjectionMatrix();
-    }, [camera]);
+    }, [camera, px, py, pz, lookY]);
     return null;
 }
-
-const VISEME_KEYS = [
-    'viseme_sil', 'viseme_PP', 'viseme_FF', 'viseme_TH', 'viseme_DD',
-    'viseme_kk', 'viseme_CH', 'viseme_SS', 'viseme_nn', 'viseme_RR',
-    'viseme_aa', 'viseme_E', 'viseme_I', 'viseme_O', 'viseme_U'
-];
 
 function HeadMesh({ url, visemesRef, blinkRef }) {
     const { scene: original } = useGLTF(url);
@@ -113,7 +105,10 @@ export default function PatientAvatar({
     listening = false,
     visemes = null,
     avatarType,
-    headManifest
+    headManifest,
+    avatarId = null,
+    cameraOverride = null,
+    platformAvatars = null
 }) {
     // Per-frame state held in refs so prop churn doesn't re-trigger useFrame.
     const visemesRef = useRef({ viseme_sil: 1 });
@@ -150,14 +145,18 @@ export default function PatientAvatar({
     if (avatarType === 'none' || avatarType == null) return null;
     if (!headManifest) return null;
 
-    const filename = pickHeadFile(patient, headManifest);
+    const filename = resolveAvatarId({
+        avatarId,
+        gender: patient?.gender,
+        manifest: headManifest,
+        platformAvatars,
+        demographicPicker: pickHeadFile,
+        patient
+    });
     if (!filename) {
         // Manifest is loaded but has no entries yet — show a neutral placeholder.
         return (
-            <div
-                className="rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-500 text-xs"
-                style={{ width: 200, height: 200 }}
-            >
+            <div className="w-full h-full rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-500 text-xs">
                 no avatar configured
             </div>
         );
@@ -165,21 +164,20 @@ export default function PatientAvatar({
 
     const url = baseUrl(`/avatars/heads/${filename}`);
     const ringColor = listening ? '#22c55e' : speaking ? '#3b82f6' : 'transparent';
+    const cam = resolveCamera(headManifest, filename, cameraOverride);
 
     return (
         <div
-            className="rounded-full overflow-hidden bg-neutral-900 border border-neutral-700"
+            className="w-full h-full rounded-full overflow-hidden bg-neutral-900 border border-neutral-700"
             style={{
-                width: 200,
-                height: 200,
                 boxShadow: ringColor !== 'transparent'
                     ? `0 0 0 4px ${ringColor}, 0 0 24px ${ringColor}`
                     : 'none',
                 transition: 'box-shadow 200ms'
             }}
         >
-            <Canvas camera={{ position: CAMERA_POS, fov: 22 }}>
-                <CameraAim />
+            <Canvas camera={{ position: cam.pos, fov: cam.fov }}>
+                <CameraAim pos={cam.pos} lookY={cam.lookY} />
                 <ambientLight intensity={1.0} />
                 <directionalLight position={[2, 3, 2]} intensity={1.2} />
                 <Suspense fallback={null}>

@@ -1,0 +1,19 @@
+{
+  "name": "rocketbox-convert",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Convert Microsoft RocketBox avatars to viseme-rigged GLBs for the rohySimulator patient/agent panel.",
+  "type": "module",
+  "main": "convert.mjs",
+  "scripts": {
+    "convert": "node convert.mjs",
+    "convert:one": "node convert.mjs --only"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "^4.1.0",
+    "@gltf-transform/functions": "^4.1.0",
+    "fbx2gltf": "^0.9.7",
+    "sharp": "^0.33.0",
+    "tga": "^1.0.5"
+  }
+}

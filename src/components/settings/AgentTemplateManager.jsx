@@ -1,7 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Plus, Trash2, Edit2, Copy, Save, X, Users, ChevronDown, ChevronUp, Bot, Zap, Brain, Eye, EyeOff, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { AgentService } from '../../services/AgentService';
+import { useVoice } from '../../contexts/VoiceContext';
+import { apiUrl } from '../../config/api';
+import { AuthService } from '../../services/authService';
+import AvatarFramingSliders from './AvatarFraming.jsx';
+import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
+
+// Lazy — pulls in three.js / r3f only when admin opens the agent editor.
+const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
+
+const TTS_PROVIDERS = [
+  { value: '', label: 'Inherit (use global)' },
+  { value: 'piper', label: 'Piper (fast, robotic)' },
+  { value: 'kokoro', label: 'Kokoro-82M (slower, expressive)' }
+];
 
 const AGENT_TYPES = [
   { value: 'nurse', label: 'Nurse', description: 'Bedside nursing staff' },
@@ -51,6 +65,21 @@ export default function AgentTemplateManager() {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingTemplate, setEditingTemplate] = useState(null);
+  const { headManifest } = useVoice();
+  const [ttsVoices, setTtsVoices] = useState([]);
+
+  // Load the voice list whenever the agent's TTS engine changes — Piper and
+  // Kokoro have non-overlapping voice catalogues. Empty provider = ask for
+  // whatever the global default is.
+  useEffect(() => {
+    const provider = editingTemplate?.config?.voice?.tts_provider || 'piper';
+    let cancelled = false;
+    fetch(apiUrl(`/tts/voices?provider=${provider}`), { headers: AuthService.authHeaders() })
+      .then(r => r.ok ? r.json() : { voices: [] })
+      .then(d => { if (!cancelled) setTtsVoices(d.voices || []); })
+      .catch(() => { if (!cancelled) setTtsVoices([]); });
+    return () => { cancelled = true; };
+  }, [editingTemplate?.config?.voice?.tts_provider]);
   const [expandedId, setExpandedId] = useState(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [testingLLM, setTestingLLM] = useState(false);
@@ -124,7 +153,13 @@ export default function AgentTemplateManager() {
         ORDERED: true, ADMINISTERED: true, CHANGED: true, EXPRESSED: true
       };
     }
-    setEditingTemplate({ ...template, memory_access: memoryAccess });
+    // Config arrives as a JSON string from the DB but is read all over the
+    // form as an object — normalise once on edit-open.
+    let config = template.config;
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch { config = {}; }
+    }
+    setEditingTemplate({ ...template, config: config || {}, memory_access: memoryAccess });
     setTestResult(null);
     setShowApiKey(false);
   };
@@ -185,6 +220,52 @@ export default function AgentTemplateManager() {
       ...prev,
       config: { ...prev.config, [field]: value }
     }));
+  };
+
+  // Voice override lives at config.voice — same shape as a case's voice
+  // override (tts_provider, case_voice, tts_rate). Empty values are stripped
+  // so the field "inherits" from the global voice settings.
+  const updateVoiceField = (field, value) => {
+    setEditingTemplate(prev => {
+      const nextVoice = { ...(prev.config?.voice || {}) };
+      if (value === '' || value === null || value === undefined) delete nextVoice[field];
+      else nextVoice[field] = value;
+      const nextConfig = { ...(prev.config || {}) };
+      if (Object.keys(nextVoice).length === 0) delete nextConfig.voice;
+      else nextConfig.voice = nextVoice;
+      return { ...prev, config: nextConfig };
+    });
+  };
+
+  // Switching TTS engine clears the per-agent voice — Piper filenames and
+  // Kokoro slugs aren't interchangeable.
+  const updateTtsProvider = (value) => {
+    setEditingTemplate(prev => {
+      const nextVoice = { ...(prev.config?.voice || {}) };
+      delete nextVoice.case_voice;
+      if (value === '') delete nextVoice.tts_provider;
+      else nextVoice.tts_provider = value;
+      const nextConfig = { ...(prev.config || {}) };
+      if (Object.keys(nextVoice).length === 0) delete nextConfig.voice;
+      else nextConfig.voice = nextVoice;
+      return { ...prev, config: nextConfig };
+    });
+  };
+
+  const updateAvatarCamera = (patch) => {
+    setEditingTemplate(prev => {
+      const base = prev.config?.avatar_camera || resolveCamera(headManifest, prev.avatar_url, null);
+      const next = mergeCameraPatch(base, patch);
+      return { ...prev, config: { ...(prev.config || {}), avatar_camera: next } };
+    });
+  };
+
+  const resetAvatarCamera = () => {
+    setEditingTemplate(prev => {
+      const next = { ...(prev.config || {}) };
+      delete next.avatar_camera;
+      return { ...prev, config: next };
+    });
   };
 
   const toggleMemoryAccess = (key) => {
@@ -323,6 +404,131 @@ export default function AgentTemplateManager() {
                   <option key={s.value} value={s.value}>{s.label} - {s.description}</option>
                 ))}
               </select>
+            </div>
+
+            {/* Avatar + Voice */}
+            <div className="border-t border-neutral-800 pt-4 mt-4">
+              <h4 className="text-sm font-medium text-neutral-300 mb-3">Avatar &amp; Voice</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-neutral-500 mb-1">Gender</label>
+                    <select
+                      value={editingTemplate.config?.gender || ''}
+                      onChange={(e) => updateConfigField('gender', e.target.value || undefined)}
+                      className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                    >
+                      <option value="">Auto-detect from name</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-neutral-500 mb-1">3D Avatar</label>
+                    <select
+                      value={editingTemplate.avatar_url || ''}
+                      onChange={(e) => updateEditingField('avatar_url', e.target.value || null)}
+                      className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                    >
+                      <option value="">Auto (by gender)</option>
+                      {(headManifest?.all || []).map(a => (
+                        <option key={a.id} value={a.id}>{a.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {editingTemplate.avatar_url && (
+                    <div className="border-t border-neutral-800 pt-3">
+                      <AvatarFramingSliders
+                        camera={resolveCamera(
+                          headManifest,
+                          editingTemplate.avatar_url,
+                          editingTemplate.config?.avatar_camera
+                        )}
+                        onChange={updateAvatarCamera}
+                        onReset={resetAvatarCamera}
+                        hasOverride={!!editingTemplate.config?.avatar_camera}
+                      />
+                    </div>
+                  )}
+
+                  <div className="border-t border-neutral-800 pt-3 space-y-2">
+                    <div>
+                      <label className="block text-xs text-neutral-500 mb-1">TTS Engine</label>
+                      <select
+                        value={editingTemplate.config?.voice?.tts_provider || ''}
+                        onChange={(e) => updateTtsProvider(e.target.value)}
+                        className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                      >
+                        {TTS_PROVIDERS.map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-500 mb-1">Voice</label>
+                      <select
+                        value={editingTemplate.config?.voice?.case_voice || ''}
+                        onChange={(e) => updateVoiceField('case_voice', e.target.value)}
+                        className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                      >
+                        <option value="">Inherit (global by gender)</option>
+                        {ttsVoices.map(v => {
+                          const tag = v.gender ? ` — ${v.gender}` : '';
+                          return (
+                            <option key={v.filename} value={v.filename}>
+                              {(v.displayName || v.filename) + tag}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-500 mb-1">Speech rate</label>
+                      <input
+                        type="number"
+                        step="0.05" min="0.5" max="1.5"
+                        value={editingTemplate.config?.voice?.tts_rate ?? ''}
+                        placeholder="Inherit"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          updateVoiceField('tts_rate', v === '' ? '' : Number(v));
+                        }}
+                        className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-start justify-center">
+                  {editingTemplate.avatar_url && headManifest ? (
+                    <div className="aspect-square w-full max-w-[200px]">
+                      <Suspense fallback={
+                        <div className="w-full h-full rounded-full bg-neutral-900 border border-neutral-700 flex items-center justify-center">
+                          <Loader2 className="w-5 h-5 animate-spin text-neutral-500" />
+                        </div>
+                      }>
+                        <PatientAvatar
+                          patient={{ gender: editingTemplate.config?.gender }}
+                          avatarType="3d"
+                          headManifest={headManifest}
+                          avatarId={editingTemplate.avatar_url}
+                          cameraOverride={resolveCamera(
+                            headManifest,
+                            editingTemplate.avatar_url,
+                            editingTemplate.config?.avatar_camera
+                          )}
+                        />
+                      </Suspense>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-neutral-500 text-center px-4 pt-8">
+                      Pick an avatar to preview.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Availability Config */}

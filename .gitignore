@@ -27,6 +27,7 @@ dist-ssr
 # Server files
 server/.env
 server/database.sqlite
+server/database.sqlite.backup-*
 
 # User uploads
 public/uploads/
@@ -57,3 +58,7 @@ server/data/piper/
 
 # Avatar GLBs from met4citizen/TalkingHead (MIT) ARE committed since Ready
 # Player Me shut down 2026-01-31 and the demo set is small (~70 MB).
+
+# Third-party kit tarballs — the unpacked tree is committed; the archive is
+# regeneratable and exceeds GitHub's 100 MB per-file hard limit.
+kits/*.tar.gz

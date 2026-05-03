@@ -12,6 +12,10 @@ import UserProfilePanel from './components/settings/UserProfilePanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider, useToast } from './contexts/ToastContext';
 import { VoiceProvider } from './contexts/VoiceContext';
+import { NotificationProvider } from './notifications/NotificationContext';
+import { useNotifications } from './notifications/useNotifications';
+import { setExternalApi } from './notifications/externalApi';
+import { ToastSurface, BannerSurface, AudioSurface, BackendSurface, ConsoleSurface } from './notifications/surfaces';
 import { PatientRecordProvider, usePatientRecord } from './services/PatientRecord';
 import { AuthService } from './services/authService';
 import EventLogger, { COMPONENTS } from './services/eventLogger';
@@ -292,11 +296,7 @@ function MainApp() {
 
             {/* Top Left: Patient Visual */}
             <div className="h-[45%] border-b border-neutral-800 relative">
-               <PatientVisual
-                  image={activeCase?.image_url || "./patient_avatar.png"}
-                  context={activeCase?.description}
-                  caseData={activeCase}
-               />
+               <PatientVisual caseData={activeCase} />
 
                {/* Top Right Controls */}
                <div className="absolute top-4 right-4 flex gap-2 z-10">
@@ -533,43 +533,95 @@ function MainApp() {
    );
 }
 
-// Check for debug mode via URL parameter
-const isBodyMapDebug = new URLSearchParams(window.location.search).get('debug') === 'bodymap';
+// Check for debug mode via URL parameter. Gated on import.meta.env.DEV
+// because this branch bypasses AuthProvider entirely — we never want a
+// production deploy to expose body-map editing by URL flag.
+const isBodyMapDebug = import.meta.env.DEV
+   && new URLSearchParams(window.location.search).get('debug') === 'bodymap';
+
+// Keep the bodymap-debug branch in its own component so its useState calls
+// don't run conditionally inside <App> (which would violate Rules of Hooks
+// even though the flag is module-stable).
+function BodyMapDebugApp() {
+   const [gender, setGender] = useState('male');
+   const [view, setView] = useState('anterior');
+   return (
+      <div className="bg-slate-900 min-h-screen">
+         <div className="p-4 flex gap-4">
+            <select value={gender} onChange={(e) => setGender(e.target.value)} className="bg-slate-800 text-white p-2 rounded">
+               <option value="male">Male</option>
+               <option value="female">Female</option>
+            </select>
+            <select value={view} onChange={(e) => setView(e.target.value)} className="bg-slate-800 text-white p-2 rounded">
+               <option value="anterior">Front (Anterior)</option>
+               <option value="posterior">Back (Posterior)</option>
+            </select>
+         </div>
+         <BodyMapDebug gender={gender} view={view} />
+      </div>
+   );
+}
 
 export default function App() {
-   if (isBodyMapDebug) {
-      const [gender, setGender] = React.useState('male');
-      const [view, setView] = React.useState('anterior');
-      return (
-         <div className="bg-slate-900 min-h-screen">
-            <div className="p-4 flex gap-4">
-               <select value={gender} onChange={(e) => setGender(e.target.value)} className="bg-slate-800 text-white p-2 rounded">
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-               </select>
-               <select value={view} onChange={(e) => setView(e.target.value)} className="bg-slate-800 text-white p-2 rounded">
-                  <option value="anterior">Front (Anterior)</option>
-                  <option value="posterior">Back (Posterior)</option>
-               </select>
-            </div>
-            <BodyMapDebug gender={gender} view={view} />
-         </div>
-      );
-   }
+   // showRegister must be declared before any conditional return so its
+   // hook ordering stays stable across renders (Rules of Hooks).
    const [showRegister, setShowRegister] = useState(false);
+
+   if (isBodyMapDebug) {
+      return <BodyMapDebugApp />;
+   }
 
    return (
       <AuthProvider>
-         <ToastProvider>
-            <VoiceProvider>
-               <AuthenticatedApp
-                  showRegister={showRegister}
-                  setShowRegister={setShowRegister}
-               />
-            </VoiceProvider>
-         </ToastProvider>
+         <NotificationProvider>
+            {/* Bridge so non-React producers (EventLogger singleton) can call notify() */}
+            <NotificationApiBridge />
+            <ToastProvider>
+               <VoiceProvider>
+                  <AuthenticatedApp
+                     showRegister={showRegister}
+                     setShowRegister={setShowRegister}
+                  />
+                  {/* Surfaces. They render fixed-position UI / side effects, so they
+                      can sit at the root regardless of which page is active. */}
+                  <ToastSurface />
+                  <BannerSurface />
+                  <AudioSurface />
+                  <ConsoleSurface />
+                  <BackendSurfaceBridge />
+               </VoiceProvider>
+            </ToastProvider>
+         </NotificationProvider>
       </AuthProvider>
    );
+}
+
+// Pulls sessionId/userId/caseId from EventLogger's singleton and passes them
+// to BackendSurface so per-event POSTs include the right session context.
+function BackendSurfaceBridge() {
+   const { user } = useAuth();
+   // EventLogger.setContext is called from various places; re-reading on every
+   // render is fine — the surface only uses these on flush boundaries.
+   const status = EventLogger.getStatus ? EventLogger.getStatus() : {};
+   return (
+      <BackendSurface
+         sessionId={status.sessionId || null}
+         userId={user?.id || status.userId || null}
+         caseId={status.caseId || null}
+      />
+   );
+}
+
+// Registers a module-level reference to the center's notify/resolve so the
+// EventLogger singleton (and any other non-component producer) can dispatch
+// without going through useNotifications().
+function NotificationApiBridge() {
+   const api = useNotifications();
+   useEffect(() => {
+      setExternalApi(api);
+      return () => setExternalApi(null);
+   }, [api]);
+   return null;
 }
 
 function AuthenticatedApp({ showRegister, setShowRegister }) {

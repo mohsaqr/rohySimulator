@@ -1,12 +1,36 @@
 // Voice service for Stack T:
 //   - Browser SpeechRecognition for STT
 //   - Server TTS via /api/tts. Two response shapes are supported:
-//       * audio/wav (Piper, or Kokoro non-streaming) — decoded once and played
 //       * application/x-rohy-pcm-stream (Kokoro streaming) — sentence chunks
 //         scheduled gaplessly so the first sentence starts playing while the
 //         rest are still being synthesized
+//       * audio/wav (Piper, or Kokoro non-streaming) — decoded once and played
 //   - wawa-lipsync drives a per-frame dominant viseme stream from the same
 //     analyser node either path feeds into.
+//
+// The streaming path is used in TWO modes:
+//   1. Single-shot:  VoiceService.speak({ text, voice, ... })
+//      Sends the whole reply text in one /tts call. Used for non-LLM-stream
+//      callers (agents, error fallbacks).
+//   2. Per-sentence: VoiceService.beginSpeechSession({ voice, ... }) →
+//      session.enqueue(sentence) called repeatedly during the LLM stream,
+//      then session.flush() at the end. Each enqueue fires its own /tts
+//      request immediately, but audio is scheduled onto a single shared
+//      timeline cursor (`nextStartTime`) so playback is gapless across
+//      sentences and order is preserved via a Promise chain. This lets
+//      the patient start talking as soon as the LLM finishes its first
+//      sentence, instead of after the whole reply is generated.
+//
+// We bypass wawa's connectAudio() (which uses createMediaElementSource on a
+// blob: URL — broken on some Chrome versions) and feed an
+// AudioBufferSourceNode straight into wawa's internal analyser instead.
+//
+// Pitch: applied client-side via AudioBufferSourceNode.playbackRate. This
+// couples pitch with playback speed (lower pitch → slower audio); the
+// independent tempo control lives server-side as `rate` (Kokoro speed /
+// Piper --length-scale). No native independent pitch shift is available
+// in Web Audio without a third-party DSP library, and the user has
+// accepted the coupling.
 
 import { Lipsync } from 'wawa-lipsync';
 import { apiUrl } from '../config/api.js';
@@ -16,20 +40,14 @@ const SR = (typeof window !== 'undefined')
     ? (window.SpeechRecognition || window.webkitSpeechRecognition)
     : null;
 
+const SILENT_VISEME = { viseme_sil: 1 };
+
 let _recognition = null;
 let _lipsync = null;
-let _activeSources = []; // array of AudioBufferSourceNode for streaming path
+let _activeSources = [];
 let _rafId = null;
 let _started = false;
-let _streamAbort = null;
-// Tracks the AudioContext time at which the *next* incoming chunk should
-// start playing. Reset by teardown(). With chain:true, consecutive speak()
-// calls write into the same lipsync context and append after this mark.
-let _nextStartTime = 0;
-// Serializes per-sentence scheduling so chunks from sentence N+1 don't race
-// chunks from sentence N for the same time slot. Each speak() awaits the
-// chain before scheduling, but its fetch+SSE parsing runs in parallel.
-let _scheduleChain = Promise.resolve();
+let _session = null;  // active speech session (single-shot or per-sentence)
 
 function teardown() {
     if (_rafId) {
@@ -41,17 +59,38 @@ function teardown() {
         try { src.disconnect(); } catch { /* noop */ }
     }
     _activeSources = [];
-    if (_streamAbort) {
-        try { _streamAbort.abort(); } catch { /* noop */ }
-        _streamAbort = null;
+    if (_session) {
+        _session.aborted = true;
+        try { _session.abort.abort(); } catch { /* noop */ }
+        _session = null;
     }
-    _lipsync = null;
+    // Note: we deliberately do NOT close _lipsync.audioContext here. Browsers
+    // cap the number of live AudioContexts (~6); recreating one per turn
+    // exhausts that budget after a few exchanges. Reused across speak() calls.
     _started = false;
-    _nextStartTime = 0;
-    _scheduleChain = Promise.resolve();
 }
 
-// Build int16 PCM bytes into a Float32 AudioBuffer at the given sample rate.
+// Lazy-init or reuse the lipsync + analyser. AudioContext stays live for the
+// whole session so we don't blow past the browser's ~6-context cap.
+async function ensureLipsync() {
+    if (_lipsync) return _lipsync;
+    _lipsync = new Lipsync({ fftSize: 1024, historySize: 8 });
+    _lipsync.analyser.connect(_lipsync.audioContext.destination);
+    await _lipsync.audioContext.resume();
+    return _lipsync;
+}
+
+// Dedup wrapper around onVisemes — only fires when the dominant viseme
+// actually changes, so we don't trigger 60 React re-renders per second.
+function makeVisemeEmitter(onVisemes) {
+    let last = null;
+    return (dominant) => {
+        if (dominant === last) return;
+        last = dominant;
+        onVisemes?.(dominant === 'viseme_sil' ? SILENT_VISEME : { [dominant]: 1 });
+    };
+}
+
 function int16BytesToAudioBuffer(audioCtx, pcmBytes, sampleRate) {
     const numSamples = Math.floor(pcmBytes.byteLength / 2);
     const buf = audioCtx.createBuffer(1, numSamples, sampleRate);
@@ -64,12 +103,17 @@ function int16BytesToAudioBuffer(audioCtx, pcmBytes, sampleRate) {
     return buf;
 }
 
-// Read a stream of [4-byte LE length][N bytes pcm] frames from a fetch
-// ReadableStream. Yields Uint8Array chunks. Stops when length=0 or stream ends.
+// Read [4-byte LE length][N bytes pcm] frames from a fetch ReadableStream.
+// First 4 bytes are the sample rate; trailing 4-zero-bytes is EOF.
+//
+// MAX_PCM_FRAME_BYTES caps a single frame so a corrupt/hostile uint32 length
+// can't make `need()` allocate gigabytes and OOM the tab. Kokoro chunks are
+// per-sentence at 24 kHz int16 mono, so 1s ≈ 48 KB and even a long sentence
+// stays well under 1 MB. 2 MB is generous headroom.
+const MAX_PCM_FRAME_BYTES = 2 * 1024 * 1024;
+
 async function* readPcmFrames(reader, headerSampleRateRef) {
     let buffer = new Uint8Array(0);
-    let sampleRateRead = false;
-
     const need = async (n) => {
         while (buffer.length < n) {
             const { value, done } = await reader.read();
@@ -83,192 +127,204 @@ async function* readPcmFrames(reader, headerSampleRateRef) {
     };
 
     if (!(await need(4))) return;
-    const dv0 = new DataView(buffer.buffer, buffer.byteOffset, 4);
-    headerSampleRateRef.current = dv0.getUint32(0, true);
+    headerSampleRateRef.current = new DataView(buffer.buffer, buffer.byteOffset, 4).getUint32(0, true);
     buffer = buffer.slice(4);
-    sampleRateRead = true;
 
-    while (sampleRateRead) {
+    while (true) {
         if (!(await need(4))) return;
-        const lenView = new DataView(buffer.buffer, buffer.byteOffset, 4);
-        const frameLen = lenView.getUint32(0, true);
+        const frameLen = new DataView(buffer.buffer, buffer.byteOffset, 4).getUint32(0, true);
         buffer = buffer.slice(4);
-        if (frameLen === 0) return; // end-of-stream marker
+        if (frameLen === 0) return;
+        if (frameLen > MAX_PCM_FRAME_BYTES) {
+            throw new Error(`PCM frame too large (${frameLen} bytes); aborting stream`);
+        }
         if (!(await need(frameLen))) return;
         yield buffer.slice(0, frameLen);
         buffer = buffer.slice(frameLen);
     }
 }
 
-async function speakStreaming({ text, voice, rate, chain, onVisemes, onStart, onEnd }) {
-    const abort = new AbortController();
-    _streamAbort = abort;
+// Track each scheduled source so we can stop it on cancel and let it
+// self-clean when it finishes naturally.
+function attachSource(source) {
+    _activeSources.push(source);
+    source.onended = () => {
+        const i = _activeSources.indexOf(source);
+        if (i >= 0) _activeSources.splice(i, 1);
+        try { source.disconnect(); } catch { /* noop */ }
+    };
+}
 
-    const body = { text, voice };
-    if (rate !== undefined && rate !== null) body.rate = rate;
-
-    // Kick off the fetch immediately so the server can start synthesizing
-    // even if a previous sentence is still scheduling. The Promise resolves
-    // when the response headers arrive.
-    const fetchPromise = fetch(apiUrl('/tts?stream=1'), {
+async function ttsFetch(streaming, body, signal) {
+    const res = await fetch(apiUrl(streaming ? '/tts?stream=1' : '/tts'), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${AuthService.getToken()}`,
-            'Accept': 'application/x-rohy-pcm-stream'
+            ...(streaming && { 'Accept': 'application/x-rohy-pcm-stream' })
         },
         body: JSON.stringify(body),
-        signal: abort.signal
-    }).then(async (res) => {
-        if (!res.ok) {
-            let msg = `TTS request failed (${res.status})`;
-            try {
-                const j = await res.json();
-                if (j?.error) msg = j.error;
-            } catch { /* noop */ }
-            throw new Error(msg);
-        }
+        signal
+    });
+    if (!res.ok) {
+        let msg = `TTS request failed (${res.status})`;
+        try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* not json */ }
+        throw new Error(msg);
+    }
+    if (streaming) {
         const ctype = res.headers.get('Content-Type') || '';
         if (!ctype.includes('application/x-rohy-pcm-stream')) {
             throw new Error(`expected pcm-stream, got ${ctype}`);
         }
-        return res;
-    });
+    }
+    return res;
+}
 
-    // Reserve our place in the schedule queue. We won't actually pull bytes
-    // off the response until the previous sentence has finished scheduling.
-    const myTurn = _scheduleChain.then(async () => {
-        const res = await fetchPromise;
+// Schedule one decoded AudioBuffer onto the session's running timeline cursor.
+// Triggers onStart + the viseme tick loop on the very first chunk.
+function scheduleChunk(session, audioCtx, analyser, audioBuffer) {
+    if (session.aborted) return;
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    const playbackRate = (session.pitch != null && session.pitch > 0) ? session.pitch : 1.0;
+    source.playbackRate.value = playbackRate;
+    source.connect(analyser);
 
-        if (!chain || !_lipsync) {
-            _lipsync = new Lipsync({ fftSize: 1024, historySize: 8 });
-            const audioCtx = _lipsync.audioContext;
-            const analyser = _lipsync.analyser;
-            analyser.connect(audioCtx.destination);
-            await audioCtx.resume();
-        }
-        const audioCtx = _lipsync.audioContext;
-        const analyser = _lipsync.analyser;
+    const startAt = Math.max(audioCtx.currentTime, session.nextStartTime);
+    source.start(startAt);
+    const playDuration = audioBuffer.duration / playbackRate;
+    session.nextStartTime = startAt + playDuration;
+    session.endTime = session.nextStartTime;
+    attachSource(source);
 
-        let firstChunk = true;
-        let endTime = 0;
-        const sampleRateRef = { current: 24000 };
-
+    if (!session.startedFired) {
+        session.startedFired = true;
+        _started = true;
+        session.onStart?.();
         const tick = () => {
-            if (!_lipsync) return;
+            if (!_lipsync || session.aborted) return;
             _lipsync.processAudio();
-            const dominant = _lipsync.viseme;
-            if (dominant) onVisemes?.({ [dominant]: 1 });
+            session.emit(_lipsync.viseme);
             _rafId = requestAnimationFrame(tick);
         };
+        tick();
+    }
+}
 
+// Synthesise + schedule one sentence. Tries Kokoro streaming first, falls
+// back to Piper / Kokoro-non-streaming WAV per request. Each sentence is
+// independent at the network layer; ordering is enforced by the caller's
+// promise chain so audio plays in the order sentences were enqueued.
+async function speakOneSentence(session, text) {
+    if (session.aborted) return;
+    const body = { text, voice: session.voice };
+    if (session.rate != null) body.rate = session.rate;
+    // Forward gender so the server can pick a gender-appropriate fallback
+    // voice if the requested voice isn't in the active provider's catalogue.
+    if (session.gender) body.gender = session.gender;
+
+    let res;
+    let stream = true;
+    try {
+        res = await ttsFetch(true, body, session.abort.signal);
+    } catch (err) {
+        if (err.name === 'AbortError') return;
+        if (err.message?.startsWith('expected pcm-stream')) {
+            stream = false;
+            res = await ttsFetch(false, body, session.abort.signal);
+        } else {
+            throw err;
+        }
+    }
+
+    const lipsync = await ensureLipsync();
+    const { audioContext: audioCtx, analyser } = lipsync;
+
+    // First chunk of the very first sentence anchors the timeline at "now".
+    if (session.nextStartTime === 0) {
+        session.nextStartTime = audioCtx.currentTime;
+    }
+
+    if (stream) {
+        const sampleRateRef = { current: 24000 };
         const reader = res.body.getReader();
-
         try {
             for await (const pcmBytes of readPcmFrames(reader, sampleRateRef)) {
-                if (abort.signal.aborted) return;
+                if (session.aborted) return;
                 const audioBuffer = int16BytesToAudioBuffer(audioCtx, pcmBytes, sampleRateRef.current);
-                const source = audioCtx.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(analyser);
-
-                const now = audioCtx.currentTime;
-                const startAt = Math.max(now, _nextStartTime);
-                source.start(startAt);
-                _nextStartTime = startAt + audioBuffer.duration;
-                endTime = _nextStartTime;
-                _activeSources.push(source);
-
-                if (firstChunk) {
-                    firstChunk = false;
-                    if (!_started) {
-                        _started = true;
-                        onStart?.();
-                        tick();
-                    }
-                }
+                scheduleChunk(session, audioCtx, analyser, audioBuffer);
             }
         } finally {
             try { reader.releaseLock(); } catch { /* noop */ }
         }
-
-        if (firstChunk) {
-            throw new Error('no audio chunks received');
-        }
-
-        if (!chain) {
-            const remainingMs = Math.max(0, (endTime - audioCtx.currentTime) * 1000);
-            setTimeout(() => {
-                if (_streamAbort === abort) {
-                    onVisemes?.({ viseme_sil: 1 });
-                    teardown();
-                    onEnd?.();
-                }
-            }, remainingMs + 80);
-        }
-    });
-
-    // Catch errors so a single sentence failure doesn't poison the chain.
-    _scheduleChain = myTurn.catch((err) => {
-        console.warn('[VoiceService] schedule error', err);
-    });
-    return myTurn;
+    } else {
+        const arrayBuffer = await res.arrayBuffer();
+        if (session.aborted) return;
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+        if (session.aborted) return;
+        scheduleChunk(session, audioCtx, analyser, audioBuffer);
+    }
 }
 
-async function speakOneShotWav({ text, voice, rate, onVisemes, onStart, onEnd }) {
-    const body = { text, voice };
-    if (rate !== undefined && rate !== null) body.rate = rate;
+// Open a streaming speech session. Returned handle accepts sentences via
+// enqueue(), each of which fires its own /tts request and gets scheduled
+// onto the shared audio timeline. Call flush() when done to wait for all
+// audio to drain and fire onEnd. cancel() aborts everything immediately.
+function beginSpeechSession({ voice, rate, pitch, gender, onStart, onVisemes, onEnd, onError }) {
+    teardown();  // cancel any prior session/single-shot
 
-    const res = await fetch(apiUrl('/tts'), {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${AuthService.getToken()}`
+    const session = {
+        aborted: false,
+        startedFired: false,
+        nextStartTime: 0,   // 0 = uninitialised; first scheduled chunk sets to currentTime
+        endTime: 0,
+        chain: Promise.resolve(),
+        abort: new AbortController(),
+        voice, rate, pitch, gender,
+        emit: makeVisemeEmitter(onVisemes),
+        onStart, onEnd, onError
+    };
+    _session = session;
+
+    return {
+        enqueue(text) {
+            if (session.aborted) return;
+            const trimmed = (text || '').trim();
+            if (!trimmed) return;
+            // Chain so sentences schedule in submission order, regardless of
+            // which fetch finishes first. Errors in one sentence don't break
+            // the chain — they're surfaced via onError and skipped.
+            session.chain = session.chain
+                .then(() => speakOneSentence(session, trimmed))
+                .catch(err => {
+                    if (err?.name === 'AbortError' || session.aborted) return;
+                    console.error('TTS sentence failed:', err);
+                    onError?.(err);
+                });
         },
-        body: JSON.stringify(body)
-    });
 
-    if (!res.ok) {
-        let msg = `TTS request failed (${res.status})`;
-        try {
-            const j = await res.json();
-            if (j?.error) msg = j.error;
-        } catch { /* noop */ }
-        throw new Error(msg);
-    }
+        async flush() {
+            if (session.aborted) return;
+            await session.chain;
+            const audioCtx = _lipsync?.audioContext;
+            if (audioCtx && session.endTime > audioCtx.currentTime && !session.aborted) {
+                const remainingMs = (session.endTime - audioCtx.currentTime) * 1000;
+                await new Promise(r => setTimeout(r, remainingMs + 80));
+            }
+            if (session.aborted || _session !== session) return;
+            session.emit('viseme_sil');
+            if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
+            _started = false;
+            _session = null;
+            onEnd?.();
+        },
 
-    const arrayBuffer = await res.arrayBuffer();
-
-    _lipsync = new Lipsync({ fftSize: 1024, historySize: 8 });
-    const audioCtx = _lipsync.audioContext;
-    const analyser = _lipsync.analyser;
-    await audioCtx.resume();
-
-    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
-    const source = audioCtx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(analyser);
-    analyser.connect(audioCtx.destination);
-    _activeSources.push(source);
-
-    const tick = () => {
-        if (!_lipsync) return;
-        _lipsync.processAudio();
-        const dominant = _lipsync.viseme;
-        if (dominant) onVisemes?.({ [dominant]: 1 });
-        _rafId = requestAnimationFrame(tick);
+        cancel() {
+            session.aborted = true;
+            try { session.abort.abort(); } catch { /* noop */ }
+            teardown();
+        }
     };
-
-    source.onended = () => {
-        onVisemes?.({ viseme_sil: 1 });
-        teardown();
-        onEnd?.();
-    };
-
-    _started = true;
-    onStart?.();
-    source.start();
-    tick();
 }
 
 export const VoiceService = {
@@ -328,12 +384,14 @@ export const VoiceService = {
         }
     },
 
-    async speak(opts) {
-        // chain: true means "queue this after the current playback instead of
-        // cancelling it" — used by voice mode to pipe successive sentences
-        // from a streaming LLM response into TTS without gaps.
-        const { chain, text, voice, onError } = opts;
-        if (!chain) this.cancelSpeech();
+    // Streaming session API for the LLM-token-stream → TTS path. Caller
+    // calls .enqueue(sentence) as each LLM sentence completes, then .flush()
+    // when the LLM stream ends. See module header.
+    beginSpeechSession,
+
+    // Single-shot speak. Sends the whole text in one TTS call. Wraps the
+    // session API so there's still one audio code path.
+    async speak({ text, voice, rate, pitch, gender, onStart, onVisemes, onEnd, onError }) {
         if (!text || typeof text !== 'string') {
             onError?.(new Error('text is required'));
             return;
@@ -342,44 +400,16 @@ export const VoiceService = {
             onError?.(new Error('voice filename is required'));
             return;
         }
-        try {
-            // Try streaming first; if the server doesn't support it (Piper
-            // path returns audio/wav directly), fall back to one-shot WAV.
-            try {
-                await speakStreaming(opts);
-            } catch (streamErr) {
-                if (streamErr.name === 'AbortError') return;
-                if (streamErr.message?.startsWith('expected pcm-stream')) {
-                    await speakOneShotWav(opts);
-                } else {
-                    throw streamErr;
-                }
-            }
-        } catch (err) {
-            teardown();
-            onError?.(err);
-        }
+        const session = beginSpeechSession({ voice, rate, pitch, gender, onStart, onVisemes, onEnd, onError });
+        session.enqueue(text);
+        // flush() resolves after audio drains; we don't await it here so the
+        // caller's `await speak()` returns once dispatch is in motion (matches
+        // the pre-refactor behaviour). onEnd fires when audio actually ends.
+        session.flush();
     },
 
     cancelSpeech() {
         teardown();
-    },
-
-    // Caller signals "no more chained sentences will be queued". We wait
-    // until all queued sentences have finished SCHEDULING, then for the
-    // last scheduled audio to finish PLAYING, then tear down.
-    async finishSpeaking({ onVisemes, onEnd } = {}) {
-        // Wait for every queued speak() to finish scheduling.
-        const chainAtCall = _scheduleChain;
-        try { await chainAtCall; } catch { /* noop */ }
-        if (!_lipsync) { onEnd?.(); return; }
-        const audioCtx = _lipsync.audioContext;
-        const remainingMs = Math.max(0, (_nextStartTime - audioCtx.currentTime) * 1000);
-        setTimeout(() => {
-            onVisemes?.({ viseme_sil: 1 });
-            teardown();
-            onEnd?.();
-        }, remainingMs + 80);
     },
 
     isSpeaking() {
