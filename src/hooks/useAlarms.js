@@ -46,7 +46,7 @@ export const useAlarms = (vitals, sessionId) => {
         const load = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const res = await fetch(apiUrl('/alarms/config/'), {
+                const res = await fetch(apiUrl('/alarms/config'), {
                     headers: token ? { Authorization: `Bearer ${token}` } : {},
                 });
                 if (!res.ok) {
@@ -178,12 +178,6 @@ export const useAlarms = (vitals, sessionId) => {
             }));
     }, [snoozed, nowTick]);
 
-    const alarmHistory = useMemo(() => {
-        // Keep this simple — the full notification history is available via
-        // useNotifications().history; this projection is for the alarm tab.
-        return [];
-    }, []);
-
     // Save thresholds to backend (per-vital).
     const saveConfig = useCallback(async (userId = null) => {
         try {
@@ -217,7 +211,6 @@ export const useAlarms = (vitals, sessionId) => {
         thresholds,
         setThresholds,
         activeAlarms,
-        alarmHistory,
         snoozedAlarms,
         // Mute mirrors the audio surface mute pref now (persisted by the center).
         isMuted: prefs.audioMuted,
