@@ -33,7 +33,7 @@ function pickSeverity(vital, value) {
 // snooze, mute, history, audio, backend logging — all of that lives in the
 // center now. This hook only owns "is this vital out of range?".
 export const useAlarms = (vitals, sessionId) => {
-    const { notify, resolve, ack, ackAll, snooze, snoozeAll, active, snoozed, prefs, setPrefs } = useNotifications();
+    const { notify, resolve, ack, ackAll, snooze, snoozeAll, active, snoozed, acked, prefs, setPrefs } = useNotifications();
 
     const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
     const [thresholdsLoaded, setThresholdsLoaded] = useState(false);
@@ -178,6 +178,38 @@ export const useAlarms = (vitals, sessionId) => {
             }));
     }, [snoozed, nowTick]);
 
+    // Vitals that are still out of range BUT have been silenced via ack.
+    // Without this list, an acked alarm vanishes from the UI entirely while
+    // the underlying vital may remain critically abnormal — the only signal
+    // is the live vital number itself. Surfacing them as a small pill in the
+    // alarm tab keeps the clinician aware of what's currently silenced.
+    const silencedAlarms = useMemo(() => {
+        if (!vitals) return [];
+        const ackedSet = new Set(acked);
+        const out = [];
+        Object.entries(vitals).forEach(([vital, value]) => {
+            const t = thresholds[vital];
+            if (!t || !t.enabled) return;
+            const num = parseFloat(value);
+            if (isNaN(num)) return;
+            let kind = '';
+            let bound = 0;
+            if (t.low !== null && num < t.low)  { kind = 'low';  bound = t.low; }
+            else if (t.high !== null && num > t.high) { kind = 'high'; bound = t.high; }
+            else return;
+            const fullKey = `alarm:${vital}_${kind}`;
+            if (!ackedSet.has(fullKey)) return;
+            out.push({
+                key: `${vital}_${kind}`,
+                vital,
+                value: num,
+                threshold: bound,
+                kind,
+            });
+        });
+        return out;
+    }, [vitals, thresholds, acked]);
+
     // Save thresholds to backend (per-vital).
     const saveConfig = useCallback(async (userId = null) => {
         try {
@@ -212,6 +244,11 @@ export const useAlarms = (vitals, sessionId) => {
         setThresholds,
         activeAlarms,
         snoozedAlarms,
+        silencedAlarms,
+        // Convenience: clear ack on a key so the alarm can re-fire even if
+        // the vital hasn't crossed back through normal yet (clinician
+        // changed their mind after acking).
+        unsilenceAlarm: (alarmKey) => resolve(`alarm:${alarmKey}`),
         // Mute mirrors the audio surface mute pref now (persisted by the center).
         isMuted: prefs.audioMuted,
         setIsMuted: (val) => setPrefs({ audioMuted: typeof val === 'function' ? val(prefs.audioMuted) : val }),

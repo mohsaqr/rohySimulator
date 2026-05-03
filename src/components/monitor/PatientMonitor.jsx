@@ -1992,6 +1992,29 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                         </div>
                      )}
 
+                     {/* Silenced (still abnormal) — clinician acked the alarm
+                         but the vital is still out of range. Without this,
+                         acked alarms vanish silently. Click to un-silence. */}
+                     {alarmSystem.silencedAlarms && alarmSystem.silencedAlarms.length > 0 && (
+                        <div className="space-y-2 mb-6">
+                           <h4 className="text-sm font-semibold text-orange-400">
+                              Silenced — still abnormal ({alarmSystem.silencedAlarms.length})
+                           </h4>
+                           <div className="flex flex-wrap gap-1.5">
+                              {alarmSystem.silencedAlarms.map(({ key, vital, value, threshold, kind }) => (
+                                 <button
+                                    key={key}
+                                    onClick={() => alarmSystem.unsilenceAlarm(key)}
+                                    title="Click to un-silence — alarm will fire again"
+                                    className="px-2 py-1 bg-orange-900/30 border border-orange-700/50 hover:bg-orange-900/50 rounded text-xs text-orange-200 transition-colors"
+                                 >
+                                    {vital.toUpperCase()} = {value} ({kind === 'low' ? '<' : '>'} {threshold})
+                                 </button>
+                              ))}
+                           </div>
+                        </div>
+                     )}
+
                      {/* Alarm Thresholds - Admin Only */}
                      {isAdmin && (
                         <div className="space-y-4">
