@@ -6905,9 +6905,8 @@ router.put('/platform-settings/avatars', authenticateToken, requireAdmin, async 
 // ============================================
 // LLM MODELS REGISTRY
 // ============================================
-// Per VOICE_AVATAR_PLAN.md §6, this endpoint is the single allowed home for
-// hardcoded Anthropic model identifiers. Frontend code reads from here rather
-// than embedding strings.
+// This endpoint is the single allowed home for hardcoded Anthropic model
+// identifiers. Frontend code reads from here rather than embedding strings.
 const LLM_MODEL_REGISTRY = [
     { id: 'claude-opus-4-7',           label: 'Claude Opus 4.7',          tier: 'flagship' },
     { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6',        tier: 'balanced' },
