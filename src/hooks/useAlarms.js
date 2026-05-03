@@ -134,15 +134,26 @@ export const useAlarms = (vitals, sessionId) => {
             }
         });
 
-        // Resolve any previously-active alarm whose condition cleared.
+        // Latching behavior: a fired alarm stays in the center's `active`
+        // list until the clinician acks, even after the vital recovers.
+        // This matches real bedside-monitor convention — a brief transient
+        // (HR=121 for one sample then back to 100) is information the user
+        // needs to see, not noise to hide. Without this, the alarm flashed
+        // up and vanished within 2 seconds, leaving the clinician unsure
+        // whether they imagined it.
+        //
+        // We only call resolve() once the user has acked AND the vital has
+        // recovered — that combination clears the acked state in the center
+        // so the next breach can re-arm the alarm cleanly.
+        const ackedSet = new Set(acked);
         for (const key of Array.from(activeKeysRef.current)) {
-            if (!seen.has(key)) {
-                resolve(key);
-                activeKeysRef.current.delete(key);
-                lastFireRef.current.delete(key);
-            }
+            if (seen.has(key)) continue;
+            if (!ackedSet.has(key)) continue; // latched, waiting for ack
+            resolve(key);
+            activeKeysRef.current.delete(key);
+            lastFireRef.current.delete(key);
         }
-    }, [vitals, thresholds, thresholdsLoaded, notify, resolve, sessionId]);
+    }, [vitals, thresholds, thresholdsLoaded, notify, resolve, sessionId, acked]);
 
     useEffect(() => {
         check();
