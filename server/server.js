@@ -6,6 +6,7 @@ import fs from "fs";
 import { fileURLToPath } from 'url';
 import db from './db.js';
 import { runSeeders, needsSeeding } from './seeders/index.js';
+import { loadKokoro } from './services/kokoroTts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -83,6 +84,82 @@ function startServer(port, maxRetries = 10) {
     return server;
 }
 
+// Fire-and-forget Kokoro warmup. The model is ~330 MB and the first /tts
+// call after boot otherwise pays the full load cost (~2 s on M-series CPU,
+// longer cold). Triggering loadKokoro() at boot — only when the platform's
+// tts_provider is set to 'kokoro' — eliminates that delay for the first
+// real request without blocking startup.
+function maybeWarmupKokoro() {
+    db.get(
+        "SELECT setting_value FROM platform_settings WHERE setting_key = 'tts_provider'",
+        (err, row) => {
+            if (err || !row || row.setting_value !== 'kokoro') return;
+            loadKokoro().catch((e) => {
+                console.warn('[kokoro] warmup failed:', e?.message || e);
+            });
+        }
+    );
+}
+
+// One-shot migration: rename legacy voice keys to per-provider shape.
+// Before this commit, voices were stored as `piper_voice_<gender>` (despite
+// being used for any provider) and `default_voice_<gender>` (provider-flat).
+// Both schemes broke on provider switch — voice IDs are provider-specific.
+// We now store voices under `voice_<provider>_<gender>` and
+// `default_voice_<provider>_<gender>`.
+//
+// On boot, copy each legacy key into its per-provider equivalent under the
+// 'piper' slot (the safest assumption — pre-multi-provider deployments
+// were Piper-only). Idempotent: only copies when destination is empty.
+const LEGACY_VOICE_MIGRATIONS = [
+    ['piper_voice_male',     'voice_piper_male'],
+    ['piper_voice_female',   'voice_piper_female'],
+    ['piper_voice_child',    'voice_piper_child'],
+    ['default_voice_male',   'default_voice_piper_male'],
+    ['default_voice_female', 'default_voice_piper_female'],
+    ['default_voice_child',  'default_voice_piper_child']
+];
+
+function getSetting(key) {
+    return new Promise((resolve, reject) => {
+        db.get(
+            'SELECT setting_value FROM platform_settings WHERE setting_key = ?',
+            [key],
+            (err, row) => err ? reject(err) : resolve(row?.setting_value || null)
+        );
+    });
+}
+
+function setSettingIfEmpty(key, value) {
+    return new Promise((resolve, reject) => {
+        db.run(
+            `INSERT INTO platform_settings (setting_key, setting_value, updated_at)
+             VALUES (?, ?, CURRENT_TIMESTAMP)
+             ON CONFLICT(setting_key) DO NOTHING`,
+            [key, value],
+            (err) => err ? reject(err) : resolve()
+        );
+    });
+}
+
+async function runVoiceKeyMigration() {
+    let copied = 0;
+    for (const [oldKey, newKey] of LEGACY_VOICE_MIGRATIONS) {
+        try {
+            const [oldVal, newVal] = await Promise.all([getSetting(oldKey), getSetting(newKey)]);
+            if (oldVal && !newVal) {
+                await setSettingIfEmpty(newKey, oldVal);
+                copied++;
+            }
+        } catch (e) {
+            console.warn(`[migration] failed copying ${oldKey} → ${newKey}:`, e.message);
+        }
+    }
+    if (copied > 0) {
+        console.log(`[migration] copied ${copied} legacy voice key${copied === 1 ? '' : 's'} to per-provider keys`);
+    }
+}
+
 // Run seeders if database is empty, then start server
 async function initializeAndStart() {
     try {
@@ -98,8 +175,17 @@ async function initializeAndStart() {
         console.error('[Startup] Seeder error (non-fatal):', err.message);
     }
 
-    // Start the server
+    // Migrate legacy voice keys before anything reads them. Cheap; logs
+    // only when work was actually done.
+    try {
+        await runVoiceKeyMigration();
+    } catch (e) {
+        console.warn('[migration] voice key migration failed:', e.message);
+    }
+
+    // Start the server, then trigger TTS warmup async.
     startServer(PORT);
+    maybeWarmupKokoro();
 }
 
 initializeAndStart();

@@ -1,418 +1,236 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { apiUrl } from '../config/api';
+import { useNotifications } from '../notifications/useNotifications';
+import { SOURCES, SEVERITY, AUDIO_PATTERNS } from '../notifications/types';
 
-// Default alarm thresholds
+// Default thresholds — used until the backend config loads. Kept identical
+// to the historical values so existing user expectations don't shift.
 const DEFAULT_THRESHOLDS = {
-  hr: { low: 50, high: 120, enabled: true },
-  spo2: { low: 90, high: null, enabled: true },
-  bpSys: { low: 90, high: 180, enabled: true },
-  bpDia: { low: 50, high: 110, enabled: true },
-  rr: { low: 8, high: 30, enabled: true },
-  temp: { low: 36, high: 38.5, enabled: true },
-  etco2: { low: 30, high: 50, enabled: true }
+    hr:    { low: 50, high: 120, enabled: true },
+    spo2:  { low: 90, high: null, enabled: true },
+    bpSys: { low: 90, high: 180, enabled: true },
+    bpDia: { low: 50, high: 110, enabled: true },
+    rr:    { low: 8,  high: 30,  enabled: true },
+    temp:  { low: 36, high: 38.5, enabled: true },
+    etco2: { low: 30, high: 50,  enabled: true },
 };
 
-export const useAlarms = (vitals, sessionId, audioContext) => {
-  const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
-  const [activeAlarms, setActiveAlarms] = useState(new Set());
-  const [alarmHistory, setAlarmHistory] = useState([]);
-  const [isMuted, setIsMuted] = useState(false);
-  const [snoozeDuration, setSnoozeDuration] = useState(5); // minutes
-  
-  const alarmDebounce = useRef(new Map()); // vital -> last alarm time
-  const snoozedAlarms = useRef(new Map()); // alarmKey -> snooze end time
-  const acknowledgedAlarms = useRef(new Set()); // alarmKey -> acknowledged (until vital normalizes)
-  const oscillatorRef = useRef(null);
+// Choose severity per breach. Severe out-of-range = critical, edge =
+// warning. The exact bands are deliberately conservative; admins can
+// shift them per-vital later. Critical maps to URGENT audio pattern via
+// the default-pattern table in the center.
+function pickSeverity(vital, value) {
+    if (vital === 'spo2' && value < 85) return SEVERITY.CRITICAL;
+    if (vital === 'hr' && (value < 35 || value > 150)) return SEVERITY.CRITICAL;
+    if (vital === 'bpSys' && (value < 70 || value > 200)) return SEVERITY.CRITICAL;
+    if (vital === 'rr' && (value < 5 || value > 40)) return SEVERITY.CRITICAL;
+    if (vital === 'temp' && (value < 34 || value > 40)) return SEVERITY.CRITICAL;
+    return SEVERITY.WARNING;
+}
 
-  // Load user's alarm config
-  useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(apiUrl('/alarms/config/'), {
-          headers: { 'Authorization': `Bearer ${token}` }
+// useAlarms is now a thin producer: every 2s it samples vitals, computes
+// breaches, and reports them to the central NotificationCenter. Acknowledge,
+// snooze, mute, history, audio, backend logging — all of that lives in the
+// center now. This hook only owns "is this vital out of range?".
+export const useAlarms = (vitals, sessionId) => {
+    const { notify, resolve, ack, ackAll, snooze, snoozeAll, active, snoozed, prefs, setPrefs } = useNotifications();
+
+    const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
+    const [thresholdsLoaded, setThresholdsLoaded] = useState(false);
+    const lastFireRef = useRef(new Map()); // alarmKey → ts of last *transition* fire
+    const activeKeysRef = useRef(new Set()); // alarmKeys currently alive (for resolve detection)
+
+    // Load user thresholds from backend; merge over defaults.
+    useEffect(() => {
+        let cancelled = false;
+        const load = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(apiUrl('/alarms/config/'), {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                if (!res.ok) {
+                    if (!cancelled) setThresholdsLoaded(true);
+                    return;
+                }
+                const data = await res.json();
+                if (cancelled) return;
+                if (Array.isArray(data?.config) && data.config.length > 0) {
+                    const next = { ...DEFAULT_THRESHOLDS };
+                    data.config.forEach(cfg => {
+                        next[cfg.vital_sign] = {
+                            low: cfg.low_threshold,
+                            high: cfg.high_threshold,
+                            enabled: Boolean(cfg.enabled),
+                        };
+                    });
+                    setThresholds(next);
+                }
+                setThresholdsLoaded(true);
+            } catch {
+                if (!cancelled) setThresholdsLoaded(true);
+            }
+        };
+        load();
+        return () => { cancelled = true; };
+    }, []);
+
+    // The check loop. Runs every 2s and on every vitals/threshold change.
+    // Only fires notify() on *transitions* (normal→breach or breach→breach
+    // after dedup window) and *resolve()*s on breach→normal — fixes the
+    // legacy 5-second-spam logging behaviour.
+    const check = useCallback(() => {
+        if (!vitals || !thresholdsLoaded) return;
+        const now = Date.now();
+        const seen = new Set();
+
+        Object.entries(vitals).forEach(([vital, value]) => {
+            const t = thresholds[vital];
+            if (!t || !t.enabled) return;
+
+            const num = parseFloat(value);
+            if (isNaN(num)) return;
+
+            let breached = false;
+            let kind = '';
+            let bound = 0;
+            if (t.low !== null && num < t.low)  { breached = true; kind = 'low';  bound = t.low; }
+            if (t.high !== null && num > t.high) { breached = true; kind = 'high'; bound = t.high; }
+            if (!breached) return;
+
+            const key = `alarm:${vital}_${kind}`;
+            seen.add(key);
+
+            const severity = pickSeverity(vital, num);
+            const audioPattern = severity === SEVERITY.CRITICAL ? AUDIO_PATTERNS.URGENT : AUDIO_PATTERNS.BEEP;
+
+            // Only re-notify the center if this is a brand-new breach OR if it's
+            // been long enough since the last fire that we want to refresh the
+            // banner (5 minutes — matches typical clinical alarm refresh).
+            const last = lastFireRef.current.get(key) || 0;
+            const ageMs = now - last;
+            const isFirstFire = !activeKeysRef.current.has(key);
+            const isPeriodicRefresh = ageMs > 5 * 60 * 1000;
+            if (isFirstFire || isPeriodicRefresh) {
+                notify({
+                    source: SOURCES.CLINICAL,
+                    severity,
+                    key,
+                    title: `${vital.toUpperCase()} ${kind === 'low' ? 'low' : 'high'}`,
+                    message: `${vital} = ${num} (limit ${kind === 'low' ? '≥' : '≤'} ${bound})`,
+                    audioPattern,
+                    requiresAck: true,
+                    ttlMs: 0,
+                    data: {
+                        vital,
+                        thresholdType: kind,
+                        thresholdValue: bound,
+                        actualValue: num,
+                        sessionId, // BackendSurface uses this when posting to /alarms/log
+                    },
+                });
+                lastFireRef.current.set(key, now);
+                activeKeysRef.current.add(key);
+            }
         });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.config && data.config.length > 0) {
-            const userThresholds = { ...DEFAULT_THRESHOLDS };
-            data.config.forEach(cfg => {
-              userThresholds[cfg.vital_sign] = {
-                low: cfg.low_threshold,
-                high: cfg.high_threshold,
-                enabled: Boolean(cfg.enabled)
-              };
-            });
-            setThresholds(userThresholds);
-          }
+
+        // Resolve any previously-active alarm whose condition cleared.
+        for (const key of Array.from(activeKeysRef.current)) {
+            if (!seen.has(key)) {
+                resolve(key);
+                activeKeysRef.current.delete(key);
+                lastFireRef.current.delete(key);
+            }
         }
-      } catch (error) {
-        console.error('Failed to load alarm config:', error);
-      }
-    };
-    
-    loadConfig();
-  }, []);
+    }, [vitals, thresholds, thresholdsLoaded, notify, resolve, sessionId]);
 
-  // Check vitals against thresholds
-  const checkVitals = useCallback(() => {
-    if (!vitals) {
-      console.log('[Alarms] No vitals to check');
-      return;
-    }
-    // Note: Alarms work even without a session, but won't be logged to database
+    useEffect(() => {
+        check();
+        const t = setInterval(check, 2000);
+        return () => clearInterval(t);
+    }, [check]);
 
-    const now = Date.now();
-    const newActiveAlarms = new Set();
+    // Selectors that mirror the legacy hook's public shape so PatientMonitor's
+    // alarm tab continues to render unchanged. activeAlarms is now derived
+    // from the center's active list filtered to source=clinical.
+    const activeAlarms = useMemo(() => {
+        return active
+            .filter(n => n.source === SOURCES.CLINICAL)
+            .map(n => n.key.replace(/^alarm:/, ''));
+    }, [active]);
 
-    // Check for expired snoozes and remove them
-    for (const [alarmKey, snoozeEndTime] of snoozedAlarms.current.entries()) {
-      if (now >= snoozeEndTime) {
-        snoozedAlarms.current.delete(alarmKey);
-        // console.log(`Snooze expired for ${alarmKey}, alarm will re-activate if condition persists`);
-      }
-    }
+    // Tick every 30s so the "Returns in N min" countdown updates without
+    // calling Date.now() at render time (React purity rule). The center's
+    // snoozed list only reports raw `until`, so we compute remaining here.
+    const [nowTick, setNowTick] = useState(() => Date.now());
+    useEffect(() => {
+        const t = setInterval(() => setNowTick(Date.now()), 30000);
+        return () => clearInterval(t);
+    }, []);
 
-    Object.entries(vitals).forEach(([vital, value]) => {
-      const threshold = thresholds[vital];
-      if (!threshold || !threshold.enabled) return;
+    const snoozedAlarms = useMemo(() => {
+        return snoozed
+            .filter(s => s.key.startsWith('alarm:'))
+            .map(s => ({
+                key: s.key.replace(/^alarm:/, ''),
+                until: new Date(s.until).toISOString(),
+                remaining: Math.max(0, Math.ceil((s.until - nowTick) / 60000)),
+            }));
+    }, [snoozed, nowTick]);
 
-      const numValue = parseFloat(value);
-      if (isNaN(numValue)) return;
+    const alarmHistory = useMemo(() => {
+        // Keep this simple — the full notification history is available via
+        // useNotifications().history; this projection is for the alarm tab.
+        return [];
+    }, []);
 
-      let alarmTriggered = false;
-      let thresholdType = '';
-      let thresholdValue = 0;
-
-      // Check low threshold
-      if (threshold.low !== null && numValue < threshold.low) {
-        alarmTriggered = true;
-        thresholdType = 'low';
-        thresholdValue = threshold.low;
-      }
-
-      // Check high threshold
-      if (threshold.high !== null && numValue > threshold.high) {
-        alarmTriggered = true;
-        thresholdType = 'high';
-        thresholdValue = threshold.high;
-      }
-
-      const alarmKey = `${vital}_${thresholdType || 'normal'}`;
-
-      if (alarmTriggered) {
-        // console.log(`[Alarms] Threshold breach: ${vital}=${numValue} (${thresholdType} threshold: ${thresholdValue})`);
-
-        // Skip if alarm is snoozed
-        if (snoozedAlarms.current.has(alarmKey)) {
-          // console.log(`[Alarms] ${alarmKey} is snoozed, skipping`);
-          return;
-        }
-
-        // Skip if alarm is acknowledged (until vital normalizes)
-        if (acknowledgedAlarms.current.has(alarmKey)) {
-          // console.log(`[Alarms] ${alarmKey} is acknowledged, skipping until normalized`);
-          return;
-        }
-
-        const lastAlarmTime = alarmDebounce.current.get(alarmKey) || 0;
-
-        // Debounce: only trigger if 5 seconds have passed
-        if (now - lastAlarmTime > 5000) {
-          console.log(`[Alarms] FIRING alarm: ${alarmKey}`);
-          newActiveAlarms.add(alarmKey);
-          alarmDebounce.current.set(alarmKey, now);
-
-          // Log alarm to backend
-          logAlarm(vital, thresholdType, thresholdValue, numValue);
-
-          // Add to history
-          setAlarmHistory(prev => [...prev, {
-            id: Date.now() + Math.random(),
-            vital,
-            thresholdType,
-            thresholdValue,
-            actualValue: numValue,
-            timestamp: new Date().toISOString(),
-            acknowledged: false,
-            snoozed: false
-          }]);
-        } else {
-          // Keep existing alarm active
-          newActiveAlarms.add(alarmKey);
-        }
-      } else {
-        // Vital is normal - clear any acknowledged state for this vital
-        // This allows alarm to re-trigger if vital goes out of range again
-        const lowKey = `${vital}_low`;
-        const highKey = `${vital}_high`;
-        if (acknowledgedAlarms.current.has(lowKey)) {
-          acknowledgedAlarms.current.delete(lowKey);
-          // console.log(`[Alarms] Cleared acknowledged state for ${lowKey} (vital normalized)`);
-        }
-        if (acknowledgedAlarms.current.has(highKey)) {
-          acknowledgedAlarms.current.delete(highKey);
-          // console.log(`[Alarms] Cleared acknowledged state for ${highKey} (vital normalized)`);
-        }
-      }
-    });
-
-    setActiveAlarms(newActiveAlarms);
-  }, [vitals, thresholds, sessionId]);
-
-  // Log alarm to backend
-  const logAlarm = async (vital, thresholdType, thresholdValue, actualValue) => {
-    // Skip logging if no active session
-    if (!sessionId) return;
-    
-    try {
-      const token = localStorage.getItem('token');
-      await fetch(apiUrl('/alarms/log'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          session_id: sessionId,
-          vital_sign: vital,
-          threshold_type: thresholdType,
-          threshold_value: thresholdValue,
-          actual_value: actualValue
-        })
-      });
-    } catch (error) {
-      console.error('Failed to log alarm:', error);
-    }
-  };
-
-  // Play alarm sound
-  useEffect(() => {
-    if (!audioContext || isMuted || activeAlarms.size === 0) {
-      // Stop any existing alarm sound
-      if (oscillatorRef.current) {
+    // Save thresholds to backend (per-vital).
+    const saveConfig = useCallback(async (userId = null) => {
         try {
-          oscillatorRef.current.stop();
+            const token = localStorage.getItem('token');
+            await Promise.all(Object.entries(thresholds).map(([vital, cfg]) =>
+                fetch(apiUrl('/alarms/config'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        vital_sign: vital,
+                        high_threshold: cfg.high,
+                        low_threshold: cfg.low,
+                        enabled: cfg.enabled,
+                    }),
+                })
+            ));
         } catch (e) {
-          // Ignore if already stopped
+            console.error('Failed to save alarm config:', e);
         }
-        oscillatorRef.current = null;
-      }
-      return;
-    }
+    }, [thresholds]);
 
-    // Create alarm tone
-    if (!oscillatorRef.current) {
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
+    const updateThreshold = useCallback((vital, low, high, enabled) => {
+        setThresholds(prev => ({ ...prev, [vital]: { low, high, enabled } }));
+    }, []);
 
-      oscillator.type = 'square';
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime); // 800 Hz beep
-      
-      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Low volume
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      // Create beeping pattern (0.2s on, 0.8s off)
-      const beepPattern = () => {
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.setValueAtTime(0, audioContext.currentTime + 0.2);
-      };
-
-      oscillator.start();
-      oscillatorRef.current = oscillator;
-
-      // Repeat beep pattern
-      const beepInterval = setInterval(beepPattern, 1000);
-      
-      return () => {
-        clearInterval(beepInterval);
-        if (oscillatorRef.current) {
-          try {
-            oscillatorRef.current.stop();
-          } catch (e) {
-            // Ignore
-          }
-          oscillatorRef.current = null;
-        }
-      };
-    }
-  }, [audioContext, isMuted, activeAlarms.size]);
-
-  // Check vitals every 2 seconds
-  useEffect(() => {
-    // Check immediately when vitals change
-    checkVitals();
-    const interval = setInterval(checkVitals, 2000);
-    return () => clearInterval(interval);
-  }, [checkVitals]);
-
-  // Debug: Log when thresholds change
-  useEffect(() => {
-    console.log('[Alarms] Thresholds updated:', thresholds);
-  }, [thresholds]);
-
-  // Acknowledge alarm - prevents re-triggering until vital normalizes
-  const acknowledgeAlarm = useCallback((alarmKey) => {
-    // Add to acknowledged set (prevents re-triggering until vital normalizes)
-    acknowledgedAlarms.current.add(alarmKey);
-
-    // Remove from active alarms
-    setActiveAlarms(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(alarmKey);
-      return newSet;
-    });
-
-    // Update history
-    setAlarmHistory(prev =>
-      prev.map(alarm => {
-        const key = `${alarm.vital}_${alarm.thresholdType}`;
-        if (key === alarmKey && !alarm.acknowledged) {
-          return { ...alarm, acknowledged: true, acknowledgedAt: new Date().toISOString() };
-        }
-        return alarm;
-      })
-    );
-  }, []);
-
-  // Acknowledge all alarms - prevents re-triggering until vitals normalize
-  const acknowledgeAll = useCallback(() => {
-    // Add all active alarms to acknowledged set
-    activeAlarms.forEach(alarmKey => {
-      acknowledgedAlarms.current.add(alarmKey);
-    });
-
-    // Clear active alarms
-    setActiveAlarms(new Set());
-
-    // Update history
-    setAlarmHistory(prev =>
-      prev.map(alarm => ({
-        ...alarm,
-        acknowledged: true,
-        acknowledgedAt: new Date().toISOString()
-      }))
-    );
-  }, [activeAlarms]);
-
-  // Snooze alarm
-  const snoozeAlarm = useCallback((alarmKey, durationMinutes = null) => {
-    const duration = durationMinutes || snoozeDuration;
-    const snoozeEndTime = Date.now() + (duration * 60 * 1000);
-    
-    // Add to snoozed alarms map
-    snoozedAlarms.current.set(alarmKey, snoozeEndTime);
-    
-    // Remove from active alarms
-    setActiveAlarms(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(alarmKey);
-      return newSet;
-    });
-
-    // Update history
-    setAlarmHistory(prev =>
-      prev.map(alarm => {
-        const key = `${alarm.vital}_${alarm.thresholdType}`;
-        if (key === alarmKey && !alarm.snoozed) {
-          return {
-            ...alarm,
-            snoozed: true,
-            snoozedAt: new Date().toISOString(),
-            snoozeUntil: new Date(snoozeEndTime).toISOString(),
-            snoozeDuration: duration
-          };
-        }
-        return alarm;
-      })
-    );
-  }, [snoozeDuration]);
-
-  // Snooze all alarms
-  const snoozeAll = useCallback((durationMinutes = null) => {
-    const duration = durationMinutes || snoozeDuration;
-    const snoozeEndTime = Date.now() + (duration * 60 * 1000);
-    
-    activeAlarms.forEach(alarmKey => {
-      snoozedAlarms.current.set(alarmKey, snoozeEndTime);
-    });
-    
-    setActiveAlarms(new Set());
-    
-    setAlarmHistory(prev =>
-      prev.map(alarm => {
-        const key = `${alarm.vital}_${alarm.thresholdType}`;
-        if (activeAlarms.has(key) && !alarm.snoozed) {
-          return {
-            ...alarm,
-            snoozed: true,
-            snoozedAt: new Date().toISOString(),
-            snoozeUntil: new Date(snoozeEndTime).toISOString(),
-            snoozeDuration: duration
-          };
-        }
-        return alarm;
-      })
-    );
-  }, [activeAlarms, snoozeDuration]);
-
-  // Update thresholds
-  const updateThreshold = useCallback((vital, low, high, enabled) => {
-    setThresholds(prev => ({
-      ...prev,
-      [vital]: { low, high, enabled }
-    }));
-  }, []);
-
-  // Save config to backend
-  const saveConfig = useCallback(async (userId = null) => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      for (const [vital, config] of Object.entries(thresholds)) {
-        await fetch(apiUrl('/alarms/config'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            user_id: userId,
-            vital_sign: vital,
-            high_threshold: config.high,
-            low_threshold: config.low,
-            enabled: config.enabled
-          })
-        });
-      }
-    } catch (error) {
-      console.error('Failed to save alarm config:', error);
-    }
-  }, [thresholds]);
-
-  return {
-    thresholds,
-    setThresholds,
-    activeAlarms: Array.from(activeAlarms),
-    alarmHistory,
-    isMuted,
-    setIsMuted,
-    snoozeDuration,
-    setSnoozeDuration,
-    snoozedAlarms: Array.from(snoozedAlarms.current.entries()).map(([key, time]) => ({
-      key,
-      until: new Date(time).toISOString(),
-      remaining: Math.max(0, Math.ceil((time - Date.now()) / 1000 / 60)) // minutes
-    })),
-    acknowledgeAlarm,
-    acknowledgeAll,
-    snoozeAlarm,
-    snoozeAll,
-    updateThreshold,
-    saveConfig,
-    resetToDefaults: () => setThresholds(DEFAULT_THRESHOLDS)
-  };
+    return {
+        thresholds,
+        setThresholds,
+        activeAlarms,
+        alarmHistory,
+        snoozedAlarms,
+        // Mute mirrors the audio surface mute pref now (persisted by the center).
+        isMuted: prefs.audioMuted,
+        setIsMuted: (val) => setPrefs({ audioMuted: typeof val === 'function' ? val(prefs.audioMuted) : val }),
+        snoozeDuration: prefs.snoozeDuration,
+        setSnoozeDuration: (mins) => setPrefs({ snoozeDuration: mins }),
+        // Lifecycle actions delegate to the center so they affect every surface.
+        acknowledgeAlarm: (alarmKey) => ack(`alarm:${alarmKey}`),
+        acknowledgeAll: () => ackAll(),
+        snoozeAlarm: (alarmKey, mins) => snooze(`alarm:${alarmKey}`, mins),
+        snoozeAll: (mins) => snoozeAll(mins),
+        updateThreshold,
+        saveConfig,
+        resetToDefaults: () => setThresholds(DEFAULT_THRESHOLDS),
+    };
 };

@@ -8,6 +8,17 @@
  */
 
 import { apiUrl } from '../../config/api';
+import { AuthService } from '../authService';
+
+// All /patient-record/* endpoints require auth + session ownership on the
+// server. AuthService.authHeaders() returns {} when not logged in so unauth
+// callers fail at the network layer with 401 rather than silently writing.
+function authHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        ...AuthService.authHeaders(),
+    };
+}
 
 /**
  * Sync patient record to database
@@ -46,9 +57,7 @@ export async function syncPatientRecord(patientRecord) {
 
   const response = await fetch(apiUrl('/patient-record/sync'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
+    headers: authHeaders(),
     body: JSON.stringify(payload)
   });
 

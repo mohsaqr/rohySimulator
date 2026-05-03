@@ -115,6 +115,12 @@ export const AuthService = {
         return localStorage.getItem('token');
     },
 
+    // Authorization header bag for fetch(). Spread into a headers object.
+    authHeaders() {
+        const t = localStorage.getItem('token');
+        return t ? { Authorization: `Bearer ${t}` } : {};
+    },
+
     // Check if user is authenticated
     isAuthenticated() {
         return !!localStorage.getItem('token');

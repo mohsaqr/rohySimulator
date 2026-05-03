@@ -1,132 +1,146 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Heart, Activity, Wind, Thermometer, Bell, Settings, Play, Pause, AlertCircle, Menu, X, Monitor, User, FileJson, FastForward, Save, Download, Upload, BellOff, Volume2, VolumeX, Pencil, Pill } from 'lucide-react';
 import defaultSettings from '../../settings.json';
-import { useEventLog } from '../../hooks/useEventLog';
 import { useAlarms } from '../../hooks/useAlarms';
 import { useTreatmentEffects } from '../../hooks/useTreatmentEffects';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { getAudioContext, resumeAudioContext } from '../../utils/alarmAudio';
+// Audio for alarms is owned by the central NotificationCenter's AudioSurface
+// (mounted in App.jsx); the legacy alarmAudio helpers are no longer needed
+// here. Imports and audio init click-handler removed below.
 import LabValueEditor from '../investigations/LabValueEditor';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { apiUrl } from '../../config/api';
 import { usePatientRecord } from '../../services/PatientRecord';
 
 /**
- * ADVANCED ECG GENERATION UTILITIES
- * Based on a simplified McSharry driven cardiovascular system model (Sum of Gaussians)
+ * ECG GENERATION
+ *
+ * Sum-of-Gaussians model in the spirit of McSharry/ECGSYN (PhysioNet, 2003),
+ * but with wave centers expressed in absolute milliseconds so intervals scale
+ * physiologically with HR rather than as fixed fractions of the cardiac cycle.
+ *
+ * Interval scaling:
+ *   - PR  : Atterhög & Loogna 1977 linear regression PR(ms) = 176.7 − 0.351·HR
+ *   - QRS : ~90 ms, HR-independent
+ *   - QT  : Fridericia QT = 400·RR^(1/3) (preferred over Bazett above ~90 BPM),
+ *           capped so a diastolic baseline always remains.
+ *
+ * Sampling: caller is expected to feed `phase` (0..1 within the current beat)
+ * at a fixed sample rate (we drive at 250 Hz from a fixed-timestep accumulator
+ * decoupled from rAF), so the QRS is captured with ~22 samples regardless of HR.
  */
 
-// Gaussian function: a * exp( - (t - b)^2 / (2 * c^2) )
-const gaussian = (t, a, b, c) => a * Math.exp(-Math.pow(t - b, 2) / (2 * Math.pow(c, 2)));
+const SAMPLE_RATE_HZ = 250;
+const SAMPLE_INTERVAL_MS = 1000 / SAMPLE_RATE_HZ; // 4 ms
+const ECG_BUFFER_LEN = 1500; // 6 seconds visible at 250 Hz
 
-// Skewed Gaussian for T-wave asymmetry (approx)
-const skewGaussian = (t, a, b, c, skew) => {
-   // Determine effective center shift based on skew
-   // This is a rough approximation: skew > 0 stretches the right tail
-   const x = (t - b) / c;
-   // Standard normal PDF
-   const pdf = Math.exp(-0.5 * x * x);
-   // Error function approx for CDF
-   const cdf = 0.5 * (1 + Math.tanh(skew * x * 0.79788));
-   return a * pdf * cdf; // Amplitude scaling might be off, but visually it works
-};
+// Gaussian helper (t, a, c=center, s=sigma). All in ms.
+const gaussMs = (t, a, c, s) => a * Math.exp(-((t - c) * (t - c)) / (2 * s * s));
 
-
-// Standard P-QRS-T parameters (approximate) relative to a beat duration of 1.0 at 60 BPM
-// [Amplitude, Center (time), Width]
-// We will adapt C (Width) based on HR to keep QRS constant duration in ms
-const BASE_WAVES = {
-   P: { a: 0.15, b: 0.20, c: 0.04 },
-   Q: { a: -0.15, b: 0.35, c: 0.02 },
-   R: { a: 1.0, b: 0.38, c: 0.03 },
-   S: { a: -0.25, b: 0.42, c: 0.03 },
-   T: { a: 0.3, b: 0.70, c: 0.08 },
+// Physiologic intervals (ms) as functions of HR.
+const cardiacIntervals = (hr) => {
+   const safeHr = Math.max(20, Math.min(220, hr || 60));
+   const RR = 60000 / safeHr;
+   // Atterhög 1977 regression, clamped to physiologic bounds
+   let PR = 176.7 - 0.351 * safeHr;
+   PR = Math.max(110, Math.min(220, PR));
+   PR = Math.min(PR, RR * 0.4); // never let PR dominate the cycle
+   const QRS = 90;
+   // Fridericia (RR in seconds)
+   let QT = 400 * Math.cbrt(RR / 1000);
+   // Always leave ≥15% of cycle for diastolic baseline
+   QT = Math.min(QT, RR * 0.85 - PR);
+   QT = Math.max(QT, QRS + 80);
+   return { RR, PR, QRS, QT };
 };
 
 const GenerateECGRaw = (phase, options = {}) => {
-   let y = 0;
    const {
-      stElev = 0,     // ST Elevation/Depression
+      stElev = 0,
       tInv = 0,
       wideQRS = 0,
       noise = 0,
-      hr = 80         // Current Heart Rate to scale widths
+      hr = 80,
+      hideP = false,
+      afibNoise = false,
+      isPVC = false,
+      isVfib = false,
+      isAsystole = false
    } = options;
 
-   // Width Scaling:
-   // At 60 BPM (1000ms), c=0.03 is ~30ms width in phase space? No.
-   // Phase 0..1 = 1000ms. 0.03 * 1000 = 30ms sigma. 
-   // QRS duration is ~3*sigma * 2 approx 100ms. Roughly correct.
-   // If HR = 120 (500ms), Phase 0..1 = 500ms.
-   // If we keep c=0.03, width is 0.03*500 = 15ms. TOO THIN.
-   // We need width in ms to be constant.
-   // New C = (Old C * 1000) / CurrentDuration
-   //       = (Old C * 1000) / (60000 / HR)
-   //       = Old C * (HR / 60)
-
-   const widthScale = Math.max(1, hr / 60);
-
-   // 1. P Wave (absent in AFib/VFib)
-   if (!options.hideP) {
-      y += gaussian(phase, BASE_WAVES.P.a, BASE_WAVES.P.b, BASE_WAVES.P.c * widthScale);
-   } else if (options.afibNoise) {
-      // F-waves for AFib
-      y += Math.sin(phase * 40) * 0.03 + Math.sin(phase * 53) * 0.02;
+   if (isAsystole) {
+      return (Math.random() - 0.5) * 0.02;
+   }
+   if (isVfib) {
+      return Math.sin(phase * 15) * 0.3 + Math.sin(phase * 19) * 0.2 + (Math.random() - 0.5) * 0.1;
    }
 
-   // 2. QRS Complex
-   const qrsW = (wideQRS > 0 ? 2.5 : 1.0) * widthScale;
+   const { RR, PR, QRS, QT } = cardiacIntervals(hr);
+   const t = phase * RR; // ms from beat onset (P-wave onset ≈ t=0)
 
-   if (options.isPVC) {
-      // PVC: Wide chaotic
-      y += gaussian(phase, 0.8, 0.4, 0.12 * widthScale);
-      y -= gaussian(phase, 0.4, 0.55, 0.15 * widthScale);
-   } else if (!options.isVfib) {
-      // Normal QRS
-      y += gaussian(phase, BASE_WAVES.Q.a, BASE_WAVES.Q.b, BASE_WAVES.Q.c * qrsW);
-      y += gaussian(phase, BASE_WAVES.R.a, BASE_WAVES.R.b, BASE_WAVES.R.c * qrsW);
-      y += gaussian(phase, BASE_WAVES.S.a, BASE_WAVES.S.b, BASE_WAVES.S.c * qrsW);
+   // Wave widths (sigma, ms) — absolute, so QRS doesn't smear at high HR
+   const wQ = wideQRS ? 2.4 : 1.0;
+   const sP = 18;
+   const sQ = 8 * wQ;
+   const sR = 9 * wQ;
+   const sS = 10 * wQ;
+   const sT = 55;
+
+   // Wave-peak centers (ms from beat onset). Anchor T so its tail lands
+   // exactly at PR+QT — guarantees a clean isoelectric TP segment.
+   const cP = Math.max(20, PR - 110);
+   const cQ = PR + 10;
+   const cR = PR + 30;
+   const cS = PR + 60;
+   const cT = PR + QT - 2 * sT;
+
+   if (isPVC) {
+      // Wide bizarre QRS, no P, opposite-polarity T
+      let y = 0;
+      y += gaussMs(t, 0.95, PR + 25, 28);
+      y -= gaussMs(t, 0.55, PR + 70, 36);
+      y += gaussMs(t, -0.35, PR + 260, 75);
+      if (noise > 0) y += (Math.random() - 0.5) * noise * 0.05;
+      return y;
    }
 
-   // 3. T Wave & ST Segment
-   if (!options.isPVC && !options.isVfib) {
-      // ST Elevation/Depression: Realistic scaling (1mm = 0.1mV typically)
-      // stElev is in mm, so we scale it subtly
-      const stOffset = stElev * 0.08; // More realistic, subtle effect
-      let tAmp = BASE_WAVES.T.a * (tInv ? -1 : 1);
+   let y = 0;
 
-      // ST Segment - subtle plateau between QRS and T wave
-      if (Math.abs(stElev) > 0.1) {
-         // Create a gentle ST segment elevation/depression
-         y += gaussian(phase, stOffset, 0.48, 0.06 * widthScale); // J-point
-         y += gaussian(phase, stOffset, 0.55, 0.10 * widthScale); // ST segment
-         tAmp += stOffset * 0.5; // T-wave slightly affected
-      }
-
-      // T Wave - Asymmetric shape
-      const tWidth = BASE_WAVES.T.c * widthScale * 1.2;
-      y += gaussian(phase, tAmp, BASE_WAVES.T.b, tWidth);
+   // P wave (or AFib f-waves in its place). Lead-II amplitude is small —
+   // ~1/4 of T — so it doesn't compete with T visually.
+   if (!hideP) {
+      y += gaussMs(t, 0.10, cP, sP);
+   } else if (afibNoise) {
+      // ~6–10 Hz fibrillatory waves
+      y += Math.sin(t * 0.040) * 0.030
+         + Math.sin(t * 0.053) * 0.020
+         + (Math.random() - 0.5) * 0.04;
    }
 
-   // 4. V-Fib Chaos
-   if (options.isVfib) {
-      y = Math.sin(phase * 15) * 0.3 + Math.sin(phase * 19) * 0.2 + (Math.random() - 0.5) * 0.1;
+   // QRS
+   y += gaussMs(t, -0.12, cQ, sQ);
+   y += gaussMs(t,  1.00, cR, sR);
+   y += gaussMs(t, -0.25, cS, sS);
+
+   // ST segment offset (1 mm ≈ 0.1 mV). Modeled as a smooth gaussian
+   // plateau between QRS-end and T-onset. A step/if-bound here would
+   // create a discontinuity at the J-point and a notch on the T upstroke.
+   if (Math.abs(stElev) > 0.05) {
+      const stStart = PR + QRS;
+      const stEnd = cT - sT;
+      const stCenter = (stStart + stEnd) / 2;
+      const stSigma = Math.max(20, (stEnd - stStart) / 2);
+      y += gaussMs(t, stElev * 0.08, stCenter, stSigma);
    }
 
-   // 5. Asystole
-   if (options.isAsystole) {
-      y = (Math.random() - 0.5) * 0.02; // Slight baseline wander line
-   }
+   // T wave — taller than P so the post-QRS "second hump" people expect
+   // is unambiguously the T, not the next beat's P creeping in.
+   // Lead-II T:R ratio is typically ~1:3.
+   const tAmp = (tInv ? -0.30 : 0.30) + stElev * 0.04;
+   y += gaussMs(t, tAmp, cT, sT);
 
-   // 6. Noise / Baseline Wander
-   if (noise > 0) {
-      y += (Math.random() - 0.5) * (noise * 0.05);
-   }
-
-   // Add consistent respiration wander
-   // Passed in options? Or just hardcode a slow sine here?
-   // We don't have time context easily here. Let's skip for now.
+   if (noise > 0) y += (Math.random() - 0.5) * noise * 0.05;
 
    return y;
 };
@@ -252,34 +266,10 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
 
    // Data Buffers (Circular or simple push/shift)
    // We use simple arrays and shift for this demo as performance is fine for < 2000 points
-   const ecgBuffer = useRef(new Array(1000).fill(0));
-   const plethBuffer = useRef(new Array(1000).fill(0));
-   const respBuffer = useRef(new Array(1000).fill(0));
+   const ecgBuffer = useRef(new Array(ECG_BUFFER_LEN).fill(0));
+   const plethBuffer = useRef(new Array(ECG_BUFFER_LEN).fill(0));
+   const respBuffer = useRef(new Array(ECG_BUFFER_LEN).fill(0));
    
-   // Audio context for alarms
-   const audioContextRef = useRef(null);
-   
-   // Initialize audio context on first user interaction
-   useEffect(() => {
-      const initAudio = async () => {
-         try {
-            audioContextRef.current = getAudioContext();
-            await resumeAudioContext();
-         } catch (error) {
-            console.error('Failed to initialize audio:', error);
-         }
-      };
-      
-      // Wait for user interaction
-      const handleInteraction = () => {
-         initAudio();
-         document.removeEventListener('click', handleInteraction);
-      };
-      document.addEventListener('click', handleInteraction);
-      
-      return () => document.removeEventListener('click', handleInteraction);
-   }, []);
-
    // --- Simulation State ---
    const [isPlaying, setIsPlaying] = useState(true);
    const [lastFrameTime, setLastFrameTime] = useState(0);
@@ -327,9 +317,10 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
 
    // Physics params ref to avoid dependency loops in animation
    const simulationParams = useRef(params);
-
-   // Event Logging Hook
-   const eventLog = useEventLog(sessionId);
+   // Conditions ref read by the scenario engine — keeps that effect's deps
+   // stable so its setInterval doesn't get destroyed/recreated on every
+   // keyframe update (which would cause the 1s tick clock to drift).
+   const conditionsRef = useRef(conditions);
 
    // Treatment Effects Hook - Real-time pharmacokinetic effects
    const treatmentEffects = useTreatmentEffects(sessionId, {
@@ -338,11 +329,16 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       enabled: !!sessionId
    });
 
-   // Alarm System Hook
-   const alarmSystem = useAlarms(displayVitals, sessionId, audioContextRef.current);
+   // Alarm System Hook — audio context, persistence, mute, ack/snooze all
+   // live in the central NotificationCenter now; this hook just produces.
+   const alarmSystem = useAlarms(displayVitals, sessionId);
 
    // Previous vitals for change detection
    const prevVitalsRef = useRef(displayVitals);
+
+   // Mirror conditions into the ref so the scenario engine reads current
+   // values without taking a closure-dependency on `conditions`.
+   useEffect(() => { conditionsRef.current = conditions; }, [conditions]);
 
    // Sync params changes to simulation ref immediately (including treatment effects)
    useEffect(() => {
@@ -381,22 +377,28 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       }));
    }, [treatmentEffects.aggregate, treatmentEffects.count]);
    
-   // Log vital changes
+   // Log significant vital changes via the EventLogger (which routes through
+   // the central NotificationCenter). Per-vital deadbands match the legacy
+   // useEventLog thresholds so the event-volume profile is unchanged.
    useEffect(() => {
-      if (!sessionId || !eventLog.logVitalChange) return;
-      
+      if (!sessionId) return;
+
       const prev = prevVitalsRef.current;
       const current = displayVitals;
-      
-      // Log significant changes
+      const DEADBAND = { hr: 10, spo2: 5, bpSys: 10, bpDia: 10, rr: 3, temp: 0.5 };
+
       Object.keys(current).forEach(vital => {
-         if (prev[vital] !== current[vital]) {
-            eventLog.logVitalChange(vital, prev[vital], current[vital]);
+         const oldV = parseFloat(prev[vital]);
+         const newV = parseFloat(current[vital]);
+         if (!Number.isFinite(oldV) || !Number.isFinite(newV)) return;
+         const threshold = DEADBAND[vital] ?? 5;
+         if (Math.abs(newV - oldV) >= threshold) {
+            EventLogger.vitalAdjusted(vital, oldV, newV, COMPONENTS.PATIENT_MONITOR);
          }
       });
-      
+
       prevVitalsRef.current = displayVitals;
-   }, [displayVitals, sessionId, eventLog]);
+   }, [displayVitals, sessionId]);
 
    // Session timer — increments by 1 each second.
    useEffect(() => {
@@ -551,10 +553,8 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
             }
          }
 
-         // Log case load
-         if (eventLog.logCaseLoad) {
-            eventLog.logCaseLoad(caseData.name);
-         }
+         // case-load is already logged by App.jsx (EventLogger.caseLoaded)
+         // when the case is selected, so we don't double-log here.
       }
    }, [caseData]);
 
@@ -672,11 +672,11 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
 
                const lerp = (start, end, p) => start + (end - start) * p;
 
-               // Interpolate Params
-               const newParams = { ...params }; // Start with current or base? 
-               // Better: Interpolate between the *values defined in the frames*.
-               // If a value is missing in 'from', use current state? No, assume defined or carry over.
-               // Simplified: We interpolate everything defined in 'toFrame'.
+               // Read live params/conditions via refs so this effect doesn't
+               // depend on those state values — that prevents the 1s setInterval
+               // from being destroyed/recreated each time setParams fires.
+               const livePrev = simulationParams.current;
+               const liveConds = conditionsRef.current;
 
                const getVal = (obj, key, def) => (obj && obj[key] !== undefined) ? obj[key] : def;
 
@@ -684,7 +684,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                const interpolatedParams = {};
 
                pKeys.forEach(key => {
-                  const startVal = getVal(fromFrame.params, key, params[key]);
+                  const startVal = getVal(fromFrame.params, key, livePrev[key]);
                   const endVal = getVal(toFrame.params, key, startVal);
                   interpolatedParams[key] = Math.round(lerp(startVal, endVal, progress));
                });
@@ -696,18 +696,13 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                const cKeys = ['stElev', 'noise'];
                const interpolatedConds = {};
                cKeys.forEach(key => {
-                  const startVal = getVal(fromFrame.conditions, key, conditions[key]);
+                  const startVal = getVal(fromFrame.conditions, key, liveConds[key]);
                   const endVal = getVal(toFrame.conditions, key, startVal);
                   interpolatedConds[key] = parseFloat(lerp(startVal, endVal, progress).toFixed(2));
                });
 
-               // Discrete switches happening EXACTLY at frame time
-               // We check if we just crossed a frame time
-               // Or simplified: Use 'fromFrame' discrete values as the "current state"
-               // But better: If we are close to 'fromFrame.time', apply its discrete settings one-shot?
-               // Actually, 'fromFrame' is the state we are LEAVING or IN.
-               // We should ensure the discrete state matches 'fromFrame'.
-
+               // Discrete switches happening EXACTLY at frame time:
+               // copy the leaving-frame's discrete values verbatim.
                const discKeys = ['pvc', 'wideQRS', 'tInv'];
                discKeys.forEach(key => {
                   if (fromFrame.conditions && fromFrame.conditions[key] !== undefined) {
@@ -733,9 +728,9 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       }, 1000); // Update scenario logic every second (interpolation granularity)
 
       return () => clearInterval(interval);
-   }, [activeScenario, scenarioPlaying, params, conditions]); // Params/conditions deps might cause jitter logic loops needed? 
-   // Actually, we are calling setParams, which triggers the other useEffect that updates simulationParams.
-   // That's fine.
+   }, [activeScenario, scenarioPlaying, scenarioList]);
+   // Deliberately omits params/conditions/rhythm: the engine reads them via
+   // refs (simulationParams, conditionsRef) so the interval stays stable.
 
    // Vital Signs Fluctuation Loop (Jitter)
    useEffect(() => {
@@ -873,41 +868,44 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
    }, [isPlaying, params, rhythm, conditions]);
 
    // --- Physics Update ---
+   // Drives the simulation with a fixed-timestep accumulator at SAMPLE_RATE_HZ
+   // (250 Hz), decoupled from rAF (~60 Hz). This is what stops the QRS from
+   // aliasing into a stubby triangle at high heart rates.
    const updateSimulation = (dt) => {
       const p = physics.current;
+      p.sampleAccum = (p.sampleAccum || 0) + dt;
+      // Cap accumulator to avoid pathological catch-up after a stalled tab
+      if (p.sampleAccum > 200) p.sampleAccum = 200;
+      while (p.sampleAccum >= SAMPLE_INTERVAL_MS) {
+         p.sampleAccum -= SAMPLE_INTERVAL_MS;
+         stepSample(SAMPLE_INTERVAL_MS);
+      }
+   };
 
-      // 1. Calculate Cardiac Phase
+   const stepSample = (dt) => {
+      const p = physics.current;
+
+      // 1. Cardiac phase
       let currentHR = params.hr;
-
-      // Rhythm Logic Overrides
-      if (rhythm === 'VFib') currentHR = 0; // Chaotic phase, HR meaningless
+      if (rhythm === 'VFib') currentHR = 0;
       if (rhythm === 'Asystole') currentHR = 0;
 
-      // Cycle duration in ms
       let targetDuration = currentHR > 0 ? (60000 / currentHR) : 1000;
-
-      // Arrhythmia variability
       if (rhythm === 'AFib') {
-         // AFib: Irregularly Irregular. 
-         // Base duration on HR but add significant variance per beat
          targetDuration = (60000 / params.hr) + (Math.random() * 400 - 200);
       }
 
-      // Advance Phase
       if (rhythm === 'Asystole') {
-         p.phase = 0; // Stuck
+         p.phase = 0;
       } else if (rhythm === 'VFib') {
-         p.phase += dt / 200; // Fast chaos
+         p.phase += dt / 200;
+         if (p.phase >= 1.0) p.phase -= 1.0;
       } else {
-         // Normal beat progression
          p.phase += dt / p.nextBeatDuration;
          if (p.phase >= 1.0) {
-            p.phase = 0; // Beat Reset
-            p.nextBeatDuration = targetDuration; // New interval for next beat
-
-            // Random PVC trigger
+            p.phase -= 1.0;
+            p.nextBeatDuration = targetDuration;
             if (conditions.pvc && Math.random() < 0.15) {
-               // Shorten next beat for PVC (early beat)
                p.nextBeatDuration *= 0.6;
                p.isNextPVC = true;
             } else {
@@ -916,40 +914,33 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
          }
       }
 
-      // 2. Advance Respiratory Phase
+      // 2. Respiratory phase
       const respDuration = params.rr > 0 ? (60000 / params.rr) : 10000;
       p.respPhase += dt / respDuration;
-      if (p.respPhase >= 1.0) p.respPhase = 0;
+      if (p.respPhase >= 1.0) p.respPhase -= 1.0;
 
-
-      // 3. Generate Data Points
+      // 3. Generate samples
       const isPVC = p.isNextPVC;
 
-      // ECG
-      const ecgOpts = {
+      const ecgVal = GenerateECGRaw(p.phase, {
          stElev: conditions.stElev,
          tInv: conditions.tInv,
          wideQRS: conditions.wideQRS ? 1 : 0,
          noise: conditions.noise,
          hideP: rhythm === 'AFib' || rhythm === 'VTach',
          afibNoise: rhythm === 'AFib',
-         isPVC: isPVC,
+         isPVC,
          isVfib: rhythm === 'VFib',
          isAsystole: rhythm === 'Asystole',
-         hr: currentHR // Pass HR for width scaling
-      };
-
-      const ecgVal = GenerateECGRaw(p.phase, ecgOpts);
+         hr: currentHR
+      });
       ecgBuffer.current.shift();
       ecgBuffer.current.push(ecgVal);
 
-      // PLETH (SpO2)
       let plethVal = 0;
       if (currentHR > 0) {
-         const plethPhase = (p.phase - 0.1 + 1.0) % 1.0; // Delayed
-         // High HR attenuates pulse slightly
+         const plethPhase = (p.phase - 0.1 + 1.0) % 1.0;
          const amp = currentHR > 140 ? 0.7 : 1.0;
-
          if (plethPhase < 0.2) {
             plethVal = Math.sin(plethPhase * 5 * Math.PI / 2) * amp;
          } else {
@@ -959,11 +950,9 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
          }
       }
       plethVal *= (1 + 0.1 * Math.sin(p.respPhase * 2 * Math.PI));
-
       plethBuffer.current.shift();
       plethBuffer.current.push(plethVal);
 
-      // RESP
       const respVal = Math.sin(p.respPhase * 2 * Math.PI);
       respBuffer.current.shift();
       respBuffer.current.push(respVal);
@@ -1186,15 +1175,15 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
             <div className="w-64 bg-neutral-900/50 backdrop-blur-sm border-l border-neutral-800 flex flex-col shrink-0 overflow-y-auto">
 
                {/* HR Box */}
-               <div className="h-32 border-b border-neutral-800 p-4 flex flex-col justify-center relative overflow-hidden">
-                  <div className="absolute top-2 left-3 text-green-500 font-bold text-sm flex items-center gap-1">
+               <div className="h-24 border-b border-neutral-800 p-3 flex flex-col justify-center relative overflow-hidden">
+                  <div className="absolute top-1.5 left-3 text-green-500 font-bold text-xs flex items-center gap-1">
                      <Heart className="w-3 h-3" /> HR
                   </div>
                   <div className="text-right relative z-10">
-                     <div className={`text-7xl font-mono font-bold tracking-tighter ${rhythm === 'Asystole' ? 'text-red-500' : 'text-green-500'}`}>
+                     <div className={`text-5xl font-mono font-bold tracking-tighter leading-none ${rhythm === 'Asystole' ? 'text-red-500' : 'text-green-500'}`}>
                         {rhythm === 'Asystole' || rhythm === 'VFib' ? '---' : displayVitals.hr}
                      </div>
-                     <div className="text-neutral-500 text-xs mt-[-5px]">bpm</div>
+                     <div className="text-neutral-500 text-[10px] mt-0.5">bpm</div>
                   </div>
                </div>
 
@@ -1254,13 +1243,13 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                </div>
 
                {/* EtCO2 Box */}
-               <div className="h-32 border-b border-neutral-800 p-4 flex flex-col justify-center relative">
-                  <div className="absolute top-2 left-3 text-yellow-500 font-bold text-sm">EtCO<sub className="text-xs">2</sub></div>
+               <div className="h-24 border-b border-neutral-800 p-3 flex flex-col justify-center relative">
+                  <div className="absolute top-1.5 left-3 text-yellow-500 font-bold text-xs">EtCO<sub className="text-[9px]">2</sub></div>
                   <div className="text-right">
-                     <div className="text-5xl font-mono font-bold tracking-tighter text-yellow-500">
+                     <div className="text-4xl font-mono font-bold tracking-tighter leading-none text-yellow-500">
                         {displayVitals.etco2 || 38}
                      </div>
-                     <div className="text-neutral-500 text-xs">mmHg</div>
+                     <div className="text-neutral-500 text-[10px] mt-0.5">mmHg</div>
                   </div>
                </div>
 
@@ -1395,9 +1384,13 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                                                    if (step.conditions) {
                                                       setConditions(c => ({ ...c, ...step.conditions }));
                                                    }
-                                                   if (eventLog.logScenarioStep) {
-                                                      eventLog.logScenarioStep(step.label || `Step ${index + 1}`, scenario.name);
-                                                   }
+                                                   // Log scenario-step jump as an admin "click" event so it's
+                                                   // visible in the analytics timeline without a dedicated verb.
+                                                   EventLogger.buttonClicked(
+                                                      `scenario-step-jump:${step.label || `Step ${index + 1}`}`,
+                                                      COMPONENTS.PATIENT_MONITOR,
+                                                      { scenarioName: scenario.name, time: step.time }
+                                                   );
                                                 }}
                                                 className={`w-full text-left p-2 rounded text-xs transition-colors ${
                                                    isCurrentStep 

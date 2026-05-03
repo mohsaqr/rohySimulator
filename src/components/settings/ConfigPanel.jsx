@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy, Mic } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { AuthService } from '../../services/authService';
@@ -16,6 +16,11 @@ import LabTestManager from './LabTestManager';
 import MedicationManager from './MedicationManager';
 import AgentTemplateManager from './AgentTemplateManager';
 import CaseTreatmentConfig from './CaseTreatmentConfig';
+import VoiceSettingsTab from './VoiceSettingsTab';
+import AvatarsSettingsTab from './AvatarsSettingsTab';
+import NotificationsSettingsTab from './NotificationsSettingsTab';
+import { Bell as BellIcon } from 'lucide-react';
+import CaseAvatarVoicePicker from './CaseAvatarVoicePicker';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
@@ -310,8 +315,27 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                             >
                                 <Users className="w-4 h-4" /> Agent Personas
                             </button>
+                            <button
+                                onClick={() => setActiveTab('avatars')}
+                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'avatars' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                            >
+                                <Image className="w-4 h-4" /> Avatars
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('voice')}
+                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'voice' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                            >
+                                <Mic className="w-4 h-4" /> Voice
+                            </button>
                         </>
                     )}
+                    {/* Notifications & Alarms — available to every user, not just admins. */}
+                    <button
+                        onClick={() => setActiveTab('notifications')}
+                        className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'notifications' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    >
+                        <BellIcon className="w-4 h-4" /> Notifications
+                    </button>
                 </div>
 
                 {/* Content Area */}
@@ -855,6 +879,21 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                         <AgentTemplateManager />
                     )}
 
+                    {/* --- AVATARS TAB (Admin Only) --- */}
+                    {activeTab === 'avatars' && isAdmin() && (
+                        <AvatarsSettingsTab />
+                    )}
+
+                    {/* --- VOICE TAB (Admin Only) --- */}
+                    {activeTab === 'voice' && isAdmin() && (
+                        <VoiceSettingsTab />
+                    )}
+
+                    {/* --- NOTIFICATIONS TAB (all users) --- */}
+                    {activeTab === 'notifications' && (
+                        <NotificationsSettingsTab />
+                    )}
+
                 </div>
             </div>
         </div>
@@ -1219,6 +1258,62 @@ function UserFieldConfiguration() {
     );
 }
 
+// Provider catalog for the LLM settings tab. `keyPrefix` is the expected
+// start of API keys for that provider — used as a sanity check (warns if
+// mismatched), not a blocker. Defaults updated 2026-05 to current model
+// generations.
+const LLM_PROVIDERS = {
+    lmstudio: { name: 'LM Studio (Local)', defaultBase: 'http://localhost:1234/v1', defaultModel: '', needsKey: false, modelRequired: false, keyPrefix: '', description: 'Local LLM server — no API key needed' },
+    ollama: { name: 'Ollama (Local)', defaultBase: 'http://localhost:11434/v1', defaultModel: 'llama3.2', needsKey: false, modelRequired: true, keyPrefix: '', description: 'Local Ollama server' },
+    openai: { name: 'OpenAI', defaultBase: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', needsKey: true, modelRequired: true, keyPrefix: 'sk-', description: 'GPT-4o, GPT-4o-mini, o1, o3' },
+    anthropic: { name: 'Anthropic (Claude)', defaultBase: 'https://api.anthropic.com/v1', defaultModel: 'claude-sonnet-4-6', needsKey: true, modelRequired: true, keyPrefix: 'sk-ant-', description: 'Claude Opus 4.7, Sonnet 4.6, Haiku 4.5' },
+    openrouter: { name: 'OpenRouter', defaultBase: 'https://openrouter.ai/api/v1', defaultModel: 'anthropic/claude-sonnet-4-6', needsKey: true, modelRequired: true, keyPrefix: 'sk-or-', description: 'Access multiple AI providers via one key' },
+    groq: { name: 'Groq', defaultBase: 'https://api.groq.com/openai/v1', defaultModel: 'llama-3.3-70b-versatile', needsKey: true, modelRequired: true, keyPrefix: 'gsk_', description: 'Ultra-fast inference' },
+    together: { name: 'Together AI', defaultBase: 'https://api.together.xyz/v1', defaultModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', needsKey: true, modelRequired: true, keyPrefix: '', description: 'Open source models' },
+    azure: { name: 'Azure OpenAI', defaultBase: 'https://YOUR-RESOURCE.openai.azure.com/openai/deployments/YOUR-DEPLOYMENT', defaultModel: '', needsKey: true, modelRequired: false, keyPrefix: '', description: 'Azure-hosted OpenAI' },
+    custom: { name: 'Custom OpenAI-Compatible', defaultBase: 'http://localhost:8000/v1', defaultModel: '', needsKey: false, modelRequired: false, keyPrefix: '', description: 'Any OpenAI-compatible API' }
+};
+
+function validateLlmConfig(cfg) {
+    const errs = [];
+    const provider = LLM_PROVIDERS[cfg.provider] || LLM_PROVIDERS.lmstudio;
+
+    if (!cfg.baseUrl || !/^https?:\/\//i.test(cfg.baseUrl.trim())) {
+        errs.push({ field: 'baseUrl', message: 'Base URL must start with http:// or https://' });
+    }
+    if (cfg.baseUrl && /^sk-/i.test(cfg.baseUrl.trim())) {
+        errs.push({ field: 'baseUrl', message: 'This looks like an API key — paste it in the API Key field instead.' });
+    }
+    if (provider.needsKey) {
+        if (!cfg.apiKey || !cfg.apiKey.trim()) {
+            errs.push({ field: 'apiKey', message: `${provider.name} requires an API key.` });
+        } else {
+            if (/^https?:\/\//i.test(cfg.apiKey.trim())) {
+                errs.push({ field: 'apiKey', message: 'This looks like a URL — paste the API key here, not the endpoint.' });
+            }
+            if (provider.keyPrefix && !cfg.apiKey.trim().startsWith(provider.keyPrefix)) {
+                errs.push({ field: 'apiKey', message: `Expected a key starting with "${provider.keyPrefix}" for ${provider.name}. Double-check this is the right provider's key.`, soft: true });
+            }
+        }
+    }
+    if (provider.modelRequired && (!cfg.model || !cfg.model.trim())) {
+        errs.push({ field: 'model', message: `${provider.name} requires a model name.` });
+    }
+    if (cfg.maxOutputTokens && cfg.maxOutputTokens.trim()) {
+        const n = parseInt(cfg.maxOutputTokens, 10);
+        if (!Number.isFinite(n) || n < 1 || n > 200000) {
+            errs.push({ field: 'maxOutputTokens', message: 'Max output tokens must be a positive integer ≤ 200000.' });
+        }
+    }
+    if (cfg.temperature && cfg.temperature.trim()) {
+        const t = parseFloat(cfg.temperature);
+        if (!Number.isFinite(t) || t < 0 || t > 2) {
+            errs.push({ field: 'temperature', message: 'Temperature must be a number between 0 and 2.' });
+        }
+    }
+    return { ok: errs.filter(e => !e.soft).length === 0, errors: errs };
+}
+
 // LLM Configuration Component (Admin Only)
 function LLMConfiguration() {
     const toast = useToast();
@@ -1244,17 +1339,8 @@ function LLMConfiguration() {
     const [testing, setTesting] = useState(false);
     const [showApiKey, setShowApiKey] = useState(false);
 
-    const PROVIDERS = {
-        lmstudio: { name: 'LM Studio (Local)', defaultBase: 'http://localhost:1234/v1', defaultModel: '', needsKey: false, modelRequired: false, description: 'Local LLM server - no API key needed' },
-        ollama: { name: 'Ollama (Local)', defaultBase: 'http://localhost:11434/v1', defaultModel: 'llama3.2', needsKey: false, modelRequired: true, description: 'Local Ollama server' },
-        openai: { name: 'OpenAI', defaultBase: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', needsKey: true, modelRequired: true, description: 'GPT-4, GPT-4o, GPT-4o-mini' },
-        anthropic: { name: 'Anthropic (Claude)', defaultBase: 'https://api.anthropic.com/v1', defaultModel: 'claude-3-5-sonnet-20241022', needsKey: true, modelRequired: true, description: 'Claude 3.5 Sonnet, Claude 3 Opus' },
-        openrouter: { name: 'OpenRouter', defaultBase: 'https://openrouter.ai/api/v1', defaultModel: 'anthropic/claude-3.5-sonnet', needsKey: true, modelRequired: true, description: 'Access multiple AI providers' },
-        groq: { name: 'Groq', defaultBase: 'https://api.groq.com/openai/v1', defaultModel: 'llama-3.3-70b-versatile', needsKey: true, modelRequired: true, description: 'Ultra-fast inference' },
-        together: { name: 'Together AI', defaultBase: 'https://api.together.xyz/v1', defaultModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', needsKey: true, modelRequired: true, description: 'Open source models' },
-        azure: { name: 'Azure OpenAI', defaultBase: 'https://YOUR-RESOURCE.openai.azure.com/openai/deployments/YOUR-DEPLOYMENT', defaultModel: '', needsKey: true, modelRequired: false, description: 'Azure-hosted OpenAI' },
-        custom: { name: 'Custom OpenAI-Compatible', defaultBase: 'http://localhost:8000/v1', defaultModel: '', needsKey: false, modelRequired: false, description: 'Any OpenAI-compatible API' }
-    };
+    const [validationErrors, setValidationErrors] = useState([]);
+    const fieldError = (field) => validationErrors.find(e => e.field === field);
 
     useEffect(() => {
         loadConfig();
@@ -1289,7 +1375,7 @@ function LLMConfiguration() {
     };
 
     const handleProviderChange = (provider) => {
-        const providerConfig = PROVIDERS[provider];
+        const providerConfig = LLM_PROVIDERS[provider];
         setLlmConfig(prev => ({
             ...prev,
             provider,
@@ -1300,6 +1386,13 @@ function LLMConfiguration() {
     };
 
     const handleSaveLLM = async () => {
+        const v = validateLlmConfig(llmConfig);
+        setValidationErrors(v.errors);
+        if (!v.ok) {
+            const blocking = v.errors.filter(e => !e.soft);
+            toast.error(`Fix ${blocking.length} validation error${blocking.length === 1 ? '' : 's'} before saving.`);
+            return;
+        }
         setSaving(true);
         try {
             const token = AuthService.getToken();
@@ -1309,7 +1402,7 @@ function LLMConfiguration() {
                 body: JSON.stringify(llmConfig)
             });
             if (res.ok) {
-                toast.success('LLM settings saved successfully!');
+                toast.success('LLM settings saved.');
             } else {
                 throw new Error('Failed to save');
             }
@@ -1374,7 +1467,7 @@ function LLMConfiguration() {
         return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>;
     }
 
-    const currentProvider = PROVIDERS[llmConfig.provider] || PROVIDERS.lmstudio;
+    const currentProvider = LLM_PROVIDERS[llmConfig.provider] || LLM_PROVIDERS.lmstudio;
 
     return (
         <div className="space-y-6">
@@ -1441,9 +1534,12 @@ function LLMConfiguration() {
                             type="text"
                             value={llmConfig.baseUrl}
                             onChange={(e) => setLlmConfig(prev => ({ ...prev, baseUrl: e.target.value }))}
-                            className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
+                            className={`w-full bg-neutral-800 border rounded-lg p-3 text-white focus:border-cyan-500 outline-none ${fieldError('baseUrl') ? 'border-red-500' : 'border-neutral-600'}`}
                             placeholder="https://api.openai.com/v1"
                         />
+                        {fieldError('baseUrl') && (
+                            <p className="text-xs text-red-400 mt-1">{fieldError('baseUrl').message}</p>
+                        )}
                     </div>
 
                     {/* Model */}
@@ -1458,22 +1554,34 @@ function LLMConfiguration() {
                             type="text"
                             value={llmConfig.model}
                             onChange={(e) => setLlmConfig(prev => ({ ...prev, model: e.target.value }))}
-                            className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
-                            placeholder={currentProvider.modelRequired ? 'gpt-4o-mini' : 'Leave empty to use loaded model'}
+                            className={`w-full bg-neutral-800 border rounded-lg p-3 text-white focus:border-cyan-500 outline-none ${fieldError('model') ? 'border-red-500' : 'border-neutral-600'}`}
+                            placeholder={currentProvider.modelRequired ? currentProvider.defaultModel || 'gpt-4o-mini' : 'Leave empty to use loaded model'}
                         />
+                        {fieldError('model') && (
+                            <p className="text-xs text-red-400 mt-1">{fieldError('model').message}</p>
+                        )}
                     </div>
 
                     {/* API Key */}
                     {currentProvider.needsKey && (
                         <div>
-                            <label className="block text-sm font-medium text-neutral-300 mb-2">API Key</label>
+                            <label className="block text-sm font-medium text-neutral-300 mb-2">
+                                API Key
+                                {currentProvider.keyPrefix && (
+                                    <span className="text-neutral-500 text-xs ml-2">
+                                        starts with <code className="text-neutral-400">{currentProvider.keyPrefix}</code>
+                                    </span>
+                                )}
+                            </label>
                             <div className="relative">
                                 <input
                                     type={showApiKey ? 'text' : 'password'}
                                     value={llmConfig.apiKey}
                                     onChange={(e) => setLlmConfig(prev => ({ ...prev, apiKey: e.target.value }))}
-                                    className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none pr-20"
-                                    placeholder="sk-..."
+                                    className={`w-full bg-neutral-800 border rounded-lg p-3 text-white focus:border-cyan-500 outline-none pr-20 ${fieldError('apiKey') ? 'border-red-500' : 'border-neutral-600'}`}
+                                    placeholder={currentProvider.keyPrefix ? `${currentProvider.keyPrefix}...` : 'API key'}
+                                    autoComplete="off"
+                                    spellCheck={false}
                                 />
                                 <button
                                     type="button"
@@ -1483,8 +1591,36 @@ function LLMConfiguration() {
                                     {showApiKey ? 'Hide' : 'Show'}
                                 </button>
                             </div>
+                            {fieldError('apiKey') && (
+                                <p className={`text-xs mt-1 ${fieldError('apiKey').soft ? 'text-amber-400' : 'text-red-400'}`}>
+                                    {fieldError('apiKey').message}
+                                </p>
+                            )}
                         </div>
                     )}
+
+                    {/* Effective settings preview — show what's actually wired up */}
+                    <div className="pt-2 border-t border-neutral-700">
+                        <h5 className="text-xs font-bold text-neutral-400 uppercase tracking-wide mb-2">Currently wired up</h5>
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                            <dt className="text-neutral-500">Provider</dt>
+                            <dd className="text-neutral-200 font-mono">{llmConfig.provider}</dd>
+                            <dt className="text-neutral-500">Model</dt>
+                            <dd className="text-neutral-200 font-mono">{llmConfig.model || <span className="text-neutral-500">(provider default)</span>}</dd>
+                            <dt className="text-neutral-500">Base URL</dt>
+                            <dd className="text-neutral-200 font-mono break-all">{llmConfig.baseUrl || <span className="text-neutral-500">(unset)</span>}</dd>
+                            {currentProvider.needsKey && (
+                                <>
+                                    <dt className="text-neutral-500">Key</dt>
+                                    <dd className="text-neutral-200 font-mono">
+                                        {llmConfig.apiKey
+                                            ? `${llmConfig.apiKey.slice(0, Math.min(7, llmConfig.apiKey.length))}…${llmConfig.apiKey.slice(-3)} (${llmConfig.apiKey.length} chars)`
+                                            : <span className="text-red-400">missing</span>}
+                                    </dd>
+                                </>
+                            )}
+                        </dl>
+                    </div>
 
                     {/* Model Parameters */}
                     <div className="grid grid-cols-2 gap-4 pt-2 border-t border-neutral-700 mt-4">
@@ -3618,38 +3754,6 @@ function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, has
         }));
     };
 
-    const handlePhotoUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        setUploading(true);
-        const formData = new FormData();
-        formData.append('photo', file);
-
-        try {
-            const res = await fetch(apiUrl('/upload'), {
-                method: 'POST',
-                body: formData
-            });
-            if (!res.ok) {
-                const errorData = await res.json().catch(() => ({}));
-                throw new Error(errorData.error || `Upload failed with status ${res.status}`);
-            }
-            const data = await res.json();
-            if (data.imageUrl) {
-                setCaseData(prev => ({ ...prev, image_url: data.imageUrl }));
-                toast.success("Photo uploaded successfully");
-            } else {
-                throw new Error('No image URL returned from server');
-            }
-        } catch (err) {
-            console.error("Upload failed", err);
-            toast.error(err.message || "Failed to upload photo");
-        } finally {
-            setUploading(false);
-        }
-    };
-
     const updateDemographics = (key, value) => {
         setCaseData(prev => ({
             ...prev,
@@ -3763,16 +3867,17 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
     };
 
     const WIZARD_STEPS = [
-        { num: 1, title: 'Demographics', icon: '👤' },
-        { num: 2, title: 'Story', icon: '📖' },
-        { num: 3, title: 'Scenario', icon: '📈' },
-        { num: 4, title: 'Vitals', icon: '💓' },
-        { num: 5, title: 'Labs', icon: '🧪' },
-        { num: 6, title: 'Radiology', icon: '📷' },
-        { num: 7, title: 'Exam', icon: '🩺' },
-        { num: 8, title: 'Records', icon: '📄' },
-        { num: 9, title: 'Treatments', icon: '💊' },
-        { num: 10, title: 'Agents', icon: '🤖' }
+        { num: 1,  title: 'Demographics', icon: '👤' },
+        { num: 2,  title: 'Avatar',       icon: '🎭' },
+        { num: 3,  title: 'Story',        icon: '📖' },
+        { num: 4,  title: 'Scenario',     icon: '📈' },
+        { num: 5,  title: 'Vitals',       icon: '💓' },
+        { num: 6,  title: 'Labs',         icon: '🧪' },
+        { num: 7,  title: 'Radiology',    icon: '📷' },
+        { num: 8,  title: 'Exam',         icon: '🩺' },
+        { num: 9,  title: 'Records',      icon: '📄' },
+        { num: 10, title: 'Treatments',   icon: '💊' },
+        { num: 11, title: 'Agents',       icon: '🤖' }
     ];
 
     // Helper to get vitals from scenario's first keyframe
@@ -3876,41 +3981,9 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                         <h4 className="text-lg font-bold text-purple-400">1. Patient Demographics</h4>
                         <p className="text-xs text-neutral-500 -mt-4">EHR-style patient information. Most fields are optional.</p>
 
-                        {/* Top Section: Avatar + Basic Info */}
-                        <div className="grid grid-cols-3 gap-6">
-                            {/* Avatar */}
-                            <div className="col-span-1">
-                                <label className="label-xs">Patient Photo</label>
-                                <div className="aspect-square bg-neutral-800 rounded-lg border border-neutral-700 overflow-hidden flex flex-col items-center justify-center relative group">
-                                    {uploading ? (
-                                        <div className="flex flex-col items-center gap-2">
-                                            <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />
-                                            <p className="text-[10px] text-neutral-500">Uploading...</p>
-                                        </div>
-                                    ) : caseData.image_url ? (
-                                        <img src={caseData.image_url} alt="Avatar" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="text-center p-4">
-                                            <User className="w-10 h-10 text-neutral-600 mx-auto mb-2" />
-                                            <p className="text-[10px] text-neutral-500">No Photo</p>
-                                        </div>
-                                    )}
-                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                                        <label className="text-[10px] font-bold bg-purple-600 hover:bg-purple-500 px-3 py-1.5 rounded cursor-pointer flex items-center gap-2">
-                                            <Upload className="w-3 h-3" /> Upload
-                                            <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
-                                        </label>
-                                        {caseData.image_url && (
-                                            <button onClick={() => setCaseData({ ...caseData, image_url: '' })} className="text-[10px] text-red-400 hover:text-red-300">
-                                                Remove
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Basic Info */}
-                            <div className="col-span-2 space-y-3">
+                        {/* Top Section: Basic Info (Patient Photo replaced by avatar system) */}
+                        <div>
+                            <div className="space-y-3">
                                 <div>
                                     <label className="label-xs">Patient Name <span className="text-red-400">*</span></label>
                                     <input
@@ -4131,12 +4204,28 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     </div>
                 )}
 
-                {/* STEP 2: STORY */}
+                {/* STEP 2: AVATAR & VOICE — camera framing, voice file, speed, pitch.
+                    Inherits from the platform's per-gender persona defaults when fields
+                    are left blank (configured under admin → Avatars). */}
                 {step === 2 && (
+                    <div className="space-y-4">
+                        <div>
+                            <h4 className="text-lg font-bold text-purple-400">2. Avatar &amp; Voice</h4>
+                            <p className="text-xs text-neutral-500">
+                                Pick the 3D head, framing, and voice for this case. Empty fields inherit the
+                                platform's persona default for the patient's gender.
+                            </p>
+                        </div>
+                        <CaseAvatarVoicePicker caseData={caseData} setCaseData={setCaseData} />
+                    </div>
+                )}
+
+                {/* STEP 3: STORY */}
+                {step === 3 && (
                     <div className="space-y-6">
                         <div className="flex justify-between items-end">
                             <div>
-                                <h4 className="text-lg font-bold text-purple-400">2. Patient Story & Behavior</h4>
+                                <h4 className="text-lg font-bold text-purple-400">3. Patient Story & Behavior</h4>
                                 <p className="text-xs text-neutral-500">Define how the simulated patient behaves and communicates.</p>
                             </div>
                             <button onClick={applyPersonaDefaults} className="text-xs bg-neutral-800 hover:bg-neutral-700 px-3 py-1 rounded text-purple-300">
@@ -4421,7 +4510,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 )}
 
                 {/* STEP 4: VITALS & ALARMS */}
-                {step === 4 && (
+                {step === 5 && (
                     <div className="space-y-6">
                         <h4 className="text-lg font-bold text-purple-400">4. Initial Vitals & Alarms</h4>
 
@@ -4720,7 +4809,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 )}
 
                 {/* STEP 3: SCENARIO (OPTIONAL) */}
-                {step === 3 && (
+                {step === 4 && (
                     <div className="space-y-6">
                         <h4 className="text-lg font-bold text-purple-400">3. Progression Scenario (Optional)</h4>
                         <p className="text-xs text-neutral-500">Add automatic deterioration or improvement over time. Choose from quick templates or browse the full repository.</p>
@@ -4925,7 +5014,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 )}
 
                 {/* STEP 5: LABORATORY INVESTIGATIONS */}
-                {step === 5 && (
+                {step === 6 && (
                     <div className="space-y-6">
                         <h4 className="text-lg font-bold text-purple-400">5. Laboratory Investigations</h4>
                         <p className="text-xs text-neutral-500">
@@ -4941,7 +5030,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 )}
 
                 {/* STEP 6: RADIOLOGY STUDIES */}
-                {step === 6 && (
+                {step === 7 && (
                     <RadiologyEditor
                         caseData={caseData}
                         setCaseData={setCaseData}
@@ -4949,7 +5038,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 )}
 
                 {/* STEP 7: PHYSICAL EXAMINATION */}
-                {step === 7 && (
+                {step === 8 && (
                     <PhysicalExamEditor
                         caseData={caseData}
                         setCaseData={setCaseData}
@@ -4958,7 +5047,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 )}
 
                 {/* STEP 8: CLINICAL RECORDS */}
-                {step === 8 && (
+                {step === 9 && (
                     <ClinicalRecordsEditor
                         caseData={caseData}
                         setCaseData={setCaseData}
@@ -4967,7 +5056,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 )}
 
                 {/* STEP 9: TREATMENTS */}
-                {step === 9 && (
+                {step === 10 && (
                     <div className="space-y-6">
                         <h4 className="text-lg font-bold text-purple-400">9. Treatment Configuration</h4>
                         <p className="text-xs text-neutral-500">
@@ -4992,7 +5081,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 )}
 
                 {/* STEP 10: AGENTS */}
-                {step === 10 && (
+                {step === 11 && (
                     <CaseAgentEditor
                         caseId={caseData.id}
                         caseData={caseData}
@@ -5020,7 +5109,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     )}
 
                     {/* Save Progress button on all steps except last */}
-                    {step < 8 && (
+                    {step < 9 && (
                         <button
                             onClick={onSave}
                             className="px-4 py-2 bg-blue-700 hover:bg-blue-600 rounded font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-900/20"
@@ -5029,7 +5118,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                         </button>
                     )}
 
-                    {step < 8 ? (
+                    {step < 9 ? (
                         <button
                             onClick={async () => {
                                 // Auto-save before moving forward

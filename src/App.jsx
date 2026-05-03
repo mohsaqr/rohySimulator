@@ -11,6 +11,11 @@ import RadiologyResultsModal from './components/investigations/RadiologyResultsM
 import UserProfilePanel from './components/settings/UserProfilePanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider, useToast } from './contexts/ToastContext';
+import { VoiceProvider } from './contexts/VoiceContext';
+import { NotificationProvider } from './notifications/NotificationContext';
+import { useNotifications } from './notifications/useNotifications';
+import { setExternalApi } from './notifications/externalApi';
+import { ToastSurface, BannerSurface, AudioSurface, BackendSurface, ConsoleSurface } from './notifications/surfaces';
 import { PatientRecordProvider, usePatientRecord } from './services/PatientRecord';
 import { AuthService } from './services/authService';
 import EventLogger, { COMPONENTS } from './services/eventLogger';
@@ -18,7 +23,6 @@ import { apiUrl } from './config/api';
 import { Settings, X, LogOut, User, RotateCcw, ChevronDown, Activity } from 'lucide-react';
 import ManikinPanel from './components/examination/ManikinPanel';
 import BodyMapDebug from './components/examination/BodyMapDebug';
-import EndSessionQuestionnaire from './components/common/EndSessionQuestionnaire';
 import TnaDashboard from './components/analytics/tna/TnaDashboard';
 
 // Session expiry time in milliseconds (default 30 minutes)
@@ -40,7 +44,6 @@ function MainApp() {
    const [sessionId, setSessionId] = useState(null);
    const [selectedResult, setSelectedResult] = useState(null);
    const [showExamination, setShowExamination] = useState(false);
-   const [showEndQuestionnaire, setShowEndQuestionnaire] = useState(false);
    const [showEndConfirm, setShowEndConfirm] = useState(false);
 
    // Set user context for EventLogger when user logs in
@@ -187,40 +190,13 @@ function MainApp() {
       setShowEndConfirm(true);
    };
 
-   const handleEndConfirmed = () => {
+   const handleEndConfirmed = async () => {
       setShowEndConfirm(false);
-      setShowEndQuestionnaire(true);
-   };
 
-   const handleEndConfirmCancel = () => {
-      setShowEndConfirm(false);
-   };
-
-   const handleQuestionnaireSubmit = async (answers) => {
-      setShowEndQuestionnaire(false);
-
-      // Save questionnaire responses (capture before state is cleared)
-      try {
-         const token = AuthService.getToken();
-         await fetch(apiUrl('/questionnaire-responses'), {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-               session_id: sessionId,
-               case_id: activeCase?.id,
-               responses: answers,
-            }),
-         });
-      } catch (err) {
-         console.error('Failed to save questionnaire responses:', err);
-      }
-
-      // Log session end before clearing
       const sessionStartTime = lastActivityRef.current;
       const duration = Date.now() - sessionStartTime;
       EventLogger.sessionEnded(duration);
 
-      // Call backend to end session
       if (sessionId) {
          try {
             const token = AuthService.getToken();
@@ -236,6 +212,10 @@ function MainApp() {
       localStorage.removeItem('rohy_chat_history');
       setActiveCase(null);
       setSessionId(null);
+   };
+
+   const handleEndConfirmCancel = () => {
+      setShowEndConfirm(false);
    };
 
 
@@ -316,11 +296,7 @@ function MainApp() {
 
             {/* Top Left: Patient Visual */}
             <div className="h-[45%] border-b border-neutral-800 relative">
-               <PatientVisual
-                  image={activeCase?.image_url || "./patient_avatar.png"}
-                  context={activeCase?.description}
-                  caseData={activeCase}
-               />
+               <PatientVisual caseData={activeCase} />
 
                {/* Top Right Controls */}
                <div className="absolute top-4 right-4 flex gap-2 z-10">
@@ -536,14 +512,6 @@ function MainApp() {
             </div>
          )}
 
-         {/* End Session Questionnaire (one-way: shown only after confirmation) */}
-         {showEndQuestionnaire && (
-            <EndSessionQuestionnaire
-               onSubmit={handleQuestionnaireSubmit}
-               hideCancel
-            />
-         )}
-
          {/* User Profile Modal */}
          {showUserProfile && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -565,41 +533,95 @@ function MainApp() {
    );
 }
 
-// Check for debug mode via URL parameter
-const isBodyMapDebug = new URLSearchParams(window.location.search).get('debug') === 'bodymap';
+// Check for debug mode via URL parameter. Gated on import.meta.env.DEV
+// because this branch bypasses AuthProvider entirely — we never want a
+// production deploy to expose body-map editing by URL flag.
+const isBodyMapDebug = import.meta.env.DEV
+   && new URLSearchParams(window.location.search).get('debug') === 'bodymap';
+
+// Keep the bodymap-debug branch in its own component so its useState calls
+// don't run conditionally inside <App> (which would violate Rules of Hooks
+// even though the flag is module-stable).
+function BodyMapDebugApp() {
+   const [gender, setGender] = useState('male');
+   const [view, setView] = useState('anterior');
+   return (
+      <div className="bg-slate-900 min-h-screen">
+         <div className="p-4 flex gap-4">
+            <select value={gender} onChange={(e) => setGender(e.target.value)} className="bg-slate-800 text-white p-2 rounded">
+               <option value="male">Male</option>
+               <option value="female">Female</option>
+            </select>
+            <select value={view} onChange={(e) => setView(e.target.value)} className="bg-slate-800 text-white p-2 rounded">
+               <option value="anterior">Front (Anterior)</option>
+               <option value="posterior">Back (Posterior)</option>
+            </select>
+         </div>
+         <BodyMapDebug gender={gender} view={view} />
+      </div>
+   );
+}
 
 export default function App() {
-   if (isBodyMapDebug) {
-      const [gender, setGender] = React.useState('male');
-      const [view, setView] = React.useState('anterior');
-      return (
-         <div className="bg-slate-900 min-h-screen">
-            <div className="p-4 flex gap-4">
-               <select value={gender} onChange={(e) => setGender(e.target.value)} className="bg-slate-800 text-white p-2 rounded">
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-               </select>
-               <select value={view} onChange={(e) => setView(e.target.value)} className="bg-slate-800 text-white p-2 rounded">
-                  <option value="anterior">Front (Anterior)</option>
-                  <option value="posterior">Back (Posterior)</option>
-               </select>
-            </div>
-            <BodyMapDebug gender={gender} view={view} />
-         </div>
-      );
-   }
+   // showRegister must be declared before any conditional return so its
+   // hook ordering stays stable across renders (Rules of Hooks).
    const [showRegister, setShowRegister] = useState(false);
+
+   if (isBodyMapDebug) {
+      return <BodyMapDebugApp />;
+   }
 
    return (
       <AuthProvider>
-         <ToastProvider>
-            <AuthenticatedApp
-               showRegister={showRegister}
-               setShowRegister={setShowRegister}
-            />
-         </ToastProvider>
+         <NotificationProvider>
+            {/* Bridge so non-React producers (EventLogger singleton) can call notify() */}
+            <NotificationApiBridge />
+            <ToastProvider>
+               <VoiceProvider>
+                  <AuthenticatedApp
+                     showRegister={showRegister}
+                     setShowRegister={setShowRegister}
+                  />
+                  {/* Surfaces. They render fixed-position UI / side effects, so they
+                      can sit at the root regardless of which page is active. */}
+                  <ToastSurface />
+                  <BannerSurface />
+                  <AudioSurface />
+                  <ConsoleSurface />
+                  <BackendSurfaceBridge />
+               </VoiceProvider>
+            </ToastProvider>
+         </NotificationProvider>
       </AuthProvider>
    );
+}
+
+// Pulls sessionId/userId/caseId from EventLogger's singleton and passes them
+// to BackendSurface so per-event POSTs include the right session context.
+function BackendSurfaceBridge() {
+   const { user } = useAuth();
+   // EventLogger.setContext is called from various places; re-reading on every
+   // render is fine — the surface only uses these on flush boundaries.
+   const status = EventLogger.getStatus ? EventLogger.getStatus() : {};
+   return (
+      <BackendSurface
+         sessionId={status.sessionId || null}
+         userId={user?.id || status.userId || null}
+         caseId={status.caseId || null}
+      />
+   );
+}
+
+// Registers a module-level reference to the center's notify/resolve so the
+// EventLogger singleton (and any other non-component producer) can dispatch
+// without going through useNotifications().
+function NotificationApiBridge() {
+   const api = useNotifications();
+   useEffect(() => {
+      setExternalApi(api);
+      return () => setExternalApi(null);
+   }, [api]);
+   return null;
 }
 
 function AuthenticatedApp({ showRegister, setShowRegister }) {

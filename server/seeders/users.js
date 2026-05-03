@@ -29,6 +29,15 @@ export const defaultUsers = [
  */
 export async function seedUsers(db) {
     return new Promise((resolve, reject) => {
+        // Refuse to seed default credentials in production unless explicitly
+        // overridden — admin123/student123 is a dev convenience that must
+        // never silently land in a real deployment.
+        if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEFAULT_USERS !== '1') {
+            console.warn('[Seeder] Skipping default user seeding in production. Set ALLOW_DEFAULT_USERS=1 to override.');
+            resolve({ seeded: 0, skipped: 0, blocked: true });
+            return;
+        }
+
         // Check if any users exist
         db.get('SELECT COUNT(*) as count FROM users', async (err, row) => {
             if (err) {

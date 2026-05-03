@@ -3,11 +3,14 @@ import db from './db.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import os from 'node:os';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcrypt';
 import rateLimit from 'express-rate-limit';
 import { authenticateToken, requireAdmin, requireAuth, generateToken } from './middleware/auth.js';
 import * as labDb from './services/labDatabase.js';
+import { spawn } from 'node:child_process';
+import { buildWavHeader } from './services/wav.js';
 
 // Rate limiters for security
 const authLimiter = rateLimit({
@@ -27,12 +30,22 @@ const registerLimiter = rateLimit({
     legacyHeaders: false
 });
 
+// Per-IP general limiter for the API surface. The limit is tuned to live
+// session traffic: monitor + treatment-effects + telemetry polling alone
+// produce ~50–80 req/min per active user, and a 25-student class behind a
+// single NAT is the realistic upper bound. 600/min stays comfortably above
+// that while still cutting off a single hostile IP. Auth/register routes
+// have their own tighter limiters that run before this one.
 const generalLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minute
-    max: 100, // 100 requests per minute
+    max: 600,
     message: { error: 'Too many requests. Please slow down.' },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    // Skip TTS + LLM proxy: those have their own server-side accounting
+    // (per-user daily token + char caps) and a slow-call burst of /tts
+    // requests during streaming TTS shouldn't be lumped with REST traffic.
+    skip: (req) => req.path.startsWith('/tts') || req.path.startsWith('/proxy/llm')
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -52,6 +65,11 @@ try {
 }
 
 const router = express.Router();
+
+// Apply the general per-IP limiter to every route in this router. Auth
+// routes also have authLimiter / registerLimiter middleware that runs first
+// (in addition, not instead of), tightening to ~10/15min for /auth/login.
+router.use(generalLimiter);
 
 // ============================================
 // HELPER FUNCTIONS
@@ -162,6 +180,51 @@ function createCaseVersion(caseId, userId, changeType, description, configSnapsh
     );
 }
 
+/**
+ * Verify the authenticated user owns the given session (or is admin).
+ * Resolves to true on access; otherwise sends 403/404/500 on `res` and
+ * resolves to false. Use on any route that accepts session_id from the
+ * body or path so users can't read/write across each other's sessions by
+ * guessing the integer id.
+ *
+ * Usage:
+ *   if (!await verifySessionOwnership(sessionId, req.user, res)) return;
+ *   // ...handler continues
+ *
+ * Admins and missing-session-id (caller's choice — handler may decide
+ * non-scoped writes are OK) pass through. Pass `requireSession: true` to
+ * reject when sessionId is falsy.
+ */
+function verifySessionOwnership(sessionId, user, res, { requireSession = false } = {}) {
+    return new Promise((resolve) => {
+        if (sessionId === undefined || sessionId === null || sessionId === '') {
+            if (requireSession) {
+                res.status(400).json({ error: 'session_id required' });
+                return resolve(false);
+            }
+            return resolve(true);
+        }
+        if (user?.role === 'admin') {
+            return resolve(true);
+        }
+        db.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, row) => {
+            if (err) {
+                res.status(500).json({ error: err.message });
+                return resolve(false);
+            }
+            if (!row) {
+                res.status(404).json({ error: 'Session not found' });
+                return resolve(false);
+            }
+            if (row.user_id !== user?.id) {
+                res.status(403).json({ error: 'Access denied: session not owned by user' });
+                return resolve(false);
+            }
+            resolve(true);
+        });
+    });
+}
+
 // Configure Multer for local uploads with security validation
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -180,6 +243,12 @@ const storage = multer.diskStorage({
 });
 
 // File type validation
+//
+// SVG is intentionally NOT in the allowlist for /api/upload — uploaded files
+// are served back from /uploads as-is, and an SVG with embedded <script> is
+// stored XSS. The /api/upload-body-image route still accepts .svg because it
+// renames the file into /public/<type>.svg (admin-only, controlled set of 4
+// filenames) and is meant for the body silhouette overlay.
 const fileFilter = (req, file, cb) => {
     // Allowed MIME types for images, audio, and video
     const allowedMimes = [
@@ -187,7 +256,6 @@ const fileFilter = (req, file, cb) => {
         'image/png',
         'image/gif',
         'image/webp',
-        'image/svg+xml',
         // audio
         'audio/mpeg',
         'audio/wav',
@@ -203,8 +271,8 @@ const fileFilter = (req, file, cb) => {
         'video/mpeg'
     ];
 
-    // Allowed extensions
-    const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg',
+    // Allowed extensions (must align with allowedMimes)
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp',
         '.mp3', '.wav', '.ogg', '.webm', '.m4a',
         '.mp4', '.mov', '.avi', '.ogv', '.mpeg', '.mpg'];
     const ext = path.extname(file.originalname).toLowerCase();
@@ -222,6 +290,22 @@ const upload = multer({
     limits: {
         fileSize: 100 * 1024 * 1024 // 100MB max
     }
+});
+
+// Separate multer for the body-image silhouette upload. That route renames
+// the file into /public/<fixed-name>.svg|.png and is admin-only, so SVG is
+// safe there even though it's stored XSS for the generic /upload route.
+const bodyImageFileFilter = (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const okMime = file.mimetype === 'image/png' || file.mimetype === 'image/svg+xml';
+    const okExt = ext === '.png' || ext === '.svg';
+    if (okMime && okExt) cb(null, true);
+    else cb(new Error('Body image must be PNG or SVG'), false);
+};
+const uploadBodyImage = multer({
+    storage,
+    fileFilter: bodyImageFileFilter,
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB cap is plenty for a silhouette
 });
 
 // --- AUTHENTICATION ---
@@ -403,9 +487,16 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
 });
 
 // POST /api/auth/login - Login user
+//
+// Account lockout: after MAX_FAILED_LOGINS consecutive failed attempts the
+// account is locked for LOCKOUT_MINUTES. The columns (`failed_login_attempts`,
+// `locked_until`) already exist on the schema; this is the missing logic.
+const MAX_FAILED_LOGINS = 5;
+const LOCKOUT_MINUTES = 15;
+
 router.post('/auth/login', authLimiter, (req, res) => {
     const { username, password } = req.body;
-    const ipAddress = req.ip || req.connection.remoteAddress;
+    const ipAddress = req.ip || req.socket?.remoteAddress;
     const userAgent = req.headers['user-agent'];
 
     if (!username || !password) {
@@ -427,10 +518,37 @@ router.post('/auth/login', authLimiter, (req, res) => {
             return res.status(401).json({ error: 'Invalid username or password' });
         }
 
+        // Honour active lockout window. Users with a future `locked_until`
+        // get rejected without bcrypt compare so timing-side-channel and
+        // CPU-burn aren't escalation paths.
+        if (user.locked_until) {
+            const lockedUntilMs = new Date(user.locked_until).getTime();
+            if (Number.isFinite(lockedUntilMs) && lockedUntilMs > Date.now()) {
+                const minsLeft = Math.ceil((lockedUntilMs - Date.now()) / 60000);
+                return res.status(423).json({
+                    error: `Account locked. Try again in ${minsLeft} minute${minsLeft === 1 ? '' : 's'}.`
+                });
+            }
+        }
+
         try {
             const match = await bcrypt.compare(password, user.password_hash);
             if (!match) {
-                // Log failed login attempt
+                // Log + bump fail counter; lock at threshold.
+                const newAttempts = (user.failed_login_attempts || 0) + 1;
+                if (newAttempts >= MAX_FAILED_LOGINS) {
+                    db.run(
+                        `UPDATE users SET failed_login_attempts = ?,
+                            locked_until = datetime('now', '+' || ? || ' minutes')
+                         WHERE id = ?`,
+                        [newAttempts, LOCKOUT_MINUTES, user.id]
+                    );
+                } else {
+                    db.run(
+                        `UPDATE users SET failed_login_attempts = ? WHERE id = ?`,
+                        [newAttempts, user.id]
+                    );
+                }
                 db.run(
                     `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)`,
                     [user.id, username, 'failed_login', ipAddress, userAgent]
@@ -444,9 +562,11 @@ router.post('/auth/login', authLimiter, (req, res) => {
                 [user.id, username, 'login', ipAddress, userAgent]
             );
 
-            // Update last_login timestamp and reset failed attempts
+            // Reset both failed_login_attempts and locked_until on success.
             db.run(
-                `UPDATE users SET last_login = CURRENT_TIMESTAMP, failed_login_attempts = 0 WHERE id = ?`,
+                `UPDATE users SET last_login = CURRENT_TIMESTAMP,
+                    failed_login_attempts = 0, locked_until = NULL
+                 WHERE id = ?`,
                 [user.id]
             );
 
@@ -456,7 +576,10 @@ router.post('/auth/login', authLimiter, (req, res) => {
             const crypto = await import('crypto');
             const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
             db.run(
-                `INSERT INTO active_sessions (user_id, token_hash, ip_address, user_agent, expires_at) VALUES (?, ?, ?, ?, datetime('now', '+24 hours'))`,
+                // Expires_at mirrors the JWT TTL (default 4h). If you change
+                // JWT_EXPIRY, update this. For non-default expiries the row
+                // is still informational — JWT verification is the source of truth.
+                `INSERT INTO active_sessions (user_id, token_hash, ip_address, user_agent, expires_at) VALUES (?, ?, ?, ?, datetime('now', '+4 hours'))`,
                 [user.id, tokenHash, ipAddress, userAgent]
             );
 
@@ -505,7 +628,7 @@ router.get('/auth/profile', authenticateToken, (req, res) => {
 
 // POST /api/auth/logout - Log logout event
 router.post('/auth/logout', authenticateToken, (req, res) => {
-    const ipAddress = req.ip || req.connection.remoteAddress;
+    const ipAddress = req.ip || req.socket?.remoteAddress;
     const userAgent = req.headers['user-agent'];
 
     db.run(
@@ -518,17 +641,22 @@ router.post('/auth/logout', authenticateToken, (req, res) => {
     );
 });
 
-// --- UPLOAD ---
-router.post('/upload', upload.single('photo'), (req, res) => {
+// --- GENERIC MEDIA UPLOAD ---
+// Used by PhysicalExamEditor (auscultation audio) and RadiologyEditor
+// (study images / videos). Authenticated; field name is 'photo' for
+// historical reasons (also accepts other media types — multer doesn't
+// inspect content). Cases no longer use this for patient photos
+// (avatars are 3D), so this is admin-authoring media only.
+router.post('/upload', authenticateToken, upload.single('photo'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
-    const imageUrl =  `./uploads/${req.file.filename}`;
+    const imageUrl = `./uploads/${req.file.filename}`;
     res.json({ imageUrl });
 });
 
 // --- BODY IMAGE UPLOAD (Admin Only) ---
-router.post('/upload-body-image', authenticateToken, upload.single('image'), (req, res) => {
+router.post('/upload-body-image', authenticateToken, uploadBodyImage.single('image'), (req, res) => {
     // Check if user is admin
     if (req.user?.role !== 'admin') {
         return res.status(403).json({ error: 'Admin access required' });
@@ -683,7 +811,7 @@ router.put('/cases/:id/default', authenticateToken, requireAdmin, (req, res) => 
 
 // POST /api/cases - Admin only
 router.post('/cases', authenticateToken, requireAdmin, (req, res) => {
-    const { name, description, system_prompt, config, image_url, scenario } = req.body;
+    const { name, description, system_prompt, config, scenario } = req.body;
     const ipAddress = req.ip || req.connection?.remoteAddress;
     const userAgent = req.headers['user-agent'];
 
@@ -694,16 +822,15 @@ router.post('/cases', authenticateToken, requireAdmin, (req, res) => {
     const chiefComplaint = config?.chiefComplaint || null;
     const difficultyLevel = config?.difficulty_level || null;
 
-    const sql = `INSERT INTO cases (name, description, system_prompt, config, image_url, scenario,
+    const sql = `INSERT INTO cases (name, description, system_prompt, config, scenario,
                  patient_name, patient_gender, patient_age, chief_complaint, difficulty_level,
                  created_by, last_modified_by, version)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`;
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`;
     const params = [
         name,
         description,
         system_prompt,
         JSON.stringify(config || {}),
-        image_url || null,
         scenario ? JSON.stringify(scenario) : null,
         patientName,
         patientGender,
@@ -757,7 +884,7 @@ router.post('/cases', authenticateToken, requireAdmin, (req, res) => {
 
 // PUT /api/cases/:id - Admin only
 router.put('/cases/:id', authenticateToken, requireAdmin, (req, res) => {
-    const { name, description, system_prompt, config, image_url, scenario } = req.body;
+    const { name, description, system_prompt, config, scenario } = req.body;
     const caseId = req.params.id;
     const ipAddress = req.ip || req.connection?.remoteAddress;
     const userAgent = req.headers['user-agent'];
@@ -776,7 +903,7 @@ router.put('/cases/:id', authenticateToken, requireAdmin, (req, res) => {
         }
 
         const sql = `UPDATE cases SET
-                     name = ?, description = ?, system_prompt = ?, config = ?, image_url = ?, scenario = ?,
+                     name = ?, description = ?, system_prompt = ?, config = ?, scenario = ?,
                      patient_name = ?, patient_gender = ?, patient_age = ?, chief_complaint = ?, difficulty_level = ?,
                      last_modified_by = ?, updated_at = CURRENT_TIMESTAMP, version = COALESCE(version, 0) + 1
                      WHERE id = ?`;
@@ -785,7 +912,6 @@ router.put('/cases/:id', authenticateToken, requireAdmin, (req, res) => {
             description,
             system_prompt,
             JSON.stringify(config || {}),
-            image_url || null,
             scenario ? JSON.stringify(scenario) : null,
             patientName,
             patientGender,
@@ -1572,13 +1698,15 @@ function convertCompleteSessionToCSV(data) {
 // --- EVENT LOG ENDPOINTS ---
 
 // POST /api/events/batch - Log multiple events at once
-router.post('/events/batch', authenticateToken, (req, res) => {
+router.post('/events/batch', authenticateToken, async (req, res) => {
     const { session_id, events } = req.body;
     const user_id = req.user.id;
 
     if (!session_id || !events || !Array.isArray(events)) {
         return res.status(400).json({ error: 'session_id and events array required' });
     }
+
+    if (!await verifySessionOwnership(session_id, req.user, res, { requireSession: true })) return;
 
     const sql = `INSERT INTO event_log (session_id, user_id, event_type, description, vital_sign, old_value, new_value, timestamp)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
@@ -1627,8 +1755,10 @@ router.post('/events/batch', authenticateToken, (req, res) => {
 });
 
 // GET /api/sessions/:id/events - Get all events for a session
-router.get('/sessions/:id/events', authenticateToken, (req, res) => {
+router.get('/sessions/:id/events', authenticateToken, async (req, res) => {
     const sessionId = req.params.id;
+
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     const sql = `
         SELECT el.id, el.session_id, el.event_type, el.description,
@@ -1677,7 +1807,7 @@ const LEARNING_VERBS = [
 ];
 
 // POST /api/learning-events - Log a learning event
-router.post('/learning-events', authenticateToken, (req, res) => {
+router.post('/learning-events', authenticateToken, async (req, res) => {
     const {
         session_id,
         case_id,
@@ -1706,6 +1836,10 @@ router.post('/learning-events', authenticateToken, (req, res) => {
     if (!object_type) {
         return res.status(400).json({ error: 'object_type is required' });
     }
+
+    // session_id is optional on learning events (e.g. pre-session telemetry).
+    // When present, verify ownership; when absent, allow.
+    if (session_id && !await verifySessionOwnership(session_id, req.user, res)) return;
 
     const sql = `
         INSERT INTO learning_events (
@@ -1741,12 +1875,30 @@ router.post('/learning-events', authenticateToken, (req, res) => {
 });
 
 // POST /api/learning-events/batch - Log multiple events at once
-router.post('/learning-events/batch', authenticateToken, (req, res) => {
+router.post('/learning-events/batch', authenticateToken, async (req, res) => {
     const { events } = req.body;
     const user_id = req.user.id;
 
     if (!Array.isArray(events) || events.length === 0) {
         return res.status(400).json({ error: 'events array is required' });
+    }
+
+    // Verify ownership of every distinct session_id present in the batch.
+    // Events without session_id are allowed (pre-session telemetry).
+    // Admin bypasses ownership.
+    if (req.user?.role !== 'admin') {
+        const distinctSessionIds = [...new Set(events.map(e => e.session_id).filter(Boolean))];
+        if (distinctSessionIds.length > 0) {
+            const ownerships = await Promise.all(distinctSessionIds.map(sid => new Promise((resolve) => {
+                db.get('SELECT user_id FROM sessions WHERE id = ?', [sid], (err, row) => {
+                    if (err || !row) return resolve(false);
+                    resolve(row.user_id === user_id);
+                });
+            })));
+            if (ownerships.some(ok => !ok)) {
+                return res.status(403).json({ error: 'Batch contains session_id(s) not owned by user' });
+            }
+        }
     }
 
     const sql = `
@@ -2070,12 +2222,14 @@ router.get('/learning-events/detailed/:sessionId', authenticateToken, (req, res)
 // --- ALARM ENDPOINTS ---
 
 // POST /api/alarms/log - Log an alarm event
-router.post('/alarms/log', authenticateToken, (req, res) => {
+router.post('/alarms/log', authenticateToken, async (req, res) => {
     const { session_id, vital_sign, threshold_type, threshold_value, actual_value } = req.body;
-    
-    const sql = `INSERT INTO alarm_events (session_id, vital_sign, threshold_type, threshold_value, actual_value) 
+
+    if (session_id && !await verifySessionOwnership(session_id, req.user, res)) return;
+
+    const sql = `INSERT INTO alarm_events (session_id, vital_sign, threshold_type, threshold_value, actual_value)
                  VALUES (?, ?, ?, ?, ?)`;
-    
+
     db.run(sql, [session_id, vital_sign, threshold_type, threshold_value, actual_value], function(err) {
         if (err) {
             return res.status(500).json({ error: err.message });
@@ -2160,6 +2314,75 @@ router.post('/alarms/config', authenticateToken, (req, res) => {
     });
 });
 
+// --- NOTIFICATION PREFS ENDPOINTS ---
+// Stored in user_preferences.notification_settings (JSON column).
+// Per-user; falls back to {} if user_preferences row doesn't exist yet.
+
+router.get('/notification-prefs', authenticateToken, (req, res) => {
+    const userId = req.user.id;
+    db.get(
+        `SELECT notification_settings FROM user_preferences WHERE user_id = ?`,
+        [userId],
+        (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            let prefs = {};
+            if (row && row.notification_settings) {
+                try { prefs = JSON.parse(row.notification_settings); } catch { prefs = {}; }
+            }
+            res.json({ prefs });
+        }
+    );
+});
+
+// Whitelist of pref keys the client is allowed to write. Mirrors
+// src/notifications/defaults.js DEFAULT_PREFS plus the nested audioFrequencies.
+// Anything else gets dropped silently — keeps a malicious client from
+// stuffing the column with arbitrary blobs.
+const ALLOWED_PREF_KEYS = new Set([
+    'dnd', 'pausedUntil', 'minSeverity',
+    'mutedSources', 'audioMuted', 'bannerMuted', 'consoleMuted',
+    'snoozeDuration',
+    'toastDedupeWindowMs', 'toastMaxVisible',
+    'telemetryBatchSize', 'telemetryFlushIntervalMs',
+    'audioFrequencies', 'audioVolume',
+]);
+const NOTIFICATION_PREFS_MAX_BYTES = 10 * 1024;   // 10 KB hard cap
+
+router.put('/notification-prefs', authenticateToken, (req, res) => {
+    const userId = req.user.id;
+    const { prefs } = req.body || {};
+    if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs)) {
+        return res.status(400).json({ error: 'prefs object required' });
+    }
+
+    // Strip unknown keys.
+    const filtered = {};
+    for (const [k, v] of Object.entries(prefs)) {
+        if (ALLOWED_PREF_KEYS.has(k)) filtered[k] = v;
+    }
+
+    const json = JSON.stringify(filtered);
+    if (json.length > NOTIFICATION_PREFS_MAX_BYTES) {
+        return res.status(413).json({
+            error: `prefs exceed ${NOTIFICATION_PREFS_MAX_BYTES} byte limit`
+        });
+    }
+
+    // Upsert. user_preferences has UNIQUE(user_id) so ON CONFLICT works.
+    db.run(
+        `INSERT INTO user_preferences (user_id, notification_settings, updated_at)
+         VALUES (?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(user_id) DO UPDATE SET
+             notification_settings = excluded.notification_settings,
+             updated_at = CURRENT_TIMESTAMP`,
+        [userId, json],
+        (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ ok: true });
+        }
+    );
+});
+
 // --- INVESTIGATION ENDPOINTS ---
 
 // GET /api/cases/:id/investigations - Get all investigations for a case
@@ -2192,13 +2415,15 @@ router.post('/investigations', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // POST /api/sessions/:id/order - Order investigation(s)
-router.post('/sessions/:id/order', authenticateToken, (req, res) => {
+router.post('/sessions/:id/order', authenticateToken, async (req, res) => {
     const sessionId = req.params.id;
     const { investigation_ids } = req.body; // Array of investigation IDs
-    
+
     if (!Array.isArray(investigation_ids)) {
         return res.status(400).json({ error: 'investigation_ids must be an array' });
     }
+
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     const sql = `INSERT INTO investigation_orders (session_id, investigation_id, available_at)
                  VALUES (?, ?, datetime('now', '+' || (SELECT turnaround_minutes FROM case_investigations WHERE id = ?) || ' minutes'))`;
@@ -3951,8 +4176,23 @@ router.get('/treatment-effects', authenticateToken, (req, res) => {
 });
 
 // --- LLM PROXY ROUTE with Authentication & Rate Limiting ---
+
+// Pull a safe, user-facing message out of an upstream LLM error body. Anthropic
+// and OpenAI both surface { error: { message } } on 4xx/5xx; passing the raw
+// body back leaks request structure (and on rare misconfig, partial keys
+// echoed in error context). Falls back to a generic string when the body is
+// not parseable JSON.
+const extractUpstreamError = (errText) => {
+    try {
+        const parsed = JSON.parse(errText);
+        const msg = parsed?.error?.message ?? parsed?.error ?? parsed?.message;
+        if (typeof msg === 'string' && msg.length > 0 && msg.length <= 500) return msg;
+    } catch { /* not json */ }
+    return 'Upstream LLM error';
+};
+
 router.post('/proxy/llm', authenticateToken, async (req, res) => {
-    const { messages, system_prompt, session_id, agent_llm_config } = req.body;
+    const { messages, system_prompt, session_id, agent_llm_config, session_mode } = req.body;
     const userId = req.user.id;
     const today = new Date().toISOString().split('T')[0];
     const startTime = Date.now();
@@ -4062,9 +4302,15 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         const platformTemperature = await getPlatformLLMSetting('llm_temperature', '');
         const systemPromptTemplate = await getPlatformLLMSetting('llm_system_prompt_template', '');
 
-        // Check if session has user-specific LLM settings (optional overrides)
+        // Check if session has user-specific LLM settings (optional overrides).
+        // The session-scoped lookup leaks settings across users if we don't
+        // first verify the caller owns the session — even though billing is
+        // per-user, the per-session llm_settings (custom base URL, model,
+        // overrides) would otherwise be readable by anyone who guesses an id.
+        // verifySessionOwnership writes the 403/404 itself; admins bypass.
         let sessionLlmSettings = null;
         if (session_id) {
+            if (!await verifySessionOwnership(session_id, req.user, res)) return;
             sessionLlmSettings = await new Promise((resolve, reject) => {
                 db.get('SELECT llm_settings FROM sessions WHERE id = ?', [session_id], (err, row) => {
                     if (err) reject(err);
@@ -4118,8 +4364,23 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         }
 
         // Priority: agent > session > platform
-        const provider = agentProvider || (sessionLlmSettings?.provider && sessionLlmSettings.provider.trim()) || platformProvider;
-        const model = agentModel || (sessionLlmSettings?.model && sessionLlmSettings.model.trim()) || platformModel;
+        let provider = agentProvider || (sessionLlmSettings?.provider && sessionLlmSettings.provider.trim()) || platformProvider;
+        const baseModel = agentModel || (sessionLlmSettings?.model && sessionLlmSettings.model.trim()) || platformModel;
+
+        // Voice-mode model override: when client sends session_mode='voice' AND admin has set
+        // llm_model_voice in platform settings, swap to that model for this call only.
+        // Voice mode often needs a smaller/faster model to keep round-trip latency under 2s.
+        let voiceModelOverride = null;
+        if (session_mode === 'voice') {
+            const stored = await getPlatformSetting('llm_model_voice');
+            if (stored && typeof stored === 'string' && stored.trim()) {
+                voiceModelOverride = stored.trim();
+            }
+        }
+        const model = voiceModelOverride || baseModel;
+        if (voiceModelOverride) {
+            console.log(`[LLM Proxy] Voice-mode override active: model=${voiceModelOverride}`);
+        }
 
         // For API key and base URL, also consider agent settings
         let baseUrl = platformBaseUrl;
@@ -4145,9 +4406,61 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             apiKey = (sessionLlmSettings?.apiKey && sessionLlmSettings.apiKey.trim()) || platformApiKey;
         }
 
+        // Voice override may pick a model from a different vendor than the
+        // platform default (e.g. user picked "Claude Haiku" while platform is
+        // OpenAI). The model name alone isn't enough — we have to swap the
+        // provider+endpoint+key too, otherwise the Claude model id gets sent
+        // to OpenAI's endpoint and 500s. Crucially: do NOT fall back to the
+        // platform key when its vendor doesn't match the new provider, or we
+        // end up sending an OpenAI sk-proj-* to Anthropic and get a confusing
+        // 401 invalid-x-api-key.
+        if (voiceModelOverride) {
+            const m = voiceModelOverride.toLowerCase();
+            const platformVendor = (agentProvider || platformProvider || '').toLowerCase();
+            if (m.startsWith('claude-')) {
+                provider = 'anthropic';
+                baseUrl = 'https://api.anthropic.com/v1';
+                apiKey = process.env.ANTHROPIC_API_KEY
+                    || (platformVendor === 'anthropic' ? apiKey : '');
+                console.log(`[LLM Proxy] Voice override is a Claude model → routing to Anthropic`);
+            } else if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('o3-')) {
+                provider = 'openai';
+                baseUrl = 'https://api.openai.com/v1';
+                apiKey = process.env.OPENAI_API_KEY
+                    || (platformVendor === 'openai' ? apiKey : '');
+                console.log(`[LLM Proxy] Voice override is an OpenAI model → routing to OpenAI`);
+            }
+            if (!apiKey) {
+                const envName = provider === 'anthropic' ? 'ANTHROPIC_API_KEY'
+                    : provider === 'openai' ? 'OPENAI_API_KEY'
+                    : `${provider.toUpperCase()}_API_KEY`;
+                return res.status(503).json({
+                    error: `Voice mode wants to use "${voiceModelOverride}" via ${provider}, but no matching API key is configured. Either (a) set ${envName} in server/.env and restart the server, or (b) change the voice-mode model in Settings → Voice & Avatar to "inherit platform" so it uses your existing platform LLM (${platformVendor || 'unset'}).`
+                });
+            }
+            // Catch the cross-vendor mistake (e.g. an OpenAI sk-proj-* key in
+            // the Anthropic field) before Anthropic returns a confusing 401.
+            if (provider === 'anthropic' && !apiKey.startsWith('sk-ant-')) {
+                return res.status(503).json({
+                    error: `The API key being used for Anthropic doesn't have the expected "sk-ant-" prefix. Get one at console.anthropic.com and set ANTHROPIC_API_KEY in server/.env.`
+                });
+            }
+            if (provider === 'openai' && !apiKey.startsWith('sk-')) {
+                return res.status(503).json({
+                    error: `The API key being used for OpenAI doesn't have the expected "sk-" prefix. Set OPENAI_API_KEY in server/.env or fix the platform LLM API key field.`
+                });
+            }
+        }
+
         const maxOutputTokensRaw = sessionLlmSettings?.maxOutputTokens || platformMaxTokens;
         const temperatureRaw = sessionLlmSettings?.temperature || platformTemperature;
-        const maxOutputTokens = maxOutputTokensRaw ? parseInt(maxOutputTokensRaw) : null;
+        let maxOutputTokens = maxOutputTokensRaw ? parseInt(maxOutputTokensRaw) : null;
+        // In voice mode every extra word adds synthesis time. Cap responses
+        // hard so the patient stays terse and TTS turnaround stays under ~3s.
+        if (session_mode === 'voice') {
+            const cap = 180;
+            maxOutputTokens = maxOutputTokens ? Math.min(maxOutputTokens, cap) : cap;
+        }
         const temperature = temperatureRaw ? parseFloat(temperatureRaw) : null;
 
         // Debug logging
@@ -4229,6 +4542,139 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
 
         // 10. Make LLM request
         console.log(`[LLM Proxy] User ${userId} sending request to ${provider}${model ? '/' + model : ' (default model)'} at ${endpoint}`);
+
+        // Streaming branch — emit SSE deltas from the upstream provider.
+        // Client requests it via Accept: text/event-stream OR ?stream=1.
+        const wantStream = req.query.stream === '1'
+            || req.body?.stream === true
+            || (req.headers.accept || '').includes('text/event-stream');
+        if (wantStream) {
+            const streamPayload = { ...requestPayload, stream: true };
+            const upstream = await fetch(endpoint, {
+                method: 'POST',
+                headers: llmHeaders,
+                body: JSON.stringify(streamPayload)
+            });
+            if (!upstream.ok) {
+                const errText = await upstream.text();
+                console.error(`[LLM Proxy] Stream error ${upstream.status}: ${errText.slice(0, 200)}`);
+                db.run('INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms) VALUES (?, ?, ?, ?, ?, ?)',
+                    [userId, session_id, model, 'error', errText.substring(0, 500), Date.now() - startTime]);
+                return res.status(upstream.status).json({ error: extractUpstreamError(errText) });
+            }
+
+            res.set('Content-Type', 'text/event-stream');
+            res.set('Cache-Control', 'no-store');
+            res.set('X-Accel-Buffering', 'no');
+            res.flushHeaders?.();
+            if (res.socket) res.socket.setNoDelay(true);
+
+            const sse = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+
+            let accText = '';
+            let promptTokens = 0;
+            let completionTokens = 0;
+            let streamInterrupted = false;
+            let streamErrMessage = null;
+            const decoder = new TextDecoder();
+            let buffered = '';
+
+            // If the client goes away mid-stream we want the same accounting
+            // path (treat as an incomplete stream). Express's `req` emits
+            // 'close' for both clean ends and disconnects, so we additionally
+            // gate on `!res.writableEnded` to distinguish.
+            req.on('close', () => {
+                if (!res.writableEnded) {
+                    streamInterrupted = true;
+                    streamErrMessage = 'client_disconnected';
+                }
+            });
+
+            try {
+                for await (const chunk of upstream.body) {
+                    buffered += decoder.decode(chunk, { stream: true });
+                    // SSE messages are separated by blank lines; data: lines accumulate
+                    let sep;
+                    while ((sep = buffered.indexOf('\n\n')) >= 0) {
+                        const block = buffered.slice(0, sep);
+                        buffered = buffered.slice(sep + 2);
+                        // Each block can have event: ... and data: ... lines
+                        const dataLines = [];
+                        let eventName = '';
+                        for (const line of block.split('\n')) {
+                            if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+                            else if (line.startsWith('event:')) eventName = line.slice(6).trim();
+                        }
+                        if (dataLines.length === 0) continue;
+                        const dataStr = dataLines.join('\n');
+                        if (dataStr === '[DONE]') break;
+                        let evt;
+                        try { evt = JSON.parse(dataStr); } catch { continue; }
+
+                        // Anthropic format
+                        if (provider === 'anthropic') {
+                            if (eventName === 'content_block_delta' && evt?.delta?.type === 'text_delta') {
+                                const t = evt.delta.text || '';
+                                if (t) { accText += t; sse({ delta: t }); }
+                            } else if (eventName === 'message_delta' && evt?.usage) {
+                                completionTokens = evt.usage.output_tokens || completionTokens;
+                            } else if (eventName === 'message_start' && evt?.message?.usage) {
+                                promptTokens = evt.message.usage.input_tokens || 0;
+                            }
+                        } else {
+                            // OpenAI / OpenAI-compatible
+                            const delta = evt?.choices?.[0]?.delta?.content || '';
+                            if (delta) { accText += delta; sse({ delta }); }
+                            if (evt?.usage) {
+                                promptTokens = evt.usage.prompt_tokens || promptTokens;
+                                completionTokens = evt.usage.completion_tokens || completionTokens;
+                            }
+                        }
+                    }
+                }
+            } catch (streamErr) {
+                console.error('[LLM Proxy] stream interrupted', streamErr);
+                streamInterrupted = true;
+                streamErrMessage = streamErr?.message?.slice(0, 500) || 'stream_error';
+            }
+
+            // Final usage + log
+            const totalTokens = promptTokens + completionTokens;
+            const responseTimeStream = Date.now() - startTime;
+            const pricing = await new Promise((resolve) => {
+                db.get('SELECT * FROM llm_model_pricing WHERE provider = ? AND (model = ? OR model = ?)',
+                    [provider, model, 'default'], (err, row) => {
+                    resolve(row || { input_cost_per_1k: 0, output_cost_per_1k: 0 });
+                });
+            });
+            const estCost = (promptTokens / 1000) * pricing.input_cost_per_1k
+                + (completionTokens / 1000) * pricing.output_cost_per_1k;
+            db.run(`INSERT INTO llm_usage (user_id, date, prompt_tokens, completion_tokens, total_tokens, estimated_cost, model, request_count, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, date) DO UPDATE SET
+                prompt_tokens = llm_usage.prompt_tokens + excluded.prompt_tokens,
+                completion_tokens = llm_usage.completion_tokens + excluded.completion_tokens,
+                total_tokens = llm_usage.total_tokens + excluded.total_tokens,
+                estimated_cost = llm_usage.estimated_cost + excluded.estimated_cost,
+                request_count = llm_usage.request_count + 1,
+                updated_at = CURRENT_TIMESTAMP`,
+                [userId, today, promptTokens, completionTokens, totalTokens, estCost, model]);
+            // Schema's status CHECK whitelists ('success','error','rate_limited').
+            // Stream interrupts (upstream error mid-stream OR client disconnect)
+            // get logged as 'error' with error_message disambiguating the cause.
+            const finalStatus = streamInterrupted ? 'error' : 'success';
+            db.run(`INSERT INTO llm_request_log (user_id, session_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, error_message, response_time_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [userId, session_id, model, promptTokens, completionTokens, totalTokens, estCost, finalStatus, streamErrMessage, responseTimeStream]);
+
+            if (!res.writableEnded) {
+                sse({ done: true, usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: totalTokens } });
+                res.write('data: [DONE]\n\n');
+                return res.end();
+            }
+            return;
+        }
+
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: llmHeaders,
@@ -4242,7 +4688,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             console.error(`[LLM Proxy] Error ${response.status}: ${errText}`);
             db.run('INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms) VALUES (?, ?, ?, ?, ?, ?)',
                 [userId, session_id, model, 'error', errText.substring(0, 500), responseTime]);
-            return res.status(response.status).json({ error: errText });
+            return res.status(response.status).json({ error: extractUpstreamError(errText) });
         }
 
         const rawData = await response.json();
@@ -4574,13 +5020,15 @@ router.post('/scenarios/seed', requireAdmin, (req, res) => {
 // --- PHYSICAL EXAM FINDINGS ---
 
 // POST /api/sessions/:sessionId/exam-findings - Record a physical exam finding
-router.post('/sessions/:sessionId/exam-findings', authenticateToken, (req, res) => {
+router.post('/sessions/:sessionId/exam-findings', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     const { body_region, exam_type, finding, is_abnormal, audio_url, audio_played, case_id } = req.body;
 
     if (!body_region || !exam_type || !finding) {
         return res.status(400).json({ error: 'body_region, exam_type, and finding are required' });
     }
+
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     const sql = `INSERT INTO physical_exam_findings
                  (session_id, case_id, user_id, body_region, exam_type, finding, is_abnormal, audio_url, audio_played)
@@ -4609,8 +5057,10 @@ router.post('/sessions/:sessionId/exam-findings', authenticateToken, (req, res) 
 });
 
 // GET /api/sessions/:sessionId/exam-findings - Get all exam findings for a session
-router.get('/sessions/:sessionId/exam-findings', authenticateToken, (req, res) => {
+router.get('/sessions/:sessionId/exam-findings', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
+
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     db.all(
         `SELECT * FROM physical_exam_findings WHERE session_id = ? ORDER BY timestamp`,
@@ -4796,13 +5246,15 @@ router.get('/admin/audit-log', authenticateToken, requireAdmin, (req, res) => {
 // --- VITAL SIGN HISTORY ---
 
 // POST /api/sessions/:sessionId/vitals - Record a vital sign reading
-router.post('/sessions/:sessionId/vitals', authenticateToken, (req, res) => {
+router.post('/sessions/:sessionId/vitals', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     const { vital_sign, value, unit, is_alarm_triggered, alarm_type, source } = req.body;
 
     if (!vital_sign || value === undefined) {
         return res.status(400).json({ error: 'vital_sign and value are required' });
     }
+
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     db.run(
         `INSERT INTO vital_sign_history (session_id, vital_sign, value, unit, is_alarm_triggered, alarm_type, source)
@@ -4816,9 +5268,11 @@ router.post('/sessions/:sessionId/vitals', authenticateToken, (req, res) => {
 });
 
 // GET /api/sessions/:sessionId/vitals - Get vital sign history for a session
-router.get('/sessions/:sessionId/vitals', authenticateToken, (req, res) => {
+router.get('/sessions/:sessionId/vitals', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     const { vital_sign, limit = 1000 } = req.query;
+
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     let sql = `SELECT * FROM vital_sign_history WHERE session_id = ?`;
     const params = [sessionId];
@@ -4840,13 +5294,15 @@ router.get('/sessions/:sessionId/vitals', authenticateToken, (req, res) => {
 // --- CLINICAL NOTES ---
 
 // POST /api/sessions/:sessionId/notes - Add a clinical note
-router.post('/sessions/:sessionId/notes', authenticateToken, (req, res) => {
+router.post('/sessions/:sessionId/notes', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     const { note_type, content } = req.body;
 
     if (!content) {
         return res.status(400).json({ error: 'content is required' });
     }
+
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     db.run(
         `INSERT INTO clinical_notes (session_id, user_id, note_type, content)
@@ -4860,8 +5316,10 @@ router.post('/sessions/:sessionId/notes', authenticateToken, (req, res) => {
 });
 
 // GET /api/sessions/:sessionId/notes - Get clinical notes for a session
-router.get('/sessions/:sessionId/notes', authenticateToken, (req, res) => {
+router.get('/sessions/:sessionId/notes', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
+
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     db.all(
         `SELECT cn.*, u.username
@@ -6164,6 +6622,880 @@ router.put('/platform-settings/chat', authenticateToken, requireAdmin, async (re
     }
 });
 
+// ============================================
+// VOICE SETTINGS (Stack T)
+// ============================================
+// All fields are nullable except voice_mode_enabled (defaults false).
+// No frontend defaults — admin must populate before voice mode is usable.
+
+const VOICE_TTS_PROVIDERS = ['piper', 'kokoro', 'openai', 'google', 'browser'];
+
+// Subset of TTS providers that have an actual voice catalogue served by
+// /api/tts (i.e. excluding 'browser', which speaks via the client's Web
+// Speech API). The platform stores per-provider voice slots and per-provider
+// persona-default voices ONLY for these four — that's what makes switching
+// between, say, Kokoro and Google preserve each provider's settings instead
+// of the old globally-stored single voice ID that broke on switch.
+const TTS_PROVIDERS_WITH_CATALOG = ['piper', 'kokoro', 'openai', 'google'];
+const VOICE_GENDERS = ['male', 'female', 'child'];
+
+// `voice_<provider>_<gender>` — per-provider voice slot. Replaces the old
+// `piper_voice_<gender>` keys (which were misnamed: they served all
+// providers but lived under one provider's prefix).
+const VOICE_SLOT_KEYS = TTS_PROVIDERS_WITH_CATALOG
+    .flatMap(p => VOICE_GENDERS.map(g => `voice_${p}_${g}`));
+
+// `default_voice_<provider>_<gender>` — per-provider persona-default voice.
+// Replaces the old flat `default_voice_<gender>` (which broke on switch).
+const PERSONA_DEFAULT_VOICE_KEYS = TTS_PROVIDERS_WITH_CATALOG
+    .flatMap(p => VOICE_GENDERS.map(g => `default_voice_${p}_${g}`));
+const VOICE_STT_PROVIDERS = ['browser'];
+const VOICE_AVATAR_TYPES = ['3d_head', 'none'];
+
+// Path-traversal-proof voice id check. Piper voices end in .onnx; Kokoro
+// voice ids are short slugs like "af_heart". Both must avoid path separators.
+const isSafeVoiceFilename = (s) => {
+    if (typeof s !== 'string' || s.length === 0 || s.length > 200) return false;
+    if (s.includes('/') || s.includes('\\') || s.includes('..') || s.startsWith('.')) return false;
+    // Either a Piper .onnx filename, or a short alphanumeric/underscore slug
+    // matching Kokoro's voice id format (e.g. "af_heart", "bm_george").
+    return s.endsWith('.onnx') || /^[a-zA-Z0-9_-]+$/.test(s);
+};
+
+const isBcp47 = (s) => typeof s === 'string' && /^[a-zA-Z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(s) && s.length <= 35;
+
+// GET /api/platform-settings/voice - Get voice settings (any authed user).
+// Cloud TTS API keys are *never* returned — only a boolean indicating
+// whether one is configured. Prevents leaking keys to non-admins and to
+// browser dev-tools. The env var (process.env.GOOGLE_TTS_API_KEY) is also
+// reported as "set" so the UI can show "configured via env" for
+// production deployments that don't want keys in the database.
+router.get('/platform-settings/voice', authenticateToken, async (req, res) => {
+    try {
+        const flatKeys = [
+            'voice_mode_enabled', 'tts_provider',
+            'tts_rate', 'tts_pitch',
+            'stt_provider', 'stt_language',
+            'avatar_type', 'llm_model_voice',
+            'google_tts_api_key', 'openai_tts_api_key'
+        ];
+        const raw = {};
+        for (const k of flatKeys) raw[k] = await getPlatformSetting(k);
+        for (const k of VOICE_SLOT_KEYS) raw[k] = await getPlatformSetting(k);
+
+        const toFloat = (v) => v === null || v === undefined || v === '' ? null : parseFloat(v);
+
+        const out = {
+            voice_mode_enabled: raw.voice_mode_enabled === 'true',
+            tts_provider: raw.tts_provider || null,
+            tts_rate: toFloat(raw.tts_rate),
+            tts_pitch: toFloat(raw.tts_pitch),
+            stt_provider: raw.stt_provider || null,
+            stt_language: raw.stt_language || null,
+            avatar_type: raw.avatar_type || null,
+            llm_model_voice: raw.llm_model_voice || null,
+            google_tts_api_key_set: !!raw.google_tts_api_key || !!process.env.GOOGLE_TTS_API_KEY,
+            google_tts_api_key_via_env: !raw.google_tts_api_key && !!process.env.GOOGLE_TTS_API_KEY,
+            openai_tts_api_key_set: !!raw.openai_tts_api_key || !!process.env.OPENAI_API_KEY,
+            openai_tts_api_key_via_env: !raw.openai_tts_api_key && !!process.env.OPENAI_API_KEY
+        };
+        for (const k of VOICE_SLOT_KEYS) out[k] = raw[k] || null;
+        res.json(out);
+    } catch (err) {
+        console.error('[platform-settings/voice GET] error', err);
+        res.status(500).json({ error: 'Failed to load voice settings' });
+    }
+});
+
+// PUT /api/platform-settings/voice - Update voice settings (Admin only)
+router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const allowed = new Set([
+            'voice_mode_enabled', 'tts_provider',
+            'tts_rate', 'tts_pitch',
+            'stt_provider', 'stt_language',
+            'avatar_type', 'llm_model_voice',
+            'google_tts_api_key', 'openai_tts_api_key',
+            ...VOICE_SLOT_KEYS
+        ]);
+
+        for (const key of Object.keys(body)) {
+            if (!allowed.has(key)) {
+                return res.status(400).json({ error: `Unknown setting: ${key} (endpoint: /platform-settings/voice)` });
+            }
+        }
+
+        const validateRate = (v) => {
+            if (v === null || v === undefined || v === '') return null;
+            const f = parseFloat(v);
+            if (!Number.isFinite(f) || f < 0.5 || f > 1.5) return undefined;
+            return String(f);
+        };
+
+        const writes = [];
+        const setIfPresent = (key, val) => writes.push([key, val]);
+
+        if ('voice_mode_enabled' in body) {
+            if (typeof body.voice_mode_enabled !== 'boolean') {
+                return res.status(400).json({ error: 'voice_mode_enabled must be boolean' });
+            }
+            setIfPresent('voice_mode_enabled', body.voice_mode_enabled ? 'true' : 'false');
+        }
+        if ('tts_provider' in body) {
+            if (body.tts_provider !== null && !VOICE_TTS_PROVIDERS.includes(body.tts_provider)) {
+                return res.status(400).json({ error: `tts_provider must be one of ${VOICE_TTS_PROVIDERS.join(', ')}` });
+            }
+            setIfPresent('tts_provider', body.tts_provider || '');
+        }
+        // Per-provider voice slots: voice_<provider>_<gender>. Same safety
+        // check used for the legacy piper_voice_* keys, applied uniformly.
+        for (const k of VOICE_SLOT_KEYS) {
+            if (k in body) {
+                if (body[k] !== null && body[k] !== '' && !isSafeVoiceFilename(body[k])) {
+                    return res.status(400).json({ error: `${k} must be a safe voice id` });
+                }
+                setIfPresent(k, body[k] || '');
+            }
+        }
+        for (const k of ['tts_rate', 'tts_pitch']) {
+            if (k in body) {
+                const v = validateRate(body[k]);
+                if (v === undefined) {
+                    return res.status(400).json({ error: `${k} must be between 0.5 and 1.5` });
+                }
+                setIfPresent(k, v ?? '');
+            }
+        }
+        if ('stt_provider' in body) {
+            if (body.stt_provider !== null && !VOICE_STT_PROVIDERS.includes(body.stt_provider)) {
+                return res.status(400).json({ error: `stt_provider must be one of ${VOICE_STT_PROVIDERS.join(', ')}` });
+            }
+            setIfPresent('stt_provider', body.stt_provider || '');
+        }
+        if ('stt_language' in body) {
+            if (body.stt_language !== null && body.stt_language !== '' && !isBcp47(body.stt_language)) {
+                return res.status(400).json({ error: 'stt_language must be a BCP-47 locale tag' });
+            }
+            setIfPresent('stt_language', body.stt_language || '');
+        }
+        if ('avatar_type' in body) {
+            if (body.avatar_type !== null && !VOICE_AVATAR_TYPES.includes(body.avatar_type)) {
+                return res.status(400).json({ error: `avatar_type must be one of ${VOICE_AVATAR_TYPES.join(', ')}` });
+            }
+            setIfPresent('avatar_type', body.avatar_type || '');
+        }
+        if ('llm_model_voice' in body) {
+            if (body.llm_model_voice !== null && (typeof body.llm_model_voice !== 'string' || body.llm_model_voice.length > 200)) {
+                return res.status(400).json({ error: 'llm_model_voice must be a string ≤ 200 chars or null' });
+            }
+            setIfPresent('llm_model_voice', body.llm_model_voice || '');
+        }
+        // Cloud TTS API keys: empty string clears the value (admin can also
+        // disable by sending '' to fall back to env or to fail-open). We don't
+        // shape-validate beyond a length cap and a charset filter — different
+        // providers have different prefixes, and stale validation tends to
+        // reject keys that work fine.
+        for (const k of ['google_tts_api_key', 'openai_tts_api_key']) {
+            if (k in body) {
+                const v = body[k];
+                if (v !== null && v !== '' && (typeof v !== 'string' || v.length > 256 || /[\s\x00-\x1f\x7f]/.test(v))) {
+                    return res.status(400).json({ error: `${k} must be a printable string ≤ 256 chars or empty to clear` });
+                }
+                setIfPresent(k, v || '');
+            }
+        }
+
+        for (const [k, v] of writes) {
+            await setPlatformSetting(k, v, req.user.id);
+        }
+
+        res.json({ message: 'Voice settings updated successfully', updated: writes.map(w => w[0]) });
+    } catch (err) {
+        console.error('[platform-settings/voice PUT] error', err);
+        res.status(500).json({ error: 'Failed to update voice settings' });
+    }
+});
+
+// Per-gender persona defaults. Cases inherit these by patient gender
+// unless overridden individually. Two key shapes:
+//
+//   FLAT (provider-independent):
+//     default_avatar_<gender>   — GLB filename, no TTS interaction
+//     default_rate_<gender>     — TTS speed (0.5–1.5), applies to any engine
+//     default_pitch_<gender>    — client-side playbackRate (0.7–1.4)
+//
+//   PER-PROVIDER (because voice IDs are provider-specific):
+//     default_voice_<provider>_<gender>  — voice ID for that provider
+//
+// The flat `default_voice_<gender>` from before was the source of "switching
+// providers breaks playback" — a Google voice ID can't be synthesized by
+// Kokoro. We migrate the legacy flat key to default_voice_piper_<gender>
+// on server boot (see runVoiceKeyMigration).
+const PERSONA_GENDERS = VOICE_GENDERS;
+const PERSONA_FLAT_FIELDS = ['avatar', 'rate', 'pitch'];
+const PERSONA_FLAT_KEYS = PERSONA_GENDERS
+    .flatMap(g => PERSONA_FLAT_FIELDS.map(f => `default_${f}_${g}`));
+const PERSONA_KEYS = new Set([...PERSONA_FLAT_KEYS, ...PERSONA_DEFAULT_VOICE_KEYS]);
+
+// GET /api/platform-settings/avatars - Per-gender persona defaults (any authed user)
+router.get('/platform-settings/avatars', authenticateToken, async (req, res) => {
+    try {
+        const out = {};
+        for (const k of PERSONA_KEYS) {
+            const v = await getPlatformSetting(k);
+            // Numeric fields come back as strings from the KV store; coerce.
+            if (v != null && v !== '' && (k.startsWith('default_rate_') || k.startsWith('default_pitch_'))) {
+                const n = Number(v);
+                out[k] = Number.isFinite(n) ? n : null;
+            } else {
+                out[k] = v || null;
+            }
+        }
+        res.json(out);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/platform-settings/avatars - Update persona defaults (Admin only)
+router.put('/platform-settings/avatars', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const body = req.body || {};
+        for (const key of Object.keys(body)) {
+            if (!PERSONA_KEYS.has(key)) {
+                return res.status(400).json({ error: `Unknown setting: ${key} (endpoint: /platform-settings/avatars)` });
+            }
+        }
+        const isSafeGlb   = (v) => typeof v === 'string' && /^[a-zA-Z0-9_-]+\.glb$/.test(v);
+        const isSafeVoice = (v) => typeof v === 'string' && /^[a-zA-Z0-9_.\-]+$/.test(v) && !v.includes('..');
+        const inRange = (v, lo, hi) => {
+            const n = Number(v);
+            return Number.isFinite(n) && n >= lo && n <= hi;
+        };
+
+        for (const k of PERSONA_KEYS) {
+            if (!(k in body)) continue;
+            const raw = body[k];
+            // Empty / null clears the override.
+            if (raw === null || raw === '' || raw === undefined) {
+                await setPlatformSetting(k, '', req.user.id);
+                continue;
+            }
+            if (k.startsWith('default_avatar_') && !isSafeGlb(raw)) {
+                return res.status(400).json({ error: `${k} must be a safe GLB filename` });
+            }
+            if (k.startsWith('default_voice_') && !isSafeVoice(raw)) {
+                return res.status(400).json({ error: `${k} must be a safe voice filename` });
+            }
+            if (k.startsWith('default_rate_')  && !inRange(raw, 0.5, 1.5)) {
+                return res.status(400).json({ error: `${k} must be between 0.5 and 1.5` });
+            }
+            if (k.startsWith('default_pitch_') && !inRange(raw, 0.7, 1.4)) {
+                return res.status(400).json({ error: `${k} must be between 0.7 and 1.4` });
+            }
+            await setPlatformSetting(k, String(raw), req.user.id);
+        }
+        res.json({ message: 'Persona defaults updated' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// LLM MODELS REGISTRY
+// ============================================
+// Per VOICE_AVATAR_PLAN.md §6, this endpoint is the single allowed home for
+// hardcoded Anthropic model identifiers. Frontend code reads from here rather
+// than embedding strings.
+const LLM_MODEL_REGISTRY = [
+    { id: 'claude-opus-4-7',           label: 'Claude Opus 4.7',          tier: 'flagship' },
+    { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6',        tier: 'balanced' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',         tier: 'fast' },
+    { id: 'claude-3-5-sonnet-20241022',label: 'Claude 3.5 Sonnet (legacy)', tier: 'legacy' },
+    { id: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku (legacy)',  tier: 'legacy' }
+];
+
+router.get('/llm/models', authenticateToken, (req, res) => {
+    res.json({ models: LLM_MODEL_REGISTRY });
+});
+
+// GET /api/tts/usage - char-count + cost rollups for the calling user
+// (or all users for admins via ?scope=all). Returns today, last 7 days,
+// last 30 days, and an optional Google free-tier indicator.
+//
+// The free-tier remaining for Google is computed from the calendar month's
+// total char_count — Google's free tier is 1M chars/month/account, not
+// per-user, so this is more useful as a platform-wide indicator.
+router.get('/tts/usage', authenticateToken, async (req, res) => {
+    try {
+        const isAdmin = req.user.role === 'admin';
+        const scopeAll = isAdmin && req.query.scope === 'all';
+        const userFilter = scopeAll ? '' : 'AND user_id = ?';
+        const userParam = scopeAll ? [] : [req.user.id];
+
+        const today = new Date().toISOString().slice(0, 10);
+        const monthStart = today.slice(0, 7) + '-01';
+        const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+
+        const queryRollup = (whereDate) => new Promise((resolve, reject) => {
+            db.all(
+                `SELECT provider,
+                        SUM(char_count)     AS chars,
+                        SUM(request_count)  AS requests,
+                        SUM(estimated_cost) AS cost
+                 FROM tts_usage
+                 WHERE date >= ? ${userFilter}
+                 GROUP BY provider`,
+                [whereDate, ...userParam],
+                (err, rows) => err ? reject(err) : resolve(rows || [])
+            );
+        });
+
+        const [todayRows, weekRows, monthRows, allTimeRows] = await Promise.all([
+            queryRollup(today),
+            queryRollup(sevenDaysAgo),
+            queryRollup(monthStart),
+            queryRollup('1970-01-01')
+        ]);
+
+        // Google free tier: 1M chars/month for Neural2/WaveNet/Chirp HD,
+        // 4M for Standard. We default to the Neural2 figure since that's
+        // what the curated voice list ships.
+        const googleMonthly = monthRows.find(r => r.provider === 'google')?.chars || 0;
+        const googleFreeRemaining = Math.max(0, 1_000_000 - googleMonthly);
+
+        res.json({
+            scope: scopeAll ? 'all' : 'self',
+            today: todayRows,
+            last_7_days: weekRows,
+            this_month: monthRows,
+            all_time: allTimeRows,
+            google_free_tier_remaining: googleFreeRemaining,
+            google_free_tier_total: 1_000_000
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// TTS (Piper) ROUTES
+// ============================================
+
+const PIPER_DIR = path.join(__dirname, 'data', 'piper');
+const PIPER_BIN = process.env.PIPER_BIN || path.join(PIPER_DIR, 'piper', 'piper');
+const TTS_TEXT_LIMIT = 2000;
+
+const readVoiceSidecar = (filename) => {
+    const sidecar = path.join(PIPER_DIR, filename + '.json');
+    if (!fs.existsSync(sidecar)) return null;
+    try { return JSON.parse(fs.readFileSync(sidecar, 'utf8')); }
+    catch { return null; }
+};
+
+// GET /api/tts/voices - list voices for the active TTS provider.
+// Accepts ?provider=kokoro|piper to preview voices for an unsaved provider
+// choice; otherwise falls back to the platform setting.
+router.get('/tts/voices', authenticateToken, async (req, res) => {
+    const queryProvider = typeof req.query.provider === 'string' ? req.query.provider : '';
+    const ttsProvider = VOICE_TTS_PROVIDERS.includes(queryProvider)
+        ? queryProvider
+        : (await getPlatformSetting('tts_provider')) || 'piper';
+
+    if (ttsProvider === 'kokoro') {
+        try {
+            const { loadKokoro, listKokoroVoices } = await import('./services/kokoroTts.js');
+            await loadKokoro();
+            return res.json({
+                provider: 'kokoro',
+                voices: listKokoroVoices(),
+                piperInstalled: fs.existsSync(PIPER_BIN)
+            });
+        } catch (err) {
+            console.error('[kokoro] failed to load for voice listing', err);
+            return res.status(503).json({ error: 'Kokoro TTS failed to load' });
+        }
+    }
+
+    if (ttsProvider === 'openai') {
+        const { listOpenaiVoices } = await import('./services/openaiTts.js');
+        return res.json({
+            provider: 'openai',
+            voices: listOpenaiVoices(),
+            piperInstalled: fs.existsSync(PIPER_BIN)
+        });
+    }
+
+    if (ttsProvider === 'google') {
+        const { listGoogleVoices } = await import('./services/googleTts.js');
+        return res.json({
+            provider: 'google',
+            voices: listGoogleVoices(),
+            piperInstalled: fs.existsSync(PIPER_BIN)
+        });
+    }
+
+    const piperInstalled = fs.existsSync(PIPER_BIN);
+    if (!fs.existsSync(PIPER_DIR)) {
+        return res.json({ provider: 'piper', voices: [], piperInstalled });
+    }
+    let files;
+    try {
+        files = fs.readdirSync(PIPER_DIR).filter(f => f.endsWith('.onnx'));
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+    const voices = files.map(filename => {
+        const sidecar = readVoiceSidecar(filename);
+        const language = sidecar?.language?.code || sidecar?.language?.name_native || 'unknown';
+        const sampleRate = sidecar?.audio?.sample_rate || 22050;
+        const m = filename.match(/^([a-z]{2}_[A-Z]{2})-([^-]+)-/);
+        const speaker = m?.[2] || filename.replace(/\.onnx$/, '');
+        return { filename, displayName: speaker, language, sampleRate };
+    });
+    res.json({ provider: 'piper', voices, piperInstalled });
+});
+
+// Per-provider input-text pricing (USD per 1M characters). Local providers
+// are free. Google Neural2/Chirp HD costs $16/M after the 1M/month free
+// tier, but for cost rollups we charge it from char 1 — the UI shows the
+// free-tier remaining separately so users see the savings explicitly.
+// Stable enough to hardcode; no db-driven price table needed.
+const TTS_COST_PER_M_CHARS = {
+    piper:  0,
+    kokoro: 0,
+    openai: 15,    // tts-1
+    google: 16     // Neural2 / WaveNet — Chirp HD is $30 but we don't model it separately
+};
+
+// Pre-flight voice validation. If the requested voice isn't in the active
+// provider's catalogue (typically because the persona default was saved
+// under a different provider), substitute the provider's hardcoded
+// fallback so the conversation keeps going. Logs a warning so admins can
+// see the misconfiguration in server logs.
+async function resolveTtsVoice(provider, requestedVoice, gender) {
+    let isValid = true;
+    try {
+        switch (provider) {
+            case 'kokoro': {
+                const { isKokoroVoice } = await import('./services/kokoroTts.js');
+                isValid = await isKokoroVoice(requestedVoice);
+                break;
+            }
+            case 'openai': {
+                const { isOpenaiVoice } = await import('./services/openaiTts.js');
+                isValid = isOpenaiVoice(requestedVoice);
+                break;
+            }
+            case 'google': {
+                const { isGoogleVoice } = await import('./services/googleTts.js');
+                isValid = isGoogleVoice(requestedVoice);
+                break;
+            }
+            case 'piper': {
+                isValid = typeof requestedVoice === 'string'
+                    && requestedVoice.endsWith('.onnx')
+                    && fs.existsSync(path.join(PIPER_DIR, requestedVoice));
+                break;
+            }
+            default:
+                return requestedVoice;   // unknown provider; let synth handle it
+        }
+    } catch (err) {
+        console.warn(`[tts-recovery] could not check ${provider} voice catalogue:`, err.message);
+        return requestedVoice;
+    }
+    if (isValid) return requestedVoice;
+
+    const { fallbackVoiceFor } = await import('./services/voiceFallbacks.js');
+    const safeGender = ['male', 'female', 'child'].includes(gender) ? gender : 'female';
+    const fallback = fallbackVoiceFor(provider, safeGender);
+    if (fallback && fallback !== requestedVoice) {
+        console.warn(`[tts-recovery] ${provider} voice "${requestedVoice}" not in catalogue → falling back to "${fallback}"`);
+        return fallback;
+    }
+    return requestedVoice;   // no fallback available — synth will throw UNKNOWN_VOICE
+}
+
+function recordTtsUsage(userId, provider, charCount) {
+    if (!userId || !provider || !charCount) return;
+    const today = new Date().toISOString().slice(0, 10);   // YYYY-MM-DD
+    const rate = TTS_COST_PER_M_CHARS[provider] ?? 0;
+    const cost = (charCount / 1_000_000) * rate;
+    db.run(
+        `INSERT INTO tts_usage (user_id, date, provider, char_count, request_count, estimated_cost, updated_at)
+         VALUES (?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(user_id, date, provider) DO UPDATE SET
+            char_count    = tts_usage.char_count    + excluded.char_count,
+            request_count = tts_usage.request_count + 1,
+            estimated_cost = tts_usage.estimated_cost + excluded.estimated_cost,
+            updated_at    = CURRENT_TIMESTAMP`,
+        [userId, today, provider, charCount, cost],
+        (err) => { if (err) console.warn('[tts-usage] insert failed:', err.message); }
+    );
+}
+
+// Shared PCM-stream framing for any provider that yields { sampleRate, pcm }.
+// Wire format (little-endian throughout):
+//   header: 4 bytes — sampleRate (uint32)
+//   then repeating frames:
+//       4 bytes — pcm byte length (uint32, 0 = end-of-stream)
+//       N bytes — int16 PCM samples
+async function pipePcmStream(res, asyncIter) {
+    res.set('Content-Type', 'application/x-rohy-pcm-stream');
+    res.set('Cache-Control', 'no-store');
+    res.set('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+    if (res.socket) res.socket.setNoDelay(true);
+    let headerSent = false;
+    for await (const { sampleRate, pcm } of asyncIter) {
+        if (!headerSent) {
+            const hdr = Buffer.alloc(4);
+            hdr.writeUInt32LE(sampleRate, 0);
+            res.write(hdr);
+            headerSent = true;
+        }
+        if (!pcm || pcm.length === 0) continue;
+        const lenBuf = Buffer.alloc(4);
+        lenBuf.writeUInt32LE(pcm.length, 0);
+        res.write(lenBuf);
+        res.write(pcm);
+    }
+    if (!headerSent) {
+        const hdr = Buffer.alloc(4);
+        hdr.writeUInt32LE(24000, 0);
+        res.write(hdr);
+    }
+    const eof = Buffer.alloc(4);
+    eof.writeUInt32LE(0, 0);
+    res.write(eof);
+    res.end();
+}
+
+// POST /api/tts - synthesize speech (returns audio/wav OR x-rohy-pcm-stream)
+// Dispatches to:
+//   - Piper  (local subprocess, ~25 MB voices, very fast, robotic)
+//   - Kokoro (kokoro-js, ~330 MB local model, ~0.7× realtime, natural)
+//   - OpenAI (cloud, lowest latency, native streaming PCM at 24 kHz)
+// based on the `tts_provider` platform setting.
+router.post('/tts', authenticateToken, async (req, res) => {
+    const { text, voice: requestedVoice, rate, gender } = req.body || {};
+
+    if (typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'text required' });
+    }
+    if (text.length > TTS_TEXT_LIMIT) {
+        return res.status(400).json({ error: `text exceeds ${TTS_TEXT_LIMIT} character limit` });
+    }
+    if (typeof requestedVoice !== 'string' || !requestedVoice) {
+        return res.status(400).json({ error: 'voice required' });
+    }
+
+    // Provider-override via ?provider=… lets the settings UI preview a voice
+    // without having to switch the platform's active TTS engine. Only honour
+    // the override when it's a known provider; otherwise fall through to
+    // the platform setting.
+    const providerOverride = typeof req.query.provider === 'string' && VOICE_TTS_PROVIDERS.includes(req.query.provider)
+        ? req.query.provider
+        : null;
+    const ttsProvider = providerOverride || (await getPlatformSetting('tts_provider')) || 'piper';
+
+    // Validate the requested voice against the active provider's catalogue
+    // and substitute the provider's hardcoded fallback if it's unknown.
+    // This is the safety net for "persona default was set under a different
+    // provider" — without it, the patient just goes silent on switch.
+    // The original UNKNOWN_VOICE error path inside each synth service still
+    // exists, but we should never hit it from real chats now.
+    const voice = await resolveTtsVoice(ttsProvider, requestedVoice, gender);
+
+    // Record char usage up-front. We charge optimistically — even if the
+    // synth fails partway through, we already paid for the API call
+    // (Google/OpenAI bill on submission, not delivery). For local providers
+    // this is a $0 row that still lets us see usage volume per user.
+    recordTtsUsage(req.user?.id, ttsProvider, text.length);
+
+    if (ttsProvider === 'google') {
+        const { synthesizeGoogleStream, synthesizeGoogleWav } = await import('./services/googleTts.js');
+        const stream = req.query.stream === '1' || req.headers.accept?.includes('application/x-rohy-pcm-stream');
+        // Google supports 0.25–4.0; widened from 0.5–1.5 so an elderly or
+        // respiratory-distressed patient can sound notably slower (~0.7) and
+        // an anxious / tachypneic patient can sound faster (~1.3) without
+        // hitting the cartoon end of the range.
+        const speed = (rate !== undefined && rate !== null && Number.isFinite(parseFloat(rate)))
+            ? Math.max(0.7, Math.min(1.3, parseFloat(rate)))
+            : 1;
+        const apiKey = (await getPlatformSetting('google_tts_api_key')) || '';
+        if (stream) {
+            try {
+                await pipePcmStream(res, synthesizeGoogleStream({ text, voice, speed, apiKey }));
+                return;
+            } catch (err) {
+                console.error('[google-tts] streaming synthesis failed', err);
+                if (!res.headersSent) {
+                    const status = err.code === 'UNKNOWN_VOICE' ? 400
+                        : err.code === 'NO_API_KEY' || err.code === 'BAD_API_KEY' ? 503
+                        : 502;
+                    return res.status(status).json({ error: err.message });
+                }
+                return res.end();
+            }
+        }
+        try {
+            const wav = await synthesizeGoogleWav({ text, voice, speed, apiKey });
+            res.set('Content-Type', 'audio/wav');
+            res.set('Cache-Control', 'no-store');
+            res.set('Content-Length', String(wav.length));
+            return res.end(wav);
+        } catch (err) {
+            console.error('[google-tts] synthesis failed', err);
+            const status = err.code === 'UNKNOWN_VOICE' ? 400
+                : err.code === 'NO_API_KEY' || err.code === 'BAD_API_KEY' ? 503
+                : 502;
+            return res.status(status).json({ error: err.message });
+        }
+    }
+
+    if (ttsProvider === 'openai') {
+        const { synthesizeOpenaiStream, synthesizeOpenaiWav } = await import('./services/openaiTts.js');
+        const stream = req.query.stream === '1' || req.headers.accept?.includes('application/x-rohy-pcm-stream');
+        // OpenAI clamps speed to [0.25, 4.0] internally; we honour the same
+        // 0.5–1.5 window the rest of the platform uses so cases stay portable.
+        const speed = (rate !== undefined && rate !== null && Number.isFinite(parseFloat(rate)))
+            ? Math.max(0.5, Math.min(1.5, parseFloat(rate)))
+            : 1;
+        // Prefer an explicit TTS-only key. Fall back to the platform's existing
+        // OpenAI LLM key when the LLM is also OpenAI, so users who already have
+        // one configured for chat get TTS for free.
+        const explicitTtsKey      = (await getPlatformSetting('openai_tts_api_key')) || '';
+        const platformLlmProvider = (await getPlatformSetting('llm_provider')) || '';
+        const platformLlmApiKey   = (await getPlatformSetting('llm_api_key')) || '';
+        const apiKey = explicitTtsKey
+            || (platformLlmProvider === 'openai' ? platformLlmApiKey : '');
+
+        if (stream) {
+            try {
+                await pipePcmStream(res, synthesizeOpenaiStream({ text, voice, speed, apiKey }));
+                return;
+            } catch (err) {
+                console.error('[openai-tts] streaming synthesis failed', err);
+                if (!res.headersSent) {
+                    const status = err.code === 'UNKNOWN_VOICE' ? 400
+                        : err.code === 'NO_API_KEY' || err.code === 'BAD_API_KEY' ? 503
+                        : 502;
+                    return res.status(status).json({ error: err.message });
+                }
+                return res.end();
+            }
+        }
+        try {
+            const wav = await synthesizeOpenaiWav({ text, voice, speed, apiKey });
+            res.set('Content-Type', 'audio/wav');
+            res.set('Cache-Control', 'no-store');
+            res.set('Content-Length', String(wav.length));
+            return res.end(wav);
+        } catch (err) {
+            console.error('[openai-tts] synthesis failed', err);
+            const status = err.code === 'UNKNOWN_VOICE' ? 400
+                : err.code === 'NO_API_KEY' || err.code === 'BAD_API_KEY' ? 503
+                : 502;
+            return res.status(status).json({ error: err.message });
+        }
+    }
+
+    if (ttsProvider === 'kokoro') {
+        // Streaming path: emit a custom binary frame per Kokoro sentence so
+        // the browser can start playing the first sentence while later ones
+        // are still being synthesized.
+        //
+        // Wire format (little-endian throughout):
+        //   header: 4 bytes — sampleRate (uint32)
+        //   then repeating frames:
+        //       4 bytes — pcm byte length (uint32, 0 = end-of-stream)
+        //       N bytes — int16 PCM samples
+        const stream = req.query.stream === '1' || req.headers.accept?.includes('application/x-rohy-pcm-stream');
+        const speed = (rate !== undefined && rate !== null && Number.isFinite(parseFloat(rate)))
+            ? Math.max(0.5, Math.min(1.5, parseFloat(rate)))
+            : 1;
+
+        if (stream) {
+            // If the client disconnects mid-synthesis, breaking the for-await
+            // tells kokoro-js's generator to clean up; we also stop scheduling
+            // new sentences so we don't burn ~600 MB of inference for nobody.
+            let clientGone = false;
+            req.on('close', () => { if (!res.writableEnded) clientGone = true; });
+            try {
+                const { synthesizeKokoroStream } = await import('./services/kokoroTts.js');
+                res.set('Content-Type', 'application/x-rohy-pcm-stream');
+                res.set('Cache-Control', 'no-store');
+                res.set('X-Accel-Buffering', 'no'); // bypass nginx buffering if proxied
+                res.flushHeaders?.();
+                if (res.socket) res.socket.setNoDelay(true);
+                let headerSent = false;
+                for await (const { sampleRate, pcm } of synthesizeKokoroStream({ text, voice, speed })) {
+                    if (clientGone) break;
+                    if (!headerSent) {
+                        const hdr = Buffer.alloc(4);
+                        hdr.writeUInt32LE(sampleRate, 0);
+                        res.write(hdr);
+                        headerSent = true;
+                    }
+                    const lenBuf = Buffer.alloc(4);
+                    lenBuf.writeUInt32LE(pcm.length, 0);
+                    res.write(lenBuf);
+                    res.write(pcm);
+                }
+                if (clientGone) return; // socket already closed; no point writing EOF
+                if (!headerSent) {
+                    // No chunks at all — client expects header. Send dummy.
+                    const hdr = Buffer.alloc(4);
+                    hdr.writeUInt32LE(24000, 0);
+                    res.write(hdr);
+                }
+                const eof = Buffer.alloc(4);
+                eof.writeUInt32LE(0, 0);
+                res.write(eof);
+                return res.end();
+            } catch (err) {
+                console.error('[kokoro] streaming synthesis failed', err);
+                if (!res.headersSent && !clientGone) {
+                    // UNKNOWN_VOICE is safe to surface (just names the bad voice).
+                    // Anything else gets a generic message; details stay in the log.
+                    const status = err.code === 'UNKNOWN_VOICE' ? 400 : 500;
+                    const msg = err.code === 'UNKNOWN_VOICE' ? err.message : 'Kokoro synthesis failed';
+                    return res.status(status).json({ error: msg });
+                }
+                if (!res.writableEnded) return res.end();
+                return;
+            }
+        }
+
+        // Non-streaming fallback: full WAV in one response.
+        try {
+            const { synthesizeKokoro } = await import('./services/kokoroTts.js');
+            const wav = await synthesizeKokoro({ text, voice, speed });
+            res.set('Content-Type', 'audio/wav');
+            res.set('Cache-Control', 'no-store');
+            res.set('Content-Length', String(wav.length));
+            return res.end(wav);
+        } catch (err) {
+            console.error('[kokoro] synthesis failed', err);
+            const msg = err.code === 'UNKNOWN_VOICE' ? err.message : 'Kokoro synthesis failed';
+            return res.status(err.code === 'UNKNOWN_VOICE' ? 400 : 500).json({ error: msg });
+        }
+    }
+
+    // ---- Piper path ----
+    if (voice.includes('/') || voice.includes('\\') || voice.includes('..') || !voice.endsWith('.onnx')) {
+        return res.status(400).json({ error: 'invalid voice filename' });
+    }
+
+    const voiceFile = path.join(PIPER_DIR, voice);
+    if (!voiceFile.startsWith(PIPER_DIR + path.sep) || !fs.existsSync(voiceFile)) {
+        return res.status(400).json({ error: 'unknown voice' });
+    }
+    // Resolve symlinks: a planted symlink within PIPER_DIR pointing outside
+    // would otherwise pass startsWith but feed Piper an arbitrary file path.
+    // Realistic threat is low (needs write access to PIPER_DIR), but the
+    // hardening is one syscall.
+    try {
+        const realVoiceFile = fs.realpathSync(voiceFile);
+        const realPiperDir = fs.realpathSync(PIPER_DIR);
+        if (!realVoiceFile.startsWith(realPiperDir + path.sep)) {
+            return res.status(400).json({ error: 'unknown voice' });
+        }
+    } catch {
+        return res.status(400).json({ error: 'unknown voice' });
+    }
+    if (!fs.existsSync(PIPER_BIN)) {
+        return res.status(503).json({ error: 'Piper TTS binary not installed on server' });
+    }
+
+    const sidecar = readVoiceSidecar(voice);
+    const sampleRate = sidecar?.audio?.sample_rate || 22050;
+
+    // piper-tts 1.x (Python rewrite) truncates stdin synthesis to ~0.6s
+    // regardless of input length. The `-i FILE` path doesn't have this bug,
+    // so we write the prompt to a temp file and feed it that way.
+    const tmpDir = os.tmpdir();
+    const tmpFile = path.join(tmpDir, `rohy-tts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`);
+    try {
+        fs.writeFileSync(tmpFile, text, 'utf8');
+    } catch (err) {
+        console.error('[piper] failed to write temp input', err);
+        return res.status(500).json({ error: 'Failed to prepare TTS input' });
+    }
+
+    const args = ['--model', voiceFile, '-i', tmpFile, '--output-raw', '--quiet'];
+    if (rate !== undefined && rate !== null) {
+        const r = parseFloat(rate);
+        if (Number.isFinite(r) && r >= 0.5 && r <= 1.5) {
+            args.push('--length-scale', String(1 / r));
+        }
+    }
+
+    let piper;
+    try {
+        piper = spawn(PIPER_BIN, args);
+    } catch (err) {
+        console.error('[piper] spawn failed', err);
+        try { fs.unlinkSync(tmpFile); } catch { /* noop */ }
+        return res.status(500).json({ error: 'Failed to start Piper' });
+    }
+
+    const chunks = [];
+    let totalLen = 0;
+    let stderrBuf = '';
+    let aborted = false;
+    let clientGone = false;
+
+    const cleanup = () => {
+        try { fs.unlinkSync(tmpFile); } catch { /* noop */ }
+    };
+
+    // If the client disconnects before piper finishes, kill the subprocess so
+    // we don't burn CPU and disk on a synthesis nobody's listening to. The
+    // close handler will fire afterwards and run cleanup().
+    req.on('close', () => {
+        if (res.writableEnded) return;
+        clientGone = true;
+        aborted = true;
+        try { piper.kill('SIGTERM'); } catch { /* noop */ }
+    });
+
+    piper.stdout.on('data', (c) => {
+        chunks.push(c);
+        totalLen += c.length;
+        if (totalLen > 50 * 1024 * 1024) {
+            aborted = true;
+            try { piper.kill('SIGTERM'); } catch { /* noop */ }
+        }
+    });
+    piper.stderr.on('data', (d) => { stderrBuf += d.toString(); });
+    piper.on('error', (err) => {
+        console.error('[piper] process error', err);
+        cleanup();
+        if (!res.headersSent && !clientGone) res.status(500).json({ error: 'Piper process error' });
+    });
+    piper.on('close', (code) => {
+        cleanup();
+        if (clientGone || res.headersSent) return;
+        if (aborted) return res.status(500).json({ error: 'TTS output exceeded size limit' });
+        if (code !== 0) {
+            console.warn('[piper] exited non-zero', code, stderrBuf.slice(0, 500));
+            return res.status(500).json({ error: 'Piper synthesis failed' });
+        }
+        const pcm = Buffer.concat(chunks, totalLen);
+        const header = buildWavHeader(pcm.length, sampleRate);
+        res.set('Content-Type', 'audio/wav');
+        res.set('Cache-Control', 'no-store');
+        res.set('Content-Length', String(header.length + pcm.length));
+        res.write(header);
+        res.end(pcm);
+    });
+});
+
 // GET /api/llm/usage - Get current user's usage
 router.get('/llm/usage', authenticateToken, async (req, res) => {
     try {
@@ -6324,13 +7656,15 @@ router.put('/llm/pricing', authenticateToken, requireAdmin, async (req, res) => 
 // ============================================
 
 // POST /api/patient-record/sync - Sync patient record (events + document)
-router.post('/patient-record/sync', async (req, res) => {
+router.post('/patient-record/sync', authenticateToken, async (req, res) => {
     try {
         const { session_id, record_id, events, document, patient_info, current_state, events_count } = req.body;
 
         if (!session_id || !record_id) {
             return res.status(400).json({ error: 'session_id and record_id are required' });
         }
+
+        if (!await verifySessionOwnership(session_id, req.user, res)) return;
 
         // Insert new events
         if (events && events.length > 0) {
@@ -6397,9 +7731,11 @@ router.post('/patient-record/sync', async (req, res) => {
 });
 
 // GET /api/patient-record/:sessionId - Get patient record document
-router.get('/patient-record/:sessionId', async (req, res) => {
+router.get('/patient-record/:sessionId', authenticateToken, async (req, res) => {
     try {
         const { sessionId } = req.params;
+
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
         const record = await new Promise((resolve, reject) => {
             db.get(
@@ -6433,10 +7769,12 @@ router.get('/patient-record/:sessionId', async (req, res) => {
 });
 
 // GET /api/patient-record/:sessionId/events - Get patient record events
-router.get('/patient-record/:sessionId/events', async (req, res) => {
+router.get('/patient-record/:sessionId/events', authenticateToken, async (req, res) => {
     try {
         const { sessionId } = req.params;
         const { verb } = req.query;
+
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
         let query = 'SELECT * FROM patient_record_events WHERE session_id = ?';
         const params = [sessionId];
@@ -6470,9 +7808,11 @@ router.get('/patient-record/:sessionId/events', async (req, res) => {
 });
 
 // DELETE /api/patient-record/:sessionId - Delete patient record
-router.delete('/patient-record/:sessionId', async (req, res) => {
+router.delete('/patient-record/:sessionId', authenticateToken, async (req, res) => {
     try {
         const { sessionId } = req.params;
+
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
         // Delete events
         await new Promise((resolve, reject) => {
@@ -6498,9 +7838,11 @@ router.delete('/patient-record/:sessionId', async (req, res) => {
 });
 
 // GET /api/patient-record/:sessionId/summary - Get patient record summary
-router.get('/patient-record/:sessionId/summary', async (req, res) => {
+router.get('/patient-record/:sessionId/summary', authenticateToken, async (req, res) => {
     try {
         const { sessionId } = req.params;
+
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
         // Get document
         const record = await new Promise((resolve, reject) => {

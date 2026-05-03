@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Talking Avatars Kit — standalone demo</title>
+<style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; padding: 0; height: 100%; background: #0a0a0a; color: #f4f4f5;
+        font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { display: grid; grid-template-columns: 360px 1fr; gap: 24px; padding: 24px; height: 100vh; box-sizing: border-box; }
+    #canvas-host { width: 100%; height: 100%; background: #18181b; border-radius: 12px; overflow: hidden; position: relative; }
+    canvas { display: block; }
+    h1 { font-size: 18px; margin: 0 0 6px; }
+    .panel { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    label { font-size: 12px; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.06em; }
+    input[type="text"], select, textarea {
+        background: #18181b; color: #f4f4f5; border: 1px solid #27272a; border-radius: 8px;
+        padding: 8px 10px; font: inherit; outline: none; }
+    input[type="text"]:focus, select:focus, textarea:focus { border-color: #6366f1; }
+    textarea { resize: vertical; min-height: 96px; }
+    button { background: #4f46e5; color: white; border: 0; border-radius: 8px; padding: 10px 14px;
+        font: 600 14px/1 ui-sans-serif, system-ui; cursor: pointer; transition: background .15s; }
+    button:hover { background: #4338ca; }
+    button:disabled { background: #3f3f46; cursor: not-allowed; }
+    .row { display: flex; gap: 8px; }
+    .row > * { flex: 1; }
+    #log { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 10px;
+        font: 12px/1.5 ui-monospace, monospace; color: #a1a1aa; height: 220px; overflow: auto;
+        white-space: pre-wrap; word-break: break-word; }
+    .ring { position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+        box-shadow: inset 0 0 0 0 transparent; transition: box-shadow .25s; }
+    .ring.speaking { box-shadow: inset 0 0 0 4px #3b82f6, inset 0 0 32px #3b82f680; }
+    .ring.listening { box-shadow: inset 0 0 0 4px #22c55e; }
+    .hint { font-size: 12px; color: #71717a; }
+    .hint code { color: #d4d4d8; }
+</style>
+
+<!-- All deps via esm.sh CDN. Pinning to versions known to work with the kit. -->
+<script type="importmap">
+{
+    "imports": {
+        "three":              "https://esm.sh/three@0.160.0",
+        "three/addons/":      "https://esm.sh/three@0.160.0/examples/jsm/",
+        "wawa-lipsync":       "https://esm.sh/wawa-lipsync@0.0.7"
+    }
+}
+</script>
+</head>
+<body>
+
+<main>
+    <section class="panel">
+        <h1>Talking Avatars — standalone demo</h1>
+        <p class="hint">
+            Sanity-checks the kit end-to-end without React. Loads a GLB, calls
+            <code>/api/tts</code>, drives morph targets from
+            <code>wawa-lipsync</code>'s FFT analyser. Run the kit's
+            <code>server/ttsRoute.js</code> on the same origin first, or set the
+            API base below.
+        </p>
+
+        <label for="api">API base (empty = same origin)</label>
+        <input id="api" type="text" value="" placeholder="http://localhost:3000" />
+
+        <label for="glb">Avatar GLB URL</label>
+        <input id="glb" type="text" value="../glbs/avatarsdk.glb" />
+
+        <label for="provider">Provider</label>
+        <div class="row">
+            <select id="provider">
+                <option value="kokoro">Kokoro (local, free)</option>
+                <option value="google">Google (cloud, needs key)</option>
+            </select>
+            <select id="voice">
+                <option value="af_bella">af_bella (Kokoro female)</option>
+                <option value="am_adam">am_adam (Kokoro male)</option>
+                <option value="af_sky">af_sky (Kokoro female)</option>
+                <option value="en-US-Chirp3-HD-Aoede">Chirp3-HD-Aoede (Google female)</option>
+                <option value="en-US-Chirp3-HD-Charon">Chirp3-HD-Charon (Google male)</option>
+            </select>
+        </div>
+
+        <label for="text">Text</label>
+        <textarea id="text">Hello. I'm not feeling great today — there's a sharp pain in my chest, and it started a couple of hours ago.</textarea>
+
+        <div class="row">
+            <button id="speak">Speak</button>
+            <button id="cancel" disabled>Cancel</button>
+        </div>
+
+        <div id="log"></div>
+    </section>
+
+    <div id="canvas-host">
+        <div id="ring" class="ring"></div>
+    </div>
+</main>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { Lipsync } from 'wawa-lipsync';
+
+// -------- Helpers --------------------------------------------------------
+
+const $ = (id) => document.getElementById(id);
+const log = (msg, ...rest) => {
+    const t = new Date().toLocaleTimeString();
+    const extra = rest.length ? ' ' + rest.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ') : '';
+    $('log').textContent += `[${t}] ${msg}${extra}\n`;
+    $('log').scrollTop = $('log').scrollHeight;
+};
+
+// Canonical 15-viseme Oculus order. Matches client/visemes.js in the kit.
+const VISEME_KEYS = [
+    'viseme_sil', 'viseme_PP', 'viseme_FF', 'viseme_TH', 'viseme_DD',
+    'viseme_kk',  'viseme_CH', 'viseme_SS', 'viseme_nn', 'viseme_RR',
+    'viseme_aa',  'viseme_E',  'viseme_I',  'viseme_O',  'viseme_U'
+];
+
+// -------- 3D scene -------------------------------------------------------
+
+const host = $('canvas-host');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+host.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+const dl = new THREE.DirectionalLight(0xffffff, 1.2);
+dl.position.set(2, 3, 2);
+scene.add(dl);
+
+const camera = new THREE.PerspectiveCamera(22, 1, 0.05, 100);
+camera.position.set(0, 1.62, 1.05);
+camera.lookAt(0, 1.62, 0);
+
+function resize() {
+    const r = host.getBoundingClientRect();
+    renderer.setSize(r.width, r.height, false);
+    camera.aspect = r.width / r.height;
+    camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(host);
+resize();
+
+// Currently-loaded mesh references with morph data. Filled by loadAvatar().
+let morphTargets = [];
+
+// Per-frame *target* viseme weights driven by wawa-lipsync's dominant viseme.
+// Same critically-damped interpolation as client/PatientAvatar.jsx.
+const visemesRef = { current: { viseme_sil: 1 } };
+const blinkRef = { current: false };
+
+const clock = new THREE.Clock();
+function tick() {
+    const delta = clock.getDelta();
+    const target = visemesRef.current || {};
+    const blink = blinkRef.current ? 1 : 0;
+    const decay = 8 * delta;
+    const rise  = 12 * delta;
+
+    for (const mesh of morphTargets) {
+        const dict = mesh.morphTargetDictionary;
+        const infl = mesh.morphTargetInfluences;
+        if (!dict || !infl) continue;
+        for (const key of VISEME_KEYS) {
+            const idx = dict[key];
+            if (idx == null) continue;
+            const want = target[key] || 0;
+            const cur = infl[idx];
+            infl[idx] = want > cur ? Math.min(want, cur + rise) : Math.max(want, cur - decay);
+        }
+        const lIdx = dict.eyeBlinkLeft  ?? dict.eyesClosed;
+        const rIdx = dict.eyeBlinkRight ?? dict.eyesClosed;
+        if (lIdx != null) infl[lIdx] = blink;
+        if (rIdx != null && rIdx !== lIdx) infl[rIdx] = blink;
+    }
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+// Procedural blink. Same scheduler as PatientAvatar.jsx.
+(function scheduleBlink() {
+    const wait = 3500 + Math.random() * 2000;
+    setTimeout(() => {
+        blinkRef.current = true;
+        setTimeout(() => { blinkRef.current = false; scheduleBlink(); }, 130);
+    }, wait);
+})();
+
+// -------- GLB loader -----------------------------------------------------
+
+const loader = new GLTFLoader();
+let currentModel = null;
+
+async function loadAvatar(url) {
+    log('loading GLB', url);
+    if (currentModel) scene.remove(currentModel);
+    return new Promise((resolve, reject) => {
+        loader.load(url, (gltf) => {
+            const model = gltf.scene;
+            scene.add(model);
+            currentModel = model;
+            morphTargets = [];
+            model.traverse((obj) => {
+                if (obj.morphTargetDictionary && obj.morphTargetInfluences) {
+                    morphTargets.push(obj);
+                }
+            });
+            const morphCount = morphTargets.reduce((n, m) => n + Object.keys(m.morphTargetDictionary).length, 0);
+            log(`GLB loaded — ${morphTargets.length} mesh(es), ${morphCount} morph targets total`);
+            resolve(model);
+        }, undefined, (err) => {
+            log('GLB load FAILED:', err.message || err);
+            reject(err);
+        });
+    });
+}
+
+// -------- TTS + lipsync --------------------------------------------------
+
+const SILENT_VISEME = { viseme_sil: 1 };
+
+let lipsync = null;
+let activeSources = [];
+let rafId = null;
+let abortController = null;
+
+function ensureLipsync() {
+    if (lipsync) return lipsync;
+    lipsync = new Lipsync({ fftSize: 1024, historySize: 8 });
+    lipsync.analyser.connect(lipsync.audioContext.destination);
+    return lipsync;
+}
+
+function teardown() {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    for (const s of activeSources) {
+        try { s.stop(); } catch {}
+        try { s.disconnect(); } catch {}
+    }
+    activeSources = [];
+    if (abortController) {
+        try { abortController.abort(); } catch {}
+        abortController = null;
+    }
+    visemesRef.current = SILENT_VISEME;
+    setSpeakingUI(false);
+    $('cancel').disabled = true;
+    $('speak').disabled = false;
+}
+
+function setSpeakingUI(on) {
+    $('ring').classList.toggle('speaking', !!on);
+}
+
+// Read [4-byte LE length][N bytes pcm] frames from a fetch ReadableStream.
+async function* readPcmFrames(reader, sampleRateRef) {
+    let buffer = new Uint8Array(0);
+    const need = async (n) => {
+        while (buffer.length < n) {
+            const { value, done } = await reader.read();
+            if (done) return false;
+            const merged = new Uint8Array(buffer.length + value.length);
+            merged.set(buffer, 0);
+            merged.set(value, buffer.length);
+            buffer = merged;
+        }
+        return true;
+    };
+    if (!(await need(4))) return;
+    sampleRateRef.current = new DataView(buffer.buffer, buffer.byteOffset, 4).getUint32(0, true);
+    buffer = buffer.slice(4);
+    while (true) {
+        if (!(await need(4))) return;
+        const len = new DataView(buffer.buffer, buffer.byteOffset, 4).getUint32(0, true);
+        buffer = buffer.slice(4);
+        if (len === 0) return;
+        if (!(await need(len))) return;
+        yield buffer.slice(0, len);
+        buffer = buffer.slice(len);
+    }
+}
+
+function int16BytesToBuffer(audioCtx, pcmBytes, sampleRate) {
+    const numSamples = Math.floor(pcmBytes.byteLength / 2);
+    const buf = audioCtx.createBuffer(1, numSamples, sampleRate);
+    const ch = buf.getChannelData(0);
+    const view = new DataView(pcmBytes.buffer, pcmBytes.byteOffset, pcmBytes.byteLength);
+    for (let i = 0; i < numSamples; i++) {
+        const s = view.getInt16(i * 2, true);
+        ch[i] = s < 0 ? s / 0x8000 : s / 0x7fff;
+    }
+    return buf;
+}
+
+async function speak() {
+    teardown();
+    const text = $('text').value.trim();
+    if (!text) return;
+    $('speak').disabled = true;
+    $('cancel').disabled = false;
+    setSpeakingUI(true);
+
+    const apiBase = $('api').value.trim();
+    const provider = $('provider').value;
+    const voice = $('voice').value;
+    abortController = new AbortController();
+
+    const apiUrl = (path) => `${apiBase}${path.startsWith('/') ? path : `/${path}`}`;
+    const url = `${apiUrl('/api/tts')}?stream=1&provider=${provider}`;
+
+    log(`POST ${url}  voice=${voice}`);
+
+    let res;
+    try {
+        res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/x-rohy-pcm-stream',
+            },
+            body: JSON.stringify({ text, voice }),
+            signal: abortController.signal,
+        });
+    } catch (err) {
+        log('fetch failed:', err.message);
+        teardown();
+        return;
+    }
+    if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try { const j = await res.json(); if (j?.error) msg = j.error; } catch {}
+        log('server error:', msg);
+        teardown();
+        return;
+    }
+
+    const ctype = res.headers.get('Content-Type') || '';
+    const ls = ensureLipsync();
+    const { audioContext, analyser } = ls;
+    if (audioContext.state === 'suspended') await audioContext.resume();
+
+    let nextStartTime = audioContext.currentTime;
+    let endTime = nextStartTime;
+    let viseme_last = null;
+    if (!rafId) {
+        const lipTick = () => {
+            ls.processAudio();
+            const v = ls.viseme;
+            if (v !== viseme_last) {
+                viseme_last = v;
+                visemesRef.current = (v === 'viseme_sil') ? SILENT_VISEME : { [v]: 1 };
+            }
+            rafId = requestAnimationFrame(lipTick);
+        };
+        rafId = requestAnimationFrame(lipTick);
+    }
+
+    const scheduleChunk = (audioBuffer) => {
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(analyser);
+        const startAt = Math.max(audioContext.currentTime, nextStartTime);
+        source.start(startAt);
+        nextStartTime = startAt + audioBuffer.duration;
+        endTime = nextStartTime;
+        activeSources.push(source);
+        source.onended = () => {
+            const i = activeSources.indexOf(source);
+            if (i >= 0) activeSources.splice(i, 1);
+            try { source.disconnect(); } catch {}
+        };
+    };
+
+    if (ctype.includes('application/x-rohy-pcm-stream')) {
+        const sampleRateRef = { current: 24000 };
+        const reader = res.body.getReader();
+        try {
+            for await (const pcm of readPcmFrames(reader, sampleRateRef)) {
+                if (abortController.signal.aborted) return;
+                scheduleChunk(int16BytesToBuffer(audioContext, pcm, sampleRateRef.current));
+            }
+            log('stream complete; waiting for audio to drain');
+        } finally {
+            try { reader.releaseLock(); } catch {}
+        }
+    } else if (ctype.includes('audio/wav')) {
+        const arrayBuffer = await res.arrayBuffer();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+        scheduleChunk(audioBuffer);
+    } else {
+        log('unexpected Content-Type:', ctype);
+        teardown();
+        return;
+    }
+
+    // Wait for audio to drain, then end UI.
+    const waitMs = (endTime - audioContext.currentTime) * 1000 + 80;
+    setTimeout(() => {
+        if (!abortController?.signal.aborted) teardown();
+    }, Math.max(50, waitMs));
+}
+
+$('speak').onclick = speak;
+$('cancel').onclick = teardown;
+
+// -------- Boot ----------------------------------------------------------
+
+loadAvatar($('glb').value).catch(() => {});
+$('glb').addEventListener('change', () => loadAvatar($('glb').value).catch(() => {}));
+
+log('demo ready. type something and click Speak.');
+log('expecting /api/tts at:', $('api').value || '(same origin)');
+</script>
+</body>
+</html>

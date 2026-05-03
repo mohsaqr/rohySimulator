@@ -55,7 +55,15 @@ export const requireAuth = (req, res, next) => {
     next();
 };
 
-// Helper function to generate JWT token
+// Helper function to generate JWT token.
+//
+// Default TTL is 4h. Tokens are not server-revocable today (the
+// `active_sessions` table tracks them but `authenticateToken` doesn't
+// consult it), so a long TTL means a demoted/disabled user keeps their
+// access until the token expires. 4h limits that blast radius without
+// being so short that users are constantly re-logging in.
+//
+// Override via JWT_EXPIRY env var (e.g. '7d' for a kiosk deployment).
 export const generateToken = (user) => {
     const payload = {
         id: user.id,
@@ -63,5 +71,5 @@ export const generateToken = (user) => {
         email: user.email,
         role: user.role
     };
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: process.env.JWT_EXPIRY || '24h' });
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: process.env.JWT_EXPIRY || '4h' });
 };
