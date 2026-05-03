@@ -2278,8 +2278,14 @@ router.get('/alarms/config/:userId', authenticateToken, (req, res) => {
     });
 });
 
-// POST /api/alarms/config - Save alarm config for user
-router.post('/alarms/config', authenticateToken, (req, res) => {
+// POST /api/alarms/config - Save alarm config (global default or per-user)
+//
+// Admin-only because the only client today (useAlarms.saveConfig) writes
+// global defaults (user_id: null), which affect every user. Without this
+// guard, any authenticated student could overwrite the global thresholds.
+// The PatientMonitor UI already hides the Save button for non-admins; this
+// closes the corresponding server-side gap.
+router.post('/alarms/config', authenticateToken, requireAdmin, (req, res) => {
     const { user_id, vital_sign, high_threshold, low_threshold, enabled } = req.body;
     
     // Check if config exists
