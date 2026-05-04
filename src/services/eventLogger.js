@@ -182,6 +182,7 @@ export const COMPONENTS = {
     INVESTIGATION_PANEL: 'InvestigationPanel', PATIENT_INFO_PANEL: 'PatientInfoPanel',
     MEDICATION_PANEL: 'MedicationPanel', TREATMENT_PANEL: 'TreatmentPanel',
     SESSION_LOG_VIEWER: 'SessionLogViewer', VITAL_TRENDS: 'VitalTrends',
+    DISCUSSION_SCREEN: 'DiscussionScreen',
 };
 
 const getVerbMetadata = (verb) => VERB_METADATA[verb] || { severity: SEVERITY.INFO, category: CATEGORIES.NAVIGATION };

@@ -3632,7 +3632,8 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${agent.agent_type === 'nurse' ? 'bg-blue-900/50 text-blue-400' :
                                         agent.agent_type === 'consultant' ? 'bg-green-900/50 text-green-400' :
                                             agent.agent_type === 'relative' ? 'bg-amber-900/50 text-amber-400' :
-                                                'bg-neutral-800 text-neutral-400'
+                                                agent.agent_type === 'discussant' ? 'bg-indigo-900/50 text-indigo-400' :
+                                                    'bg-neutral-800 text-neutral-400'
                                         }`}>
                                         <Users className="w-5 h-5" />
                                     </div>

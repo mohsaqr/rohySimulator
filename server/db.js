@@ -122,14 +122,52 @@ Respond based on the patient information available. If specific family relations
                 can_be_paged: false,
                 response_time: { min: 0, max: 0 }
             })
+        },
+        {
+            agent_type: 'discussant',
+            name: 'Default Discussant',
+            role_title: 'Case Debrief Tutor',
+            avatar_url: 'rb_medical_male_03.glb',
+            system_prompt: `You are a senior clinician-educator running a Socratic case debrief with a learner who has just finished managing this patient. You are warm, intellectually honest, and unhurried.
+
+Your role:
+- You discuss the case the learner has just completed — not the live case (that's done)
+- You probe the learner's reasoning: why they ordered what they ordered, what they considered, what they ruled out
+- You highlight strong decisions and gently surface missed opportunities
+- You ask before you tell — never lecture when a question would teach more
+- You connect the case to underlying physiology, evidence, and clinical patterns
+
+Communication style:
+- Curious and conversational, not interrogative
+- Ask open-ended questions: "What were you thinking when…", "What would you do differently…", "What did you notice that pulled you toward that diagnosis?"
+- When the learner is stuck, scaffold (small hint) rather than giving the answer
+- Validate effort, but don't paper over errors — name them clearly when relevant
+- Keep responses concise; this is a dialogue, not a lecture
+
+Critical behaviors:
+- You have full access to the case (patient summary, vitals trajectory, orders, results) when context_filter='full'
+- Anchor your questions in what actually happened in this case — reference specific decisions and timestamps when useful
+- If the learner asks you to "just tell me", briefly answer, then redirect to a question that deepens their understanding
+- Wrap up when the learner signals they're done — offer one or two key takeaways, not ten
+
+You are a tutor, not a judge. The goal is learning, not assessment.`,
+            context_filter: 'full',
+            communication_style: 'educational',
+            is_default: 1,
+            config: JSON.stringify({
+                typical_availability: 'on-call',
+                can_be_paged: false,
+                response_time: { min: 0, max: 0 },
+                unlock_trigger: 'after_case_ended'
+            })
         }
     ];
 
     // Insert default agents if they don't exist
     const stmt = db.prepare(`
         INSERT OR IGNORE INTO agent_templates
-        (agent_type, name, role_title, system_prompt, context_filter, communication_style, is_default, config)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style, is_default, config)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     defaultAgents.forEach(agent => {
@@ -137,6 +175,7 @@ Respond based on the patient information available. If specific family relations
             agent.agent_type,
             agent.name,
             agent.role_title,
+            agent.avatar_url || null,
             agent.system_prompt,
             agent.context_filter,
             agent.communication_style,
@@ -148,6 +187,16 @@ Respond based on the patient information available. If specific family relations
     stmt.finalize(() => {
         console.log('Default agent personas seeded.');
     });
+
+    // Backfill avatar_url for any existing default discussant row that was
+    // seeded before this column was populated. Idempotent — only updates rows
+    // currently NULL.
+    db.run(
+        `UPDATE agent_templates SET avatar_url = ?
+         WHERE agent_type = 'discussant' AND name = 'Default Discussant'
+           AND (avatar_url IS NULL OR avatar_url = '')`,
+        ['rb_medical_male_03.glb']
+    );
 }
 
 // Seed default treatment effects for pharmacokinetic simulation
@@ -2095,6 +2144,19 @@ function initDb() {
         db.run(`CREATE INDEX IF NOT EXISTS idx_agent_conv_session ON agent_conversations(session_id, agent_type)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_agent_state_session ON agent_session_state(session_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_team_log_session ON team_communications_log(session_id)`);
+
+        // Discussion notes - one row per (session, user). Free-form notes the
+        // learner writes during a case-debrief discussion. Per-user scoped so
+        // multiple students reviewing the same session don't see each other's.
+        db.run(`CREATE TABLE IF NOT EXISTS session_notes (
+            session_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            note_text TEXT NOT NULL DEFAULT '',
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (session_id, user_id),
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )`);
 
         // ==================== TREATMENT MODULE TABLES ====================
 

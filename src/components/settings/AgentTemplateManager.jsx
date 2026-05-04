@@ -23,6 +23,7 @@ const AGENT_TYPES = [
   { value: 'relative', label: 'Relative', description: 'Patient family members' },
   { value: 'pharmacist', label: 'Pharmacist', description: 'Pharmacy consultation' },
   { value: 'technician', label: 'Technician', description: 'Lab/Radiology technicians' },
+  { value: 'discussant', label: 'Discussant', description: 'Case debrief tutor (post-case discussion)' },
   { value: 'other', label: 'Other', description: 'Custom agent type' }
 ];
 
@@ -816,6 +817,7 @@ export default function AgentTemplateManager() {
                     template.agent_type === 'nurse' ? 'bg-blue-900/50 text-blue-400' :
                     template.agent_type === 'consultant' ? 'bg-green-900/50 text-green-400' :
                     template.agent_type === 'relative' ? 'bg-amber-900/50 text-amber-400' :
+                    template.agent_type === 'discussant' ? 'bg-indigo-900/50 text-indigo-400' :
                     'bg-neutral-800 text-neutral-400'
                   }`}>
                     <Users className="w-5 h-5" />

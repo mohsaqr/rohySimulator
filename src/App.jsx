@@ -24,6 +24,7 @@ import { Settings, X, LogOut, User, RotateCcw, ChevronDown, Activity } from 'luc
 import ManikinPanel from './components/examination/ManikinPanel';
 import BodyMapDebug from './components/examination/BodyMapDebug';
 import TnaDashboard from './components/analytics/tna/TnaDashboard';
+import DiscussionScreen from './components/discussion/DiscussionScreen';
 
 // Session expiry time in milliseconds (default 30 minutes)
 const SESSION_EXPIRY_MS = parseInt(localStorage.getItem('rohy_session_expiry_minutes') || '30') * 60 * 1000;
@@ -34,6 +35,8 @@ function MainApp() {
    const [showUserProfile, setShowUserProfile] = useState(false);
    const [showUserMenu, setShowUserMenu] = useState(false);
    const [showTnaAnalytics, setShowTnaAnalytics] = useState(false);
+   const [showDiscussion, setShowDiscussion] = useState(false);
+   const [caseEnded, setCaseEnded] = useState(false);
    const { user, logout, isAdmin } = useAuth();
    const toast = useToast();
    const [sessionValidated, setSessionValidated] = useState(false);
@@ -208,10 +211,24 @@ function MainApp() {
             console.error('Failed to end session in backend:', err);
          }
       }
-      localStorage.removeItem('rohy_active_session');
-      localStorage.removeItem('rohy_chat_history');
-      setActiveCase(null);
-      setSessionId(null);
+      // Don't wipe the session yet — flip into "ended" mode and open the
+      // debrief discussion screen. handleCloseDiscussion does the actual
+      // cleanup once the learner is done with the debrief.
+      setCaseEnded(true);
+      setShowDiscussion(true);
+   };
+
+   const handleCloseDiscussion = () => {
+      setShowDiscussion(false);
+      // If the user only opened the discussion mid-case (unlock_trigger='always')
+      // and didn't end the case, leave the session intact.
+      if (caseEnded) {
+         localStorage.removeItem('rohy_active_session');
+         localStorage.removeItem('rohy_chat_history');
+         setActiveCase(null);
+         setSessionId(null);
+         setCaseEnded(false);
+      }
    };
 
    const handleEndConfirmCancel = () => {
@@ -271,6 +288,17 @@ function MainApp() {
          <div className="h-screen w-screen overflow-hidden">
             <TnaDashboard onClose={() => setShowTnaAnalytics(false)} />
          </div>
+      );
+   }
+
+   // Show full-page discussion screen
+   if (showDiscussion) {
+      return (
+         <DiscussionScreen
+            sessionId={sessionId}
+            activeCase={activeCase}
+            onClose={handleCloseDiscussion}
+         />
       );
    }
 
@@ -384,7 +412,7 @@ function MainApp() {
                         title="End simulation session"
                      >
                         <X className="w-3 h-3" />
-                        End
+                        End & Debrief
                      </button>
                   </div>
                )}

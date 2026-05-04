@@ -9290,5 +9290,49 @@ router.get('/questionnaire-responses', authenticateToken, (req, res) => {
     });
 });
 
+// ==================== DISCUSSION NOTES ====================
+// Free-form notes the learner writes during the case-debrief discussion screen.
+// Per-user scoped: each user gets their own row per session. Distinct from
+// clinical_notes (charted patient notes) which uses a separate /notes route.
+
+// GET /sessions/:sessionId/discussion-notes — current user's discussion note
+router.get('/sessions/:sessionId/discussion-notes', authenticateToken, async (req, res) => {
+    const sessionId = parseInt(req.params.sessionId, 10);
+    if (!Number.isInteger(sessionId)) {
+        return res.status(400).json({ error: 'Invalid session id' });
+    }
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+    db.get(
+        `SELECT note_text, updated_at FROM session_notes WHERE session_id = ? AND user_id = ?`,
+        [sessionId, req.user.id],
+        (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ note_text: row?.note_text || '', updated_at: row?.updated_at || null });
+        }
+    );
+});
+
+// PUT /sessions/:sessionId/discussion-notes — upsert current user's note
+router.put('/sessions/:sessionId/discussion-notes', authenticateToken, async (req, res) => {
+    const sessionId = parseInt(req.params.sessionId, 10);
+    if (!Number.isInteger(sessionId)) {
+        return res.status(400).json({ error: 'Invalid session id' });
+    }
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+    const noteText = typeof req.body?.note_text === 'string' ? req.body.note_text : '';
+    db.run(
+        `INSERT INTO session_notes (session_id, user_id, note_text, updated_at)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(session_id, user_id) DO UPDATE SET
+            note_text = excluded.note_text,
+            updated_at = CURRENT_TIMESTAMP`,
+        [sessionId, req.user.id, noteText],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ ok: true, note_text: noteText });
+        }
+    );
+});
+
 
 export default router;
