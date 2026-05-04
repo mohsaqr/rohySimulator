@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Heart, Activity, Wind, Thermometer, Bell, Settings, Play, Pause, AlertCircle, Menu, X, Monitor, User, FileJson, FastForward, Save, Download, Upload, BellOff, Volume2, VolumeX, Pencil, Pill } from 'lucide-react';
 import defaultSettings from '../../settings.json';
 import { useAlarms } from '../../hooks/useAlarms';
+import { useNotifications } from '../../notifications/useNotifications';
+import { SOURCES } from '../../notifications/types';
 import { useTreatmentEffects } from '../../hooks/useTreatmentEffects';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -66,18 +68,34 @@ const GenerateECGRaw = (phase, options = {}) => {
       afibNoise = false,
       isPVC = false,
       isVfib = false,
-      isAsystole = false
+      isAsystole = false,
+      isVtach = false
    } = options;
 
    if (isAsystole) {
       return (Math.random() - 0.5) * 0.02;
    }
    if (isVfib) {
-      return Math.sin(phase * 15) * 0.3 + Math.sin(phase * 19) * 0.2 + (Math.random() - 0.5) * 0.1;
+      // Coarse 5-7 Hz fibrillation with random amplitude modulation. Phase
+      // wraps every 200ms in the producer, so phase * 2π gives 5 Hz primary.
+      return Math.sin(phase * 2 * Math.PI) * (0.4 + 0.2 * Math.sin(phase * 9.7))
+           + Math.sin(phase * 2 * Math.PI * 1.4) * 0.2
+           + (Math.random() - 0.5) * 0.18;
    }
 
    const { RR, PR, QRS, QT } = cardiacIntervals(hr);
    const t = phase * RR; // ms from beat onset (P-wave onset ≈ t=0)
+
+   if (isVtach) {
+      // Monomorphic VT: wide bizarre QRS, no P, large discordant T. Built
+      // from the same gaussian template as a PVC but applied every beat.
+      let y = 0;
+      y += gaussMs(t, 1.30, PR + 30, 22);    // tall broad R
+      y -= gaussMs(t, 0.65, PR + 85, 32);    // deep S
+      y += gaussMs(t, -0.45, PR + 280, 75);  // discordant inverted T
+      if (noise > 0) y += (Math.random() - 0.5) * noise * 0.05;
+      return y;
+   }
 
    // Wave widths (sigma, ms) — absolute, so QRS doesn't smear at high HR
    const wQ = wideQRS ? 2.4 : 1.0;
@@ -112,10 +130,11 @@ const GenerateECGRaw = (phase, options = {}) => {
    if (!hideP) {
       y += gaussMs(t, 0.10, cP, sP);
    } else if (afibNoise) {
-      // ~6–10 Hz fibrillatory waves
-      y += Math.sin(t * 0.040) * 0.030
-         + Math.sin(t * 0.053) * 0.020
-         + (Math.random() - 0.5) * 0.04;
+      // ~6–10 Hz fibrillatory waves on the baseline. Pumped up so they're
+      // visible against the QRS scale.
+      y += Math.sin(t * 0.040) * 0.060
+         + Math.sin(t * 0.053) * 0.040
+         + (Math.random() - 0.5) * 0.08;
    }
 
    // QRS
@@ -339,6 +358,11 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
    // Mirror conditions into the ref so the scenario engine reads current
    // values without taking a closure-dependency on `conditions`.
    useEffect(() => { conditionsRef.current = conditions; }, [conditions]);
+
+   // Mirror overriddenVitals into a ref so the scenario engine can check it
+   // without taking a dependency (the engine's interval is stable by design).
+   const overriddenVitalsRef = useRef(new Set());
+   useEffect(() => { overriddenVitalsRef.current = overriddenVitals; }, [overriddenVitals]);
 
    // Sync params changes to simulation ref immediately (including treatment effects)
    useEffect(() => {
@@ -610,10 +634,10 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
    const updateRhythmWithOverride = (newRhythm) => {
       const prevRhythm = rhythm;
       setRhythm(newRhythm);
-      if (caseBaselineRhythm && trackOverrides) {
-         setOverriddenVitals(prev => new Set([...prev, 'rhythm']));
-      }
-      // Record rhythm change to PatientRecord
+      // Always mark manual rhythm changes as overridden so the scenario engine
+      // doesn't revert them on its next tick. The scenario engine reads this
+      // via overriddenVitalsRef before applying its own rhythm setter.
+      setOverriddenVitals(prev => new Set([...prev, 'rhythm']));
       if (prevRhythm !== newRhythm) {
          changed('vitals', 'Cardiac Rhythm', prevRhythm, newRhythm, 'manual');
       }
@@ -710,7 +734,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                   }
                });
 
-               if (fromFrame.rhythm) {
+               if (fromFrame.rhythm && !overriddenVitalsRef.current.has('rhythm')) {
                   setRhythm(fromFrame.rhythm);
                }
 
@@ -719,7 +743,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                // We are sitting at or past the last frame
                // Ensure final state
                if (toFrame.params) setParams(prev => ({ ...prev, ...toFrame.params }));
-               if (toFrame.rhythm) setRhythm(toFrame.rhythm);
+               if (toFrame.rhythm && !overriddenVitalsRef.current.has('rhythm')) setRhythm(toFrame.rhythm);
                if (toFrame.conditions) setConditions(prev => ({ ...prev, ...toFrame.conditions }));
             }
 
@@ -892,7 +916,9 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
 
       let targetDuration = currentHR > 0 ? (60000 / currentHR) : 1000;
       if (rhythm === 'AFib') {
-         targetDuration = (60000 / params.hr) + (Math.random() * 400 - 200);
+         // ±400ms RR jitter — clearly irregular at any base HR. Real AFib
+         // RR variability often exceeds this.
+         targetDuration = (60000 / params.hr) + (Math.random() * 800 - 400);
       }
 
       if (rhythm === 'Asystole') {
@@ -932,6 +958,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
          isPVC,
          isVfib: rhythm === 'VFib',
          isAsystole: rhythm === 'Asystole',
+         isVtach: rhythm === 'VTach',
          hr: currentHR
       });
       ecgBuffer.current.shift();
@@ -1168,6 +1195,10 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                   </div>
                   <canvas ref={respCanvasRef} className="w-full h-full block" />
                </div>
+
+               {/* Active clinical alarms — render directly below RESP. Each
+                   row shows the alarm message with an Acknowledge button. */}
+               <InlineClinicalAlarms />
 
             </div>
 
@@ -1418,7 +1449,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                               onClick={() => setShowBuilder(true)}
                               className="w-full py-3 mb-4 rounded border-2 border-dashed border-neutral-700 text-neutral-400 font-bold text-sm uppercase hover:bg-neutral-800 hover:border-neutral-500 transition-all flex items-center justify-center gap-2"
                            >
-                              <Settings className="w-4 h-4" /> Build Custom Scenario
+                              <Settings className="w-4 h-4" /> Build Custom Trend
                            </button>
                         ) : (
                            <div className="mb-4 bg-neutral-900 border border-neutral-700 p-3 rounded-md space-y-3 animate-in fade-in slide-in-from-top-2">
@@ -1561,57 +1592,57 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                                  case 'normal':
                                     setConditions({ pvc: false, stElev: 0, tInv: false, wideQRS: false, noise: 0 });
                                     setParams(p => ({ ...p, hr: 75 }));
-                                    setRhythm('NSR');
+                                    updateRhythmWithOverride('NSR');
                                     break;
                                  case 'stemi':
                                     setConditions({ pvc: false, stElev: 2, tInv: false, wideQRS: false, noise: 0 });
                                     setParams(p => ({ ...p, hr: 95 }));
-                                    setRhythm('NSR');
+                                    updateRhythmWithOverride('NSR');
                                     break;
                                  case 'nstemi':
                                     setConditions({ pvc: false, stElev: -1, tInv: true, wideQRS: false, noise: 0 });
                                     setParams(p => ({ ...p, hr: 88 }));
-                                    setRhythm('NSR');
+                                    updateRhythmWithOverride('NSR');
                                     break;
                                  case 'angina':
                                     setConditions({ pvc: false, stElev: -0.5, tInv: false, wideQRS: false, noise: 0 });
                                     setParams(p => ({ ...p, hr: 92 }));
-                                    setRhythm('NSR');
+                                    updateRhythmWithOverride('NSR');
                                     break;
                                  case 'hyperkalemia':
                                     setConditions({ pvc: false, stElev: 0, tInv: false, wideQRS: true, noise: 0 });
                                     setParams(p => ({ ...p, hr: 70 }));
-                                    setRhythm('NSR');
+                                    updateRhythmWithOverride('NSR');
                                     break;
                                  case 'hypokalemia':
                                     setConditions({ pvc: false, stElev: -0.5, tInv: true, wideQRS: false, noise: 0 });
                                     setParams(p => ({ ...p, hr: 82 }));
-                                    setRhythm('NSR');
+                                    updateRhythmWithOverride('NSR');
                                     break;
                                  case 'pericarditis':
                                     setConditions({ pvc: false, stElev: 1, tInv: false, wideQRS: false, noise: 0 });
                                     setParams(p => ({ ...p, hr: 88 }));
-                                    setRhythm('NSR');
+                                    updateRhythmWithOverride('NSR');
                                     break;
                                  case 'lbbb':
                                     setConditions({ pvc: false, stElev: 0, tInv: false, wideQRS: true, noise: 0 });
                                     setParams(p => ({ ...p, hr: 78 }));
-                                    setRhythm('NSR');
+                                    updateRhythmWithOverride('NSR');
                                     break;
                                  case 'pvcs':
                                     setConditions({ pvc: true, stElev: 0, tInv: false, wideQRS: false, noise: 0 });
                                     setParams(p => ({ ...p, hr: 85 }));
-                                    setRhythm('NSR');
+                                    updateRhythmWithOverride('NSR');
                                     break;
                                  case 'vtach':
                                     setConditions({ pvc: false, stElev: 0, tInv: false, wideQRS: true, noise: 0 });
                                     setParams(p => ({ ...p, hr: 160 }));
-                                    setRhythm('VTach');
+                                    updateRhythmWithOverride('VTach');
                                     break;
                                  case 'afib':
                                     setConditions({ pvc: false, stElev: 0, tInv: false, wideQRS: false, noise: 0 });
                                     setParams(p => ({ ...p, hr: 110 }));
-                                    setRhythm('AFib');
+                                    updateRhythmWithOverride('AFib');
                                     break;
                               }
                               // Reset select
@@ -2211,5 +2242,55 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
          </div>
 
       </div>
+   );
+}
+
+// Active-clinical-alarms strip rendered directly below the RESP wave inside
+// the monitor pane. Filtering by source (rather than routedSurfaces) is
+// intentional — clinical alarms always show here regardless of the routing
+// matrix, and routing has BANNER stripped from clinical to avoid duplicate
+// rendering at the top of the screen.
+function InlineClinicalAlarms() {
+   const { active, ack, snooze } = useNotifications();
+   const alarms = useMemo(
+      () => active.filter(n => n.source === SOURCES.CLINICAL),
+      [active]
+   );
+   if (alarms.length === 0) return null;
+   return (
+      <>
+         {alarms.map(n => (
+            <div
+               key={n.id}
+               className="flex items-center gap-3 px-4 py-2 border-b border-red-900/60 bg-red-900/40"
+            >
+               <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+               <span className="font-mono text-xs font-bold uppercase tracking-wider text-red-300 shrink-0">
+                  {n.severity}
+               </span>
+               {n.title && (
+                  <span className="font-semibold text-red-100 text-sm shrink-0">{n.title}</span>
+               )}
+               <span className="text-sm text-red-100 flex-1 min-w-0 truncate">{n.message}</span>
+               {n.count > 1 && (
+                  <span className="px-1.5 py-0.5 rounded bg-black/40 text-xs text-red-200 shrink-0">
+                     ×{n.count}
+                  </span>
+               )}
+               <button
+                  onClick={() => snooze(n.key)}
+                  className="text-xs px-2 py-1 rounded bg-red-800/50 hover:bg-red-700/60 text-white shrink-0"
+               >
+                  Snooze
+               </button>
+               <button
+                  onClick={() => ack(n.key)}
+                  className="text-xs px-3 py-1 rounded bg-red-600 hover:bg-red-500 text-white font-semibold shrink-0"
+               >
+                  Acknowledge
+               </button>
+            </div>
+         ))}
+      </>
    );
 }
