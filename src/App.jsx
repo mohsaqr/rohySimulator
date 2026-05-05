@@ -90,6 +90,24 @@ function MainApp() {
       }
    };
 
+   // Fire-and-forget POST to /sessions/:id/end. Used both for explicit end
+   // (user clicks End) and orphan cleanup (case reload, expiry detection)
+   // so server rows don't accumulate with end_time = NULL. Server-side this
+   // endpoint is idempotent — calling it twice is safe. Declared early so
+   // the validate-on-mount effect can call it during expiry cleanup.
+   const endSessionOnServer = async (sid) => {
+      if (!sid) return;
+      try {
+         const token = AuthService.getToken();
+         await fetch(apiUrl(`/sessions/${sid}/end`), {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+         });
+      } catch (err) {
+         console.error('[Session] Failed to end session on server:', err);
+      }
+   };
+
    // Validate session on mount
    useEffect(() => {
       const validateAndRestoreSession = async () => {
@@ -108,8 +126,17 @@ function MainApp() {
             const timeSinceActivity = Date.now() - (timestamp || 0);
             if (timeSinceActivity > SESSION_EXPIRY_MS) {
                console.log('Session expired due to inactivity');
+               // Tell the server to mark the session ended so it doesn't
+               // linger as a zombie row. /end is idempotent so a duplicate
+               // call (eg. another tab beat us to it) is safe.
+               if (savedSessionId) {
+                  endSessionOnServer(savedSessionId);
+               }
                localStorage.removeItem('rohy_active_session');
                localStorage.removeItem('rohy_chat_history');
+               if (savedSessionId) {
+                  localStorage.removeItem(`rohy_discussion_history_${savedSessionId}`);
+               }
                // Load default case after session expiry
                await loadDefaultCase();
                setSessionValidated(true);
@@ -190,6 +217,39 @@ function MainApp() {
       return () => events.forEach(event => window.removeEventListener(event, updateActivity));
    }, [updateActivity]);
 
+   // Multi-tab detection. The `storage` event fires only in OTHER tabs of
+   // the same origin when localStorage changes — never in the tab that
+   // wrote the change. So if a second tab opens the same session and
+   // writes its own rohy_active_session, this tab sees the change here
+   // and warns the learner. We don't hard-block (per Q2 = "detect+warn"),
+   // just surface a banner so they know last-write-wins is in effect.
+   const [multiTabWarning, setMultiTabWarning] = useState(false);
+   useEffect(() => {
+      const onStorage = (e) => {
+         if (e.key !== 'rohy_active_session' || !sessionId) return;
+         try {
+            const next = e.newValue ? JSON.parse(e.newValue) : null;
+            // Same session id touched from another tab — they're sharing
+            // the session. Different id with our session still mounted —
+            // the other tab just took over. Either way, warn.
+            if (next && next.sessionId && next.sessionId !== sessionId) {
+               setMultiTabWarning(true);
+            } else if (next && next.sessionId === sessionId) {
+               // Co-occupancy on the same session — also worth flagging
+               // because chat history writes from either tab will overwrite.
+               setMultiTabWarning(true);
+            } else if (e.newValue === null) {
+               // Another tab cleared the session entirely.
+               setMultiTabWarning(true);
+            }
+         } catch {
+            // ignore parse failures; not actionable
+         }
+      };
+      window.addEventListener('storage', onStorage);
+      return () => window.removeEventListener('storage', onStorage);
+   }, [sessionId]);
+
    // Save session to localStorage whenever it changes
    useEffect(() => {
       if (activeCase && sessionValidated) {
@@ -213,17 +273,7 @@ function MainApp() {
       const duration = Date.now() - sessionStartTime;
       EventLogger.sessionEnded(duration);
 
-      if (sessionId) {
-         try {
-            const token = AuthService.getToken();
-            await fetch(apiUrl(`/sessions/${sessionId}/end`), {
-               method: 'PUT',
-               headers: { 'Authorization': `Bearer ${token}` }
-            });
-         } catch (err) {
-            console.error('Failed to end session in backend:', err);
-         }
-      }
+      await endSessionOnServer(sessionId);
       // Don't wipe the session yet — flip into "ended" mode and open the
       // debrief discussion screen. handleCloseDiscussion does the actual
       // cleanup once the learner is done with the debrief.
@@ -238,6 +288,12 @@ function MainApp() {
       if (caseEnded) {
          localStorage.removeItem('rohy_active_session');
          localStorage.removeItem('rohy_chat_history');
+         // The debrief transcript is keyed per-session and stored separately;
+         // clear it on full session end so the next session on the same case
+         // doesn't show last session's debrief on first open.
+         if (sessionId) {
+            localStorage.removeItem(`rohy_discussion_history_${sessionId}`);
+         }
          setActiveCase(null);
          setSessionId(null);
          setCaseEnded(false);
@@ -250,8 +306,18 @@ function MainApp() {
 
 
    const handleLoadCase = (caseData) => {
+      // If a session is already running, end it server-side before loading
+      // the new case. Without this the prior session is orphaned with
+      // end_time = NULL and learners can rack up zombie rows by switching
+      // cases without explicitly ending.
+      if (sessionId) {
+         endSessionOnServer(sessionId);
+      }
       // Clear previous session data when loading new case
       localStorage.removeItem('rohy_chat_history');
+      if (sessionId) {
+         localStorage.removeItem(`rohy_discussion_history_${sessionId}`);
+      }
       setActiveCase(caseData);
       setSessionId(null); // Will be set by ChatInterface when session starts
       setShowConfig(false);
@@ -371,6 +437,23 @@ function MainApp() {
          patientInfo={patientInfo}
       >
          <div className="flex h-screen w-screen bg-neutral-950 text-white overflow-hidden">
+
+         {/* Multi-tab warning banner. Shown when another tab on this origin
+             writes to rohy_active_session. last-write-wins applies.
+             Fixed overlay so we don't disturb the existing flex layout. */}
+         {multiTabWarning && (
+            <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-4 py-2 bg-amber-600/95 text-amber-50 text-sm rounded-lg shadow-xl border border-amber-700 max-w-2xl">
+               <span>
+                  <strong>Heads up:</strong> this session is open in another browser tab. Last-write-wins applies.
+               </span>
+               <button
+                  onClick={() => setMultiTabWarning(false)}
+                  className="px-2 py-0.5 rounded bg-amber-700 hover:bg-amber-800 text-xs"
+               >
+                  Dismiss
+               </button>
+            </div>
+         )}
 
          {/* Left Column (Visual + Chat) - 35% width on large screens */}
          <div className="w-[35%] min-w-[350px] flex flex-col border-r border-neutral-800 bg-neutral-900">

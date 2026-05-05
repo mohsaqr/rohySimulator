@@ -406,11 +406,9 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
    // useEventLog thresholds so the event-volume profile is unchanged.
    useEffect(() => {
       if (!sessionId) return;
-
       const prev = prevVitalsRef.current;
       const current = displayVitals;
       const DEADBAND = { hr: 10, spo2: 5, bpSys: 10, bpDia: 10, rr: 3, temp: 0.5 };
-
       Object.keys(current).forEach(vital => {
          const oldV = parseFloat(prev[vital]);
          const newV = parseFloat(current[vital]);
@@ -420,7 +418,6 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
             EventLogger.vitalAdjusted(vital, oldV, newV, COMPONENTS.PATIENT_MONITOR);
          }
       });
-
       prevVitalsRef.current = displayVitals;
    }, [displayVitals, sessionId]);
 
@@ -469,7 +466,88 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
 
    // Load Scenarios into State (to allow custom additions)
    const [scenarioList, setScenarioList] = useState(defaultSettings.scenarios);
-   
+
+   // Stage-1 audit: persist a vitals snapshot to /sessions/:id/vitals when any
+   // vital crosses its deadband. Lives here (after `activeScenario` state) so
+   // the source-tag can distinguish scenario-driven from learner-driven changes
+   // without hitting a temporal-dead-zone error on the deps array.
+   const lastPersistedVitalsRef = useRef(null);
+   useEffect(() => {
+      if (!sessionId) return;
+      const prev = lastPersistedVitalsRef.current ?? displayVitals;
+      const current = displayVitals;
+      const DEADBAND = { hr: 10, spo2: 5, bpSys: 10, bpDia: 10, rr: 3, temp: 0.5 };
+      let crossed = lastPersistedVitalsRef.current === null;
+      if (!crossed) {
+         for (const vital of Object.keys(current)) {
+            const oldV = parseFloat(prev[vital]);
+            const newV = parseFloat(current[vital]);
+            if (!Number.isFinite(oldV) || !Number.isFinite(newV)) continue;
+            const threshold = DEADBAND[vital] ?? 5;
+            if (Math.abs(newV - oldV) >= threshold) { crossed = true; break; }
+         }
+      }
+      if (!crossed) return;
+      lastPersistedVitalsRef.current = current;
+      const token = localStorage.getItem('token');
+      fetch(apiUrl(`/sessions/${sessionId}/vitals`), {
+         method: 'POST',
+         headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+         },
+         body: JSON.stringify({
+            elapsed_ms: elapsedTime * 1000,
+            hr: current.hr,
+            rhythm,
+            spo2: current.spo2,
+            bp_sys: current.bpSys,
+            bp_dia: current.bpDia,
+            rr: current.rr,
+            temp: current.temp,
+            etco2: current.etco2,
+            source: activeScenario ? 'scenario' : 'monitor'
+         })
+      }).catch(err => console.warn('[Vitals] persist failed:', err.message));
+   }, [displayVitals, sessionId, rhythm, activeScenario, elapsedTime]);
+
+   // On session restore, fetch the most recent persisted vitals snapshot
+   // and seed `params` with it so the monitor resumes from where the
+   // learner left off rather than snapping back to the case baseline.
+   useEffect(() => {
+      if (!sessionId) return;
+      let cancelled = false;
+      (async () => {
+         try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(apiUrl(`/sessions/${sessionId}/vitals`), {
+               headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const last = Array.isArray(data.vitals) && data.vitals.length > 0
+               ? data.vitals[data.vitals.length - 1]
+               : null;
+            if (!last || cancelled) return;
+            const restored = {};
+            if (Number.isFinite(last.hr)) restored.hr = last.hr;
+            if (Number.isFinite(last.spo2)) restored.spo2 = last.spo2;
+            if (Number.isFinite(last.bp_sys)) restored.bpSys = last.bp_sys;
+            if (Number.isFinite(last.bp_dia)) restored.bpDia = last.bp_dia;
+            if (Number.isFinite(last.rr)) restored.rr = last.rr;
+            if (Number.isFinite(last.temp)) restored.temp = last.temp;
+            if (Number.isFinite(last.etco2)) restored.etco2 = last.etco2;
+            if (Object.keys(restored).length > 0) {
+               setParams(prev => ({ ...prev, ...restored }));
+               if (last.rhythm) setRhythm(last.rhythm);
+            }
+         } catch (e) {
+            console.warn('[Monitor] vitals restore failed:', e.message);
+         }
+      })();
+      return () => { cancelled = true; };
+   }, [sessionId]);
+
    // Load initial vitals and scenario from case data when case loads
    useEffect(() => {
       if (caseData) {

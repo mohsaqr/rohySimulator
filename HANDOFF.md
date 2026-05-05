@@ -1,22 +1,50 @@
 # Session Handoff — 2026-05-05
 
+## Stage 1 (Sessions + lifecycle) — SHIPPED this session
+
+The deferred snapshot question is resolved. Three Explore agents reviewed
+the subsystem; 17 findings, 3 false positives (~18% rate, better than the
+~30% ceiling). Architectural decisions taken via `AskUserQuestion`:
+
+1. **Snapshot at session start** — `cases.config` + `cases.scenario` are
+   captured into `sessions.case_snapshot` at POST /sessions; five reader
+   sites refactored to prefer the snapshot. Admin edits during a running
+   session no longer bleed into the simulator.
+2. **Multi-tab: detect + warn** — `storage` event listener in App.jsx
+   surfaces a fixed-overlay banner when another tab writes to
+   `rohy_active_session`. Last-write-wins still applies; the banner just
+   makes it visible.
+3. **Vitals: persist on meaningful change** — same deadband thresholds the
+   EventLogger uses for telemetry now also POST to
+   `/sessions/:id/vitals`. On session restore, the latest persisted row
+   seeds `params` + `rhythm` so the monitor resumes from where the learner
+   left off, not the case baseline.
+
+Other HIGH/MEDIUM fixes shipped: `/end` idempotency (was overwriting
+`end_time` on every re-call), `sessions.status` finally transitions to
+`'completed'`, `handleLoadCase` ends the prior session server-side
+instead of orphaning it, `handleCloseDiscussion` clears the discussion
+history key, expired sessions are now ended server-side (no zombie
+rows), chat history localStorage now carries `sessionId` so restoring
+the same case in a new session doesn't replay the prior conversation.
+
+Verification: `bash scripts/audit-sessions.sh` — 9/9 passing.
+
 ## Remaining audits — staged roadmap
 
-Three wiring audits have shipped this branch (commits below). The case
-audit explicitly deferred several questions to follow-up sessions; this
-section is the north-star for the remaining work. Full plan kept at
-`~/.claude-claudef/plans/now-we-want-a-tranquil-valiant.md` — the outline
-below is the executive view.
+Four wiring audits have shipped this branch (commits below). Full plan
+kept at `~/.claude-claudef/plans/now-we-want-a-tranquil-valiant.md` — the
+outline below is the executive view.
 
 **Each stage is its own session and its own commit.** Don't batch.
 
 | # | Stage | Severity | Effort | Why |
 |---|---|---|---|---|
-| 1 | **Sessions + lifecycle** | HIGH | 90–120 min | Most-connected subsystem; mid-session bugs have worst blast radius. Snapshot vs live-binding question deferred from case audit lives here. |
+| ~~1~~ | ~~Sessions + lifecycle~~ | ~~HIGH~~ | ✅ DONE | Snapshot decision: snapshot at start. Multi-tab: detect+warn. Vitals: persist on change. /end idempotent. |
 | 2 | **Investigations (Lab + Radiology)** | HIGH | 60–90 min | Mirrors the treatment-master pattern. Orphan refs, master-edit propagation, format drift expected. L6 from case audit was deferred here. |
 | 3 | **Alarms + Notifications** | HIGH | 90–120 min | Recent commits show flux. Five surfaces (Audio/Banner/Backend/Console/Toast) all read the same notification stream — easy for one to drift on ack state. |
 | 4 | LLM precedence chain | MED | 45–60 min | platform → case → agent → session → user. Five layers, persona audit just touched the agent layer. |
-| 5 | Scenario engine (runtime) | MED | 60–90 min | Storage audited; runtime engine in PatientMonitor:560–682 not yet. Beat application, scenario-disable mid-run, complete state. |
+| 5 | Scenario engine (runtime) | MED | 60–90 min | Storage audited; runtime engine in PatientMonitor:560–682 not yet. Beat application, scenario-disable mid-run, complete state. Stage 1's snapshot decision now constrains what mid-run admin edits do. |
 | 6 | Physical exam + body map | MED | 60 min | Region master + per-case + AI-context narrative. Same drift pattern as labs/treatments. |
 | 7 | Auth + user preferences | LOW | 30–45 min | Simple FK relationships; expect 0–1 real findings. |
 | 8 | TNA analytics + event log | LOW | 45–60 min | Read-mostly aggregation; drift is cosmetic. Run after Stage 1 informs event lifecycle. |
@@ -45,6 +73,8 @@ budget-permitting.
 ### Prior audits (commits)
 - `af9302a` Persona / Voice / Avatar — voice resolver extracted, provider routing fixed, OpenAI alignment, avatarType prop removed.
 - `ff4056b` Case editor — schema fidelity (history mirror), persistence (localStorage stash provenance), session safety (vitals clamps, active-use chip), provenance (scenario.source).
+- `d954fd0` Comprehensive Agent Persona editor — full-page editor mounted at App.jsx; reset-to-defaults; voice resolver on the editor mirrors ChatInterface.
+- *Stage 1 sessions audit (this session, uncommitted as of writing)* — see Stage-1 section above.
 
 ---
 

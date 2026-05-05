@@ -353,7 +353,14 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         }
     };
 
-    // Load chat history from database or localStorage
+    // Load chat history from database or localStorage.
+    //
+    // Stage-1 audit: previously the localStorage entry was keyed only by
+    // caseId, so opening the same case in a fresh session restored the
+    // previous session's chat. Now we additionally require the stored
+    // sessionId to match restoredSessionId — for fresh sessions where
+    // restoredSessionId is null, only an in-progress draft (also tagged
+    // with sessionId=null) is allowed to restore.
     useEffect(() => {
         const loadChatHistory = async () => {
             if (!activeCase) return;
@@ -363,11 +370,19 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 const savedChat = localStorage.getItem('rohy_chat_history');
                 if (savedChat) {
                     const parsed = JSON.parse(savedChat);
-                    if (parsed.caseId === activeCase.id && parsed.messages?.length > 0) {
+                    const caseMatches = parsed.caseId === activeCase.id;
+                    const sessionMatches = (parsed.sessionId ?? null) === (restoredSessionId ?? null);
+                    if (caseMatches && sessionMatches && parsed.messages?.length > 0) {
                         console.log('Restored chat from localStorage:', parsed.messages.length, 'messages');
                         setMessages(parsed.messages);
                         setMessagesLoaded(true);
                         return;
+                    }
+                    // Stale localStorage chat (different session). Clear it
+                    // so the save effect below can take over with current data.
+                    if (caseMatches && !sessionMatches) {
+                        console.log('Discarding stale chat history from prior session');
+                        localStorage.removeItem('rohy_chat_history');
                     }
                 }
             } catch (e) {
@@ -393,6 +408,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                             // Also save to localStorage for faster next load
                             localStorage.setItem('rohy_chat_history', JSON.stringify({
                                 caseId: activeCase.id,
+                                sessionId: restoredSessionId,
                                 messages: chatMessages,
                                 timestamp: Date.now()
                             }));
@@ -413,11 +429,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         if (activeCase && messages.length > 0 && messagesLoaded) {
             localStorage.setItem('rohy_chat_history', JSON.stringify({
                 caseId: activeCase.id,
+                sessionId: sessionId || restoredSessionId || null,
                 messages,
                 timestamp: Date.now()
             }));
         }
-    }, [messages, activeCase, messagesLoaded]);
+    }, [messages, activeCase, messagesLoaded, sessionId, restoredSessionId]);
 
     // Initialize Session when Active Case Changes
     useEffect(() => {

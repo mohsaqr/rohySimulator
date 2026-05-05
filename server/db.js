@@ -1112,6 +1112,29 @@ function initDb() {
             }
         });
 
+        // 7b. Session Vitals - Trend persistence so a tab refresh restores
+        // the vital-sign trace instead of snapping back to baseline. Written
+        // on meaningful change (scenario beat, learner adjust, alarm trigger),
+        // not as a continuous stream — keeps row count modest (~tens/min).
+        db.run(`CREATE TABLE IF NOT EXISTS session_vitals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            elapsed_ms INTEGER,
+            hr REAL,
+            rhythm TEXT,
+            spo2 REAL,
+            bp_sys REAL,
+            bp_dia REAL,
+            rr REAL,
+            temp REAL,
+            etco2 REAL,
+            source TEXT,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        )`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_session_vitals_session
+                ON session_vitals(session_id, timestamp)`);
+
         // 8. Event Log Table - Chronological event tracking
         db.run(`CREATE TABLE IF NOT EXISTS event_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1898,6 +1921,10 @@ function initDb() {
                 // SQLite doesn't allow CURRENT_TIMESTAMP as default in ALTER TABLE
                 addColumn('updated_at', 'DATETIME');
                 addColumn('deleted_at', 'DATETIME');
+                // Stage-1 audit: pin runtime case config to a snapshot taken at
+                // session start so admin edits to the live case row don't bleed
+                // into running sessions (Q1 = "snapshot at session start").
+                addColumn('case_snapshot', 'JSON');
             }
         });
 

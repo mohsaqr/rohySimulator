@@ -1,3 +1,34 @@
+### 2026-05-05 — Sessions + lifecycle wiring audit (Stage 1)
+Three Explore agents reviewed the Sessions subsystem end-to-end (schema/persistence, cross-system wiring, runtime correctness). 17 findings; **3 false positives** on triage (`B-H3` SESSION_EXPIRY_MS module-load capture — module const is fine; `C-M2` debrief re-open guard — already in place via `caseEnded` gate; `B-H2` EventLogger context timing — narrow gap, demoted to LOW). False-positive rate this round: ~18%. Real findings shipped:
+
+The user picked, in `AskUserQuestion`: **(1)** snapshot at session start, **(2)** detect-and-warn for multi-tab, **(3)** persist vitals on meaningful change.
+
+- `server/db.js`:
+  - Added `case_snapshot JSON` column to `sessions` (idempotent ALTER). The infrastructure designer scaffolded `sessions.case_version` years ago but never wired the runtime side; this completes that work via a simpler one-column-on-sessions path rather than the existing `case_versions` audit-log table.
+  - Added `session_vitals` table with index on `(session_id, timestamp)` for trend persistence. Cascades on session delete.
+- `server/routes.js`:
+  - New helpers `resolveSessionCaseConfig(row)` and `resolveSessionCaseScenario(row)` — read from `case_snapshot` first, fall back to live JOIN for sessions written before the column existed.
+  - `POST /api/sessions` now captures `{config, scenario, name, snapshot_at}` from the live `cases` row at session start. Refactored to `async` so it can `await` the case fetch in a Promise.
+  - `PUT /api/sessions/:id/end` is now idempotent: re-call returns the original `end_time/duration` and `already_ended:true` instead of overwriting (prior behavior corrupted analytics on any double-end).
+  - `PUT /api/sessions/:id/end` also transitions `sessions.status = 'completed'` — the column existed with a CHECK constraint but had never been written.
+  - New `POST /api/sessions/:id/vitals` and `GET /api/sessions/:id/vitals` for trend persistence. POST writes a snapshot row with `elapsed_ms + hr/rhythm/spo2/bp/rr/temp/etco2 + source` tag.
+  - Five reader sites refactored to prefer the snapshot: `/sessions/:id/available-labs`, `/sessions/:id/available-radiology`, `/sessions/:id/order-radiology`, `/sessions/:id/treatments`, `/sessions/:id/order-treatment`. Plus the order-labs path that fetches case config separately.
+- `src/App.jsx`:
+  - `endSessionOnServer(sid)` helper hoisted above the validate-on-mount effect so all callers (explicit end, expiry detection, case reload) use the same fire-and-forget /end path.
+  - `handleLoadCase` now ends the previous session server-side before loading the new case (was leaving orphan rows with `end_time IS NULL`).
+  - `handleCloseDiscussion` now also clears `rohy_discussion_history_<sessionId>` (was leaking debrief transcripts across sessions).
+  - Expiry detection in `validateAndRestoreSession` now ends the expired session server-side and clears the discussion history key (was silently abandoning the row server-side).
+  - Multi-tab detection: `storage` event listener fires when another tab on the same origin writes to `rohy_active_session`. Surfaces a fixed-overlay amber banner (last-write-wins applies). Per Q2 — detect+warn, not block.
+- `src/components/chat/ChatInterface.jsx`:
+  - Chat history localStorage entry now carries `sessionId` alongside `caseId`. Restore requires both to match (or both null for in-progress drafts). Stale entries from prior sessions on the same case are explicitly cleared instead of being replayed.
+- `src/components/monitor/PatientMonitor.jsx`:
+  - New persist-on-deadband effect POSTs the full vital snapshot to `/sessions/:id/vitals` when any vital crosses its threshold. Fail mode: `console.warn`, never blocks the monitor. Maintains its own `lastPersistedVitalsRef` independent of the EventLogger effect's `prevVitalsRef`.
+  - On session restore (sessionId set), fetches `/sessions/:id/vitals`, takes the latest row, and seeds `params` + `rhythm` so the monitor resumes from where the learner left off instead of snapping back to baseline.
+  - **Both new effects placed AFTER `activeScenario`'s `useState`** declaration. An earlier draft positioned the persist effect alongside the EventLogger effect (line ~404) and listed `activeScenario` (declared at line ~535) in its deps array. Reading the destructured `const` before its declaration ran throws a temporal-dead-zone `ReferenceError` on every render — `<PatientMonitor>` crashed under React's error boundary the moment a session loaded. Browser smoke test caught this; the bash audit didn't (it never renders the UI). Lesson: end-to-end UI verification is not optional for monitor-touching work.
+- `scripts/audit-sessions.sh` (NEW): end-to-end verification — login, snapshot capture, snapshot immutability under live edit, /end idempotency, status transition, vitals POST/GET round-trip. **9/9 passing** against the live API. Bash 3.2 compatible. Snapshot-immutability assertion uses a `RUN_MARKER="audit-run-$$-$(date +%s)"` so prior runs' marker writes (which persist in `cases.config`) don't false-positive subsequent invocations — without this, the test passed on the first run only.
+
+**Tests:** Build clean (`npx vite build` — only pre-existing chunk warning). Lint clean for new code (4 pre-existing errors in App.jsx, 3 in ChatInterface.jsx — all carried forward, none introduced this session). Audit script: 9/9 pass on repeated runs. Browser smoke test on `:5173`: login → simulator renders, no monitor errors.
+
 ### 2026-05-05 — Persona/Voice/Avatar wiring audit
 - `src/utils/voiceResolver.js` (NEW): single source of truth for voice resolution. Returns `{file, provider, rate, pitch, tier}`; mirrors the server's `resolveTtsVoice` chain. Replaces three previously-duplicated implementations.
 - `src/components/chat/ChatInterface.jsx`: replaced `pickVoiceFile` + `resolveRatePitch` + `resolveSpeakerSettings` with a single call to `resolveVoice()`. Both `beginSpeechSession` and `speak()` now forward `provider` — without this, a case configured for Piper silently played whatever the platform default tts_provider was.

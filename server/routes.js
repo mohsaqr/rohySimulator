@@ -226,6 +226,53 @@ function mergeScenarioSource(scenario, { scenario_template, scenario_from_reposi
     return { ...scenario, source };
 }
 
+// Stage-1 audit: pin runtime case config to a snapshot taken at session
+// start. Readers prefer `sessions.case_snapshot` over the live `cases.config`
+// JOIN; the live row is kept as a safety fallback for sessions written
+// before the snapshot column existed.
+//
+// Pass a row that includes both `case_snapshot` (from sessions) and `config`
+// (from JOIN cases). Returns the parsed config object. Never throws — bad
+// JSON falls back to {} with a warning.
+function resolveSessionCaseConfig(row) {
+    if (row && row.case_snapshot) {
+        try {
+            const snap = JSON.parse(row.case_snapshot);
+            if (snap && snap.config) return snap.config;
+        } catch (e) {
+            console.warn('[snapshot] bad case_snapshot JSON, falling back to live config:', e.message);
+        }
+    }
+    if (row && row.config) {
+        try {
+            return JSON.parse(row.config);
+        } catch (e) {
+            console.warn('[snapshot] bad live case.config JSON:', e.message);
+        }
+    }
+    return {};
+}
+
+// Same shape for scenario JSON.
+function resolveSessionCaseScenario(row) {
+    if (row && row.case_snapshot) {
+        try {
+            const snap = JSON.parse(row.case_snapshot);
+            if (snap && snap.scenario !== undefined) return snap.scenario;
+        } catch (e) {
+            // already warned in resolveSessionCaseConfig path; stay quiet here
+        }
+    }
+    if (row && row.scenario) {
+        try {
+            return JSON.parse(row.scenario);
+        } catch (e) {
+            console.warn('[snapshot] bad live case.scenario JSON:', e.message);
+        }
+    }
+    return null;
+}
+
 function createCaseVersion(caseId, userId, changeType, description, configSnapshot) {
     // Get current version number
     db.get(
@@ -1132,17 +1179,46 @@ router.post('/sessions', authenticateToken, async (req, res) => {
         }
     }
 
-    const sql = `INSERT INTO sessions (case_id, user_id, student_name, llm_settings, monitor_settings) VALUES (?, ?, ?, ?, ?)`;
+    // Build the case snapshot from the live cases row at session-start time.
+    // Once written, runtime readers (labs / treatments / vitals / scenario)
+    // pull from this snapshot rather than the live cases row, so admin edits
+    // mid-session don't bleed into the running session.
+    const caseRow = await new Promise((resolve, reject) => {
+        db.get('SELECT id, name, config, scenario FROM cases WHERE id = ?', [case_id], (err, row) => {
+            if (err) reject(err); else resolve(row || null);
+        });
+    });
+    let caseSnapshot = null;
+    if (caseRow) {
+        let parsedConfig = {};
+        let parsedScenario = null;
+        try { parsedConfig = caseRow.config ? JSON.parse(caseRow.config) : {}; } catch (e) {
+            console.warn('[Session start] bad case.config JSON:', e.message);
+        }
+        try { parsedScenario = caseRow.scenario ? JSON.parse(caseRow.scenario) : null; } catch (e) {
+            console.warn('[Session start] bad case.scenario JSON:', e.message);
+        }
+        caseSnapshot = JSON.stringify({
+            case_id: caseRow.id,
+            name: caseRow.name,
+            config: parsedConfig,
+            scenario: parsedScenario,
+            snapshot_at: new Date().toISOString()
+        });
+    }
+
+    const sql = `INSERT INTO sessions (case_id, user_id, student_name, llm_settings, monitor_settings, case_snapshot) VALUES (?, ?, ?, ?, ?, ?)`;
 
     db.run(sql, [
         case_id,
         user_id,
         student_name || req.user.username,
         JSON.stringify(effectiveLlmSettings),
-        JSON.stringify(monitor_settings || {})
+        JSON.stringify(monitor_settings || {}),
+        caseSnapshot
     ], function (err) {
         if (err) return res.status(500).json({ error: err.message });
-        
+
         const sessionId = this.lastID;
 
         // Create session settings snapshot
@@ -1205,29 +1281,94 @@ router.get('/sessions/:id', authenticateToken, (req, res) => {
 });
 
 // PUT /api/sessions/:id/end - Mark session as ended
+// Idempotent: a re-call on an already-ended session returns the original
+// end_time/duration instead of overwriting them. Without this guard a
+// second /end (eg. learner reload + re-end) silently resets the duration
+// to ~0s and corrupts analytics.
 router.put('/sessions/:id/end', authenticateToken, (req, res) => {
     const sessionId = req.params.id;
-    
-    // Get session start time
-    db.get('SELECT start_time, user_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
+
+    db.get('SELECT start_time, end_time, duration, user_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
-        
-        // Check if user owns this session or is admin
+
         if (session.user_id !== req.user.id && req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Access denied' });
         }
 
+        if (session.end_time) {
+            return res.json({
+                message: 'Session already ended',
+                duration: session.duration,
+                end_time: session.end_time,
+                already_ended: true
+            });
+        }
+
         const endTime = new Date();
         const startTime = new Date(session.start_time);
-        const duration = Math.floor((endTime - startTime) / 1000); // Duration in seconds
+        const duration = Math.floor((endTime - startTime) / 1000);
 
-        const sql = `UPDATE sessions SET end_time = ?, duration = ? WHERE id = ?`;
+        // Also flip status to 'completed' so queries filtering on the
+        // CHECK-constrained status field actually return ended sessions
+        // (the column existed but was never transitioned).
+        const sql = `UPDATE sessions SET end_time = ?, duration = ?, status = 'completed' WHERE id = ? AND end_time IS NULL`;
         db.run(sql, [endTime.toISOString(), duration, sessionId], function (err) {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'Session ended', duration });
+            res.json({ message: 'Session ended', duration, end_time: endTime.toISOString() });
         });
     });
+});
+
+// --- SESSION VITALS (trend persistence) ---
+//
+// Vitals are streamed to the client by the monitor's scenario engine and
+// adjusted by the learner; without persistence, a tab refresh wipes the
+// trend and the chart restarts from baseline. We log on meaningful change
+// (scenario beat, learner edit, alarm trigger) — not as a raw 250 Hz feed —
+// so a session generates tens of rows per minute, not thousands.
+
+// POST /api/sessions/:id/vitals - record a vital change
+router.post('/sessions/:id/vitals', authenticateToken, async (req, res) => {
+    const sessionId = req.params.id;
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+
+    const { elapsed_ms, hr, rhythm, spo2, bp_sys, bp_dia, rr, temp, etco2, source } = req.body || {};
+    const sql = `INSERT INTO session_vitals
+        (session_id, elapsed_ms, hr, rhythm, spo2, bp_sys, bp_dia, rr, temp, etco2, source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    db.run(sql, [
+        sessionId,
+        Number.isFinite(elapsed_ms) ? elapsed_ms : null,
+        Number.isFinite(hr) ? hr : null,
+        rhythm || null,
+        Number.isFinite(spo2) ? spo2 : null,
+        Number.isFinite(bp_sys) ? bp_sys : null,
+        Number.isFinite(bp_dia) ? bp_dia : null,
+        Number.isFinite(rr) ? rr : null,
+        Number.isFinite(temp) ? temp : null,
+        Number.isFinite(etco2) ? etco2 : null,
+        source || 'unknown'
+    ], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ id: this.lastID });
+    });
+});
+
+// GET /api/sessions/:id/vitals - return the trend in chronological order
+router.get('/sessions/:id/vitals', authenticateToken, async (req, res) => {
+    const sessionId = req.params.id;
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+
+    db.all(
+        `SELECT id, timestamp, elapsed_ms, hr, rhythm, spo2, bp_sys, bp_dia, rr, temp, etco2, source
+           FROM session_vitals WHERE session_id = ? ORDER BY id ASC`,
+        [sessionId],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ vitals: rows || [] });
+        }
+    );
 });
 
 // --- INTERACTIONS ---
@@ -2979,9 +3120,10 @@ router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireAdmin, (re
 router.get('/sessions/:sessionId/available-labs', authenticateToken, (req, res) => {
     const { sessionId } = req.params;
     
-    // Get session and case details
-    const sessionSql = `SELECT s.case_id, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?`;
-    
+    // Get session + case_snapshot (preferred) + live config (fallback for
+    // sessions written before the snapshot column existed).
+    const sessionSql = `SELECT s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?`;
+
     db.get(sessionSql, [sessionId], (err, session) => {
         if (err) {
             return res.status(500).json({ error: err.message });
@@ -2989,15 +3131,8 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, (req, res) 
         if (!session) {
             return res.status(404).json({ error: 'Session not found' });
         }
-        
-        // Parse case config safely
-        let caseConfig = {};
-        try {
-            caseConfig = JSON.parse(session.config || '{}');
-        } catch (parseErr) {
-            console.error('[Labs API] Invalid case config JSON:', parseErr.message);
-            return res.status(500).json({ error: 'Invalid case configuration' });
-        }
+
+        const caseConfig = resolveSessionCaseConfig(session);
         const defaultLabsEnabled = caseConfig.investigations?.defaultLabsEnabled !== false;
         
         // Get configured abnormal labs for this case
@@ -3131,8 +3266,8 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
 
     console.log(`[Order Labs] Received request: session=${sessionId}, lab_ids=${JSON.stringify(lab_ids)}, turnaround_override=${turnaround_override}`);
 
-    // Verify session exists and user has access
-    db.get('SELECT user_id, case_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
+    // Verify session exists and user has access; pull snapshot in same query
+    db.get('SELECT user_id, case_id, case_snapshot FROM sessions WHERE id = ?', [sessionId], (err, session) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -3153,13 +3288,14 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
         // Track IDs that need to be inserted as orders
         const configuredIds = [...numericIds.map(id => parseInt(id, 10))];
 
-        // Get case config to determine patient gender and find config-based labs
+        // Get case config (snapshot-preferred) to determine patient gender and find config-based labs
         db.get('SELECT config FROM cases WHERE id = ?', [session.case_id], (err, caseRow) => {
             if (err) {
                 return res.status(500).json({ error: err.message });
             }
 
-            const caseConfig = JSON.parse(caseRow?.config || '{}');
+            // Merge: snapshot from session row + live config as fallback
+            const caseConfig = resolveSessionCaseConfig({ case_snapshot: session.case_snapshot, config: caseRow?.config });
             const patientGender = caseConfig.demographics?.gender || 'Male';
             const configJsonLabs = caseConfig.investigations?.labs || [];
 
@@ -3515,9 +3651,9 @@ router.get('/radiology-database', authenticateToken, (req, res) => {
 router.get('/sessions/:sessionId/available-radiology', authenticateToken, (req, res) => {
     const { sessionId } = req.params;
 
-    // Get case config to include custom studies
+    // Get case config (snapshot-preferred) to include custom studies.
     db.get(
-        'SELECT c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?',
+        'SELECT s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?',
         [sessionId],
         (err, row) => {
             if (err) {
@@ -3531,30 +3667,22 @@ router.get('/sessions/:sessionId/available-radiology', authenticateToken, (req, 
 
             let allStudies = [...radiologyDatabase];
 
-            // Parse case config and add custom studies
-            if (row?.config) {
-                try {
-                    const config = JSON.parse(row.config);
-                    const configuredRadiology = config.radiology || config.clinicalRecords?.radiology || [];
+            const config = resolveSessionCaseConfig(row);
+            const configuredRadiology = config.radiology || config.clinicalRecords?.radiology || [];
 
-                    // Add custom studies that aren't in the master database
-                    configuredRadiology.forEach(cr => {
-                        if (cr.isCustom && cr.studyId) {
-                            allStudies.push({
-                                id: cr.studyId,
-                                name: cr.studyName || 'Custom Study',
-                                modality: cr.modality || 'Other',
-                                body_region: cr.bodyRegion || '',
-                                turnaround_minutes: cr.turnaroundMinutes || 30,
-                                common_indications: [],
-                                isCustom: true
-                            });
-                        }
+            configuredRadiology.forEach(cr => {
+                if (cr.isCustom && cr.studyId) {
+                    allStudies.push({
+                        id: cr.studyId,
+                        name: cr.studyName || 'Custom Study',
+                        modality: cr.modality || 'Other',
+                        body_region: cr.bodyRegion || '',
+                        turnaround_minutes: cr.turnaroundMinutes || 30,
+                        common_indications: [],
+                        isCustom: true
                     });
-                } catch (e) {
-                    console.warn('Failed to parse case config:', e.message);
                 }
-            }
+            });
 
             // Group by modality for easier display
             const groups = [...new Set(allStudies.map(s => s.modality))].sort();
@@ -3616,21 +3744,15 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
         return res.status(400).json({ error: 'radiology_ids array is required' });
     }
 
-    // Verify session exists and get case config
-    db.get('SELECT s.user_id, s.case_id, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?', [sessionId], (err, session) => {
+    // Verify session exists and get case config (snapshot-preferred)
+    db.get('SELECT s.user_id, s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?', [sessionId], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (session.user_id !== req.user.id && req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        // Parse case config to get configured radiology studies
-        let caseConfig = {};
-        try {
-            caseConfig = JSON.parse(session.config || '{}');
-        } catch (e) {
-            console.warn('Failed to parse case config:', e.message);
-        }
+        const caseConfig = resolveSessionCaseConfig(session);
         // Check both new location (config.radiology) and old location (clinicalRecords.radiology)
         const configuredRadiology = caseConfig.radiology || caseConfig.clinicalRecords?.radiology || [];
 
@@ -3749,16 +3871,11 @@ router.get('/sessions/:sessionId/available-treatments', authenticateToken, (req,
     const { sessionId } = req.params;
     const { type } = req.query; // Optional filter: medication, iv_fluid, oxygen, nursing
 
-    db.get('SELECT s.case_id, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?', [sessionId], (err, session) => {
+    db.get('SELECT s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?', [sessionId], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
-        let caseConfig = {};
-        try {
-            caseConfig = JSON.parse(session.config || '{}');
-        } catch (e) {
-            console.warn('[Treatments] Failed to parse case config:', e.message);
-        }
+        const caseConfig = resolveSessionCaseConfig(session);
 
         // Get case-specific treatment configuration
         const treatmentConfig = caseConfig.treatments || {};
@@ -3843,8 +3960,8 @@ router.post('/sessions/:sessionId/order-treatment', authenticateToken, (req, res
         return res.status(400).json({ error: 'treatment_type and treatment_name are required' });
     }
 
-    // Verify session and access
-    db.get('SELECT s.user_id, s.case_id, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?', [sessionId], (err, session) => {
+    // Verify session and access (snapshot-aware select for downstream config)
+    db.get('SELECT s.user_id, s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?', [sessionId], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (session.user_id !== req.user.id && req.user.role !== 'admin') {
