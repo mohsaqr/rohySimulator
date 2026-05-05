@@ -226,10 +226,15 @@ BEFORE_MED_DEPS=$(db_scalar "SELECT (SELECT COUNT(*) FROM medication_doses WHERE
 curl -s -X DELETE "${ADMIN_AUTH[@]}" "$API/api/master/medications/$MED_ID" > "$OUT/med-delete.json"
 AFTER_MED_DEPS=$(db_scalar "SELECT (SELECT COUNT(*) FROM medication_doses WHERE medication_id = ?) + (SELECT COUNT(*) FROM treatment_effects WHERE medication_id = ?) + (SELECT COUNT(*) FROM case_treatments WHERE medication_id = ?)" "$MED_ID" "$MED_ID" "$MED_ID")
 AFTER_MED=$(db_scalar "SELECT COUNT(*) FROM medications WHERE id = ?" "$MED_ID")
-if [ "$BEFORE_MED_DEPS" -gt 0 ] && [ "$AFTER_MED_DEPS" = "0" ] && [ "$AFTER_MED" = "0" ]; then
-    pass "DELETE /master/medications/:id removed dose rows and detached medication FKs"
+# Stage E7 changed medication DELETE to soft-delete: the row stays but
+# `deleted_at` is set and `is_active = 0`. Filtered SELECTs (the route
+# layer) hide it. Dose rows + treatment-effect/order/case-treatment
+# medication FKs still get detached the same way.
+AFTER_MED_LIVE=$(db_scalar "SELECT COUNT(*) FROM medications WHERE id = ? AND deleted_at IS NULL" "$MED_ID")
+if [ "$BEFORE_MED_DEPS" -gt 0 ] && [ "$AFTER_MED_DEPS" = "0" ] && [ "$AFTER_MED_LIVE" = "0" ]; then
+    pass "DELETE /master/medications/:id soft-deleted medication and detached medication FKs"
 else
-    fail "Medication cleanup failed (deps $BEFORE_MED_DEPS->$AFTER_MED_DEPS medication_after=$AFTER_MED)"
+    fail "Medication cleanup failed (deps $BEFORE_MED_DEPS->$AFTER_MED_DEPS medication_after=$AFTER_MED live=$AFTER_MED_LIVE)"
 fi
 
 section "users delete cleans user-owned rows"

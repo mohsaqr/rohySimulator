@@ -99,6 +99,62 @@ const isValidRole = (role) => VALID_ROLES.includes(normalizeRole(role));
 const roleForStorage = (role, fallback = 'student') => normalizeRole(role || fallback);
 const tenantId = (req) => resolveTenant(req);
 
+const SOFT_DELETE_TABLES = [
+    'cases',
+    'sessions',
+    'agent_templates',
+    'scenarios',
+    'medications',
+    'case_investigations',
+    'lab_definitions',
+    'clinical_notes'
+];
+
+const HARD_DELETE_ON_PURGE_TABLES = [
+    'user_preferences',
+    'active_sessions',
+    'alarm_config',
+    'session_notes',
+    'questionnaire_responses',
+    'export_records',
+    'llm_usage',
+    'tts_usage'
+];
+
+const RETENTION_TABLES = [
+    { table: 'event_log', column: 'timestamp', userColumn: 'user_id' },
+    { table: 'learning_events', column: 'timestamp', userColumn: 'user_id' },
+    { table: 'interactions', column: 'timestamp', userColumn: null },
+    { table: 'system_audit_log', column: 'timestamp', userColumn: 'user_id' },
+    { table: 'alarm_events', column: 'triggered_at', userColumn: null },
+    { table: 'llm_request_log', column: 'request_timestamp', userColumn: 'user_id' }
+];
+
+function dbGet(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.get(sql, params, (err, row) => err ? reject(err) : resolve(row || null));
+    });
+}
+
+function dbAll(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []));
+    });
+}
+
+function dbRun(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.run(sql, params, function onRun(err) {
+            err ? reject(err) : resolve(this);
+        });
+    });
+}
+
+async function dbScalar(sql, params = []) {
+    const row = await dbGet(sql, params);
+    return row ? Number(row.count || 0) : 0;
+}
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -180,6 +236,44 @@ function logAudit(params) {
     );
 }
 
+function logAuditAsync(params) {
+    const {
+        userId = null,
+        username = null,
+        action,
+        resourceType = null,
+        resourceId = null,
+        resourceName = null,
+        targetType = null,
+        targetId = null,
+        targetName = null,
+        oldValue = null,
+        newValue = null,
+        ipAddress = null,
+        userAgent = null,
+        sessionId = null,
+        status = 'success',
+        errorMessage = null,
+        metadata = null
+    } = params;
+    const tenant_id = params.tenantId ?? params.tenant_id ?? 1;
+
+    return dbRun(
+        `INSERT INTO system_audit_log
+         (user_id, username, action, resource_type, resource_id, resource_name,
+          old_value, new_value, ip_address, user_agent, session_id, status, error_message, metadata, tenant_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            userId, username, action, resourceType ?? targetType, resourceId ?? targetId, resourceName ?? targetName,
+            oldValue ? JSON.stringify(redactAuditPayload(oldValue)) : null,
+            newValue ? JSON.stringify(redactAuditPayload(newValue)) : null,
+            ipAddress, userAgent, sessionId, status, errorMessage,
+            metadata ? JSON.stringify(redactAuditPayload(metadata)) : null,
+            tenant_id
+        ]
+    );
+}
+
 function auditSuccess(req, params) {
     logAudit({
         userId: req.user?.id,
@@ -207,6 +301,128 @@ function redactAuditSetting(key, value) {
         return value ? REDACTED : value;
     }
     return redactJsonColumn(parseAuditJson(value));
+}
+
+async function buildUserPurgePlan(userId, tenant_id) {
+    const authoredCaseIds = (await dbAll(
+        `SELECT id FROM cases WHERE tenant_id = ? AND deleted_at IS NULL
+         AND (created_by = ? OR last_modified_by = ?)`,
+        [tenant_id, userId, userId]
+    )).map(r => r.id);
+    const sessionIds = (await dbAll(
+        `SELECT id FROM sessions WHERE tenant_id = ? AND deleted_at IS NULL AND user_id = ?`,
+        [tenant_id, userId]
+    )).map(r => r.id);
+
+    const plan = {
+        soft_delete: {
+            cases: authoredCaseIds.length,
+            sessions: sessionIds.length,
+            agent_templates: await dbScalar(`SELECT COUNT(*) AS count FROM agent_templates WHERE tenant_id = ? AND created_by = ? AND deleted_at IS NULL`, [tenant_id, userId]),
+            scenarios: await dbScalar(`SELECT COUNT(*) AS count FROM scenarios WHERE tenant_id = ? AND created_by = ? AND deleted_at IS NULL`, [tenant_id, userId]),
+            // lab_definitions is a global master catalog (no tenant_id),
+            // but per-user authorship exists via created_by. Stage E6 didn't
+            // tenant-scope this table. Filter by created_by only.
+            lab_definitions: await dbScalar(`SELECT COUNT(*) AS count FROM lab_definitions WHERE created_by = ? AND deleted_at IS NULL`, [userId]),
+            clinical_notes: await dbScalar(`SELECT COUNT(*) AS count FROM clinical_notes WHERE tenant_id = ? AND user_id = ? AND deleted_at IS NULL`, [tenant_id, userId]),
+            case_investigations: authoredCaseIds.length
+                ? await dbScalar(
+                    `SELECT COUNT(*) AS count FROM case_investigations
+                     WHERE tenant_id = ? AND deleted_at IS NULL AND case_id IN (${authoredCaseIds.map(() => '?').join(',')})`,
+                    [tenant_id, ...authoredCaseIds]
+                )
+                : 0
+        },
+        hard_delete: {},
+        anonymize_retained: {},
+        anonymize_user: 1
+    };
+
+    for (const table of HARD_DELETE_ON_PURGE_TABLES) {
+        plan.hard_delete[table] = await dbScalar(
+            `SELECT COUNT(*) AS count FROM ${table} WHERE tenant_id = ? AND user_id = ?`,
+            [tenant_id, userId]
+        );
+    }
+
+    plan.hard_delete.alarm_config = await dbScalar(
+        `SELECT COUNT(*) AS count FROM alarm_config WHERE tenant_id = ? AND user_id = ?`,
+        [tenant_id, userId]
+    );
+
+    plan.anonymize_retained.sessions = sessionIds.length;
+    plan.anonymize_retained.login_logs = await dbScalar(`SELECT COUNT(*) AS count FROM login_logs WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+    plan.anonymize_retained.settings_logs = await dbScalar(`SELECT COUNT(*) AS count FROM settings_logs WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+    plan.anonymize_retained.session_settings = await dbScalar(`SELECT COUNT(*) AS count FROM session_settings WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+    plan.anonymize_retained.physical_exam_findings = await dbScalar(`SELECT COUNT(*) AS count FROM physical_exam_findings WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+    plan.anonymize_retained.emotion_logs = await dbScalar(`SELECT COUNT(*) AS count FROM emotion_logs WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+    for (const retention of RETENTION_TABLES.filter(t => t.userColumn)) {
+        plan.anonymize_retained[retention.table] = await dbScalar(
+            `SELECT COUNT(*) AS count FROM ${retention.table} WHERE tenant_id = ? AND ${retention.userColumn} = ?`,
+            [tenant_id, userId]
+        );
+    }
+
+    return { plan, authoredCaseIds, sessionIds };
+}
+
+async function executeUserPurge({ userId, tenant_id, anonymizedUsername, passwordHash, authoredCaseIds }) {
+    await dbRun('BEGIN');
+    try {
+        await dbRun(`UPDATE cases SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL, last_modified_by = NULL
+                     WHERE tenant_id = ? AND (created_by = ? OR last_modified_by = ?)`, [tenant_id, userId, userId]);
+        if (authoredCaseIds.length > 0) {
+            await dbRun(
+                `UPDATE case_investigations SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP)
+                 WHERE tenant_id = ? AND case_id IN (${authoredCaseIds.map(() => '?').join(',')})`,
+                [tenant_id, ...authoredCaseIds]
+            );
+        }
+        await dbRun(`UPDATE sessions SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), user_id = NULL, student_name = ?
+                     WHERE tenant_id = ? AND user_id = ?`, [anonymizedUsername, tenant_id, userId]);
+        await dbRun(`UPDATE agent_templates SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL
+                     WHERE tenant_id = ? AND created_by = ?`, [tenant_id, userId]);
+        await dbRun(`UPDATE scenarios SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL
+                     WHERE tenant_id = ? AND created_by = ?`, [tenant_id, userId]);
+        // lab_definitions is a global master catalog (no tenant_id column);
+        // detach by created_by only.
+        await dbRun(`UPDATE lab_definitions SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL
+                     WHERE created_by = ?`, [userId]);
+        await dbRun(`UPDATE clinical_notes SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP)
+                     WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+
+        for (const table of HARD_DELETE_ON_PURGE_TABLES) {
+            await dbRun(`DELETE FROM ${table} WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+        }
+
+        await dbRun(`UPDATE event_log SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+        await dbRun(`UPDATE learning_events SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+        await dbRun(`UPDATE system_audit_log SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+        await dbRun(`UPDATE llm_request_log SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+        await dbRun(`UPDATE login_logs SET user_id = NULL, username = ? WHERE tenant_id = ? AND user_id = ?`, [anonymizedUsername, tenant_id, userId]);
+        await dbRun(`UPDATE settings_logs SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+        await dbRun(`UPDATE session_settings SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+        await dbRun(`UPDATE physical_exam_findings SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+        await dbRun(`UPDATE emotion_logs SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+        await dbRun(`UPDATE platform_settings SET updated_by = NULL WHERE updated_by = ?`, [userId]);
+        await dbRun(`UPDATE scenario_templates SET created_by = NULL WHERE created_by = ?`, [userId]);
+        await dbRun(`UPDATE scenario_events SET acknowledged_by = NULL WHERE tenant_id = ? AND acknowledged_by = ?`, [tenant_id, userId]);
+
+        await dbRun(
+            `UPDATE users SET
+                username = ?, name = NULL, email = NULL, password_hash = ?, role = 'student',
+                department = NULL, status = 'inactive', last_login = NULL, failed_login_attempts = 0,
+                locked_until = NULL, updated_at = CURRENT_TIMESTAMP, deleted_at = CURRENT_TIMESTAMP,
+                institution = NULL, address = NULL, phone = NULL, alternative_email = NULL,
+                education = NULL, grade = NULL
+             WHERE id = ? AND tenant_id = ?`,
+            [anonymizedUsername, passwordHash, userId, tenant_id]
+        );
+        await dbRun('COMMIT');
+    } catch (err) {
+        await dbRun('ROLLBACK').catch(() => {});
+        throw err;
+    }
 }
 
 /**
@@ -1047,8 +1263,8 @@ router.get('/cases', authenticateToken, (req, res) => {
 
     // Students only see available cases; reviewer+ can inspect all cases.
     const sql = canReview
-        ? "SELECT * FROM cases WHERE tenant_id = ? ORDER BY is_default DESC, created_at DESC"
-        : "SELECT * FROM cases WHERE tenant_id = ? AND is_available = 1 ORDER BY is_default DESC, created_at DESC";
+        ? "SELECT * FROM cases WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, created_at DESC"
+        : "SELECT * FROM cases WHERE tenant_id = ? AND deleted_at IS NULL AND is_available = 1 ORDER BY is_default DESC, created_at DESC";
 
     db.all(sql, [tenantId(req)], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -1085,10 +1301,28 @@ router.get('/cases', authenticateToken, (req, res) => {
     });
 });
 
+// GET /api/cases/:id - Authenticated users can read a live case in their tenant
+router.get('/cases/:id', authenticateToken, (req, res) => {
+    const sql = canReadAcrossUsers(req.user)
+        ? `SELECT * FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`
+        : `SELECT * FROM cases WHERE id = ? AND tenant_id = ? AND is_available = 1 AND deleted_at IS NULL`;
+    db.get(sql, [req.params.id, tenantId(req)], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: 'Case not found' });
+        res.json({
+            ...row,
+            config: row.config ? JSON.parse(row.config) : {},
+            scenario: row.scenario ? JSON.parse(row.scenario) : null,
+            is_available: Boolean(row.is_available),
+            is_default: Boolean(row.is_default)
+        });
+    });
+});
+
 // PUT /api/cases/:id/availability - Toggle case availability (Admin only)
 router.put('/cases/:id/availability', authenticateToken, requireEducator, (req, res) => {
     const { is_available } = req.body;
-    db.get('SELECT id, name, is_available FROM cases WHERE id = ? AND tenant_id = ?', [req.params.id, tenantId(req)], (readErr, oldCase) => {
+    db.get('SELECT id, name, is_available FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [req.params.id, tenantId(req)], (readErr, oldCase) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
         if (!oldCase) return res.status(404).json({ error: 'Case not found' });
         db.run(
@@ -1114,7 +1348,7 @@ router.put('/cases/:id/availability', authenticateToken, requireEducator, (req, 
 // PUT /api/cases/:id/default - Set case as default (Admin only)
 router.put('/cases/:id/default', authenticateToken, requireEducator, (req, res) => {
     const { is_default } = req.body;
-    db.get('SELECT id, name, is_default FROM cases WHERE id = ? AND tenant_id = ?', [req.params.id, tenantId(req)], (readErr, oldCase) => {
+    db.get('SELECT id, name, is_default FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [req.params.id, tenantId(req)], (readErr, oldCase) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
         if (!oldCase) return res.status(404).json({ error: 'Case not found' });
 
@@ -1264,7 +1498,7 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
     const safeConfig = clampInitialVitals(config || {});
 
     // First, get the old case data for audit trail
-    db.get(`SELECT * FROM cases WHERE id = ? AND tenant_id = ?`, [caseId, tenantId(req)], (err, oldCase) => {
+    db.get(`SELECT * FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`, [caseId, tenantId(req)], (err, oldCase) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -1340,7 +1574,7 @@ router.delete('/cases/:id', authenticateToken, requireEducator, (req, res) => {
     const userAgent = req.headers['user-agent'];
 
     // Get case name for audit before deleting
-    db.get(`SELECT name FROM cases WHERE id = ? AND tenant_id = ?`, [caseId, tenantId(req)], (err, caseData) => {
+    db.get(`SELECT name FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`, [caseId, tenantId(req)], (err, caseData) => {
         if (err) return res.status(500).json({ error: err.message });
 
         // Soft delete - set deleted_at timestamp
@@ -1406,7 +1640,7 @@ router.post('/sessions', authenticateToken, async (req, res) => {
     // pull from this snapshot rather than the live cases row, so admin edits
     // mid-session don't bleed into the running session.
     const caseRow = await new Promise((resolve, reject) => {
-        db.get('SELECT id, name, system_prompt, config, scenario FROM cases WHERE id = ? AND tenant_id = ?', [case_id, tenantId(req)], (err, row) => {
+        db.get('SELECT id, name, system_prompt, config, scenario FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [case_id, tenantId(req)], (err, row) => {
             if (err) reject(err); else resolve(row || null);
         });
     });
@@ -1501,7 +1735,7 @@ router.get('/sessions/:id', authenticateToken, (req, res) => {
         SELECT s.*, c.name as case_name
         FROM sessions s
         LEFT JOIN cases c ON s.case_id = c.id
-        WHERE s.id = ? AND s.tenant_id = ?
+        WHERE s.id = ? AND s.tenant_id = ? AND s.deleted_at IS NULL
     `;
 
     db.get(sql, [sessionId, tenantId(req)], (err, session) => {
@@ -1525,7 +1759,7 @@ router.get('/sessions/:id', authenticateToken, (req, res) => {
 router.put('/sessions/:id/end', authenticateToken, (req, res) => {
     const sessionId = req.params.id;
 
-    db.get('SELECT start_time, end_time, duration, user_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
+    db.get('SELECT start_time, end_time, duration, user_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [sessionId, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
@@ -1616,7 +1850,7 @@ router.post('/interactions', authenticateToken, (req, res) => {
     const { session_id, role, content } = req.body;
     
     // Verify user owns the session
-    db.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [session_id, tenantId(req)], (err, session) => {
+    db.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [session_id, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         
@@ -1635,7 +1869,7 @@ router.post('/interactions', authenticateToken, (req, res) => {
 // GET /api/interactions/:session_id - Authenticated users can view their own
 router.get('/interactions/:session_id', authenticateToken, (req, res) => {
     // Verify user owns the session or is admin
-    db.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [req.params.session_id, tenantId(req)], (err, session) => {
+    db.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [req.params.session_id, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         
@@ -1852,6 +2086,93 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     }
 });
 
+// POST /api/users/:id/purge - GDPR-style same-tenant purge (Admin only)
+router.post('/users/:id/purge', authenticateToken, requireAdmin, async (req, res) => {
+    const userId = Number(req.params.id);
+    // Use bracket notation: req.query.dry-run is parsed as a subtraction expression in JS.
+    const dryRun = String(req.query['dry-run'] || req.query.dry_run || '').toLowerCase() === 'true';
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+        return res.status(400).json({ error: 'Invalid user id' });
+    }
+    if (userId === req.user.id) {
+        return res.status(400).json({ error: 'Cannot purge your own account' });
+    }
+
+    try {
+        const targetUser = await dbGet(
+            'SELECT id, username, email, role, tenant_id, deleted_at FROM users WHERE id = ? AND tenant_id = ?',
+            [userId, tenantId(req)]
+        );
+        if (!targetUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const { plan, authoredCaseIds } = await buildUserPurgePlan(userId, tenantId(req));
+        const responsePlan = {
+            target_user_id: userId,
+            tenant_id: tenantId(req),
+            dry_run: dryRun,
+            policy: {
+                soft_delete: 'Strict erasure: user-authored domain rows are hidden with deleted_at and nullable owner ids are detached.',
+                hard_delete: 'Ephemeral preferences/session/config rows are physically deleted on purge.',
+                retained_logs: 'Time-bounded logs keep operational rows but target user_id is anonymized to NULL until retention sweep deletes by age.',
+                user_row: 'The user ownership row is retained, deactivated, and PII is nulled.'
+            },
+            counts: plan
+        };
+
+        if (dryRun) {
+            return res.json(responsePlan);
+        }
+
+        const anonymizedUsername = `deleted_user_${userId}`;
+        const passwordHash = await bcrypt.hash(`purged-${userId}-${Date.now()}`, 10);
+
+        await logAuditAsync({
+            userId: req.user.id,
+            username: req.user.username,
+            action: 'purge_user',
+            resourceType: 'user',
+            resourceId: String(userId),
+            resourceName: targetUser.username,
+            oldValue: {
+                id: targetUser.id,
+                username: targetUser.username,
+                email_present: Boolean(targetUser.email),
+                role: targetUser.role
+            },
+            newValue: {
+                username: anonymizedUsername,
+                email: null,
+                status: 'inactive',
+                deleted_at: 'CURRENT_TIMESTAMP',
+                counts: plan
+            },
+            metadata: {
+                dry_run: false,
+                authored_case_ids: authoredCaseIds
+            },
+            tenantId: tenantId(req),
+            ipAddress: req.ip || req.connection?.remoteAddress,
+            userAgent: req.headers?.['user-agent']
+        });
+
+        await executeUserPurge({
+            userId,
+            tenant_id: tenantId(req),
+            anonymizedUsername,
+            passwordHash,
+            authoredCaseIds
+        });
+
+        res.json({ ...responsePlan, purged: true, anonymized_username: anonymizedUsername });
+    } catch (err) {
+        console.error('[User Purge] Error:', err.message);
+        res.status(500).json({ error: 'Failed to purge user', details: err.message });
+    }
+});
+
 // DELETE /api/users/:id - Delete user (Admin only)
 router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
     // Prevent deleting yourself
@@ -1960,7 +2281,7 @@ router.get('/analytics/sessions', authenticateToken, (req, res) => {
             FROM sessions s
             LEFT JOIN cases c ON s.case_id = c.id
             LEFT JOIN users u ON s.user_id = u.id
-            WHERE s.tenant_id = ?
+            WHERE s.tenant_id = ? AND s.deleted_at IS NULL
             ORDER BY s.start_time DESC
         `;
         params = [tenantId(req)];
@@ -1970,7 +2291,7 @@ router.get('/analytics/sessions', authenticateToken, (req, res) => {
             SELECT s.*, c.name as case_name
             FROM sessions s
             LEFT JOIN cases c ON s.case_id = c.id
-            WHERE s.tenant_id = ? AND s.user_id = ?
+            WHERE s.tenant_id = ? AND s.user_id = ? AND s.deleted_at IS NULL
             ORDER BY s.start_time DESC
         `;
         params = [tenantId(req), req.user.id];
@@ -3208,7 +3529,7 @@ router.put('/notification-prefs', authenticateToken, (req, res) => {
 router.get('/cases/:id/investigations', authenticateToken, (req, res) => {
     const caseId = req.params.id;
     
-    const sql = `SELECT * FROM case_investigations WHERE case_id = ? AND tenant_id = ?`;
+    const sql = `SELECT * FROM case_investigations WHERE case_id = ? AND tenant_id = ? AND deleted_at IS NULL`;
     
     db.all(sql, [caseId, tenantId(req)], (err, rows) => {
         if (err) {
@@ -3661,12 +3982,12 @@ router.post('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res
         return res.status(400).json({ error: 'test_name is required' });
     }
 
-    const findSql = `SELECT id FROM case_investigations WHERE case_id = ? AND investigation_type = 'lab' AND test_name = ?`;
-    db.get(findSql, [caseId, test_name], (findErr, existing) => {
+    const findSql = `SELECT id FROM case_investigations WHERE case_id = ? AND tenant_id = ? AND investigation_type = 'lab' AND test_name = ? AND deleted_at IS NULL`;
+    db.get(findSql, [caseId, tenantId(req), test_name], (findErr, existing) => {
         if (findErr) return res.status(500).json({ error: findErr.message });
 
         if (existing && existing.id) {
-            db.get('SELECT * FROM case_investigations WHERE id = ?', [existing.id], (oldErr, oldLab) => {
+            db.get('SELECT * FROM case_investigations WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [existing.id, tenantId(req)], (oldErr, oldLab) => {
                 if (oldErr) return res.status(500).json({ error: oldErr.message });
             const updateSql = `
                 UPDATE case_investigations
@@ -3700,14 +4021,14 @@ router.post('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res
             INSERT INTO case_investigations (
                 case_id, investigation_type, test_name, test_group, gender_category,
                 min_value, max_value, current_value, unit, normal_samples,
-                is_abnormal, turnaround_minutes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                is_abnormal, turnaround_minutes, tenant_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         db.run(insertSql, [
             caseId, 'lab', test_name, test_group, gender_category,
             min_value, max_value, current_value, unit,
             JSON.stringify(normal_samples || []),
-            is_abnormal ? 1 : 0, turnaround_minutes
+            is_abnormal ? 1 : 0, turnaround_minutes, tenantId(req)
         ], function(insertErr) {
             if (insertErr) return res.status(500).json({ error: insertErr.message });
             auditSuccess(req, {
@@ -3737,8 +4058,8 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res)
     }
 
     db.all(
-        `SELECT * FROM case_investigations WHERE case_id = ? AND investigation_type = 'lab'`,
-        [caseId],
+        `SELECT * FROM case_investigations WHERE case_id = ? AND tenant_id = ? AND investigation_type = 'lab' AND deleted_at IS NULL`,
+        [caseId, tenantId(req)],
         (readErr, oldLabs) => {
             if (readErr) return res.status(500).json({ error: readErr.message });
 
@@ -3750,17 +4071,17 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res)
             DELETE FROM investigation_orders
             WHERE investigation_id IN (
                 SELECT id FROM case_investigations
-                WHERE case_id = ? AND investigation_type = 'lab'
+                WHERE case_id = ? AND tenant_id = ? AND investigation_type = 'lab' AND deleted_at IS NULL
             )
         `;
-        db.run(orphanSql, [caseId], (orphanErr) => {
+        db.run(orphanSql, [caseId, tenantId(req)], (orphanErr) => {
             if (orphanErr) {
                 db.run('ROLLBACK');
                 return res.status(500).json({ error: orphanErr.message });
             }
             db.run(
-                `DELETE FROM case_investigations WHERE case_id = ? AND investigation_type = 'lab'`,
-                [caseId],
+                `UPDATE case_investigations SET deleted_at = CURRENT_TIMESTAMP WHERE case_id = ? AND tenant_id = ? AND investigation_type = 'lab' AND deleted_at IS NULL`,
+                [caseId, tenantId(req)],
                 function(deleteErr) {
                     if (deleteErr) {
                         db.run('ROLLBACK');
@@ -3783,8 +4104,8 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res)
                         INSERT INTO case_investigations (
                             case_id, investigation_type, test_name, test_group, gender_category,
                             min_value, max_value, current_value, unit, normal_samples,
-                            is_abnormal, turnaround_minutes
-                        ) VALUES (?, 'lab', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            is_abnormal, turnaround_minutes, tenant_id
+                        ) VALUES (?, 'lab', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     `;
                     let pending = labs.length;
                     let failed = false;
@@ -3800,7 +4121,7 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res)
                             lab.gender_category ?? null, lab.min_value ?? null,
                             lab.max_value ?? null, lab.current_value ?? null,
                             lab.unit ?? null, JSON.stringify(lab.normal_samples || []),
-                            lab.is_abnormal ? 1 : 0, lab.turnaround_minutes ?? 30
+                            lab.is_abnormal ? 1 : 0, lab.turnaround_minutes ?? 30, tenantId(req)
                         ], (insertErr) => {
                             if (insertErr && !failed) {
                                 failed = true;
@@ -3871,13 +4192,13 @@ router.put('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, (re
     }
     
     params.push(labId);
-    const sql = `UPDATE case_investigations SET ${updates.join(', ')} WHERE id = ?`;
+    const sql = `UPDATE case_investigations SET ${updates.join(', ')} WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`;
 
-    db.get('SELECT * FROM case_investigations WHERE id = ? AND case_id = ?', [labId, req.params.caseId], (readErr, oldLab) => {
+    db.get('SELECT * FROM case_investigations WHERE id = ? AND case_id = ? AND tenant_id = ? AND deleted_at IS NULL', [labId, req.params.caseId, tenantId(req)], (readErr, oldLab) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
         if (!oldLab) return res.status(404).json({ error: 'Lab test not found' });
 
-        db.run(sql, params, function(err) {
+        db.run(sql, [...params, tenantId(req)], function(err) {
             if (err) {
                 return res.status(500).json({ error: err.message });
             }
@@ -3908,7 +4229,7 @@ router.put('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, (re
 router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, (req, res) => {
     const { labId, caseId } = req.params;
 
-    db.get('SELECT * FROM case_investigations WHERE id = ? AND case_id = ?', [labId, caseId], (readErr, oldLab) => {
+    db.get('SELECT * FROM case_investigations WHERE id = ? AND case_id = ? AND tenant_id = ? AND deleted_at IS NULL', [labId, caseId, tenantId(req)], (readErr, oldLab) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
         if (!oldLab) return res.status(404).json({ error: 'Lab test not found' });
 
@@ -3926,8 +4247,8 @@ router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, 
                 }
                 const orphans = this.changes ?? 0;
                 db.run(
-                    `DELETE FROM case_investigations WHERE id = ? AND case_id = ?`,
-                    [labId, caseId],
+                    `UPDATE case_investigations SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND case_id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+                    [labId, caseId, tenantId(req)],
                     function (deleteErr) {
                         if (deleteErr) {
                             db.run('ROLLBACK');
@@ -3984,7 +4305,7 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, (req, res) 
                 min_value, max_value, current_value, unit,
                 normal_samples, is_abnormal, turnaround_minutes
             FROM case_investigations 
-            WHERE case_id = ? AND investigation_type = 'lab'
+            WHERE case_id = ? AND deleted_at IS NULL AND investigation_type = 'lab'
             ORDER BY test_group, test_name
         `;
         
@@ -4194,7 +4515,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
 
                 // Get configured labs
                 if (configuredIds.length > 0) {
-                    const labsSql = `SELECT id, turnaround_minutes, test_name FROM case_investigations WHERE id IN (${configuredIds.map(() => '?').join(',')})`;
+                    const labsSql = `SELECT id, turnaround_minutes, test_name FROM case_investigations WHERE deleted_at IS NULL AND id IN (${configuredIds.map(() => '?').join(',')})`;
 
                     db.all(labsSql, configuredIds, (err, labs) => {
                         if (err) {
@@ -5486,8 +5807,8 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         } else if (agent_llm_config?.agent_template_id) {
             // Try to fetch agent template LLM config from DB
             const agentTemplate = await new Promise((resolve, reject) => {
-                db.get('SELECT llm_provider, llm_model, llm_api_key, llm_endpoint, llm_temperature, llm_max_tokens FROM agent_templates WHERE id = ?',
-                    [agent_llm_config.agent_template_id], (err, row) => {
+                db.get('SELECT llm_provider, llm_model, llm_api_key, llm_endpoint, llm_temperature, llm_max_tokens FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
+                    [agent_llm_config.agent_template_id, tenantId(req)], (err, row) => {
                     if (err) reject(err);
                     else resolve(row);
                 });
@@ -5924,11 +6245,11 @@ router.get('/scenarios', authenticateToken, (req, res) => {
         SELECT s.*, u.username as created_by_username 
         FROM scenarios s
         LEFT JOIN users u ON s.created_by = u.id
-        WHERE s.is_public = 1 OR s.created_by = ?
+        WHERE s.tenant_id = ? AND s.deleted_at IS NULL AND (s.is_public = 1 OR s.created_by = ?)
         ORDER BY s.created_at DESC
     `;
     
-    db.all(query, [userId], (err, rows) => {
+    db.all(query, [tenantId(req), userId], (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -5947,7 +6268,7 @@ router.get('/scenarios', authenticateToken, (req, res) => {
 router.get('/scenarios/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
     
-    db.get('SELECT * FROM scenarios WHERE id = ?', [id], (err, row) => {
+    db.get('SELECT * FROM scenarios WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], (err, row) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -6011,13 +6332,13 @@ router.post('/scenarios', authenticateToken, (req, res) => {
     }
 
     const query = `
-        INSERT INTO scenarios (name, description, duration_minutes, category, timeline, created_by, is_public)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO scenarios (name, description, duration_minutes, category, timeline, created_by, is_public, tenant_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     db.run(
         query,
-        [name, description, duration_minutes, category, JSON.stringify(timeline), created_by, is_public ? 1 : 0],
+        [name, description, duration_minutes, category, JSON.stringify(timeline), created_by, is_public ? 1 : 0, tenantId(req)],
         function(err) {
             if (err) {
                 return res.status(500).json({ error: err.message });
@@ -6052,7 +6373,7 @@ router.put('/scenarios/:id', authenticateToken, (req, res) => {
     }
     
     // Check ownership or educator/admin
-    db.get('SELECT * FROM scenarios WHERE id = ?', [id], (err, row) => {
+    db.get('SELECT * FROM scenarios WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], (err, row) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -6066,12 +6387,12 @@ router.put('/scenarios/:id', authenticateToken, (req, res) => {
         const query = `
             UPDATE scenarios 
             SET name = ?, description = ?, duration_minutes = ?, category = ?, timeline = ?, is_public = ?
-            WHERE id = ?
+            WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL
         `;
         
         db.run(
             query,
-            [name, description, duration_minutes, category, JSON.stringify(timeline), is_public ? 1 : 0, id],
+            [name, description, duration_minutes, category, JSON.stringify(timeline), is_public ? 1 : 0, id, tenantId(req)],
             (err) => {
                 if (err) {
                     return res.status(500).json({ error: err.message });
@@ -6095,7 +6416,7 @@ router.delete('/scenarios/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
     
     // Check ownership or educator/admin
-    db.get('SELECT * FROM scenarios WHERE id = ?', [id], (err, row) => {
+    db.get('SELECT * FROM scenarios WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], (err, row) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -6106,7 +6427,7 @@ router.delete('/scenarios/:id', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Not authorized to delete this scenario' });
         }
         
-        db.run('DELETE FROM scenarios WHERE id = ?', [id], (err) => {
+        db.run('UPDATE scenarios SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], (err) => {
             if (err) {
                 return res.status(500).json({ error: err.message });
             }
@@ -6973,7 +7294,7 @@ router.get('/master/lab-panels', (req, res) => {
 router.get('/master/medications', (req, res) => {
     const { drug_class, category, search, limit = 500, offset = 0 } = req.query;
 
-    let sql = `SELECT * FROM medications WHERE is_active = 1`;
+    let sql = `SELECT * FROM medications WHERE is_active = 1 AND deleted_at IS NULL`;
     const params = [];
 
     if (drug_class) {
@@ -7079,7 +7400,7 @@ router.post('/master/medications/bulk', authenticateToken, requireEducator, (req
 router.delete('/master/medications/:id', authenticateToken, requireEducator, (req, res) => {
     const { id } = req.params;
 
-    db.get('SELECT * FROM medications WHERE id = ?', [id], (readErr, oldMedication) => {
+    db.get('SELECT * FROM medications WHERE id = ? AND deleted_at IS NULL', [id], (readErr, oldMedication) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
         if (!oldMedication) return res.status(404).json({ error: 'Medication not found' });
 
@@ -7109,7 +7430,7 @@ router.delete('/master/medications/:id', authenticateToken, requireEducator, (re
                             return res.status(500).json({ error: caseErr.message });
                         }
                         const caseTreatmentsDetached = this.changes ?? 0;
-                        db.run('DELETE FROM medications WHERE id = ?', [id], function(err) {
+                        db.run('UPDATE medications SET deleted_at = CURRENT_TIMESTAMP, is_active = 0 WHERE id = ? AND deleted_at IS NULL', [id], function(err) {
                             if (err) {
                                 db.run('ROLLBACK');
                                 return res.status(500).json({ error: err.message });
@@ -7150,7 +7471,7 @@ router.delete('/master/medications/:id', authenticateToken, requireEducator, (re
 
 // DELETE /api/master/medications/all - Clear all medications (Admin)
 router.delete('/master/medications/all', authenticateToken, requireEducator, (req, res) => {
-    db.get('SELECT COUNT(*) AS count FROM medications', [], (readErr, row) => {
+    db.get('SELECT COUNT(*) AS count FROM medications WHERE deleted_at IS NULL', [], (readErr, row) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
         const oldCount = row?.count || 0;
 
@@ -7180,7 +7501,7 @@ router.delete('/master/medications/all', authenticateToken, requireEducator, (re
                             return res.status(500).json({ error: caseErr.message });
                         }
                         const caseTreatmentsDetached = this.changes ?? 0;
-                        db.run('DELETE FROM medications', function(err) {
+                        db.run('UPDATE medications SET deleted_at = CURRENT_TIMESTAMP, is_active = 0 WHERE deleted_at IS NULL', function(err) {
                             if (err) {
                                 db.run('ROLLBACK');
                                 return res.status(500).json({ error: err.message });
@@ -9317,7 +9638,7 @@ router.get('/agents/templates', authenticateToken, async (req, res) => {
     try {
         const templates = await new Promise((resolve, reject) => {
             db.all(
-                `SELECT * FROM agent_templates WHERE tenant_id = ? ORDER BY is_default DESC, agent_type ASC, name ASC`,
+                `SELECT * FROM agent_templates WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, agent_type ASC, name ASC`,
                 [tenantId(req)],
                 (err, rows) => {
                     if (err) reject(err);
@@ -9346,7 +9667,7 @@ router.get('/agents/templates/:id', authenticateToken, async (req, res) => {
 
         const template = await new Promise((resolve, reject) => {
             db.get(
-                'SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ?',
+                'SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
                 [id, tenantId(req)],
                 (err, row) => {
                     if (err) reject(err);
@@ -9457,7 +9778,7 @@ router.put('/agents/templates/:id', authenticateToken, requireEducator, async (r
         // baseline (POST .../reset-to-default re-applies it). We still
         // 404 on missing rows so the UI gets a sensible signal.
         const existing = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ?', [id, tenantId(req)], (err, row) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -9587,7 +9908,7 @@ router.delete('/agents/templates/:id', authenticateToken, requireEducator, async
 
         // Check if it's a default template
         const template = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ?', [id, tenantId(req)], (err, row) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -9622,7 +9943,7 @@ router.delete('/agents/templates/:id', authenticateToken, requireEducator, async
         }
 
         await new Promise((resolve, reject) => {
-            db.run('DELETE FROM agent_templates WHERE id = ?', [id], function(err) {
+            db.run('UPDATE agent_templates SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], function(err) {
                 if (err) reject(err);
                 else resolve(this.changes);
             });
@@ -9660,7 +9981,7 @@ router.post('/agents/templates/:id/reset-to-default', authenticateToken, require
     try {
         const { id } = req.params;
         const existing = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM agent_templates WHERE id = ?', [id], (err, row) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -9758,7 +10079,7 @@ router.post('/agents/templates/:id/reset-to-default', authenticateToken, require
         // Return the freshly-reset row so the client can rehydrate without
         // a separate GET.
         const fresh = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM agent_templates WHERE id = ?', [id], (err, row) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -9777,7 +10098,7 @@ router.post('/agents/templates/:id/test-llm', authenticateToken, requireEducator
 
         // Get template with LLM config
         const template = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM agent_templates WHERE id = ?', [id], (err, row) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -9930,7 +10251,7 @@ router.post('/agents/templates/:id/duplicate', authenticateToken, requireEducato
 
         // Get original template
         const original = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM agent_templates WHERE id = ?', [id], (err, row) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -10084,7 +10405,7 @@ router.post('/cases/:caseId/agents', authenticateToken, async (req, res) => {
 
         // Check if template exists
         const template = await new Promise((resolve, reject) => {
-            db.get('SELECT id FROM agent_templates WHERE id = ?', [agent_template_id], (err, row) => {
+            db.get('SELECT id FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [agent_template_id, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -10247,7 +10568,7 @@ router.post('/cases/:caseId/agents/add-defaults', authenticateToken, async (req,
 
         // Get all default templates
         const defaults = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM agent_templates WHERE is_default = 1', (err, rows) => {
+            db.all('SELECT * FROM agent_templates WHERE is_default = 1 AND tenant_id = ? AND deleted_at IS NULL', [tenantId(req)], (err, rows) => {
                 if (err) reject(err);
                 else resolve(rows || []);
             });

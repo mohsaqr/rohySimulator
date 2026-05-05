@@ -1,5 +1,62 @@
 # Session Handoff — 2026-05-05
 
+## Stage E7 (Soft delete + retention policy) — IMPLEMENTED this session
+
+Inventory pass:
+- **Soft-delete**: `cases`, `sessions`, `agent_templates`, `scenarios`,
+  `medications`, `case_investigations`, `lab_definitions`, and
+  `clinical_notes`.
+- **Hard-delete on purge**: `user_preferences`, `active_sessions`,
+  `alarm_config`, `session_notes`, `questionnaire_responses`,
+  `export_records`, `llm_usage`, and `tts_usage`.
+- **Retain N days, then purge**: `event_log`, `learning_events`,
+  `interactions`, `system_audit_log`, `alarm_events`, and
+  `llm_request_log`.
+- **Always retain/anonymized**: `users` as the tenant ownership anchor and
+  `tenants`; immutable case-version history keeps `changed_by` pointing to
+  the anonymized retained user row.
+
+Implementation:
+1. **Migration** — `migrations/0005_retention.sql` adds missing
+   `deleted_at` columns to soft-delete tables, indexes all soft-delete
+   columns, adds retention time indexes, rebuilds `users.email` as nullable
+   for purge anonymization, and rebuilds `llm_request_log.user_id` as nullable
+   for retained-log anonymization.
+2. **Soft-delete reads** — cases, scenarios, case investigations, medications,
+   and agent templates now filter `deleted_at IS NULL` on live reads. Deletes
+   for scenarios, medications, case labs, and agent templates now set
+   `deleted_at` instead of hard-deleting the parent row.
+3. **Purge endpoint** — `POST /api/users/:id/purge` is admin-only and
+   same-tenant only. `?dry-run=true` returns cascade counts without writes.
+   The destructive path writes `purge_user` to `system_audit_log` before
+   mutation, then soft-deletes user-authored domain rows, hard-deletes
+   ephemeral rows, nulls user ids in retained time-bounded logs, and
+   anonymizes/deactivates the retained `users` row as `deleted_user_<id>`.
+4. **Retention sweep** — `scripts/retention-sweep.js` deletes old rows from
+   time-bounded tables. Default retention is 90 days; override with
+   `ROHY_RETENTION_SECONDS`, `RETENTION_SECONDS`, `ROHY_RETENTION_DAYS`,
+   `RETENTION_DAYS`, or platform settings `retention_days` /
+   `log_retention_days`. Cron pattern for deployment:
+   `0 3 * * * cd /path/to/rohySimulator && ROHY_DB=/path/to/database.sqlite node scripts/retention-sweep.js >> /var/log/rohy-retention.log 2>&1`
+   Do not install this cron from the repo; platform ops owns scheduling.
+5. **Audit** — `scripts/audit-retention.sh` covers schema, case soft-delete,
+   purge dry-run, purge execution, and retention sweep.
+
+Verification completed locally: `node --check server/routes.js`,
+`node --check scripts/retention-sweep.js`, `bash -n scripts/audit-retention.sh`
+plus representative prior script syntax checks, fresh throwaway DB startup
+through all migrations + seeders until the sandbox blocked listener binding,
+`scripts/audit-migrations.sh` 4/4, `scripts/retention-sweep.js` no-op on a
+throwaway DB, and `npx vite build` (large-chunk warning only). The sandbox
+blocked binding a local test listener (`EPERM` on port 3997), and
+`localhost:3000` was not listening, so HTTP end-to-end audit scripts could not
+run here. A fresh orchestrator server restart is required to load the new route
+and migration before running `scripts/audit-retention.sh`.
+
+Deferred: purge GUI, data-export-on-purge, cross-tenant/super-admin erasure,
+legal-hold flags, tenant deletion semantics, and Postgres portability of the
+SQLite-specific retention SQL.
+
 ## Stage E6 (Multi-tenant readiness) — SHIPPED this session
 
 Inventory pass:

@@ -86,6 +86,9 @@ CONSTRAINTS:
   including key-aware `platform_settings.setting_value` redaction)
 - E6: shipped 2026-05-05 (default tenant, tenant_id structural columns,
   tenant-aware auth context, high-risk route scoping, tenant audit script)
-- E7-E9: pending
+- E7: implemented 2026-05-05 (soft-delete inventory, same-tenant user purge,
+  retention sweep script, retention audit script; HTTP audit requires
+  orchestrator server restart)
+- E8-E9: pending
 
 Updated: 2026-05-05.

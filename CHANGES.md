@@ -1,3 +1,16 @@
+### 2026-05-05 — Stage E7: Soft delete + retention policy
+Added a uniform retention layer for same-tenant user purge, soft-delete reads, and time-bounded log cleanup.
+
+- `migrations/0005_retention.sql` (NEW): adds `deleted_at` to `agent_templates`, `scenarios`, `medications`, `case_investigations`, and `lab_definitions`; indexes all soft-delete columns; indexes retention time columns for `event_log`, `learning_events`, `interactions`, `system_audit_log`, `alarm_events`, and `llm_request_log`; rebuilds `users.email` as nullable for anonymization and `llm_request_log.user_id` as nullable for retained-log anonymization.
+- `server/routes.js`: added `POST /api/users/:id/purge?dry-run=true`, admin-only and tenant-scoped. The endpoint audit-logs `purge_user` before destructive work, returns cascade counts for dry-runs, soft-deletes user-authored domain rows, hard-deletes ephemeral preference/session/config rows, anonymizes retained log `user_id` values to NULL, and deactivates the retained user row as `deleted_user_<id>` with PII nulled.
+- `server/routes.js`: live reads now filter `deleted_at IS NULL` for cases, scenarios, case investigations, medications, and agent templates. `GET /api/cases/:id` now returns 404 for soft-deleted cases. Scenario, medication, case-lab, and agent-template deletes now soft-delete their parent rows.
+- `scripts/retention-sweep.js` (NEW): deletes rows older than the retention window from time-bounded log tables. Default is 90 days, override with `ROHY_RETENTION_SECONDS`, `RETENTION_SECONDS`, `ROHY_RETENTION_DAYS`, `RETENTION_DAYS`, or platform settings `retention_days` / `log_retention_days`. Writes a `retention_sweep` audit row and is idempotent.
+- `scripts/audit-retention.sh` (NEW): verifies soft-delete columns, case soft-delete behavior, purge dry-run counts, purge anonymization/hard-delete behavior, purge audit retention, and retention-sweep deletion of old rows.
+
+Inventory: soft-delete tables are `cases`, `sessions`, `agent_templates`, `scenarios`, `medications`, `case_investigations`, `lab_definitions`, and `clinical_notes`. Hard-delete-on-purge tables are `user_preferences`, `active_sessions`, `alarm_config`, `session_notes`, `questionnaire_responses`, `export_records`, `llm_usage`, and `tts_usage`. Retain-N-days tables are `event_log`, `learning_events`, `interactions`, `system_audit_log`, `alarm_events`, and `llm_request_log`. Always-retain/anonymized anchors are `users` and `tenants` plus immutable case-version ownership history through the anonymized user row.
+
+Deferred: real GUI for purge, data-export-on-purge, cross-tenant erasure beyond tenant admin scope, legal-hold flags, and tenant deletion semantics.
+
 ### 2026-05-05 — Stage E6: Multi-tenant readiness
 Added the structural tenant boundary for enterprise deployments while keeping the existing single-tenant default path intact.
 
