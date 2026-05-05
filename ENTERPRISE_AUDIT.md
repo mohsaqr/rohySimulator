@@ -80,6 +80,7 @@ CONSTRAINTS:
 
 - E1: shipped 2026-05-05
 - E2: shipped 2026-05-05
-- E3-E9: pending
+- E3: shipped 2026-05-05
+- E4-E9: pending
 
 Updated: 2026-05-05.

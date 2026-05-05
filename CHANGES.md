@@ -1,3 +1,15 @@
+### 2026-05-05 — Stage E3: RBAC role hierarchy
+Introduced the enterprise role ladder and moved route checks onto centralized rank helpers.
+
+- `migrations/0003_role_hierarchy.sql:1`: rebuilds `users` with role enum `guest/student/reviewer/educator/admin`, maps legacy `user` rows to `student`, preserves all identity/profile/password columns, and adds generated `role_rank` for comparisons.
+- `server/middleware/auth.js:39`: adds `ROLE_RANKS`, `normalizeRole()`, `getRoleRank()`, `hasRoleAtLeast()`, `requireRole(minRank)`, and `requireAdmin`/`requireEducator`/`requireReviewer`/`requireStudent` wrappers.
+- `server/routes.js`: replaces scattered direct admin comparisons with rank helpers, opens reviewer read paths and educator authoring paths while keeping user/platform/admin audit surfaces behind `requireAdmin`.
+- `server/routes.js` registration/user-management paths: self-registration defaults to `student`; only the first user can self-register as `admin`; admin-created users validate the five-role enum; role grants above the actor's rank are rejected; role transitions continue to write `oldValue.role` and `newValue.role` audit records.
+- `server/seeders/users.js:20`: default `student/student123` now seeds with role `student` so fresh DBs satisfy the new enum.
+- `scripts/audit-rbac.sh` (NEW): proves enum rejection, student IDOR denial, reviewer read-only behavior, educator non-admin authoring, admin-only gates, admin retained access, and student self-escalation denial.
+
+Deferred: per-resource permissions such as "user X can edit case Y" remain Stage E4+ design work; E3 only establishes the rank hierarchy and enforcement points.
+
 ### 2026-05-05 — Stage E2: Migration framework
 Replaced the ad-hoc schema bootstrap with versioned SQLite migrations and proved the first rebuild/copy FK migration.
 

@@ -1,5 +1,46 @@
 # Session Handoff — 2026-05-05
 
+## Stage E3 (RBAC role hierarchy) — SHIPPED this session
+
+The binary admin/student model is now a five-rank hierarchy:
+`guest(0) < student(1) < reviewer(2) < educator(3) < admin(4)`.
+
+Key fixes:
+1. **Role hierarchy migration** —
+   `migrations/0003_role_hierarchy.sql:1` rebuilds `users` with the
+   five-value role CHECK enum plus generated `role_rank`, maps legacy
+   `user` rows to `student`, preserves passwords/profile columns, and
+   recreates user indexes including `idx_users_role_rank`.
+2. **Central enforcement** — `server/middleware/auth.js:39` owns
+   `ROLE_RANKS`, role normalization, rank comparison, `requireRole()`,
+   and the four convenience wrappers. `server/routes.js` now uses those
+   helpers for conditional ownership/admin branches.
+3. **Registration + admin user management** — self-registration defaults
+   to `student`; only the first user can self-register as `admin`; admin
+   user creation validates the enum; role grants above the actor's rank
+   are rejected; role transitions continue to audit `oldValue.role` and
+   `newValue.role`.
+4. **Reviewer/educator split** — reviewer can read representative
+   analytics/catalog surfaces but cannot write; educator can author
+   cases/catalog content but remains blocked from `requireAdmin`
+   platform/user/audit surfaces.
+5. **RBAC audit** — `scripts/audit-rbac.sh:1` covers invalid roles,
+   student IDOR denial, reviewer read-only access, educator non-admin
+   authoring, admin-only gates, admin retained access, and self-escalation
+   denial.
+
+Verification target: prior 10 audit scripts (79/79),
+`audit-rbac.sh`, `npx vite build`, existing-DB boot applying `0003`, and
+fresh `ROHY_DB=/tmp/rohy-e3-fresh.sqlite` boot applying `0001`+`0002`+`0003`.
+
+Deferred:
+- **Per-resource permissions**: E3 intentionally stops at role hierarchy
+  and centralized rank checks. Case/session/resource-specific grants
+  remain a later enterprise stage.
+- **Legacy `user` spelling**: accepted only as an in-code normalization
+  alias for old tokens/data; the database enum and seed data now store
+  `student`.
+
 ## Stage E2 (Migration framework) — SHIPPED this session
 
 SQLite schema creation is now owned by versioned migrations instead of the

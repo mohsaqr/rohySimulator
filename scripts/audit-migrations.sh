@@ -123,7 +123,7 @@ section "alarm_config user FK cascades"
 AUDIT_USER="migration-$RUN_TAG"
 AUDIT_EMAIL="migration-$RUN_TAG@example.invalid"
 USER_ID=$(db_insert \
-    "INSERT INTO users (username, name, password_hash, email, role, status) VALUES (?, ?, ?, ?, 'user', 'active')" \
+    "INSERT INTO users (username, name, password_hash, email, role, status) VALUES (?, ?, ?, ?, 'student', 'active')" \
     "$AUDIT_USER" "Migration Audit" "audit-password-hash" "$AUDIT_EMAIL") || USER_ID=""
 
 if [ -z "$USER_ID" ]; then

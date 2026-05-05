@@ -36,16 +36,45 @@ export const authenticateToken = (req, res, next) => {
     });
 };
 
-// Middleware to require admin role
-export const requireAdmin = (req, res, next) => {
+export const ROLE_RANKS = Object.freeze({
+    guest: 0,
+    student: 1,
+    user: 1,
+    reviewer: 2,
+    educator: 3,
+    admin: 4
+});
+
+export const VALID_ROLES = Object.freeze(['guest', 'student', 'reviewer', 'educator', 'admin']);
+
+export function normalizeRole(role) {
+    return role === 'user' ? 'student' : role;
+}
+
+export function getRoleRank(roleOrUser) {
+    const role = typeof roleOrUser === 'string' ? roleOrUser : roleOrUser?.role;
+    return ROLE_RANKS[normalizeRole(role)] ?? ROLE_RANKS.guest;
+}
+
+export function hasRoleAtLeast(user, minRank) {
+    return getRoleRank(user) >= minRank;
+}
+
+export const requireRole = (minRank) => (req, res, next) => {
     if (!req.user) {
         return res.status(401).json({ error: 'Authentication required' });
     }
-    if (req.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Admin access required' });
+    if (!hasRoleAtLeast(req.user, minRank)) {
+        return res.status(403).json({ error: 'Insufficient role' });
     }
     next();
 };
+
+// Middleware to require specific minimum roles
+export const requireAdmin = requireRole(ROLE_RANKS.admin);
+export const requireEducator = requireRole(ROLE_RANKS.educator);
+export const requireReviewer = requireRole(ROLE_RANKS.reviewer);
+export const requireStudent = requireRole(ROLE_RANKS.student);
 
 // Middleware to require authenticated user (admin or regular user)
 export const requireAuth = (req, res, next) => {

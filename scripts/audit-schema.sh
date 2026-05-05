@@ -245,7 +245,7 @@ with open(sys.argv[1], 'w') as f:
         "name": "Schema Audit User",
         "email": sys.argv[3],
         "password": sys.argv[4],
-        "role": "user"
+        "role": "student"
     }, f)
 PYEOF
 curl -s -X POST "${ADMIN_AUTH[@]}" "$API/api/users/create" \

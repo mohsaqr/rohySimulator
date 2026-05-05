@@ -7,7 +7,19 @@ import os from 'node:os';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcrypt';
 import rateLimit from 'express-rate-limit';
-import { authenticateToken, requireAdmin, requireAuth, generateToken } from './middleware/auth.js';
+import {
+    authenticateToken,
+    requireAdmin,
+    requireAuth,
+    requireEducator,
+    requireReviewer,
+    generateToken,
+    ROLE_RANKS,
+    VALID_ROLES,
+    getRoleRank,
+    hasRoleAtLeast,
+    normalizeRole
+} from './middleware/auth.js';
 import * as labDb from './services/labDatabase.js';
 import { spawn } from 'node:child_process';
 import { buildWavHeader } from './services/wav.js';
@@ -71,6 +83,11 @@ const router = express.Router();
 // routes also have authLimiter / registerLimiter middleware that runs first
 // (in addition, not instead of), tightening to ~10/15min for /auth/login.
 router.use(generalLimiter);
+
+const canManageOwnedResource = (ownerId, user) => ownerId === user?.id || hasRoleAtLeast(user, ROLE_RANKS.educator);
+const canReadAcrossUsers = (user) => hasRoleAtLeast(user, ROLE_RANKS.reviewer);
+const isValidRole = (role) => VALID_ROLES.includes(normalizeRole(role));
+const roleForStorage = (role, fallback = 'student') => normalizeRole(role || fallback);
 
 // ============================================
 // HELPER FUNCTIONS
@@ -309,7 +326,7 @@ function createCaseVersion(caseId, userId, changeType, description, configSnapsh
  *   if (!await verifySessionOwnership(sessionId, req.user, res)) return;
  *   // ...handler continues
  *
- * Admins and missing-session-id (caller's choice — handler may decide
+ * Educators/admins and missing-session-id (caller's choice — handler may decide
  * non-scoped writes are OK) pass through. Pass `requireSession: true` to
  * reject when sessionId is falsy.
  */
@@ -322,7 +339,7 @@ function verifySessionOwnership(sessionId, user, res, { requireSession = false }
             }
             return resolve(true);
         }
-        if (user?.role === 'admin') {
+        if (hasRoleAtLeast(user, ROLE_RANKS.educator)) {
             return resolve(true);
         }
         db.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, row) => {
@@ -430,7 +447,8 @@ const uploadBodyImage = multer({
 
 // POST /api/auth/register - Register a new user
 router.post('/auth/register', registerLimiter, async (req, res) => {
-    const { username, name, email, password, role = 'user' } = req.body;
+    const { username, name, email, password, role = 'student' } = req.body;
+    const requestedRole = roleForStorage(role);
 
     // Validation
     if (!username || !email || !password) {
@@ -442,24 +460,22 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
         return res.status(400).json({ error: passwordValidation.errors.join('. ') });
     }
 
-    // Only allow admin creation if the request is from an existing admin
-    let finalRole = 'user';
-    if (role === 'admin') {
-        // Check if there are any existing users
-        const userCount = await new Promise((resolve, reject) => {
-            db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
-                if (err) reject(err);
-                else resolve(row.count);
-            });
-        });
+    if (!isValidRole(requestedRole)) {
+        return res.status(400).json({ error: 'Invalid role' });
+    }
 
-        // If no users exist, first user becomes admin
-        if (userCount === 0) {
-            finalRole = 'admin';
-        } else {
-            // Otherwise, only admin can create admin
-            finalRole = 'user';
-        }
+    const userCount = await new Promise((resolve, reject) => {
+        db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
+            if (err) reject(err);
+            else resolve(row.count);
+        });
+    });
+
+    let finalRole = 'student';
+    if (userCount === 0 && requestedRole === 'admin') {
+        finalRole = 'admin';
+    } else if (getRoleRank(requestedRole) > ROLE_RANKS.student) {
+        return res.status(403).json({ error: 'Only admins can create elevated accounts' });
     }
 
     try {
@@ -492,11 +508,18 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
 
 // POST /api/users/create - Create user (Admin only, no auto-login)
 router.post('/users/create', authenticateToken, requireAdmin, async (req, res) => {
-    const { username, name, email, password, role = 'user' } = req.body;
+    const { username, name, email, password, role = 'student' } = req.body;
+    const finalRole = roleForStorage(role);
 
     // Validation
     if (!username || !email || !password) {
         return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+    if (!isValidRole(finalRole)) {
+        return res.status(400).json({ error: 'Invalid role' });
+    }
+    if (getRoleRank(finalRole) > getRoleRank(req.user)) {
+        return res.status(403).json({ error: 'Cannot grant a role higher than your own' });
     }
 
     const passwordValidation = validatePassword(password);
@@ -510,7 +533,7 @@ router.post('/users/create', authenticateToken, requireAdmin, async (req, res) =
 
         // Insert user
         const sql = `INSERT INTO users (username, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)`;
-        db.run(sql, [username, name || null, email, password_hash, role], function (err) {
+        db.run(sql, [username, name || null, email, password_hash, finalRole], function (err) {
             if (err) {
                 if (err.message.includes('UNIQUE')) {
                     return res.status(409).json({ error: 'Username or email already exists' });
@@ -520,7 +543,7 @@ router.post('/users/create', authenticateToken, requireAdmin, async (req, res) =
 
             res.status(201).json({
                 message: 'User created successfully',
-                user: { id: this.lastID, username, name, email, role }
+                user: { id: this.lastID, username, name, email, role: finalRole }
             });
         });
     } catch (err) {
@@ -543,7 +566,8 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
     };
 
     for (const userData of users) {
-        const { username, name, email, password, role = 'user' } = userData;
+        const { username, name, email, password, role = 'student' } = userData;
+        const finalRole = roleForStorage(role);
 
         // Validation
         if (!username || !email || !password) {
@@ -552,6 +576,24 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
                 name,
                 email, 
                 error: 'Missing required fields' 
+            });
+            continue;
+        }
+        if (!isValidRole(finalRole)) {
+            results.failed.push({
+                username,
+                name,
+                email,
+                error: 'Invalid role'
+            });
+            continue;
+        }
+        if (getRoleRank(finalRole) > getRoleRank(req.user)) {
+            results.failed.push({
+                username,
+                name,
+                email,
+                error: 'Cannot grant a role higher than your own'
             });
             continue;
         }
@@ -574,7 +616,7 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
             // Insert user
             await new Promise((resolve, reject) => {
                 const sql = `INSERT INTO users (username, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)`;
-                db.run(sql, [username, name || null, email, password_hash, role], function (err) {
+                db.run(sql, [username, name || null, email, password_hash, finalRole], function (err) {
                     if (err) {
                         if (err.message.includes('UNIQUE')) {
                             reject({ error: 'Username or email already exists' });
@@ -582,12 +624,12 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
                             reject({ error: err.message });
                         }
                     } else {
-                        resolve({ id: this.lastID, username, name, email, role });
+                        resolve({ id: this.lastID, username, name, email, role: finalRole });
                     }
                 });
             });
 
-            results.success.push({ username, name, email, role });
+            results.success.push({ username, name, email, role: finalRole });
         } catch (err) {
             results.failed.push({ 
                 username,
@@ -774,12 +816,7 @@ router.post('/upload', authenticateToken, upload.single('photo'), (req, res) => 
 });
 
 // --- BODY IMAGE UPLOAD (Admin Only) ---
-router.post('/upload-body-image', authenticateToken, uploadBodyImage.single('image'), (req, res) => {
-    // Check if user is admin
-    if (req.user?.role !== 'admin') {
-        return res.status(403).json({ error: 'Admin access required' });
-    }
-
+router.post('/upload-body-image', authenticateToken, requireAdmin, uploadBodyImage.single('image'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
@@ -836,11 +873,7 @@ router.get('/bodymap-regions', (req, res) => {
 });
 
 // POST save body map regions (admin only)
-router.post('/bodymap-regions', authenticateToken, (req, res) => {
-    if (req.user?.role !== 'admin') {
-        return res.status(403).json({ error: 'Admin access required' });
-    }
-
+router.post('/bodymap-regions', authenticateToken, requireEducator, (req, res) => {
     const { regions } = req.body;
     if (!regions) {
         return res.status(400).json({ error: 'No regions data provided' });
@@ -859,10 +892,10 @@ router.post('/bodymap-regions', authenticateToken, (req, res) => {
 
 // GET /api/cases - Authenticated users can view cases (students only see available cases)
 router.get('/cases', authenticateToken, (req, res) => {
-    const isAdmin = req.user?.role === 'admin';
+    const canReview = canReadAcrossUsers(req.user);
 
-    // Students only see available cases, admins see all
-    const sql = isAdmin
+    // Students only see available cases; reviewer+ can inspect all cases.
+    const sql = canReview
         ? "SELECT * FROM cases ORDER BY is_default DESC, created_at DESC"
         : "SELECT * FROM cases WHERE is_available = 1 ORDER BY is_default DESC, created_at DESC";
 
@@ -902,7 +935,7 @@ router.get('/cases', authenticateToken, (req, res) => {
 });
 
 // PUT /api/cases/:id/availability - Toggle case availability (Admin only)
-router.put('/cases/:id/availability', authenticateToken, requireAdmin, (req, res) => {
+router.put('/cases/:id/availability', authenticateToken, requireEducator, (req, res) => {
     const { is_available } = req.body;
     db.run(
         "UPDATE cases SET is_available = ? WHERE id = ?",
@@ -916,7 +949,7 @@ router.put('/cases/:id/availability', authenticateToken, requireAdmin, (req, res
 });
 
 // PUT /api/cases/:id/default - Set case as default (Admin only)
-router.put('/cases/:id/default', authenticateToken, requireAdmin, (req, res) => {
+router.put('/cases/:id/default', authenticateToken, requireEducator, (req, res) => {
     const { is_default } = req.body;
 
     // If setting as default, first clear any existing defaults
@@ -947,7 +980,7 @@ router.put('/cases/:id/default', authenticateToken, requireAdmin, (req, res) => 
 });
 
 // POST /api/cases - Admin only
-router.post('/cases', authenticateToken, requireAdmin, (req, res) => {
+router.post('/cases', authenticateToken, requireEducator, (req, res) => {
     const { name, description, system_prompt, config, scenario,
             scenario_template, scenario_from_repository, scenario_duration } = req.body;
     const ipAddress = req.ip || req.connection?.remoteAddress;
@@ -1027,7 +1060,7 @@ router.post('/cases', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // PUT /api/cases/:id - Admin only
-router.put('/cases/:id', authenticateToken, requireAdmin, (req, res) => {
+router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
     const { name, description, system_prompt, config, scenario,
             scenario_template, scenario_from_repository, scenario_duration } = req.body;
     const caseId = req.params.id;
@@ -1114,7 +1147,7 @@ router.put('/cases/:id', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // DELETE /api/cases/:id - Admin only (soft delete)
-router.delete('/cases/:id', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/cases/:id', authenticateToken, requireEducator, (req, res) => {
     const caseId = req.params.id;
     const ipAddress = req.ip || req.connection?.remoteAddress;
     const userAgent = req.headers['user-agent'];
@@ -1279,7 +1312,7 @@ router.get('/sessions/:id', authenticateToken, (req, res) => {
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
         // Check ownership (users can only access their own sessions, admins can access all)
-        if (session.user_id !== userId && req.user.role !== 'admin') {
+        if (session.user_id !== userId && !canReadAcrossUsers(req.user)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -1316,7 +1349,7 @@ router.put('/sessions/:id/end', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
-        if (session.user_id !== req.user.id && req.user.role !== 'admin') {
+        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -1406,7 +1439,7 @@ router.post('/interactions', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         
-        if (session.user_id !== req.user.id && req.user.role !== 'admin') {
+        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -1425,7 +1458,7 @@ router.get('/interactions/:session_id', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         
-        if (session.user_id !== req.user.id && req.user.role !== 'admin') {
+        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -1466,6 +1499,7 @@ router.get('/users/:id', authenticateToken, requireAdmin, (req, res) => {
 router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     const { username, name, email, role, password } = req.body;
     const targetUserId = req.params.id;
+    const requestedRole = roleForStorage(role, null);
 
     // Read prior state so we can record what changed.
     const prior = await new Promise((resolve) => {
@@ -1485,12 +1519,23 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
                 : passwordReset ? 'admin_user_password_reset' : 'admin_user_role_change',
             targetType: 'user',
             targetId: targetUserId,
-            oldValue: prior ? JSON.stringify({ role: prior.role }) : null,
-            newValue: JSON.stringify({ role: role ?? prior?.role })
+            oldValue: prior ? { role: prior.role } : null,
+            newValue: { role: requestedRole ?? prior?.role }
         });
     };
 
     try {
+        if (!prior) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        if (requestedRole && !isValidRole(requestedRole)) {
+            return res.status(400).json({ error: 'Invalid role' });
+        }
+        if (requestedRole && getRoleRank(requestedRole) > getRoleRank(req.user)) {
+            return res.status(403).json({ error: 'Cannot grant a role higher than your own' });
+        }
+        const finalRole = requestedRole || prior.role;
+
         // If password is provided, validate and hash it
         if (password) {
             const passwordValidation = validatePassword(password);
@@ -1499,7 +1544,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
             }
             const password_hash = await bcrypt.hash(password, 10);
             const sql = `UPDATE users SET username = ?, name = ?, email = ?, role = ?, password_hash = ? WHERE id = ?`;
-            db.run(sql, [username, name || null, email, role, password_hash, targetUserId], function (err) {
+            db.run(sql, [username, name || null, email, finalRole, password_hash, targetUserId], function (err) {
                 if (err) {
                     if (err.message.includes('UNIQUE')) {
                         return res.status(409).json({ error: 'Username or email already exists' });
@@ -1509,13 +1554,13 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
                 if (this.changes === 0) {
                     return res.status(404).json({ error: 'User not found' });
                 }
-                logUserChange({ passwordReset: true, roleChanged: prior && prior.role !== role });
+                logUserChange({ passwordReset: true, roleChanged: prior.role !== finalRole });
                 res.json({ message: 'User updated successfully', id: targetUserId });
             });
         } else {
             // Update without changing password
             const sql = `UPDATE users SET username = ?, name = ?, email = ?, role = ? WHERE id = ?`;
-            db.run(sql, [username, name || null, email, role, targetUserId], function (err) {
+            db.run(sql, [username, name || null, email, finalRole, targetUserId], function (err) {
                 if (err) {
                     if (err.message.includes('UNIQUE')) {
                         return res.status(409).json({ error: 'Username or email already exists' });
@@ -1525,7 +1570,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
                 if (this.changes === 0) {
                     return res.status(404).json({ error: 'User not found' });
                 }
-                logUserChange({ passwordReset: false, roleChanged: prior && prior.role !== role });
+                logUserChange({ passwordReset: false, roleChanged: prior.role !== finalRole });
                 res.json({ message: 'User updated successfully', id: targetUserId });
             });
         }
@@ -1624,8 +1669,8 @@ router.get('/analytics/sessions', authenticateToken, (req, res) => {
     let sql;
     let params;
 
-    if (req.user.role === 'admin') {
-        // Admin sees all sessions
+    if (canReadAcrossUsers(req.user)) {
+        // Reviewer+ sees all sessions
         sql = `
             SELECT s.*, c.name as case_name, u.username
             FROM sessions s
@@ -1668,7 +1713,7 @@ router.get('/analytics/sessions/:id', authenticateToken, (req, res) => {
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
         // Check permissions
-        if (session.user_id !== req.user.id && req.user.role !== 'admin') {
+        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -1686,7 +1731,7 @@ router.get('/analytics/user-stats/:userId', authenticateToken, (req, res) => {
     const userId = parseInt(req.params.userId);
 
     // Users can only view their own stats, admins can view anyone's
-    if (req.user.id !== userId && req.user.role !== 'admin') {
+    if (req.user.id !== userId && !canReadAcrossUsers(req.user)) {
         return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -1837,7 +1882,7 @@ router.get('/export/chat-logs', authenticateToken, (req, res) => {
     const params = [];
     
     // Users can only see their own, admins see all
-    if (req.user.role !== 'admin') {
+    if (!canReadAcrossUsers(req.user)) {
         sql += ' AND s.user_id = ?';
         params.push(req.user.id);
     }
@@ -1936,7 +1981,7 @@ router.get('/export/session-settings', authenticateToken, (req, res) => {
     const params = [];
     
     // Users can only see their own
-    if (req.user.role !== 'admin') {
+    if (!canReadAcrossUsers(req.user)) {
         sql += ' AND ss.user_id = ?';
         params.push(req.user.id);
     }
@@ -1975,7 +2020,7 @@ router.get('/export/complete-session/:sessionId', authenticateToken, (req, res) 
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         
-        if (session.user_id !== req.user.id && req.user.role !== 'admin') {
+        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -2247,8 +2292,8 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
 
     // Verify ownership of every distinct session_id present in the batch.
     // Events without session_id are allowed (pre-session telemetry).
-    // Admin bypasses ownership.
-    if (req.user?.role !== 'admin') {
+    // Educators/admins bypass ownership for supervised event capture.
+    if (!hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
         const distinctSessionIds = [...new Set(events.map(e => e.session_id).filter(Boolean))];
         if (distinctSessionIds.length > 0) {
             const ownerships = await Promise.all(distinctSessionIds.map(sid => new Promise((resolve) => {
@@ -2315,7 +2360,7 @@ router.get('/learning-events/session/:id', authenticateToken, (req, res) => {
     db.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
-        if (session.user_id !== userId && req.user.role !== 'admin') {
+        if (session.user_id !== userId && !canReadAcrossUsers(req.user)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -2339,7 +2384,7 @@ router.get('/learning-events/user/:id', authenticateToken, (req, res) => {
     const targetUserId = req.params.id;
 
     // Only admin or the user themselves can view
-    if (req.user.id !== parseInt(targetUserId) && req.user.role !== 'admin') {
+    if (req.user.id !== parseInt(targetUserId) && !canReadAcrossUsers(req.user)) {
         return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -2389,13 +2434,13 @@ router.get('/learning-events/user/:id', authenticateToken, (req, res) => {
 // in the scenario engine). Now both branches verify ownership.
 router.get('/learning-events/analytics/summary', authenticateToken, async (req, res) => {
     const { session_id, user_id, case_id } = req.query;
-    const isAdmin = req.user.role === 'admin' || req.user.is_admin;
+    const canReview = canReadAcrossUsers(req.user);
 
     let whereClause = '';
     const params = [];
 
     if (session_id) {
-        // Verify the requester owns the session (or is admin) before exposing summary.
+        // Verify the requester owns the session (or can review) before exposing summary.
         const session = await new Promise((resolve) => {
             db.get('SELECT user_id FROM sessions WHERE id = ?', [session_id], (err, row) => {
                 if (err) return resolve(null);
@@ -2403,18 +2448,18 @@ router.get('/learning-events/analytics/summary', authenticateToken, async (req, 
             });
         });
         if (!session) return res.status(404).json({ error: 'Session not found' });
-        if (!isAdmin && session.user_id !== req.user.id) {
+        if (!canReview && session.user_id !== req.user.id) {
             return res.status(403).json({ error: 'Access denied' });
         }
         whereClause = 'WHERE session_id = ?';
         params.push(session_id);
     } else if (user_id) {
-        if (req.user.id !== parseInt(user_id, 10) && !isAdmin) {
+        if (req.user.id !== parseInt(user_id, 10) && !canReview) {
             return res.status(403).json({ error: 'Access denied' });
         }
         whereClause = 'WHERE user_id = ?';
         params.push(user_id);
-    } else if (!isAdmin) {
+    } else if (!canReview) {
         whereClause = 'WHERE user_id = ?';
         params.push(req.user.id);
     }
@@ -2477,11 +2522,11 @@ router.get('/learning-events/recent', authenticateToken, (req, res) => {
 
 // GET /api/learning-events/all - Get ALL events across all users and sessions (admin) or user's events
 router.get('/learning-events/all', authenticateToken, (req, res) => {
-    const isAdmin = req.user.role === 'admin';
+    const canReview = canReadAcrossUsers(req.user);
     const limit = parseInt(req.query.limit) || 500;
 
-    // Admin sees all events, regular users see only their own
-    const sql = isAdmin ? `
+    // Reviewer+ sees all events, regular users see only their own
+    const sql = canReview ? `
         SELECT le.*,
                s.case_id,
                c.name as case_name,
@@ -2506,7 +2551,7 @@ router.get('/learning-events/all', authenticateToken, (req, res) => {
         LIMIT ?
     `;
 
-    const params = isAdmin ? [limit] : [req.user.id, limit];
+    const params = canReview ? [limit] : [req.user.id, limit];
 
     db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -2535,7 +2580,7 @@ router.get('/learning-events/all', authenticateToken, (req, res) => {
 // shipped in Stages 3 + pattern-sweep.
 router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req, res) => {
     const sessionId = req.params.sessionId;
-    const isAdmin = req.user.role === 'admin' || req.user.is_admin;
+    const canReview = canReadAcrossUsers(req.user);
 
     const session = await new Promise((resolve) => {
         db.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, row) => {
@@ -2544,7 +2589,7 @@ router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req
         });
     });
     if (!session) return res.status(404).json({ error: 'Session not found' });
-    if (!isAdmin && session.user_id !== req.user.id) {
+    if (!canReview && session.user_id !== req.user.id) {
         return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -2642,7 +2687,7 @@ router.post('/alarms/log', authenticateToken, async (req, res) => {
 // timestamp.
 router.put('/alarms/:id/acknowledge', authenticateToken, (req, res) => {
     const alarmId = req.params.id;
-    const isAdmin = req.user.role === 'admin' || req.user.is_admin;
+    const canSupervise = hasRoleAtLeast(req.user, ROLE_RANKS.educator);
 
     const ownerSql = `
         SELECT a.id, a.acknowledged_at, s.user_id AS session_user_id
@@ -2654,9 +2699,9 @@ router.put('/alarms/:id/acknowledge', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(404).json({ error: 'Alarm not found' });
 
-        // Bound to a session: only the session owner or an admin can ack.
-        // Orphan alarms (no session_id) are admin-only.
-        const allowed = isAdmin || (row.session_user_id != null && row.session_user_id === req.user.id);
+        // Bound to a session: only the session owner or educator/admin can ack.
+        // Orphan alarms (no session_id) are educator/admin-only.
+        const allowed = canSupervise || (row.session_user_id != null && row.session_user_id === req.user.id);
         if (!allowed) return res.status(403).json({ error: 'Access denied' });
 
         // Idempotent: if already acked, return the original timestamp.
@@ -2700,14 +2745,13 @@ router.get('/alarms/config', authenticateToken, (req, res) => {
 //
 // Stage-3 audit: pre-fix this had no scope check, so any authenticated user
 // could read any other user's alarm thresholds by guessing their ID. Now
-// only the user themself or an admin can read.
+// only the user themself or reviewer+ can read.
 router.get('/alarms/config/:userId', authenticateToken, (req, res) => {
     const userId = parseInt(req.params.userId, 10);
     if (!Number.isInteger(userId)) {
         return res.status(400).json({ error: 'invalid userId' });
     }
-    const isAdmin = req.user.role === 'admin' || req.user.is_admin;
-    if (userId !== req.user.id && !isAdmin) {
+    if (userId !== req.user.id && !canReadAcrossUsers(req.user)) {
         return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -2848,7 +2892,7 @@ router.get('/cases/:id/investigations', authenticateToken, (req, res) => {
 });
 
 // POST /api/investigations - Admin creates investigation for case
-router.post('/investigations', authenticateToken, requireAdmin, (req, res) => {
+router.post('/investigations', authenticateToken, requireEducator, (req, res) => {
     const { case_id, investigation_type, test_name, result_data, image_url, turnaround_minutes } = req.body;
     
     const sql = `INSERT INTO case_investigations (case_id, investigation_type, test_name, result_data, image_url, turnaround_minutes) 
@@ -2979,7 +3023,7 @@ router.get('/sessions/:id/orders', authenticateToken, (req, res) => {
 router.put('/orders/:id/view', authenticateToken, (req, res) => {
     const orderId = req.params.id;
     const userId = req.user.id;
-    const isAdmin = req.user.role === 'admin' || req.user.is_admin;
+    const canSupervise = hasRoleAtLeast(req.user, ROLE_RANKS.educator);
 
     // First get the order details for logging
     const getOrderSql = `
@@ -2995,8 +3039,8 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!order) return res.status(404).json({ error: 'Order not found' });
 
-        // Ownership: only the session owner or an admin can mark viewed.
-        if (!isAdmin && order.session_user_id !== userId) {
+        // Ownership: only the session owner or educator/admin can mark viewed.
+        if (!canSupervise && order.session_user_id !== userId) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -3137,7 +3181,7 @@ router.get('/labs/grouped', authenticateToken, (req, res) => {
 });
 
 // GET /api/labs/stats - Get database statistics (Admin only)
-router.get('/labs/stats', authenticateToken, requireAdmin, (req, res) => {
+router.get('/labs/stats', authenticateToken, requireReviewer, (req, res) => {
     try {
         const stats = labDb.getDatabaseStats();
         res.json(stats);
@@ -3147,7 +3191,7 @@ router.get('/labs/stats', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // POST /api/labs/test - Add a new lab test (Admin only)
-router.post('/labs/test', authenticateToken, requireAdmin, (req, res) => {
+router.post('/labs/test', authenticateToken, requireEducator, (req, res) => {
     try {
         const result = labDb.addTest(req.body);
         if (!result.success) {
@@ -3160,7 +3204,7 @@ router.post('/labs/test', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // PUT /api/labs/test - Update a lab test (Admin only)
-router.put('/labs/test', authenticateToken, requireAdmin, (req, res) => {
+router.put('/labs/test', authenticateToken, requireEducator, (req, res) => {
     const { test_name, category, ...updates } = req.body;
 
     if (!test_name || !category) {
@@ -3179,7 +3223,7 @@ router.put('/labs/test', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // DELETE /api/labs/test - Delete a lab test (Admin only)
-router.delete('/labs/test', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/labs/test', authenticateToken, requireEducator, (req, res) => {
     const { test_name, category } = req.body;
 
     if (!test_name || !category) {
@@ -3198,7 +3242,7 @@ router.delete('/labs/test', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // POST /api/labs/import - Import lab tests from CSV (Admin only)
-router.post('/labs/import', authenticateToken, requireAdmin, (req, res) => {
+router.post('/labs/import', authenticateToken, requireEducator, (req, res) => {
     const { tests, overwrite = false } = req.body;
 
     if (!tests || !Array.isArray(tests) || tests.length === 0) {
@@ -3217,7 +3261,7 @@ router.post('/labs/import', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // POST /api/labs/reload - Force reload the lab database (Admin only)
-router.post('/labs/reload', authenticateToken, requireAdmin, (req, res) => {
+router.post('/labs/reload', authenticateToken, requireEducator, (req, res) => {
     try {
         labDb.clearCache();
         const tests = labDb.loadLabDatabase();
@@ -3234,7 +3278,7 @@ router.post('/labs/reload', authenticateToken, requireAdmin, (req, res) => {
 // which let ConfigPanel's per-row save loop quietly accumulate duplicates
 // every time an admin saved a case. Single-row admin adds and the bulk PUT
 // below both rely on this dedup behavior.
-router.post('/cases/:caseId/labs', authenticateToken, requireAdmin, (req, res) => {
+router.post('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res) => {
     const { caseId } = req.params;
     const {
         test_name,
@@ -3301,7 +3345,7 @@ router.post('/cases/:caseId/labs', authenticateToken, requireAdmin, (req, res) =
 // without any cleanup, so admin removals never deleted DB rows. This endpoint
 // is the atomic replacement: cascade-clean dependent investigation_orders for
 // labs we're about to remove, drop the old lab rows, then insert the new set.
-router.put('/cases/:caseId/labs', authenticateToken, requireAdmin, (req, res) => {
+router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res) => {
     const { caseId } = req.params;
     const labs = Array.isArray(req.body?.labs) ? req.body.labs : null;
     if (labs === null) {
@@ -3378,7 +3422,7 @@ router.put('/cases/:caseId/labs', authenticateToken, requireAdmin, (req, res) =>
 });
 
 // PUT /api/cases/:caseId/labs/:labId - Update lab values (Admin only)
-router.put('/cases/:caseId/labs/:labId', authenticateToken, requireAdmin, (req, res) => {
+router.put('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, (req, res) => {
     const { labId } = req.params;
     const { 
         current_value, 
@@ -3438,7 +3482,7 @@ router.put('/cases/:caseId/labs/:labId', authenticateToken, requireAdmin, (req, 
 // rows are cleaned up here in the application layer before the parent row is
 // deleted. Otherwise GET /sessions/:id/lab-results would JOIN against missing
 // case_investigations rows and either error or silently drop entries.
-router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, (req, res) => {
     const { labId, caseId } = req.params;
 
     db.serialize(() => {
@@ -3636,7 +3680,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
         if (!session) {
             return res.status(404).json({ error: 'Session not found' });
         }
-        if (session.user_id !== req.user.id && req.user.role !== 'admin') {
+        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -3954,7 +3998,7 @@ router.get('/sessions/:sessionId/lab-results', authenticateToken, (req, res) => 
 });
 
 // PUT /api/sessions/:sessionId/labs/:labId - Instructor edit lab value during simulation (Admin only)
-router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireAdmin, (req, res) => {
+router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireEducator, (req, res) => {
     const { sessionId, labId } = req.params;
     const { current_value } = req.body;
     
@@ -4127,7 +4171,7 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
     db.get('SELECT s.user_id, s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?', [sessionId], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
-        if (session.user_id !== req.user.id && req.user.role !== 'admin') {
+        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -4370,7 +4414,7 @@ router.post('/sessions/:sessionId/order-treatment', authenticateToken, (req, res
     db.get('SELECT s.user_id, s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?', [sessionId], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
-        if (session.user_id !== req.user.id && req.user.role !== 'admin') {
+        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -4457,7 +4501,7 @@ router.post('/sessions/:sessionId/administer/:orderId', authenticateToken, (req,
             WHERE t.id = ? AND t.session_id = ?`, [orderId, sessionId], (err, order) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!order) return res.status(404).json({ error: 'Order not found' });
-        if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+        if (order.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
             return res.status(403).json({ error: 'Access denied' });
         }
         if (order.status !== 'ordered') {
@@ -4565,7 +4609,7 @@ router.put('/sessions/:sessionId/discontinue/:orderId', authenticateToken, (req,
             WHERE t.id = ? AND t.session_id = ?`, [orderId, sessionId], (err, order) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!order) return res.status(404).json({ error: 'Order not found' });
-        if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+        if (order.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -4722,7 +4766,7 @@ router.get('/sessions/:sessionId/active-effects', authenticateToken, (req, res) 
 });
 
 // PUT /api/cases/:caseId/treatments - Configure case treatments (admin)
-router.put('/cases/:caseId/treatments', authenticateToken, requireAdmin, (req, res) => {
+router.put('/cases/:caseId/treatments', authenticateToken, requireEducator, (req, res) => {
     const { caseId } = req.params;
     const { treatments } = req.body;
 
@@ -5542,7 +5586,6 @@ router.put('/scenarios/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
     const { name, description, duration_minutes, category, timeline, is_public } = req.body;
     const userId = req.user.id;
-    const isAdmin = req.user.role === 'admin';
 
     // Stage-5 audit: validate timeline shape before persisting (mirrors POST).
     if (timeline !== undefined) {
@@ -5552,7 +5595,7 @@ router.put('/scenarios/:id', authenticateToken, (req, res) => {
         }
     }
     
-    // Check ownership or admin
+    // Check ownership or educator/admin
     db.get('SELECT created_by FROM scenarios WHERE id = ?', [id], (err, row) => {
         if (err) {
             return res.status(500).json({ error: err.message });
@@ -5560,7 +5603,7 @@ router.put('/scenarios/:id', authenticateToken, (req, res) => {
         if (!row) {
             return res.status(404).json({ error: 'Scenario not found' });
         }
-        if (row.created_by !== userId && !isAdmin) {
+        if (!canManageOwnedResource(row.created_by, req.user)) {
             return res.status(403).json({ error: 'Not authorized to edit this scenario' });
         }
         
@@ -5587,9 +5630,8 @@ router.put('/scenarios/:id', authenticateToken, (req, res) => {
 router.delete('/scenarios/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
-    const isAdmin = req.user.role === 'admin';
     
-    // Check ownership or admin
+    // Check ownership or educator/admin
     db.get('SELECT created_by FROM scenarios WHERE id = ?', [id], (err, row) => {
         if (err) {
             return res.status(500).json({ error: err.message });
@@ -5597,7 +5639,7 @@ router.delete('/scenarios/:id', authenticateToken, (req, res) => {
         if (!row) {
             return res.status(404).json({ error: 'Scenario not found' });
         }
-        if (row.created_by !== userId && !isAdmin) {
+        if (!canManageOwnedResource(row.created_by, req.user)) {
             return res.status(403).json({ error: 'Not authorized to delete this scenario' });
         }
         
@@ -6228,7 +6270,7 @@ router.get('/master/body-regions', (req, res) => {
 });
 
 // POST /api/master/body-regions - Create body region (Admin)
-router.post('/master/body-regions', authenticateToken, requireAdmin, (req, res) => {
+router.post('/master/body-regions', authenticateToken, requireEducator, (req, res) => {
     const { region_id, name, anatomical_view, description, parent_region_id, display_order } = req.body;
 
     db.run(
@@ -6350,7 +6392,7 @@ router.get('/master/scenario-templates/:id', (req, res) => {
 });
 
 // POST /api/master/scenario-templates - Create scenario template (Admin)
-router.post('/master/scenario-templates', authenticateToken, requireAdmin, (req, res) => {
+router.post('/master/scenario-templates', authenticateToken, requireEducator, (req, res) => {
     const { template_id, name, description, category, duration_minutes, difficulty_level, clinical_condition, timeline } = req.body;
 
     db.run(
@@ -6434,7 +6476,7 @@ router.get('/master/lab-tests/groups', (req, res) => {
 });
 
 // POST /api/master/lab-tests - Create lab test (Admin)
-router.post('/master/lab-tests', authenticateToken, requireAdmin, (req, res) => {
+router.post('/master/lab-tests', authenticateToken, requireEducator, (req, res) => {
     const { test_code, test_name, test_group, category, specimen_type, min_value, max_value, unit, critical_low, critical_high, normal_samples, description, turnaround_minutes } = req.body;
 
     db.run(
@@ -6527,7 +6569,7 @@ router.get('/master/medications', (req, res) => {
 });
 
 // POST /api/master/medications - Create medication (Admin)
-router.post('/master/medications', authenticateToken, requireAdmin, (req, res) => {
+router.post('/master/medications', authenticateToken, requireEducator, (req, res) => {
     const { medication_code, generic_name, brand_names, drug_class, category, route, typical_dose, dose_unit, frequency, indications, contraindications, side_effects, is_controlled, is_high_alert } = req.body;
 
     db.run(
@@ -6542,7 +6584,7 @@ router.post('/master/medications', authenticateToken, requireAdmin, (req, res) =
 });
 
 // POST /api/master/medications/bulk - Bulk import medications (Admin)
-router.post('/master/medications/bulk', authenticateToken, requireAdmin, (req, res) => {
+router.post('/master/medications/bulk', authenticateToken, requireEducator, (req, res) => {
     const { medications } = req.body; // Array of { name, uses, side_effects, description }
 
     if (!Array.isArray(medications) || medications.length === 0) {
@@ -6591,7 +6633,7 @@ router.post('/master/medications/bulk', authenticateToken, requireAdmin, (req, r
 });
 
 // DELETE /api/master/medications/:id - Delete single medication (Admin)
-router.delete('/master/medications/:id', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/master/medications/:id', authenticateToken, requireEducator, (req, res) => {
     const { id } = req.params;
 
     db.serialize(() => {
@@ -6646,7 +6688,7 @@ router.delete('/master/medications/:id', authenticateToken, requireAdmin, (req, 
 });
 
 // DELETE /api/master/medications/all - Clear all medications (Admin)
-router.delete('/master/medications/all', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/master/medications/all', authenticateToken, requireEducator, (req, res) => {
     db.serialize(() => {
         db.run('BEGIN');
         db.run('DELETE FROM medication_doses', [], function(doseErr) {
@@ -7248,7 +7290,7 @@ router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
         };
 
         // Admins get full settings
-        if (req.user.role === 'admin') {
+        if (hasRoleAtLeast(req.user, ROLE_RANKS.admin)) {
             response.apiKey = settings.llm_api_key || '';
         }
 
@@ -7769,7 +7811,7 @@ router.get('/llm/models', authenticateToken, (req, res) => {
 // per-user, so this is more useful as a platform-wide indicator.
 router.get('/tts/usage', authenticateToken, async (req, res) => {
     try {
-        const isAdmin = req.user.role === 'admin';
+        const isAdmin = hasRoleAtLeast(req.user, ROLE_RANKS.admin);
         const scopeAll = isAdmin && req.query.scope === 'all';
         const userFilter = scopeAll ? '' : 'AND user_id = ?';
         const userParam = scopeAll ? [] : [req.user.id];
@@ -8819,7 +8861,7 @@ router.get('/agents/templates/:id', authenticateToken, async (req, res) => {
 });
 
 // POST /api/agents/templates - Create agent template (admin only)
-router.post('/agents/templates', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/agents/templates', authenticateToken, requireEducator, async (req, res) => {
     try {
         const {
             agent_type,
@@ -8894,7 +8936,7 @@ router.post('/agents/templates', authenticateToken, requireAdmin, async (req, re
 });
 
 // PUT /api/agents/templates/:id - Update agent template (admin only)
-router.put('/agents/templates/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/agents/templates/:id', authenticateToken, requireEducator, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -9009,7 +9051,7 @@ router.put('/agents/templates/:id', authenticateToken, requireAdmin, async (req,
 });
 
 // DELETE /api/agents/templates/:id - Delete agent template (admin only)
-router.delete('/agents/templates/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.delete('/agents/templates/:id', authenticateToken, requireEducator, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -9084,7 +9126,7 @@ router.delete('/agents/templates/:id', authenticateToken, requireAdmin, async (r
 // recover the original prompt/dos/donts/avatar/voice slot. Custom templates
 // (is_default=0) reject with 400 because there's no canonical baseline to
 // restore — they should be edited or deleted instead.
-router.post('/agents/templates/:id/reset-to-default', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/agents/templates/:id/reset-to-default', authenticateToken, requireEducator, async (req, res) => {
     try {
         const { id } = req.params;
         const existing = await new Promise((resolve, reject) => {
@@ -9199,7 +9241,7 @@ router.post('/agents/templates/:id/reset-to-default', authenticateToken, require
 });
 
 // POST /api/agents/templates/:id/test-llm - Test agent LLM configuration
-router.post('/agents/templates/:id/test-llm', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/agents/templates/:id/test-llm', authenticateToken, requireEducator, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -9349,7 +9391,7 @@ router.post('/agents/templates/:id/test-llm', authenticateToken, requireAdmin, a
 });
 
 // POST /api/agents/templates/:id/duplicate - Duplicate an agent template
-router.post('/agents/templates/:id/duplicate', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/agents/templates/:id/duplicate', authenticateToken, requireEducator, async (req, res) => {
     try {
         const { id } = req.params;
         // The Standard/Custom UI calls this with no body (just a click). Tolerate
@@ -10311,7 +10353,7 @@ router.post('/questionnaire-responses', authenticateToken, (req, res) => {
 router.get('/questionnaire-responses', authenticateToken, (req, res) => {
     let sql, params;
 
-    if (req.user.role === 'admin') {
+    if (canReadAcrossUsers(req.user)) {
         sql = `
             SELECT qr.id, qr.session_id, qr.case_id, qr.submitted_at, qr.responses,
                    u.username, u.email,

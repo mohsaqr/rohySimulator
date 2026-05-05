@@ -18,7 +18,7 @@ export const defaultUsers = [
         name: 'Demo Student',
         email: 'student@rohy.local',
         password: 'student123',
-        role: 'user'
+        role: 'student'
     }
 ];
 
