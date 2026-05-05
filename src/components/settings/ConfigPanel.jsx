@@ -36,8 +36,10 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
     // Cases State
     const [cases, setCases] = useState([]);
     const [, setSelectedCaseId] = useState(null);
+    // Stash shape: { _stashedAt: ISO string, _caseId: number|'new', ...rest of editingCase }.
+    // The _stashedAt + _caseId let the wizard show a "Resumed draft from X"
+    // banner so admins know this isn't a fresh open from the server.
     const [editingCase, setEditingCase] = useState(() => {
-        // Restore editing case from localStorage on mount
         const savedCase = localStorage.getItem('rohy_editing_case');
         if (savedCase) {
             try {
@@ -50,17 +52,35 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
         }
         return null;
     });
+    const [resumedFromStash, setResumedFromStash] = useState(() => {
+        // Mark the initial editingCase value as "resumed" so the wizard can
+        // surface that to the admin. Cleared as soon as admin makes any edit.
+        return !!localStorage.getItem('rohy_editing_case');
+    });
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [lastSavedAt, setLastSavedAt] = useState(null);
 
-    // Auto-save editing case to localStorage
+    // Auto-save editing case to localStorage. Stash carries _stashedAt and
+    // _caseId so a later mount can prove provenance.
     useEffect(() => {
         if (editingCase) {
-            localStorage.setItem('rohy_editing_case', JSON.stringify(editingCase));
+            const stash = {
+                ...editingCase,
+                _stashedAt: new Date().toISOString(),
+                _caseId: editingCase.id || 'new'
+            };
+            localStorage.setItem('rohy_editing_case', JSON.stringify(stash));
             setHasUnsavedChanges(true);
             setLastSavedAt(new Date());
         }
     }, [editingCase]);
+
+    const discardDraft = () => {
+        localStorage.removeItem('rohy_editing_case');
+        setEditingCase(null);
+        setResumedFromStash(false);
+        setHasUnsavedChanges(false);
+    };
 
     // Warn before leaving with unsaved changes
     useEffect(() => {
@@ -97,13 +117,16 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             .catch(err => console.error("Failed to load cases", err));
     }, []);
 
+    // Returns true on a successful save and false on validation/network failure
+    // so callers can gate post-save UX (like the cancel-dialog close) on whether
+    // the persistence actually completed.
     const handleSaveCase = async () => {
-        if (!editingCase) return;
+        if (!editingCase) return false;
 
         // Validate required fields
         if (!editingCase.name || editingCase.name.trim() === '') {
             toast.warning('Please enter a case name before saving.');
-            return;
+            return false;
         }
 
         const isUpdate = !!editingCase.id;
@@ -131,7 +154,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
         if (!token) {
             toast.error('Authentication required. Please log in again.');
-            return;
+            return false;
         }
 
         console.log('Saving case:', { isUpdate, url, payload: { ...payload, config: 'omitted for brevity' } });
@@ -203,10 +226,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             clearAutoSave();
 
             toast.success('Case saved successfully!');
+            return true;
 
         } catch (err) {
             console.error(err);
             toast.error(err.message || 'Failed to save case');
+            return false;
         }
     };
 
@@ -449,6 +474,17 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                 {c.is_available ? 'Available' : 'Hidden'}
                                                             </span>
                                                         )}
+                                                        {/* Active-use indicator. Edits to this case will be live to
+                                                            anyone running it — admins ought to know before they
+                                                            start changing prompts/vitals mid-simulation. */}
+                                                        {isAdmin() && c.active_session_count > 0 && (
+                                                            <span
+                                                                className="px-2 py-0.5 text-xs rounded border bg-orange-900/40 text-orange-300 border-orange-700/50"
+                                                                title={`${c.active_session_count} active simulation session(s) — edits will be visible to learners on their next request.`}
+                                                            >
+                                                                ⚡ {c.active_session_count} live
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <div className="text-sm text-neutral-400">{c.description}</div>
                                                 </div>
@@ -605,6 +641,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                     initialStep={wizardInitialStep}
                                     onStepLoaded={() => setWizardInitialStep(1)}
                                     onOpenPersonaEditor={onOpenPersonaEditor}
+                                    resumedFromStash={resumedFromStash}
+                                    onDiscardDraft={discardDraft}
                                     onSave={handleSaveCase}
                                     onCancel={async () => {
                                         if (hasUnsavedChanges) {
@@ -613,7 +651,15 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                 { title: 'Unsaved Changes', confirmText: 'Save & Exit', cancelText: 'Discard', type: 'warning' }
                                             );
                                             if (action) {
-                                                handleSaveCase();
+                                                // Await the save so we don't close the dialog
+                                                // while the request is still in flight; on
+                                                // failure handleSaveCase surfaces a toast and
+                                                // we keep the editor open with the draft intact.
+                                                const ok = await handleSaveCase();
+                                                if (ok) {
+                                                    clearAutoSave();
+                                                    setEditingCase(null);
+                                                }
                                             } else {
                                                 clearAutoSave();
                                                 setEditingCase(null);
@@ -3323,6 +3369,86 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
 }
 
 // Case Agent Editor - Configure which agents are available per case
+// Editor for `config.pages` — title/content pairs appended to the AI patient's
+// system prompt as hidden context (only revealed when relevant to history
+// taking). Lightweight inline editor with add/remove/reorder; no rich-text.
+function PagesEditor({ pages, onChange }) {
+    const update = (i, patch) => {
+        const next = pages.map((p, idx) => idx === i ? { ...p, ...patch } : p);
+        onChange(next);
+    };
+    const add = () => onChange([...pages, { title: '', content: '' }]);
+    const remove = (i) => onChange(pages.filter((_, idx) => idx !== i));
+    const move = (i, delta) => {
+        const target = i + delta;
+        if (target < 0 || target >= pages.length) return;
+        const next = [...pages];
+        const [moved] = next.splice(i, 1);
+        next.splice(target, 0, moved);
+        onChange(next);
+    };
+    return (
+        <div className="border-t border-neutral-700 pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h5 className="text-sm font-bold text-neutral-200">Hidden Context Pages</h5>
+                    <p className="text-[11px] text-neutral-500">
+                        Title + content pairs the AI patient knows about but reveals only when asked.
+                        Useful for backstory, social context, lab results the patient already heard, etc.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={add}
+                    className="px-2.5 py-1 rounded text-xs font-semibold text-white flex items-center gap-1 bg-purple-700 hover:bg-purple-600"
+                >
+                    <Plus className="w-3.5 h-3.5" /> Add page
+                </button>
+            </div>
+            {pages.length === 0 ? (
+                <div className="rounded border border-dashed border-neutral-700 bg-neutral-900/40 p-4 text-center text-xs text-neutral-500">
+                    No hidden pages yet.
+                </div>
+            ) : (
+                <ul className="space-y-2">
+                    {pages.map((page, i) => (
+                        <li key={i} className="bg-neutral-900/60 border border-neutral-800 rounded p-3 space-y-2">
+                            <div className="flex items-start gap-2">
+                                <div className="flex flex-col items-center mt-1 text-neutral-600 text-[10px]">
+                                    <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="disabled:opacity-30 hover:text-neutral-300 leading-none">▲</button>
+                                    <span className="my-0.5 font-mono text-neutral-700">{i + 1}</span>
+                                    <button type="button" onClick={() => move(i, 1)} disabled={i === pages.length - 1} className="disabled:opacity-30 hover:text-neutral-300 leading-none">▼</button>
+                                </div>
+                                <input
+                                    type="text"
+                                    value={page.title || ''}
+                                    onChange={(e) => update(i, { title: e.target.value })}
+                                    placeholder="Page title (e.g., Lab Result Summary)"
+                                    className="flex-1 px-2 py-1.5 bg-neutral-950 border border-neutral-800 rounded text-sm focus:outline-none focus:border-purple-500"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => remove(i)}
+                                    className="p-1.5 rounded text-neutral-500 hover:text-rose-300 hover:bg-rose-900/30 mt-0.5"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <textarea
+                                value={page.content || ''}
+                                onChange={(e) => update(i, { content: e.target.value })}
+                                placeholder="Body text — anything the AI should know but reveal only on demand."
+                                rows={4}
+                                className="w-full px-2.5 py-2 bg-neutral-950 border border-neutral-800 rounded text-sm focus:outline-none focus:border-purple-500 resize-y"
+                            />
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+}
+
 function CaseAgentEditor({ caseId, caseData, setCaseData, onOpenPersonaEditor }) {
     const [templates, setTemplates] = useState([]);
     const [caseAgents, setCaseAgents] = useState([]);
@@ -3773,7 +3899,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData, onOpenPersonaEditor })
 }
 
 // Sub-component for the Wizard to keep code clean
-function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, hasUnsavedChanges, lastSavedAt, initialStep, onStepLoaded, onOpenPersonaEditor }) {
+function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, hasUnsavedChanges, lastSavedAt, initialStep, onStepLoaded, onOpenPersonaEditor, resumedFromStash, onDiscardDraft }) {
     const [step, setStep] = useState(initialStep || 1);
     const [uploading, setUploading] = useState(false);
     const [publicScenarios, setPublicScenarios] = useState([]);
@@ -3818,6 +3944,43 @@ function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, has
             ...prev,
             config: { ...prev.config, [key]: value }
         }));
+    };
+
+    // Map from the wizard's structuredHistory field names to the canonical
+    // clinicalRecords.history field names that the runtime actually reads
+    // (ChatInterface.jsx). Pre-this-fix the structured-mode editor wrote ONLY
+    // to structuredHistory and the runtime ignored it — admins lost their work.
+    // Fields with no clinicalRecords equivalent (`ros`, `additionalNotes`,
+    // `medications`) are kept in structuredHistory only; they're surfaced via
+    // a different ClinicalRecords section.
+    const STRUCTURED_HISTORY_TO_CLINICAL_HISTORY = {
+        chiefComplaint: 'chiefComplaint',
+        hpi: 'hpi',
+        pmh: 'pastMedical',
+        psh: 'pastSurgical',
+        allergies: 'allergies',
+        socialHistory: 'social',
+        familyHistory: 'family',
+    };
+
+    // Update a single field of structuredHistory and mirror it into
+    // clinicalRecords.history with the canonical key. Caller passes the
+    // structuredHistory key (eg. 'pmh'); we resolve the mirror key.
+    const updateStructuredHistoryField = (field, value) => {
+        const mirroredKey = STRUCTURED_HISTORY_TO_CLINICAL_HISTORY[field];
+        setCaseData(prev => {
+            const cfg = prev.config || {};
+            const sh = { ...(cfg.structuredHistory || {}), [field]: value };
+            const next = { ...prev, config: { ...cfg, structuredHistory: sh } };
+            if (mirroredKey) {
+                const cr = cfg.clinicalRecords || {};
+                next.config.clinicalRecords = {
+                    ...cr,
+                    history: { ...(cr.history || {}), [mirroredKey]: value }
+                };
+            }
+            return next;
+        });
     };
 
     const updateDemographics = (key, value) => {
@@ -3970,6 +4133,30 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
 
             {/* Wizard Header with Step Navigation */}
             <div className="border-b border-neutral-800 pb-4 mb-6">
+                {/* Resumed-from-stash banner. Auto-save persists the wizard
+                    state across page reloads, but the previous behaviour
+                    silently re-applied that draft on next mount with no
+                    indicator — admins could mistake a stale draft for a
+                    fresh load. The banner names the case the draft belongs
+                    to and offers an explicit Discard button. */}
+                {resumedFromStash && caseData?._stashedAt && (
+                    <div className="mb-3 px-3 py-2 bg-amber-900/30 border border-amber-700/50 rounded flex items-center justify-between gap-3 text-xs">
+                        <div className="text-amber-200">
+                            Resumed unsaved draft of <strong>{caseData.name || '(new case)'}</strong>
+                            {' from '}
+                            <span className="font-mono">{new Date(caseData._stashedAt).toLocaleString()}</span>
+                            . Save to persist, or discard to revert to the last saved version.
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onDiscardDraft}
+                            className="shrink-0 px-2 py-1 rounded border border-amber-700 text-amber-200 hover:bg-amber-800/40 hover:text-white text-xs"
+                        >
+                            Discard draft
+                        </button>
+                    </div>
+                )}
+
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex-1 mr-4">
                         <div className="flex items-center gap-3 mb-1">
@@ -4084,8 +4271,23 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         <label className="label-xs">Age</label>
                                         <input
                                             type="number"
-                                            value={caseData.config?.demographics?.age || ''}
-                                            onChange={e => updateDemographics('age', e.target.value)}
+                                            min="0"
+                                            max="120"
+                                            value={caseData.config?.demographics?.age ?? ''}
+                                            onChange={e => {
+                                                const raw = e.target.value;
+                                                if (raw === '') {
+                                                    updateDemographics('age', null);
+                                                    return;
+                                                }
+                                                const n = parseInt(raw, 10);
+                                                // Persist only finite integers in 0..120; otherwise
+                                                // keep the previous value so a stray character can't
+                                                // poison downstream voice/avatar slot derivation.
+                                                if (Number.isFinite(n) && n >= 0 && n <= 120) {
+                                                    updateDemographics('age', n);
+                                                }
+                                            }}
                                             className="input-dark"
                                             placeholder="Years"
                                         />
@@ -4423,8 +4625,34 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             <div className="flex items-center justify-between mb-4">
                                 <h5 className="text-sm font-bold text-neutral-300">Patient Story</h5>
                                 <div className="flex bg-neutral-800 rounded-lg p-1">
+                                    {/* Mode-switch handlers clear the unused mode's data after
+                                        confirmation. Without this, the runtime would see both a
+                                        freeform system_prompt AND structured history (mirrored to
+                                        clinicalRecords.history) at once — doubling the AI context
+                                        and producing inconsistent patient behaviour. */}
                                     <button
-                                        onClick={() => updateConfig('storyMode', 'freeform')}
+                                        onClick={async () => {
+                                            const current = caseData.config?.storyMode || 'freeform';
+                                            if (current === 'freeform') return;
+                                            const sh = caseData.config?.structuredHistory || {};
+                                            const hasStructured = Object.values(sh).some(v => v && String(v).trim());
+                                            if (hasStructured) {
+                                                const ok = await toast.confirm(
+                                                    'Switching to Freeform will clear the structured history fields. Continue?',
+                                                    { title: 'Switch to Freeform', confirmText: 'Switch', type: 'warning' }
+                                                );
+                                                if (!ok) return;
+                                            }
+                                            setCaseData(prev => {
+                                                const cfg = { ...(prev.config || {}) };
+                                                cfg.storyMode = 'freeform';
+                                                delete cfg.structuredHistory;
+                                                if (cfg.clinicalRecords?.history) {
+                                                    cfg.clinicalRecords = { ...cfg.clinicalRecords, history: {} };
+                                                }
+                                                return { ...prev, config: cfg };
+                                            });
+                                        }}
                                         className={`px-3 py-1 text-xs font-bold rounded transition-colors ${(caseData.config?.storyMode || 'freeform') === 'freeform'
                                             ? 'bg-purple-600 text-white'
                                             : 'text-neutral-400 hover:text-white'
@@ -4433,7 +4661,23 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         Freeform
                                     </button>
                                     <button
-                                        onClick={() => updateConfig('storyMode', 'structured')}
+                                        onClick={async () => {
+                                            const current = caseData.config?.storyMode || 'freeform';
+                                            if (current === 'structured') return;
+                                            const hasFreeform = !!(caseData.system_prompt && caseData.system_prompt.trim());
+                                            if (hasFreeform) {
+                                                const ok = await toast.confirm(
+                                                    'Switching to Structured will clear the freeform system prompt. Continue?',
+                                                    { title: 'Switch to Structured', confirmText: 'Switch', type: 'warning' }
+                                                );
+                                                if (!ok) return;
+                                            }
+                                            setCaseData(prev => ({
+                                                ...prev,
+                                                system_prompt: '',
+                                                config: { ...(prev.config || {}), storyMode: 'structured' }
+                                            }));
+                                        }}
                                         className={`px-3 py-1 text-xs font-bold rounded transition-colors ${caseData.config?.storyMode === 'structured'
                                             ? 'bg-purple-600 text-white'
                                             : 'text-neutral-400 hover:text-white'
@@ -4466,7 +4710,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         <input
                                             type="text"
                                             value={caseData.config?.structuredHistory?.chiefComplaint || ''}
-                                            onChange={e => updateConfig('structuredHistory', { ...caseData.config?.structuredHistory, chiefComplaint: e.target.value })}
+                                            onChange={e => updateStructuredHistoryField('chiefComplaint', e.target.value)}
                                             className="input-dark"
                                             placeholder="e.g., Chest pain for 2 hours"
                                         />
@@ -4475,7 +4719,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         <label className="label-xs">History of Present Illness (HPI)</label>
                                         <textarea
                                             value={caseData.config?.structuredHistory?.hpi || ''}
-                                            onChange={e => updateConfig('structuredHistory', { ...caseData.config?.structuredHistory, hpi: e.target.value })}
+                                            onChange={e => updateStructuredHistoryField('hpi', e.target.value)}
                                             className="input-dark h-24"
                                             placeholder="Describe the onset, location, duration, character, aggravating/alleviating factors, radiation, timing, and severity (OLDCARTS)..."
                                         />
@@ -4485,7 +4729,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             <label className="label-xs">Past Medical History</label>
                                             <textarea
                                                 value={caseData.config?.structuredHistory?.pmh || ''}
-                                                onChange={e => updateConfig('structuredHistory', { ...caseData.config?.structuredHistory, pmh: e.target.value })}
+                                                onChange={e => updateStructuredHistoryField('pmh', e.target.value)}
                                                 className="input-dark h-20"
                                                 placeholder="e.g., Hypertension, Type 2 DM, Hyperlipidemia"
                                             />
@@ -4494,7 +4738,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             <label className="label-xs">Past Surgical History</label>
                                             <textarea
                                                 value={caseData.config?.structuredHistory?.psh || ''}
-                                                onChange={e => updateConfig('structuredHistory', { ...caseData.config?.structuredHistory, psh: e.target.value })}
+                                                onChange={e => updateStructuredHistoryField('psh', e.target.value)}
                                                 className="input-dark h-20"
                                                 placeholder="e.g., Appendectomy (2010), Cholecystectomy (2015)"
                                             />
@@ -4505,7 +4749,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             <label className="label-xs">Current Medications</label>
                                             <textarea
                                                 value={caseData.config?.structuredHistory?.medications || ''}
-                                                onChange={e => updateConfig('structuredHistory', { ...caseData.config?.structuredHistory, medications: e.target.value })}
+                                                onChange={e => updateStructuredHistoryField('medications', e.target.value)}
                                                 className="input-dark h-20"
                                                 placeholder="e.g., Metformin 500mg BID, Lisinopril 10mg daily"
                                             />
@@ -4514,7 +4758,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             <label className="label-xs">Allergies</label>
                                             <textarea
                                                 value={caseData.config?.structuredHistory?.allergies || ''}
-                                                onChange={e => updateConfig('structuredHistory', { ...caseData.config?.structuredHistory, allergies: e.target.value })}
+                                                onChange={e => updateStructuredHistoryField('allergies', e.target.value)}
                                                 className="input-dark h-20"
                                                 placeholder="e.g., Penicillin (rash), Sulfa (hives), NKDA"
                                             />
@@ -4525,7 +4769,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             <label className="label-xs">Social History</label>
                                             <textarea
                                                 value={caseData.config?.structuredHistory?.socialHistory || ''}
-                                                onChange={e => updateConfig('structuredHistory', { ...caseData.config?.structuredHistory, socialHistory: e.target.value })}
+                                                onChange={e => updateStructuredHistoryField('socialHistory', e.target.value)}
                                                 className="input-dark h-20"
                                                 placeholder="e.g., Smoker 1 PPD x 20 years, occasional alcohol, retired teacher, lives with spouse"
                                             />
@@ -4534,7 +4778,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             <label className="label-xs">Family History</label>
                                             <textarea
                                                 value={caseData.config?.structuredHistory?.familyHistory || ''}
-                                                onChange={e => updateConfig('structuredHistory', { ...caseData.config?.structuredHistory, familyHistory: e.target.value })}
+                                                onChange={e => updateStructuredHistoryField('familyHistory', e.target.value)}
                                                 className="input-dark h-20"
                                                 placeholder="e.g., Father - MI at 55, Mother - DM, Sister - breast cancer"
                                             />
@@ -4544,7 +4788,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         <label className="label-xs">Review of Systems (Positive Findings)</label>
                                         <textarea
                                             value={caseData.config?.structuredHistory?.ros || ''}
-                                            onChange={e => updateConfig('structuredHistory', { ...caseData.config?.structuredHistory, ros: e.target.value })}
+                                            onChange={e => updateStructuredHistoryField('ros', e.target.value)}
                                             className="input-dark h-20"
                                             placeholder="e.g., Constitutional: fatigue, weight loss. Cardiac: chest pain, palpitations. Respiratory: SOB on exertion"
                                         />
@@ -4553,7 +4797,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         <label className="label-xs">Additional Notes for AI</label>
                                         <textarea
                                             value={caseData.config?.structuredHistory?.additionalNotes || ''}
-                                            onChange={e => updateConfig('structuredHistory', { ...caseData.config?.structuredHistory, additionalNotes: e.target.value })}
+                                            onChange={e => updateStructuredHistoryField('additionalNotes', e.target.value)}
                                             className="input-dark h-16"
                                             placeholder="Any additional context or instructions for the AI..."
                                         />
@@ -4900,11 +5144,19 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         Browse Repository
                                     </button>
                                 </div>
-                                {(caseData.scenario_from_repository || caseData.scenario_template) && (() => {
-                                    const isRepo = !!caseData.scenario_from_repository;
+                                {(caseData.scenario_from_repository || caseData.scenario_template || caseData.scenario?.source) && (() => {
+                                    // Scenario provenance can live in three places now:
+                                    //   - scenario.source (canonical, server-persisted)
+                                    //   - top-level scenario_from_repository (legacy + in-flight edits)
+                                    //   - top-level scenario_template (legacy + in-flight edits)
+                                    // Prefer the persisted scenario.source so a save+reload shows the
+                                    // same indicator the admin saw before saving.
+                                    const sourceMeta = caseData.scenario?.source;
+                                    const isRepo = sourceMeta?.kind === 'repository' || !!caseData.scenario_from_repository;
                                     const name = isRepo
-                                        ? caseData.scenario_from_repository.name
-                                        : SCENARIO_TEMPLATES[caseData.scenario_template]?.name;
+                                        ? (caseData.scenario_from_repository?.name || sourceMeta?.name)
+                                        : (SCENARIO_TEMPLATES[caseData.scenario_template]?.name
+                                           || SCENARIO_TEMPLATES[sourceMeta?.id]?.name);
                                     const source = isRepo ? 'Repository' : 'Built-in Template';
                                     return (
                                         <div className="mt-3 bg-green-900/20 border border-green-700/50 rounded p-3 flex items-center justify-between gap-3">
@@ -4940,8 +5192,24 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                 <label className="label-xs">Quick Templates</label>
                                 <select
                                     value={caseData.scenario_from_repository ? '_repository' : (caseData.scenario_template || 'none')}
-                                    onChange={(e) => {
+                                    onChange={async (e) => {
                                         const val = e.target.value;
+                                        // If a scenario is already attached, picking a different
+                                        // template silently clobbers the current timeline. Confirm
+                                        // first so admins don't lose customised scenarios.
+                                        const currentlyHasScenario = !!caseData.scenario;
+                                        if (currentlyHasScenario && val !== '_repository') {
+                                            const ok = await toast.confirm(
+                                                'This will replace the current scenario timeline. Continue?',
+                                                { title: 'Replace scenario?', confirmText: 'Replace', type: 'warning' }
+                                            );
+                                            if (!ok) {
+                                                e.target.value = caseData.scenario_from_repository
+                                                    ? '_repository'
+                                                    : (caseData.scenario_template || 'none');
+                                                return;
+                                            }
+                                        }
                                         if (val === 'none') {
                                             setCaseData(prev => ({ ...prev, scenario_template: null, scenario: null, scenario_duration: undefined, scenario_from_repository: null }));
                                         } else if (val === '_repository') {
@@ -5114,11 +5382,23 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
 
                 {/* STEP 8: CLINICAL RECORDS */}
                 {step === 9 && (
-                    <ClinicalRecordsEditor
-                        caseData={caseData}
-                        setCaseData={setCaseData}
-                        updateConfig={updateConfig}
-                    />
+                    <div className="space-y-6">
+                        <ClinicalRecordsEditor
+                            caseData={caseData}
+                            setCaseData={setCaseData}
+                            updateConfig={updateConfig}
+                        />
+
+                        {/* Hidden context pages — appended to the AI patient's
+                            system prompt as "PATIENT MEDICAL RECORD (Hidden
+                            Context)". Pre-this-fix the runtime read these but
+                            no editor surface existed, so admins couldn't
+                            author them via the UI. */}
+                        <PagesEditor
+                            pages={Array.isArray(caseData.config?.pages) ? caseData.config.pages : []}
+                            onChange={(next) => updateConfig('pages', next)}
+                        />
+                    </div>
                 )}
 
                 {/* STEP 9: TREATMENTS */}

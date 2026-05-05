@@ -156,6 +156,76 @@ function logAudit(params) {
  * @param {string} description - Description of changes
  * @param {Object} configSnapshot - Full config snapshot
  */
+// Physiological clamp ranges for case.config.initialVitals. The editor's
+// HTML min/max are advisory only (browsers accept out-of-range values when
+// the user types them directly); this is the server-side belt-and-braces.
+const VITAL_RANGES = {
+    hr:    { min: 20,  max: 250 },
+    spo2:  { min: 50,  max: 100 },
+    rr:    { min: 4,   max: 60  },
+    bpSys: { min: 40,  max: 260 },
+    bpDia: { min: 20,  max: 180 },
+    temp:  { min: 30,  max: 43  },
+    etco2: { min: 0,   max: 100 }
+};
+
+/**
+ * Clamp the case's initialVitals to physiologically-plausible ranges so an
+ * admin can't accidentally persist (or a malicious payload can't inject)
+ * values that would crash the monitor or trigger unrelated alarm cascades.
+ * Returns a new config object with clamped values; non-vitals fields are
+ * untouched. If a vital was out-of-range we log it for the admin.
+ */
+function clampInitialVitals(config) {
+    if (!config || typeof config !== 'object') return config;
+    const iv = config.initialVitals;
+    if (!iv || typeof iv !== 'object') return config;
+    const clamped = { ...iv };
+    let changed = false;
+    for (const [key, range] of Object.entries(VITAL_RANGES)) {
+        if (iv[key] == null || iv[key] === '') continue;
+        const n = Number(iv[key]);
+        if (!Number.isFinite(n)) continue;
+        if (n < range.min || n > range.max) {
+            clamped[key] = Math.max(range.min, Math.min(range.max, n));
+            console.warn(`[case clamp] initialVitals.${key} ${n} → ${clamped[key]} (range ${range.min}..${range.max})`);
+            changed = true;
+        } else if (clamped[key] !== n) {
+            clamped[key] = n; // coerce string-numbers to numbers
+            changed = true;
+        }
+    }
+    return changed ? { ...config, initialVitals: clamped } : config;
+}
+
+/**
+ * Tuck scenario provenance metadata into the scenario JSON itself so it
+ * round-trips through the DB. The case wizard sends `scenario_template`
+ * (built-in template id), `scenario_from_repository` (admin-curated entry),
+ * and `scenario_duration` (override duration in minutes) as top-level
+ * fields. Pre-this-fix the destructure ignored them and admins lost the
+ * audit trail of which template a case was authored from.
+ *
+ * The merged shape is `scenario.source = { kind, id?, name?, duration_minutes? }`
+ * and is non-destructive: if no metadata is provided we return the scenario
+ * unchanged, including null.
+ */
+function mergeScenarioSource(scenario, { scenario_template, scenario_from_repository, scenario_duration }) {
+    if (!scenario) return scenario; // null or undefined — leave alone
+    const source = {};
+    if (scenario_from_repository) {
+        source.kind = 'repository';
+        if (scenario_from_repository.id != null) source.id = scenario_from_repository.id;
+        if (scenario_from_repository.name) source.name = scenario_from_repository.name;
+    } else if (scenario_template) {
+        source.kind = 'template';
+        source.id = scenario_template;
+    }
+    if (scenario_duration != null) source.duration_minutes = scenario_duration;
+    if (Object.keys(source).length === 0) return scenario;
+    return { ...scenario, source };
+}
+
 function createCaseVersion(caseId, userId, changeType, description, configSnapshot) {
     // Get current version number
     db.get(
@@ -761,7 +831,26 @@ router.get('/cases', authenticateToken, (req, res) => {
             is_default: Boolean(row.is_default)
         }));
 
-        res.json({ cases });
+        // Annotate each case with `active_session_count` so the editor
+        // can warn admins that mid-session edits will be live to learners
+        // (the runtime reads case config fresh from the DB each request).
+        // One round-trip with a GROUP BY rather than N+1 queries.
+        db.all(
+            `SELECT case_id, COUNT(*) AS n
+             FROM sessions
+             WHERE end_time IS NULL
+             GROUP BY case_id`,
+            [],
+            (sErr, sessRows) => {
+                if (sErr) {
+                    console.warn('[cases] active session count failed:', sErr.message);
+                    return res.json({ cases });
+                }
+                const counts = new Map(sessRows.map(r => [r.case_id, r.n]));
+                const annotated = cases.map(c => ({ ...c, active_session_count: counts.get(c.id) || 0 }));
+                res.json({ cases: annotated });
+            }
+        );
     });
 });
 
@@ -812,7 +901,8 @@ router.put('/cases/:id/default', authenticateToken, requireAdmin, (req, res) => 
 
 // POST /api/cases - Admin only
 router.post('/cases', authenticateToken, requireAdmin, (req, res) => {
-    const { name, description, system_prompt, config, scenario } = req.body;
+    const { name, description, system_prompt, config, scenario,
+            scenario_template, scenario_from_repository, scenario_duration } = req.body;
     const ipAddress = req.ip || req.connection?.remoteAddress;
     const userAgent = req.headers['user-agent'];
 
@@ -823,6 +913,12 @@ router.post('/cases', authenticateToken, requireAdmin, (req, res) => {
     const chiefComplaint = config?.chiefComplaint || null;
     const difficultyLevel = config?.difficulty_level || null;
 
+    // Tuck the scenario provenance ({template_id|repository_id, name, duration})
+    // into the scenario JSON so it survives the round-trip. The wizard sends
+    // these as top-level fields; without this merge they were silently dropped.
+    const scenarioWithSource = mergeScenarioSource(scenario, { scenario_template, scenario_from_repository, scenario_duration });
+    const safeConfig = clampInitialVitals(config || {});
+
     const sql = `INSERT INTO cases (name, description, system_prompt, config, scenario,
                  patient_name, patient_gender, patient_age, chief_complaint, difficulty_level,
                  created_by, last_modified_by, version)
@@ -831,8 +927,8 @@ router.post('/cases', authenticateToken, requireAdmin, (req, res) => {
         name,
         description,
         system_prompt,
-        JSON.stringify(config || {}),
-        scenario ? JSON.stringify(scenario) : null,
+        JSON.stringify(safeConfig),
+        scenarioWithSource ? JSON.stringify(scenarioWithSource) : null,
         patientName,
         patientGender,
         patientAge,
@@ -885,7 +981,8 @@ router.post('/cases', authenticateToken, requireAdmin, (req, res) => {
 
 // PUT /api/cases/:id - Admin only
 router.put('/cases/:id', authenticateToken, requireAdmin, (req, res) => {
-    const { name, description, system_prompt, config, scenario } = req.body;
+    const { name, description, system_prompt, config, scenario,
+            scenario_template, scenario_from_repository, scenario_duration } = req.body;
     const caseId = req.params.id;
     const ipAddress = req.ip || req.connection?.remoteAddress;
     const userAgent = req.headers['user-agent'];
@@ -896,6 +993,10 @@ router.put('/cases/:id', authenticateToken, requireAdmin, (req, res) => {
     const patientName = config?.demographics?.name || null;
     const chiefComplaint = config?.chiefComplaint || null;
     const difficultyLevel = config?.difficulty_level || null;
+
+    // Same scenario-source merge as the POST handler — see comment there.
+    const scenarioWithSource = mergeScenarioSource(scenario, { scenario_template, scenario_from_repository, scenario_duration });
+    const safeConfig = clampInitialVitals(config || {});
 
     // First, get the old case data for audit trail
     db.get(`SELECT * FROM cases WHERE id = ?`, [caseId], (err, oldCase) => {
@@ -912,8 +1013,8 @@ router.put('/cases/:id', authenticateToken, requireAdmin, (req, res) => {
             name,
             description,
             system_prompt,
-            JSON.stringify(config || {}),
-            scenario ? JSON.stringify(scenario) : null,
+            JSON.stringify(safeConfig),
+            scenarioWithSource ? JSON.stringify(scenarioWithSource) : null,
             patientName,
             patientGender,
             patientAge,
@@ -8170,6 +8271,26 @@ router.delete('/agents/templates/:id', authenticateToken, requireAdmin, async (r
             return res.status(403).json({ error: 'Cannot delete a default template; duplicate it first' });
         }
 
+        // The case_agents FK on agent_template_id was created without ON DELETE
+        // CASCADE (and SQLite forbids retroactively adding it), so we clean up
+        // dependent rows explicitly. Without this, deleting a custom persona
+        // leaves orphaned case_agents rows whose JOIN to agent_templates
+        // returns NULL — the case shows a phantom agent at runtime.
+        const dependentRows = await new Promise((resolve, reject) => {
+            db.all('SELECT id, case_id FROM case_agents WHERE agent_template_id = ?', [id], (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            });
+        });
+        if (dependentRows.length > 0) {
+            await new Promise((resolve, reject) => {
+                db.run('DELETE FROM case_agents WHERE agent_template_id = ?', [id], function(err) {
+                    if (err) reject(err);
+                    else resolve(this.changes);
+                });
+            });
+        }
+
         await new Promise((resolve, reject) => {
             db.run('DELETE FROM agent_templates WHERE id = ?', [id], function(err) {
                 if (err) reject(err);
@@ -8183,10 +8304,16 @@ router.delete('/agents/templates/:id', authenticateToken, requireAdmin, async (r
             action: 'delete_agent_template',
             resourceType: 'agent_template',
             resourceId: id,
-            resourceName: template.name
+            resourceName: template.name,
+            metadata: dependentRows.length > 0
+                ? { cascaded_case_agents: dependentRows.length, affected_case_ids: [...new Set(dependentRows.map(r => r.case_id))] }
+                : null
         });
 
-        res.json({ success: true, message: 'Agent template deleted' });
+        const cascadedMsg = dependentRows.length > 0
+            ? ` (also removed ${dependentRows.length} attached case-agent row${dependentRows.length === 1 ? '' : 's'})`
+            : '';
+        res.json({ success: true, message: `Agent template deleted${cascadedMsg}` });
     } catch (err) {
         console.error('Agent template delete error:', err);
         res.status(500).json({ error: err.message });

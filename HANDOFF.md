@@ -48,6 +48,16 @@ A persona template is system-wide; case agents are per-case overrides on top. Th
 
 This makes the scope explicit so admins don't accidentally edit shipped behaviour while configuring a specific case.
 
+## Case editor wiring audit (this session, third pass)
+
+Three Explore agents reviewed the case editing system end-to-end (schema fidelity, cross-system wiring, wizard UX). 19 findings, of which 6 turned out to be false alarms (the agents cited code paths that were already correct). The 13 real findings shipped:
+
+- **HIGH**: persona delete leaves orphan case_agents rows (server-side cascade in DELETE handler), structuredHistory ↔ clinicalRecords.history schema split (mirror writes with rename map), localStorage stash leaks across case switches (timestamped draft + Discard button), Cancel→Save&Exit race (await save before close), treatment-effects master propagation (UI warning banner — full snapshot deferred).
+- **MEDIUM**: scenario provenance metadata persistence (`scenario.source` JSON), scenario clobber confirmation, story-mode switch clearing, `config.pages` editor surface, vitals server-side clamping.
+- **LOW**: avatar manifest staleness warning, age integer parsing, active-session count chip on case cards.
+
+Deferred: full session-config snapshot at session start (architectural change, would touch every runtime consumer of case config); lab-test orphan handling in LabInvestigationEditor.
+
 ## Persona / Voice / Avatar wiring audit (this session, second pass)
 
 After the codex-review fixes landed and the user ran the editor in the

@@ -156,6 +156,17 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
                                     <option key={a.id} value={a.id}>{a.label}</option>
                                 ))}
                             </select>
+                            {/* Stale-reference warning: a case may have been
+                                authored against an avatar GLB that's since been
+                                removed from the manifest (renamed/deleted). The
+                                runtime falls back to the platform default
+                                silently — surface that here so the admin can
+                                pick a fresh avatar before saving. */}
+                            {config.avatar_id && manifest && !avatarOptions.some(a => a.id === config.avatar_id) && (
+                                <p className="text-[11px] text-amber-400 mt-1">
+                                    ⚠ Avatar <span className="font-mono text-amber-200">{config.avatar_id}</span> is no longer in the manifest. Runtime will fall back to the platform default.
+                                </p>
+                            )}
                         </div>
 
                         {config.avatar_id && (

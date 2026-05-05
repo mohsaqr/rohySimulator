@@ -8,6 +8,25 @@
 - Removed the dead `avatarType` prop from `PatientAvatar.jsx`. `PatientVisual` keeps the `voiceSettings.avatar_type === 'none'` global kill-switch at parent level. Cleaned five callers (PatientVisual, AgentPersonaEditor, AgentTemplateManager, AvatarsSettingsTab, CaseAvatarVoicePicker, PatientSummaryCard, DiscussionScreen).
 - `scripts/audit-voices.sh` (NEW): end-to-end verification — provider routing, distinct sample rates, PCM s16le alignment, default-persona camera resolution. 10/10 passing locally. Bash 3.2 compatible (no associative arrays).
 
+### 2026-05-05 — Case editor wiring audit
+Three review agents flagged 19 findings across the case editing system. After verification, **6 were false alarms** (L7 scenario-timeline, M2 aiAccess enforcement, M3 vitals fallback chain, M7 scenario scaling preservation, M8 persona-editor wizard-step round-trip, M9 demographics null guards) — the agents were over-eager about claims that turned out already-correct in the code. The remaining 13 were real and shipped here:
+
+- `server/db.js` / `server/routes.js`: persona DELETE now explicitly cleans up dependent `case_agents` rows (SQLite forbade adding ON DELETE CASCADE retroactively). Audit log records the cascade. Server response message names the count of affected case-agent rows.
+- `server/routes.js`: case POST/PUT now persists scenario provenance (`scenario_template` / `scenario_from_repository` / `scenario_duration`) by tucking it into `scenario.source = { kind, id, name, duration_minutes }` so it survives the round-trip. Editor's read site falls back to legacy top-level fields for in-flight migrations.
+- `server/routes.js`: physiological clamps for `config.initialVitals` at case save time (HR 20–250, SpO2 50–100, etc.) — belt-and-braces against the editor's HTML min/max being type-bypassable.
+- `server/routes.js`: `/api/cases` GET annotates each case with `active_session_count` so the editor can show which cases are being used live.
+- `src/components/settings/ConfigPanel.jsx`:
+  - `updateStructuredHistoryField()` helper mirrors Step 3 inputs into `clinicalRecords.history` with the canonical key names (pmh→pastMedical, psh→pastSurgical, socialHistory→social, familyHistory→family). Pre-this-fix, Step 3 edits were silently lost — the runtime only reads `clinicalRecords.history`.
+  - localStorage stash now carries `_stashedAt` + `_caseId`. Wizard renders a "Resumed unsaved draft from <date>" banner with an explicit "Discard draft" button so admins can no longer mistake a stale draft for a fresh open.
+  - `handleSaveCase` returns boolean success; cancel-dialog "Save & Exit" awaits it and only closes when the save actually persisted.
+  - Story mode toggle (freeform↔structured) confirms before clearing the unused mode's data; eliminates the doubled-AI-context bug where both modes survived a switch.
+  - Scenario picker now confirms before clobbering an existing scenario.
+  - Active-use chip on every case card shows `⚡ N live` when sessions are open.
+  - New `PagesEditor` component for `config.pages` — title/content pairs the AI patient knows about but only reveals when relevant. Pre-this-fix the runtime read these pages but no editor surface existed.
+  - Age input parses to integer + clamps to 0..120 instead of accepting bare strings.
+- `src/components/settings/CaseAvatarVoicePicker.jsx`: warns when `config.avatar_id` no longer exists in the loaded avatar manifest (manifest staleness).
+- `src/components/settings/CaseTreatmentConfig.jsx`: amber banner clarifies that treatment effects live in the shared master catalog and that master edits propagate to every case using a treatment.
+
 ### 2026-05-05 — Codex-review pre-commit fixes
 - `server/db.js`: rewrote `seedDefaultAgents()` to insert a shipped row only when no `is_default=1` row exists for that `agent_type` (was: `INSERT OR IGNORE` on `(agent_type,name)`). Prevents the rename-then-restart duplication that would have made reset-to-defaults collide on the unique index.
 - `server/routes.js`:

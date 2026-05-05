@@ -169,6 +169,21 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
 
     return (
         <div className="space-y-6">
+            {/* Master-catalog warning. Treatments here reference rows in the
+                shared treatment_effects table — onset/duration/effect-deltas
+                come from there at runtime. An admin editing the master
+                catalog later affects every case using that treatment. */}
+            <div className="bg-amber-900/20 border border-amber-700/40 rounded-lg p-3 flex items-start gap-2 text-xs">
+                <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                <div className="text-amber-200">
+                    Treatments below pull their effect values (onset, duration, vital-sign
+                    deltas) live from the shared <span className="font-mono text-amber-100">treatment_effects</span> master catalog
+                    at runtime. Editing the master catalog will retroactively change
+                    behaviour for every case configured to use that treatment. Per-case
+                    overrides aren't yet exposed in this UI.
+                </div>
+            </div>
+
             {/* Configured Treatments Summary */}
             {configuredList.length > 0 && (
                 <div className="bg-neutral-800/50 rounded-lg p-4 border border-neutral-700">
