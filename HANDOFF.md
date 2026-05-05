@@ -1,6 +1,48 @@
 # Session Handoff — 2026-05-05
 
-## Stage E7 (Soft delete + retention policy) — IMPLEMENTED this session
+## Stage E8 (Connection pooling + portability) — SHIPPED this session
+
+Scope: inventory + infrastructure only. Actual Postgres migration is out of
+scope; E8 is the structural prerequisite. Route migration to the adapter is
+also out of scope and deferred, so existing `server/routes.js` sqlite3 callback
+call sites remain unchanged.
+
+Implementation:
+1. **Portability inventory** — current SQLite blockers were inventoried across
+   migrations, DB bootstrap/seed code, route SQL, retention scripts, and the
+   hand-rolled migration framework. The main blockers are SQLite conflict
+   syntax, `datetime('now')`/`julianday()` time math, `AUTOINCREMENT`, schema
+   rebuild/copy migrations, `BOOLEAN`/`DATETIME` declarations, and the direct
+   sqlite3 callback connection model.
+2. **Adapter infrastructure** — `server/dbAdapter.js` reuses the existing
+   handle from `server/db.js` and exports Promise-returning `get`, `all`,
+   `run`, `serialize`, `transaction`, and `prepare` helpers. It also exports
+   `now()` and `upsert()` as the first SQL-fragment portability helpers.
+   Existing route code was not migrated.
+3. **Migration framework documentation** — `server/migrationRunner.js` now
+   explicitly documents that the baseline detection is SQLite-specific and that
+   a future Postgres runner should use `information_schema.tables`.
+4. **Audit** — `scripts/audit-portability.sh` is Bash 3.2 compatible, reports
+   portability inventory counts without failing on non-zero findings, asserts
+   the adapter surface, smokes the adapter against a throwaway SQLite DB, checks
+   the new stage did not add a `pg` dependency, and verifies the adapter keeps
+   bare `db.run` usage inside the wrapper.
+
+Verification completed locally:
+- Prior audit scripts: retention 27/27, tenant 22/22, redaction 18/18,
+  auditlog 15/15, rbac 18/18, sessions 9/9, investigations 17/17, alarms
+  13/13, llm 7/7, scenario 7/7, physexam 6/6, auth 3/3, tna 6/6, schema 7/7,
+  migrations 4/4. Total 179/179.
+- `scripts/audit-portability.sh`: 14/14.
+- `npx vite build`: passed.
+- Adapter smoke used a throwaway `ROHY_DB`; no orchestrator-managed `:3000`
+  restart was performed.
+
+Deferred: actual Postgres migration, route migration to `server/dbAdapter.js`,
+`pg` dependency, column-type abstractions, query-builder adoption, and migration
+framework replacement.
+
+## Stage E7 (Soft delete + retention policy) — SHIPPED previous session, COMMITTED
 
 Inventory pass:
 - **Soft-delete**: `cases`, `sessions`, `agent_templates`, `scenarios`,

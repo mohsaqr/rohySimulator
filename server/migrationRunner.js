@@ -93,6 +93,11 @@ async function getAppliedMigrations(db) {
 }
 
 async function hasBaselineSchema(db) {
+    // SQLite-specific pre-baselined detection: this checks sqlite_master for
+    // existing tables before stamping the extracted baseline migration. A
+    // future Postgres migration runner should use information_schema.tables for
+    // the equivalent check; do not treat this PRAGMA/sqlite_master framework as
+    // portable database infrastructure.
     const placeholders = BASELINE_TABLES.map(() => '?').join(',');
     const rows = await all(
         db,

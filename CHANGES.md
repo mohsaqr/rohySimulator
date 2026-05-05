@@ -1,3 +1,13 @@
+### 2026-05-05 — Stage E8: Connection pooling + portability
+Shipped the Postgres-portability inventory and adapter infrastructure without migrating routes.
+
+- `server/dbAdapter.js` (NEW): Promise-returning wrapper around the existing sqlite3 handle from `server/db.js`, exporting `get`, `all`, `run`, `serialize`, `transaction`, `prepare`, `now`, and `upsert`. It opens no second connection and documents the future pg drop-in surface.
+- `server/migrationRunner.js`: added a documentation comment calling out the SQLite-specific baseline detection and the future Postgres `information_schema.tables` equivalent.
+- `scripts/audit-portability.sh` (NEW): Bash 3.2-compatible inventory audit that reports SQLite-specific counts, asserts the adapter surface, smokes an adapter query against a throwaway DB, checks no `pg` dependency was added, and passes even while inventory counts are non-zero.
+- `HANDOFF.md` and `ENTERPRISE_AUDIT.md`: record E8 as shipped and explicitly defer route migration and actual Postgres migration.
+
+Deferred: actual Postgres migration, route migration to the adapter, `pg` dependency, column-type abstractions, and query-builder adoption. E8 is the structural prerequisite only.
+
 ### 2026-05-05 — Stage E7: Soft delete + retention policy
 Added a uniform retention layer for same-tenant user purge, soft-delete reads, and time-bounded log cleanup.
 

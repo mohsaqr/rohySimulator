@@ -27,7 +27,7 @@ deferrals that earlier audits surfaced.
 | E5 | **Data classification + redaction policy** | MED | 60–90 min | Stage 4 + Stage 7 redacted `apiKey` in two places. Generalize: tag every column carrying secrets/PII (apiKey, password_hash, email, phone, alternative_email, address, etc.); enforce redaction at the response middleware level so new endpoints inherit the policy. |
 | E6 | **Multi-tenant readiness** | MED | 90–120 min | Add `tenant_id` (or `organization_id`) column to user-owned tables; default to a "default" tenant; wire scoping to all per-user queries. Educational platform's nominal scope is single-tenant, but this is the structural prerequisite for enterprise deployment. |
 | E7 | **Soft delete + retention policy** | MED | 60–90 min | `cases.deleted_at` exists for soft delete; sweep other user-scoped tables. Retention rules: how long do `event_log`, `learning_events`, `interactions` rows live? GDPR's right-to-erasure means a per-user purge must work. |
-| E8 | **Connection pooling + portability** | LOW | 60–90 min | Currently `better-sqlite3` (or `sqlite3`?) on a single file. Enterprise asks for Postgres compatibility; the SQL is *mostly* portable but `INSERT OR REPLACE`, `datetime('now')`, and JSON shorthand will break. Inventory + flag, don't migrate. |
+| E8 | **Connection pooling + portability** | LOW | 60–90 min | Shipped 2026-05-05: inventoried SQLite/Postgres blockers and added `server/dbAdapter.js` as a Promise-returning portability shim over the existing sqlite3 handle. Actual Postgres migration and route migration to the adapter are out of scope; E8 is the structural prerequisite. |
 | E9 | **Observability hooks** | LOW | 30–60 min | Slow-query log, error tracking, request-id propagation, structured logs. Currently `console.log` is the entire observability stack. |
 
 ## Out of scope
@@ -89,6 +89,9 @@ CONSTRAINTS:
 - E7: implemented 2026-05-05 (soft-delete inventory, same-tenant user purge,
   retention sweep script, retention audit script; HTTP audit requires
   orchestrator server restart)
-- E8-E9: pending
+- E8: shipped 2026-05-05 (portability inventory, additive db adapter,
+  SQLite-specific migration-runner documentation, portability audit script;
+  actual Postgres migration and route migration are out of scope/deferred)
+- E9: pending
 
 Updated: 2026-05-05.
