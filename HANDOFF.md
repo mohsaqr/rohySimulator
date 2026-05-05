@@ -1,5 +1,99 @@
 # Session Handoff — 2026-05-06
 
+## NEXT SESSION — Top priority
+
+### 1. Discussant voice mismatch — UNRESOLVED
+
+**User report**: the voice configured for the Default Discussant is NOT
+what they hear when the discussant speaks in a case. They've said this
+twice and the previous orchestrator (me) failed to actually diagnose
+it — instead lectured about Neural2 voices "sounding similar" and went
+on to build more diagnostic UI instead of capturing the literal TTS
+payload over the wire.
+
+**What is configured (verified via DB)**:
+- `agent_templates` row id=184 (`Default Discussant`):
+  `config.voice = {"gender":"male","tts_rate":1.1,"tts_provider":"google","case_voice":"en-US-Neural2-D"}`
+- `case_agents` row 12 attaches template 184 to case 1 with empty
+  `config_override` — so the discussant inherits the template config.
+
+**What the diagnostic bar shows for this case**:
+```
+patient    | John Martinez       | en-US-Neural2-J | google | OVERRIDE
+discussant | Default Discussant  | en-US-Neural2-D | google | OVERRIDE
+```
+The bar pre-resolves through the same `resolveVoice()` the runtime
+uses — so this says the resolver *should* return Neural2-D for the
+discussant. It is a static analysis, not a runtime capture.
+
+**What is NOT verified**:
+- The actual `/api/tts` request body when the discussant speaks. We
+  never opened DevTools → Network and looked at the literal `voice`
+  field flying over the wire. That is the only ground truth — every
+  prior static-analysis answer is a hypothesis.
+- Whether the user is hearing the discussant via the post-case
+  **debrief panel** (DiscussionScreen + useDiscussionEngine) or via
+  the **chat sidebar tab during the case** (ChatInterface line 980).
+  Each goes through a different code path and could break
+  independently.
+
+**Steps for next session, in order** — no theorizing, no UI work, no
+extending the diagnostic bar until step 4 is done:
+1. Ask the user: "When you hear the wrong discussant voice, are you
+   in the post-case debrief panel, or the discussant tab in the live
+   chat sidebar?"
+2. Open the simulator with that exact path. DevTools → Network →
+   filter `tts`. Make the discussant speak. Inspect the request body.
+   Document the literal `voice` and `provider` strings sent.
+3. If the body says `voice: en-US-Neural2-D`, the request is correct;
+   the wrong voice is then either a user-perception issue or a
+   server-side bug in `/api/tts` voice substitution. Probe `/api/tts`
+   directly via curl with that exact payload and compare audio bytes.
+4. If the body says something OTHER than Neural2-D, the bug is
+   upstream in either ChatInterface line 980 or useDiscussionEngine
+   line 114. Trace from there.
+5. Only after the wire payload is captured, decide what to fix.
+
+**What I built that is NOT a fix and may be in the way**:
+- `src/components/debug/DiagnosticBar.jsx` — useful as a static-config
+  view but it does NOT capture the live TTS payload. Don't trust its
+  "active resolved voice" row as proof of what got synthesized — that
+  row is also a static resolver call, just like the configured-speakers
+  table.
+- A planned enhancement to make the bar capture the most recent
+  `/api/tts` request body via a custom event from `voiceService.js` —
+  abandoned mid-implementation when the user (rightly) said stop. If
+  pursued next session, the right place to wire it is around
+  `ttsFetch()` in `src/services/voiceService.js:158`.
+
+### 2. Audit-script side-effects (lower priority but real)
+
+Earlier in this session a real production bug was found and patched:
+the `audit-redaction.sh` and `audit-auditlog.sh` scripts were
+clobbering the operator's real `platform_settings.llm_api_key` with a
+fake `platform-secret-redaction-...` value every run. Restored from
+the pre-E2 backup (`sk-proj-...8qrecA`, 164 chars). Cleanup also
+dropped 7 orphan `Redaction Template ...` agent_templates, 6 polluted
+`user_preferences.default_llm_settings` rows, and 9 orphan test users.
+The audit scripts now self-clean (commit `902b314`). **Verify on
+fresh-clone deploys** that the platform LLM key + model settings
+survive a full `for f in scripts/audit-*.sh; do bash "$f"; done`
+run-through. They should now, but real-world test against a non-dev
+DB has not happened.
+
+### 3. Workflow note for next orchestrator
+
+When a user reports a runtime symptom ("I hear the wrong voice"),
+opening DevTools / capturing the literal network payload is step 1.
+This session skipped to schema introspection and code reading, which
+is fine for narrowing hypotheses but is not a substitute for empirical
+observation. When the user pushed back the second time, the
+orchestrator reflexively built more diagnostic UI instead of just
+listening. That is the failure mode this handoff is recording so
+future-me reads it before opening more files.
+
+---
+
 ## ALL 9 ENTERPRISE STAGES COMPLETE — Stage E9 Observability Hooks SHIPPED
 
 Scope: lightweight runtime instrumentation only. Existing handler-level
