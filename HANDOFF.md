@@ -1,5 +1,52 @@
 # Session Handoff — 2026-05-05
 
+## Stage E4 (Audit-log coverage) — SHIPPED this session
+
+Mission inventory found previously uncovered sensitive mutations in:
+user create/delete and admin reads; case availability/default/labs/treatments;
+scenario create/update/delete/seed; alarm threshold writes; lab JSON catalog
+add/update/delete/import/reload; master lab-test and medication writes;
+platform-settings writes; notification/user preference writes; case-agent
+assignment writes; and agent-template duplicate/update metadata gaps. Password
+change, admin role/password change, case create/update/delete, case restore,
+agent-template create/update/delete/reset, and force logout already had partial
+coverage.
+
+Key fixes:
+1. **Central helpers** — `logAudit()` now accepts `targetType/targetId`
+   aliases as well as `resourceType/resourceId`, warns on failed audit writes,
+   and is wrapped by `auditSuccess(req, ...)` for request identity/IP/user-agent.
+   Platform settings use `setAuditedPlatformSetting()` so every key write logs
+   old/new values without repeating route boilerplate.
+2. **Expanded write coverage** — added audit rows for case lifecycle adjuncts,
+   case labs/treatments/agents, scenario lifecycle, alarm config, lab catalog,
+   master lab/medication catalog, user/preferences/notification prefs, agent
+   template lifecycle gaps, and platform settings.
+3. **Read-side coverage** — admin cross-user reads now log representative
+   sensitive access (`GET /users/:id`, cross-user
+   `GET /learning-events/detailed/:sessionId`). Own-data reads do not log.
+4. **Audit reader alias** — `GET /api/system-audit-log` is an admin-only alias
+   for `/api/admin/audit-log`, preserving the existing admin requirement.
+5. **New audit script** — `scripts/audit-auditlog.sh` performs representative
+   admin mutations and verifies expected action rows plus populated
+   `old_value`/`new_value` fields.
+
+Audit boundary / explicit non-logging policy:
+- GET reads of a user's own data do not log to avoid noise.
+- Runtime learner telemetry such as chat messages, learning events, vitals,
+  physical exam findings, alarm event creation, LLM usage, TTS usage, and
+  patient-record events keep using their domain tables/logs.
+- Failed authorization attempts are not audit-logged in E4 because
+  `requireRole()` blocks before route handlers run. That can be centralized
+  later if enterprise wants failed-access telemetry.
+- API keys/secrets are redacted before platform-setting audit payloads.
+
+Verification completed locally: `node --check server/routes.js`,
+`bash -n scripts/audit-auditlog.sh`, and `npx vite build`.
+`scripts/audit-auditlog.sh` was not run end-to-end because no API server was
+listening on `localhost:3000` and this stage must not start/restart the
+orchestrator-managed server.
+
 ## Stage E3 (RBAC role hierarchy) — SHIPPED this session
 
 The binary admin/student model is now a five-rank hierarchy:

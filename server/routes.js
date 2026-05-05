@@ -135,6 +135,9 @@ function logAudit(params) {
         resourceType = null,
         resourceId = null,
         resourceName = null,
+        targetType = null,
+        targetId = null,
+        targetName = null,
         oldValue = null,
         newValue = null,
         ipAddress = null,
@@ -151,18 +154,62 @@ function logAudit(params) {
           old_value, new_value, ip_address, user_agent, session_id, status, error_message, metadata)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-            userId, username, action, resourceType, resourceId, resourceName,
-            oldValue ? JSON.stringify(oldValue) : null,
-            newValue ? JSON.stringify(newValue) : null,
+            userId, username, action, resourceType ?? targetType, resourceId ?? targetId, resourceName ?? targetName,
+            oldValue ? JSON.stringify(redactAuditPayload(oldValue)) : null,
+            newValue ? JSON.stringify(redactAuditPayload(newValue)) : null,
             ipAddress, userAgent, sessionId, status, errorMessage,
-            metadata ? JSON.stringify(metadata) : null
+            metadata ? JSON.stringify(redactAuditPayload(metadata)) : null
         ],
         (err) => {
             if (err) {
-                console.error('[Audit Log] Failed to write audit log:', err.message);
+                console.warn('[Audit Log] Failed to write audit log:', err.message);
             }
         }
     );
+}
+
+function auditSuccess(req, params) {
+    logAudit({
+        userId: req.user?.id,
+        username: req.user?.username,
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.headers?.['user-agent'],
+        status: 'success',
+        ...params
+    });
+}
+
+function parseAuditJson(value) {
+    if (!value || typeof value !== 'string') return value ?? null;
+    try {
+        return JSON.parse(value);
+    } catch {
+        return value;
+    }
+}
+
+function redactAuditPayload(value) {
+    if (Array.isArray(value)) {
+        return value.map(redactAuditPayload);
+    }
+    if (value && typeof value === 'object') {
+        const out = {};
+        for (const [key, child] of Object.entries(value)) {
+            out[key] = /(api[_-]?key|password|secret|token)/i.test(key)
+                ? (child ? '[redacted]' : child)
+                : redactAuditPayload(child);
+        }
+        return out;
+    }
+    return value;
+}
+
+function redactAuditSetting(key, value) {
+    if (value == null) return value;
+    if (/(api[_-]?key|password|secret|token)/i.test(key)) {
+        return value ? '[redacted]' : value;
+    }
+    return parseAuditJson(value);
 }
 
 /**
@@ -495,6 +542,18 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
             const user = { id: this.lastID, username, name, email, role: finalRole };
             const token = generateToken(user);
 
+            logAudit({
+                userId: user.id,
+                username,
+                action: 'register_user_self',
+                resourceType: 'user',
+                resourceId: String(user.id),
+                resourceName: username,
+                newValue: { username, email, role: finalRole },
+                ipAddress: req.ip || req.connection?.remoteAddress,
+                userAgent: req.headers['user-agent']
+            });
+
             res.status(201).json({
                 message: 'User registered successfully',
                 user: { id: user.id, username, name, email, role: finalRole },
@@ -540,6 +599,14 @@ router.post('/users/create', authenticateToken, requireAdmin, async (req, res) =
                 }
                 return res.status(500).json({ error: 'Failed to create user' });
             }
+
+            auditSuccess(req, {
+                action: 'admin_create_user',
+                resourceType: 'user',
+                resourceId: String(this.lastID),
+                resourceName: username,
+                newValue: { username, email, role: finalRole }
+            });
 
             res.status(201).json({
                 message: 'User created successfully',
@@ -639,6 +706,17 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
             });
         }
     }
+
+    auditSuccess(req, {
+        action: 'admin_batch_create_users',
+        resourceType: 'user_batch',
+        resourceId: `batch-${Date.now()}`,
+        newValue: {
+            success: results.success.map(u => ({ username: u.username, email: u.email, role: u.role })),
+            failed: results.failed.map(u => ({ username: u.username, email: u.email, error: u.error }))
+        },
+        metadata: { succeeded: results.success.length, failed: results.failed.length }
+    });
 
     res.json({
         message: `Batch upload complete: ${results.success.length} succeeded, ${results.failed.length} failed`,
@@ -937,20 +1015,35 @@ router.get('/cases', authenticateToken, (req, res) => {
 // PUT /api/cases/:id/availability - Toggle case availability (Admin only)
 router.put('/cases/:id/availability', authenticateToken, requireEducator, (req, res) => {
     const { is_available } = req.body;
-    db.run(
-        "UPDATE cases SET is_available = ? WHERE id = ?",
-        [is_available ? 1 : 0, req.params.id],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            if (this.changes === 0) return res.status(404).json({ error: 'Case not found' });
-            res.json({ success: true, is_available: Boolean(is_available) });
-        }
-    );
+    db.get('SELECT id, name, is_available FROM cases WHERE id = ?', [req.params.id], (readErr, oldCase) => {
+        if (readErr) return res.status(500).json({ error: readErr.message });
+        if (!oldCase) return res.status(404).json({ error: 'Case not found' });
+        db.run(
+            "UPDATE cases SET is_available = ? WHERE id = ?",
+            [is_available ? 1 : 0, req.params.id],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                if (this.changes === 0) return res.status(404).json({ error: 'Case not found' });
+                auditSuccess(req, {
+                    action: 'update_case_availability',
+                    resourceType: 'case',
+                    resourceId: req.params.id,
+                    resourceName: oldCase.name,
+                    oldValue: { is_available: Boolean(oldCase.is_available) },
+                    newValue: { is_available: Boolean(is_available) }
+                });
+                res.json({ success: true, is_available: Boolean(is_available) });
+            }
+        );
+    });
 });
 
 // PUT /api/cases/:id/default - Set case as default (Admin only)
 router.put('/cases/:id/default', authenticateToken, requireEducator, (req, res) => {
     const { is_default } = req.body;
+    db.get('SELECT id, name, is_default FROM cases WHERE id = ?', [req.params.id], (readErr, oldCase) => {
+        if (readErr) return res.status(500).json({ error: readErr.message });
+        if (!oldCase) return res.status(404).json({ error: 'Case not found' });
 
     // If setting as default, first clear any existing defaults
     if (is_default) {
@@ -963,6 +1056,14 @@ router.put('/cases/:id/default', authenticateToken, requireEducator, (req, res) 
                 function(err) {
                     if (err) return res.status(500).json({ error: err.message });
                     if (this.changes === 0) return res.status(404).json({ error: 'Case not found' });
+                    auditSuccess(req, {
+                        action: 'update_case_default',
+                        resourceType: 'case',
+                        resourceId: req.params.id,
+                        resourceName: oldCase.name,
+                        oldValue: { is_default: Boolean(oldCase.is_default) },
+                        newValue: { is_default: true, is_available: true }
+                    });
                     res.json({ success: true, is_default: true });
                 }
             );
@@ -973,10 +1074,19 @@ router.put('/cases/:id/default', authenticateToken, requireEducator, (req, res) 
             [req.params.id],
             function(err) {
                 if (err) return res.status(500).json({ error: err.message });
+                auditSuccess(req, {
+                    action: 'update_case_default',
+                    resourceType: 'case',
+                    resourceId: req.params.id,
+                    resourceName: oldCase.name,
+                    oldValue: { is_default: Boolean(oldCase.is_default) },
+                    newValue: { is_default: false }
+                });
                 res.json({ success: true, is_default: false });
             }
         );
     }
+    });
 });
 
 // POST /api/cases - Admin only
@@ -1487,6 +1597,15 @@ router.get('/users/:id', authenticateToken, requireAdmin, (req, res) => {
     db.get(sql, [req.params.id], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) return res.status(404).json({ error: 'User not found' });
+        if (String(req.params.id) !== String(req.user.id)) {
+            auditSuccess(req, {
+                action: 'read_user_profile_admin',
+                resourceType: 'user',
+                resourceId: String(req.params.id),
+                resourceName: user.username,
+                newValue: { fields: ['id', 'username', 'name', 'email', 'role', 'created_at'] }
+            });
+        }
         res.json({ user });
     });
 });
@@ -1589,6 +1708,10 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
 
     const userId = req.params.id;
 
+    db.get('SELECT id, username, email, role FROM users WHERE id = ?', [userId], (targetErr, targetUser) => {
+        if (targetErr) return res.status(500).json({ error: targetErr.message });
+        if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
     db.get('SELECT COUNT(*) as count FROM case_versions WHERE changed_by = ?', [userId], (versionErr, versionRow) => {
         if (versionErr) return res.status(500).json({ error: versionErr.message });
         if ((versionRow?.count || 0) > 0) {
@@ -1642,6 +1765,13 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
                             return res.status(404).json({ error: 'User not found' });
                         }
                         db.run('COMMIT');
+                        auditSuccess(req, {
+                            action: 'admin_delete_user',
+                            resourceType: 'user',
+                            resourceId: userId,
+                            resourceName: targetUser.username,
+                            oldValue: targetUser
+                        });
                         return res.json({ message: 'User deleted successfully', id: userId });
                     });
                     return;
@@ -1659,6 +1789,7 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
 
             runCleanup(0);
         });
+    });
     });
 });
 
@@ -2592,6 +2723,15 @@ router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req
     if (!canReview && session.user_id !== req.user.id) {
         return res.status(403).json({ error: 'Access denied' });
     }
+    if (canReview && session.user_id !== req.user.id) {
+        auditSuccess(req, {
+            action: 'read_learning_events_cross_user',
+            resourceType: 'session',
+            resourceId: sessionId,
+            oldValue: null,
+            newValue: { target_user_id: session.user_id }
+        });
+    }
 
     // Get all learning events for this session with full details
     const eventsSql = `
@@ -2775,7 +2915,7 @@ router.post('/alarms/config', authenticateToken, requireAdmin, (req, res) => {
     const { user_id, vital_sign, high_threshold, low_threshold, enabled } = req.body;
     
     // Check if config exists
-    const checkSql = `SELECT id FROM alarm_config WHERE user_id ${user_id ? '= ?' : 'IS NULL'} AND vital_sign = ?`;
+    const checkSql = `SELECT * FROM alarm_config WHERE user_id ${user_id ? '= ?' : 'IS NULL'} AND vital_sign = ?`;
     const checkParams = user_id ? [user_id, vital_sign] : [vital_sign];
     
     db.get(checkSql, checkParams, (err, row) => {
@@ -2790,6 +2930,14 @@ router.post('/alarms/config', authenticateToken, requireAdmin, (req, res) => {
                 if (err) {
                     return res.status(500).json({ error: err.message });
                 }
+                auditSuccess(req, {
+                    action: 'update_alarm_config',
+                    resourceType: 'alarm_config',
+                    resourceId: String(row.id),
+                    resourceName: vital_sign,
+                    oldValue: row,
+                    newValue: { user_id: user_id || null, vital_sign, high_threshold, low_threshold, enabled: enabled ? 1 : 0 }
+                });
                 res.json({ message: 'Alarm config updated' });
             });
         } else {
@@ -2800,6 +2948,13 @@ router.post('/alarms/config', authenticateToken, requireAdmin, (req, res) => {
                 if (err) {
                     return res.status(500).json({ error: err.message });
                 }
+                auditSuccess(req, {
+                    action: 'create_alarm_config',
+                    resourceType: 'alarm_config',
+                    resourceId: String(this.lastID),
+                    resourceName: vital_sign,
+                    newValue: { user_id: user_id || null, vital_sign, high_threshold, low_threshold, enabled: enabled ? 1 : 0 }
+                });
                 res.json({ id: this.lastID });
             });
         }
@@ -2860,19 +3015,29 @@ router.put('/notification-prefs', authenticateToken, (req, res) => {
         });
     }
 
-    // Upsert. user_preferences has UNIQUE(user_id) so ON CONFLICT works.
-    db.run(
-        `INSERT INTO user_preferences (user_id, notification_settings, updated_at)
-         VALUES (?, ?, CURRENT_TIMESTAMP)
-         ON CONFLICT(user_id) DO UPDATE SET
-             notification_settings = excluded.notification_settings,
-             updated_at = CURRENT_TIMESTAMP`,
-        [userId, json],
-        (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ ok: true });
-        }
-    );
+    db.get(`SELECT notification_settings FROM user_preferences WHERE user_id = ?`, [userId], (readErr, oldPrefs) => {
+        if (readErr) return res.status(500).json({ error: readErr.message });
+        // Upsert. user_preferences has UNIQUE(user_id) so ON CONFLICT works.
+        db.run(
+            `INSERT INTO user_preferences (user_id, notification_settings, updated_at)
+             VALUES (?, ?, CURRENT_TIMESTAMP)
+             ON CONFLICT(user_id) DO UPDATE SET
+                 notification_settings = excluded.notification_settings,
+                 updated_at = CURRENT_TIMESTAMP`,
+            [userId, json],
+            (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+                auditSuccess(req, {
+                    action: 'update_notification_preferences',
+                    resourceType: 'user_preferences',
+                    resourceId: String(userId),
+                    oldValue: { notification_settings: parseAuditJson(oldPrefs?.notification_settings) },
+                    newValue: { notification_settings: filtered }
+                });
+                res.json({ ok: true });
+            }
+        );
+    });
 });
 
 // --- INVESTIGATION ENDPOINTS ---
@@ -3197,6 +3362,13 @@ router.post('/labs/test', authenticateToken, requireEducator, (req, res) => {
         if (!result.success) {
             return res.status(400).json({ error: result.error });
         }
+        auditSuccess(req, {
+            action: 'create_lab_catalog_test',
+            resourceType: 'lab_catalog_test',
+            resourceId: `${result.test.test_name}:${result.test.category}`,
+            resourceName: result.test.test_name,
+            newValue: result.test
+        });
         res.status(201).json({ message: 'Test added successfully', test: result.test });
     } catch (error) {
         res.status(500).json({ error: 'Error adding test', details: error.message });
@@ -3212,10 +3384,19 @@ router.put('/labs/test', authenticateToken, requireEducator, (req, res) => {
     }
 
     try {
+        const oldTest = labDb.loadLabDatabase().find(t => t.test_name === test_name && t.category === category) || null;
         const result = labDb.updateTest(test_name, category, updates);
         if (!result.success) {
             return res.status(404).json({ error: result.error });
         }
+        auditSuccess(req, {
+            action: 'update_lab_catalog_test',
+            resourceType: 'lab_catalog_test',
+            resourceId: `${test_name}:${category}`,
+            resourceName: test_name,
+            oldValue: oldTest,
+            newValue: result.test
+        });
         res.json({ message: 'Test updated successfully', test: result.test });
     } catch (error) {
         res.status(500).json({ error: 'Error updating test', details: error.message });
@@ -3231,10 +3412,18 @@ router.delete('/labs/test', authenticateToken, requireEducator, (req, res) => {
     }
 
     try {
+        const oldTest = labDb.loadLabDatabase().find(t => t.test_name === test_name && t.category === category) || null;
         const result = labDb.deleteTest(test_name, category);
         if (!result.success) {
             return res.status(404).json({ error: result.error });
         }
+        auditSuccess(req, {
+            action: 'delete_lab_catalog_test',
+            resourceType: 'lab_catalog_test',
+            resourceId: `${test_name}:${category}`,
+            resourceName: test_name,
+            oldValue: oldTest
+        });
         res.json({ message: 'Test deleted successfully' });
     } catch (error) {
         res.status(500).json({ error: 'Error deleting test', details: error.message });
@@ -3251,6 +3440,12 @@ router.post('/labs/import', authenticateToken, requireEducator, (req, res) => {
 
     try {
         const results = labDb.importFromCSV(tests, overwrite);
+        auditSuccess(req, {
+            action: 'import_lab_catalog_tests',
+            resourceType: 'lab_catalog',
+            resourceId: 'Lab_database.json',
+            newValue: { overwrite, submitted: tests.length, results }
+        });
         res.json({
             message: 'Import completed',
             results
@@ -3265,6 +3460,12 @@ router.post('/labs/reload', authenticateToken, requireEducator, (req, res) => {
     try {
         labDb.clearCache();
         const tests = labDb.loadLabDatabase();
+        auditSuccess(req, {
+            action: 'reload_lab_catalog',
+            resourceType: 'lab_catalog',
+            resourceId: 'Lab_database.json',
+            newValue: { totalTests: tests.length }
+        });
         res.json({ message: 'Database reloaded', totalTests: tests.length });
     } catch (error) {
         res.status(500).json({ error: 'Error reloading database', details: error.message });
@@ -3302,6 +3503,8 @@ router.post('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res
         if (findErr) return res.status(500).json({ error: findErr.message });
 
         if (existing && existing.id) {
+            db.get('SELECT * FROM case_investigations WHERE id = ?', [existing.id], (oldErr, oldLab) => {
+                if (oldErr) return res.status(500).json({ error: oldErr.message });
             const updateSql = `
                 UPDATE case_investigations
                 SET test_group = ?, gender_category = ?, min_value = ?, max_value = ?,
@@ -3315,7 +3518,17 @@ router.post('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res
                 is_abnormal ? 1 : 0, turnaround_minutes, existing.id
             ], function(updateErr) {
                 if (updateErr) return res.status(500).json({ error: updateErr.message });
+                auditSuccess(req, {
+                    action: 'update_case_lab',
+                    resourceType: 'case_lab',
+                    resourceId: String(existing.id),
+                    resourceName: test_name,
+                    oldValue: oldLab,
+                    newValue: req.body,
+                    metadata: { case_id: caseId }
+                });
                 res.json({ id: existing.id, message: 'Lab test updated', upserted: true });
+            });
             });
             return;
         }
@@ -3334,6 +3547,14 @@ router.post('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res
             is_abnormal ? 1 : 0, turnaround_minutes
         ], function(insertErr) {
             if (insertErr) return res.status(500).json({ error: insertErr.message });
+            auditSuccess(req, {
+                action: 'create_case_lab',
+                resourceType: 'case_lab',
+                resourceId: String(this.lastID),
+                resourceName: test_name,
+                newValue: req.body,
+                metadata: { case_id: caseId }
+            });
             res.json({ id: this.lastID, message: 'Lab test added to case' });
         });
     });
@@ -3351,6 +3572,12 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res)
     if (labs === null) {
         return res.status(400).json({ error: 'body.labs array is required' });
     }
+
+    db.all(
+        `SELECT * FROM case_investigations WHERE case_id = ? AND investigation_type = 'lab'`,
+        [caseId],
+        (readErr, oldLabs) => {
+            if (readErr) return res.status(500).json({ error: readErr.message });
 
     db.serialize(() => {
         db.run('BEGIN');
@@ -3371,14 +3598,23 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res)
             db.run(
                 `DELETE FROM case_investigations WHERE case_id = ? AND investigation_type = 'lab'`,
                 [caseId],
-                (deleteErr) => {
+                function(deleteErr) {
                     if (deleteErr) {
                         db.run('ROLLBACK');
                         return res.status(500).json({ error: deleteErr.message });
                     }
+                    const deleted = this.changes ?? 0;
                     if (labs.length === 0) {
                         db.run('COMMIT');
-                        return res.json({ inserted: 0, deleted: this.changes ?? 0 });
+                        auditSuccess(req, {
+                            action: 'bulk_replace_case_labs',
+                            resourceType: 'case',
+                            resourceId: caseId,
+                            oldValue: { labs: oldLabs || [] },
+                            newValue: { labs: [] },
+                            metadata: { inserted: 0, deleted }
+                        });
+                        return res.json({ inserted: 0, deleted });
                     }
                     const insertSql = `
                         INSERT INTO case_investigations (
@@ -3411,6 +3647,14 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res)
                             pending--;
                             if (pending === 0 && !failed) {
                                 db.run('COMMIT');
+                                auditSuccess(req, {
+                                    action: 'bulk_replace_case_labs',
+                                    resourceType: 'case',
+                                    resourceId: caseId,
+                                    oldValue: { labs: oldLabs || [] },
+                                    newValue: { labs },
+                                    metadata: { inserted: labs.length }
+                                });
                                 res.json({ inserted: labs.length, message: 'Labs replaced' });
                             }
                         });
@@ -3419,6 +3663,8 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res)
             );
         });
     });
+        }
+    );
 });
 
 // PUT /api/cases/:caseId/labs/:labId - Update lab values (Admin only)
@@ -3463,15 +3709,29 @@ router.put('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, (re
     
     params.push(labId);
     const sql = `UPDATE case_investigations SET ${updates.join(', ')} WHERE id = ?`;
-    
-    db.run(sql, params, function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Lab test not found' });
-        }
-        res.json({ message: 'Lab test updated' });
+
+    db.get('SELECT * FROM case_investigations WHERE id = ? AND case_id = ?', [labId, req.params.caseId], (readErr, oldLab) => {
+        if (readErr) return res.status(500).json({ error: readErr.message });
+        if (!oldLab) return res.status(404).json({ error: 'Lab test not found' });
+
+        db.run(sql, params, function(err) {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'Lab test not found' });
+            }
+            auditSuccess(req, {
+                action: 'update_case_lab_values',
+                resourceType: 'case_lab',
+                resourceId: labId,
+                resourceName: oldLab.test_name,
+                oldValue: oldLab,
+                newValue: req.body,
+                metadata: { case_id: req.params.caseId }
+            });
+            res.json({ message: 'Lab test updated' });
+        });
     });
 });
 
@@ -3484,6 +3744,10 @@ router.put('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, (re
 // case_investigations rows and either error or silently drop entries.
 router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, (req, res) => {
     const { labId, caseId } = req.params;
+
+    db.get('SELECT * FROM case_investigations WHERE id = ? AND case_id = ?', [labId, caseId], (readErr, oldLab) => {
+        if (readErr) return res.status(500).json({ error: readErr.message });
+        if (!oldLab) return res.status(404).json({ error: 'Lab test not found' });
 
     db.serialize(() => {
         db.run('BEGIN');
@@ -3511,6 +3775,14 @@ router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, 
                             return res.status(404).json({ error: 'Lab test not found' });
                         }
                         db.run('COMMIT');
+                        auditSuccess(req, {
+                            action: 'delete_case_lab',
+                            resourceType: 'case_lab',
+                            resourceId: labId,
+                            resourceName: oldLab.test_name,
+                            oldValue: oldLab,
+                            metadata: { case_id: caseId, orphan_orders_removed: orphans }
+                        });
                         res.json({
                             message: 'Lab test removed from case',
                             orphan_orders_removed: orphans
@@ -3519,6 +3791,7 @@ router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, 
                 );
             }
         );
+    });
     });
 });
 
@@ -4779,11 +5052,22 @@ router.put('/cases/:caseId/treatments', authenticateToken, requireEducator, (req
         if (err) return res.status(500).json({ error: err.message });
         if (!caseRow) return res.status(404).json({ error: 'Case not found' });
 
+        db.all('SELECT * FROM case_treatments WHERE case_id = ?', [caseId], (readErr, oldTreatments) => {
+            if (readErr) return res.status(500).json({ error: readErr.message });
+
         // Delete existing case treatments and insert new ones
         db.run('DELETE FROM case_treatments WHERE case_id = ?', [caseId], (err) => {
             if (err) return res.status(500).json({ error: err.message });
 
             if (treatments.length === 0) {
+                auditSuccess(req, {
+                    action: 'configure_case_treatments',
+                    resourceType: 'case',
+                    resourceId: caseId,
+                    oldValue: { treatments: oldTreatments || [] },
+                    newValue: { treatments: [] },
+                    metadata: { treatment_count: 0 }
+                });
                 return res.json({ message: 'Case treatments cleared', count: 0 });
             }
 
@@ -4819,15 +5103,18 @@ router.put('/cases/:caseId/treatments', authenticateToken, requireEducator, (req
                         logAudit({
                             userId: req.user.id,
                             username: req.user.username,
-                            action: 'CONFIGURED_CASE_TREATMENTS',
+                            action: 'configure_case_treatments',
                             resourceType: 'case',
                             resourceId: caseId,
+                            oldValue: { treatments: oldTreatments || [] },
+                            newValue: { treatments },
                             metadata: { treatment_count: inserted }
                         });
                         res.json({ message: `Case treatments configured`, count: inserted });
                     }
                 });
             });
+        });
         });
     });
 });
@@ -5572,6 +5859,13 @@ router.post('/scenarios', authenticateToken, (req, res) => {
             if (err) {
                 return res.status(500).json({ error: err.message });
             }
+            auditSuccess(req, {
+                action: 'create_scenario',
+                resourceType: 'scenario',
+                resourceId: String(this.lastID),
+                resourceName: name,
+                newValue: { name, description, duration_minutes, category, timeline, is_public: is_public ? 1 : 0 }
+            });
             
             res.json({ 
                 id: this.lastID,
@@ -5585,7 +5879,6 @@ router.post('/scenarios', authenticateToken, (req, res) => {
 router.put('/scenarios/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
     const { name, description, duration_minutes, category, timeline, is_public } = req.body;
-    const userId = req.user.id;
 
     // Stage-5 audit: validate timeline shape before persisting (mirrors POST).
     if (timeline !== undefined) {
@@ -5596,7 +5889,7 @@ router.put('/scenarios/:id', authenticateToken, (req, res) => {
     }
     
     // Check ownership or educator/admin
-    db.get('SELECT created_by FROM scenarios WHERE id = ?', [id], (err, row) => {
+    db.get('SELECT * FROM scenarios WHERE id = ?', [id], (err, row) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -5620,6 +5913,14 @@ router.put('/scenarios/:id', authenticateToken, (req, res) => {
                 if (err) {
                     return res.status(500).json({ error: err.message });
                 }
+                auditSuccess(req, {
+                    action: 'update_scenario',
+                    resourceType: 'scenario',
+                    resourceId: id,
+                    resourceName: name || row.name,
+                    oldValue: { ...row, timeline: parseAuditJson(row.timeline) },
+                    newValue: { name, description, duration_minutes, category, timeline, is_public: is_public ? 1 : 0 }
+                });
                 res.json({ message: 'Scenario updated successfully' });
             }
         );
@@ -5629,10 +5930,9 @@ router.put('/scenarios/:id', authenticateToken, (req, res) => {
 // Delete scenario
 router.delete('/scenarios/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
-    const userId = req.user.id;
     
     // Check ownership or educator/admin
-    db.get('SELECT created_by FROM scenarios WHERE id = ?', [id], (err, row) => {
+    db.get('SELECT * FROM scenarios WHERE id = ?', [id], (err, row) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -5647,13 +5947,20 @@ router.delete('/scenarios/:id', authenticateToken, (req, res) => {
             if (err) {
                 return res.status(500).json({ error: err.message });
             }
+            auditSuccess(req, {
+                action: 'delete_scenario',
+                resourceType: 'scenario',
+                resourceId: id,
+                resourceName: row.name,
+                oldValue: { ...row, timeline: parseAuditJson(row.timeline) }
+            });
             res.json({ message: 'Scenario deleted successfully' });
         });
     });
 });
 
 // Seed default scenarios (admin only)
-router.post('/scenarios/seed', requireAdmin, (req, res) => {
+router.post('/scenarios/seed', authenticateToken, requireAdmin, (req, res) => {
     const defaultScenarios = [
         {
             name: "STEMI Progression",
@@ -5750,6 +6057,12 @@ router.post('/scenarios/seed', requireAdmin, (req, res) => {
                 
                 // After all scenarios processed
                 if (inserted + errors === defaultScenarios.length) {
+                    auditSuccess(req, {
+                        action: 'seed_scenarios',
+                        resourceType: 'scenario',
+                        resourceId: 'default_scenarios',
+                        newValue: { inserted, errors, total: defaultScenarios.length }
+                    });
                     res.json({ 
                         message: `Seeded ${inserted} scenarios, ${errors} errors`,
                         inserted,
@@ -5956,6 +6269,9 @@ router.get('/users/preferences', authenticateToken, (req, res) => {
 router.put('/users/preferences', authenticateToken, (req, res) => {
     const { theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings } = req.body;
 
+    db.get(`SELECT * FROM user_preferences WHERE user_id = ?`, [req.user.id], (readErr, oldPrefs) => {
+        if (readErr) return res.status(500).json({ error: readErr.message });
+
     db.run(
         `INSERT INTO user_preferences (user_id, theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -5980,15 +6296,30 @@ router.put('/users/preferences', authenticateToken, (req, res) => {
         ],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
+            auditSuccess(req, {
+                action: 'update_user_preferences',
+                resourceType: 'user_preferences',
+                resourceId: String(req.user.id),
+                oldValue: oldPrefs,
+                newValue: {
+                    theme: theme || 'dark',
+                    language: language || 'en',
+                    notification_settings,
+                    dashboard_layout,
+                    default_llm_settings: default_llm_settings ? redactAuditSetting('default_llm_settings', JSON.stringify(default_llm_settings)) : null,
+                    default_monitor_settings,
+                    accessibility_settings
+                }
+            });
             res.json({ message: 'Preferences updated' });
         }
     );
+    });
 });
 
 // --- SYSTEM AUDIT LOG ---
 
-// GET /api/admin/audit-log - Get system audit log (Admin only)
-router.get('/admin/audit-log', authenticateToken, requireAdmin, (req, res) => {
+function handleSystemAuditLogRequest(req, res) {
     const { limit = 100, offset = 0, action, resource_type, user_id, from_date, to_date } = req.query;
 
     let sql = `SELECT sal.*, u.username as user_username
@@ -6025,7 +6356,15 @@ router.get('/admin/audit-log', authenticateToken, requireAdmin, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ logs });
     });
+}
+
+// GET /api/admin/audit-log - Get system audit log (Admin only)
+router.get('/admin/audit-log', authenticateToken, requireAdmin, (req, res) => {
+    handleSystemAuditLogRequest(req, res);
 });
+
+// GET /api/system-audit-log - Alias for audit scripts and enterprise integrations.
+router.get('/system-audit-log', authenticateToken, requireAdmin, handleSystemAuditLogRequest);
 
 // --- VITAL SIGN HISTORY ---
 
@@ -6427,6 +6766,13 @@ router.post('/master/scenario-templates', authenticateToken, requireEducator, (r
                 stmt.finalize();
             }
 
+            auditSuccess(req, {
+                action: 'create_scenario_template',
+                resourceType: 'scenario_template',
+                resourceId: String(scenarioId),
+                resourceName: name,
+                newValue: { template_id, name, description, category, duration_minutes, difficulty_level, clinical_condition, timeline }
+            });
             res.json({ id: scenarioId, message: 'Scenario template created' });
         }
     );
@@ -6485,6 +6831,13 @@ router.post('/master/lab-tests', authenticateToken, requireEducator, (req, res) 
         [test_code, test_name, test_group, category || 'General', specimen_type, min_value, max_value, unit, critical_low, critical_high, JSON.stringify(normal_samples || []), description, turnaround_minutes || 30],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
+            auditSuccess(req, {
+                action: 'create_master_lab_test',
+                resourceType: 'lab_test',
+                resourceId: String(this.lastID),
+                resourceName: test_name,
+                newValue: req.body
+            });
             res.json({ id: this.lastID, message: 'Lab test created' });
         }
     );
@@ -6578,6 +6931,13 @@ router.post('/master/medications', authenticateToken, requireEducator, (req, res
         [medication_code, generic_name, JSON.stringify(brand_names || []), drug_class, category, route, typical_dose, dose_unit, frequency, JSON.stringify(indications || []), JSON.stringify(contraindications || []), JSON.stringify(side_effects || []), is_controlled ? 1 : 0, is_high_alert ? 1 : 0],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
+            auditSuccess(req, {
+                action: 'create_master_medication',
+                resourceType: 'medication',
+                resourceId: String(this.lastID),
+                resourceName: generic_name,
+                newValue: req.body
+            });
             res.json({ id: this.lastID, message: 'Medication created' });
         }
     );
@@ -6622,6 +6982,12 @@ router.post('/master/medications/bulk', authenticateToken, requireEducator, (req
 
         db.run('COMMIT', () => {
             stmt.finalize();
+            auditSuccess(req, {
+                action: 'bulk_import_master_medications',
+                resourceType: 'medication_catalog',
+                resourceId: 'medications',
+                newValue: { inserted, skipped, total: medications.length }
+            });
             res.json({
                 message: 'Bulk import completed',
                 inserted,
@@ -6635,6 +7001,10 @@ router.post('/master/medications/bulk', authenticateToken, requireEducator, (req
 // DELETE /api/master/medications/:id - Delete single medication (Admin)
 router.delete('/master/medications/:id', authenticateToken, requireEducator, (req, res) => {
     const { id } = req.params;
+
+    db.get('SELECT * FROM medications WHERE id = ?', [id], (readErr, oldMedication) => {
+        if (readErr) return res.status(500).json({ error: readErr.message });
+        if (!oldMedication) return res.status(404).json({ error: 'Medication not found' });
 
     db.serialize(() => {
         db.run('BEGIN');
@@ -6672,6 +7042,19 @@ router.delete('/master/medications/:id', authenticateToken, requireEducator, (re
                                 return res.status(404).json({ error: 'Medication not found' });
                             }
                             db.run('COMMIT');
+                            auditSuccess(req, {
+                                action: 'delete_master_medication',
+                                resourceType: 'medication',
+                                resourceId: id,
+                                resourceName: oldMedication.generic_name,
+                                oldValue: oldMedication,
+                                metadata: {
+                                    medication_doses_removed: medicationDosesRemoved,
+                                    treatment_effects_detached: treatmentEffectsDetached,
+                                    treatment_orders_detached: treatmentOrdersDetached,
+                                    case_treatments_detached: caseTreatmentsDetached
+                                }
+                            });
                             res.json({
                                 message: 'Medication deleted',
                                 medication_doses_removed: medicationDosesRemoved,
@@ -6685,10 +7068,15 @@ router.delete('/master/medications/:id', authenticateToken, requireEducator, (re
             });
         });
     });
+    });
 });
 
 // DELETE /api/master/medications/all - Clear all medications (Admin)
 router.delete('/master/medications/all', authenticateToken, requireEducator, (req, res) => {
+    db.get('SELECT COUNT(*) AS count FROM medications', [], (readErr, row) => {
+        if (readErr) return res.status(500).json({ error: readErr.message });
+        const oldCount = row?.count || 0;
+
     db.serialize(() => {
         db.run('BEGIN');
         db.run('DELETE FROM medication_doses', [], function(doseErr) {
@@ -6722,6 +7110,20 @@ router.delete('/master/medications/all', authenticateToken, requireEducator, (re
                             }
                             const deleted = this.changes ?? 0;
                             db.run('COMMIT');
+                            auditSuccess(req, {
+                                action: 'delete_all_master_medications',
+                                resourceType: 'medication_catalog',
+                                resourceId: 'medications',
+                                oldValue: { medication_count: oldCount },
+                                newValue: { medication_count: 0 },
+                                metadata: {
+                                    deleted,
+                                    medication_doses_removed: medicationDosesRemoved,
+                                    treatment_effects_detached: treatmentEffectsDetached,
+                                    treatment_orders_detached: treatmentOrdersDetached,
+                                    case_treatments_detached: caseTreatmentsDetached
+                                }
+                            });
                             res.json({
                                 message: 'All medications deleted',
                                 deleted,
@@ -6735,6 +7137,7 @@ router.delete('/master/medications/all', authenticateToken, requireEducator, (re
                 });
             });
         });
+    });
     });
 });
 
@@ -7149,19 +7552,33 @@ router.put('/platform-settings/user-fields', authenticateToken, requireAdmin, (r
 
     const configJson = JSON.stringify(config);
 
-    db.run(
-        `INSERT INTO platform_settings (setting_key, setting_value, updated_by, updated_at)
-         VALUES ('user_field_config', ?, ?, CURRENT_TIMESTAMP)
-         ON CONFLICT(setting_key) DO UPDATE SET
-         setting_value = excluded.setting_value,
-         updated_by = excluded.updated_by,
-         updated_at = CURRENT_TIMESTAMP`,
-        [configJson, req.user.id],
-        function(err) {
+    getPlatformSetting('user_field_config')
+        .then((oldValue) => {
+            db.run(
+                `INSERT INTO platform_settings (setting_key, setting_value, updated_by, updated_at)
+                 VALUES ('user_field_config', ?, ?, CURRENT_TIMESTAMP)
+                 ON CONFLICT(setting_key) DO UPDATE SET
+                 setting_value = excluded.setting_value,
+                 updated_by = excluded.updated_by,
+                 updated_at = CURRENT_TIMESTAMP`,
+                [configJson, req.user.id],
+                function(err) {
+                    if (err) return res.status(500).json({ error: err.message });
+                    auditSuccess(req, {
+                        action: 'update_platform_user_fields',
+                        resourceType: 'platform_setting',
+                        resourceId: 'user_field_config',
+                        resourceName: 'user_field_config',
+                        oldValue: { user_field_config: redactAuditSetting('user_field_config', oldValue) },
+                        newValue: { user_field_config: config }
+                    });
+                    res.json({ message: 'User field configuration updated', config });
+                }
+            );
+        })
+        .catch((err) => {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'User field configuration updated', config });
-        }
-    );
+        });
 });
 
 // GET /api/platform-settings - Get all platform settings (Admin only)
@@ -7219,6 +7636,19 @@ const setPlatformSetting = (key, value, userId) => {
                 else resolve(this.changes);
             }
         );
+    });
+};
+
+const setAuditedPlatformSetting = async (req, key, value, action = 'update_platform_setting') => {
+    const oldValue = await getPlatformSetting(key);
+    await setPlatformSetting(key, value, req.user.id);
+    auditSuccess(req, {
+        action,
+        resourceType: 'platform_setting',
+        resourceId: key,
+        resourceName: key,
+        oldValue: { [key]: redactAuditSetting(key, oldValue) },
+        newValue: { [key]: redactAuditSetting(key, value) }
     });
 };
 
@@ -7305,14 +7735,14 @@ router.put('/platform-settings/llm', authenticateToken, requireAdmin, async (req
     try {
         const { provider, model, baseUrl, apiKey, enabled, maxOutputTokens, temperature, systemPromptTemplate } = req.body;
 
-        if (provider) await setPlatformSetting('llm_provider', provider, req.user.id);
-        if (model !== undefined) await setPlatformSetting('llm_model', model, req.user.id);
-        if (baseUrl) await setPlatformSetting('llm_base_url', baseUrl, req.user.id);
-        if (apiKey !== undefined) await setPlatformSetting('llm_api_key', apiKey, req.user.id);
-        if (enabled !== undefined) await setPlatformSetting('llm_enabled', String(enabled), req.user.id);
-        if (maxOutputTokens !== undefined) await setPlatformSetting('llm_max_output_tokens', String(maxOutputTokens), req.user.id);
-        if (temperature !== undefined) await setPlatformSetting('llm_temperature', String(temperature), req.user.id);
-        if (systemPromptTemplate !== undefined) await setPlatformSetting('llm_system_prompt_template', systemPromptTemplate, req.user.id);
+        if (provider) await setAuditedPlatformSetting(req, 'llm_provider', provider, 'update_platform_llm_settings');
+        if (model !== undefined) await setAuditedPlatformSetting(req, 'llm_model', model, 'update_platform_llm_settings');
+        if (baseUrl) await setAuditedPlatformSetting(req, 'llm_base_url', baseUrl, 'update_platform_llm_settings');
+        if (apiKey !== undefined) await setAuditedPlatformSetting(req, 'llm_api_key', apiKey, 'update_platform_llm_settings');
+        if (enabled !== undefined) await setAuditedPlatformSetting(req, 'llm_enabled', String(enabled), 'update_platform_llm_settings');
+        if (maxOutputTokens !== undefined) await setAuditedPlatformSetting(req, 'llm_max_output_tokens', String(maxOutputTokens), 'update_platform_llm_settings');
+        if (temperature !== undefined) await setAuditedPlatformSetting(req, 'llm_temperature', String(temperature), 'update_platform_llm_settings');
+        if (systemPromptTemplate !== undefined) await setAuditedPlatformSetting(req, 'llm_system_prompt_template', systemPromptTemplate, 'update_platform_llm_settings');
 
         res.json({ message: 'LLM settings updated successfully' });
     } catch (err) {
@@ -7414,11 +7844,11 @@ router.put('/platform-settings/rate-limits', authenticateToken, requireAdmin, as
     try {
         const { tokensPerUserDaily, costPerUserDaily, tokensPlatformDaily, costPlatformDaily, requestsPerUserHourly } = req.body;
 
-        if (tokensPerUserDaily !== undefined) await setPlatformSetting('rate_limit_tokens_per_user_daily', String(tokensPerUserDaily), req.user.id);
-        if (costPerUserDaily !== undefined) await setPlatformSetting('rate_limit_cost_per_user_daily', String(costPerUserDaily), req.user.id);
-        if (tokensPlatformDaily !== undefined) await setPlatformSetting('rate_limit_tokens_platform_daily', String(tokensPlatformDaily), req.user.id);
-        if (costPlatformDaily !== undefined) await setPlatformSetting('rate_limit_cost_platform_daily', String(costPlatformDaily), req.user.id);
-        if (requestsPerUserHourly !== undefined) await setPlatformSetting('rate_limit_requests_per_user_hourly', String(requestsPerUserHourly), req.user.id);
+        if (tokensPerUserDaily !== undefined) await setAuditedPlatformSetting(req, 'rate_limit_tokens_per_user_daily', String(tokensPerUserDaily), 'update_platform_rate_limits');
+        if (costPerUserDaily !== undefined) await setAuditedPlatformSetting(req, 'rate_limit_cost_per_user_daily', String(costPerUserDaily), 'update_platform_rate_limits');
+        if (tokensPlatformDaily !== undefined) await setAuditedPlatformSetting(req, 'rate_limit_tokens_platform_daily', String(tokensPlatformDaily), 'update_platform_rate_limits');
+        if (costPlatformDaily !== undefined) await setAuditedPlatformSetting(req, 'rate_limit_cost_platform_daily', String(costPlatformDaily), 'update_platform_rate_limits');
+        if (requestsPerUserHourly !== undefined) await setAuditedPlatformSetting(req, 'rate_limit_requests_per_user_hourly', String(requestsPerUserHourly), 'update_platform_rate_limits');
 
         res.json({ message: 'Rate limits updated successfully' });
     } catch (err) {
@@ -7460,7 +7890,7 @@ router.put('/platform-settings/monitor', authenticateToken, requireAdmin, async 
 
         for (const [key, value] of Object.entries(req.body)) {
             if (validKeys.includes(key)) {
-                await setPlatformSetting(`monitor_${key}`, String(value), req.user.id);
+                await setAuditedPlatformSetting(req, `monitor_${key}`, String(value), 'update_platform_monitor_settings');
             }
         }
 
@@ -7496,8 +7926,8 @@ router.put('/platform-settings/chat', authenticateToken, requireAdmin, async (re
     try {
         const { doctorName, doctorAvatar } = req.body;
 
-        if (doctorName !== undefined) await setPlatformSetting('chat_doctor_name', doctorName, req.user.id);
-        if (doctorAvatar !== undefined) await setPlatformSetting('chat_doctor_avatar', doctorAvatar, req.user.id);
+        if (doctorName !== undefined) await setAuditedPlatformSetting(req, 'chat_doctor_name', doctorName, 'update_platform_chat_settings');
+        if (doctorAvatar !== undefined) await setAuditedPlatformSetting(req, 'chat_doctor_avatar', doctorAvatar, 'update_platform_chat_settings');
 
         res.json({ message: 'Chat settings updated successfully' });
     } catch (err) {
@@ -7690,7 +8120,7 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
         }
 
         for (const [k, v] of writes) {
-            await setPlatformSetting(k, v, req.user.id);
+            await setAuditedPlatformSetting(req, k, v, 'update_platform_voice_settings');
         }
 
         res.json({ message: 'Voice settings updated successfully', updated: writes.map(w => w[0]) });
@@ -7762,7 +8192,7 @@ router.put('/platform-settings/avatars', authenticateToken, requireAdmin, async 
             const raw = body[k];
             // Empty / null clears the override.
             if (raw === null || raw === '' || raw === undefined) {
-                await setPlatformSetting(k, '', req.user.id);
+                await setAuditedPlatformSetting(req, k, '', 'update_platform_avatar_defaults');
                 continue;
             }
             if (k.startsWith('default_avatar_') && !isSafeGlb(raw)) {
@@ -7777,7 +8207,7 @@ router.put('/platform-settings/avatars', authenticateToken, requireAdmin, async 
             if (k.startsWith('default_pitch_') && !inRange(raw, 0.7, 1.4)) {
                 return res.status(400).json({ error: `${k} must be between 0.7 and 1.4` });
             }
-            await setPlatformSetting(k, String(raw), req.user.id);
+            await setAuditedPlatformSetting(req, k, String(raw), 'update_platform_avatar_defaults');
         }
         res.json({ message: 'Persona defaults updated' });
     } catch (err) {
@@ -8530,6 +8960,13 @@ router.put('/llm/pricing', authenticateToken, requireAdmin, async (req, res) => 
             return res.status(400).json({ error: 'Provider and model are required' });
         }
 
+        const oldPricing = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM llm_model_pricing WHERE provider = ? AND model = ?', [provider, model], (err, row) => {
+                if (err) reject(err);
+                else resolve(row || null);
+            });
+        });
+
         await new Promise((resolve, reject) => {
             db.run(
                 `INSERT INTO llm_model_pricing (provider, model, input_cost_per_1k, output_cost_per_1k, updated_at)
@@ -8544,6 +8981,15 @@ router.put('/llm/pricing', authenticateToken, requireAdmin, async (req, res) => 
                     else resolve(this.changes);
                 }
             );
+        });
+
+        auditSuccess(req, {
+            action: 'update_llm_pricing',
+            resourceType: 'llm_model_pricing',
+            resourceId: `${provider}:${model}`,
+            resourceName: model,
+            oldValue: oldPricing,
+            newValue: { provider, model, inputCostPer1k: inputCostPer1k || 0, outputCostPer1k: outputCostPer1k || 0 }
         });
 
         res.json({ message: 'Pricing updated successfully' });
@@ -8945,7 +9391,7 @@ router.put('/agents/templates/:id', authenticateToken, requireEducator, async (r
         // baseline (POST .../reset-to-default re-applies it). We still
         // 404 on missing rows so the UI gets a sensible signal.
         const existing = await new Promise((resolve, reject) => {
-            db.get('SELECT is_default, agent_type FROM agent_templates WHERE id = ?', [id], (err, row) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ?', [id], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -9040,6 +9486,24 @@ router.put('/agents/templates/:id', authenticateToken, requireEducator, async (r
             action: 'update_agent_template',
             resourceType: 'agent_template',
             resourceId: id,
+            resourceName: name ?? existing.name,
+            oldValue: {
+                id: existing.id,
+                agent_type: existing.agent_type,
+                name: existing.name,
+                role_title: existing.role_title,
+                avatar_url: existing.avatar_url,
+                system_prompt: existing.system_prompt,
+                context_filter: existing.context_filter,
+                communication_style: existing.communication_style,
+                config: existing.config,
+                llm_provider: existing.llm_provider,
+                llm_model: existing.llm_model,
+                llm_endpoint: existing.llm_endpoint,
+                llm_temperature: existing.llm_temperature,
+                llm_max_tokens: existing.llm_max_tokens,
+                memory_access: existing.memory_access
+            },
             newValue: req.body
         });
 
@@ -9442,6 +9906,21 @@ router.post('/agents/templates/:id/duplicate', authenticateToken, requireEducato
             );
         });
 
+        logAudit({
+            userId: req.user.id,
+            username: req.user.username,
+            action: 'duplicate_agent_template',
+            resourceType: 'agent_template',
+            resourceId: String(result.id),
+            resourceName: duplicateName,
+            oldValue: {
+                id: original.id,
+                agent_type: original.agent_type,
+                name: original.name
+            },
+            newValue: { id: result.id, name: duplicateName, agent_type: original.agent_type }
+        });
+
         res.status(201).json({ id: result.id, message: 'Agent template duplicated' });
     } catch (err) {
         console.error('Agent template duplicate error:', err);
@@ -9566,6 +10045,13 @@ router.post('/cases/:caseId/agents', authenticateToken, async (req, res) => {
             );
         });
 
+        auditSuccess(req, {
+            action: 'add_case_agent',
+            resourceType: 'case_agent',
+            resourceId: String(result.id),
+            newValue: { caseId, ...req.body }
+        });
+
         res.status(201).json({ id: result.id, message: 'Agent added to case' });
     } catch (err) {
         console.error('Case agent add error:', err);
@@ -9608,6 +10094,16 @@ router.put('/cases/:caseId/agents/:agentId', authenticateToken, async (req, res)
             return res.status(400).json({ error: 'No fields to update' });
         }
 
+        const existing = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM case_agents WHERE id = ? AND case_id = ?', [agentId, caseId], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+        if (!existing) {
+            return res.status(404).json({ error: 'Case agent not found' });
+        }
+
         params.push(agentId, caseId);
 
         await new Promise((resolve, reject) => {
@@ -9619,6 +10115,14 @@ router.put('/cases/:caseId/agents/:agentId', authenticateToken, async (req, res)
                     else resolve(this.changes);
                 }
             );
+        });
+
+        auditSuccess(req, {
+            action: 'update_case_agent',
+            resourceType: 'case_agent',
+            resourceId: agentId,
+            oldValue: existing,
+            newValue: { caseId, ...req.body }
         });
 
         res.json({ success: true, message: 'Case agent updated' });
@@ -9633,6 +10137,16 @@ router.delete('/cases/:caseId/agents/:agentId', authenticateToken, async (req, r
     try {
         const { caseId, agentId } = req.params;
 
+        const existing = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM case_agents WHERE id = ? AND case_id = ?', [agentId, caseId], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+        if (!existing) {
+            return res.status(404).json({ error: 'Case agent not found' });
+        }
+
         await new Promise((resolve, reject) => {
             db.run(
                 'DELETE FROM case_agents WHERE id = ? AND case_id = ?',
@@ -9642,6 +10156,13 @@ router.delete('/cases/:caseId/agents/:agentId', authenticateToken, async (req, r
                     else resolve(this.changes);
                 }
             );
+        });
+
+        auditSuccess(req, {
+            action: 'delete_case_agent',
+            resourceType: 'case_agent',
+            resourceId: agentId,
+            oldValue: existing
         });
 
         res.json({ success: true, message: 'Agent removed from case' });
@@ -9695,6 +10216,13 @@ router.post('/cases/:caseId/agents/add-defaults', authenticateToken, async (req,
                 // Ignore duplicates
             }
         }
+
+        auditSuccess(req, {
+            action: 'add_default_case_agents',
+            resourceType: 'case',
+            resourceId: caseId,
+            newValue: { added_count: addedCount }
+        });
 
         res.json({ success: true, added: addedCount, message: `Added ${addedCount} default agents to case` });
     } catch (err) {

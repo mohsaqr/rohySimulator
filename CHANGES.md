@@ -1,3 +1,13 @@
+### 2026-05-05 — Stage E4: Audit-log coverage
+Centralized request-aware audit helpers and expanded `system_audit_log` coverage across sensitive mutations.
+
+- `server/routes.js`: `logAudit()` now accepts both `resourceType/resourceId` and `targetType/targetId`, logs failures with `console.warn`, and has `auditSuccess()` plus `setAuditedPlatformSetting()` helpers for lower-friction route coverage.
+- `server/routes.js`: added audit rows for case availability/default/labs/treatments, scenario create/update/delete/seed, alarm config writes, lab catalog writes/reloads, master lab/medication writes, platform settings writes, notification/user preference writes, case-agent mutations, agent-template duplicate/update/reset/delete, admin user reads/creates/deletes, and cross-user learning-event reads.
+- `server/routes.js`: added `GET /api/system-audit-log` as an admin-only alias for the existing `/api/admin/audit-log` reader.
+- `scripts/audit-auditlog.sh` (NEW): exercises representative sensitive writes and verifies `old_value`/`new_value` population through the audit-log API. Policy: failed authorization attempts are not audit-logged in E4 because `requireRole` rejects before handlers run.
+
+Deferred: no GUI, retention policy, or external export hooks; those remain E7/E9 territory.
+
 ### 2026-05-05 — Stage E3: RBAC role hierarchy
 Introduced the enterprise role ladder and moved route checks onto centralized rank helpers.
 
