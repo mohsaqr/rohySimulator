@@ -2316,25 +2316,40 @@ router.get('/learning-events/user/:id', authenticateToken, (req, res) => {
 });
 
 // GET /api/learning-events/analytics/summary - Get analytics summary
-router.get('/learning-events/analytics/summary', authenticateToken, (req, res) => {
+//
+// Stage-8 audit: pre-fix the `session_id` branch had no ownership check —
+// any authenticated user could query the verb/object frequency summary for
+// any session by guessing the ID. The `user_id` branch was guarded; the
+// `session_id` branch wasn't (a partial guard, the same pattern Stage 5 hit
+// in the scenario engine). Now both branches verify ownership.
+router.get('/learning-events/analytics/summary', authenticateToken, async (req, res) => {
     const { session_id, user_id, case_id } = req.query;
+    const isAdmin = req.user.role === 'admin' || req.user.is_admin;
 
-    // Build where clause
     let whereClause = '';
     const params = [];
 
     if (session_id) {
+        // Verify the requester owns the session (or is admin) before exposing summary.
+        const session = await new Promise((resolve) => {
+            db.get('SELECT user_id FROM sessions WHERE id = ?', [session_id], (err, row) => {
+                if (err) return resolve(null);
+                resolve(row);
+            });
+        });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+        if (!isAdmin && session.user_id !== req.user.id) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
         whereClause = 'WHERE session_id = ?';
         params.push(session_id);
     } else if (user_id) {
-        // Check permission
-        if (req.user.id !== parseInt(user_id) && req.user.role !== 'admin') {
+        if (req.user.id !== parseInt(user_id, 10) && !isAdmin) {
             return res.status(403).json({ error: 'Access denied' });
         }
         whereClause = 'WHERE user_id = ?';
         params.push(user_id);
-    } else if (req.user.role !== 'admin') {
-        // Non-admins can only see their own data
+    } else if (!isAdmin) {
         whereClause = 'WHERE user_id = ?';
         params.push(req.user.id);
     }
@@ -2448,8 +2463,25 @@ router.get('/learning-events/all', authenticateToken, (req, res) => {
 });
 
 // GET /api/learning-events/detailed/:sessionId - Get detailed events with lab workflow info
-router.get('/learning-events/detailed/:sessionId', authenticateToken, (req, res) => {
+//
+// Stage-8 audit: ownership check added. Pre-fix any authenticated user could
+// dump another user's event log + lab orders + chat messages by passing
+// their session ID. Same IDOR shape as the alarm-ack and orders-view fixes
+// shipped in Stages 3 + pattern-sweep.
+router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req, res) => {
     const sessionId = req.params.sessionId;
+    const isAdmin = req.user.role === 'admin' || req.user.is_admin;
+
+    const session = await new Promise((resolve) => {
+        db.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, row) => {
+            if (err) return resolve(null);
+            resolve(row);
+        });
+    });
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!isAdmin && session.user_id !== req.user.id) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
 
     // Get all learning events for this session with full details
     const eventsSql = `

@@ -1,6 +1,54 @@
 # Session Handoff — 2026-05-05
 
-## Stage 7 (Auth + user preferences) — SHIPPED this session
+## All 9 stages complete
+
+The staged audit roadmap is now complete. Summary:
+
+| Stage | Severity | Status | Key fixes |
+|---|---|---|---|
+| 1 | HIGH | ✅ | Snapshot at session start, idempotent /end, vitals persistence |
+| 2 | HIGH | ✅ | UPSERT POST/labs, bulk PUT/labs replace, DELETE cascade, /order-* idempotent |
+| 3 | HIGH | ✅ | Ack IDOR + idempotency, cross-user config read fix, transient-state clear |
+| Sweep | — | ✅ | orders/:id/view IDOR + idempotency (Stage-2 outlier) |
+| 4 | MED | ✅ | Agent layer temp/max_tokens, system_prompt in snapshot, apiKey redaction |
+| 5 | MED | ✅ | Scenario engine snapshot, override guard extended, auto-stop, frame validation |
+| 6 | MED | ✅ | exam-findings idempotent, ManikinPanel snapshot-bound, delete confirms |
+| 7 | LOW | ✅ | apiKey redaction in user-prefs, audit log on password/role, ScenarioRepo isAdmin |
+| 8 | LOW | ✅ | Two IDOR fixes on learning-events read endpoints |
+| 9 | LOW | ✅ | Closed — no body-avatar concept exists |
+
+## Stage 8 (TNA analytics + event log) — SHIPPED this session
+
+Two Explore agents reviewed TNA + body avatars. 0 false positives.
+
+1. **GET /learning-events/detailed/:sessionId IDOR** (HIGH for a read
+   endpoint) — pre-fix any user could dump another's event log + lab
+   orders + chat messages.
+2. **GET /learning-events/analytics/summary partial guard** — the
+   `user_id` branch was ownership-checked; the `session_id` branch
+   wasn't. Now both are guarded.
+
+Verification: `audit-tna.sh` 6/6. All prior stages green.
+**68/68 across all stages.** Browser smoke clean.
+
+**Deferred (uncertain blast radius)**: TNA aggregation includes
+in-progress sessions (Stage 1's status transition exists but TNA
+doesn't filter). Including in-progress in dashboards may be intentional
+for live monitoring; defer until a real complaint surfaces.
+
+## Stage 9 (Body avatars) — CLOSED, no scope
+
+Definitive answer: avatar rendering is head-only.
+- `frontend/avatars/` has only `heads/` (no `bodies/`).
+- `VOICE_AVATAR_TYPES = ['3d_head', 'none']` (`routes.js:7309`).
+- `PatientAvatar` renders only head geometry.
+- `BodyMap` is a 2D SVG silhouette for physical-exam region selection,
+  not a 3D body avatar.
+- Stage 0's persona/voice/avatar audit was head-only by design.
+
+If a future feature adds full-body avatars, audit then.
+
+## Stage 7 (Auth + user preferences) — SHIPPED previous session, COMMITTED
 
 Two Explore agents reviewed auth + prefs. 0 false positives. Real
 fixes shipped:
@@ -277,8 +325,8 @@ outline below is the executive view.
 | ~~5~~ | ~~Scenario engine (runtime)~~ | ~~MED~~ | ✅ DONE | Snapshot binding for engine, override guard extended to all mutable fields, auto-stop on complete, scenario-picker confirm, server-side timeline validation. Beat-drift + mid-run banner deferred. |
 | ~~6~~ | ~~Physical exam + body map~~ | ~~MED~~ | ✅ DONE | exam-findings idempotent, ManikinPanel snapshot-bound, ClinicalRecordsEditor delete confirms. Two-schema reconciliation deferred (architectural). |
 | ~~7~~ | ~~Auth + user preferences~~ | ~~LOW~~ | ✅ DONE | apiKey redacted in GET /users/preferences (Stage-4 twin endpoint), audit log on password/role change, ScenarioRepository isAdmin fix. Stage-4 user-layer LLM deferral was a false alarm — already wired correctly. |
-| 8 | TNA analytics + event log | LOW | 45–60 min | Read-mostly aggregation; drift is cosmetic. Run after Stage 1 informs event lifecycle. |
-| 9 | Body avatars (if separate from heads) | LOW | 15–60 min | First check: do body GLBs exist as a separate concept? If no, close. |
+| ~~8~~ | ~~TNA analytics + event log~~ | ~~LOW~~ | ✅ DONE | Two IDOR fixes on `/learning-events/detailed/:sessionId` and `/learning-events/analytics/summary?session_id=X`. In-progress-session filter in dashboards deferred (uncertain blast radius). |
+| ~~9~~ | ~~Body avatars~~ | ~~LOW~~ | ✅ CLOSED | No separate body-avatar concept exists. Avatars are head-only. |
 
 **Sequencing**: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9. Stop after Stage 3 if
 the user signals "good enough" — the high-blast-radius work is done at

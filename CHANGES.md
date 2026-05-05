@@ -1,3 +1,21 @@
+### 2026-05-05 — Stage 9: Body avatars (CLOSED — no scope)
+The roadmap's checkpoint — "First check: do body GLBs exist as a separate concept?" — has a definitive answer: **no**. Avatar rendering is head-only. `frontend/avatars/` contains only a `heads/` subdirectory; `VOICE_AVATAR_TYPES = ['3d_head', 'none']` in `server/routes.js:7309`; `PatientAvatar` renders only head geometry; `BodyMap` is a 2D SVG silhouette for clickable physical-exam regions, not a 3D body avatar. No `body*.glb` files, no `BodyAvatar` component, no `body_avatar_type` setting, no `/avatars/body/*` endpoints. Stage 0's persona/voice/avatar audit (`af9302a`) was head-only by intent. **Stage 9 closed: no architectural surface to audit.** If a future feature adds full-body avatars, that's a new subsystem requiring its own snapshot/wiring review at that time.
+
+### 2026-05-05 — TNA analytics + event log audit (Stage 8)
+Two Explore agents (Stage 8 + Stage 9 in parallel) reviewed analytics + body avatars. 0 false positives. Real fixes shipped:
+
+- `server/routes.js` GET `/learning-events/detailed/:sessionId`: added ownership check. Pre-fix any authenticated user could dump another user's event log + lab orders + chat messages by passing their session ID — the same IDOR shape as the alarm-ack and orders-view fixes from Stages 3 + pattern-sweep. The pattern keeps recurring on read endpoints; LEARNINGS now flags read endpoints separately from write endpoints because admins audit writes more carefully than reads.
+- `server/routes.js` GET `/learning-events/analytics/summary`: the `user_id` branch already had ownership check, but the `session_id` branch had none — a partial guard, the same shape Stage 5 caught in the scenario engine override logic. Both branches now verify `session.user_id === req.user.id || isAdmin`.
+- `scripts/audit-tna.sh` (NEW): asserts cross-user 403 on detailed-events and analytics-summary endpoints, plus self-read 200. **6/6 passing**.
+
+Triage outcomes:
+- **DEFERRED** (uncertain blast radius): TNA aggregation includes in-progress sessions (Stage 1's `status='completed'` transition exists but TNA queries don't filter on it). Including in-progress sessions in dashboards may be intentional for live monitoring; changing the behavior could break existing dashboards.
+- **DEFERRED** (LOW, speculative): TNA endpoint echoes raw verbs from `learning_events` if not in `TNA_VERB_MERGE_MAP` — the dataset is enum-constrained at insert time, so the fallthrough is safe but inelegant.
+
+Browser smoke `:5173`: simulator workspace mounts, no React error-boundary fires.
+
+**Tests:** `audit-tna.sh` 6/6. `audit-auth.sh` 3/3. `audit-physexam.sh` 6/6. `audit-scenario.sh` 7/7. `audit-llm.sh` 7/7. `audit-alarms.sh` 13/13. `audit-investigations.sh` 17/17. `audit-sessions.sh` 9/9 (last green run; not re-run due to in-test login rate-limit, but Stage-8 changes don't touch session lifecycle). **68/68 across all stages.**
+
 ### 2026-05-05 — Auth + user preferences audit (Stage 7)
 Two Explore agents reviewed auth/user-prefs server-side and the client surfaces. 0 false positives. Real fixes shipped:
 
