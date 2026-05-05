@@ -1,3 +1,16 @@
+### 2026-05-05 — Stage E2: Migration framework
+Replaced the ad-hoc schema bootstrap with versioned SQLite migrations and proved the first rebuild/copy FK migration.
+
+- `server/migrationRunner.js:53`: new hand-rolled migration runner discovers sorted `migrations/*.sql`, calculates SHA-256 checksums, tracks `schema_migrations(version, name, applied_at, checksum)`, skips already-applied files, and supports `--dry-run` without mutating the database.
+- `server/migrationRunner.js:105`: baseline-stamps `0001_initial.sql` when a pre-E2 database already has the expected core tables and an empty `schema_migrations` table, then leaves non-baseline migrations pending so retroactive rebuilds still apply.
+- `migrations/0001_initial.sql:1`: baseline schema extracted from the previous `server/db.js` bootstrap; seed/default data remains in `server/db.js` per E2 scope.
+- `migrations/0002_alarm_config_user_cascade.sql:4`: rebuilds `alarm_config` with `FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE`, copies existing rows, drops/renames the table, and recreates `idx_alarm_config_user_vital`.
+- `server/db.js:11` and `server/db.js:987`: database boot now supports `ROHY_DB`, waits on `runMigrations(db)`, then runs existing seed/backfill routines. `server/server.js:166` awaits `dbReady` before seeders and fails startup on migration errors.
+- `scripts/migrate.js:1`: standalone manual migration entry point with `--dry-run`.
+- `scripts/audit-migrations.sh:87`: new audit verifies `schema_migrations`, dry-run immutability, no-op reruns, and the `alarm_config` user-delete cascade.
+
+Deferred to E2.1/E8: individual down/rollback commands, seed refactoring out of `server/db.js`, and Postgres-compatible migration syntax.
+
 ### 2026-05-05 — Stage E1: Schema integrity sweep
 Swept SQLite FK relationships, hard-delete handlers, and hot child-table query paths.
 

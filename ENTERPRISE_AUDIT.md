@@ -78,7 +78,8 @@ CONSTRAINTS:
 
 ## Status
 
-- E1: pending
-- E2-E9: pending
+- E1: shipped 2026-05-05
+- E2: shipped 2026-05-05
+- E3-E9: pending
 
 Updated: 2026-05-05.

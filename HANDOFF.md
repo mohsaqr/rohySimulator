@@ -1,6 +1,46 @@
 # Session Handoff — 2026-05-05
 
-## Stage E1 (Schema integrity sweep) — SHIPPED this session
+## Stage E2 (Migration framework) — SHIPPED this session
+
+SQLite schema creation is now owned by versioned migrations instead of the
+large ad-hoc `db.serialize()` bootstrap.
+
+Key fixes:
+1. **Migration runner** — `server/migrationRunner.js:53` discovers sorted
+   SQL files, tracks `schema_migrations(version, name, applied_at,
+   checksum)`, verifies checksums, runs pending files once, and supports
+   dry-run printing without mutation.
+2. **Boot integration** — `server/db.js:11` supports `ROHY_DB`;
+   `server/db.js:987` runs migrations before the existing seed/default
+   routines; `server/server.js:166` awaits `dbReady` before seeders and
+   treats migration failures as startup-fatal.
+3. **Baseline schema** — `migrations/0001_initial.sql:1` captures the
+   pre-E2 schema. Existing fully-initialized DBs are baseline-stamped for
+   `0001` only (`server/migrationRunner.js:105`), so retroactive rebuild
+   migrations still apply.
+4. **Retroactive FK rebuild** —
+   `migrations/0002_alarm_config_user_cascade.sql:4` rebuilds
+   `alarm_config` with `ON DELETE CASCADE` on `user_id`, copies rows, and
+   recreates `idx_alarm_config_user_vital`.
+5. **Manual + audit entry points** — `scripts/migrate.js:1` exposes
+   `node scripts/migrate.js [--dry-run]`; `scripts/audit-migrations.sh:87`
+   verifies migration table state, dry-run immutability, no-op reruns, and
+   the alarm-config cascade.
+
+Verification target: prior 9 audit scripts (75/75), `audit-migrations.sh`,
+`npx vite build`, clean boot, and fresh-DB smoke.
+
+Deferred:
+- **E2.1 rollback commands**: migration tracking is forward-only for now;
+  individual down migrations/rollback orchestration are intentionally out of
+  scope for E2.
+- **Seeder refactor**: default pricing, agents, treatment effects, and
+  avatar defaults still live in `server/db.js`; moving them into seed
+  modules remains separate cleanup.
+- **E8 portability**: migrations are SQLite-specific and intentionally use
+  SQLite rebuild/copy semantics.
+
+## Stage E1 (Schema integrity sweep) — SHIPPED previous session
 
 SQLite schema sweep completed across `server/db.js` and hard-delete
 handlers in `server/routes.js`.

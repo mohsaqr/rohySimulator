@@ -4,7 +4,7 @@ import apiRoutes from './routes.js';
 import path from 'path';
 import fs from "fs";
 import { fileURLToPath } from 'url';
-import db from './db.js';
+import db, { dbReady } from './db.js';
 import { runSeeders, needsSeeding } from './seeders/index.js';
 import { loadKokoro } from './services/kokoroTts.js';
 
@@ -163,9 +163,13 @@ async function runVoiceKeyMigration() {
 // Run seeders if database is empty, then start server
 async function initializeAndStart() {
     try {
-        // Wait a moment for database to initialize
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await dbReady;
+    } catch (err) {
+        console.error('[Startup] Database migration error:', err.message);
+        process.exit(1);
+    }
 
+    try {
         // Check if seeding is needed and run seeders
         const isEmpty = await needsSeeding(db);
         if (isEmpty) {
