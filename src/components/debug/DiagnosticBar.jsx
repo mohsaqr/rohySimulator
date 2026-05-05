@@ -14,6 +14,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { apiUrl } from '../../config/api';
 import { AuthService } from '../../services/authService';
 import EventLogger from '../../services/eventLogger';
+import { resolveVoice } from '../../utils/voiceResolver';
+import { parseConfig } from '../../utils/parseConfig';
 
 const KEY_PREFIX = 'rohy_diag_bar_enabled_';
 const storageKey = (uid) => `${KEY_PREFIX}${uid ?? 'anon'}`;
@@ -45,6 +47,11 @@ export default function DiagnosticBar() {
     const [llm, setLlm] = useState(null);
     const [eventStatus, setEventStatus] = useState({});
     const [now, setNow] = useState(Date.now());
+    // Configured speakers for the current case (patient + every agent). Shows
+    // the resolved voice each one *would* play, even when not currently
+    // active. This is the diagnostic surface that answers "the setting says
+    // Neural2 but I hear Charon" — by showing both rows side-by-side.
+    const [configuredSpeakers, setConfiguredSpeakers] = useState([]);
 
     // Re-read enabled flag when the user changes (login/logout) so the bar
     // honours the per-user toggle without a full reload.
@@ -86,34 +93,115 @@ export default function DiagnosticBar() {
         return () => clearInterval(id);
     }, [enabled]);
 
+    // Whenever the case changes, fetch its case_agents (patient template +
+    // attached agents) and pre-resolve each one's voice. Shows the user every
+    // speaker's voice at a glance.
+    const caseId = eventStatus.caseId;
+    useEffect(() => {
+        if (!enabled || !caseId) { setConfiguredSpeakers([]); return; }
+        const token = AuthService.getToken();
+        if (!token) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                // Fetch case + case_agents in parallel.
+                const [caseRes, agentsRes] = await Promise.all([
+                    fetch(apiUrl(`/cases/${caseId}`), { headers: { Authorization: `Bearer ${token}` } }),
+                    fetch(apiUrl(`/cases/${caseId}/agents`), { headers: { Authorization: `Bearer ${token}` } })
+                ]);
+                if (cancelled) return;
+                const caseData = caseRes.ok ? await caseRes.json() : null;
+                const agentsData = agentsRes.ok ? await agentsRes.json() : null;
+                const speakers = [];
+
+                // Patient row.
+                const caseConfig = parseConfig(caseData?.case?.config || caseData?.config);
+                const patientVoice = caseConfig?.voice;
+                const patientGender = caseConfig?.demographics?.gender || '';
+                const patientAge = caseConfig?.demographics?.age;
+                const patientResolved = resolveVoice({
+                    voice: patientVoice,
+                    voiceSettings,
+                    platformAvatars,
+                    gender: patientGender,
+                    age: patientAge
+                });
+                speakers.push({
+                    role: 'patient',
+                    name: caseConfig?.patient_name || caseData?.case?.name || 'Patient',
+                    file: patientResolved.file,
+                    provider: patientResolved.provider,
+                    tier: patientResolved.tier
+                });
+
+                // Each configured agent row.
+                for (const a of (agentsData?.agents || [])) {
+                    const cfg = parseConfig(a.config);
+                    const r = resolveVoice({
+                        voice: cfg?.voice,
+                        voiceSettings,
+                        platformAvatars,
+                        gender: cfg?.voice?.gender || cfg?.gender || ''
+                    });
+                    speakers.push({
+                        role: a.agent_type || 'agent',
+                        name: a.name || a.agent_type,
+                        file: r.file,
+                        provider: r.provider,
+                        tier: r.tier
+                    });
+                }
+                if (!cancelled) setConfiguredSpeakers(speakers);
+            } catch (e) {
+                console.warn('[DiagnosticBar] failed to load case speakers:', e.message);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [enabled, caseId, voiceSettings, platformAvatars]);
+
     const toggleEnabled = useCallback((next) => {
         setDiagnosticBarEnabled(userId, next);
         setEnabledState(next);
         if (!next) setExpanded(false);
     }, [userId]);
 
-    // Derive the active speaker's voice (resolver mirrors the runtime path).
-    const speakerVoice = useMemo(() => {
+    // Derive the active speaker's resolved voice from the pre-resolved
+    // configuredSpeakers table. Keying on name is fine because it's stable
+    // for the lifetime of a case.
+    //
+    // Why not read activeParticipant.voice directly: deriveActiveParticipant
+    // in ChatInterface only propagates avatar/gender/name fields, not the
+    // voice block, so the live activeParticipant says "(falls through)"
+    // even when the case has a `case_voice` override. The configured-speakers
+    // table reads from /cases/:id where the override IS present, so it
+    // accurately reflects what the runtime *will* play.
+    const activeSpeakerRow = useMemo(() => {
         if (!activeParticipant) return null;
-        const cfg = activeParticipant?.voice || activeParticipant?.config?.voice;
-        return cfg?.case_voice || null;
-    }, [activeParticipant]);
+        return configuredSpeakers.find(s =>
+            s.name === activeParticipant.name ||
+            (activeParticipant.id?.startsWith('case:') && s.role === 'patient')
+        ) || null;
+    }, [activeParticipant, configuredSpeakers]);
+    const speakerVoice = activeSpeakerRow?.file || null;
+    const speakerTier = activeSpeakerRow?.tier || null;
 
     // Build the compact one-liner. Show only fields that have a value so the
-    // bar stays readable.
+    // bar stays readable. Voice tier appears next to the file so the user can
+    // tell at a glance whether it's an override or a fallback.
     const oneLiner = useMemo(() => {
         const parts = [];
         if (llm?.provider) parts.push(`LLM: ${llm.provider}/${llm.model || '(default)'}`);
         if (voiceSettings?.tts_provider) {
             const v = speakerVoice || activeVoiceSlot(voiceSettings, activeParticipant);
-            parts.push(`TTS: ${voiceSettings.tts_provider}${v ? ` · ${v}` : ''}`);
+            const tierTag = speakerTier ? ` (${speakerTier})` : '';
+            parts.push(`TTS: ${voiceSettings.tts_provider}${v ? ` · ${v}${tierTag}` : ''}`);
         }
         parts.push(voiceMode ? 'voice ON' : 'voice OFF');
         if (activeParticipant?.name) parts.push(`speaker: ${activeParticipant.name}`);
         if (eventStatus.sessionId) parts.push(`s${eventStatus.sessionId}`);
         if (user?.tenant_id) parts.push(`t${user.tenant_id}`);
         return parts.join(' · ');
-    }, [llm, voiceSettings, voiceMode, speakerVoice, activeParticipant, eventStatus.sessionId, user?.tenant_id]);
+    }, [llm, voiceSettings, voiceMode, speakerVoice, speakerTier, activeParticipant, eventStatus.sessionId, user?.tenant_id]);
 
     // Floating toggle when bar is disabled — a tiny pill bottom-right that
     // surfaces the feature without requiring the user to dig into Settings.
@@ -174,7 +262,7 @@ export default function DiagnosticBar() {
                             <Row k="temperature" v={llm?.temperature} />
                             <Row k="maxOutputTokens" v={llm?.maxOutputTokens} />
                             <Row k="enabled" v={String(llm?.enabled ?? '')} />
-                            <Row k="apiKey" v={llm?.apiKey ? maskKey(llm.apiKey) : '<unset>'} />
+                            <Row k="apiKey" v={maskKey(llm?.apiKey)} />
                         </Section>
                         <Section title="Voice (platform)">
                             <Row k="tts_provider" v={voiceSettings?.tts_provider} />
@@ -191,7 +279,8 @@ export default function DiagnosticBar() {
                             <Row k="speaking" v={String(speaking)} />
                             <Row k="active speaker" v={activeParticipant?.name || '(none)'} />
                             <Row k="active gender" v={activeParticipant?.gender || ''} />
-                            <Row k="active voice (case_voice)" v={speakerVoice || '(falls through)'} />
+                            <Row k="active resolved voice" v={speakerVoice || '(no voice)'} />
+                            <Row k="active voice tier" v={speakerTier || ''} />
                             <Row k="active avatar" v={activeParticipant?.avatar_id || activeParticipant?.avatar_url || ''} />
                         </Section>
                         <Section title="Session">
@@ -208,9 +297,54 @@ export default function DiagnosticBar() {
                             <Row k="default_male" v={platformAvatars?.default_avatar_male} />
                             <Row k="default_female" v={platformAvatars?.default_avatar_female} />
                             <Row k="default_child" v={platformAvatars?.default_avatar_child} />
-                            <Row k="avatar_type" v={platformAvatars?.avatar_type} />
+                            <Row k="avatar_type" v={voiceSettings?.avatar_type ?? platformAvatars?.avatar_type} />
                         </Section>
                     </div>
+
+                    {/* Configured speakers — patient + every agent attached to
+                        the case, with the voice each one would actually play
+                        right now. Shows tier so you can see whether a row is
+                        using a per-speaker case_voice override or falling
+                        through to the platform slot. This is the canonical
+                        view for "the setting says X but I hear Y" questions. */}
+                    {configuredSpeakers.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-neutral-800">
+                            <div className="text-emerald-400 font-bold tracking-wider uppercase mb-2">
+                                Configured speakers (this case)
+                            </div>
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-left text-neutral-500 border-b border-neutral-900">
+                                        <th className="pr-3 py-1 font-normal">role</th>
+                                        <th className="pr-3 py-1 font-normal">name</th>
+                                        <th className="pr-3 py-1 font-normal">resolved voice</th>
+                                        <th className="pr-3 py-1 font-normal">provider</th>
+                                        <th className="pr-3 py-1 font-normal">tier</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {configuredSpeakers.map((s, i) => (
+                                        <tr key={i} className="border-b border-neutral-900/50 hover:bg-neutral-900/40">
+                                            <td className="pr-3 py-1 text-neutral-400">{s.role}</td>
+                                            <td className="pr-3 py-1 text-white">{s.name}</td>
+                                            <td className="pr-3 py-1 text-white">
+                                                {s.file || <span className="italic text-neutral-600">no voice</span>}
+                                            </td>
+                                            <td className="pr-3 py-1 text-neutral-400">{s.provider}</td>
+                                            <td className="pr-3 py-1">
+                                                <TierBadge tier={s.tier} />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            <div className="mt-2 text-[10px] text-neutral-600">
+                                <code>override</code> = per-speaker <code>case_voice</code> set;{' '}
+                                <code>platform-default</code> = persona default in /platform-settings/avatars;{' '}
+                                <code>voice-slot</code> = falls through to <code>voice_&lt;provider&gt;_&lt;slot&gt;</code>.
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -246,9 +380,31 @@ function Row({ k, v }) {
 }
 
 function maskKey(key) {
-    const s = String(key || '');
-    if (s.length <= 10) return '***';
+    if (!key) return '<unset>';
+    const s = String(key);
+    // E5's redaction policy ships short sentinels ("[redacted]" = 10 chars)
+    // for any GET response. Show that verbatim instead of "***" so it's
+    // obvious the value is *intentionally* hidden, not missing.
+    if (s === '[redacted]') return '[redacted] (server-side)';
+    if (s.length <= 10) return s;
     return `${s.slice(0, 6)}…${s.slice(-4)} (${s.length} chars)`;
+}
+
+function TierBadge({ tier }) {
+    if (!tier) return <span className="text-neutral-600 italic">no voice</span>;
+    const palette = {
+        'override': 'bg-emerald-900/40 text-emerald-300 border-emerald-800',
+        'platform-default': 'bg-blue-900/30 text-blue-300 border-blue-800',
+        'voice-slot': 'bg-amber-900/30 text-amber-300 border-amber-800',
+        'hardcoded': 'bg-orange-900/30 text-orange-300 border-orange-800',
+        'catalog-first': 'bg-neutral-800 text-neutral-300 border-neutral-700'
+    };
+    const cls = palette[tier] || 'bg-neutral-800 text-neutral-300 border-neutral-700';
+    return (
+        <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider border ${cls}`}>
+            {tier}
+        </span>
+    );
 }
 
 // Find the platform default voice for the active speaker's slot. Used in
