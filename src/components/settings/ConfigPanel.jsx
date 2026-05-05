@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy, Mic } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy, Mic, GraduationCap } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { AuthService } from '../../services/authService';
@@ -15,6 +15,7 @@ import PhysicalExamEditor from './PhysicalExamEditor';
 import LabTestManager from './LabTestManager';
 import MedicationManager from './MedicationManager';
 import AgentTemplateManager from './AgentTemplateManager';
+import DiscussantSettings from './DiscussantSettings';
 import CaseTreatmentConfig from './CaseTreatmentConfig';
 import VoiceSettingsTab from './VoiceSettingsTab';
 import AvatarsSettingsTab from './AvatarsSettingsTab';
@@ -314,6 +315,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                 className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'agents' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                             >
                                 <Users className="w-4 h-4" /> Agent Personas
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('discussant')}
+                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'discussant' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                            >
+                                <GraduationCap className="w-4 h-4" /> Discussant
                             </button>
                             <button
                                 onClick={() => setActiveTab('avatars')}
@@ -877,6 +884,11 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                     {/* --- AGENT PERSONAS TAB (Admin Only) --- */}
                     {activeTab === 'agents' && isAdmin() && (
                         <AgentTemplateManager />
+                    )}
+
+                    {/* --- DISCUSSANT TAB (Admin Only) --- */}
+                    {activeTab === 'discussant' && isAdmin() && (
+                        <DiscussantSettings onJumpToAgents={() => setActiveTab('agents')} />
                     )}
 
                     {/* --- AVATARS TAB (Admin Only) --- */}
@@ -3573,17 +3585,61 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
                     </div>
                 </div>
 
+                {editingAgent.agent_type === 'discussant' && (
+                    <div className="space-y-4 p-4 rounded-lg bg-indigo-950/30 border border-indigo-900/50">
+                        <h5 className="text-sm font-bold text-indigo-300">Discussant — case overrides</h5>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm text-neutral-400 mb-1">Context filter</label>
+                                <select
+                                    value={editingAgent._cfg_context_filter ?? editingAgent.context_filter ?? 'full'}
+                                    onChange={(e) => setEditingAgent(prev => ({ ...prev, _cfg_context_filter: e.target.value }))}
+                                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                                >
+                                    <option value="full">Full case context</option>
+                                    <option value="history">History only</option>
+                                    <option value="vitals">Vitals only</option>
+                                    <option value="minimal">Minimal (Socratic)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm text-neutral-400 mb-1">Unlock trigger</label>
+                                <select
+                                    value={editingAgent._cfg_unlock_trigger ?? editingAgent.unlock_trigger ?? 'after_case_ended'}
+                                    onChange={(e) => setEditingAgent(prev => ({ ...prev, _cfg_unlock_trigger: e.target.value }))}
+                                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                                >
+                                    <option value="after_case_ended">After case ends (debrief)</option>
+                                    <option value="always">Always available</option>
+                                </select>
+                            </div>
+                        </div>
+                        <p className="text-xs text-neutral-500">These override the global discussant template values for this case only. Stored in <code className="text-neutral-400">case_agents.config_override</code>.</p>
+                    </div>
+                )}
+
                 <div className="flex justify-end gap-2 pt-4 border-t border-neutral-800">
                     <button
-                        onClick={() => handleUpdateAgent({
-                            name_override: editingAgent.name_override || null,
-                            system_prompt_override: editingAgent.system_prompt_override || null,
-                            availability_type: editingAgent.availability_type,
-                            available_from_minute: editingAgent.available_from_minute,
-                            depart_at_minute: editingAgent.depart_at_minute || null,
-                            response_time_min: editingAgent.response_time_min,
-                            response_time_max: editingAgent.response_time_max
-                        })}
+                        onClick={() => {
+                            const updates = {
+                                name_override: editingAgent.name_override || null,
+                                system_prompt_override: editingAgent.system_prompt_override || null,
+                                availability_type: editingAgent.availability_type,
+                                available_from_minute: editingAgent.available_from_minute,
+                                depart_at_minute: editingAgent.depart_at_minute || null,
+                                response_time_min: editingAgent.response_time_min,
+                                response_time_max: editingAgent.response_time_max,
+                            };
+                            if (editingAgent.agent_type === 'discussant') {
+                                const cfg = {};
+                                const ctx = editingAgent._cfg_context_filter ?? editingAgent.context_filter;
+                                const unlock = editingAgent._cfg_unlock_trigger ?? editingAgent.unlock_trigger;
+                                if (ctx) cfg.context_filter = ctx;
+                                if (unlock) cfg.unlock_trigger = unlock;
+                                updates.config_override = Object.keys(cfg).length ? cfg : null;
+                            }
+                            handleUpdateAgent(updates);
+                        }}
                         className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded text-sm font-bold"
                     >
                         Save Changes
