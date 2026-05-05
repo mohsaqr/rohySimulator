@@ -61,7 +61,14 @@ export default function ClinicalRecordsEditor({ caseData, setCaseData, updateCon
         updated[idx] = { ...updated[idx], [field]: value };
         updateRecords('medications', updated);
     };
+    // Stage-6 audit: confirm before deleting medication entries (Stage-2
+    // pattern — destructive actions get a confirmation). Skip if the row is
+    // empty so brand-new "Add Medication" rows can be removed without
+    // friction.
     const removeMedication = (idx) => {
+        const m = medications[idx];
+        const filled = m && (m.name || m.dose || m.route || m.frequency || m.indication);
+        if (filled && !window.confirm(`Delete medication "${m.name || '(unnamed)'}"? This cannot be undone.`)) return;
         updateRecords('medications', medications.filter((_, i) => i !== idx));
     };
     // Handle medication selection from search
@@ -94,6 +101,9 @@ export default function ClinicalRecordsEditor({ caseData, setCaseData, updateCon
         updateRecords('procedures', updated);
     };
     const removeProcedure = (idx) => {
+        const p = procedures[idx];
+        const filled = p && (p.name || p.date || p.indication || p.findings || p.complications);
+        if (filled && !window.confirm(`Delete procedure "${p.name || '(unnamed)'}"? This cannot be undone.`)) return;
         updateRecords('procedures', procedures.filter((_, i) => i !== idx));
     };
 
@@ -115,6 +125,9 @@ export default function ClinicalRecordsEditor({ caseData, setCaseData, updateCon
         updateRecords('notes', updated);
     };
     const removeNote = (idx) => {
+        const n = notes[idx];
+        const filled = n && (n.title || n.author || n.content);
+        if (filled && !window.confirm(`Delete clinical note "${n.title || '(untitled)'}"? This cannot be undone.`)) return;
         updateRecords('notes', notes.filter((_, i) => i !== idx));
     };
 

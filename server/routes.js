@@ -5599,6 +5599,13 @@ router.post('/scenarios/seed', requireAdmin, (req, res) => {
 // --- PHYSICAL EXAM FINDINGS ---
 
 // POST /api/sessions/:sessionId/exam-findings - Record a physical exam finding
+//
+// Stage-6 audit: idempotent on (session_id, body_region, exam_type). Pre-fix
+// every POST inserted a fresh row AND bumped exam_findings_count, so a
+// network retry doubled both the audit trail and the counter. The natural
+// key for this resource is "I performed exam X on region Y in this session";
+// re-running it is the same operation. Returns already_recorded:true on
+// duplicates.
 router.post('/sessions/:sessionId/exam-findings', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     const { body_region, exam_type, finding, is_abnormal, audio_url, audio_played, case_id } = req.body;
@@ -5609,29 +5616,42 @@ router.post('/sessions/:sessionId/exam-findings', authenticateToken, async (req,
 
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
-    const sql = `INSERT INTO physical_exam_findings
-                 (session_id, case_id, user_id, body_region, exam_type, finding, is_abnormal, audio_url, audio_played)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const existsSql = `SELECT id, finding, is_abnormal FROM physical_exam_findings
+                       WHERE session_id = ? AND body_region = ? AND exam_type = ?
+                       LIMIT 1`;
+    db.get(existsSql, [sessionId, body_region, exam_type], (existsErr, existing) => {
+        if (existsErr) return res.status(500).json({ error: existsErr.message });
 
-    db.run(sql, [
-        sessionId,
-        case_id || null,
-        req.user.id,
-        body_region,
-        exam_type,
-        finding,
-        is_abnormal ? 1 : 0,
-        audio_url || null,
-        audio_played ? 1 : 0
-    ], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+        if (existing && existing.id) {
+            return res.json({
+                id: existing.id,
+                message: 'Exam finding already recorded',
+                already_recorded: true
+            });
         }
 
-        // Update session exam count
-        db.run(`UPDATE sessions SET exam_findings_count = exam_findings_count + 1 WHERE id = ?`, [sessionId]);
+        const insertSql = `INSERT INTO physical_exam_findings
+                     (session_id, case_id, user_id, body_region, exam_type, finding, is_abnormal, audio_url, audio_played)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-        res.json({ id: this.lastID, message: 'Exam finding recorded' });
+        db.run(insertSql, [
+            sessionId,
+            case_id || null,
+            req.user.id,
+            body_region,
+            exam_type,
+            finding,
+            is_abnormal ? 1 : 0,
+            audio_url || null,
+            audio_played ? 1 : 0
+        ], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+
+            // Counter only increments on real inserts so retries don't inflate it.
+            db.run(`UPDATE sessions SET exam_findings_count = exam_findings_count + 1 WHERE id = ?`, [sessionId]);
+
+            res.json({ id: this.lastID, message: 'Exam finding recorded', already_recorded: false });
+        });
     });
 });
 

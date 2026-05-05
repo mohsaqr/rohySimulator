@@ -1,6 +1,34 @@
 # Session Handoff — 2026-05-05
 
-## Stage 5 (Scenario engine runtime) — SHIPPED this session
+## Stage 6 (Physical exam + body map) — SHIPPED this session
+
+Three Explore agents reviewed the physical-exam subsystem. 0 false
+positives. Real fixes shipped:
+
+1. **POST /sessions/:id/exam-findings idempotency** (MED) — keyed on
+   `(session_id, body_region, exam_type)`. Pre-fix retries doubled the
+   row and the counter.
+2. **ManikinPanel snapshot binding** (HIGH, Stage-1 follow-on) — App
+   now owns a `caseSnapshot` state and passes it down. Snapshot binding
+   is now a structural property at three call sites (chat, scenario,
+   physical exam).
+3. **ClinicalRecordsEditor delete confirms** (cheap MED) —
+   medications / procedures / notes now confirm before deleting if the
+   row has any data. Last unprotected destructive surface in the case
+   wizard.
+
+Verification: `audit-physexam.sh` 6/6. All prior stages green.
+**59/59 across all stages.** Browser smoke clean.
+
+**Deferred (architectural)**:
+- Two parallel physical-exam schemas (`clinicalRecords.physicalExam`
+  free-text vs `config.physical_exam` region×exam grid). Bidirectional
+  reconciliation needs schema unification and dual-write logic.
+- Server-side enforcement of `aiAccess.physicalExam` toggle (same
+  shape as the `memory_access` server enforcement deferred from
+  Stage 4).
+
+## Stage 5 (Scenario engine runtime) — SHIPPED previous session, COMMITTED
 
 Three Explore agents reviewed the scenario engine state machine,
 persistence/snapshot interactions, and admin/runtime UX. **1 false
@@ -219,7 +247,7 @@ outline below is the executive view.
 | ~~3~~ | ~~Alarms + Notifications~~ | ~~HIGH~~ | ✅ DONE | Ack endpoint IDOR + idempotency, /alarms/config cross-user read fix, transient state cleared on session change, BannerSurface aria-live. Threshold snapshot deferred. |
 | ~~4~~ | ~~LLM precedence chain~~ | ~~MED~~ | ✅ DONE | Agent layer temperature/max_tokens added (was silently dropped). case_snapshot includes system_prompt; ChatInterface frozen-snapshot. apiKey redacted in GET /sessions/:id. Memory_access server enforcement + user-layer resolver deferred. |
 | ~~5~~ | ~~Scenario engine (runtime)~~ | ~~MED~~ | ✅ DONE | Snapshot binding for engine, override guard extended to all mutable fields, auto-stop on complete, scenario-picker confirm, server-side timeline validation. Beat-drift + mid-run banner deferred. |
-| 6 | Physical exam + body map | MED | 60 min | Region master + per-case + AI-context narrative. Same drift pattern as labs/treatments. |
+| ~~6~~ | ~~Physical exam + body map~~ | ~~MED~~ | ✅ DONE | exam-findings idempotent, ManikinPanel snapshot-bound, ClinicalRecordsEditor delete confirms. Two-schema reconciliation deferred (architectural). |
 | 7 | Auth + user preferences | LOW | 30–45 min | Simple FK relationships; expect 0–1 real findings. |
 | 8 | TNA analytics + event log | LOW | 45–60 min | Read-mostly aggregation; drift is cosmetic. Run after Stage 1 informs event lifecycle. |
 | 9 | Body avatars (if separate from heads) | LOW | 15–60 min | First check: do body GLBs exist as a separate concept? If no, close. |

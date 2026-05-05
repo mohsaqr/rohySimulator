@@ -84,6 +84,34 @@ function MainApp() {
       notifications.clearTransient?.('session-change');
    }, [sessionId, notifications]);
 
+   // Stage-6 audit: app-level case snapshot (fetched once on session start).
+   // Mirrors the pattern in ChatInterface (Stage 4) and PatientMonitor
+   // (Stage 5). Owned at App level here because ManikinPanel and any other
+   // panels that should be snapshot-bound mount as siblings under App. Falls
+   // back to live activeCase if the fetch hasn't completed.
+   const [caseSnapshot, setCaseSnapshot] = useState(null);
+   useEffect(() => {
+      if (!sessionId) { setCaseSnapshot(null); return; }
+      let cancelled = false;
+      (async () => {
+         try {
+            const token = AuthService.getToken();
+            const res = await fetch(apiUrl(`/sessions/${sessionId}`), {
+               headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            if (!res.ok || cancelled) return;
+            const data = await res.json();
+            const raw = data?.session?.case_snapshot;
+            if (!raw) return;
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (!cancelled) setCaseSnapshot(parsed);
+         } catch (e) {
+            console.warn('[App] case snapshot fetch failed:', e.message);
+         }
+      })();
+      return () => { cancelled = true; };
+   }, [sessionId]);
+
    // Fetch and load default case if no session exists
    const loadDefaultCase = async () => {
       try {
@@ -633,15 +661,20 @@ function MainApp() {
             )
          )}
 
-         {/* Physical Examination Panel */}
+         {/* Physical Examination Panel
+             Stage-6 audit: physicalExam now reads from caseSnapshot.config first
+             (frozen at session start), falling back to live activeCase only if
+             the snapshot fetch hasn't landed. Pre-fix this read live state, so
+             admin edits to physical_exam mid-session bled into the running
+             session — same pattern as Stage-4 chat and Stage-5 scenario fixes. */}
          <ManikinPanel
             isOpen={showExamination}
             onClose={() => {
                setShowExamination(false);
                EventLogger.examPanelClosed();
             }}
-            physicalExam={activeCase?.config?.physical_exam || null}
-            patientGender={activeCase?.config?.demographics?.gender?.toLowerCase() || 'male'}
+            physicalExam={caseSnapshot?.config?.physical_exam ?? activeCase?.config?.physical_exam ?? null}
+            patientGender={(caseSnapshot?.config?.demographics?.gender ?? activeCase?.config?.demographics?.gender)?.toLowerCase() || 'male'}
             onExamPerformed={(exam) => {
                // Log exam to system
                EventLogger.physicalExamPerformed(

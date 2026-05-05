@@ -1,3 +1,20 @@
+### 2026-05-05 — Physical exam + body map audit (Stage 6)
+Three Explore agents reviewed the physical-exam subsystem (DB+server, admin editors, runtime UI). 0 false positives. Real fixes shipped:
+
+- `server/routes.js` POST `/sessions/:id/exam-findings`: idempotent on `(session_id, body_region, exam_type)`. Pre-fix every POST inserted a fresh row AND bumped `exam_findings_count`, so a network retry doubled both the audit trail and the counter. Replays now return the existing id + `already_recorded:true`; the counter only increments on real inserts.
+- `src/App.jsx`: new app-level `caseSnapshot` state mirrors the per-component pattern from Stage 4 (ChatInterface) and Stage 5 (PatientMonitor). `<ManikinPanel>` now receives `physicalExam={caseSnapshot?.config?.physical_exam ?? activeCase?.config?.physical_exam}`. Pre-fix the runtime body-map read live `activeCase.config.physical_exam`, so admin edits to a case's findings mid-session bled into the running session — same Stage-1 follow-on shape as the chat and scenario fixes. Snapshot binding is now a structural property at three call sites.
+- `src/components/settings/ClinicalRecordsEditor.jsx` `removeMedication` / `removeProcedure` / `removeNote`: now confirm before deleting if the row has any data. Stage-2 added confirms for lab + radiology editors; this was the last unprotected destructive surface in the case wizard.
+- `scripts/audit-physexam.sh` (NEW): asserts first-record stamp, replay-returns-same-id with `already_recorded:true`, and `physical_exam_findings` table holds exactly 1 row after a replay. **6/6 passing**.
+
+Triage outcomes:
+- **DEFERRED** (architectural): two parallel physical-exam schemas — `clinicalRecords.physicalExam` (free-text, AI-consumed) vs `config.physical_exam` (region×exam grid, ManikinPanel-consumed). They don't reconcile. Bidirectional sync would require schema unification and dual-write logic; out of scope here. Documented in HANDOFF for future stage.
+- **DEFERRED** (Stage-4 follow-on): server-side enforcement of `aiAccess.physicalExam` toggle. Same shape as `memory_access` server enforcement deferred earlier.
+- **DEFERRED** (LOW): reset-to-defaults button in ClinicalRecordsEditor; BodyMap region-definitions localStorage scoping (currently global, but that's region polygons, not findings — not session data).
+
+Browser smoke `:5173`: simulator workspace mounts, no React error-boundary fires.
+
+**Tests:** `audit-physexam.sh` 6/6. `audit-scenario.sh` 7/7. `audit-llm.sh` 7/7. `audit-alarms.sh` 13/13. `audit-investigations.sh` 17/17. `audit-sessions.sh` 9/9. **59/59 across all stages.**
+
 ### 2026-05-05 — Scenario engine runtime audit (Stage 5)
 Three Explore agents reviewed the scenario engine state machine (`PatientMonitor`), persistence/snapshot interactions, and admin/runtime UX. **1 false positive** on triage (FP rate ~8% — Agent 2 self-corrected on `scaleScenarioTimeline`). Real fixes shipped:
 
