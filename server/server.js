@@ -7,11 +7,17 @@ import { fileURLToPath } from 'url';
 import db, { dbReady } from './db.js';
 import { runSeeders, needsSeeding } from './seeders/index.js';
 import { loadKokoro } from './services/kokoroTts.js';
+import { configureSlowQueryThresholdFromDb, instrumentSqliteDb } from './observability.js';
+import requestIdMiddleware from './middleware/requestId.js';
+import requestLoggerMiddleware from './middleware/requestLogger.js';
+import errorHandler from './middleware/errorHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 3000;
+
+instrumentSqliteDb(db);
 
 // CORS Configuration - restrict to allowed origins
 const allowedOrigins = [
@@ -27,6 +33,8 @@ const allowedOrigins = [
 
 const isDev = process.env.NODE_ENV !== 'production';
 
+app.use(requestIdMiddleware);
+
 app.use(cors({
     origin: (origin, callback) => {
         if (!origin) return callback(null, true);
@@ -40,8 +48,10 @@ app.use(cors({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    exposedHeaders: ['X-Request-Id']
 }));
+app.use(requestLoggerMiddleware());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
@@ -62,6 +72,7 @@ app.get('/', (req, res) => {
 
 app.use('/uploads', express.static(path.join(__dirname, "..", "public","uploads")));
 app.use('/', express.static(path.join(__dirname, "..", "frontend")));
+app.use(errorHandler);
 
 // Start server with port fallback — bind to :: with ipv6Only:false for dual-stack (IPv4 + IPv6)
 function startServer(port, maxRetries = 10) {
@@ -164,6 +175,7 @@ async function runVoiceKeyMigration() {
 async function initializeAndStart() {
     try {
         await dbReady;
+        configureSlowQueryThresholdFromDb(db);
     } catch (err) {
         console.error('[Startup] Database migration error:', err.message);
         process.exit(1);

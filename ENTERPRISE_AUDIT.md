@@ -18,17 +18,17 @@ deferrals that earlier audits surfaced.
 - FP triage by orchestrator (pattern matures across stages, prior audits ran
   30 → 18 → 11 → 0 → 0 → 0 → 8 → 0 → 0%).
 
-| # | Stage | Severity | Estimated effort | Why |
-|---|---|---|---|---|
-| E1 | **Schema integrity sweep** | HIGH | 90–120 min | FK consistency, ON DELETE CASCADE coverage, orphan-row detection, missing indexes on hot query paths. Stage 2 added cascades for case_investigations; sweep the rest of the schema systematically. |
-| E2 | **Migration framework** | HIGH | 120–180 min | Replace ad-hoc `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE … ADD COLUMN` pattern with a real migration tool (Knex, Drizzle, or hand-rolled with version tracking). Pre-fix: rolling back a column requires manual schema surgery. |
-| E3 | **RBAC beyond admin/student** | HIGH | 90–120 min | Currently `users.role` is a binary CHECK constraint (`admin` / `student`). Enterprise asks for role hierarchies (admin → educator → reviewer → student → guest) and per-resource permissions. `req.user.role === 'admin'` checks are scattered; centralize. |
-| E4 | **Audit-log coverage** | MED | 60–90 min | `logAudit()` exists but is called inconsistently. Stage 7 added it for password/role; sweep every sensitive mutation (case edit, agent template edit, scenario delete, alarm threshold change, lab/treatment master edits). Centralize via middleware. |
-| E5 | **Data classification + redaction policy** | MED | 60–90 min | Stage 4 + Stage 7 redacted `apiKey` in two places. Generalize: tag every column carrying secrets/PII (apiKey, password_hash, email, phone, alternative_email, address, etc.); enforce redaction at the response middleware level so new endpoints inherit the policy. |
-| E6 | **Multi-tenant readiness** | MED | 90–120 min | Add `tenant_id` (or `organization_id`) column to user-owned tables; default to a "default" tenant; wire scoping to all per-user queries. Educational platform's nominal scope is single-tenant, but this is the structural prerequisite for enterprise deployment. |
-| E7 | **Soft delete + retention policy** | MED | 60–90 min | `cases.deleted_at` exists for soft delete; sweep other user-scoped tables. Retention rules: how long do `event_log`, `learning_events`, `interactions` rows live? GDPR's right-to-erasure means a per-user purge must work. |
-| E8 | **Connection pooling + portability** | LOW | 60–90 min | Shipped 2026-05-05: inventoried SQLite/Postgres blockers and added `server/dbAdapter.js` as a Promise-returning portability shim over the existing sqlite3 handle. Actual Postgres migration and route migration to the adapter are out of scope; E8 is the structural prerequisite. |
-| E9 | **Observability hooks** | LOW | 30–60 min | Slow-query log, error tracking, request-id propagation, structured logs. Currently `console.log` is the entire observability stack. |
+| # | Stage | Severity | Estimated effort | Status | Why |
+|---|---|---|---|---|---|
+| E1 | **Schema integrity sweep** | HIGH | 90–120 min | Complete | FK consistency, ON DELETE CASCADE coverage, orphan-row detection, missing indexes on hot query paths. Stage 2 added cascades for case_investigations; sweep the rest of the schema systematically. |
+| E2 | **Migration framework** | HIGH | 120–180 min | Complete | Replace ad-hoc `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE … ADD COLUMN` pattern with a real migration tool (Knex, Drizzle, or hand-rolled with version tracking). Pre-fix: rolling back a column requires manual schema surgery. |
+| E3 | **RBAC beyond admin/student** | HIGH | 90–120 min | Complete | Currently `users.role` is a binary CHECK constraint (`admin` / `student`). Enterprise asks for role hierarchies (admin → educator → reviewer → student → guest) and per-resource permissions. `req.user.role === 'admin'` checks are scattered; centralize. |
+| E4 | **Audit-log coverage** | MED | 60–90 min | Complete | `logAudit()` exists but is called inconsistently. Stage 7 added it for password/role; sweep every sensitive mutation (case edit, agent template edit, scenario delete, alarm threshold change, lab/treatment master edits). Centralize via middleware. |
+| E5 | **Data classification + redaction policy** | MED | 60–90 min | Complete | Stage 4 + Stage 7 redacted `apiKey` in two places. Generalize: tag every column carrying secrets/PII (apiKey, password_hash, email, phone, alternative_email, address, etc.); enforce redaction at the response middleware level so new endpoints inherit the policy. |
+| E6 | **Multi-tenant readiness** | MED | 90–120 min | Complete | Add `tenant_id` (or `organization_id`) column to user-owned tables; default to a "default" tenant; wire scoping to all per-user queries. Educational platform's nominal scope is single-tenant, but this is the structural prerequisite for enterprise deployment. |
+| E7 | **Soft delete + retention policy** | MED | 60–90 min | Complete | `cases.deleted_at` exists for soft delete; sweep other user-scoped tables. Retention rules: how long do `event_log`, `learning_events`, `interactions` rows live? GDPR's right-to-erasure means a per-user purge must work. |
+| E8 | **Connection pooling + portability** | LOW | 60–90 min | Complete | Shipped 2026-05-05: inventoried SQLite/Postgres blockers and added `server/dbAdapter.js` as a Promise-returning portability shim over the existing sqlite3 handle. Actual Postgres migration and route migration to the adapter are out of scope; E8 is the structural prerequisite. |
+| E9 | **Observability hooks** | LOW | 30–60 min | Complete | Shipped 2026-05-06: request-id propagation, structured request/http-error logs, terminal error logging, and slow-query logs over both the E8 adapter and legacy sqlite callback surface. |
 
 ## Out of scope
 
@@ -92,6 +92,10 @@ CONSTRAINTS:
 - E8: shipped 2026-05-05 (portability inventory, additive db adapter,
   SQLite-specific migration-runner documentation, portability audit script;
   actual Postgres migration and route migration are out of scope/deferred)
-- E9: pending
+- E9: shipped 2026-05-06 (request-id middleware, NDJSON request/http-error
+  logging, slow-query timing, terminal error logging, observability audit
+  script; log shipping/APM/distributed tracing intentionally deferred)
 
-Updated: 2026-05-05.
+All 9 enterprise stages are complete.
+
+Updated: 2026-05-06.

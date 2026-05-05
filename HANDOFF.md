@@ -1,3 +1,63 @@
+# Session Handoff — 2026-05-06
+
+## ALL 9 ENTERPRISE STAGES COMPLETE — Stage E9 Observability Hooks SHIPPED
+
+Scope: lightweight runtime instrumentation only. Existing handler-level
+`console.log` calls remain in place; E9 adds a centralized opt-in layer that
+can feed stdout log shippers, SIEM, or APM later without rewriting routes.
+
+Implementation:
+1. **Request id propagation** — `server/middleware/requestId.js` is mounted
+   first in `server/server.js`. It accepts sane inbound `X-Request-Id` values,
+   generates one otherwise, attaches `req.request_id`, and echoes the value in
+   the response header. CORS now allows and exposes `X-Request-Id`.
+2. **Structured request logging** — `server/middleware/requestLogger.js` emits
+   one NDJSON object per completed request via `res.on('finish')` with
+   `timestamp`, `request_id`, `method`, `path`, `status`, `duration_ms`,
+   `user_id`, `tenant_id`, and `bytes_sent`. 4xx/5xx responses also emit a
+   structured `http_error` entry. Skip paths are configurable and default to
+   `/api/proxy/llm,/health`.
+3. **Slow-query logging** — `server/observability.js` owns SQL
+   sanitization/truncation and threshold logic. `server/dbAdapter.js` times
+   the E8 Promise adapter without changing its API, and `server/server.js`
+   instruments the shared sqlite handle once so existing legacy callback
+   routes are covered before route migration happens.
+4. **Error tracking hook** — `server/middleware/errorHandler.js` is mounted at
+   the end of the Express stack. It logs request id, route, user/tenant, error
+   message, and stack server-side, while responses continue to return
+   `{ error: err.message }` rather than leaking stack traces.
+5. **Configuration** — `ROHY_LOG_LEVEL` accepts `debug | info | warn | error`
+   and defaults to `info`; `ROHY_SLOW_QUERY_MS` defaults to `100`; platform
+   settings `slow_query_ms` or `observability_slow_query_ms` can supply the
+   threshold when the env var is absent; `ROHY_LOG_SKIP_PATHS` defaults to
+   `/api/proxy/llm,/health`.
+6. **Audit** — `scripts/audit-observability.sh` is Bash 3.2 compatible and
+   starts an isolated temporary server/DB so it can force a low slow-query
+   threshold without touching the orchestrator-managed `:3000` process.
+
+Verification completed locally:
+- `node --check server/observability.js`
+- `node --check server/server.js`
+- `node --check server/dbAdapter.js`
+- `node --check server/middleware/requestId.js`
+- `node --check server/middleware/requestLogger.js`
+- `node --check server/middleware/errorHandler.js`
+- `bash -n scripts/audit-observability.sh`
+
+Sandbox note: `scripts/audit-observability.sh` could not complete in this
+Codex sandbox because binding a local listener is blocked with
+`listen EPERM`. It bootstrapped the temporary DB and migrations, then failed
+when Node tried to listen on the isolated port. The orchestrator should run the
+script in the normal environment; it does not require restarting the managed
+`:3000` server because it starts and cleans up its own process.
+
+Final enterprise rollup: E1 schema integrity, E2 migrations, E3 RBAC, E4
+audit-log coverage, E5 redaction, E6 tenant readiness, E7 retention, E8
+portability adapter, and E9 observability are all implemented. Deferred beyond
+the enterprise roadmap: actual Postgres migration, route migration to the
+adapter, log shipping, APM integration, distributed tracing, and operator log
+retention.
+
 # Session Handoff — 2026-05-05
 
 ## Stage E8 (Connection pooling + portability) — SHIPPED this session

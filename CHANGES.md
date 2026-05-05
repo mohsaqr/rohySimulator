@@ -1,3 +1,15 @@
+### 2026-05-06 — Stage E9: Observability hooks (final enterprise stage)
+Added opt-in runtime observability primitives without replacing existing handler `console.log` calls.
+
+- `server/observability.js` (NEW): centralized NDJSON writer, log-level parsing, request-context storage, request-id validation/generation, SQL sanitization/truncation, slow-query threshold handling, platform-setting fallback, and one-time sqlite handle instrumentation for legacy callback routes.
+- `server/middleware/requestId.js`, `requestLogger.js`, `errorHandler.js` (NEW): first-stack request id propagation, structured completion logs via `res.on('finish')`, 4xx/5xx `http_error` signals, and terminal Express error logging with server-side stack traces.
+- `server/server.js`: installs request id before CORS/body parsing/routes, exposes `X-Request-Id`, mounts structured request logging, instruments the existing sqlite handle, reads platform slow-query settings after DB readiness, and adds a final error handler.
+- `server/dbAdapter.js`: keeps the E8 adapter API unchanged while timing Promise-based `get`, `all`, `run`, and prepared-statement calls.
+- `scripts/audit-observability.sh` (NEW): starts an isolated temporary server, verifies generated and inbound `X-Request-Id`, checks NDJSON request/error fields, and forces low slow-query threshold coverage without touching the orchestrator-managed `:3000`.
+- `ENTERPRISE_AUDIT.md`, `HANDOFF.md`, and `LEARNINGS.md`: mark all 9 enterprise stages complete and document the E9 defaults: `ROHY_LOG_LEVEL=info`, `ROHY_SLOW_QUERY_MS=100`, and `ROHY_LOG_SKIP_PATHS=/api/proxy/llm,/health`.
+
+Deferred: log shipping, APM agents, cross-service distributed tracing, and runtime log retention. Runtime logs intentionally go to stdout for the operator's future shipper.
+
 ### 2026-05-05 — Stage E8: Connection pooling + portability
 Shipped the Postgres-portability inventory and adapter infrastructure without migrating routes.
 

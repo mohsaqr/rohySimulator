@@ -1,4 +1,5 @@
 import db from './db.js';
+import { timeDbAdapterQuery } from './observability.js';
 
 /**
  * Stage E8 database portability adapter.
@@ -24,23 +25,23 @@ function normalizeParams(params) {
 }
 
 export function get(sql, params = []) {
-    return new Promise((resolve, reject) => {
+    return timeDbAdapterQuery('adapter.get', sql, () => new Promise((resolve, reject) => {
         db.get(sql, normalizeParams(params), (err, row) => {
             err ? reject(err) : resolve(row || null);
         });
-    });
+    }));
 }
 
 export function all(sql, params = []) {
-    return new Promise((resolve, reject) => {
+    return timeDbAdapterQuery('adapter.all', sql, () => new Promise((resolve, reject) => {
         db.all(sql, normalizeParams(params), (err, rows) => {
             err ? reject(err) : resolve(rows || []);
         });
-    });
+    }));
 }
 
 export function run(sql, params = []) {
-    return new Promise((resolve, reject) => {
+    return timeDbAdapterQuery('adapter.run', sql, () => new Promise((resolve, reject) => {
         db.run(sql, normalizeParams(params), function onRun(err) {
             err ? reject(err) : resolve({
                 lastID: this.lastID,
@@ -48,7 +49,7 @@ export function run(sql, params = []) {
                 statement: this
             });
         });
-    });
+    }));
 }
 
 export function serialize(work) {
@@ -79,7 +80,7 @@ export function prepare(sql) {
     const stmt = db.prepare(sql);
     return {
         run(params = []) {
-            return new Promise((resolve, reject) => {
+            return timeDbAdapterQuery('adapter.prepare.run', sql, () => new Promise((resolve, reject) => {
                 stmt.run(normalizeParams(params), function onPreparedRun(err) {
                     err ? reject(err) : resolve({
                         lastID: this.lastID,
@@ -87,21 +88,21 @@ export function prepare(sql) {
                         statement: this
                     });
                 });
-            });
+            }));
         },
         get(params = []) {
-            return new Promise((resolve, reject) => {
+            return timeDbAdapterQuery('adapter.prepare.get', sql, () => new Promise((resolve, reject) => {
                 stmt.get(normalizeParams(params), (err, row) => {
                     err ? reject(err) : resolve(row || null);
                 });
-            });
+            }));
         },
         all(params = []) {
-            return new Promise((resolve, reject) => {
+            return timeDbAdapterQuery('adapter.prepare.all', sql, () => new Promise((resolve, reject) => {
                 stmt.all(normalizeParams(params), (err, rows) => {
                     err ? reject(err) : resolve(rows || []);
                 });
-            });
+            }));
         },
         finalize() {
             return new Promise((resolve, reject) => {
