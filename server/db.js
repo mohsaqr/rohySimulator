@@ -1047,7 +1047,7 @@ function initDb() {
             role TEXT CHECK(role IN ('user', 'assistant', 'system')),
             content TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(session_id) REFERENCES sessions(id)
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
         )`);
 
         // 5. Login Logs Table - Track all login/logout events
@@ -1074,9 +1074,9 @@ function initDb() {
             new_value TEXT,
             settings_json JSON,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(user_id) REFERENCES users(id),
-            FOREIGN KEY(session_id) REFERENCES sessions(id),
-            FOREIGN KEY(case_id) REFERENCES cases(id)
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+            FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE SET NULL
         )`);
 
         // 7. Session Settings Table - Link settings to sessions
@@ -1097,9 +1097,9 @@ function initDb() {
             monitor_temp REAL,
             settings_snapshot JSON,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(session_id) REFERENCES sessions(id),
-            FOREIGN KEY(case_id) REFERENCES cases(id),
-            FOREIGN KEY(user_id) REFERENCES users(id)
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+            FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE SET NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
         )`);
 
         // Migration: Add monitor_settings to sessions table
@@ -1146,8 +1146,8 @@ function initDb() {
             old_value TEXT,
             new_value TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(session_id) REFERENCES sessions(id),
-            FOREIGN KEY(user_id) REFERENCES users(id)
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
         )`);
         db.all("PRAGMA table_info(event_log)", (err, cols) => {
             if (err || !cols) return;
@@ -1166,7 +1166,7 @@ function initDb() {
             actual_value REAL,
             triggered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             acknowledged_at DATETIME,
-            FOREIGN KEY(session_id) REFERENCES sessions(id)
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
         )`);
 
         // 10. Alarm Config Table - User-specific alarm thresholds
@@ -1189,7 +1189,7 @@ function initDb() {
             result_data JSON,
             image_url TEXT,
             turnaround_minutes INTEGER DEFAULT 30,
-            FOREIGN KEY(case_id) REFERENCES cases(id)
+            FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE CASCADE
         )`);
 
         // Migration: Add lab database columns to case_investigations
@@ -1230,8 +1230,8 @@ function initDb() {
             ordered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             available_at DATETIME,
             viewed_at DATETIME,
-            FOREIGN KEY(session_id) REFERENCES sessions(id),
-            FOREIGN KEY(investigation_id) REFERENCES case_investigations(id)
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+            FOREIGN KEY(investigation_id) REFERENCES case_investigations(id) ON DELETE CASCADE
         )`);
 
         // Migration: Add scenario column to cases table
@@ -1312,9 +1312,9 @@ function initDb() {
             category TEXT CHECK(category IN ('SESSION', 'NAVIGATION', 'CLINICAL', 'COMMUNICATION', 'MONITORING', 'CONFIGURATION', 'ASSESSMENT', 'ERROR')),
 
             -- Foreign keys
-            FOREIGN KEY(session_id) REFERENCES sessions(id),
-            FOREIGN KEY(user_id) REFERENCES users(id),
-            FOREIGN KEY(case_id) REFERENCES cases(id)
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE SET NULL
         )`);
 
         // ============================================
@@ -1336,7 +1336,7 @@ function initDb() {
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
             FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE CASCADE,
-            FOREIGN KEY(user_id) REFERENCES users(id)
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
         )`);
 
         // 16. Patient Information Table - Normalized patient demographics
@@ -1422,7 +1422,7 @@ function initDb() {
             created_by INTEGER,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(test_name, category),
-            FOREIGN KEY(created_by) REFERENCES users(id)
+            FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
         )`);
 
         // 20. Vital Sign History Table - Track vital sign changes over time
@@ -1469,8 +1469,8 @@ function initDb() {
             ip_address TEXT,
             user_agent TEXT,
             is_active BOOLEAN DEFAULT 1,
-            FOREIGN KEY(user_id) REFERENCES users(id),
-            FOREIGN KEY(session_id) REFERENCES sessions(id)
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
         )`);
 
         // 23. Scenario Events Table - Track scenario timeline execution
@@ -1986,7 +1986,9 @@ function initDb() {
 
         // Investigation orders indexes
         db.run(`CREATE INDEX IF NOT EXISTS idx_investigation_orders_session_id ON investigation_orders(session_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_investigation_orders_investigation_id ON investigation_orders(investigation_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_investigation_orders_viewed_at ON investigation_orders(viewed_at)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_case_investigations_case_type ON case_investigations(case_id, investigation_type)`);
 
         // Login logs indexes
         db.run(`CREATE INDEX IF NOT EXISTS idx_login_logs_user_id ON login_logs(user_id)`);
@@ -1995,7 +1997,16 @@ function initDb() {
 
         // Settings logs indexes
         db.run(`CREATE INDEX IF NOT EXISTS idx_settings_logs_user_id ON settings_logs(user_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_settings_logs_session_id ON settings_logs(session_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_settings_logs_case_id ON settings_logs(case_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_settings_logs_timestamp ON settings_logs(timestamp DESC)`);
+
+        db.run(`CREATE INDEX IF NOT EXISTS idx_session_settings_session_id ON session_settings(session_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_session_settings_user_id ON session_settings(user_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_session_settings_case_id ON session_settings(case_id)`);
+
+        db.run(`CREATE INDEX IF NOT EXISTS idx_event_log_session_id ON event_log(session_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_event_log_user_id ON event_log(user_id)`);
 
         // Physical exam findings indexes
         db.run(`CREATE INDEX IF NOT EXISTS idx_physical_exam_session ON physical_exam_findings(session_id)`);
@@ -2027,6 +2038,7 @@ function initDb() {
         // Alarm events indexes
         db.run(`CREATE INDEX IF NOT EXISTS idx_alarm_events_session_id ON alarm_events(session_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_alarm_events_triggered ON alarm_events(triggered_at)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_alarm_config_user_vital ON alarm_config(user_id, vital_sign)`);
 
         // Clinical notes indexes
         db.run(`CREATE INDEX IF NOT EXISTS idx_clinical_notes_session ON clinical_notes(session_id)`);
@@ -2330,6 +2342,7 @@ function initDb() {
         // Agent indexes
         db.run(`CREATE INDEX IF NOT EXISTS idx_agent_templates_type ON agent_templates(agent_type)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_case_agents_case ON case_agents(case_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_case_agents_template ON case_agents(agent_template_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_agent_conv_session ON agent_conversations(session_id, agent_type)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_agent_state_session ON agent_session_state(session_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_team_log_session ON team_communications_log(session_id)`);
@@ -2452,6 +2465,7 @@ function initDb() {
 
         // Treatment indexes
         db.run(`CREATE INDEX IF NOT EXISTS idx_treatment_orders_session ON treatment_orders(session_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_treatment_orders_medication ON treatment_orders(medication_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_treatment_orders_status ON treatment_orders(status)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_treatment_orders_type ON treatment_orders(treatment_type)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_treatment_effects_type ON treatment_effects(treatment_type)`);
@@ -2459,6 +2473,7 @@ function initDb() {
         db.run(`CREATE INDEX IF NOT EXISTS idx_active_treatments_session ON active_treatments(session_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_active_treatments_order ON active_treatments(treatment_order_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_case_treatments_case ON case_treatments(case_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_case_treatments_medication ON case_treatments(medication_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_case_treatments_type ON case_treatments(treatment_type)`, [], function(err) {
             if (err) {
                 console.error('Error creating treatment indexes:', err);
@@ -2477,9 +2492,9 @@ function initDb() {
             case_id INTEGER,
             emotion TEXT NOT NULL,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(session_id) REFERENCES sessions(id),
-            FOREIGN KEY(user_id) REFERENCES users(id),
-            FOREIGN KEY(case_id) REFERENCES cases(id)
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE SET NULL
         )`);
         // Migrate: drop intensity column if it exists (recreate table without it)
         db.all("PRAGMA table_info(emotion_logs)", (err, cols) => {
@@ -2494,9 +2509,9 @@ function initDb() {
                         case_id INTEGER,
                         emotion TEXT NOT NULL,
                         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY(session_id) REFERENCES sessions(id),
-                        FOREIGN KEY(user_id) REFERENCES users(id),
-                        FOREIGN KEY(case_id) REFERENCES cases(id)
+                        FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
+                        FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE SET NULL
                     )`);
                     db.run(`INSERT INTO emotion_logs_new (id, session_id, user_id, case_id, emotion, timestamp)
                             SELECT id, session_id, user_id, case_id, emotion, timestamp FROM emotion_logs`);

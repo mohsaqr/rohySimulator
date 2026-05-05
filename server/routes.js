@@ -1542,13 +1542,78 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
         return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
-    const sql = `DELETE FROM users WHERE id = ?`;
-    db.run(sql, [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'User not found' });
+    const userId = req.params.id;
+
+    db.get('SELECT COUNT(*) as count FROM case_versions WHERE changed_by = ?', [userId], (versionErr, versionRow) => {
+        if (versionErr) return res.status(500).json({ error: versionErr.message });
+        if ((versionRow?.count || 0) > 0) {
+            return res.status(409).json({
+                error: 'Cannot delete user with immutable case-version audit history',
+                deferred_stage: 'E7'
+            });
         }
-        res.json({ message: 'User deleted successfully', id: req.params.id });
+
+        db.serialize(() => {
+            db.run('BEGIN');
+            const cleanupSteps = [
+                ['DELETE FROM active_sessions WHERE user_id = ?', [userId]],
+                ['DELETE FROM user_preferences WHERE user_id = ?', [userId]],
+                ['DELETE FROM session_notes WHERE user_id = ?', [userId]],
+                ['DELETE FROM questionnaire_responses WHERE user_id = ?', [userId]],
+                ['DELETE FROM alarm_config WHERE user_id = ?', [userId]],
+                ['DELETE FROM clinical_notes WHERE user_id = ?', [userId]],
+                ['DELETE FROM export_records WHERE user_id = ?', [userId]],
+                ['DELETE FROM llm_usage WHERE user_id = ?', [userId]],
+                ['DELETE FROM tts_usage WHERE user_id = ?', [userId]],
+                ['UPDATE sessions SET user_id = NULL WHERE user_id = ?', [userId]],
+                ['UPDATE event_log SET user_id = NULL WHERE user_id = ?', [userId]],
+                ['UPDATE login_logs SET user_id = NULL WHERE user_id = ?', [userId]],
+                ['UPDATE settings_logs SET user_id = NULL WHERE user_id = ?', [userId]],
+                ['UPDATE session_settings SET user_id = NULL WHERE user_id = ?', [userId]],
+                ['UPDATE learning_events SET user_id = NULL WHERE user_id = ?', [userId]],
+                ['UPDATE physical_exam_findings SET user_id = NULL WHERE user_id = ?', [userId]],
+                ['UPDATE system_audit_log SET user_id = NULL WHERE user_id = ?', [userId]],
+                ['UPDATE lab_definitions SET created_by = NULL WHERE created_by = ?', [userId]],
+                ['UPDATE platform_settings SET updated_by = NULL WHERE updated_by = ?', [userId]],
+                ['UPDATE scenarios SET created_by = NULL WHERE created_by = ?', [userId]],
+                ['UPDATE scenario_templates SET created_by = NULL WHERE created_by = ?', [userId]],
+                ['UPDATE agent_templates SET created_by = NULL WHERE created_by = ?', [userId]],
+                ['UPDATE cases SET created_by = NULL WHERE created_by = ?', [userId]],
+                ['UPDATE cases SET last_modified_by = NULL WHERE last_modified_by = ?', [userId]],
+                ['UPDATE scenario_events SET acknowledged_by = NULL WHERE acknowledged_by = ?', [userId]],
+                ['UPDATE emotion_logs SET user_id = NULL WHERE user_id = ?', [userId]],
+                ['UPDATE llm_request_log SET user_id = NULL WHERE user_id = ?', [userId]]
+            ];
+
+            const runCleanup = (idx) => {
+                if (idx >= cleanupSteps.length) {
+                    db.run('DELETE FROM users WHERE id = ?', [userId], function (err) {
+                        if (err) {
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ error: err.message });
+                        }
+                        if (this.changes === 0) {
+                            db.run('ROLLBACK');
+                            return res.status(404).json({ error: 'User not found' });
+                        }
+                        db.run('COMMIT');
+                        return res.json({ message: 'User deleted successfully', id: userId });
+                    });
+                    return;
+                }
+
+                const [sql, params] = cleanupSteps[idx];
+                db.run(sql, params, (err) => {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ error: err.message });
+                    }
+                    runCleanup(idx + 1);
+                });
+            };
+
+            runCleanup(0);
+        });
     });
 });
 
@@ -6528,18 +6593,106 @@ router.post('/master/medications/bulk', authenticateToken, requireAdmin, (req, r
 // DELETE /api/master/medications/:id - Delete single medication (Admin)
 router.delete('/master/medications/:id', authenticateToken, requireAdmin, (req, res) => {
     const { id } = req.params;
-    db.run('DELETE FROM medications WHERE id = ?', [id], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(404).json({ error: 'Medication not found' });
-        res.json({ message: 'Medication deleted' });
+
+    db.serialize(() => {
+        db.run('BEGIN');
+        db.run('DELETE FROM medication_doses WHERE medication_id = ?', [id], function(doseErr) {
+            if (doseErr) {
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: doseErr.message });
+            }
+            const medicationDosesRemoved = this.changes ?? 0;
+            db.run('UPDATE treatment_effects SET medication_id = NULL WHERE medication_id = ?', [id], function(effectErr) {
+                if (effectErr) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ error: effectErr.message });
+                }
+                const treatmentEffectsDetached = this.changes ?? 0;
+                db.run('UPDATE treatment_orders SET medication_id = NULL WHERE medication_id = ?', [id], function(orderErr) {
+                    if (orderErr) {
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ error: orderErr.message });
+                    }
+                    const treatmentOrdersDetached = this.changes ?? 0;
+                    db.run('UPDATE case_treatments SET medication_id = NULL WHERE medication_id = ?', [id], function(caseErr) {
+                        if (caseErr) {
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ error: caseErr.message });
+                        }
+                        const caseTreatmentsDetached = this.changes ?? 0;
+                        db.run('DELETE FROM medications WHERE id = ?', [id], function(err) {
+                            if (err) {
+                                db.run('ROLLBACK');
+                                return res.status(500).json({ error: err.message });
+                            }
+                            if (this.changes === 0) {
+                                db.run('ROLLBACK');
+                                return res.status(404).json({ error: 'Medication not found' });
+                            }
+                            db.run('COMMIT');
+                            res.json({
+                                message: 'Medication deleted',
+                                medication_doses_removed: medicationDosesRemoved,
+                                treatment_effects_detached: treatmentEffectsDetached,
+                                treatment_orders_detached: treatmentOrdersDetached,
+                                case_treatments_detached: caseTreatmentsDetached
+                            });
+                        });
+                    });
+                });
+            });
+        });
     });
 });
 
 // DELETE /api/master/medications/all - Clear all medications (Admin)
 router.delete('/master/medications/all', authenticateToken, requireAdmin, (req, res) => {
-    db.run('DELETE FROM medications', function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'All medications deleted', deleted: this.changes });
+    db.serialize(() => {
+        db.run('BEGIN');
+        db.run('DELETE FROM medication_doses', [], function(doseErr) {
+            if (doseErr) {
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: doseErr.message });
+            }
+            const medicationDosesRemoved = this.changes ?? 0;
+            db.run('UPDATE treatment_effects SET medication_id = NULL WHERE medication_id IS NOT NULL', [], function(effectErr) {
+                if (effectErr) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ error: effectErr.message });
+                }
+                const treatmentEffectsDetached = this.changes ?? 0;
+                db.run('UPDATE treatment_orders SET medication_id = NULL WHERE medication_id IS NOT NULL', [], function(orderErr) {
+                    if (orderErr) {
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ error: orderErr.message });
+                    }
+                    const treatmentOrdersDetached = this.changes ?? 0;
+                    db.run('UPDATE case_treatments SET medication_id = NULL WHERE medication_id IS NOT NULL', [], function(caseErr) {
+                        if (caseErr) {
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ error: caseErr.message });
+                        }
+                        const caseTreatmentsDetached = this.changes ?? 0;
+                        db.run('DELETE FROM medications', function(err) {
+                            if (err) {
+                                db.run('ROLLBACK');
+                                return res.status(500).json({ error: err.message });
+                            }
+                            const deleted = this.changes ?? 0;
+                            db.run('COMMIT');
+                            res.json({
+                                message: 'All medications deleted',
+                                deleted,
+                                medication_doses_removed: medicationDosesRemoved,
+                                treatment_effects_detached: treatmentEffectsDetached,
+                                treatment_orders_detached: treatmentOrdersDetached,
+                                case_treatments_detached: caseTreatmentsDetached
+                            });
+                        });
+                    });
+                });
+            });
+        });
     });
 });
 

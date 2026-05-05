@@ -1,3 +1,12 @@
+### 2026-05-05 — Stage E1: Schema integrity sweep
+Swept SQLite FK relationships, hard-delete handlers, and hot child-table query paths.
+
+- `server/db.js`: documented intended ON DELETE behavior in fresh-table definitions for high-traffic session/case/user children where the semantic cleanup is clear, and added targeted indexes for child columns already used by route WHERE/JOIN/delete paths: investigation orders by investigation, case investigations by case/type, settings/session/event logs by parent, alarm config by user/vital, case agents by template, and treatment medication FKs.
+- `server/routes.js`: hardened hard-delete parents that SQLite cannot retroactively protect. `DELETE /users/:id` now clears or detaches user-owned dependents before deleting the user. `DELETE /master/medications/:id` and `/all` now remove medication dose rows and detach medication references from treatment effects, treatment orders, and case treatments before deleting master medication rows.
+- `scripts/audit-schema.sh` (NEW): proves five parent-child cleanup paths end-to-end: lab -> investigation orders, agent template -> case agents, patient record -> events/documents, medication -> dose/treatment/case-treatment references, and user -> preferences/active sessions/discussion notes.
+
+Deferred to E2: existing databases still need a real migration framework before FK constraint changes can be rebuilt safely in place. Stage E1 keeps existing live data safe with application-layer cleanup rather than ad-hoc table rebuilds.
+
 ### 2026-05-05 — Stage 9: Body avatars (CLOSED — no scope)
 The roadmap's checkpoint — "First check: do body GLBs exist as a separate concept?" — has a definitive answer: **no**. Avatar rendering is head-only. `frontend/avatars/` contains only a `heads/` subdirectory; `VOICE_AVATAR_TYPES = ['3d_head', 'none']` in `server/routes.js:7309`; `PatientAvatar` renders only head geometry; `BodyMap` is a 2D SVG silhouette for clickable physical-exam regions, not a 3D body avatar. No `body*.glb` files, no `BodyAvatar` component, no `body_avatar_type` setting, no `/avatars/body/*` endpoints. Stage 0's persona/voice/avatar audit (`af9302a`) was head-only by intent. **Stage 9 closed: no architectural surface to audit.** If a future feature adds full-body avatars, that's a new subsystem requiring its own snapshot/wiring review at that time.
 

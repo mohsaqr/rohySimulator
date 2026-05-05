@@ -1,5 +1,44 @@
 # Session Handoff — 2026-05-05
 
+## Stage E1 (Schema integrity sweep) — SHIPPED this session
+
+SQLite schema sweep completed across `server/db.js` and hard-delete
+handlers in `server/routes.js`.
+
+Key fixes:
+1. **Hard user delete orphan risk** — `DELETE /users/:id` now removes
+   user-owned dependents (`user_preferences`, `active_sessions`,
+   `session_notes`, questionnaire/clinical/export/usage rows) and
+   detaches nullable audit/history references before deleting the user.
+2. **Hard medication delete orphan risk** — `DELETE
+   /master/medications/:id` and `/all` now delete `medication_doses` and
+   set medication FKs to NULL in `treatment_effects`,
+   `treatment_orders`, and `case_treatments`.
+3. **Fresh-schema FK intent** — obvious session/case/user child tables
+   now declare `ON DELETE CASCADE` or `ON DELETE SET NULL` where the data
+   semantics are clear. Existing DBs still need E2 migrations for true
+   in-place FK rebuilds.
+4. **Missing-index sweep** — added indexes only for columns already used
+   in route WHERE/JOIN/delete paths: `investigation_orders.investigation_id`,
+   `case_investigations(case_id, investigation_type)`, settings/session
+   log parents, `event_log` parents, `alarm_config(user_id, vital_sign)`,
+   `case_agents.agent_template_id`, and treatment medication FKs.
+5. **New audit script** — `scripts/audit-schema.sh` covers lab orders,
+   agent/case-agent cleanup, patient record events/documents, medication
+   dependents, and user-owned dependents.
+
+Verification target: `audit-schema.sh` plus the prior 8 audit scripts,
+`npx vite build`, and a clean `node server/server.js` boot smoke.
+
+Deferred:
+- **E2 migration framework**: existing SQLite tables cannot have FK
+  `ON DELETE` clauses altered in place. A safe rebuild/copy/drop
+  migration system should own retroactive FK enforcement.
+- **E7 retention policy**: historical audit/analytics rows are preserved
+  or detached instead of globally cascaded on parent deletion. Retention
+  and right-to-erasure semantics need a platform policy before broader
+  deletes.
+
 ## All 9 stages complete
 
 The staged audit roadmap is now complete. Summary:
