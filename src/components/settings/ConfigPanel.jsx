@@ -23,12 +23,15 @@ import { Bell as BellIcon } from 'lucide-react';
 import CaseAvatarVoicePicker from './CaseAvatarVoicePicker';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
-export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
+export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'cases', initialWizardStep = 1, onOpenPersonaEditor }) {
     const { isAdmin } = useAuth();
     const toast = useToast();
-    // Default to 'cases' tab for all users, admins can access 'platform' for LLM settings
-    const [activeTab, setActiveTab] = useState('cases'); // cases, users, history, logs, platform, scenarios
-    const [wizardInitialStep, setWizardInitialStep] = useState(1);
+    // Default to 'cases' tab for all users; the parent can pass `initialTab`
+    // to land directly on a specific tab — used when the persona editor
+    // closes back into ConfigPanel and we want to land on 'agents' or back
+    // on a specific case wizard step.
+    const [activeTab, setActiveTab] = useState(initialTab); // cases, users, history, logs, platform, scenarios
+    const [wizardInitialStep, setWizardInitialStep] = useState(initialWizardStep);
 
     // Cases State
     const [cases, setCases] = useState([]);
@@ -601,6 +604,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                     setActiveTab={setActiveTab}
                                     initialStep={wizardInitialStep}
                                     onStepLoaded={() => setWizardInitialStep(1)}
+                                    onOpenPersonaEditor={onOpenPersonaEditor}
                                     onSave={handleSaveCase}
                                     onCancel={async () => {
                                         if (hasUnsavedChanges) {
@@ -876,7 +880,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
 
                     {/* --- AGENT PERSONAS TAB (Admin Only) --- */}
                     {activeTab === 'agents' && isAdmin() && (
-                        <AgentTemplateManager />
+                        <AgentTemplateManager onOpenEditor={onOpenPersonaEditor} />
                     )}
 
                     {/* --- AVATARS TAB (Admin Only) --- */}
@@ -3319,7 +3323,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
 }
 
 // Case Agent Editor - Configure which agents are available per case
-function CaseAgentEditor({ caseId, caseData, setCaseData }) {
+function CaseAgentEditor({ caseId, caseData, setCaseData, onOpenPersonaEditor }) {
     const [templates, setTemplates] = useState([]);
     const [caseAgents, setCaseAgents] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -3711,9 +3715,22 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
                                     <button
                                         onClick={() => setEditingAgent(agent)}
                                         className="px-2 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs"
+                                        title="Edit per-case overrides (name, availability, response time)"
                                     >
-                                        Edit
+                                        Case overrides
                                     </button>
+                                    {onOpenPersonaEditor && agent.agent_template_id && (
+                                        <button
+                                            // wizardStep=11 keeps the case wizard's Agents step in sync
+                                            // with the seeder/case-data; if step numbering ever changes,
+                                            // search this comment to find the magic number.
+                                            onClick={() => onOpenPersonaEditor(agent.agent_template_id, { tab: 'cases', wizardStep: 11 })}
+                                            className="px-2 py-1 bg-purple-700/40 hover:bg-purple-700 text-purple-200 hover:text-white rounded text-xs"
+                                            title="Open the underlying persona template in the full editor (system-wide; affects every case using it). You'll return here when done."
+                                        >
+                                            Edit persona ↗
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => handleRemoveAgent(agent.id)}
                                         className="px-2 py-1 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded text-xs"
@@ -3756,7 +3773,7 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
 }
 
 // Sub-component for the Wizard to keep code clean
-function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, hasUnsavedChanges, lastSavedAt, initialStep, onStepLoaded }) {
+function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, hasUnsavedChanges, lastSavedAt, initialStep, onStepLoaded, onOpenPersonaEditor }) {
     const [step, setStep] = useState(initialStep || 1);
     const [uploading, setUploading] = useState(false);
     const [publicScenarios, setPublicScenarios] = useState([]);
@@ -5135,6 +5152,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                         caseId={caseData.id}
                         caseData={caseData}
                         setCaseData={setCaseData}
+                        onOpenPersonaEditor={onOpenPersonaEditor}
                     />
                 )}
 

@@ -144,6 +144,28 @@ export const AgentService = {
   },
 
   /**
+   * Reset a standard (is_default=1) template back to its shipped baseline.
+   * Server validates that the row is in fact a standard template; custom
+   * templates reject with 400.
+   */
+  async resetTemplateToDefault(templateId) {
+    try {
+      const response = await fetch(apiUrl(`/agents/templates/${templateId}/reset-to-default`), {
+        method: 'POST',
+        headers: this.getAuthHeaders()
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to reset template to defaults');
+      }
+      return await response.json();
+    } catch (err) {
+      console.error('[AgentService] resetTemplateToDefault error:', err);
+      throw err;
+    }
+  },
+
+  /**
    * Test LLM configuration for an agent template
    */
   async testLLM(templateId) {

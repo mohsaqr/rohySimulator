@@ -1,5 +1,5 @@
 import express from 'express';
-import db from './db.js';
+import db, { findDefaultAgent } from './db.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -8033,11 +8033,12 @@ router.put('/agents/templates/:id', authenticateToken, requireAdmin, async (req,
     try {
         const { id } = req.params;
 
-        // Standard (is_default=1) templates are read-only — duplicate to customize.
-        // The UI normally hides Edit on these, but block direct PUTs too as
-        // belt-and-braces; without this any admin could overwrite a shipped row.
+        // Admins are allowed to edit standard (is_default=1) templates in
+        // place — the shipped DEFAULT_AGENTS array is the recoverable
+        // baseline (POST .../reset-to-default re-applies it). We still
+        // 404 on missing rows so the UI gets a sensible signal.
         const existing = await new Promise((resolve, reject) => {
-            db.get('SELECT is_default FROM agent_templates WHERE id = ?', [id], (err, row) => {
+            db.get('SELECT is_default, agent_type FROM agent_templates WHERE id = ?', [id], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -8045,8 +8046,17 @@ router.put('/agents/templates/:id', authenticateToken, requireAdmin, async (req,
         if (!existing) {
             return res.status(404).json({ error: 'Agent template not found' });
         }
-        if (existing.is_default === 1) {
-            return res.status(403).json({ error: 'Cannot modify a default template; duplicate it first' });
+        // agent_type is the immutable identity for shipped standards — the
+        // seeder uses it to detect "is there already a default of this type"
+        // and reset's fallback resolves baseline by type. Allowing admins to
+        // re-tag a standard's type would let them silently swap which
+        // baseline applies on reset. Lock it for is_default=1 rows.
+        if (existing.is_default === 1
+            && req.body.agent_type !== undefined
+            && req.body.agent_type !== existing.agent_type) {
+            return res.status(400).json({
+                error: 'Cannot change agent_type on a standard template. Duplicate it first if you want a different type.'
+            });
         }
 
         const {
@@ -8159,6 +8169,126 @@ router.delete('/agents/templates/:id', authenticateToken, requireAdmin, async (r
         res.json({ success: true, message: 'Agent template deleted' });
     } catch (err) {
         console.error('Agent template delete error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/agents/templates/:id/reset-to-default
+// Re-applies the shipped DEFAULT_AGENTS values onto a standard (is_default=1)
+// template row. Lets admins edit shipped rows freely while still being able to
+// recover the original prompt/dos/donts/avatar/voice slot. Custom templates
+// (is_default=0) reject with 400 because there's no canonical baseline to
+// restore — they should be edited or deleted instead.
+router.post('/agents/templates/:id/reset-to-default', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ?', [id], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+        if (!existing) {
+            return res.status(404).json({ error: 'Agent template not found' });
+        }
+        if (existing.is_default !== 1) {
+            return res.status(400).json({ error: 'Only standard templates can be reset to defaults' });
+        }
+
+        // Match by (agent_type, name) — both are stable identifiers in the
+        // shipped array. Fall back to type-only if name was renamed by an
+        // earlier admin tweak; this is the more useful behaviour than a 404.
+        const baseline = findDefaultAgent(existing.agent_type, existing.name)
+            || findDefaultAgent(existing.agent_type, null);
+        if (!baseline) {
+            return res.status(404).json({
+                error: `No shipped baseline for agent_type "${existing.agent_type}". Cannot reset.`
+            });
+        }
+
+        await new Promise((resolve, reject) => {
+            db.run(
+                `UPDATE agent_templates SET
+                    name = ?,
+                    role_title = ?,
+                    avatar_url = ?,
+                    system_prompt = ?,
+                    context_filter = ?,
+                    communication_style = ?,
+                    config = ?,
+                    llm_provider = NULL,
+                    llm_model = NULL,
+                    llm_api_key = NULL,
+                    llm_endpoint = NULL,
+                    llm_config = NULL,
+                    memory_access = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`,
+                [
+                    baseline.name,
+                    baseline.role_title || null,
+                    baseline.avatar_url || null,
+                    baseline.system_prompt,
+                    baseline.context_filter,
+                    baseline.communication_style,
+                    baseline.config, // already a JSON string in DEFAULT_AGENTS
+                    id
+                ],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve(this.changes);
+                }
+            );
+        });
+
+        // Audit captures the full pre-reset row + the baseline applied so
+        // a reset is reversible from the audit trail (admin can paste the
+        // oldValue back through PUT to recover an accidental click).
+        logAudit({
+            userId: req.user.id,
+            username: req.user.username,
+            action: 'reset_agent_template_to_default',
+            resourceType: 'agent_template',
+            resourceId: id,
+            resourceName: baseline.name,
+            oldValue: {
+                id: existing.id,
+                agent_type: existing.agent_type,
+                name: existing.name,
+                role_title: existing.role_title,
+                avatar_url: existing.avatar_url,
+                system_prompt: existing.system_prompt,
+                context_filter: existing.context_filter,
+                communication_style: existing.communication_style,
+                config: existing.config,
+                llm_provider: existing.llm_provider,
+                llm_model: existing.llm_model,
+                llm_endpoint: existing.llm_endpoint,
+                memory_access: existing.memory_access
+            },
+            newValue: {
+                source: 'DEFAULT_AGENTS',
+                agent_type: baseline.agent_type,
+                name: baseline.name,
+                role_title: baseline.role_title,
+                avatar_url: baseline.avatar_url,
+                context_filter: baseline.context_filter,
+                communication_style: baseline.communication_style,
+                config: baseline.config
+            }
+        });
+
+        // Return the freshly-reset row so the client can rehydrate without
+        // a separate GET.
+        const fresh = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ?', [id], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+        res.json({ success: true, message: `Reset "${baseline.name}" to shipped defaults`, template: fresh });
+    } catch (err) {
+        console.error('Agent template reset error:', err);
         res.status(500).json({ error: err.message });
     }
 });

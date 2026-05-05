@@ -25,6 +25,7 @@ import ManikinPanel from './components/examination/ManikinPanel';
 import BodyMapDebug from './components/examination/BodyMapDebug';
 import TnaDashboard from './components/analytics/tna/TnaDashboard';
 import DiscussionScreen from './components/discussion/DiscussionScreen';
+import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
 
 // Session expiry time in milliseconds (default 30 minutes)
 const SESSION_EXPIRY_MS = parseInt(localStorage.getItem('rohy_session_expiry_minutes') || '30') * 60 * 1000;
@@ -36,6 +37,18 @@ function MainApp() {
    const [showUserMenu, setShowUserMenu] = useState(false);
    const [showTnaAnalytics, setShowTnaAnalytics] = useState(false);
    const [showDiscussion, setShowDiscussion] = useState(false);
+   // Agent persona editor full-page route. null = closed; 'new' = create;
+   // <number> = edit by template id. Setting this hides ConfigPanel so the
+   // editor gets the entire viewport. On close we reopen ConfigPanel with
+   // its activeTab pinned to 'agents' so the user lands back where they were.
+   const [personaEditorTarget, setPersonaEditorTarget] = useState(null);
+   // Where to send the user when the persona editor closes. Default null =
+   // land on the Agent Personas tab. Callers may pass {tab,wizardStep} to
+   // round-trip back to a specific surface (eg. case wizard step 11) so
+   // the user isn't displaced when they launched from a deeper context.
+   const [personaEditorReturn, setPersonaEditorReturn] = useState(null);
+   const [settingsInitialTab, setSettingsInitialTab] = useState('cases');
+   const [settingsInitialStep, setSettingsInitialStep] = useState(1);
    const [caseEnded, setCaseEnded] = useState(false);
    const { user, logout, isAdmin } = useAuth();
    const toast = useToast();
@@ -255,7 +268,32 @@ function MainApp() {
 
    const handleCloseSettings = () => {
       setShowFullPageSettings(false);
+      // Reset the next-open defaults so the simulator's settings button
+      // always lands somewhere predictable; the persona-editor flow
+      // re-pins these just before reopening.
+      setSettingsInitialTab('cases');
+      setSettingsInitialStep(1);
       EventLogger.componentClosed(COMPONENTS.CONFIG_PANEL, 'Settings');
+   };
+
+   const handleOpenPersonaEditor = (target, returnContext = null) => {
+      // target: 'new' or numeric template id.
+      // returnContext (optional): { tab, wizardStep } — where to land on close.
+      // Defaults to the Agent Personas tab when null.
+      setPersonaEditorTarget(target);
+      setPersonaEditorReturn(returnContext);
+      setShowFullPageSettings(false);
+   };
+
+   const handleClosePersonaEditor = () => {
+      const ret = personaEditorReturn;
+      setPersonaEditorTarget(null);
+      setPersonaEditorReturn(null);
+      // Resolve return surface: explicit return context wins; otherwise
+      // land on Agent Personas which is the default entry point.
+      setSettingsInitialTab(ret?.tab || 'agents');
+      setSettingsInitialStep(ret?.wizardStep || 1);
+      setShowFullPageSettings(true);
    };
 
    // Handle lab results modal with logging
@@ -269,6 +307,18 @@ function MainApp() {
       EventLogger.modalClosed('LabResults', COMPONENTS.LAB_RESULTS_MODAL);
    };
 
+   // Persona editor takes priority — when open, hide every other surface.
+   // Mounted at the App.jsx level so it owns the entire viewport (the
+   // user's "not a toy" feedback was specifically about cramped chrome).
+   if (personaEditorTarget !== null) {
+      return (
+         <AgentPersonaEditor
+            templateId={personaEditorTarget}
+            onClose={handleClosePersonaEditor}
+         />
+      );
+   }
+
    // Show full-page settings
    if (showFullPageSettings) {
       return (
@@ -277,6 +327,9 @@ function MainApp() {
                onClose={handleCloseSettings}
                onLoadCase={handleLoadCase}
                fullPage={true}
+               initialTab={settingsInitialTab}
+               initialWizardStep={settingsInitialStep}
+               onOpenPersonaEditor={handleOpenPersonaEditor}
             />
          </div>
       );

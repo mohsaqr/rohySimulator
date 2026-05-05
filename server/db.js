@@ -17,9 +17,11 @@ const db = new sqlite.Database(dbPath, (err) => {
     }
 });
 
-// Seed default agent personas
-function seedDefaultAgents() {
-    const defaultAgents = [
+// Shipped default agent personas. Lifted to module-level so the same array
+// powers both first-boot seeding and the admin-triggered "Reset to defaults"
+// endpoint. Treat this as the single source of truth for what a freshly-
+// installed Rohy looks like; DB rows are admin-mutable copies.
+export const DEFAULT_AGENTS = [
         {
             agent_type: 'nurse',
             name: 'Sarah Mitchell',
@@ -251,32 +253,60 @@ If the learner asks meta-questions ("are you a real patient?", "what should I as
                 ]
             })
         }
-    ];
+];
 
-    // Insert default agents if they don't exist
-    const stmt = db.prepare(`
-        INSERT OR IGNORE INTO agent_templates
-        (agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style, is_default, config)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+// Look up the shipped baseline for a given (agent_type, name). Used by the
+// reset-to-defaults endpoint so PUT-style overrides can be reverted to what
+// originally shipped without re-installing.
+export function findDefaultAgent(agentType, name) {
+    if (!agentType) return null;
+    return DEFAULT_AGENTS.find(a => a.agent_type === agentType && (!name || a.name === name)) || null;
+}
 
-    defaultAgents.forEach(agent => {
-        stmt.run(
-            agent.agent_type,
-            agent.name,
-            agent.role_title,
-            agent.avatar_url || null,
-            agent.system_prompt,
-            agent.context_filter,
-            agent.communication_style,
-            agent.is_default,
-            agent.config
+// Seed default agent personas
+function seedDefaultAgents() {
+    // Insert a shipped standard ONLY if no is_default=1 row exists for its
+    // agent_type yet. Standards are now admin-editable (including renamable),
+    // so we can't dedupe on (agent_type, name) — that would re-insert the
+    // shipped baseline next boot under its original name and collide with
+    // the renamed admin row at reset time. agent_type IS the immutable
+    // identity for shipped rows; PUT also locks it for is_default=1 rows.
+    DEFAULT_AGENTS.forEach(agent => {
+        db.get(
+            'SELECT id FROM agent_templates WHERE is_default = 1 AND agent_type = ? LIMIT 1',
+            [agent.agent_type],
+            (err, row) => {
+                if (err) {
+                    console.warn('seedDefaultAgents existence check failed:', err.message);
+                    return;
+                }
+                if (row) return; // standard for this type already exists (possibly renamed/edited)
+                db.run(
+                    `INSERT INTO agent_templates
+                     (agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style, is_default, config)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        agent.agent_type,
+                        agent.name,
+                        agent.role_title,
+                        agent.avatar_url || null,
+                        agent.system_prompt,
+                        agent.context_filter,
+                        agent.communication_style,
+                        agent.is_default,
+                        agent.config
+                    ],
+                    (insertErr) => {
+                        if (insertErr) {
+                            console.warn(`seedDefaultAgents insert (${agent.agent_type}) failed:`, insertErr.message);
+                        }
+                    }
+                );
+            }
         );
     });
 
-    stmt.finalize(() => {
-        console.log('Default agent personas seeded.');
-    });
+    console.log('Default agent personas seed dispatched.');
 
     // Backfill avatar_url for default rows seeded before each row had a
     // shipped avatar. Idempotent — only updates rows currently NULL or empty.
