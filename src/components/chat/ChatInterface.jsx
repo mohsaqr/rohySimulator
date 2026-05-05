@@ -141,6 +141,36 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // template has been attached/seeded — in which case the chat falls through
     // to the legacy case.config-only path.
     const [patientTemplate, setPatientTemplate] = useState(null);
+
+    // Stage-4 audit: fetch the case snapshot at session start and freeze it
+    // for the chat persona. Pre-fix `buildPatientSystemPrompt` read from
+    // `activeCase.config` (live React state, re-fetched whenever the
+    // /api/cases list refreshed), so an admin renaming the case or
+    // editing the system_prompt mid-session shifted the in-progress chat's
+    // persona. The snapshot stays immutable for the session's lifetime.
+    const [caseSnapshot, setCaseSnapshot] = useState(null);
+    useEffect(() => {
+        const sid = sessionId || restoredSessionId;
+        if (!sid) { setCaseSnapshot(null); return; }
+        let cancelled = false;
+        (async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(apiUrl(`/sessions/${sid}`), {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
+                if (!res.ok || cancelled) return;
+                const data = await res.json();
+                const raw = data?.session?.case_snapshot;
+                if (!raw) return;
+                const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (!cancelled) setCaseSnapshot(parsed);
+            } catch (e) {
+                console.warn('[ChatInterface] case snapshot fetch failed:', e.message);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [sessionId, restoredSessionId]);
     const [agentConversations, setAgentConversations] = useState({}); // { agent_type: [...messages] }
     const [agentStates, setAgentStates] = useState({}); // { agent_type: { status, paged_at, ... } }
     const [pagingTimers, setPagingTimers] = useState({}); // { agent_type: timeoutId }
@@ -481,13 +511,21 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     useEffect(() => { scrollToBottom(); }, [messages, agentConversations, activeTab]);
 
     // Build rich system prompt for patient chat
+    //
+    // Stage-4 audit: prefer the session's frozen `case_snapshot` over the
+    // live `activeCase` so the persona stays stable for the session's
+    // lifetime. Falls back to `activeCase` only if the snapshot fetch
+    // hasn't completed yet (rare — the effect above runs on mount).
     const buildPatientSystemPrompt = () => {
-        const config = activeCase.config || {};
+        const sourceConfig = caseSnapshot?.config ?? activeCase.config ?? {};
+        const sourceName = caseSnapshot?.name ?? activeCase.name;
+        const sourceSystemPrompt = caseSnapshot?.system_prompt ?? activeCase.system_prompt;
+        const config = sourceConfig;
         const demo = config.demographics || {};
 
         let richSystemPrompt = `## PERSONA\n`;
         richSystemPrompt += `Role: ${config.persona_type || 'Patient'}\n`;
-        richSystemPrompt += `Name: ${config.patient_name || activeCase.name}\n`;
+        richSystemPrompt += `Name: ${config.patient_name || sourceName}\n`;
         richSystemPrompt += `Demographics: ${demo.age || 'Unknown'} year old ${demo.gender || 'Unknown'}\n`;
 
         // If a patient persona template is attached/seeded, lead with its
@@ -504,7 +542,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         }
 
         richSystemPrompt += `\n## INSTRUCTIONS\n`;
-        richSystemPrompt += `${activeCase.system_prompt || 'You are a patient.'}\n`;
+        richSystemPrompt += `${sourceSystemPrompt || 'You are a patient.'}\n`;
         richSystemPrompt += `\nSpeak only what the patient would say aloud. Never use stage directions, narration, or asterisk-wrapped action descriptors (e.g. "*nods*", "*clutches chest*", "*sighs*"). Express feelings through words alone.\n`;
 
         if (config.constraints) {

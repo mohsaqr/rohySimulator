@@ -1,6 +1,47 @@
 # Session Handoff — 2026-05-05
 
-## Stage 3 (Alarms + Notifications) — SHIPPED this session
+## Stage 4 (LLM precedence chain) — SHIPPED this session
+
+Three Explore agents reviewed the platform → case → agent → session →
+user resolver. **0 false positives** (FP rate 30 → 18 → 11 → 0 → 0%).
+Real fixes shipped:
+
+1. **Agent `temperature` + `max_tokens` silently dropped** (HIGH) —
+   `agent_templates` had no columns for these; resolver SELECT only
+   pulled provider/model/api_key/endpoint. Admins setting them in any
+   prior UI were quietly ignored. Added the two columns + resolver path
+   uses `agent ?? session ?? platform` (nullish coalescing because `0`
+   is a valid temperature). PUT/POST endpoints accept the new fields.
+2. **Chat persona drifted with live admin edits** (HIGH, Stage-1
+   follow-on) — `case_snapshot` captured config+scenario+name only, not
+   `system_prompt`. ChatInterface's `buildPatientSystemPrompt` read live
+   `activeCase.system_prompt`. Now snapshot includes it; ChatInterface
+   fetches `/api/sessions/:id` once on mount and freezes the result.
+3. **GET /sessions/:id echoed `apiKey`** (MED) — the `llm_settings`
+   column carries `user_preferences.default_llm_settings` merged at
+   session start, which can include an apiKey. `SELECT s.*` returned it
+   verbatim. Now redacted to `[redacted]` before responding.
+4. **AgentPersonaEditor: temperature + max_tokens UI** (cheap MED) — new
+   Temperature + Max-tokens fields with "(platform default)" placeholder
+   and helper text explaining precedence.
+
+Verification: `audit-llm.sh` 7/7. `audit-alarms.sh` 13/13.
+`audit-investigations.sh` 17/17. `audit-sessions.sh` 9/9. Browser smoke
+on `:5173`: simulator workspace mounts, no error-boundary fires.
+
+**Deferred (architectural)**:
+- **Server-side `memory_access` enforcement**: the matrix is enforced
+  client-side only (ChatInterface conditionally appends sections). A
+  learner could bypass by crafting requests; the threat model is weak
+  in an educational platform but it's still a defensive-design gap.
+- **User-layer LLM resolver**: UserProfilePanel saves
+  `user_preferences.default_llm_settings` but no resolver consults it at
+  runtime. Either remove the UI or wire the resolver. Stage 7 (Auth +
+  user prefs) should pick this up.
+- **Case-layer LLM config**: case_agents only overrides name/system_prompt,
+  not LLM. Would need new schema + UI. Defer until needed.
+
+## Stage 3 (Alarms + Notifications) — SHIPPED previous session, COMMITTED
 
 Three Explore agents reviewed alarms (backend, central dispatcher, five
 surfaces). 11 findings, **0 false positives** on triage (FP rate has
@@ -132,7 +173,7 @@ outline below is the executive view.
 | ~~1~~ | ~~Sessions + lifecycle~~ | ~~HIGH~~ | ✅ DONE | Snapshot decision: snapshot at start. Multi-tab: detect+warn. Vitals: persist on change. /end idempotent. |
 | ~~2~~ | ~~Investigations (Lab + Radiology)~~ | ~~HIGH~~ | ✅ DONE | UPSERT POST/labs, bulk PUT/labs replace, DELETE cascade, /order-labs+/order-radiology idempotent, editor delete confirms. L6 resolved. |
 | ~~3~~ | ~~Alarms + Notifications~~ | ~~HIGH~~ | ✅ DONE | Ack endpoint IDOR + idempotency, /alarms/config cross-user read fix, transient state cleared on session change, BannerSurface aria-live. Threshold snapshot deferred. |
-| 4 | LLM precedence chain | MED | 45–60 min | platform → case → agent → session → user. Five layers, persona audit just touched the agent layer. |
+| ~~4~~ | ~~LLM precedence chain~~ | ~~MED~~ | ✅ DONE | Agent layer temperature/max_tokens added (was silently dropped). case_snapshot includes system_prompt; ChatInterface frozen-snapshot. apiKey redacted in GET /sessions/:id. Memory_access server enforcement + user-layer resolver deferred. |
 | 5 | Scenario engine (runtime) | MED | 60–90 min | Storage audited; runtime engine in PatientMonitor:560–682 not yet. Beat application, scenario-disable mid-run, complete state. Stage 1's snapshot decision now constrains what mid-run admin edits do. |
 | 6 | Physical exam + body map | MED | 60 min | Region master + per-case + AI-context narrative. Same drift pattern as labs/treatments. |
 | 7 | Auth + user preferences | LOW | 30–45 min | Simple FK relationships; expect 0–1 real findings. |

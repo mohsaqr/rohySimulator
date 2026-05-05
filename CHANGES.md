@@ -1,3 +1,21 @@
+### 2026-05-05 — LLM precedence chain audit (Stage 4)
+Three Explore agents reviewed the platform → case → agent → session → user resolver across server, editors, and runtime. **0 false positives** (FP rate 30 → 18 → 11 → 0 → 0%). Real fixes shipped:
+
+- `server/db.js`: new `llm_temperature REAL` + `llm_max_tokens INTEGER` columns on `agent_templates` (idempotent ALTER). Pre-fix the resolver `SELECT` only fetched `provider/model/api_key/endpoint` from the agent template and the agent layer was *silently dropped* for these two fields — every chat used session/platform defaults regardless of admin tuning.
+- `server/routes.js` `/proxy/llm`: agent-layer resolution now consults the new columns. Precedence is `agent ?? session ?? platform` for both temperature and max_tokens. Empty/null clears fall through correctly (uses `??` not `||` — a temperature of `0` is valid).
+- `server/routes.js` POST + PUT `/agents/templates`: accept `llm_temperature` (REAL) and `llm_max_tokens` (INTEGER) in the request body. Empty string clears to NULL. Non-finite values become NULL so the resolver falls through cleanly.
+- `server/routes.js` POST `/sessions`: `case_snapshot` now includes `system_prompt` (was capturing `config + scenario + name` only). Pre-fix the chat persona was rebuilt every render from live `activeCase.system_prompt`, so admin renames or prompt edits mid-session shifted the patient's voice for the in-progress chat.
+- `server/routes.js` GET `/sessions/:id`: redacts `apiKey` / `api_key` from `llm_settings` JSON before responding. Session creation merges `user_preferences.default_llm_settings` into this column, which can carry an API key; the prior `SELECT s.*` echoed it verbatim to the response.
+- `src/components/chat/ChatInterface.jsx` `buildPatientSystemPrompt`: now reads from a frozen `caseSnapshot` state (fetched once at mount from `/api/sessions/:id`) and falls back to `activeCase` only if the snapshot fetch hasn't completed. Closes a Stage-1 follow-on — the server-side reader sites used the snapshot but the client-side persona builder was reading live React state.
+- `src/components/settings/AgentPersonaEditor.jsx`: new Temperature + Max-tokens fields in the LLM section (placeholder text says "(platform default)"; helper text explains the precedence chain). Pre-fix admins had no UI for these even after the columns existed.
+- `scripts/audit-llm.sh` (NEW): asserts agent-template round-trip for temperature/max_tokens, empty-string clears, `system_prompt` in `case_snapshot`, and `apiKey` redaction in `/sessions/:id`. **7/7 passing**.
+
+Triage outcomes:
+- **DEFERRED** (architectural): server-side enforcement of `agent_templates.memory_access` matrix (currently client-side only — a learner could bypass by crafting requests directly; threat model is weak in an educational context); user-layer LLM resolver (UserProfilePanel saves `default_llm_settings` but it's never read at runtime); case-layer LLM config (would need new schema + UI surface).
+- **INTENTIONAL** (not bugs): Voice provider vs LLM provider divergence; system prompt assembly order (platform template + client → client wins).
+
+**Tests:** `audit-llm.sh` 7/7. `audit-alarms.sh` 13/13. `audit-investigations.sh` 17/17. `audit-sessions.sh` 9/9. Browser smoke `:5173`: simulator workspace mounts, no error-boundary fires.
+
 ### 2026-05-05 — Pattern sweep: orders/:id/view IDOR + idempotency
 The Stage-3 audit named the IDOR + timestamp-restamp shape as a recurring pattern in LEARNINGS.md. A grep sweep across `server/routes.js` for the same shape (`req.params.id` + UPDATE without ownership JOIN) found one outlier I missed in Stage 2:
 

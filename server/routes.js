@@ -1184,7 +1184,7 @@ router.post('/sessions', authenticateToken, async (req, res) => {
     // pull from this snapshot rather than the live cases row, so admin edits
     // mid-session don't bleed into the running session.
     const caseRow = await new Promise((resolve, reject) => {
-        db.get('SELECT id, name, config, scenario FROM cases WHERE id = ?', [case_id], (err, row) => {
+        db.get('SELECT id, name, system_prompt, config, scenario FROM cases WHERE id = ?', [case_id], (err, row) => {
             if (err) reject(err); else resolve(row || null);
         });
     });
@@ -1198,9 +1198,16 @@ router.post('/sessions', authenticateToken, async (req, res) => {
         try { parsedScenario = caseRow.scenario ? JSON.parse(caseRow.scenario) : null; } catch (e) {
             console.warn('[Session start] bad case.scenario JSON:', e.message);
         }
+        // Stage-4 audit: include `system_prompt` in the snapshot. Pre-fix
+        // the chat persona was rebuilt every render from the live
+        // activeCase.system_prompt, so an admin renaming or re-prompting a
+        // case mid-session shifted the patient's voice for the in-progress
+        // chat. With it captured here, ChatInterface can rebuild from the
+        // snapshot and stay stable for the session's lifetime.
         caseSnapshot = JSON.stringify({
             case_id: caseRow.id,
             name: caseRow.name,
+            system_prompt: caseRow.system_prompt || null,
             config: parsedConfig,
             scenario: parsedScenario,
             snapshot_at: new Date().toISOString()
@@ -1274,6 +1281,23 @@ router.get('/sessions/:id', authenticateToken, (req, res) => {
         // Check ownership (users can only access their own sessions, admins can access all)
         if (session.user_id !== userId && req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Stage-4 audit: redact API keys from `llm_settings` JSON. Session
+        // creation merges user_preferences.default_llm_settings into this
+        // column, which can carry an apiKey. SELECT s.* echoed it verbatim.
+        // Strip apiKey + api_key from the parsed JSON before responding.
+        if (session.llm_settings) {
+            try {
+                const parsed = typeof session.llm_settings === 'string'
+                    ? JSON.parse(session.llm_settings)
+                    : session.llm_settings;
+                if (parsed && typeof parsed === 'object') {
+                    if ('apiKey' in parsed) parsed.apiKey = parsed.apiKey ? '[redacted]' : '';
+                    if ('api_key' in parsed) parsed.api_key = parsed.api_key ? '[redacted]' : '';
+                    session.llm_settings = JSON.stringify(parsed);
+                }
+            } catch { /* malformed JSON — leave as-is */ }
         }
 
         res.json({ session });
@@ -4818,17 +4842,30 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         let agentApiKey = null;
         let agentEndpoint = null;
 
+        // Stage-4 audit: agent layer now contributes temperature and
+        // max_tokens too. Pre-fix these were never read from the agent
+        // template, so admin tuning per-agent had zero effect — every chat
+        // used session/platform values regardless of the editor's settings.
+        let agentTemperature = null;
+        let agentMaxTokens = null;
         if (agent_llm_config && agent_llm_config.provider) {
-            // Agent has override settings
             agentProvider = agent_llm_config.provider;
             agentModel = agent_llm_config.model;
             agentApiKey = agent_llm_config.api_key;
             agentEndpoint = agent_llm_config.endpoint;
-            console.log(`[LLM Proxy] Using agent-specific LLM config: provider=${agentProvider}, model=${agentModel || '(default)'}`);
+            if (agent_llm_config.temperature !== undefined && agent_llm_config.temperature !== null && agent_llm_config.temperature !== '') {
+                agentTemperature = parseFloat(agent_llm_config.temperature);
+                if (!Number.isFinite(agentTemperature)) agentTemperature = null;
+            }
+            if (agent_llm_config.max_tokens !== undefined && agent_llm_config.max_tokens !== null && agent_llm_config.max_tokens !== '') {
+                agentMaxTokens = parseInt(agent_llm_config.max_tokens, 10);
+                if (!Number.isFinite(agentMaxTokens)) agentMaxTokens = null;
+            }
+            console.log(`[LLM Proxy] Using agent-specific LLM config: provider=${agentProvider}, model=${agentModel || '(default)'}, temp=${agentTemperature ?? '(default)'}, maxTokens=${agentMaxTokens ?? '(default)'}`);
         } else if (agent_llm_config?.agent_template_id) {
             // Try to fetch agent template LLM config from DB
             const agentTemplate = await new Promise((resolve, reject) => {
-                db.get('SELECT llm_provider, llm_model, llm_api_key, llm_endpoint FROM agent_templates WHERE id = ?',
+                db.get('SELECT llm_provider, llm_model, llm_api_key, llm_endpoint, llm_temperature, llm_max_tokens FROM agent_templates WHERE id = ?',
                     [agent_llm_config.agent_template_id], (err, row) => {
                     if (err) reject(err);
                     else resolve(row);
@@ -4839,7 +4876,13 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 agentModel = agentTemplate.llm_model;
                 agentApiKey = agentTemplate.llm_api_key;
                 agentEndpoint = agentTemplate.llm_endpoint;
-                console.log(`[LLM Proxy] Using agent template ${agent_llm_config.agent_template_id} LLM config: provider=${agentProvider}`);
+                if (agentTemplate.llm_temperature !== null && Number.isFinite(agentTemplate.llm_temperature)) {
+                    agentTemperature = agentTemplate.llm_temperature;
+                }
+                if (agentTemplate.llm_max_tokens !== null && Number.isFinite(agentTemplate.llm_max_tokens)) {
+                    agentMaxTokens = agentTemplate.llm_max_tokens;
+                }
+                console.log(`[LLM Proxy] Using agent template ${agent_llm_config.agent_template_id} LLM config: provider=${agentProvider}, temp=${agentTemperature ?? '(default)'}, maxTokens=${agentMaxTokens ?? '(default)'}`);
             }
         }
 
@@ -4932,16 +4975,25 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             }
         }
 
-        const maxOutputTokensRaw = sessionLlmSettings?.maxOutputTokens || platformMaxTokens;
-        const temperatureRaw = sessionLlmSettings?.temperature || platformTemperature;
-        let maxOutputTokens = maxOutputTokensRaw ? parseInt(maxOutputTokensRaw) : null;
+        // Precedence (matches provider/model): agent > session > platform.
+        // `?? null` because `0` is a valid temperature; `||` would silently
+        // skip it.
+        const maxOutputTokensRaw = agentMaxTokens ?? (sessionLlmSettings?.maxOutputTokens || platformMaxTokens);
+        const temperatureRaw = agentTemperature ?? (sessionLlmSettings?.temperature !== undefined && sessionLlmSettings?.temperature !== '' ? sessionLlmSettings.temperature : platformTemperature);
+        let maxOutputTokens = maxOutputTokensRaw !== null && maxOutputTokensRaw !== undefined && maxOutputTokensRaw !== ''
+            ? parseInt(maxOutputTokensRaw, 10)
+            : null;
+        if (!Number.isFinite(maxOutputTokens)) maxOutputTokens = null;
         // In voice mode every extra word adds synthesis time. Cap responses
         // hard so the patient stays terse and TTS turnaround stays under ~3s.
         if (session_mode === 'voice') {
             const cap = 180;
             maxOutputTokens = maxOutputTokens ? Math.min(maxOutputTokens, cap) : cap;
         }
-        const temperature = temperatureRaw ? parseFloat(temperatureRaw) : null;
+        let temperature = temperatureRaw !== null && temperatureRaw !== undefined && temperatureRaw !== ''
+            ? parseFloat(temperatureRaw)
+            : null;
+        if (!Number.isFinite(temperature)) temperature = null;
 
         // Debug logging
         console.log(`[LLM Proxy] Final settings: provider=${provider}, model=${model || '(default)'}, baseUrl=${baseUrl}`);
@@ -8475,6 +8527,8 @@ router.post('/agents/templates', authenticateToken, requireAdmin, async (req, re
             llm_api_key,
             llm_endpoint,
             llm_config,
+            llm_temperature,
+            llm_max_tokens,
             // Memory access configuration
             memory_access
         } = req.body;
@@ -8483,17 +8537,26 @@ router.post('/agents/templates', authenticateToken, requireAdmin, async (req, re
             return res.status(400).json({ error: 'agent_type, name, and system_prompt are required' });
         }
 
+        // Stage-4 audit: temperature/max_tokens parsed defensively. Empty
+        // strings and non-finite values store as NULL so the resolver falls
+        // through to session/platform; finite numbers persist as-is.
+        const tempVal = (llm_temperature !== undefined && llm_temperature !== null && llm_temperature !== '' && Number.isFinite(parseFloat(llm_temperature)))
+            ? parseFloat(llm_temperature) : null;
+        const maxTokensVal = (llm_max_tokens !== undefined && llm_max_tokens !== null && llm_max_tokens !== '' && Number.isFinite(parseInt(llm_max_tokens, 10)))
+            ? parseInt(llm_max_tokens, 10) : null;
+
         const result = await new Promise((resolve, reject) => {
             db.run(
                 `INSERT INTO agent_templates
                  (agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style, config,
-                  llm_provider, llm_model, llm_api_key, llm_endpoint, llm_config, memory_access, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  llm_provider, llm_model, llm_api_key, llm_endpoint, llm_config, llm_temperature, llm_max_tokens, memory_access, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style,
                     JSON.stringify(config),
                     llm_provider || null, llm_model || null, llm_api_key || null, llm_endpoint || null,
                     llm_config ? JSON.stringify(llm_config) : null,
+                    tempVal, maxTokensVal,
                     memory_access ? JSON.stringify(memory_access) : null,
                     req.user.id
                 ],
@@ -8567,6 +8630,8 @@ router.put('/agents/templates/:id', authenticateToken, requireAdmin, async (req,
             llm_api_key,
             llm_endpoint,
             llm_config,
+            llm_temperature,
+            llm_max_tokens,
             // Memory access configuration
             memory_access
         } = req.body;
@@ -8589,6 +8654,18 @@ router.put('/agents/templates/:id', authenticateToken, requireAdmin, async (req,
         if (llm_api_key !== undefined) { updates.push('llm_api_key = ?'); params.push(llm_api_key || null); }
         if (llm_endpoint !== undefined) { updates.push('llm_endpoint = ?'); params.push(llm_endpoint || null); }
         if (llm_config !== undefined) { updates.push('llm_config = ?'); params.push(llm_config ? JSON.stringify(llm_config) : null); }
+        // Stage-4: temperature + max_tokens. Empty string clears (resolver falls
+        // back to session/platform); a finite number persists.
+        if (llm_temperature !== undefined) {
+            const v = (llm_temperature === null || llm_temperature === '') ? null : parseFloat(llm_temperature);
+            updates.push('llm_temperature = ?');
+            params.push(Number.isFinite(v) ? v : null);
+        }
+        if (llm_max_tokens !== undefined) {
+            const v = (llm_max_tokens === null || llm_max_tokens === '') ? null : parseInt(llm_max_tokens, 10);
+            updates.push('llm_max_tokens = ?');
+            params.push(Number.isFinite(v) ? v : null);
+        }
         // Memory access
         if (memory_access !== undefined) { updates.push('memory_access = ?'); params.push(memory_access ? JSON.stringify(memory_access) : null); }
 

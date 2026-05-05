@@ -2267,6 +2267,11 @@ function initDb() {
         db.run(`ALTER TABLE agent_templates ADD COLUMN llm_endpoint TEXT`, (err) => { if (err && !err.message.includes('duplicate')) console.error('Error adding llm_endpoint column:', err.message); });
         db.run(`ALTER TABLE agent_templates ADD COLUMN llm_config JSON`, (err) => { if (err && !err.message.includes('duplicate')) console.error('Error adding llm_config column:', err.message); });
         db.run(`ALTER TABLE agent_templates ADD COLUMN memory_access JSON`, (err) => { if (err && !err.message.includes('duplicate')) console.error('Error adding memory_access column:', err.message); });
+        // Stage-4 audit: temperature + max_tokens at the agent layer. Pre-fix
+        // these were silently dropped — admins could set them in the UI but
+        // the resolver ignored agent values and used session/platform only.
+        db.run(`ALTER TABLE agent_templates ADD COLUMN llm_temperature REAL`, (err) => { if (err && !err.message.includes('duplicate')) console.error('Error adding llm_temperature column:', err.message); });
+        db.run(`ALTER TABLE agent_templates ADD COLUMN llm_max_tokens INTEGER`, (err) => { if (err && !err.message.includes('duplicate')) console.error('Error adding llm_max_tokens column:', err.message); });
 
         // Case Agents - which agents are enabled per case with overrides
         db.run(`CREATE TABLE IF NOT EXISTS case_agents (

@@ -860,6 +860,41 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
                                  />
                               </Field>
                            )}
+                           {/*
+                              Stage-4 audit: temperature + max_tokens at the
+                              agent layer. Pre-fix the resolver ignored agent
+                              values entirely, so admins setting these in any
+                              prior UI surface were quietly overridden by
+                              session/platform defaults.
+                           */}
+                           <div className="grid grid-cols-2 gap-3">
+                              <Field label="Temperature">
+                                 <input
+                                    type="number"
+                                    min="0"
+                                    max="2"
+                                    step="0.1"
+                                    value={template.llm_temperature ?? ''}
+                                    onChange={(e) => setField('llm_temperature', e.target.value)}
+                                    placeholder="(platform default)"
+                                    className={inputClass}
+                                 />
+                              </Field>
+                              <Field label="Max tokens">
+                                 <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={template.llm_max_tokens ?? ''}
+                                    onChange={(e) => setField('llm_max_tokens', e.target.value)}
+                                    placeholder="(platform default)"
+                                    className={inputClass}
+                                 />
+                              </Field>
+                           </div>
+                           <p className="text-xs text-neutral-500 -mt-2">
+                              Leave blank to inherit platform/session defaults. Resolver precedence: agent → session → platform.
+                           </p>
                            <button
                               onClick={handleTestLLM}
                               disabled={testingLLM || isCreate}
@@ -1134,6 +1169,8 @@ function blankTemplate() {
       llm_model: '',
       llm_api_key: '',
       llm_endpoint: '',
+      llm_temperature: '',
+      llm_max_tokens: '',
       memory_access: { ...DEFAULT_MEMORY_ACCESS },
       is_default: 0
    };
