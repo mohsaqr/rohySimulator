@@ -18,13 +18,32 @@ const TTS_PROVIDERS = [
 ];
 
 const AGENT_TYPES = [
+  { value: 'patient', label: 'Patient', description: 'The simulated patient persona' },
+  { value: 'discussant', label: 'Discussant', description: 'Case debrief tutor (post-case discussion)' },
   { value: 'nurse', label: 'Nurse', description: 'Bedside nursing staff' },
   { value: 'consultant', label: 'Consultant', description: 'Specialist physicians' },
-  { value: 'relative', label: 'Relative', description: 'Patient family members' },
+  { value: 'relative', label: 'Family member', description: 'Patient family members' },
   { value: 'pharmacist', label: 'Pharmacist', description: 'Pharmacy consultation' },
   { value: 'technician', label: 'Technician', description: 'Lab/Radiology technicians' },
-  { value: 'discussant', label: 'Discussant', description: 'Case debrief tutor (post-case discussion)' },
   { value: 'other', label: 'Other', description: 'Custom agent type' }
+];
+
+// Tailwind classes for the per-type avatar circle. Centralised so the list
+// view, the editor preview, and the per-case agent list all match.
+const AGENT_TYPE_BADGE = {
+  patient: 'bg-rose-900/50 text-rose-300',
+  discussant: 'bg-indigo-900/50 text-indigo-400',
+  nurse: 'bg-blue-900/50 text-blue-400',
+  consultant: 'bg-green-900/50 text-green-400',
+  relative: 'bg-amber-900/50 text-amber-400',
+  pharmacist: 'bg-fuchsia-900/50 text-fuchsia-300',
+  technician: 'bg-teal-900/50 text-teal-300',
+  other: 'bg-neutral-800 text-neutral-400',
+};
+
+const UNLOCK_TRIGGERS = [
+  { value: 'after_case_ended', label: 'After case ends (debrief)' },
+  { value: 'always', label: 'Always available' },
 ];
 
 const CONTEXT_FILTERS = [
@@ -749,198 +768,359 @@ export default function AgentTemplateManager() {
             </div>
           </div>
 
-          {/* Right Column - System Prompt */}
+          {/* Right Column - System Prompt + Dos/Donts + discussant fields */}
           <div className="space-y-4">
-            <div className="h-full flex flex-col">
+            <div className="flex flex-col">
               <label className="block text-sm font-medium text-neutral-400 mb-1">System Prompt *</label>
               <textarea
                 value={editingTemplate.system_prompt}
                 onChange={(e) => updateEditingField('system_prompt', e.target.value)}
                 placeholder="Define the agent's personality, role, and behavior..."
-                className="flex-1 min-h-[400px] px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm focus:outline-none focus:border-purple-500 font-mono resize-none"
+                className="min-h-[260px] px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm focus:outline-none focus:border-purple-500 font-mono resize-y"
               />
               <p className="text-xs text-neutral-500 mt-1">
-                This defines the agent's personality. Patient context and vitals will be appended automatically.
+                Patient context and vitals are appended automatically when this agent runs.
               </p>
             </div>
+
+            {/* Dos / Don'ts — per-line bullets stored in config.dos / config.donts */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-emerald-400 mb-1">Dos (one per line)</label>
+                <textarea
+                  value={configListToText(editingTemplate.config?.dos)}
+                  onChange={(e) => updateConfigField('dos', textToConfigList(e.target.value))}
+                  placeholder={'Stay in character\nUse lay terms\nAnswer questions truthfully'}
+                  rows={6}
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm focus:outline-none focus:border-emerald-500 resize-y"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-rose-400 mb-1">Don'ts (one per line)</label>
+                <textarea
+                  value={configListToText(editingTemplate.config?.donts)}
+                  onChange={(e) => updateConfigField('donts', textToConfigList(e.target.value))}
+                  placeholder={'Volunteer differential diagnoses\nUse medical jargon\nBreak character'}
+                  rows={6}
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm focus:outline-none focus:border-rose-500 resize-y"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-neutral-500 -mt-2">
+              Each bullet is sent to the LLM under "You should:" / "You must not:" alongside the system prompt.
+            </p>
+
+            {/* Discussant-only fields */}
+            {editingTemplate.agent_type === 'discussant' && (
+              <div className="p-3 rounded-lg bg-indigo-950/30 border border-indigo-900/50 space-y-3">
+                <h5 className="text-sm font-bold text-indigo-300">Discussant settings</h5>
+                <div>
+                  <label className="block text-sm text-neutral-400 mb-1">Unlock trigger</label>
+                  <select
+                    value={editingTemplate.config?.unlock_trigger || 'after_case_ended'}
+                    onChange={(e) => updateConfigField('unlock_trigger', e.target.value)}
+                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm focus:outline-none focus:border-indigo-500"
+                  >
+                    {UNLOCK_TRIGGERS.map(u => (
+                      <option key={u.value} value={u.value}>{u.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Controls when the learner can open the debrief screen during a session.
+                  </p>
+                </div>
+                <p className="text-xs text-neutral-500">
+                  Context filter is set in the Left column — defaults to "Full" so the discussant sees the case context.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
     );
   }
 
-  // Template list view
+  // Template list view — split into Standard (read-only, shipped) and Custom
+  // (admin-created, fully editable). Both available system-wide.
+  const standardTemplates = [...templates]
+    .filter(t => t.is_default === 1 || t.is_default === true)
+    .sort((a, b) => (a.agent_type || '').localeCompare(b.agent_type || '') || (a.name || '').localeCompare(b.name || ''));
+  const customTemplates = [...templates]
+    .filter(t => !(t.is_default === 1 || t.is_default === true))
+    .sort((a, b) => (a.agent_type || '').localeCompare(b.agent_type || '') || (a.name || '').localeCompare(b.name || ''));
+
+  const renderTemplateCard = (template, { readOnly }) => {
+    const cfg = parseConfigField(template.config);
+    const voiceGender = cfg.voice?.gender || cfg.voice?.tts_provider || null;
+    const llmLabel = template.llm_provider
+      ? `${template.llm_provider}${template.llm_model ? '/' + template.llm_model : ''}`
+      : null;
+    return (
+    <div
+      key={template.id}
+      className={`border rounded-lg transition-colors ${
+        readOnly ? 'border-purple-800 bg-purple-950/20' : 'border-neutral-800 bg-neutral-900/50'
+      }`}
+    >
+      <div
+        className="px-4 py-3 flex items-center justify-between cursor-pointer gap-3"
+        onClick={() => setExpandedId(expandedId === template.id ? null : template.id)}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${AGENT_TYPE_BADGE[template.agent_type] || AGENT_TYPE_BADGE.other}`}>
+            <Users className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium">{template.name}</span>
+              <span className="px-1.5 py-0.5 rounded text-xs bg-neutral-800 text-neutral-300 capitalize">{template.agent_type}</span>
+              {readOnly && (
+                <span className="px-1.5 py-0.5 bg-purple-600/50 text-purple-300 rounded text-xs">Standard</span>
+              )}
+            </div>
+            <div className="text-sm text-neutral-500 truncate">
+              {template.role_title || template.agent_type} · {template.communication_style || 'standard'}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+          {template.avatar_url && (
+            <span className="px-2 py-0.5 rounded text-xs bg-neutral-800 text-neutral-300" title={`Avatar: ${template.avatar_url}`}>
+              🎭 avatar
+            </span>
+          )}
+          {voiceGender && (
+            <span className="px-2 py-0.5 rounded text-xs bg-neutral-800 text-neutral-300" title={`Voice slot: ${voiceGender}`}>
+              🔊 {voiceGender}
+            </span>
+          )}
+          {(Array.isArray(cfg.dos) && cfg.dos.length > 0) && (
+            <span className="px-2 py-0.5 rounded text-xs bg-emerald-900/40 text-emerald-300" title={`${cfg.dos.length} dos`}>
+              ✓ {cfg.dos.length}
+            </span>
+          )}
+          {(Array.isArray(cfg.donts) && cfg.donts.length > 0) && (
+            <span className="px-2 py-0.5 rounded text-xs bg-rose-900/40 text-rose-300" title={`${cfg.donts.length} don'ts`}>
+              ✗ {cfg.donts.length}
+            </span>
+          )}
+          {llmLabel && (
+            <span className="px-2 py-0.5 rounded text-xs bg-amber-900/40 text-amber-300" title="Custom LLM">
+              ⚡ {llmLabel}
+            </span>
+          )}
+          <span className={`px-2 py-0.5 rounded text-xs ${
+            template.context_filter === 'full' ? 'bg-green-900/50 text-green-400' :
+            template.context_filter === 'history' ? 'bg-amber-900/50 text-amber-400' :
+            'bg-neutral-800 text-neutral-400'
+          }`}>
+            {template.context_filter}
+          </span>
+          {expandedId === template.id ? <ChevronUp className="w-5 h-5 text-neutral-500" /> : <ChevronDown className="w-5 h-5 text-neutral-500" />}
+        </div>
+      </div>
+
+      {expandedId === template.id && (
+        <div className="px-4 py-3 border-t border-neutral-800">
+          {/* Avatar preview + system prompt side-by-side */}
+          <div className="grid grid-cols-[160px_minmax(0,1fr)] gap-3 mb-3">
+            <div className="flex flex-col items-center">
+              <div className="w-32 h-32 rounded-lg overflow-hidden bg-neutral-950 border border-neutral-800">
+                <Suspense fallback={<div className="w-full h-full bg-neutral-900" />}>
+                  <PatientAvatar
+                    patient={{ id: `tpl-${template.id}`, name: template.name, gender: cfg.voice?.gender }}
+                    avatarType="head"
+                    avatarId={template.avatar_url}
+                    headManifest={headManifest}
+                  />
+                </Suspense>
+              </div>
+              <div className="text-[11px] text-neutral-500 text-center mt-1 truncate w-full" title={template.avatar_url || 'auto'}>
+                {template.avatar_url || 'auto by gender'}
+              </div>
+            </div>
+            <div>
+              <h4 className="text-xs font-medium text-neutral-500 mb-1">System Prompt</h4>
+              <pre className="text-sm text-neutral-300 whitespace-pre-wrap max-h-40 overflow-y-auto bg-neutral-950 p-2 rounded">
+                {template.system_prompt}
+              </pre>
+            </div>
+          </div>
+
+          {(() => {
+            const cfg = parseConfigField(template.config);
+            const dos = Array.isArray(cfg.dos) ? cfg.dos : [];
+            const donts = Array.isArray(cfg.donts) ? cfg.donts : [];
+            if (dos.length === 0 && donts.length === 0) return null;
+            return (
+              <div className="grid md:grid-cols-2 gap-3 mb-3">
+                {dos.length > 0 && (
+                  <div className="p-2 bg-emerald-950/30 border border-emerald-900/50 rounded">
+                    <div className="text-xs font-medium text-emerald-400 mb-1">DO</div>
+                    <ul className="text-sm text-neutral-300 list-disc pl-4 space-y-0.5">
+                      {dos.map((d, i) => <li key={i}>{d}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {donts.length > 0 && (
+                  <div className="p-2 bg-rose-950/30 border border-rose-900/50 rounded">
+                    <div className="text-xs font-medium text-rose-400 mb-1">DON'T</div>
+                    <ul className="text-sm text-neutral-300 list-disc pl-4 space-y-0.5">
+                      {donts.map((d, i) => <li key={i}>{d}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          <div className="grid grid-cols-3 gap-4 text-sm mb-3">
+            <div>
+              <span className="text-neutral-500">Availability:</span>{' '}
+              <span className="text-neutral-300">{template.config?.typical_availability || 'present'}</span>
+            </div>
+            <div>
+              <span className="text-neutral-500">Can be paged:</span>{' '}
+              <span className="text-neutral-300">{template.config?.can_be_paged ? 'Yes' : 'No'}</span>
+            </div>
+            {template.config?.can_be_paged && (
+              <div>
+                <span className="text-neutral-500">Response time:</span>{' '}
+                <span className="text-neutral-300">
+                  {template.config?.response_time?.min || 0}-{template.config?.response_time?.max || 0} min
+                </span>
+              </div>
+            )}
+          </div>
+
+          {template.llm_provider && (
+            <div className="mb-3 p-2 bg-amber-950/30 border border-amber-900/50 rounded">
+              <div className="flex items-center gap-2 text-sm">
+                <Zap className="w-4 h-4 text-amber-400" />
+                <span className="text-amber-400">Custom LLM:</span>
+                <span className="text-neutral-300">{template.llm_provider}</span>
+                {template.llm_model && (
+                  <span className="text-neutral-500">/ {template.llm_model}</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {template.memory_access && (() => {
+            let memAccess = template.memory_access;
+            if (typeof memAccess === 'string') {
+              try { memAccess = JSON.parse(memAccess); } catch { memAccess = null; }
+            }
+            if (!memAccess) return null;
+            const restrictedKeys = Object.entries(memAccess).filter(([_, v]) => v === false).map(([k]) => k);
+            if (restrictedKeys.length === 0) return null;
+            return (
+              <div className="mb-3 p-2 bg-cyan-950/30 border border-cyan-900/50 rounded">
+                <div className="flex items-center gap-2 text-sm">
+                  <Brain className="w-4 h-4 text-cyan-400" />
+                  <span className="text-cyan-400">Restricted access:</span>
+                  <span className="text-neutral-300">{restrictedKeys.join(', ')}</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDuplicate(template); }}
+              className={`px-3 py-1.5 rounded text-sm flex items-center gap-1 ${readOnly ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-neutral-700 hover:bg-neutral-600'}`}
+              title={readOnly ? 'Standard templates are read-only — duplicate to customize' : 'Duplicate this template'}
+            >
+              <Copy className="w-4 h-4" /> Duplicate{readOnly ? ' to customize' : ''}
+            </button>
+            {!readOnly && (
+              <>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleEdit(template); }}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm flex items-center gap-1"
+                >
+                  <Edit2 className="w-4 h-4" /> Edit
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDelete(template); }}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded text-sm flex items-center gap-1"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between border-b border-neutral-800 pb-4">
         <div>
           <h3 className="text-lg font-bold flex items-center gap-2">
             <Bot className="w-5 h-5 text-purple-400" />
-            Agent Templates
+            Agent Personas
           </h3>
           <p className="text-sm text-neutral-500 mt-1">
-            Create and manage AI agent personas for simulations
+            Standard personas ship with the app and are read-only — duplicate to customize. Custom personas are admin-authored and available across all cases.
           </p>
         </div>
         <button
           onClick={handleCreate}
           className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded text-sm flex items-center gap-1"
         >
-          <Plus className="w-4 h-4" /> New Template
+          <Plus className="w-4 h-4" /> New Custom
         </button>
       </div>
 
-      {templates.length === 0 ? (
-        <div className="text-center py-12 text-neutral-500">
-          <Bot className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p>No agent templates found.</p>
-          <p className="text-sm">Create your first template to get started.</p>
+      {/* Standard section */}
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-sm font-bold text-purple-300 uppercase tracking-wider">Standard templates</h4>
+          <span className="text-xs text-neutral-500">{standardTemplates.length} shipped</span>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {templates.map(template => (
-            <div
-              key={template.id}
-              className={`border rounded-lg transition-colors ${
-                template.is_default
-                  ? 'border-purple-800 bg-purple-950/20'
-                  : 'border-neutral-800 bg-neutral-900/50'
-              }`}
-            >
-              {/* Header */}
-              <div
-                className="px-4 py-3 flex items-center justify-between cursor-pointer"
-                onClick={() => setExpandedId(expandedId === template.id ? null : template.id)}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    template.agent_type === 'nurse' ? 'bg-blue-900/50 text-blue-400' :
-                    template.agent_type === 'consultant' ? 'bg-green-900/50 text-green-400' :
-                    template.agent_type === 'relative' ? 'bg-amber-900/50 text-amber-400' :
-                    template.agent_type === 'discussant' ? 'bg-indigo-900/50 text-indigo-400' :
-                    'bg-neutral-800 text-neutral-400'
-                  }`}>
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{template.name}</span>
-                      {template.is_default && (
-                        <span className="px-1.5 py-0.5 bg-purple-600/50 text-purple-300 rounded text-xs">Default</span>
-                      )}
-                    </div>
-                    <div className="text-sm text-neutral-500">
-                      {template.role_title || template.agent_type} • {template.communication_style || 'standard'}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded text-xs ${
-                    template.context_filter === 'full' ? 'bg-green-900/50 text-green-400' :
-                    template.context_filter === 'history' ? 'bg-amber-900/50 text-amber-400' :
-                    'bg-neutral-800 text-neutral-400'
-                  }`}>
-                    {template.context_filter}
-                  </span>
-                  {expandedId === template.id ? (
-                    <ChevronUp className="w-5 h-5 text-neutral-500" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-neutral-500" />
-                  )}
-                </div>
-              </div>
+        {standardTemplates.length === 0 ? (
+          <div className="text-sm text-neutral-500 italic px-2 py-4">No standard templates seeded.</div>
+        ) : (
+          <div className="space-y-3">{standardTemplates.map(t => renderTemplateCard(t, { readOnly: true }))}</div>
+        )}
+      </section>
 
-              {/* Expanded Details */}
-              {expandedId === template.id && (
-                <div className="px-4 py-3 border-t border-neutral-800">
-                  <div className="mb-3">
-                    <h4 className="text-xs font-medium text-neutral-500 mb-1">System Prompt</h4>
-                    <pre className="text-sm text-neutral-300 whitespace-pre-wrap max-h-40 overflow-y-auto bg-neutral-950 p-2 rounded">
-                      {template.system_prompt}
-                    </pre>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4 text-sm mb-3">
-                    <div>
-                      <span className="text-neutral-500">Availability:</span>{' '}
-                      <span className="text-neutral-300">{template.config?.typical_availability || 'present'}</span>
-                    </div>
-                    <div>
-                      <span className="text-neutral-500">Can be paged:</span>{' '}
-                      <span className="text-neutral-300">{template.config?.can_be_paged ? 'Yes' : 'No'}</span>
-                    </div>
-                    {template.config?.can_be_paged && (
-                      <div>
-                        <span className="text-neutral-500">Response time:</span>{' '}
-                        <span className="text-neutral-300">
-                          {template.config?.response_time?.min || 0}-{template.config?.response_time?.max || 0} min
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* LLM Configuration Summary */}
-                  {template.llm_provider && (
-                    <div className="mb-3 p-2 bg-amber-950/30 border border-amber-900/50 rounded">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Zap className="w-4 h-4 text-amber-400" />
-                        <span className="text-amber-400">Custom LLM:</span>
-                        <span className="text-neutral-300">{template.llm_provider}</span>
-                        {template.llm_model && (
-                          <span className="text-neutral-500">/ {template.llm_model}</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Memory Access Summary */}
-                  {template.memory_access && (() => {
-                    let memAccess = template.memory_access;
-                    if (typeof memAccess === 'string') {
-                      try { memAccess = JSON.parse(memAccess); } catch { memAccess = null; }
-                    }
-                    if (!memAccess) return null;
-                    const restrictedKeys = Object.entries(memAccess).filter(([_, v]) => v === false).map(([k]) => k);
-                    if (restrictedKeys.length === 0) return null;
-                    return (
-                      <div className="mb-3 p-2 bg-cyan-950/30 border border-cyan-900/50 rounded">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Brain className="w-4 h-4 text-cyan-400" />
-                          <span className="text-cyan-400">Restricted access:</span>
-                          <span className="text-neutral-300">{restrictedKeys.join(', ')}</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDuplicate(template); }}
-                      className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-sm flex items-center gap-1"
-                    >
-                      <Copy className="w-4 h-4" /> Duplicate
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleEdit(template); }}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm flex items-center gap-1"
-                    >
-                      <Edit2 className="w-4 h-4" /> Edit
-                    </button>
-                    {!template.is_default && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(template); }}
-                        className="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded text-sm flex items-center gap-1"
-                      >
-                        <Trash2 className="w-4 h-4" /> Delete
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+      {/* Custom section */}
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Custom templates</h4>
+          <span className="text-xs text-neutral-500">{customTemplates.length} authored · system-wide</span>
         </div>
-      )}
+        {customTemplates.length === 0 ? (
+          <div className="rounded border border-dashed border-neutral-800 p-6 text-center text-sm text-neutral-500">
+            No custom templates yet. Click <span className="text-purple-300">+ New Custom</span> or duplicate a standard template above to get started.
+          </div>
+        ) : (
+          <div className="space-y-3">{customTemplates.map(t => renderTemplateCard(t, { readOnly: false }))}</div>
+        )}
+      </section>
     </div>
   );
+}
+
+// Defensive parse — DB returns config as a JSON string; in-flight edits use
+// objects. Centralised to avoid sprinkling try/catches in render code.
+function parseConfigField(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try { return JSON.parse(value); } catch { return {}; }
+}
+
+// Editor stores dos/donts as arrays in config.* — render them as one-bullet-
+// per-line text in a textarea, parse back to array on change.
+function configListToText(value) {
+  if (!Array.isArray(value)) return '';
+  return value.filter(s => typeof s === 'string').join('\n');
+}
+function textToConfigList(text) {
+  return String(text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
 }

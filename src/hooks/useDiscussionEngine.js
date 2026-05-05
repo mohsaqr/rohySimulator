@@ -4,6 +4,7 @@ import { VoiceService } from '../services/voiceService';
 import { apiUrl } from '../config/api';
 import { buildCaseContext } from '../services/discussionService';
 import { PROVIDER_FALLBACK_VOICE } from '../utils/voiceFallbacks';
+import { buildPersonaBlocks } from '../utils/personaBlocks';
 import EventLogger, { COMPONENTS } from '../services/eventLogger';
 
 // Resolve a voice for the discussant using the same precedence chain as the
@@ -111,7 +112,11 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
         abortRef.current = controller;
 
         const caseContext = buildCaseContext(activeCase, discussant.contextFilter);
-        const systemPrompt = `${discussant.systemPrompt}${caseContext}`;
+        // Persona blocks (dos / donts) read from the discussant template's
+        // config — same shape used by every other agent type so the LLM call
+        // path stays uniform.
+        const personaBlocks = buildPersonaBlocks(discussant.rawConfig || discussant.config);
+        const systemPrompt = `${discussant.systemPrompt}${personaBlocks}${caseContext}`;
 
         let speech = null;
         if (voiceMode) {

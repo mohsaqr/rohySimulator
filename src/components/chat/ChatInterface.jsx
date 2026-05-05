@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, MessageCircle, X, Mic, MicOff, Volume2, Eye, EyeOff } from 'lucide-react';
 import { LLMService } from '../../services/llmService';
 import { AgentService } from '../../services/AgentService';
+import { buildPersonaBlocks } from '../../utils/personaBlocks';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthService } from '../../services/authService';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
@@ -135,6 +136,11 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // Multi-agent state
     const [activeTab, setActiveTab] = useState('patient'); // 'patient' or agent_type
     const [agents, setAgents] = useState([]);
+    // Resolved patient template (per-case attached → platform default).
+    // Holds the merged-config object the server returns, or null if no patient
+    // template has been attached/seeded — in which case the chat falls through
+    // to the legacy case.config-only path.
+    const [patientTemplate, setPatientTemplate] = useState(null);
     const [agentConversations, setAgentConversations] = useState({}); // { agent_type: [...messages] }
     const [agentStates, setAgentStates] = useState({}); // { agent_type: { status, paged_at, ... } }
     const [pagingTimers, setPagingTimers] = useState({}); // { agent_type: timeoutId }
@@ -249,6 +255,23 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     };
                 });
                 setAgentStates(states);
+
+                // Patient template resolution: prefer per-case attached row;
+                // fall back to platform default; null if neither exists. The
+                // patient prompt builder appends the resolved persona/dos/
+                // donts on top of case.config so legacy cases still work.
+                const attachedPatient = agentList.find(a => a.agent_type === 'patient' && a.enabled !== 0 && a.enabled !== false);
+                if (attachedPatient) {
+                    setPatientTemplate(normalizePatientAgent(attachedPatient));
+                } else {
+                    try {
+                        const templates = await AgentService.getTemplates();
+                        const fallback = (templates || []).find(t => t.agent_type === 'patient' && (t.is_default === 1 || t.is_default === true));
+                        setPatientTemplate(fallback ? normalizePatientAgent(fallback) : null);
+                    } catch {
+                        setPatientTemplate(null);
+                    }
+                }
 
                 // Load team communications
                 const log = await AgentService.getTeamCommunications(sessionId);
@@ -449,6 +472,19 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         richSystemPrompt += `Role: ${config.persona_type || 'Patient'}\n`;
         richSystemPrompt += `Name: ${config.patient_name || activeCase.name}\n`;
         richSystemPrompt += `Demographics: ${demo.age || 'Unknown'} year old ${demo.gender || 'Unknown'}\n`;
+
+        // If a patient persona template is attached/seeded, lead with its
+        // baseline persona — this is the shared "how a patient should behave"
+        // ruleset that applies across cases. The case's own instructions and
+        // clinical records still apply on top.
+        if (patientTemplate?.systemPrompt) {
+            richSystemPrompt += `\n## PATIENT PERSONA (from template "${patientTemplate.name}")\n`;
+            richSystemPrompt += `${patientTemplate.systemPrompt}\n`;
+        }
+        const personaBlocks = patientTemplate ? buildPersonaBlocks(patientTemplate.config) : '';
+        if (personaBlocks) {
+            richSystemPrompt += personaBlocks;
+        }
 
         richSystemPrompt += `\n## INSTRUCTIONS\n`;
         richSystemPrompt += `${activeCase.system_prompt || 'You are a patient.'}\n`;
@@ -1374,4 +1410,28 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             </div>
         </div>
     );
+}
+
+// Normalise either a per-case attached agent row (from /cases/:id/agents) or
+// a raw template row (from /agents/templates) into a uniform shape. Per-case
+// rows carry name_override / system_prompt_override / config_override which
+// take precedence; raw templates supply the underlying defaults.
+function normalizePatientAgent(raw) {
+    if (!raw) return null;
+    const config = parseConfigSafe(raw.config) || parseConfigSafe(raw.config_override) || {};
+    return {
+        templateId: raw.agent_template_id || raw.id,
+        name: raw.name_override || raw.name || 'Patient',
+        roleTitle: raw.role_title || 'Simulated Patient',
+        avatarUrl: raw.avatar_url || null,
+        systemPrompt: raw.system_prompt_override || raw.system_prompt || '',
+        contextFilter: raw.context_filter_override || raw.context_filter || 'history',
+        config,
+    };
+}
+
+function parseConfigSafe(value) {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+    try { return JSON.parse(value); } catch { return null; }
 }

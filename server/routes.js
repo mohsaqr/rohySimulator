@@ -8032,6 +8032,23 @@ router.post('/agents/templates', authenticateToken, requireAdmin, async (req, re
 router.put('/agents/templates/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
+
+        // Standard (is_default=1) templates are read-only — duplicate to customize.
+        // The UI normally hides Edit on these, but block direct PUTs too as
+        // belt-and-braces; without this any admin could overwrite a shipped row.
+        const existing = await new Promise((resolve, reject) => {
+            db.get('SELECT is_default FROM agent_templates WHERE id = ?', [id], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+        if (!existing) {
+            return res.status(404).json({ error: 'Agent template not found' });
+        }
+        if (existing.is_default === 1) {
+            return res.status(403).json({ error: 'Cannot modify a default template; duplicate it first' });
+        }
+
         const {
             agent_type,
             name,
@@ -8120,7 +8137,7 @@ router.delete('/agents/templates/:id', authenticateToken, requireAdmin, async (r
         }
 
         if (template.is_default === 1) {
-            return res.status(400).json({ error: 'Cannot delete default agent templates' });
+            return res.status(403).json({ error: 'Cannot delete a default template; duplicate it first' });
         }
 
         await new Promise((resolve, reject) => {
@@ -8300,7 +8317,9 @@ router.post('/agents/templates/:id/test-llm', authenticateToken, requireAdmin, a
 router.post('/agents/templates/:id/duplicate', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const { name: newName } = req.body;
+        // The Standard/Custom UI calls this with no body (just a click). Tolerate
+        // missing body or missing Content-Type without crashing on destructure.
+        const { name: newName } = req.body || {};
 
         // Get original template
         const original = await new Promise((resolve, reject) => {

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy, Mic, GraduationCap } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy, Mic } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { AuthService } from '../../services/authService';
@@ -15,7 +15,6 @@ import PhysicalExamEditor from './PhysicalExamEditor';
 import LabTestManager from './LabTestManager';
 import MedicationManager from './MedicationManager';
 import AgentTemplateManager from './AgentTemplateManager';
-import DiscussantSettings from './DiscussantSettings';
 import CaseTreatmentConfig from './CaseTreatmentConfig';
 import VoiceSettingsTab from './VoiceSettingsTab';
 import AvatarsSettingsTab from './AvatarsSettingsTab';
@@ -315,12 +314,6 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                                 className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'agents' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                             >
                                 <Users className="w-4 h-4" /> Agent Personas
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('discussant')}
-                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'discussant' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                            >
-                                <GraduationCap className="w-4 h-4" /> Discussant
                             </button>
                             <button
                                 onClick={() => setActiveTab('avatars')}
@@ -884,11 +877,6 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false }) {
                     {/* --- AGENT PERSONAS TAB (Admin Only) --- */}
                     {activeTab === 'agents' && isAdmin() && (
                         <AgentTemplateManager />
-                    )}
-
-                    {/* --- DISCUSSANT TAB (Admin Only) --- */}
-                    {activeTab === 'discussant' && isAdmin() && (
-                        <DiscussantSettings onJumpToAgents={() => setActiveTab('agents')} />
                     )}
 
                     {/* --- AVATARS TAB (Admin Only) --- */}
@@ -3685,11 +3673,15 @@ function CaseAgentEditor({ caseId, caseData, setCaseData }) {
                         >
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${agent.agent_type === 'nurse' ? 'bg-blue-900/50 text-blue-400' :
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                        agent.agent_type === 'patient' ? 'bg-rose-900/50 text-rose-300' :
+                                        agent.agent_type === 'discussant' ? 'bg-indigo-900/50 text-indigo-400' :
+                                        agent.agent_type === 'nurse' ? 'bg-blue-900/50 text-blue-400' :
                                         agent.agent_type === 'consultant' ? 'bg-green-900/50 text-green-400' :
-                                            agent.agent_type === 'relative' ? 'bg-amber-900/50 text-amber-400' :
-                                                agent.agent_type === 'discussant' ? 'bg-indigo-900/50 text-indigo-400' :
-                                                    'bg-neutral-800 text-neutral-400'
+                                        agent.agent_type === 'relative' ? 'bg-amber-900/50 text-amber-400' :
+                                        agent.agent_type === 'pharmacist' ? 'bg-fuchsia-900/50 text-fuchsia-300' :
+                                        agent.agent_type === 'technician' ? 'bg-teal-900/50 text-teal-300' :
+                                        'bg-neutral-800 text-neutral-400'
                                         }`}>
                                         <Users className="w-5 h-5" />
                                     </div>
