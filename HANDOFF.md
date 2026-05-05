@@ -1,5 +1,62 @@
 # Session Handoff — 2026-05-05
 
+## Stage E6 (Multi-tenant readiness) — SHIPPED this session
+
+Inventory pass:
+- **Tenant-scoped**: `users`, `cases`, `sessions`, `interactions`,
+  `login_logs`, `settings_logs`, `session_settings`, `event_log`,
+  `alarm_events`, `alarm_config`, `case_investigations`,
+  `investigation_orders`, `scenarios`, `learning_events`,
+  `physical_exam_findings`, `patient_information`, `case_versions`,
+  `system_audit_log`, `vital_sign_history`, `export_records`,
+  `active_sessions`, `scenario_events`, `user_preferences`,
+  `clinical_notes`, `llm_usage`, `llm_request_log`,
+  `patient_record_events`, `patient_record_documents`, `agent_templates`,
+  `case_agents`, `agent_conversations`, `agent_session_state`,
+  `team_communications_log`, `treatment_orders`, `active_treatments`,
+  `case_treatments`, `emotion_logs`, `questionnaire_responses`,
+  `tts_usage`, `session_notes`, and `session_vitals`.
+- **Global**: platform settings and shipped/master catalogs such as
+  lab/radiology/master medication/investigation/diagnosis/vital/body-map
+  catalogs, scenario templates/timelines, search aliases, pricing, and
+  treatment effects.
+
+Implementation:
+1. **Migration** — `migrations/0004_tenants.sql` creates `tenants`, seeds
+   `slug='default'`, adds `tenant_id INTEGER NOT NULL DEFAULT 1` to the
+   tenant-scoped inventory, and adds tenant-prefixed hot-path indexes.
+   Tenant delete semantics are application-RESTRICT/deferred because SQLite
+   cannot add a non-null FK default via `ALTER TABLE`, and destructive tenant
+   deletion needs the E7 retention decision.
+2. **Middleware** — `authenticateToken` refreshes role/status/tenant from
+   `users`, attaches `req.user.tenant_id`, and token generation includes the
+   tenant. `resolveTenant(req)` and `requireSameTenant()` are exported from
+   `server/middleware/auth.js`.
+3. **Route scoping** — high-risk cases/sessions/users/interactions/learning
+   events/investigation orders/alarms/settings logs/audit logs/active sessions
+   paths now filter by `req.user.tenant_id`; inserts use the authenticated
+   tenant and ignore body-supplied `tenant_id`.
+4. **Tenant management shell** — `POST /api/tenants` creates a tenant and
+   `POST /api/users/:id/tenant` is a minimal assignment hook. Both audit
+   `oldValue.tenant_id`/`newValue.tenant_id`.
+5. **Seed** — default admin/student continue to seed into tenant 1.
+6. **Audit** — `scripts/audit-tenant.sh` verifies default tenant schema,
+   two-tenant case/session/active-session isolation, mass-assignment
+   resistance, and tenant audit rows.
+
+Verification completed locally: `node --check server/routes.js`,
+`node --check server/middleware/auth.js`, `bash -n scripts/audit-tenant.sh`,
+fresh `ROHY_DB=/tmp/rohy-e6-fresh.sqlite` migration+seed initialization
+through server startup, and `npx vite build` (large-chunk warning only).
+The sandbox blocked binding a local test listener (`EPERM` on port 3999), so
+`scripts/audit-tenant.sh` could only run its DB assertions here; end-to-end
+HTTP validation still needs the orchestrator-managed API server.
+
+Deferred: cross-tenant super-admin views, tenant deletion/retention semantics,
+per-tenant rate limits/billing/LLM API keys, subdomain/header routing,
+full user/resource tenant migration tooling, and tenant-local username/email
+uniqueness.
+
 ## Stage E5 (Data classification + redaction policy) — SHIPPED this session
 
 Inventory pass:

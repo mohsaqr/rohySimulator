@@ -1,3 +1,17 @@
+### 2026-05-05 — Stage E6: Multi-tenant readiness
+Added the structural tenant boundary for enterprise deployments while keeping the existing single-tenant default path intact.
+
+- `migrations/0004_tenants.sql` (NEW): creates `tenants`, seeds `default`, adds `tenant_id INTEGER NOT NULL DEFAULT 1` to user/case/session/runtime/log tables, and adds tenant-prefixed indexes for hot lookups. Tenant deletion is application-RESTRICT/deferred; existing rows are assigned to tenant 1 without data loss.
+- `server/middleware/auth.js`: `authenticateToken` refreshes user status/role/tenant from the database, attaches `req.user.tenant_id`, exports `resolveTenant(req)`, and adds `requireSameTenant(resourceTenantIdGetter)`.
+- `server/routes.js`: tenant-scoped the high-risk request paths for users, cases, sessions, interactions, learning events, investigation orders, alarms, active sessions, settings logs, audit logs, and session vitals. Inserts ignore body-supplied `tenant_id` and use `req.user.tenant_id`.
+- `server/routes.js`: added `POST /api/tenants` and a minimal admin assignment hook `POST /api/users/:id/tenant`; both write `system_audit_log` rows with old/new `tenant_id`.
+- `server/seeders/users.js`: default admin/student seed into tenant 1.
+- `scripts/audit-tenant.sh` (NEW): verifies schema/default tenant, two-tenant isolation for cases/sessions/active sessions, mass-assignment resistance, and tenant audit rows.
+
+Inventory: tenant-scoped tables are `users`, `cases`, `sessions`, `interactions`, `login_logs`, `settings_logs`, `session_settings`, `event_log`, `alarm_events`, `alarm_config`, `case_investigations`, `investigation_orders`, `scenarios`, `learning_events`, `physical_exam_findings`, `patient_information`, `case_versions`, `system_audit_log`, `vital_sign_history`, `export_records`, `active_sessions`, `scenario_events`, `user_preferences`, `clinical_notes`, `llm_usage`, `llm_request_log`, `patient_record_events`, `patient_record_documents`, `agent_templates`, `case_agents`, `agent_conversations`, `agent_session_state`, `team_communications_log`, `treatment_orders`, `active_treatments`, `case_treatments`, `emotion_logs`, `questionnaire_responses`, `tts_usage`, `session_notes`, and `session_vitals`. Global tables remain the shipped/master catalogs: platform settings, lab/radiology/master medication/investigation/diagnosis/vital/body-map catalogs, scenario templates/timelines, search aliases, pricing, and treatment effects.
+
+Deferred: cross-tenant super-admin views, tenant deletion/retention semantics, per-tenant rate limits/billing/LLM keys, subdomain/header routing, user-tenant migration tooling, and tenant-local uniqueness for username/email.
+
 ### 2026-05-05 — Stage E5: Data classification + redaction policy
 Generalized the Stage 4/7 apiKey redaction fixes into a central response policy.
 

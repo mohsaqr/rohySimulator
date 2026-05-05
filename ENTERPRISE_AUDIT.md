@@ -84,6 +84,8 @@ CONSTRAINTS:
 - E4: shipped 2026-05-05
 - E5: shipped 2026-05-05 (central response redaction policy,
   including key-aware `platform_settings.setting_value` redaction)
-- E6-E9: pending
+- E6: shipped 2026-05-05 (default tenant, tenant_id structural columns,
+  tenant-aware auth context, high-risk route scoping, tenant audit script)
+- E7-E9: pending
 
 Updated: 2026-05-05.

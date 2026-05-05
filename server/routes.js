@@ -14,6 +14,7 @@ import {
     requireEducator,
     requireReviewer,
     generateToken,
+    resolveTenant,
     ROLE_RANKS,
     VALID_ROLES,
     getRoleRank,
@@ -96,6 +97,7 @@ const canManageOwnedResource = (ownerId, user) => ownerId === user?.id || hasRol
 const canReadAcrossUsers = (user) => hasRoleAtLeast(user, ROLE_RANKS.reviewer);
 const isValidRole = (role) => VALID_ROLES.includes(normalizeRole(role));
 const roleForStorage = (role, fallback = 'student') => normalizeRole(role || fallback);
+const tenantId = (req) => resolveTenant(req);
 
 // ============================================
 // HELPER FUNCTIONS
@@ -155,18 +157,20 @@ function logAudit(params) {
         errorMessage = null,
         metadata = null
     } = params;
+    const tenant_id = params.tenantId ?? params.tenant_id ?? 1;
 
     db.run(
         `INSERT INTO system_audit_log
          (user_id, username, action, resource_type, resource_id, resource_name,
-          old_value, new_value, ip_address, user_agent, session_id, status, error_message, metadata)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          old_value, new_value, ip_address, user_agent, session_id, status, error_message, metadata, tenant_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             userId, username, action, resourceType ?? targetType, resourceId ?? targetId, resourceName ?? targetName,
             oldValue ? JSON.stringify(redactAuditPayload(oldValue)) : null,
             newValue ? JSON.stringify(redactAuditPayload(newValue)) : null,
             ipAddress, userAgent, sessionId, status, errorMessage,
-            metadata ? JSON.stringify(redactAuditPayload(metadata)) : null
+            metadata ? JSON.stringify(redactAuditPayload(metadata)) : null,
+            tenant_id
         ],
         (err) => {
             if (err) {
@@ -183,6 +187,7 @@ function auditSuccess(req, params) {
         ipAddress: req.ip || req.connection?.remoteAddress,
         userAgent: req.headers?.['user-agent'],
         status: 'success',
+        tenantId: tenantId(req),
         ...params
     });
 }
@@ -341,9 +346,9 @@ function createCaseVersion(caseId, userId, changeType, description, configSnapsh
             }
             const versionNumber = row?.next_version || 1;
             db.run(
-                `INSERT INTO case_versions (case_id, version_number, changed_by, change_type, changes_description, config_snapshot)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
-                [caseId, versionNumber, userId, changeType, description, JSON.stringify(configSnapshot)],
+                `INSERT INTO case_versions (case_id, version_number, changed_by, change_type, changes_description, config_snapshot, tenant_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [caseId, versionNumber, userId, changeType, description, JSON.stringify(configSnapshot), configSnapshot?.tenant_id || 1],
                 (err) => {
                     if (err) {
                         console.error('[Case Version] Failed to create version:', err.message);
@@ -381,7 +386,7 @@ function verifySessionOwnership(sessionId, user, res, { requireSession = false }
         if (hasRoleAtLeast(user, ROLE_RANKS.educator)) {
             return resolve(true);
         }
-        db.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, row) => {
+        db.get('SELECT user_id, tenant_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, user?.tenant_id || 1], (err, row) => {
             if (err) {
                 res.status(500).json({ error: err.message });
                 return resolve(false);
@@ -522,8 +527,9 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
         const password_hash = await bcrypt.hash(password, 10);
 
         // Insert user
-        const sql = `INSERT INTO users (username, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)`;
-        db.run(sql, [username, name || null, email, password_hash, finalRole], function (err) {
+        const defaultTenantId = 1;
+        const sql = `INSERT INTO users (username, name, email, password_hash, role, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`;
+        db.run(sql, [username, name || null, email, password_hash, finalRole, defaultTenantId], function (err) {
             if (err) {
                 if (err.message.includes('UNIQUE')) {
                     return res.status(409).json({ error: 'Username or email already exists' });
@@ -531,7 +537,7 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                 return res.status(500).json({ error: err.message });
             }
 
-            const user = { id: this.lastID, username, name, email, role: finalRole };
+            const user = { id: this.lastID, username, name, email, role: finalRole, tenant_id: defaultTenantId };
             const token = generateToken(user);
 
             logAudit({
@@ -541,14 +547,15 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                 resourceType: 'user',
                 resourceId: String(user.id),
                 resourceName: username,
-                newValue: { username, email, role: finalRole },
+                newValue: { username, email, role: finalRole, tenant_id: defaultTenantId },
+                tenantId: defaultTenantId,
                 ipAddress: req.ip || req.connection?.remoteAddress,
                 userAgent: req.headers['user-agent']
             });
 
             res.status(201).json({
                 message: 'User registered successfully',
-                user: { id: user.id, username, name, email, role: finalRole },
+                user: { id: user.id, username, name, email, role: finalRole, tenant_id: defaultTenantId },
                 token
             });
         });
@@ -583,8 +590,8 @@ router.post('/users/create', authenticateToken, requireAdmin, async (req, res) =
         const password_hash = await bcrypt.hash(password, 10);
 
         // Insert user
-        const sql = `INSERT INTO users (username, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)`;
-        db.run(sql, [username, name || null, email, password_hash, finalRole], function (err) {
+        const sql = `INSERT INTO users (username, name, email, password_hash, role, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`;
+        db.run(sql, [username, name || null, email, password_hash, finalRole, tenantId(req)], function (err) {
             if (err) {
                 if (err.message.includes('UNIQUE')) {
                     return res.status(409).json({ error: 'Username or email already exists' });
@@ -597,12 +604,12 @@ router.post('/users/create', authenticateToken, requireAdmin, async (req, res) =
                 resourceType: 'user',
                 resourceId: String(this.lastID),
                 resourceName: username,
-                newValue: { username, email, role: finalRole }
+                newValue: { username, email, role: finalRole, tenant_id: tenantId(req) }
             });
 
             res.status(201).json({
                 message: 'User created successfully',
-                user: { id: this.lastID, username, name, email, role: finalRole }
+                user: { id: this.lastID, username, name, email, role: finalRole, tenant_id: tenantId(req) }
             });
         });
     } catch (err) {
@@ -674,8 +681,8 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
 
             // Insert user
             await new Promise((resolve, reject) => {
-                const sql = `INSERT INTO users (username, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)`;
-                db.run(sql, [username, name || null, email, password_hash, finalRole], function (err) {
+                const sql = `INSERT INTO users (username, name, email, password_hash, role, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`;
+                db.run(sql, [username, name || null, email, password_hash, finalRole, tenantId(req)], function (err) {
                     if (err) {
                         if (err.message.includes('UNIQUE')) {
                             reject({ error: 'Username or email already exists' });
@@ -683,12 +690,12 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
                             reject({ error: err.message });
                         }
                     } else {
-                        resolve({ id: this.lastID, username, name, email, role: finalRole });
+                        resolve({ id: this.lastID, username, name, email, role: finalRole, tenant_id: tenantId(req) });
                     }
                 });
             });
 
-            results.success.push({ username, name, email, role: finalRole });
+            results.success.push({ username, name, email, role: finalRole, tenant_id: tenantId(req) });
         } catch (err) {
             results.failed.push({ 
                 username,
@@ -704,7 +711,7 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
         resourceType: 'user_batch',
         resourceId: `batch-${Date.now()}`,
         newValue: {
-            success: results.success.map(u => ({ username: u.username, email: u.email, role: u.role })),
+            success: results.success.map(u => ({ username: u.username, email: u.email, role: u.role, tenant_id: u.tenant_id })),
             failed: results.failed.map(u => ({ username: u.username, email: u.email, error: u.error }))
         },
         metadata: { succeeded: results.success.length, failed: results.failed.length }
@@ -713,6 +720,77 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
     res.json({
         message: `Batch upload complete: ${results.success.length} succeeded, ${results.failed.length} failed`,
         results
+    });
+});
+
+// POST /api/tenants - Create a tenant shell for future enterprise deployments.
+// E6 keeps admins tenant-local; cross-tenant super-admin views and bulk user
+// migration tooling are explicitly deferred.
+router.post('/tenants', authenticateToken, requireAdmin, (req, res) => {
+    const { slug, name } = req.body || {};
+    const normalizedSlug = String(slug || '').trim().toLowerCase();
+    const displayName = String(name || '').trim();
+
+    if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(normalizedSlug)) {
+        return res.status(400).json({ error: 'Tenant slug must be 2-63 lowercase letters, numbers, or hyphens' });
+    }
+    if (!displayName) {
+        return res.status(400).json({ error: 'Tenant name is required' });
+    }
+
+    db.run(
+        `INSERT INTO tenants (slug, name, is_default) VALUES (?, ?, 0)`,
+        [normalizedSlug, displayName],
+        function(err) {
+            if (err) {
+                if (err.message.includes('UNIQUE')) {
+                    return res.status(409).json({ error: 'Tenant slug already exists' });
+                }
+                return res.status(500).json({ error: err.message });
+            }
+            auditSuccess(req, {
+                action: 'create_tenant',
+                resourceType: 'tenant',
+                resourceId: String(this.lastID),
+                resourceName: normalizedSlug,
+                oldValue: { tenant_id: null },
+                newValue: { tenant_id: this.lastID, slug: normalizedSlug, name: displayName }
+            });
+            res.status(201).json({ tenant: { id: this.lastID, slug: normalizedSlug, name: displayName, is_default: 0 } });
+        }
+    );
+});
+
+// POST /api/users/:id/tenant - Minimal assignment hook for tests/controlled
+// admin use. Full migration tooling remains deferred because it must move or
+// archive all resource ownership coherently.
+router.post('/users/:id/tenant', authenticateToken, requireAdmin, (req, res) => {
+    const targetUserId = req.params.id;
+    const nextTenantId = Number(req.body?.tenant_id);
+    if (!Number.isInteger(nextTenantId) || nextTenantId <= 0) {
+        return res.status(400).json({ error: 'tenant_id must be a positive integer' });
+    }
+
+    db.get('SELECT id, username, tenant_id FROM users WHERE id = ?', [targetUserId], (userErr, user) => {
+        if (userErr) return res.status(500).json({ error: userErr.message });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        db.get('SELECT id, slug, name FROM tenants WHERE id = ?', [nextTenantId], (tenantErr, tenant) => {
+            if (tenantErr) return res.status(500).json({ error: tenantErr.message });
+            if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+            db.run('UPDATE users SET tenant_id = ? WHERE id = ?', [nextTenantId, targetUserId], function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                auditSuccess(req, {
+                    action: 'assign_user_tenant',
+                    resourceType: 'user',
+                    resourceId: String(targetUserId),
+                    resourceName: user.username,
+                    oldValue: { tenant_id: user.tenant_id },
+                    newValue: { tenant_id: nextTenantId }
+                });
+                res.json({ user: { id: user.id, username: user.username, tenant_id: nextTenantId } });
+            });
+        });
     });
 });
 
@@ -742,8 +820,8 @@ router.post('/auth/login', authLimiter, (req, res) => {
         if (!user) {
             // Log failed login attempt
             db.run(
-                `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)`,
-                [null, username, 'failed_login', ipAddress, userAgent]
+                `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+                [null, username, 'failed_login', ipAddress, userAgent, 1]
             );
             return res.status(401).json({ error: 'Invalid username or password' });
         }
@@ -780,16 +858,16 @@ router.post('/auth/login', authLimiter, (req, res) => {
                     );
                 }
                 db.run(
-                    `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)`,
-                    [user.id, username, 'failed_login', ipAddress, userAgent]
+                    `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+                    [user.id, username, 'failed_login', ipAddress, userAgent, user.tenant_id || 1]
                 );
                 return res.status(401).json({ error: 'Invalid username or password' });
             }
 
             // Log successful login
             db.run(
-                `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)`,
-                [user.id, username, 'login', ipAddress, userAgent]
+                `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+                [user.id, username, 'login', ipAddress, userAgent, user.tenant_id || 1]
             );
 
             // Reset both failed_login_attempts and locked_until on success.
@@ -809,8 +887,8 @@ router.post('/auth/login', authLimiter, (req, res) => {
                 // Expires_at mirrors the JWT TTL (default 4h). If you change
                 // JWT_EXPIRY, update this. For non-default expiries the row
                 // is still informational — JWT verification is the source of truth.
-                `INSERT INTO active_sessions (user_id, token_hash, ip_address, user_agent, expires_at) VALUES (?, ?, ?, ?, datetime('now', '+4 hours'))`,
-                [user.id, tokenHash, ipAddress, userAgent]
+                `INSERT INTO active_sessions (user_id, token_hash, ip_address, user_agent, expires_at, tenant_id) VALUES (?, ?, ?, ?, datetime('now', '+4 hours'), ?)`,
+                [user.id, tokenHash, ipAddress, userAgent, user.tenant_id || 1]
             );
 
             res.json({
@@ -819,7 +897,8 @@ router.post('/auth/login', authLimiter, (req, res) => {
                     id: user.id,
                     username: user.username,
                     email: user.email,
-                    role: user.role
+                    role: user.role,
+                    tenant_id: user.tenant_id || 1
                 },
                 token
             });
@@ -838,14 +917,16 @@ router.get('/auth/verify', authenticateToken, (req, res) => {
             username: req.user.username,
             email: req.user.email,
             role: req.user.role
+            ,
+            tenant_id: tenantId(req)
         }
     });
 });
 
 // GET /api/auth/profile - Get current user profile
 router.get('/auth/profile', authenticateToken, (req, res) => {
-    const sql = `SELECT id, username, email, role, created_at FROM users WHERE id = ?`;
-    db.get(sql, [req.user.id], (err, user) => {
+    const sql = `SELECT id, username, email, role, tenant_id, created_at FROM users WHERE id = ? AND tenant_id = ?`;
+    db.get(sql, [req.user.id, tenantId(req)], (err, user) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -862,8 +943,8 @@ router.post('/auth/logout', authenticateToken, (req, res) => {
     const userAgent = req.headers['user-agent'];
 
     db.run(
-        `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)`,
-        [req.user.id, req.user.username, 'logout', ipAddress, userAgent],
+        `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+        [req.user.id, req.user.username, 'logout', ipAddress, userAgent, tenantId(req)],
         (err) => {
             if (err) console.error('Failed to log logout:', err);
             res.json({ message: 'Logout logged successfully' });
@@ -966,10 +1047,10 @@ router.get('/cases', authenticateToken, (req, res) => {
 
     // Students only see available cases; reviewer+ can inspect all cases.
     const sql = canReview
-        ? "SELECT * FROM cases ORDER BY is_default DESC, created_at DESC"
-        : "SELECT * FROM cases WHERE is_available = 1 ORDER BY is_default DESC, created_at DESC";
+        ? "SELECT * FROM cases WHERE tenant_id = ? ORDER BY is_default DESC, created_at DESC"
+        : "SELECT * FROM cases WHERE tenant_id = ? AND is_available = 1 ORDER BY is_default DESC, created_at DESC";
 
-    db.all(sql, [], (err, rows) => {
+    db.all(sql, [tenantId(req)], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
 
         // Parse JSON fields
@@ -988,9 +1069,9 @@ router.get('/cases', authenticateToken, (req, res) => {
         db.all(
             `SELECT case_id, COUNT(*) AS n
              FROM sessions
-             WHERE end_time IS NULL
+             WHERE tenant_id = ? AND end_time IS NULL
              GROUP BY case_id`,
-            [],
+            [tenantId(req)],
             (sErr, sessRows) => {
                 if (sErr) {
                     console.warn('[cases] active session count failed:', sErr.message);
@@ -1007,12 +1088,12 @@ router.get('/cases', authenticateToken, (req, res) => {
 // PUT /api/cases/:id/availability - Toggle case availability (Admin only)
 router.put('/cases/:id/availability', authenticateToken, requireEducator, (req, res) => {
     const { is_available } = req.body;
-    db.get('SELECT id, name, is_available FROM cases WHERE id = ?', [req.params.id], (readErr, oldCase) => {
+    db.get('SELECT id, name, is_available FROM cases WHERE id = ? AND tenant_id = ?', [req.params.id, tenantId(req)], (readErr, oldCase) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
         if (!oldCase) return res.status(404).json({ error: 'Case not found' });
         db.run(
-            "UPDATE cases SET is_available = ? WHERE id = ?",
-            [is_available ? 1 : 0, req.params.id],
+            "UPDATE cases SET is_available = ? WHERE id = ? AND tenant_id = ?",
+            [is_available ? 1 : 0, req.params.id, tenantId(req)],
             function(err) {
                 if (err) return res.status(500).json({ error: err.message });
                 if (this.changes === 0) return res.status(404).json({ error: 'Case not found' });
@@ -1033,18 +1114,18 @@ router.put('/cases/:id/availability', authenticateToken, requireEducator, (req, 
 // PUT /api/cases/:id/default - Set case as default (Admin only)
 router.put('/cases/:id/default', authenticateToken, requireEducator, (req, res) => {
     const { is_default } = req.body;
-    db.get('SELECT id, name, is_default FROM cases WHERE id = ?', [req.params.id], (readErr, oldCase) => {
+    db.get('SELECT id, name, is_default FROM cases WHERE id = ? AND tenant_id = ?', [req.params.id, tenantId(req)], (readErr, oldCase) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
         if (!oldCase) return res.status(404).json({ error: 'Case not found' });
 
     // If setting as default, first clear any existing defaults
     if (is_default) {
-        db.run("UPDATE cases SET is_default = 0", [], (err) => {
+        db.run("UPDATE cases SET is_default = 0 WHERE tenant_id = ?", [tenantId(req)], (err) => {
             if (err) return res.status(500).json({ error: err.message });
 
             db.run(
-                "UPDATE cases SET is_default = 1, is_available = 1 WHERE id = ?",
-                [req.params.id],
+                "UPDATE cases SET is_default = 1, is_available = 1 WHERE id = ? AND tenant_id = ?",
+                [req.params.id, tenantId(req)],
                 function(err) {
                     if (err) return res.status(500).json({ error: err.message });
                     if (this.changes === 0) return res.status(404).json({ error: 'Case not found' });
@@ -1062,8 +1143,8 @@ router.put('/cases/:id/default', authenticateToken, requireEducator, (req, res) 
         });
     } else {
         db.run(
-            "UPDATE cases SET is_default = 0 WHERE id = ?",
-            [req.params.id],
+            "UPDATE cases SET is_default = 0 WHERE id = ? AND tenant_id = ?",
+            [req.params.id, tenantId(req)],
             function(err) {
                 if (err) return res.status(500).json({ error: err.message });
                 auditSuccess(req, {
@@ -1103,8 +1184,8 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
 
     const sql = `INSERT INTO cases (name, description, system_prompt, config, scenario,
                  patient_name, patient_gender, patient_age, chief_complaint, difficulty_level,
-                 created_by, last_modified_by, version)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`;
+                 created_by, last_modified_by, version, tenant_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`;
     const params = [
         name,
         description,
@@ -1117,7 +1198,8 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
         chiefComplaint,
         difficultyLevel,
         req.user.id,
-        req.user.id
+        req.user.id,
+        tenantId(req)
     ];
 
     db.run(sql, params, function (err) {
@@ -1146,7 +1228,8 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
             resourceType: 'case',
             resourceId: String(caseId),
             resourceName: name,
-            newValue: { name, description, config },
+            newValue: { name, description, config, tenant_id: tenantId(req) },
+            tenantId: tenantId(req),
             ipAddress,
             userAgent,
             status: 'success'
@@ -1154,7 +1237,7 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
 
         // Create initial version snapshot
         createCaseVersion(caseId, req.user.id, 'created', 'Initial case creation', {
-            name, description, system_prompt, config, scenario
+            name, description, system_prompt, config, scenario, tenant_id: tenantId(req)
         });
 
         res.json({ id: caseId, ...req.body });
@@ -1181,7 +1264,7 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
     const safeConfig = clampInitialVitals(config || {});
 
     // First, get the old case data for audit trail
-    db.get(`SELECT * FROM cases WHERE id = ?`, [caseId], (err, oldCase) => {
+    db.get(`SELECT * FROM cases WHERE id = ? AND tenant_id = ?`, [caseId, tenantId(req)], (err, oldCase) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -1190,7 +1273,7 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
                      name = ?, description = ?, system_prompt = ?, config = ?, scenario = ?,
                      patient_name = ?, patient_gender = ?, patient_age = ?, chief_complaint = ?, difficulty_level = ?,
                      last_modified_by = ?, updated_at = CURRENT_TIMESTAMP, version = COALESCE(version, 0) + 1
-                     WHERE id = ?`;
+                     WHERE id = ? AND tenant_id = ?`;
         const params = [
             name,
             description,
@@ -1203,7 +1286,8 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
             chiefComplaint,
             difficultyLevel,
             req.user.id,
-            caseId
+            caseId,
+            tenantId(req)
         ];
 
         db.run(sql, params, function (err) {
@@ -1232,15 +1316,16 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
                 resourceId: caseId,
                 resourceName: name,
                 oldValue: oldCase ? { name: oldCase.name, description: oldCase.description } : null,
-                newValue: { name, description },
+                newValue: { name, description, tenant_id: tenantId(req) },
                 ipAddress,
                 userAgent,
+                tenantId: tenantId(req),
                 status: 'success'
             });
 
             // Create version snapshot
             createCaseVersion(caseId, req.user.id, 'updated', 'Case configuration updated', {
-                name, description, system_prompt, config, scenario
+                name, description, system_prompt, config, scenario, tenant_id: tenantId(req)
             });
 
             res.json({ id: caseId, ...req.body });
@@ -1255,12 +1340,12 @@ router.delete('/cases/:id', authenticateToken, requireEducator, (req, res) => {
     const userAgent = req.headers['user-agent'];
 
     // Get case name for audit before deleting
-    db.get(`SELECT name FROM cases WHERE id = ?`, [caseId], (err, caseData) => {
+    db.get(`SELECT name FROM cases WHERE id = ? AND tenant_id = ?`, [caseId, tenantId(req)], (err, caseData) => {
         if (err) return res.status(500).json({ error: err.message });
 
         // Soft delete - set deleted_at timestamp
-        const sql = `UPDATE cases SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL`;
-        db.run(sql, [caseId], function (err) {
+        const sql = `UPDATE cases SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`;
+        db.run(sql, [caseId, tenantId(req)], function (err) {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) {
                 return res.status(404).json({ error: 'Case not found or already deleted' });
@@ -1277,6 +1362,8 @@ router.delete('/cases/:id', authenticateToken, requireEducator, (req, res) => {
                 ipAddress,
                 userAgent,
                 status: 'success'
+                ,
+                tenantId: tenantId(req)
             });
 
             res.json({ message: 'Case deleted successfully', id: caseId });
@@ -1296,7 +1383,7 @@ router.post('/sessions', authenticateToken, async (req, res) => {
     if (!llm_settings || Object.keys(llm_settings).length === 0) {
         try {
             const userPrefs = await new Promise((resolve, reject) => {
-                db.get('SELECT default_llm_settings FROM user_preferences WHERE user_id = ?', [user_id], (err, row) => {
+                db.get('SELECT default_llm_settings FROM user_preferences WHERE user_id = ? AND tenant_id = ?', [user_id, tenantId(req)], (err, row) => {
                     if (err) reject(err);
                     else resolve(row);
                 });
@@ -1319,7 +1406,7 @@ router.post('/sessions', authenticateToken, async (req, res) => {
     // pull from this snapshot rather than the live cases row, so admin edits
     // mid-session don't bleed into the running session.
     const caseRow = await new Promise((resolve, reject) => {
-        db.get('SELECT id, name, system_prompt, config, scenario FROM cases WHERE id = ?', [case_id], (err, row) => {
+        db.get('SELECT id, name, system_prompt, config, scenario FROM cases WHERE id = ? AND tenant_id = ?', [case_id, tenantId(req)], (err, row) => {
             if (err) reject(err); else resolve(row || null);
         });
     });
@@ -1349,7 +1436,11 @@ router.post('/sessions', authenticateToken, async (req, res) => {
         });
     }
 
-    const sql = `INSERT INTO sessions (case_id, user_id, student_name, llm_settings, monitor_settings, case_snapshot) VALUES (?, ?, ?, ?, ?, ?)`;
+    if (!caseRow) {
+        return res.status(404).json({ error: 'Case not found' });
+    }
+
+    const sql = `INSERT INTO sessions (case_id, user_id, student_name, llm_settings, monitor_settings, case_snapshot, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)`;
 
     db.run(sql, [
         case_id,
@@ -1357,7 +1448,8 @@ router.post('/sessions', authenticateToken, async (req, res) => {
         student_name || req.user.username,
         JSON.stringify(effectiveLlmSettings),
         JSON.stringify(monitor_settings || {}),
-        caseSnapshot
+        caseSnapshot,
+        tenantId(req)
     ], function (err) {
         if (err) return res.status(500).json({ error: err.message });
 
@@ -1370,8 +1462,8 @@ router.post('/sessions', authenticateToken, async (req, res) => {
                 llm_provider, llm_model, llm_base_url,
                 monitor_hr, monitor_rhythm, monitor_spo2,
                 monitor_bp_sys, monitor_bp_dia, monitor_rr, monitor_temp,
-                settings_snapshot
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                settings_snapshot, tenant_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         db.run(settingsSnapshotSql, [
@@ -1379,13 +1471,14 @@ router.post('/sessions', authenticateToken, async (req, res) => {
             effectiveLlmSettings?.provider, effectiveLlmSettings?.model, effectiveLlmSettings?.baseUrl,
             monitor_settings?.hr, monitor_settings?.rhythm, monitor_settings?.spo2,
             monitor_settings?.bp_sys, monitor_settings?.bp_dia, monitor_settings?.rr, monitor_settings?.temp,
-            JSON.stringify({ llm: effectiveLlmSettings, monitor: monitor_settings })
+            JSON.stringify({ llm: effectiveLlmSettings, monitor: monitor_settings }),
+            tenantId(req)
         ]);
 
         // Log case load event
         db.run(
-            `INSERT INTO settings_logs (user_id, session_id, case_id, setting_type, settings_json) VALUES (?, ?, ?, ?, ?)`,
-            [user_id, sessionId, case_id, 'case_load', JSON.stringify({ case_id, timestamp: new Date().toISOString() })]
+            `INSERT INTO settings_logs (user_id, session_id, case_id, setting_type, settings_json, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+            [user_id, sessionId, case_id, 'case_load', JSON.stringify({ case_id, timestamp: new Date().toISOString() }), tenantId(req)]
         );
 
         res.json({ 
@@ -1393,6 +1486,8 @@ router.post('/sessions', authenticateToken, async (req, res) => {
             case_id, 
             user_id, 
             student_name: student_name || req.user.username 
+            ,
+            tenant_id: tenantId(req)
         });
     });
 });
@@ -1406,10 +1501,10 @@ router.get('/sessions/:id', authenticateToken, (req, res) => {
         SELECT s.*, c.name as case_name
         FROM sessions s
         LEFT JOIN cases c ON s.case_id = c.id
-        WHERE s.id = ?
+        WHERE s.id = ? AND s.tenant_id = ?
     `;
 
-    db.get(sql, [sessionId], (err, session) => {
+    db.get(sql, [sessionId, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
@@ -1430,7 +1525,7 @@ router.get('/sessions/:id', authenticateToken, (req, res) => {
 router.put('/sessions/:id/end', authenticateToken, (req, res) => {
     const sessionId = req.params.id;
 
-    db.get('SELECT start_time, end_time, duration, user_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
+    db.get('SELECT start_time, end_time, duration, user_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
@@ -1454,8 +1549,8 @@ router.put('/sessions/:id/end', authenticateToken, (req, res) => {
         // Also flip status to 'completed' so queries filtering on the
         // CHECK-constrained status field actually return ended sessions
         // (the column existed but was never transitioned).
-        const sql = `UPDATE sessions SET end_time = ?, duration = ?, status = 'completed' WHERE id = ? AND end_time IS NULL`;
-        db.run(sql, [endTime.toISOString(), duration, sessionId], function (err) {
+        const sql = `UPDATE sessions SET end_time = ?, duration = ?, status = 'completed' WHERE id = ? AND tenant_id = ? AND end_time IS NULL`;
+        db.run(sql, [endTime.toISOString(), duration, sessionId, tenantId(req)], function (err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ message: 'Session ended', duration, end_time: endTime.toISOString() });
         });
@@ -1477,8 +1572,8 @@ router.post('/sessions/:id/vitals', authenticateToken, async (req, res) => {
 
     const { elapsed_ms, hr, rhythm, spo2, bp_sys, bp_dia, rr, temp, etco2, source } = req.body || {};
     const sql = `INSERT INTO session_vitals
-        (session_id, elapsed_ms, hr, rhythm, spo2, bp_sys, bp_dia, rr, temp, etco2, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        (session_id, elapsed_ms, hr, rhythm, spo2, bp_sys, bp_dia, rr, temp, etco2, source, tenant_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     db.run(sql, [
         sessionId,
         Number.isFinite(elapsed_ms) ? elapsed_ms : null,
@@ -1490,7 +1585,8 @@ router.post('/sessions/:id/vitals', authenticateToken, async (req, res) => {
         Number.isFinite(rr) ? rr : null,
         Number.isFinite(temp) ? temp : null,
         Number.isFinite(etco2) ? etco2 : null,
-        source || 'unknown'
+        source || 'unknown',
+        tenantId(req)
     ], function (err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ id: this.lastID });
@@ -1504,8 +1600,8 @@ router.get('/sessions/:id/vitals', authenticateToken, async (req, res) => {
 
     db.all(
         `SELECT id, timestamp, elapsed_ms, hr, rhythm, spo2, bp_sys, bp_dia, rr, temp, etco2, source
-           FROM session_vitals WHERE session_id = ? ORDER BY id ASC`,
-        [sessionId],
+           FROM session_vitals WHERE session_id = ? AND tenant_id = ? ORDER BY id ASC`,
+        [sessionId, tenantId(req)],
         (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ vitals: rows || [] });
@@ -1520,7 +1616,7 @@ router.post('/interactions', authenticateToken, (req, res) => {
     const { session_id, role, content } = req.body;
     
     // Verify user owns the session
-    db.get('SELECT user_id FROM sessions WHERE id = ?', [session_id], (err, session) => {
+    db.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [session_id, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         
@@ -1528,8 +1624,8 @@ router.post('/interactions', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        const sql = `INSERT INTO interactions (session_id, role, content) VALUES (?, ?, ?)`;
-        db.run(sql, [session_id, role, content], function (err) {
+        const sql = `INSERT INTO interactions (session_id, role, content, tenant_id) VALUES (?, ?, ?, ?)`;
+        db.run(sql, [session_id, role, content, tenantId(req)], function (err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ id: this.lastID, session_id, role, content });
         });
@@ -1539,7 +1635,7 @@ router.post('/interactions', authenticateToken, (req, res) => {
 // GET /api/interactions/:session_id - Authenticated users can view their own
 router.get('/interactions/:session_id', authenticateToken, (req, res) => {
     // Verify user owns the session or is admin
-    db.get('SELECT user_id FROM sessions WHERE id = ?', [req.params.session_id], (err, session) => {
+    db.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [req.params.session_id, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         
@@ -1547,8 +1643,8 @@ router.get('/interactions/:session_id', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        const sql = "SELECT * FROM interactions WHERE session_id = ? ORDER BY timestamp ASC";
-        db.all(sql, [req.params.session_id], (err, rows) => {
+        const sql = "SELECT * FROM interactions WHERE session_id = ? AND tenant_id = ? ORDER BY timestamp ASC";
+        db.all(sql, [req.params.session_id, tenantId(req)], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ interactions: rows });
         });
@@ -1559,8 +1655,8 @@ router.get('/interactions/:session_id', authenticateToken, (req, res) => {
 
 // GET /api/users - List all users (Admin only)
 router.get('/users', authenticateToken, requireAdmin, (req, res) => {
-    const sql = `SELECT id, username, name, email, role, created_at FROM users ORDER BY created_at DESC`;
-    db.all(sql, [], (err, rows) => {
+    const sql = `SELECT id, username, name, email, role, tenant_id, created_at FROM users WHERE tenant_id = ? ORDER BY created_at DESC`;
+    db.all(sql, [tenantId(req)], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ users: rows });
     });
@@ -1577,8 +1673,8 @@ router.get('/users', authenticateToken, requireAdmin, (req, res) => {
 // asserted [redacted] PRESENCE.
 router.get('/users/preferences', authenticateToken, (req, res) => {
     db.get(
-        `SELECT * FROM user_preferences WHERE user_id = ?`,
-        [req.user.id],
+        `SELECT * FROM user_preferences WHERE user_id = ? AND tenant_id = ?`,
+        [req.user.id, tenantId(req)],
         (err, prefs) => {
             if (err) return res.status(500).json({ error: err.message });
             if (!prefs) {
@@ -1599,12 +1695,12 @@ router.get('/users/preferences', authenticateToken, (req, res) => {
 router.put('/users/preferences', authenticateToken, (req, res) => {
     const { theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings } = req.body;
 
-    db.get(`SELECT * FROM user_preferences WHERE user_id = ?`, [req.user.id], (readErr, oldPrefs) => {
+    db.get(`SELECT * FROM user_preferences WHERE user_id = ? AND tenant_id = ?`, [req.user.id, tenantId(req)], (readErr, oldPrefs) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
 
         db.run(
-            `INSERT INTO user_preferences (user_id, theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO user_preferences (user_id, theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings, tenant_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(user_id) DO UPDATE SET
              theme = excluded.theme,
              language = excluded.language,
@@ -1622,7 +1718,8 @@ router.put('/users/preferences', authenticateToken, (req, res) => {
                 dashboard_layout ? JSON.stringify(dashboard_layout) : null,
                 default_llm_settings ? JSON.stringify(default_llm_settings) : null,
                 default_monitor_settings ? JSON.stringify(default_monitor_settings) : null,
-                accessibility_settings ? JSON.stringify(accessibility_settings) : null
+                accessibility_settings ? JSON.stringify(accessibility_settings) : null,
+                tenantId(req)
             ],
             function(err) {
                 if (err) return res.status(500).json({ error: err.message });
@@ -1649,8 +1746,8 @@ router.put('/users/preferences', authenticateToken, (req, res) => {
 
 // GET /api/users/:id - Get user details (Admin only)
 router.get('/users/:id', authenticateToken, requireAdmin, (req, res) => {
-    const sql = `SELECT id, username, name, email, role, created_at FROM users WHERE id = ?`;
-    db.get(sql, [req.params.id], (err, user) => {
+    const sql = `SELECT id, username, name, email, role, tenant_id, created_at FROM users WHERE id = ? AND tenant_id = ?`;
+    db.get(sql, [req.params.id, tenantId(req)], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) return res.status(404).json({ error: 'User not found' });
         if (String(req.params.id) !== String(req.user.id)) {
@@ -1678,7 +1775,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
 
     // Read prior state so we can record what changed.
     const prior = await new Promise((resolve) => {
-        db.get('SELECT username, role FROM users WHERE id = ?', [targetUserId], (err, row) => {
+        db.get('SELECT username, role, tenant_id FROM users WHERE id = ? AND tenant_id = ?', [targetUserId, tenantId(req)], (err, row) => {
             if (err) return resolve(null);
             resolve(row);
         });
@@ -1718,8 +1815,8 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
                 return res.status(400).json({ error: passwordValidation.errors.join('. ') });
             }
             const password_hash = await bcrypt.hash(password, 10);
-            const sql = `UPDATE users SET username = ?, name = ?, email = ?, role = ?, password_hash = ? WHERE id = ?`;
-            db.run(sql, [username, name || null, email, finalRole, password_hash, targetUserId], function (err) {
+            const sql = `UPDATE users SET username = ?, name = ?, email = ?, role = ?, password_hash = ? WHERE id = ? AND tenant_id = ?`;
+            db.run(sql, [username, name || null, email, finalRole, password_hash, targetUserId, tenantId(req)], function (err) {
                 if (err) {
                     if (err.message.includes('UNIQUE')) {
                         return res.status(409).json({ error: 'Username or email already exists' });
@@ -1734,8 +1831,8 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
             });
         } else {
             // Update without changing password
-            const sql = `UPDATE users SET username = ?, name = ?, email = ?, role = ? WHERE id = ?`;
-            db.run(sql, [username, name || null, email, finalRole, targetUserId], function (err) {
+            const sql = `UPDATE users SET username = ?, name = ?, email = ?, role = ? WHERE id = ? AND tenant_id = ?`;
+            db.run(sql, [username, name || null, email, finalRole, targetUserId, tenantId(req)], function (err) {
                 if (err) {
                     if (err.message.includes('UNIQUE')) {
                         return res.status(409).json({ error: 'Username or email already exists' });
@@ -1764,7 +1861,7 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
 
     const userId = req.params.id;
 
-    db.get('SELECT id, username, email, role FROM users WHERE id = ?', [userId], (targetErr, targetUser) => {
+    db.get('SELECT id, username, email, role, tenant_id FROM users WHERE id = ? AND tenant_id = ?', [userId, tenantId(req)], (targetErr, targetUser) => {
         if (targetErr) return res.status(500).json({ error: targetErr.message });
         if (!targetUser) return res.status(404).json({ error: 'User not found' });
 
@@ -1863,19 +1960,20 @@ router.get('/analytics/sessions', authenticateToken, (req, res) => {
             FROM sessions s
             LEFT JOIN cases c ON s.case_id = c.id
             LEFT JOIN users u ON s.user_id = u.id
+            WHERE s.tenant_id = ?
             ORDER BY s.start_time DESC
         `;
-        params = [];
+        params = [tenantId(req)];
     } else {
         // Users see only their own sessions
         sql = `
             SELECT s.*, c.name as case_name
             FROM sessions s
             LEFT JOIN cases c ON s.case_id = c.id
-            WHERE s.user_id = ?
+            WHERE s.tenant_id = ? AND s.user_id = ?
             ORDER BY s.start_time DESC
         `;
-        params = [req.user.id];
+        params = [tenantId(req), req.user.id];
     }
 
     db.all(sql, params, (err, rows) => {
@@ -1892,10 +1990,10 @@ router.get('/analytics/sessions/:id', authenticateToken, (req, res) => {
         FROM sessions s
         LEFT JOIN cases c ON s.case_id = c.id
         LEFT JOIN users u ON s.user_id = u.id
-        WHERE s.id = ?
+        WHERE s.id = ? AND s.tenant_id = ?
     `;
 
-    db.get(sessionSql, [req.params.id], (err, session) => {
+    db.get(sessionSql, [req.params.id, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
@@ -1930,10 +2028,10 @@ router.get('/analytics/user-stats/:userId', authenticateToken, (req, res) => {
             AVG(duration) as avg_duration,
             COUNT(DISTINCT case_id) as unique_cases
         FROM sessions
-        WHERE user_id = ?
+        WHERE tenant_id = ? AND user_id = ?
     `;
 
-    db.get(sql, [userId], (err, stats) => {
+    db.get(sql, [tenantId(req), userId], (err, stats) => {
         if (err) return res.status(500).json({ error: err.message });
         
         // Get interaction count
@@ -1941,10 +2039,10 @@ router.get('/analytics/user-stats/:userId', authenticateToken, (req, res) => {
             SELECT COUNT(*) as total_interactions
             FROM interactions i
             JOIN sessions s ON i.session_id = s.id
-            WHERE s.user_id = ?
+            WHERE s.tenant_id = ? AND s.user_id = ?
         `;
 
-        db.get(interactionSql, [userId], (err, interactionStats) => {
+        db.get(interactionSql, [tenantId(req), userId], (err, interactionStats) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ 
                 ...stats, 
@@ -1962,12 +2060,12 @@ router.post('/settings/log', authenticateToken, (req, res) => {
     
     const sql = `INSERT INTO settings_logs (
         user_id, session_id, case_id, setting_type, setting_name, 
-        old_value, new_value, settings_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+        old_value, new_value, settings_json, tenant_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     db.run(sql, [
         req.user.id, session_id, case_id, setting_type, setting_name,
-        old_value, new_value, JSON.stringify(settings_json)
+        old_value, new_value, JSON.stringify(settings_json), tenantId(req)
     ], function (err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ id: this.lastID, message: 'Setting logged' });
@@ -1982,11 +2080,12 @@ router.get('/analytics/login-logs', authenticateToken, requireAdmin, (req, res) 
         SELECT ll.*, u.email, u.role
         FROM login_logs ll
         LEFT JOIN users u ON ll.user_id = u.id
+        WHERE ll.tenant_id = ?
         ORDER BY ll.timestamp DESC
         LIMIT ?
     `;
     
-    db.all(sql, [limit], (err, rows) => {
+    db.all(sql, [tenantId(req), limit], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ logs: redactRows(rows, { pii: 'allow', internal: 'allow' }) });
     });
@@ -2001,11 +2100,12 @@ router.get('/analytics/settings-logs', authenticateToken, requireAdmin, (req, re
         FROM settings_logs sl
         LEFT JOIN users u ON sl.user_id = u.id
         LEFT JOIN cases c ON sl.case_id = c.id
+        WHERE sl.tenant_id = ?
         ORDER BY sl.timestamp DESC
         LIMIT ?
     `;
     
-    db.all(sql, [limit], (err, rows) => {
+    db.all(sql, [tenantId(req), limit], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ logs: redactRows(rows, { pii: 'allow', internal: 'allow' }) });
     });
@@ -2441,8 +2541,8 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
             object_type, object_id, object_name,
             component, parent_component,
             result, duration_ms, context,
-            message_content, message_role
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            message_content, message_role, tenant_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     db.run(sql, [
@@ -2459,7 +2559,8 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
         duration_ms || null,
         context ? JSON.stringify(context) : null,
         message_content || null,
-        message_role || null
+        message_role || null,
+        tenantId(req)
     ], function(err) {
         if (err) {
             return res.status(500).json({ error: err.message });
@@ -2484,7 +2585,7 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
         const distinctSessionIds = [...new Set(events.map(e => e.session_id).filter(Boolean))];
         if (distinctSessionIds.length > 0) {
             const ownerships = await Promise.all(distinctSessionIds.map(sid => new Promise((resolve) => {
-                db.get('SELECT user_id FROM sessions WHERE id = ?', [sid], (err, row) => {
+                db.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [sid, tenantId(req)], (err, row) => {
                     if (err || !row) return resolve(false);
                     resolve(row.user_id === user_id);
                 });
@@ -2501,8 +2602,8 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
             object_type, object_id, object_name,
             component, parent_component,
             result, duration_ms, context,
-            message_content, message_role, timestamp
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            message_content, message_role, timestamp, tenant_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const stmt = db.prepare(sql);
@@ -2524,7 +2625,8 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
             event.context ? JSON.stringify(event.context) : null,
             event.message_content || null,
             event.message_role || null,
-            event.timestamp || new Date().toISOString()
+            event.timestamp || new Date().toISOString(),
+            tenantId(req)
         ], function(err) {
             if (!err) inserted++;
         });
@@ -2544,7 +2646,7 @@ router.get('/learning-events/session/:id', authenticateToken, (req, res) => {
     const userId = req.user.id;
 
     // Verify user owns session or is admin
-    db.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
+    db.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (session.user_id !== userId && !canReadAcrossUsers(req.user)) {
@@ -2555,11 +2657,11 @@ router.get('/learning-events/session/:id', authenticateToken, (req, res) => {
             SELECT le.*, c.name as case_name
             FROM learning_events le
             LEFT JOIN cases c ON le.case_id = c.id
-            WHERE le.session_id = ?
+            WHERE le.session_id = ? AND le.tenant_id = ?
             ORDER BY le.timestamp ASC
         `;
 
-        db.all(sql, [sessionId], (err, events) => {
+        db.all(sql, [sessionId, tenantId(req)], (err, events) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ events });
         });
@@ -2582,9 +2684,9 @@ router.get('/learning-events/user/:id', authenticateToken, (req, res) => {
         FROM learning_events le
         LEFT JOIN sessions s ON le.session_id = s.id
         LEFT JOIN cases c ON le.case_id = c.id
-        WHERE le.user_id = ?
+        WHERE le.tenant_id = ? AND le.user_id = ?
     `;
-    const params = [targetUserId];
+    const params = [tenantId(req), targetUserId];
 
     if (start_date) {
         sql += ` AND le.timestamp >= ?`;
@@ -2629,7 +2731,7 @@ router.get('/learning-events/analytics/summary', authenticateToken, async (req, 
     if (session_id) {
         // Verify the requester owns the session (or can review) before exposing summary.
         const session = await new Promise((resolve) => {
-            db.get('SELECT user_id FROM sessions WHERE id = ?', [session_id], (err, row) => {
+            db.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [session_id, tenantId(req)], (err, row) => {
                 if (err) return resolve(null);
                 resolve(row);
             });
@@ -2638,17 +2740,20 @@ router.get('/learning-events/analytics/summary', authenticateToken, async (req, 
         if (!canReview && session.user_id !== req.user.id) {
             return res.status(403).json({ error: 'Access denied' });
         }
-        whereClause = 'WHERE session_id = ?';
-        params.push(session_id);
+        whereClause = 'WHERE tenant_id = ? AND session_id = ?';
+        params.push(tenantId(req), session_id);
     } else if (user_id) {
         if (req.user.id !== parseInt(user_id, 10) && !canReview) {
             return res.status(403).json({ error: 'Access denied' });
         }
-        whereClause = 'WHERE user_id = ?';
-        params.push(user_id);
+        whereClause = 'WHERE tenant_id = ? AND user_id = ?';
+        params.push(tenantId(req), user_id);
     } else if (!canReview) {
-        whereClause = 'WHERE user_id = ?';
-        params.push(req.user.id);
+        whereClause = 'WHERE tenant_id = ? AND user_id = ?';
+        params.push(tenantId(req), req.user.id);
+    } else {
+        whereClause = 'WHERE tenant_id = ?';
+        params.push(tenantId(req));
     }
 
     if (case_id) {
@@ -2689,12 +2794,12 @@ router.get('/learning-events/recent', authenticateToken, (req, res) => {
         FROM learning_events le
         LEFT JOIN sessions s ON le.session_id = s.id
         LEFT JOIN cases c ON s.case_id = c.id
-        WHERE le.user_id = ?
+        WHERE le.tenant_id = ? AND le.user_id = ?
         ORDER BY le.timestamp DESC
         LIMIT ?
     `;
 
-    db.all(sql, [userId, limit], (err, rows) => {
+    db.all(sql, [tenantId(req), userId, limit], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
 
         // Parse JSON fields
@@ -2722,6 +2827,7 @@ router.get('/learning-events/all', authenticateToken, (req, res) => {
         LEFT JOIN sessions s ON le.session_id = s.id
         LEFT JOIN cases c ON s.case_id = c.id
         LEFT JOIN users u ON le.user_id = u.id
+        WHERE le.tenant_id = ?
         ORDER BY le.timestamp DESC
         LIMIT ?
     ` : `
@@ -2733,12 +2839,12 @@ router.get('/learning-events/all', authenticateToken, (req, res) => {
         LEFT JOIN sessions s ON le.session_id = s.id
         LEFT JOIN cases c ON s.case_id = c.id
         LEFT JOIN users u ON le.user_id = u.id
-        WHERE le.user_id = ?
+        WHERE le.tenant_id = ? AND le.user_id = ?
         ORDER BY le.timestamp DESC
         LIMIT ?
     `;
 
-    const params = canReview ? [limit] : [req.user.id, limit];
+    const params = canReview ? [tenantId(req), limit] : [tenantId(req), req.user.id, limit];
 
     db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -2770,7 +2876,7 @@ router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req
     const canReview = canReadAcrossUsers(req.user);
 
     const session = await new Promise((resolve) => {
-        db.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, row) => {
+        db.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, row) => {
             if (err) return resolve(null);
             resolve(row);
         });
@@ -2798,7 +2904,7 @@ router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req
         LEFT JOIN users u ON le.user_id = u.id
         LEFT JOIN sessions s ON le.session_id = s.id
         LEFT JOIN cases c ON s.case_id = c.id
-        WHERE le.session_id = ?
+        WHERE le.session_id = ? AND le.tenant_id = ?
         ORDER BY le.timestamp ASC
     `;
 
@@ -2809,24 +2915,24 @@ router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req
                ROUND((julianday(io.viewed_at) - julianday(io.available_at)) * 24 * 60, 1) as view_delay_minutes
         FROM investigation_orders io
         LEFT JOIN case_investigations ci ON io.investigation_id = ci.id
-        WHERE io.session_id = ?
+        WHERE io.session_id = ? AND io.tenant_id = ?
         ORDER BY io.ordered_at ASC
     `;
 
     // Get chat messages
     const chatSql = `
         SELECT * FROM interactions
-        WHERE session_id = ?
+        WHERE session_id = ? AND tenant_id = ?
         ORDER BY timestamp ASC
     `;
 
-    db.all(eventsSql, [sessionId], (err, events) => {
+    db.all(eventsSql, [sessionId, tenantId(req)], (err, events) => {
         if (err) return res.status(500).json({ error: err.message });
 
-        db.all(labOrdersSql, [sessionId], (err, labOrders) => {
+        db.all(labOrdersSql, [sessionId, tenantId(req)], (err, labOrders) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            db.all(chatSql, [sessionId], (err, chatMessages) => {
+            db.all(chatSql, [sessionId, tenantId(req)], (err, chatMessages) => {
                 if (err) return res.status(500).json({ error: err.message });
 
                 // Parse JSON fields in events
@@ -2862,10 +2968,10 @@ router.post('/alarms/log', authenticateToken, async (req, res) => {
 
     if (session_id && !await verifySessionOwnership(session_id, req.user, res)) return;
 
-    const sql = `INSERT INTO alarm_events (session_id, vital_sign, threshold_type, threshold_value, actual_value)
-                 VALUES (?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO alarm_events (session_id, vital_sign, threshold_type, threshold_value, actual_value, tenant_id)
+                 VALUES (?, ?, ?, ?, ?, ?)`;
 
-    db.run(sql, [session_id, vital_sign, threshold_type, threshold_value, actual_value], function(err) {
+    db.run(sql, [session_id, vital_sign, threshold_type, threshold_value, actual_value, tenantId(req)], function(err) {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -2889,9 +2995,9 @@ router.put('/alarms/:id/acknowledge', authenticateToken, (req, res) => {
         SELECT a.id, a.acknowledged_at, s.user_id AS session_user_id
         FROM alarm_events a
         LEFT JOIN sessions s ON a.session_id = s.id
-        WHERE a.id = ?
+        WHERE a.id = ? AND a.tenant_id = ?
     `;
-    db.get(ownerSql, [alarmId], (err, row) => {
+    db.get(ownerSql, [alarmId, tenantId(req)], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(404).json({ error: 'Alarm not found' });
 
@@ -2909,11 +3015,11 @@ router.put('/alarms/:id/acknowledge', authenticateToken, (req, res) => {
             });
         }
 
-        const updateSql = `UPDATE alarm_events SET acknowledged_at = CURRENT_TIMESTAMP WHERE id = ? AND acknowledged_at IS NULL`;
-        db.run(updateSql, [alarmId], function (updateErr) {
+        const updateSql = `UPDATE alarm_events SET acknowledged_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ? AND acknowledged_at IS NULL`;
+        db.run(updateSql, [alarmId, tenantId(req)], function (updateErr) {
             if (updateErr) return res.status(500).json({ error: updateErr.message });
             // Re-read the just-stamped value so the caller can record it.
-            db.get(`SELECT acknowledged_at FROM alarm_events WHERE id = ?`, [alarmId], (readErr, fresh) => {
+            db.get(`SELECT acknowledged_at FROM alarm_events WHERE id = ? AND tenant_id = ?`, [alarmId, tenantId(req)], (readErr, fresh) => {
                 if (readErr) return res.status(500).json({ error: readErr.message });
                 res.json({
                     message: 'Alarm acknowledged',
@@ -2927,9 +3033,9 @@ router.put('/alarms/:id/acknowledge', authenticateToken, (req, res) => {
 
 // GET /api/alarms/config - Get default alarm config
 router.get('/alarms/config', authenticateToken, (req, res) => {
-    const sql = `SELECT * FROM alarm_config WHERE user_id IS NULL`;
+    const sql = `SELECT * FROM alarm_config WHERE tenant_id = ? AND user_id IS NULL`;
     
-    db.all(sql, [], (err, rows) => {
+    db.all(sql, [tenantId(req)], (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -2951,8 +3057,8 @@ router.get('/alarms/config/:userId', authenticateToken, (req, res) => {
         return res.status(403).json({ error: 'Access denied' });
     }
 
-    const sql = `SELECT * FROM alarm_config WHERE user_id = ?`;
-    db.all(sql, [userId], (err, rows) => {
+    const sql = `SELECT * FROM alarm_config WHERE tenant_id = ? AND user_id = ?`;
+    db.all(sql, [tenantId(req), userId], (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -2971,8 +3077,8 @@ router.post('/alarms/config', authenticateToken, requireAdmin, (req, res) => {
     const { user_id, vital_sign, high_threshold, low_threshold, enabled } = req.body;
     
     // Check if config exists
-    const checkSql = `SELECT * FROM alarm_config WHERE user_id ${user_id ? '= ?' : 'IS NULL'} AND vital_sign = ?`;
-    const checkParams = user_id ? [user_id, vital_sign] : [vital_sign];
+    const checkSql = `SELECT * FROM alarm_config WHERE tenant_id = ? AND user_id ${user_id ? '= ?' : 'IS NULL'} AND vital_sign = ?`;
+    const checkParams = user_id ? [tenantId(req), user_id, vital_sign] : [tenantId(req), vital_sign];
     
     db.get(checkSql, checkParams, (err, row) => {
         if (err) {
@@ -2981,8 +3087,8 @@ router.post('/alarms/config', authenticateToken, requireAdmin, (req, res) => {
         
         if (row) {
             // Update existing
-            const updateSql = `UPDATE alarm_config SET high_threshold = ?, low_threshold = ?, enabled = ? WHERE id = ?`;
-            db.run(updateSql, [high_threshold, low_threshold, enabled ? 1 : 0, row.id], function(err) {
+            const updateSql = `UPDATE alarm_config SET high_threshold = ?, low_threshold = ?, enabled = ? WHERE id = ? AND tenant_id = ?`;
+            db.run(updateSql, [high_threshold, low_threshold, enabled ? 1 : 0, row.id, tenantId(req)], function(err) {
                 if (err) {
                     return res.status(500).json({ error: err.message });
                 }
@@ -2998,9 +3104,9 @@ router.post('/alarms/config', authenticateToken, requireAdmin, (req, res) => {
             });
         } else {
             // Insert new
-            const insertSql = `INSERT INTO alarm_config (user_id, vital_sign, high_threshold, low_threshold, enabled) 
-                               VALUES (?, ?, ?, ?, ?)`;
-            db.run(insertSql, [user_id, vital_sign, high_threshold, low_threshold, enabled ? 1 : 0], function(err) {
+            const insertSql = `INSERT INTO alarm_config (user_id, vital_sign, high_threshold, low_threshold, enabled, tenant_id) 
+                               VALUES (?, ?, ?, ?, ?, ?)`;
+            db.run(insertSql, [user_id, vital_sign, high_threshold, low_threshold, enabled ? 1 : 0, tenantId(req)], function(err) {
                 if (err) {
                     return res.status(500).json({ error: err.message });
                 }
@@ -3102,9 +3208,9 @@ router.put('/notification-prefs', authenticateToken, (req, res) => {
 router.get('/cases/:id/investigations', authenticateToken, (req, res) => {
     const caseId = req.params.id;
     
-    const sql = `SELECT * FROM case_investigations WHERE case_id = ?`;
+    const sql = `SELECT * FROM case_investigations WHERE case_id = ? AND tenant_id = ?`;
     
-    db.all(sql, [caseId], (err, rows) => {
+    db.all(sql, [caseId, tenantId(req)], (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -3116,10 +3222,10 @@ router.get('/cases/:id/investigations', authenticateToken, (req, res) => {
 router.post('/investigations', authenticateToken, requireEducator, (req, res) => {
     const { case_id, investigation_type, test_name, result_data, image_url, turnaround_minutes } = req.body;
     
-    const sql = `INSERT INTO case_investigations (case_id, investigation_type, test_name, result_data, image_url, turnaround_minutes) 
-                 VALUES (?, ?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO case_investigations (case_id, investigation_type, test_name, result_data, image_url, turnaround_minutes, tenant_id) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`;
     
-    db.run(sql, [case_id, investigation_type, test_name, JSON.stringify(result_data), image_url, turnaround_minutes || 30], function(err) {
+    db.run(sql, [case_id, investigation_type, test_name, JSON.stringify(result_data), image_url, turnaround_minutes || 30, tenantId(req)], function(err) {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -3138,8 +3244,8 @@ router.post('/sessions/:id/order', authenticateToken, async (req, res) => {
 
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
-    const sql = `INSERT INTO investigation_orders (session_id, investigation_id, available_at)
-                 VALUES (?, ?, datetime('now', '+' || (SELECT turnaround_minutes FROM case_investigations WHERE id = ?) || ' minutes'))`;
+    const sql = `INSERT INTO investigation_orders (session_id, investigation_id, available_at, tenant_id)
+                 VALUES (?, ?, datetime('now', '+' || (SELECT turnaround_minutes FROM case_investigations WHERE id = ? AND tenant_id = ?) || ' minutes'), ?)`;
 
     const stmt = db.prepare(sql);
     let inserted = 0;
@@ -3152,7 +3258,7 @@ router.post('/sessions/:id/order', authenticateToken, async (req, res) => {
     }
 
     investigation_ids.forEach(invId => {
-        stmt.run(sessionId, invId, invId, function(err) {
+        stmt.run(sessionId, invId, invId, tenantId(req), tenantId(req), function(err) {
             if (err && !runError) {
                 runError = err;
             } else if (!err) {
@@ -3198,11 +3304,11 @@ router.get('/sessions/:id/orders', authenticateToken, (req, res) => {
             (julianday(io.available_at) - julianday('now')) * 24 * 60 as minutes_remaining
         FROM investigation_orders io
         JOIN case_investigations ci ON io.investigation_id = ci.id
-        WHERE io.session_id = ?
+        WHERE io.session_id = ? AND io.tenant_id = ?
         ORDER BY io.ordered_at DESC
     `;
 
-    db.all(sql, [sessionId], (err, rows) => {
+    db.all(sql, [sessionId, tenantId(req)], (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -3253,10 +3359,10 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
         FROM investigation_orders io
         LEFT JOIN case_investigations ci ON io.investigation_id = ci.id
         LEFT JOIN sessions s ON io.session_id = s.id
-        WHERE io.id = ?
+        WHERE io.id = ? AND io.tenant_id = ?
     `;
 
-    db.get(getOrderSql, [orderId], (err, order) => {
+    db.get(getOrderSql, [orderId, tenantId(req)], (err, order) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!order) return res.status(404).json({ error: 'Order not found' });
 
@@ -3286,17 +3392,17 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
         const totalTimeMs = now - orderedAt;
 
         // Update viewed_at (guard with IS NULL so a parallel retry can't double-stamp)
-        const updateSql = `UPDATE investigation_orders SET viewed_at = CURRENT_TIMESTAMP WHERE id = ? AND viewed_at IS NULL`;
+        const updateSql = `UPDATE investigation_orders SET viewed_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ? AND viewed_at IS NULL`;
 
-        db.run(updateSql, [orderId], function(updateErr) {
+        db.run(updateSql, [orderId, tenantId(req)], function(updateErr) {
             if (updateErr) return res.status(500).json({ error: updateErr.message });
 
             // Log detailed learning event
             const logSql = `
                 INSERT INTO learning_events (
                     session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                    component, result, duration_ms, context
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    component, result, duration_ms, context, tenant_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             const context = {
@@ -3324,7 +3430,8 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
                 'OrdersDrawer',
                 resultText,
                 viewDelayMs,
-                JSON.stringify(context)
+                JSON.stringify(context),
+                tenantId(req)
             ]);
 
             res.json({
@@ -6295,8 +6402,8 @@ function handleSystemAuditLogRequest(req, res) {
     let sql = `SELECT sal.*, u.username as user_username
                FROM system_audit_log sal
                LEFT JOIN users u ON sal.user_id = u.id
-               WHERE 1=1`;
-    const params = [];
+               WHERE sal.tenant_id = ?`;
+    const params = [tenantId(req)];
 
     if (action) {
         sql += ` AND sal.action = ?`;
@@ -6350,9 +6457,9 @@ router.post('/sessions/:sessionId/vitals', authenticateToken, async (req, res) =
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     db.run(
-        `INSERT INTO vital_sign_history (session_id, vital_sign, value, unit, is_alarm_triggered, alarm_type, source)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [sessionId, vital_sign, value, unit || null, is_alarm_triggered ? 1 : 0, alarm_type || null, source || 'system'],
+        `INSERT INTO vital_sign_history (session_id, vital_sign, value, unit, is_alarm_triggered, alarm_type, source, tenant_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [sessionId, vital_sign, value, unit || null, is_alarm_triggered ? 1 : 0, alarm_type || null, source || 'system', tenantId(req)],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ id: this.lastID, message: 'Vital sign recorded' });
@@ -6367,8 +6474,8 @@ router.get('/sessions/:sessionId/vitals', authenticateToken, async (req, res) =>
 
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
-    let sql = `SELECT * FROM vital_sign_history WHERE session_id = ?`;
-    const params = [sessionId];
+    let sql = `SELECT * FROM vital_sign_history WHERE session_id = ? AND tenant_id = ?`;
+    const params = [sessionId, tenantId(req)];
 
     if (vital_sign) {
         sql += ` AND vital_sign = ?`;
@@ -6482,9 +6589,9 @@ router.get('/admin/active-sessions', authenticateToken, requireAdmin, (req, res)
         `SELECT acs.*, u.username, u.email, u.role
          FROM active_sessions acs
          LEFT JOIN users u ON acs.user_id = u.id
-         WHERE acs.is_active = 1 AND (acs.expires_at IS NULL OR acs.expires_at > datetime('now'))
+         WHERE acs.tenant_id = ? AND acs.is_active = 1 AND (acs.expires_at IS NULL OR acs.expires_at > datetime('now'))
          ORDER BY acs.last_activity_at DESC`,
-        [],
+        [tenantId(req)],
         (err, sessions) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ sessions: redactRows(sessions, { pii: 'allow', internal: 'allow' }) });
@@ -6498,8 +6605,8 @@ router.delete('/admin/active-sessions/:id', authenticateToken, requireAdmin, (re
     const ipAddress = req.ip || req.connection?.remoteAddress;
 
     db.run(
-        `UPDATE active_sessions SET is_active = 0 WHERE id = ?`,
-        [id],
+        `UPDATE active_sessions SET is_active = 0 WHERE id = ? AND tenant_id = ?`,
+        [id, tenantId(req)],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) {
@@ -9210,7 +9317,8 @@ router.get('/agents/templates', authenticateToken, async (req, res) => {
     try {
         const templates = await new Promise((resolve, reject) => {
             db.all(
-                `SELECT * FROM agent_templates ORDER BY is_default DESC, agent_type ASC, name ASC`,
+                `SELECT * FROM agent_templates WHERE tenant_id = ? ORDER BY is_default DESC, agent_type ASC, name ASC`,
+                [tenantId(req)],
                 (err, rows) => {
                     if (err) reject(err);
                     else resolve(rows || []);
@@ -9238,8 +9346,8 @@ router.get('/agents/templates/:id', authenticateToken, async (req, res) => {
 
         const template = await new Promise((resolve, reject) => {
             db.get(
-                'SELECT * FROM agent_templates WHERE id = ?',
-                [id],
+                'SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ?',
+                [id, tenantId(req)],
                 (err, row) => {
                     if (err) reject(err);
                     else resolve(row);
@@ -9302,8 +9410,8 @@ router.post('/agents/templates', authenticateToken, requireEducator, async (req,
             db.run(
                 `INSERT INTO agent_templates
                  (agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style, config,
-                  llm_provider, llm_model, llm_api_key, llm_endpoint, llm_config, llm_temperature, llm_max_tokens, memory_access, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  llm_provider, llm_model, llm_api_key, llm_endpoint, llm_config, llm_temperature, llm_max_tokens, memory_access, created_by, tenant_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style,
                     JSON.stringify(config),
@@ -9311,7 +9419,8 @@ router.post('/agents/templates', authenticateToken, requireEducator, async (req,
                     llm_config ? JSON.stringify(llm_config) : null,
                     tempVal, maxTokensVal,
                     memory_access ? JSON.stringify(memory_access) : null,
-                    req.user.id
+                    req.user.id,
+                    tenantId(req)
                 ],
                 function(err) {
                     if (err) reject(err);
@@ -9327,7 +9436,8 @@ router.post('/agents/templates', authenticateToken, requireEducator, async (req,
             resourceType: 'agent_template',
             resourceId: result.id.toString(),
             resourceName: name,
-            newValue: { agent_type, name }
+            newValue: { agent_type, name, tenant_id: tenantId(req) },
+            tenantId: tenantId(req)
         });
 
         res.status(201).json({ id: result.id, message: 'Agent template created' });
@@ -9347,7 +9457,7 @@ router.put('/agents/templates/:id', authenticateToken, requireEducator, async (r
         // baseline (POST .../reset-to-default re-applies it). We still
         // 404 on missing rows so the UI gets a sensible signal.
         const existing = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM agent_templates WHERE id = ?', [id], (err, row) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ?', [id, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -9477,7 +9587,7 @@ router.delete('/agents/templates/:id', authenticateToken, requireEducator, async
 
         // Check if it's a default template
         const template = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM agent_templates WHERE id = ?', [id], (err, row) => {
+            db.get('SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ?', [id, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -9836,8 +9946,8 @@ router.post('/agents/templates/:id/duplicate', authenticateToken, requireEducato
             db.run(
                 `INSERT INTO agent_templates
                  (agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style, is_default, config, created_by,
-                  llm_provider, llm_model, llm_api_key, llm_endpoint, llm_config, memory_access)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  llm_provider, llm_model, llm_api_key, llm_endpoint, llm_config, memory_access, tenant_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     original.agent_type,
                     duplicateName,
@@ -9853,7 +9963,8 @@ router.post('/agents/templates/:id/duplicate', authenticateToken, requireEducato
                     original.llm_api_key,
                     original.llm_endpoint,
                     original.llm_config,
-                    original.memory_access
+                    original.memory_access,
+                    tenantId(req)
                 ],
                 function(err) {
                     if (err) reject(err);
@@ -9874,7 +9985,8 @@ router.post('/agents/templates/:id/duplicate', authenticateToken, requireEducato
                 agent_type: original.agent_type,
                 name: original.name
             },
-            newValue: { id: result.id, name: duplicateName, agent_type: original.agent_type }
+            newValue: { id: result.id, name: duplicateName, agent_type: original.agent_type, tenant_id: tenantId(req) },
+            tenantId: tenantId(req)
         });
 
         res.status(201).json({ id: result.id, message: 'Agent template duplicated' });
@@ -9899,9 +10011,9 @@ router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
                         at.communication_style as template_communication_style, at.config as template_config
                  FROM case_agents ca
                  JOIN agent_templates at ON ca.agent_template_id = at.id
-                 WHERE ca.case_id = ?
+                 WHERE ca.case_id = ? AND ca.tenant_id = ? AND at.tenant_id = ?
                  ORDER BY at.agent_type ASC`,
-                [caseId],
+                [caseId, tenantId(req), tenantId(req)],
                 (err, rows) => {
                     if (err) reject(err);
                     else resolve(rows || []);

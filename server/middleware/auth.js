@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import db from '../db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,9 +32,44 @@ export const authenticateToken = (req, res, next) => {
         if (err) {
             return res.status(403).json({ error: 'Invalid or expired token' });
         }
-        req.user = user; // Attach user info to request
-        next();
+        db.get(
+            `SELECT tenant_id, role, status, deleted_at FROM users WHERE id = ?`,
+            [user.id],
+            (lookupErr, row) => {
+                if (lookupErr) {
+                    return res.status(500).json({ error: 'Failed to resolve authenticated user' });
+                }
+                if (!row || row.deleted_at || row.status !== 'active') {
+                    return res.status(403).json({ error: 'Invalid or inactive user' });
+                }
+                req.user = {
+                    ...user,
+                    role: row.role || user.role,
+                    tenant_id: row.tenant_id || user.tenant_id || 1
+                };
+                next();
+            }
+        );
     });
+};
+
+export function resolveTenant(req) {
+    return req.user?.tenant_id || 1;
+}
+
+export const requireSameTenant = (resourceTenantIdGetter) => async (req, res, next) => {
+    try {
+        const resourceTenantId = await resourceTenantIdGetter(req);
+        if (resourceTenantId == null) {
+            return res.status(404).json({ error: 'Resource not found' });
+        }
+        if (Number(resourceTenantId) !== Number(resolveTenant(req))) {
+            return res.status(403).json({ error: 'Access denied: tenant mismatch' });
+        }
+        next();
+    } catch (err) {
+        res.status(500).json({ error: err.message || 'Tenant scope check failed' });
+    }
 };
 
 export const ROLE_RANKS = Object.freeze({
@@ -98,7 +134,8 @@ export const generateToken = (user) => {
         id: user.id,
         username: user.username,
         email: user.email,
-        role: user.role
+        role: user.role,
+        tenant_id: user.tenant_id || 1
     };
     return jwt.sign(payload, JWT_SECRET, { expiresIn: process.env.JWT_EXPIRY || '4h' });
 };

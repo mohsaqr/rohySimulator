@@ -62,8 +62,8 @@ export async function seedUsers(db) {
 
                     await new Promise((res, rej) => {
                         db.run(
-                            `INSERT INTO users (username, name, email, password_hash, role, status, created_at)
-                             VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)`,
+                            `INSERT INTO users (username, name, email, password_hash, role, tenant_id, status, created_at)
+                             VALUES (?, ?, ?, ?, ?, 1, 'active', CURRENT_TIMESTAMP)`,
                             [user.username, user.name, user.email, password_hash, user.role],
                             function(err) {
                                 if (err) {
