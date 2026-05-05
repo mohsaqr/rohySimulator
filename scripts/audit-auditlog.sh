@@ -265,6 +265,15 @@ fi
 fetch_action "update_platform_monitor_settings" "$OUT/monitor-after-fail.json"
 assert_no_student_log_after_failed_write "$OUT/monitor-before-fail.json" "$OUT/monitor-after-fail.json" "$STUDENT_ID"
 
+# Cleanup: this script creates an audit-test case + writes platform monitor
+# settings and notification prefs without restoring. Without explicit
+# cleanup the test data accumulates and the operator's real settings drift.
+section "Cleanup test artifacts"
+if [ -n "$CASE_ID" ]; then
+    curl -s -o /dev/null -X DELETE "${ADMIN_AUTH[@]}" "$API/api/cases/$CASE_ID"
+    pass "Audit-test case deleted"
+fi
+
 section "Summary"
 TOTAL=$((PASS_COUNT + FAIL_COUNT))
 if [ "$FAIL_COUNT" -eq 0 ]; then

@@ -109,6 +109,55 @@ ADMIN_ID=$(json_get "$OUT/admin-login.json" "user.id")
 pass "Admin logged in"
 ADMIN_AUTH=( -H "Authorization: Bearer $ADMIN_TOK" )
 
+# Snapshot pre-test platform LLM block + admin user_preferences. The cleanup
+# section at the end of this script PUTs them back. Without this, every run
+# overwrites the operator's real OpenAI key with `platform-secret-...`.
+# Pull RAW values directly from sqlite — the GET response is redacted.
+DB_FILE="${ROHY_DB:-server/database.sqlite}"
+python3 - "$OUT/platform-llm-pre.json" "$DB_FILE" <<'PYEOF'
+import json, sqlite3, sys
+db = sqlite3.connect(sys.argv[2])
+def get(k):
+    r = db.execute("SELECT setting_value FROM platform_settings WHERE setting_key = ?", (k,)).fetchone()
+    return r[0] if r else None
+out = {
+    "provider": get("llm_provider") or "",
+    "model": get("llm_model") or "",
+    "apiKey": get("llm_api_key") or "",
+    "baseUrl": get("llm_base_url") or "",
+    "enabled": (get("llm_enabled") == "true"),
+    "temperature": get("llm_temperature") or "",
+    "maxOutputTokens": get("llm_max_output_tokens") or "",
+    "systemPromptTemplate": get("llm_system_prompt_template") or ""
+}
+with open(sys.argv[1], "w") as f:
+    json.dump(out, f)
+db.close()
+PYEOF
+python3 - "$OUT/prefs-pre.json" "$DB_FILE" "$ADMIN_ID" <<'PYEOF'
+import json, sqlite3, sys
+db = sqlite3.connect(sys.argv[2])
+r = db.execute("SELECT theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings FROM user_preferences WHERE user_id = ?", (int(sys.argv[3]),)).fetchone()
+db.close()
+def parse(v):
+    if not v: return None
+    try: return json.loads(v)
+    except: return v
+if r:
+    out = {
+        "theme": r[0], "language": r[1],
+        "notification_settings": parse(r[2]),
+        "dashboard_layout": parse(r[3]),
+        "default_llm_settings": parse(r[4]),
+        "default_monitor_settings": parse(r[5]),
+        "accessibility_settings": parse(r[6])
+    }
+else:
+    out = {"default_llm_settings": None}
+with open(sys.argv[1], "w") as f:
+    json.dump(out, f)
+PYEOF
+
 section "Create and login student"
 STUDENT_USER="student_$RUN_TAG"
 STUDENT_EMAIL="$STUDENT_USER@audit.local"
@@ -275,6 +324,33 @@ if grep -q "req.path.startsWith('/proxy/llm')" server/routes.js && ! grep -q "re
     pass "No res.json interceptor installed; /proxy/llm streaming path remains untouched"
 else
     fail "Streaming proxy sanity check failed"
+fi
+
+# Cleanup: this script POSTs fake LLM keys to platform_settings + creates a
+# disposable agent template + writes test default_llm_settings into the admin's
+# user_preferences. Without explicit cleanup, the next chat call sends the
+# fake key to OpenAI and 401s. Restore from a snapshot we took at the start.
+section "Restore platform LLM + cleanup test artifacts"
+
+# 1. Restore the platform LLM block (provider/model/apiKey) — we PUT a snapshot
+#    we captured before mutating, so the original value survives.
+if [ -f "$OUT/platform-llm-pre.json" ]; then
+    curl -s -o /dev/null -X PUT "${ADMIN_AUTH[@]}" "$API/api/platform-settings/llm" \
+        -H 'Content-Type: application/json' --data-binary "@$OUT/platform-llm-pre.json"
+    pass "Platform LLM settings restored from pre-test snapshot"
+fi
+
+# 2. Delete the disposable agent template.
+if [ -n "$AGENT_ID" ]; then
+    curl -s -o /dev/null -X DELETE "${ADMIN_AUTH[@]}" "$API/api/agents/templates/$AGENT_ID"
+    pass "Disposable agent template deleted"
+fi
+
+# 3. Restore admin's user_preferences.default_llm_settings to its pre-test value.
+if [ -f "$OUT/prefs-pre.json" ]; then
+    curl -s -o /dev/null -X PUT "${ADMIN_AUTH[@]}" "$API/api/users/preferences" \
+        -H 'Content-Type: application/json' --data-binary "@$OUT/prefs-pre.json"
+    pass "Admin user_preferences restored from pre-test snapshot"
 fi
 
 section "Result"
