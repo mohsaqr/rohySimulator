@@ -1,10 +1,56 @@
 # Session Handoff — 2026-05-05
 
-## Stage 1 (Sessions + lifecycle) — SHIPPED this session
+## Stage 2 (Investigations: Lab + Radiology) — SHIPPED this session
 
-The deferred snapshot question is resolved. Three Explore agents reviewed
-the subsystem; 17 findings, 3 false positives (~18% rate, better than the
-~30% ceiling). Architectural decisions taken via `AskUserQuestion`:
+Three Explore agents reviewed labs/radiology end-to-end (DB+server,
+admin editors, runtime). 9 findings, **1 false positive** (~11% rate —
+the pattern keeps getting more reliable as audits stack). Real findings
+shipped:
+
+1. **`ConfigPanel` lab-save accumulated DB rows** (HIGH) — the comment
+   said "First, delete existing labs" but the next 15 lines only POSTed.
+   Every save grew the table. Fix: new `PUT /api/cases/:id/labs` bulk-
+   replace endpoint (atomic transaction: drop dependent
+   `investigation_orders`, drop old `case_investigations` rows for that
+   case, reinsert the new array). ConfigPanel calls it once per save.
+2. **`POST /api/cases/:id/labs` is now an UPSERT** (HIGH) — keyed on
+   `(case_id, test_name, investigation_type='lab')`. Admin lab edits in
+   the wizard (or single-row admin POSTs) overwrite the existing row
+   instead of duplicating it.
+3. **`DELETE /api/cases/:id/labs/:labId` cascades** (HIGH, Stage-1's
+   deferred L6) — also deletes dependent `investigation_orders` rows.
+   SQLite can't add `ON DELETE CASCADE` retroactively so cleanup is
+   application-layer. Reports `orphan_orders_removed:N`.
+4. **`POST /api/sessions/:id/order-labs` idempotent** (HIGH) — checks
+   `(session_id, investigation_id)` before INSERT. Returns
+   `skipped_duplicates:N`.
+5. **`POST /api/sessions/:id/order-radiology` idempotent** (HIGH) — keyed
+   on `(session_id, ci.test_name)` via JOIN, because each radiology order
+   re-INSERTs a fresh `case_investigations` row by design. UNIQUE on
+   investigation_orders wouldn't catch radiology dupes.
+6. **Editor bulk-delete confirmations** (MED) — `LabInvestigationEditor`
+   `Delete Selected` and `RadiologyEditor` per-row Trash now confirm
+   before destroying user-entered findings/images.
+
+Verification: `bash scripts/audit-investigations.sh` — **14/14 passing**,
+repeatable. `bash scripts/audit-sessions.sh` still 9/9 (no Stage-1
+regression). Browser smoke on `:5173`: simulator workspace mounts, Lab
++ Radiology buttons render, no React error-boundary fires.
+
+Deferred (architectural, out of scope for this audit):
+- Radiology DB master catalog (currently config-JSON only — asymmetric
+  to labs by design).
+- Master-lab-edit propagation to per-case copies (admin rename in
+  `lab_tests` master doesn't update existing `case_investigations`).
+- Lab numeric server-side clamps — "valid" depends on the unit; needs
+  per-test policy. Stage 1 added vitals clamps because vitals have
+  universal physiological bounds; labs don't.
+
+## Stage 1 (Sessions + lifecycle) — SHIPPED previous session, COMMITTED
+
+Earlier work resolved the deferred snapshot question. Three Explore
+agents reviewed the subsystem; 17 findings, 3 false positives (~18%).
+Architectural decisions taken via `AskUserQuestion`:
 
 1. **Snapshot at session start** — `cases.config` + `cases.scenario` are
    captured into `sessions.case_snapshot` at POST /sessions; five reader
@@ -41,7 +87,7 @@ outline below is the executive view.
 | # | Stage | Severity | Effort | Why |
 |---|---|---|---|---|
 | ~~1~~ | ~~Sessions + lifecycle~~ | ~~HIGH~~ | ✅ DONE | Snapshot decision: snapshot at start. Multi-tab: detect+warn. Vitals: persist on change. /end idempotent. |
-| 2 | **Investigations (Lab + Radiology)** | HIGH | 60–90 min | Mirrors the treatment-master pattern. Orphan refs, master-edit propagation, format drift expected. L6 from case audit was deferred here. |
+| ~~2~~ | ~~Investigations (Lab + Radiology)~~ | ~~HIGH~~ | ✅ DONE | UPSERT POST/labs, bulk PUT/labs replace, DELETE cascade, /order-labs+/order-radiology idempotent, editor delete confirms. L6 resolved. |
 | 3 | **Alarms + Notifications** | HIGH | 90–120 min | Recent commits show flux. Five surfaces (Audio/Banner/Backend/Console/Toast) all read the same notification stream — easy for one to drift on ack state. |
 | 4 | LLM precedence chain | MED | 45–60 min | platform → case → agent → session → user. Five layers, persona audit just touched the agent layer. |
 | 5 | Scenario engine (runtime) | MED | 60–90 min | Storage audited; runtime engine in PatientMonitor:560–682 not yet. Beat application, scenario-disable mid-run, complete state. Stage 1's snapshot decision now constrains what mid-run admin edits do. |

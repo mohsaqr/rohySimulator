@@ -188,27 +188,25 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             const saved = await res.json();
             console.log('Case saved successfully:', saved);
 
-            // Save lab investigations to database if any
+            // Stage-2 audit: bulk-replace labs in one atomic call. Pre-fix
+            // this looped POST per lab with a "first delete" comment that was
+            // never implemented, so the DB accumulated a duplicate row for
+            // every saved-but-removed lab. PUT /cases/:id/labs deletes orphaned
+            // investigation_orders, drops the old lab rows, and reinserts the
+            // current array under one transaction.
+            const caseId = saved.id;
             const labs = editingCase.config?.investigations?.labs || [];
-            if (labs.length > 0) {
-                const caseId = saved.id;
-
-                // First, delete existing labs for this case (to handle updates)
-                // Then insert new ones
-                for (const lab of labs) {
-                    try {
-                        await fetch(apiUrl(`/cases/${caseId}/labs`), {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`
-                            },
-                            body: JSON.stringify(lab)
-                        });
-                    } catch (labErr) {
-                        console.error('Failed to save lab:', labErr);
-                    }
-                }
+            try {
+                await fetch(apiUrl(`/cases/${caseId}/labs`), {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ labs })
+                });
+            } catch (labErr) {
+                console.error('Failed to replace labs:', labErr);
             }
 
             // Update List

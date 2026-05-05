@@ -145,8 +145,15 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
     };
 
     // Remove a study configuration
+    //
+    // Stage-2 audit: confirm before deleting — radiology rows can carry
+    // configured findings, interpretations, and uploaded image/video URLs
+    // that aren't trivially recoverable.
     const removeStudy = (idx) => {
         if (idx < 0 || idx >= radiology.length) return;
+        const target = radiology[idx];
+        const label = target?.studyName || target?.type || 'this radiology study';
+        if (!window.confirm(`Delete "${label}"? Any configured findings, images, and videos for this study will be removed.`)) return;
         updateRadiology(radiology.filter((_, i) => i !== idx));
     };
 

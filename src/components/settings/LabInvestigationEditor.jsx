@@ -399,8 +399,18 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
     };
 
     // Bulk remove selected
+    //
+    // Stage-2 audit: bulk delete is destructive (the per-row Trash button has
+    // no undo either). Confirm before nuking so a stray click doesn't wipe a
+    // case's lab panel. Single-row removeLab stays unconfirmed because there
+    // it's harder to mis-target.
     const removeSelected = () => {
         if (selectedLabs.size === 0) return;
+        const count = selectedLabs.size;
+        const confirmed = window.confirm(
+            `Delete ${count} lab test${count === 1 ? '' : 's'} from this case? This cannot be undone.`
+        );
+        if (!confirmed) return;
         const updatedLabs = configuredLabs.filter(lab => !selectedLabs.has(lab.id) && !selectedLabs.has(lab.test_name));
         updateInvestigations({ defaultLabsEnabled, labs: updatedLabs });
         setSelectedLabs(new Set());

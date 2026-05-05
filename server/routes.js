@@ -3001,46 +3001,152 @@ router.post('/labs/reload', authenticateToken, requireAdmin, (req, res) => {
     }
 });
 
-// POST /api/cases/:caseId/labs - Add lab test to case (Admin only)
+// POST /api/cases/:caseId/labs - Add or update lab test on a case (Admin only)
+//
+// Stage-2 audit: this endpoint is now an UPSERT keyed on
+// (case_id, test_name, investigation_type='lab'). Pre-fix it was append-only,
+// which let ConfigPanel's per-row save loop quietly accumulate duplicates
+// every time an admin saved a case. Single-row admin adds and the bulk PUT
+// below both rely on this dedup behavior.
 router.post('/cases/:caseId/labs', authenticateToken, requireAdmin, (req, res) => {
     const { caseId } = req.params;
-    const { 
-        test_name, 
-        test_group, 
-        gender_category, 
-        min_value, 
-        max_value, 
-        current_value, 
-        unit, 
+    const {
+        test_name,
+        test_group,
+        gender_category,
+        min_value,
+        max_value,
+        current_value,
+        unit,
         normal_samples,
         is_abnormal,
         turnaround_minutes = 30
     } = req.body;
-    
+
     if (!test_name) {
         return res.status(400).json({ error: 'test_name is required' });
     }
-    
-    const sql = `
-        INSERT INTO case_investigations (
-            case_id, investigation_type, test_name, test_group, gender_category,
-            min_value, max_value, current_value, unit, normal_samples,
-            is_abnormal, turnaround_minutes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    
-    db.run(sql, [
-        caseId, 'lab', test_name, test_group, gender_category,
-        min_value, max_value, current_value, unit,
-        JSON.stringify(normal_samples || []),
-        is_abnormal ? 1 : 0, turnaround_minutes
-    ], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+
+    const findSql = `SELECT id FROM case_investigations WHERE case_id = ? AND investigation_type = 'lab' AND test_name = ?`;
+    db.get(findSql, [caseId, test_name], (findErr, existing) => {
+        if (findErr) return res.status(500).json({ error: findErr.message });
+
+        if (existing && existing.id) {
+            const updateSql = `
+                UPDATE case_investigations
+                SET test_group = ?, gender_category = ?, min_value = ?, max_value = ?,
+                    current_value = ?, unit = ?, normal_samples = ?,
+                    is_abnormal = ?, turnaround_minutes = ?
+                WHERE id = ?
+            `;
+            db.run(updateSql, [
+                test_group, gender_category, min_value, max_value, current_value, unit,
+                JSON.stringify(normal_samples || []),
+                is_abnormal ? 1 : 0, turnaround_minutes, existing.id
+            ], function(updateErr) {
+                if (updateErr) return res.status(500).json({ error: updateErr.message });
+                res.json({ id: existing.id, message: 'Lab test updated', upserted: true });
+            });
+            return;
         }
-        res.json({ 
-            id: this.lastID,
-            message: 'Lab test added to case'
+
+        const insertSql = `
+            INSERT INTO case_investigations (
+                case_id, investigation_type, test_name, test_group, gender_category,
+                min_value, max_value, current_value, unit, normal_samples,
+                is_abnormal, turnaround_minutes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        db.run(insertSql, [
+            caseId, 'lab', test_name, test_group, gender_category,
+            min_value, max_value, current_value, unit,
+            JSON.stringify(normal_samples || []),
+            is_abnormal ? 1 : 0, turnaround_minutes
+        ], function(insertErr) {
+            if (insertErr) return res.status(500).json({ error: insertErr.message });
+            res.json({ id: this.lastID, message: 'Lab test added to case' });
+        });
+    });
+});
+
+// PUT /api/cases/:caseId/labs - Bulk-replace all lab rows for a case (Admin only)
+//
+// Stage-2 audit: ConfigPanel previously POSTed each lab in the editor's array
+// without any cleanup, so admin removals never deleted DB rows. This endpoint
+// is the atomic replacement: cascade-clean dependent investigation_orders for
+// labs we're about to remove, drop the old lab rows, then insert the new set.
+router.put('/cases/:caseId/labs', authenticateToken, requireAdmin, (req, res) => {
+    const { caseId } = req.params;
+    const labs = Array.isArray(req.body?.labs) ? req.body.labs : null;
+    if (labs === null) {
+        return res.status(400).json({ error: 'body.labs array is required' });
+    }
+
+    db.serialize(() => {
+        db.run('BEGIN');
+        // Delete dependent orders for this case's lab investigations first
+        // (FK has no ON DELETE CASCADE — application layer handles it).
+        const orphanSql = `
+            DELETE FROM investigation_orders
+            WHERE investigation_id IN (
+                SELECT id FROM case_investigations
+                WHERE case_id = ? AND investigation_type = 'lab'
+            )
+        `;
+        db.run(orphanSql, [caseId], (orphanErr) => {
+            if (orphanErr) {
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: orphanErr.message });
+            }
+            db.run(
+                `DELETE FROM case_investigations WHERE case_id = ? AND investigation_type = 'lab'`,
+                [caseId],
+                (deleteErr) => {
+                    if (deleteErr) {
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ error: deleteErr.message });
+                    }
+                    if (labs.length === 0) {
+                        db.run('COMMIT');
+                        return res.json({ inserted: 0, deleted: this.changes ?? 0 });
+                    }
+                    const insertSql = `
+                        INSERT INTO case_investigations (
+                            case_id, investigation_type, test_name, test_group, gender_category,
+                            min_value, max_value, current_value, unit, normal_samples,
+                            is_abnormal, turnaround_minutes
+                        ) VALUES (?, 'lab', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `;
+                    let pending = labs.length;
+                    let failed = false;
+                    labs.forEach(lab => {
+                        if (failed) return;
+                        if (!lab?.test_name) {
+                            failed = true;
+                            db.run('ROLLBACK');
+                            return res.status(400).json({ error: 'each lab requires test_name' });
+                        }
+                        db.run(insertSql, [
+                            caseId, lab.test_name, lab.test_group ?? null,
+                            lab.gender_category ?? null, lab.min_value ?? null,
+                            lab.max_value ?? null, lab.current_value ?? null,
+                            lab.unit ?? null, JSON.stringify(lab.normal_samples || []),
+                            lab.is_abnormal ? 1 : 0, lab.turnaround_minutes ?? 30
+                        ], (insertErr) => {
+                            if (insertErr && !failed) {
+                                failed = true;
+                                db.run('ROLLBACK');
+                                return res.status(500).json({ error: insertErr.message });
+                            }
+                            pending--;
+                            if (pending === 0 && !failed) {
+                                db.run('COMMIT');
+                                res.json({ inserted: labs.length, message: 'Labs replaced' });
+                            }
+                        });
+                    });
+                }
+            );
         });
     });
 });
@@ -3100,19 +3206,49 @@ router.put('/cases/:caseId/labs/:labId', authenticateToken, requireAdmin, (req, 
 });
 
 // DELETE /api/cases/:caseId/labs/:labId - Remove lab from case (Admin only)
+//
+// Stage-2 audit (deferred L6 from Stage 1): SQLite can't add ON DELETE CASCADE
+// to an existing FK without a table rebuild, so dependent investigation_orders
+// rows are cleaned up here in the application layer before the parent row is
+// deleted. Otherwise GET /sessions/:id/lab-results would JOIN against missing
+// case_investigations rows and either error or silently drop entries.
 router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireAdmin, (req, res) => {
     const { labId, caseId } = req.params;
-    
-    const sql = `DELETE FROM case_investigations WHERE id = ? AND case_id = ?`;
-    
-    db.run(sql, [labId, caseId], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Lab test not found' });
-        }
-        res.json({ message: 'Lab test removed from case' });
+
+    db.serialize(() => {
+        db.run('BEGIN');
+        // Regular `function` (not arrow) so SQLite binds `this.changes` for
+        // the orphan-row count.
+        db.run(
+            `DELETE FROM investigation_orders WHERE investigation_id = ?`,
+            [labId],
+            function (orphanErr) {
+                if (orphanErr) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ error: orphanErr.message });
+                }
+                const orphans = this.changes ?? 0;
+                db.run(
+                    `DELETE FROM case_investigations WHERE id = ? AND case_id = ?`,
+                    [labId, caseId],
+                    function (deleteErr) {
+                        if (deleteErr) {
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ error: deleteErr.message });
+                        }
+                        if (this.changes === 0) {
+                            db.run('ROLLBACK');
+                            return res.status(404).json({ error: 'Lab test not found' });
+                        }
+                        db.run('COMMIT');
+                        res.json({
+                            message: 'Lab test removed from case',
+                            orphan_orders_removed: orphans
+                        });
+                    }
+                );
+            }
+        );
     });
 });
 
@@ -3333,13 +3469,21 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
             };
 
             // Process all IDs and create orders
+            //
+            // Stage-2 audit: each lab is now idempotent on
+            // (session_id, investigation_id) — a duplicate order request
+            // returns the existing order row instead of inserting a new
+            // row. Investigation_orders has no UNIQUE constraint (would
+            // require a SQLite table rebuild) so the check lives here.
             const processOrders = () => {
-                const sql = `
+                const insertSql = `
                     INSERT INTO investigation_orders (session_id, investigation_id, ordered_at, available_at)
                     VALUES (?, ?, datetime('now'), datetime('now', '+' || ? || ' minutes'))
                 `;
+                const existsSql = `SELECT id FROM investigation_orders WHERE session_id = ? AND investigation_id = ? LIMIT 1`;
 
                 let inserted = 0;
+                let skipped = 0;
                 const orderIds = [];
 
                 // Get configured labs
@@ -3360,18 +3504,26 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
 
                         labs.forEach(lab => {
                             const turnaround = getTurnaround(lab.turnaround_minutes);
-                            console.log(`Ordering lab: ${lab.test_name}, turnaround: ${turnaround} min (test default: ${lab.turnaround_minutes}, override: ${turnaround_override}, case default: ${caseDefaultTurnaround})`);
-                            db.run(sql, [sessionId, lab.id, turnaround], function(err) {
-                                if (!err) {
-                                    orderIds.push({ id: this.lastID, test_name: lab.test_name, turnaround });
-                                    inserted++;
-                                } else {
-                                    console.error('Error inserting order:', err);
+                            db.get(existsSql, [sessionId, lab.id], (existsErr, existing) => {
+                                if (existing && existing.id) {
+                                    skipped++;
+                                    pendingInserts--;
+                                    if (pendingInserts === 0) finalizeOrders();
+                                    return;
                                 }
-                                pendingInserts--;
-                                if (pendingInserts === 0) {
-                                    finalizeOrders();
-                                }
+                                console.log(`Ordering lab: ${lab.test_name}, turnaround: ${turnaround} min`);
+                                db.run(insertSql, [sessionId, lab.id, turnaround], function(insertErr) {
+                                    if (!insertErr) {
+                                        orderIds.push({ id: this.lastID, test_name: lab.test_name, turnaround });
+                                        inserted++;
+                                    } else {
+                                        console.error('Error inserting order:', insertErr);
+                                    }
+                                    pendingInserts--;
+                                    if (pendingInserts === 0) {
+                                        finalizeOrders();
+                                    }
+                                });
                             });
                         });
                     });
@@ -3420,7 +3572,8 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
 
                     res.json({
                         message: `${inserted} lab tests ordered`,
-                        orders: orderIds
+                        orders: orderIds,
+                        skipped_duplicates: skipped
                     });
                 }
             };
@@ -3757,12 +3910,34 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
         const configuredRadiology = caseConfig.radiology || caseConfig.clinicalRecords?.radiology || [];
 
         let inserted = 0;
+        let skipped = 0;
         let pending = radiology_ids.length;
         const orderIds = [];
 
         if (pending === 0) {
             return res.json({ message: '0 radiology studies ordered', orders: [] });
         }
+
+        // Stage-2 audit: radiology idempotency lives at (session_id, test_name)
+        // because each order INSERTs a fresh case_investigations row to capture
+        // result_data at order time (intentional — admin edits to result_data
+        // between orders should reflect on the next order). UNIQUE on
+        // investigation_orders(session_id, investigation_id) wouldn't catch
+        // re-orders of the same study because investigation_id is always new.
+        const existingRadSql = `
+            SELECT io.id FROM investigation_orders io
+            JOIN case_investigations ci ON io.investigation_id = ci.id
+            WHERE io.session_id = ? AND ci.investigation_type = 'radiology' AND ci.test_name = ?
+            LIMIT 1
+        `;
+
+        const finalize = () => {
+            res.json({
+                message: `${inserted} radiology studies ordered`,
+                orders: orderIds,
+                skipped_duplicates: skipped
+            });
+        };
 
         radiology_ids.forEach(radId => {
             // Check if this is a custom study (ID starts with "custom_")
@@ -3782,9 +3957,7 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
             if (!study && !configuredResult) {
                 console.warn(`Radiology study not found and no config: ${radId}`);
                 pending--;
-                if (pending === 0) {
-                    res.json({ message: `${inserted} radiology studies ordered`, orders: orderIds });
-                }
+                if (pending === 0) finalize();
                 return;
             }
 
@@ -3816,48 +3989,55 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
                 isNormalDefault: !configuredResult?.findings && !configuredResult?.interpretation && !!study?.normal_findings
             };
 
-            // First insert into case_investigations
-            const insertStudySql = `
-                INSERT INTO case_investigations (
-                    case_id, investigation_type, test_name, test_group,
-                    image_url, result_data, turnaround_minutes
-                ) VALUES (?, 'radiology', ?, ?, ?, ?, ?)
-            `;
-
-            db.run(insertStudySql, [
-                session.case_id,
-                testName,
-                modality,
-                imageUrl,
-                JSON.stringify(resultData),
-                turnaround
-            ], function(err) {
-                if (err) {
-                    console.error('Error inserting radiology study:', err);
+            // Idempotency: skip if this session already has an order for this
+            // study (matched by test_name). Stage-2 audit fix.
+            db.get(existingRadSql, [sessionId, testName], (existsErr, existing) => {
+                if (existing && existing.id) {
+                    skipped++;
                     pending--;
-                    if (pending === 0) {
-                        res.json({ message: `${inserted} radiology studies ordered`, orders: orderIds });
-                    }
+                    if (pending === 0) finalize();
                     return;
                 }
 
-                const investigationId = this.lastID;
-
-                // Now create the order
-                const orderSql = `
-                    INSERT INTO investigation_orders (session_id, investigation_id, available_at)
-                    VALUES (?, ?, datetime('now', '+' || ? || ' minutes'))
+                // First insert into case_investigations
+                const insertStudySql = `
+                    INSERT INTO case_investigations (
+                        case_id, investigation_type, test_name, test_group,
+                        image_url, result_data, turnaround_minutes
+                    ) VALUES (?, 'radiology', ?, ?, ?, ?, ?)
                 `;
 
-                db.run(orderSql, [sessionId, investigationId, turnaround], function(orderErr) {
-                    pending--;
-                    if (!orderErr) {
-                        inserted++;
-                        orderIds.push(this.lastID);
+                db.run(insertStudySql, [
+                    session.case_id,
+                    testName,
+                    modality,
+                    imageUrl,
+                    JSON.stringify(resultData),
+                    turnaround
+                ], function(err) {
+                    if (err) {
+                        console.error('Error inserting radiology study:', err);
+                        pending--;
+                        if (pending === 0) finalize();
+                        return;
                     }
-                    if (pending === 0) {
-                        res.json({ message: `${inserted} radiology studies ordered`, orders: orderIds });
-                    }
+
+                    const investigationId = this.lastID;
+
+                    // Now create the order
+                    const orderSql = `
+                        INSERT INTO investigation_orders (session_id, investigation_id, available_at)
+                        VALUES (?, ?, datetime('now', '+' || ? || ' minutes'))
+                    `;
+
+                    db.run(orderSql, [sessionId, investigationId, turnaround], function(orderErr) {
+                        pending--;
+                        if (!orderErr) {
+                            inserted++;
+                            orderIds.push(this.lastID);
+                        }
+                        if (pending === 0) finalize();
+                    });
                 });
             });
         });

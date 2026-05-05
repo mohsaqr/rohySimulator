@@ -1,3 +1,25 @@
+### 2026-05-05 — Investigations: Lab + Radiology wiring audit (Stage 2)
+Three Explore agents reviewed the labs/radiology subsystem (DB+server, admin editors, runtime). 9 distinct findings; **1 false positive** on triage (FP rate ~11%, lower than the prior ~18-30% baseline — three reports cross-referenced against each other catch more upfront). Real findings shipped:
+
+- `server/routes.js` POST `/cases/:id/labs`: now an UPSERT on `(case_id, test_name, investigation_type='lab')`. Pre-fix it was append-only, which let `ConfigPanel`'s per-row save loop quietly accumulate duplicate rows every time an admin saved a case (the `// First, delete existing labs` comment described intent that was never implemented).
+- `server/routes.js` PUT `/cases/:id/labs` (NEW): bulk-replace endpoint. Single transaction: drop dependent `investigation_orders` for this case's labs, drop the old `case_investigations` rows, insert the new array. Atomic; ROLLBACK on any insert failure.
+- `server/routes.js` DELETE `/cases/:id/labs/:labId`: now cascades to `investigation_orders` (Stage-1 deferred L6). SQLite can't add `ON DELETE CASCADE` retroactively, so cleanup lives in the application layer ahead of the parent delete. Reports `orphan_orders_removed:N` for verification.
+- `server/routes.js` POST `/sessions/:id/order-labs`: idempotent on `(session_id, investigation_id)`. Re-ordering the same lab returns `skipped_duplicates:N` and does not insert. Pre-fix, double-clicks and replayed requests accumulated rows; client polling masked it but DB grew over time.
+- `server/routes.js` POST `/sessions/:id/order-radiology`: idempotent on `(session_id, ci.test_name)` via JOIN. Radiology's order flow `INSERT ci → INSERT order` creates a fresh `case_investigations` row per order (intentional — captures result_data at order time), so dedup keys on test_name not investigation_id.
+- `src/components/settings/ConfigPanel.jsx` lab-save flow: replaces the per-row POST loop with a single PUT to the new bulk endpoint. Lab removals now propagate to the DB.
+- `src/components/settings/LabInvestigationEditor.jsx`: bulk `Delete Selected` now confirms before deleting (counts the selection in the prompt). Per-row Trash stays unconfirmed — harder to mis-target.
+- `src/components/settings/RadiologyEditor.jsx`: per-study delete confirms with the study name and notes that uploaded image/video URLs are dropped.
+- `scripts/audit-investigations.sh` (NEW): end-to-end verification — UPSERT correctness, bulk-replace + orphan cleanup, DELETE cascade, lab order idempotency, radiology order idempotency. **14/14 passing**, repeatable (per-run unique `LAB_NAME` so prior runs don't poison subsequent assertions, mirroring the Stage-1 fix).
+
+Triage outcomes:
+- **DEFERRED** (architectural, expensive): radiology stored only in `cases.config.radiology` JSON with no DB master catalog (asymmetric to labs by design); master-lab-edit propagation to per-case copies (admin renames in `lab_tests` master don't update existing `case_investigations` rows — would need an audit-log replay).
+- **DEFERRED** (LOW, cosmetic): unused `InvestigationPanel` export, `result_data` JSON shape inconsistency between order-time and config-time radiology rows, missing reset-to-defaults in editors.
+- **FALSE ALARM**: claimed `turnaroundMinutes` camelCase mismatch in editor payload — verified at LabInvestigationEditor.jsx:143 the editor uses `turnaround_minutes` snake_case throughout, matching the server.
+
+Browser smoke test on `:5173`: simulator workspace mounts, Laboratory + Radiology buttons render, no React error-boundary fires (per the Stage-1 learning that bash audits miss UI crashes).
+
+**Tests:** `npx vite build` clean. `bash scripts/audit-investigations.sh` 14/14 (repeatable). `bash scripts/audit-sessions.sh` still 9/9 (no Stage-1 regression).
+
 ### 2026-05-05 — Sessions + lifecycle wiring audit (Stage 1)
 Three Explore agents reviewed the Sessions subsystem end-to-end (schema/persistence, cross-system wiring, runtime correctness). 17 findings; **3 false positives** on triage (`B-H3` SESSION_EXPIRY_MS module-load capture — module const is fine; `C-M2` debrief re-open guard — already in place via `caseEnded` gate; `B-H2` EventLogger context timing — narrow gap, demoted to LOW). False-positive rate this round: ~18%. Real findings shipped:
 
