@@ -82,6 +82,8 @@ CONSTRAINTS:
 - E2: shipped 2026-05-05
 - E3: shipped 2026-05-05
 - E4: shipped 2026-05-05
-- E5-E9: pending
+- E5: shipped 2026-05-05 (central response redaction policy,
+  including key-aware `platform_settings.setting_value` redaction)
+- E6-E9: pending
 
 Updated: 2026-05-05.

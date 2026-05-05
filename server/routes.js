@@ -24,6 +24,14 @@ import * as labDb from './services/labDatabase.js';
 import { spawn } from 'node:child_process';
 import { buildWavHeader } from './services/wav.js';
 import { EvenByteAligner } from './lib/pcmAlign.js';
+import {
+    REDACTED,
+    redactAuditPayload,
+    redactJsonColumn,
+    redactPlatformSettingRows,
+    redactRow,
+    redactRows
+} from './redaction.js';
 
 // Rate limiters for security
 const authLimiter = rateLimit({
@@ -188,28 +196,12 @@ function parseAuditJson(value) {
     }
 }
 
-function redactAuditPayload(value) {
-    if (Array.isArray(value)) {
-        return value.map(redactAuditPayload);
-    }
-    if (value && typeof value === 'object') {
-        const out = {};
-        for (const [key, child] of Object.entries(value)) {
-            out[key] = /(api[_-]?key|password|secret|token)/i.test(key)
-                ? (child ? '[redacted]' : child)
-                : redactAuditPayload(child);
-        }
-        return out;
-    }
-    return value;
-}
-
 function redactAuditSetting(key, value) {
     if (value == null) return value;
     if (/(api[_-]?key|password|secret|token)/i.test(key)) {
-        return value ? '[redacted]' : value;
+        return value ? REDACTED : value;
     }
-    return parseAuditJson(value);
+    return redactJsonColumn(parseAuditJson(value));
 }
 
 /**
@@ -1426,24 +1418,7 @@ router.get('/sessions/:id', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        // Stage-4 audit: redact API keys from `llm_settings` JSON. Session
-        // creation merges user_preferences.default_llm_settings into this
-        // column, which can carry an apiKey. SELECT s.* echoed it verbatim.
-        // Strip apiKey + api_key from the parsed JSON before responding.
-        if (session.llm_settings) {
-            try {
-                const parsed = typeof session.llm_settings === 'string'
-                    ? JSON.parse(session.llm_settings)
-                    : session.llm_settings;
-                if (parsed && typeof parsed === 'object') {
-                    if ('apiKey' in parsed) parsed.apiKey = parsed.apiKey ? '[redacted]' : '';
-                    if ('api_key' in parsed) parsed.api_key = parsed.api_key ? '[redacted]' : '';
-                    session.llm_settings = JSON.stringify(parsed);
-                }
-            } catch { /* malformed JSON — leave as-is */ }
-        }
-
-        res.json({ session });
+        res.json({ session: redactRow(session) });
     });
 });
 
@@ -1588,6 +1563,87 @@ router.get('/users', authenticateToken, requireAdmin, (req, res) => {
     db.all(sql, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ users: rows });
+    });
+});
+
+// --- USER PREFERENCES (declared early) ---
+//
+// Stage-E5 fix: moved BEFORE /users/:id so Express matches /users/preferences
+// directly. Pre-fix /users/:id (declared first, with requireAdmin) intercepted
+// the request as id="preferences", returned 404 "User not found", and silently
+// broke both reads and writes of user prefs. Stage 7's audit-auth.sh asserted
+// the absence of the literal apiKey in the body, which was vacuously true
+// for the 404 response — the bug only surfaced when audit-redaction.sh
+// asserted [redacted] PRESENCE.
+router.get('/users/preferences', authenticateToken, (req, res) => {
+    db.get(
+        `SELECT * FROM user_preferences WHERE user_id = ?`,
+        [req.user.id],
+        (err, prefs) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!prefs) {
+                return res.json({
+                    theme: 'dark',
+                    language: 'en',
+                    notification_settings: null,
+                    dashboard_layout: null,
+                    default_llm_settings: null,
+                    default_monitor_settings: null
+                });
+            }
+            res.json(redactRow(prefs));
+        }
+    );
+});
+
+router.put('/users/preferences', authenticateToken, (req, res) => {
+    const { theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings } = req.body;
+
+    db.get(`SELECT * FROM user_preferences WHERE user_id = ?`, [req.user.id], (readErr, oldPrefs) => {
+        if (readErr) return res.status(500).json({ error: readErr.message });
+
+        db.run(
+            `INSERT INTO user_preferences (user_id, theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(user_id) DO UPDATE SET
+             theme = excluded.theme,
+             language = excluded.language,
+             notification_settings = excluded.notification_settings,
+             dashboard_layout = excluded.dashboard_layout,
+             default_llm_settings = excluded.default_llm_settings,
+             default_monitor_settings = excluded.default_monitor_settings,
+             accessibility_settings = excluded.accessibility_settings,
+             updated_at = CURRENT_TIMESTAMP`,
+            [
+                req.user.id,
+                theme || 'dark',
+                language || 'en',
+                notification_settings ? JSON.stringify(notification_settings) : null,
+                dashboard_layout ? JSON.stringify(dashboard_layout) : null,
+                default_llm_settings ? JSON.stringify(default_llm_settings) : null,
+                default_monitor_settings ? JSON.stringify(default_monitor_settings) : null,
+                accessibility_settings ? JSON.stringify(accessibility_settings) : null
+            ],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                auditSuccess(req, {
+                    action: 'update_user_preferences',
+                    resourceType: 'user_preferences',
+                    resourceId: String(req.user.id),
+                    oldValue: oldPrefs,
+                    newValue: {
+                        theme: theme || 'dark',
+                        language: language || 'en',
+                        notification_settings,
+                        dashboard_layout,
+                        default_llm_settings: default_llm_settings ? redactAuditSetting('default_llm_settings', JSON.stringify(default_llm_settings)) : null,
+                        default_monitor_settings,
+                        accessibility_settings
+                    }
+                });
+                res.json({ message: 'Preferences updated' });
+            }
+        );
     });
 });
 
@@ -1824,7 +1880,7 @@ router.get('/analytics/sessions', authenticateToken, (req, res) => {
 
     db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ sessions: rows });
+        res.json({ sessions: redactRows(rows) });
     });
 });
 
@@ -1852,7 +1908,7 @@ router.get('/analytics/sessions/:id', authenticateToken, (req, res) => {
         const interactionsSql = `SELECT * FROM interactions WHERE session_id = ? ORDER BY timestamp ASC`;
         db.all(interactionsSql, [req.params.id], (err, interactions) => {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ session, interactions });
+            res.json({ session: redactRow(session), interactions });
         });
     });
 });
@@ -1932,7 +1988,7 @@ router.get('/analytics/login-logs', authenticateToken, requireAdmin, (req, res) 
     
     db.all(sql, [limit], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ logs: rows });
+        res.json({ logs: redactRows(rows, { pii: 'allow', internal: 'allow' }) });
     });
 });
 
@@ -1951,7 +2007,7 @@ router.get('/analytics/settings-logs', authenticateToken, requireAdmin, (req, re
     
     db.all(sql, [limit], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ logs: rows });
+        res.json({ logs: redactRows(rows, { pii: 'allow', internal: 'allow' }) });
     });
 });
 
@@ -1987,7 +2043,7 @@ router.get('/export/login-logs', authenticateToken, requireAdmin, (req, res) => 
         if (err) return res.status(500).json({ error: err.message });
         
         // Convert to CSV
-        const csv = convertToCSV(rows);
+        const csv = convertToCSV(redactRows(rows, { pii: 'allow', internal: 'allow' }));
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=login_logs.csv');
         res.send(csv);
@@ -2040,7 +2096,7 @@ router.get('/export/chat-logs', authenticateToken, (req, res) => {
     db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         
-        const csv = convertToCSV(rows);
+        const csv = convertToCSV(redactRows(rows, { pii: canReadAcrossUsers(req.user) ? 'allow' : 'redact' }));
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=chat_logs.csv');
         res.send(csv);
@@ -2082,7 +2138,7 @@ router.get('/export/settings-logs', authenticateToken, requireAdmin, (req, res) 
     db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         
-        const csv = convertToCSV(rows);
+        const csv = convertToCSV(redactRows(rows, { pii: 'allow', internal: 'allow' }));
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=settings_logs.csv');
         res.send(csv);
@@ -2135,7 +2191,7 @@ router.get('/export/session-settings', authenticateToken, (req, res) => {
     db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         
-        const csv = convertToCSV(rows);
+        const csv = convertToCSV(redactRows(rows, { pii: canReadAcrossUsers(req.user) ? 'allow' : 'redact' }));
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=session_settings.csv');
         res.send(csv);
@@ -2182,10 +2238,10 @@ router.get('/export/complete-session/:sessionId', authenticateToken, (req, res) 
                     if (err) return res.status(500).json({ error: err.message });
 
                     // Combine data
-                    const completeData = {
+                    const completeData = redactRow({
                         ...sessionData,
                         interactions
-                    };
+                    }, { pii: hasRoleAtLeast(req.user, ROLE_RANKS.educator) ? 'allow' : 'redact' });
 
                     // Convert to CSV format
                     const csv = convertCompleteSessionToCSV(completeData);
@@ -5772,7 +5828,7 @@ router.get('/scenarios', authenticateToken, (req, res) => {
         
         // Parse JSON timeline
         const scenarios = rows.map(row => ({
-            ...row,
+            ...redactRow(row, { internal: hasRoleAtLeast(req.user, ROLE_RANKS.admin) ? 'allow' : 'redact' }),
             timeline: JSON.parse(row.timeline || '[]')
         }));
         
@@ -5793,7 +5849,7 @@ router.get('/scenarios/:id', authenticateToken, (req, res) => {
         }
         
         res.json({
-            ...row,
+            ...redactRow(row, { internal: hasRoleAtLeast(req.user, ROLE_RANKS.admin) ? 'allow' : 'redact' }),
             timeline: JSON.parse(row.timeline || '[]')
         });
     });
@@ -6225,97 +6281,11 @@ router.post('/cases/:caseId/restore/:versionId', authenticateToken, requireAdmin
 });
 
 // --- USER PREFERENCES ---
-
-// GET /api/users/preferences - Get current user's preferences
 //
-// Stage-7 audit: redact apiKey from default_llm_settings JSON before
-// responding. Stage 4 fixed the same shape on GET /sessions/:id but missed
-// this twin endpoint. SELECT * echoed default_llm_settings.apiKey to anyone
-// who saved one in their UserProfilePanel.
-router.get('/users/preferences', authenticateToken, (req, res) => {
-    db.get(
-        `SELECT * FROM user_preferences WHERE user_id = ?`,
-        [req.user.id],
-        (err, prefs) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (!prefs) {
-                return res.json({
-                    theme: 'dark',
-                    language: 'en',
-                    notification_settings: null,
-                    dashboard_layout: null,
-                    default_llm_settings: null,
-                    default_monitor_settings: null
-                });
-            }
-            if (prefs.default_llm_settings) {
-                try {
-                    const parsed = typeof prefs.default_llm_settings === 'string'
-                        ? JSON.parse(prefs.default_llm_settings)
-                        : prefs.default_llm_settings;
-                    if (parsed && typeof parsed === 'object') {
-                        if ('apiKey' in parsed) parsed.apiKey = parsed.apiKey ? '[redacted]' : '';
-                        if ('api_key' in parsed) parsed.api_key = parsed.api_key ? '[redacted]' : '';
-                        prefs.default_llm_settings = JSON.stringify(parsed);
-                    }
-                } catch { /* malformed — leave as-is */ }
-            }
-            res.json(prefs);
-        }
-    );
-});
-
-// PUT /api/users/preferences - Update current user's preferences
-router.put('/users/preferences', authenticateToken, (req, res) => {
-    const { theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings } = req.body;
-
-    db.get(`SELECT * FROM user_preferences WHERE user_id = ?`, [req.user.id], (readErr, oldPrefs) => {
-        if (readErr) return res.status(500).json({ error: readErr.message });
-
-    db.run(
-        `INSERT INTO user_preferences (user_id, theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(user_id) DO UPDATE SET
-         theme = excluded.theme,
-         language = excluded.language,
-         notification_settings = excluded.notification_settings,
-         dashboard_layout = excluded.dashboard_layout,
-         default_llm_settings = excluded.default_llm_settings,
-         default_monitor_settings = excluded.default_monitor_settings,
-         accessibility_settings = excluded.accessibility_settings,
-         updated_at = CURRENT_TIMESTAMP`,
-        [
-            req.user.id,
-            theme || 'dark',
-            language || 'en',
-            notification_settings ? JSON.stringify(notification_settings) : null,
-            dashboard_layout ? JSON.stringify(dashboard_layout) : null,
-            default_llm_settings ? JSON.stringify(default_llm_settings) : null,
-            default_monitor_settings ? JSON.stringify(default_monitor_settings) : null,
-            accessibility_settings ? JSON.stringify(accessibility_settings) : null
-        ],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            auditSuccess(req, {
-                action: 'update_user_preferences',
-                resourceType: 'user_preferences',
-                resourceId: String(req.user.id),
-                oldValue: oldPrefs,
-                newValue: {
-                    theme: theme || 'dark',
-                    language: language || 'en',
-                    notification_settings,
-                    dashboard_layout,
-                    default_llm_settings: default_llm_settings ? redactAuditSetting('default_llm_settings', JSON.stringify(default_llm_settings)) : null,
-                    default_monitor_settings,
-                    accessibility_settings
-                }
-            });
-            res.json({ message: 'Preferences updated' });
-        }
-    );
-    });
-});
+// (Routes moved earlier in the file — see "USER PREFERENCES (declared early)"
+// just above the /users/:id routes. Express matches first-defined-first, and
+// /users/:id was capturing /users/preferences as id="preferences" → 404
+// "User not found" because no row had that id. Stage E5 fix.)
 
 // --- SYSTEM AUDIT LOG ---
 
@@ -6354,7 +6324,7 @@ function handleSystemAuditLogRequest(req, res) {
 
     db.all(sql, params, (err, logs) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ logs });
+        res.json({ logs: redactRows(logs, { pii: 'allow', internal: 'allow' }) });
     });
 }
 
@@ -6499,7 +6469,7 @@ router.get('/admin/export-records', authenticateToken, requireAdmin, (req, res) 
         [parseInt(limit), parseInt(offset)],
         (err, records) => {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ records });
+            res.json({ records: redactRows(records, { pii: 'allow', internal: 'allow' }) });
         }
     );
 });
@@ -6517,7 +6487,7 @@ router.get('/admin/active-sessions', authenticateToken, requireAdmin, (req, res)
         [],
         (err, sessions) => {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ sessions });
+            res.json({ sessions: redactRows(sessions, { pii: 'allow', internal: 'allow' }) });
         }
     );
 });
@@ -7592,16 +7562,7 @@ router.get('/platform-settings', authenticateToken, requireAdmin, (req, res) => 
         (err, settings) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            // Parse JSON values
-            const parsed = settings.map(s => ({
-                ...s,
-                setting_value: s.setting_value ? (() => {
-                    try { return JSON.parse(s.setting_value); }
-                    catch { return s.setting_value; }
-                })() : null
-            }));
-
-            res.json({ settings: parsed });
+            res.json({ settings: redactPlatformSettingRows(settings) });
         }
     );
 });
@@ -7711,18 +7672,13 @@ router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
             provider: settings.llm_provider || DEFAULT_LLM_SETTINGS.provider,
             model: settings.llm_model || DEFAULT_LLM_SETTINGS.model,
             baseUrl: settings.llm_base_url || DEFAULT_LLM_SETTINGS.baseUrl,
-            apiKey: settings.llm_api_key ? '••••••••' : '', // Mask API key for non-admins
+            apiKey: settings.llm_api_key ? REDACTED : '',
             apiKeySet: !!settings.llm_api_key,
             enabled: settings.llm_enabled !== 'false',
             maxOutputTokens: settings.llm_max_output_tokens || '',
             temperature: settings.llm_temperature || '',
             systemPromptTemplate: settings.llm_system_prompt_template || DEFAULT_LLM_SETTINGS.systemPromptTemplate
         };
-
-        // Admins get full settings
-        if (hasRoleAtLeast(req.user, ROLE_RANKS.admin)) {
-            response.apiKey = settings.llm_api_key || '';
-        }
 
         res.json(response);
     } catch (err) {
@@ -7738,7 +7694,7 @@ router.put('/platform-settings/llm', authenticateToken, requireAdmin, async (req
         if (provider) await setAuditedPlatformSetting(req, 'llm_provider', provider, 'update_platform_llm_settings');
         if (model !== undefined) await setAuditedPlatformSetting(req, 'llm_model', model, 'update_platform_llm_settings');
         if (baseUrl) await setAuditedPlatformSetting(req, 'llm_base_url', baseUrl, 'update_platform_llm_settings');
-        if (apiKey !== undefined) await setAuditedPlatformSetting(req, 'llm_api_key', apiKey, 'update_platform_llm_settings');
+        if (apiKey !== undefined && apiKey !== REDACTED) await setAuditedPlatformSetting(req, 'llm_api_key', apiKey, 'update_platform_llm_settings');
         if (enabled !== undefined) await setAuditedPlatformSetting(req, 'llm_enabled', String(enabled), 'update_platform_llm_settings');
         if (maxOutputTokens !== undefined) await setAuditedPlatformSetting(req, 'llm_max_output_tokens', String(maxOutputTokens), 'update_platform_llm_settings');
         if (temperature !== undefined) await setAuditedPlatformSetting(req, 'llm_temperature', String(temperature), 'update_platform_llm_settings');
@@ -9263,7 +9219,7 @@ router.get('/agents/templates', authenticateToken, async (req, res) => {
         });
 
         const parsed = templates.map(t => ({
-            ...t,
+            ...redactRow(t),
             config: JSON.parse(t.config || '{}'),
             is_default: t.is_default === 1
         }));
@@ -9296,7 +9252,7 @@ router.get('/agents/templates/:id', authenticateToken, async (req, res) => {
         }
 
         res.json({
-            ...template,
+            ...redactRow(template),
             config: JSON.parse(template.config || '{}'),
             is_default: template.is_default === 1
         });
@@ -9448,7 +9404,7 @@ router.put('/agents/templates/:id', authenticateToken, requireEducator, async (r
         // LLM fields
         if (llm_provider !== undefined) { updates.push('llm_provider = ?'); params.push(llm_provider || null); }
         if (llm_model !== undefined) { updates.push('llm_model = ?'); params.push(llm_model || null); }
-        if (llm_api_key !== undefined) { updates.push('llm_api_key = ?'); params.push(llm_api_key || null); }
+        if (llm_api_key !== undefined && llm_api_key !== REDACTED) { updates.push('llm_api_key = ?'); params.push(llm_api_key || null); }
         if (llm_endpoint !== undefined) { updates.push('llm_endpoint = ?'); params.push(llm_endpoint || null); }
         if (llm_config !== undefined) { updates.push('llm_config = ?'); params.push(llm_config ? JSON.stringify(llm_config) : null); }
         // Stage-4: temperature + max_tokens. Empty string clears (resolver falls

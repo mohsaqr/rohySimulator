@@ -1,5 +1,65 @@
 # Session Handoff — 2026-05-05
 
+## Stage E5 (Data classification + redaction policy) — SHIPPED this session
+
+Inventory pass:
+- **Secrets, never returned raw**: `users.password_hash`;
+  `active_sessions.token_hash`; `agent_templates.llm_api_key`;
+  `platform_settings.setting_key` values matching `*_api_key`, `*_secret`,
+  or `*_token` such as `llm_api_key`, `google_tts_api_key`,
+  `openai_tts_api_key`; JSON keys `apiKey`, `api_key`, `llm_api_key`,
+  `password`, `secret`, `token` inside `sessions.llm_settings`,
+  `sessions.monitor_settings`, `user_preferences.default_llm_settings`,
+  `user_preferences.default_monitor_settings`,
+  `user_preferences.notification_settings`, `session_settings.settings_snapshot`,
+  `settings_logs.settings_json`, and `system_audit_log.old_value/new_value/metadata`.
+- **PII, role/scope controlled**: `users.email`, `alternative_email`,
+  `phone`, `address`, `name`, `education`, `grade`, plus response aliases
+  `user_email` and `student_name`. Admin/educator/reviewer routes that are
+  explicitly cross-user keep permitted PII; student cross-user reads remain
+  denied or redact aliases if exposed by a scoped endpoint.
+- **Internal, hidden from non-admin where exposed**: `users.role_rank`,
+  creator/updater identifiers such as `created_by`, `updated_by`,
+  scenario creator ids, and raw audit/settings payload internals. Admin audit
+  readers can see metadata after recursive secret redaction.
+
+Implementation:
+1. **Central helper** — `server/redaction.js` owns
+   `RESPONSE_REDACTION_POLICY`, `redactRow()`, `redactRows()`,
+   `redactJsonColumn()`, `redactPlatformSettingRows()`, and
+   `redactAuditPayload()`.
+2. **Chosen integration** — per-route helpers, not a global `res.json`
+   interceptor. This is deliberate: `POST /api/proxy/llm` streams SSE when
+   `Accept: text/event-stream` and must not be intercepted.
+3. **Known fixes migrated** — `GET /sessions/:id` and
+   `GET /users/preferences` now call the helper; behavior remains
+   `apiKey`/`api_key` -> `[redacted]`.
+4. **Swept offenders** — applied redaction to session analytics, complete
+   session/session-settings/settings-log exports, settings/audit log reads,
+   active-session reads, dedicated and generic platform-setting reads,
+   scenarios' internal creator ids, and agent-template `llm_api_key` reads.
+5. **Audit boundary** — audit `oldValue`/`newValue`/`metadata` are redacted
+   before persistence via the shared helper. Audit-log GET also redacts
+   defensively on read.
+6. **New script** — `scripts/audit-redaction.sh` covers 5+ endpoints:
+   `/sessions/:id`, `/users/preferences`, `/users/:id`,
+   `/analytics/sessions/:id`, `/agents/templates/:id`,
+   `/platform-settings`, and `/admin/active-sessions`.
+
+Policy for new endpoints: if a route returns rows touching the classes above,
+declare the intended scope and call `redactRow()`/`redactRows()` at the response
+boundary. JSON settings columns should go through `redactJsonColumn()` even
+when the column name is innocuous.
+
+Verification completed locally: `node --check server/redaction.js`,
+`node --check server/routes.js`, `bash -n scripts/audit-redaction.sh`,
+`bash -n` across all `scripts/audit-*.sh`, and `npx vite build` (large-chunk
+warning only). End-to-end audit scripts require the managed API server; this
+run did not restart `:3000`, and `localhost:3000` was not listening.
+
+Deferred: column-level encryption at rest, request-side classification, GDPR
+right-to-erasure, and broader failed-access telemetry.
+
 ## Stage E4 (Audit-log coverage) — SHIPPED this session
 
 Mission inventory found previously uncovered sensitive mutations in:

@@ -1,3 +1,15 @@
+### 2026-05-05 — Stage E5: Data classification + redaction policy
+Generalized the Stage 4/7 apiKey redaction fixes into a central response policy.
+
+- `server/redaction.js` (NEW): declares `RESPONSE_REDACTION_POLICY` and helpers `redactRow()`, `redactRows()`, `redactJsonColumn()`, `redactPlatformSettingRows()`, and `redactAuditPayload()`. Chosen approach: per-route helpers instead of an Express `res.json` interceptor so streaming endpoints such as `POST /api/proxy/llm` are not wrapped.
+- `server/routes.js`: migrated `GET /sessions/:id` and `GET /users/preferences` to the helper and swept additional settings/key surfaces: session analytics, complete/session CSV exports, settings/audit log reads, active-session token rows, dedicated and generic platform-setting reads, scenario internal creator ids, and agent-template `llm_api_key` reads.
+- `server/routes.js`: audit old/new/metadata payloads now use the same recursive redaction helper before persistence, so audit rows do not become a secondary secret store.
+- `scripts/audit-redaction.sh` (NEW): logs in admin + a student, proves secret redaction on preferences, sessions, analytics sessions, agent templates, platform settings, active sessions, and checks admin/student PII behavior for `/users/:id`.
+
+Inventory: secrets are `users.password_hash`, `active_sessions.token_hash`, platform settings matching `*_api_key`, agent `llm_api_key`, session/preference JSON carrying `apiKey`/`api_key`/`llm_api_key`, audit/settings old/new JSON, and future `*_key`/`*_secret`/`*_token` response columns. PII is `users.email`, `alternative_email`, `phone`, `address`, `name`, `education`, `grade` plus aliases such as `user_email` and `student_name`. Internal fields are creator/updater ranks and ids such as `created_by`, `updated_by`, and `role_rank`.
+
+Deferred: column-level encryption at rest, request-side classification, and GDPR erasure remain separate stages.
+
 ### 2026-05-05 — Stage E4: Audit-log coverage
 Centralized request-aware audit helpers and expanded `system_audit_log` coverage across sensitive mutations.
 
