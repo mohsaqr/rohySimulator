@@ -1,3 +1,22 @@
+### 2026-05-05 — Scenario engine runtime audit (Stage 5)
+Three Explore agents reviewed the scenario engine state machine (`PatientMonitor`), persistence/snapshot interactions, and admin/runtime UX. **1 false positive** on triage (FP rate ~8% — Agent 2 self-corrected on `scaleScenarioTimeline`). Real fixes shipped:
+
+- `src/components/monitor/PatientMonitor.jsx`: new `caseSnapshot` state mirrors the Stage-4 ChatInterface pattern — fetches `/api/sessions/:id` once on mount and uses the frozen `case_snapshot.scenario` for the engine's timeline source. Falls back to live `caseData.scenario` only if the snapshot fetch hasn't completed. Pre-fix the engine read `caseData.scenario` directly, so admin scenario edits mid-session bled into the running session — the same Stage-1 follow-on shape as Stage 4's chat fix.
+- `src/components/monitor/PatientMonitor.jsx` engine tick: override guard now checks every key the scenario can mutate (params, conditions, discrete switches), not just `rhythm`. Pre-fix a learner who manually pushed HR to 60 watched the next beat clobber it back to whatever the timeline interpolation produced. Helper `filterOverrides()` strips overridden keys before `setParams` / `setConditions` so the apply is pure.
+- `src/components/monitor/PatientMonitor.jsx` engine tick: auto-stop on complete. When `nextTime >= toFrame.time + 2` the engine schedules `setScenarioPlaying(false)` via `setTimeout(..., 0)` so the final-frame state lands first, then the interval tears down. Pre-fix the engine held the last frame indefinitely with no completion signal — `scenarioTime` ticked toward infinity, the UI showed "Playing" forever, and any analytics keyed on completion never fired.
+- `src/components/monitor/PatientMonitor.jsx`: aria-label + title on the play/pause button. Was icon-only with no screen-reader affordance.
+- `src/components/settings/ConfigPanel.jsx` `ScenarioRepository.onSelectScenario`: confirm before clobbering an existing case scenario. Stage 2 added the same guard to the in-wizard scenario picker; the repository import path was an outlier (drag-drop / double-click / keyboard-pick all bypassed the dialog).
+- `server/routes.js` POST + PUT `/scenarios`: new `validateScenarioTimeline()` rejects malformed frames before persisting (non-numeric `time`, non-numeric param values, non-object frames, non-string rhythm). Pre-fix the server stored anything; PatientMonitor's interpolator hit `NaN` or pushed an unknown rhythm into the ECG generator at runtime.
+- `scripts/audit-scenario.sh` (NEW): asserts POST/PUT 400 on malformed frames, valid-scenario round-trip, and `case_snapshot` has both `scenario` + `system_prompt` keys. **7/7 passing**.
+
+Triage outcomes:
+- **DEFERRED** (architectural / speculative): beat-skipping under load (`setInterval` drift, no `performance.now()` rebase); scenario-disable mid-run zombie state (engine no-ops cleanly but doesn't surface a banner); server-side timeline scaling (`scaleScenarioTimeline` runs only client-side); PUT /scenarios idempotency marker; mid-run UX banner if admin removes scenario; master/copy distinction UI label.
+- **FALSE ALARM**: `scaleScenarioTimeline` rhythm/conditions preservation — Agent 2 flagged then verified the spread copies all fields correctly.
+
+Browser smoke `:5173`: simulator workspace mounts, no React error-boundary fires.
+
+**Tests:** `audit-scenario.sh` 7/7. `audit-llm.sh` 7/7. `audit-alarms.sh` 13/13. `audit-investigations.sh` 17/17. `audit-sessions.sh` 9/9. **53/53 across all stages.**
+
 ### 2026-05-05 — LLM precedence chain audit (Stage 4)
 Three Explore agents reviewed the platform → case → agent → session → user resolver across server, editors, and runtime. **0 false positives** (FP rate 30 → 18 → 11 → 0 → 0%). Real fixes shipped:
 

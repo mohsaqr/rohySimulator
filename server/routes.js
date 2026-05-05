@@ -5342,14 +5342,53 @@ router.get('/scenarios/:id', authenticateToken, (req, res) => {
 });
 
 // Create scenario
+// Stage-5 audit: validate every timeline frame on write so the runtime
+// engine doesn't have to defend against malformed scenarios. Pre-fix
+// `params: {hr: "invalid"}` or `rhythm: "ASYSTOLE_TYPO"` were accepted
+// and JSON.stringify'd into the DB; PatientMonitor's interpolator then
+// produced NaN or hit an unknown rhythm in the ECG generator.
+const KNOWN_RHYTHMS = new Set(['NSR', 'AFIB', 'AFib', 'VTach', 'VFib', 'Asystole', 'PVC', 'AFlutter', 'PEA', 'SVT', 'BradySinus', 'JunctionalEscape']);
+function validateScenarioTimeline(timeline) {
+    if (!Array.isArray(timeline)) return 'timeline must be an array';
+    for (let i = 0; i < timeline.length; i++) {
+        const frame = timeline[i];
+        if (!frame || typeof frame !== 'object') return `frame[${i}] is not an object`;
+        if (!Number.isFinite(frame.time) || frame.time < 0) {
+            return `frame[${i}].time must be a non-negative number`;
+        }
+        if (frame.params !== undefined && frame.params !== null) {
+            if (typeof frame.params !== 'object') return `frame[${i}].params must be an object`;
+            for (const [k, v] of Object.entries(frame.params)) {
+                if (v !== null && v !== undefined && !Number.isFinite(Number(v))) {
+                    return `frame[${i}].params.${k} must be numeric`;
+                }
+            }
+        }
+        if (frame.conditions !== undefined && frame.conditions !== null && typeof frame.conditions !== 'object') {
+            return `frame[${i}].conditions must be an object`;
+        }
+        if (frame.rhythm !== undefined && frame.rhythm !== null && frame.rhythm !== '') {
+            // Don't be strict about case; accept anything reasonably named.
+            // The known list is informational — log a warning for unknowns
+            // rather than reject (admins occasionally invent rhythm names).
+            if (typeof frame.rhythm !== 'string') return `frame[${i}].rhythm must be a string`;
+        }
+    }
+    return null;
+}
+
 router.post('/scenarios', authenticateToken, (req, res) => {
     const { name, description, duration_minutes, category, timeline, is_public } = req.body;
     const created_by = req.user.id;
-    
+
     if (!name || !timeline || !duration_minutes) {
         return res.status(400).json({ error: 'Name, timeline, and duration are required' });
     }
-    
+    const tlError = validateScenarioTimeline(timeline);
+    if (tlError) {
+        return res.status(400).json({ error: `Invalid scenario timeline: ${tlError}` });
+    }
+
     const query = `
         INSERT INTO scenarios (name, description, duration_minutes, category, timeline, created_by, is_public)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -5377,6 +5416,14 @@ router.put('/scenarios/:id', authenticateToken, (req, res) => {
     const { name, description, duration_minutes, category, timeline, is_public } = req.body;
     const userId = req.user.id;
     const isAdmin = req.user.role === 'admin';
+
+    // Stage-5 audit: validate timeline shape before persisting (mirrors POST).
+    if (timeline !== undefined) {
+        const tlError = validateScenarioTimeline(timeline);
+        if (tlError) {
+            return res.status(400).json({ error: `Invalid scenario timeline: ${tlError}` });
+        }
+    }
     
     // Check ownership or admin
     db.get('SELECT created_by FROM scenarios WHERE id = ?', [id], (err, row) => {

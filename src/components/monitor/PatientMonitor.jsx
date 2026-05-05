@@ -548,6 +548,34 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       return () => { cancelled = true; };
    }, [sessionId]);
 
+   // Stage-5 audit: fetch case_snapshot at session start and freeze it for
+   // scenario engine consumption. Pre-fix the engine read `caseData.scenario`
+   // (live React state, re-fetched on case-list refresh), so admin scenario
+   // edits mid-session bled into the running session — same shape as the
+   // Stage-4 ChatInterface fix. Snapshot is immutable for the session.
+   const [caseSnapshot, setCaseSnapshot] = useState(null);
+   useEffect(() => {
+      if (!sessionId) { setCaseSnapshot(null); return; }
+      let cancelled = false;
+      (async () => {
+         try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(apiUrl(`/sessions/${sessionId}`), {
+               headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            if (!res.ok || cancelled) return;
+            const data = await res.json();
+            const raw = data?.session?.case_snapshot;
+            if (!raw) return;
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (!cancelled) setCaseSnapshot(parsed);
+         } catch (e) {
+            console.warn('[PatientMonitor] case snapshot fetch failed:', e.message);
+         }
+      })();
+      return () => { cancelled = true; };
+   }, [sessionId]);
+
    // Load initial vitals and scenario from case data when case loads
    useEffect(() => {
       if (caseData) {
@@ -629,13 +657,19 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
             }
          }
 
-         // Load scenario if present
-         if (caseData.scenario) {
+         // Load scenario if present.
+         //
+         // Stage-5 audit: prefer caseSnapshot.scenario (frozen at session
+         // start) over caseData.scenario (live React state). Falls back to
+         // the live case if the snapshot fetch hasn't completed or this
+         // case-load happened before any session existed.
+         const scenarioSource = caseSnapshot?.scenario ?? caseData.scenario;
+         if (scenarioSource) {
             const caseScenario = {
                id: `case_${caseData.id}`,
                name: `${caseData.name} - Scenario`,
-               description: caseData.scenario.description || 'Case scenario',
-               timeline: caseData.scenario.timeline || []
+               description: scenarioSource.description || 'Case scenario',
+               timeline: scenarioSource.timeline || []
             };
 
             // Add case scenario to list if it has a timeline
@@ -647,7 +681,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                });
 
                // Auto-start if configured
-               if (caseData.scenario.autoStart) {
+               if (scenarioSource.autoStart) {
                   setActiveScenario(caseScenario.id);
                   setScenarioTime(0);
                   setScenarioPlaying(true);
@@ -658,7 +692,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
          // case-load is already logged by App.jsx (EventLogger.caseLoaded)
          // when the case is selected, so we don't double-log here.
       }
-   }, [caseData]);
+   }, [caseData, caseSnapshot]);
 
    // Custom Trend Builder State
    const [trendTarget, setTrendTarget] = useState({ hr: 100, spo2: 95, bpSys: 120, bpDia: 80, duration: 300 });
@@ -767,6 +801,22 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
             const toFrame = timeline[idx < timeline.length ? idx : timeline.length - 1];
             const fromFrame = timeline[idx > 0 ? idx - 1 : 0];
 
+            // Stage-5 audit: extend the override guard from rhythm-only to
+            // every field the scenario can mutate (params + conditions). A
+            // learner who manually pushes HR to 60 or toggles a condition
+            // expects their edit to survive subsequent beats. Pre-fix only
+            // rhythm checked overriddenVitalsRef; everything else got
+            // unconditionally clobbered each tick.
+            const overridden = overriddenVitalsRef.current;
+            const filterOverrides = (obj) => {
+               if (!obj) return obj;
+               const out = {};
+               for (const k of Object.keys(obj)) {
+                  if (!overridden.has(k)) out[k] = obj[k];
+               }
+               return out;
+            };
+
             if (toFrame && fromFrame && toFrame !== fromFrame) {
                // Interpolate
                const totalDur = toFrame.time - fromFrame.time;
@@ -786,18 +836,22 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                const interpolatedParams = {};
 
                pKeys.forEach(key => {
+                  if (overridden.has(key)) return; // learner override wins
                   const startVal = getVal(fromFrame.params, key, livePrev[key]);
                   const endVal = getVal(toFrame.params, key, startVal);
                   interpolatedParams[key] = Math.round(lerp(startVal, endVal, progress));
                });
 
-               setParams(prev => ({ ...prev, ...interpolatedParams }));
+               if (Object.keys(interpolatedParams).length > 0) {
+                  setParams(prev => ({ ...prev, ...interpolatedParams }));
+               }
 
                // Interpolate Conditions (Float values like stElev)
                // Boolean/Enum conditions (rhythm, pvc, wideQRS) usually switch at the Keyframe time
                const cKeys = ['stElev', 'noise'];
                const interpolatedConds = {};
                cKeys.forEach(key => {
+                  if (overridden.has(key)) return;
                   const startVal = getVal(fromFrame.conditions, key, liveConds[key]);
                   const endVal = getVal(toFrame.conditions, key, startVal);
                   interpolatedConds[key] = parseFloat(lerp(startVal, endVal, progress).toFixed(2));
@@ -807,22 +861,42 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                // copy the leaving-frame's discrete values verbatim.
                const discKeys = ['pvc', 'wideQRS', 'tInv'];
                discKeys.forEach(key => {
+                  if (overridden.has(key)) return;
                   if (fromFrame.conditions && fromFrame.conditions[key] !== undefined) {
                      interpolatedConds[key] = fromFrame.conditions[key];
                   }
                });
 
-               if (fromFrame.rhythm && !overriddenVitalsRef.current.has('rhythm')) {
+               if (fromFrame.rhythm && !overridden.has('rhythm')) {
                   setRhythm(fromFrame.rhythm);
                }
 
-               setConditions(prev => ({ ...prev, ...interpolatedConds }));
+               if (Object.keys(interpolatedConds).length > 0) {
+                  setConditions(prev => ({ ...prev, ...interpolatedConds }));
+               }
             } else if (toFrame && nextTime >= toFrame.time) {
-               // We are sitting at or past the last frame
-               // Ensure final state
-               if (toFrame.params) setParams(prev => ({ ...prev, ...toFrame.params }));
-               if (toFrame.rhythm && !overriddenVitalsRef.current.has('rhythm')) setRhythm(toFrame.rhythm);
-               if (toFrame.conditions) setConditions(prev => ({ ...prev, ...toFrame.conditions }));
+               // We are sitting at or past the last frame — ensure final state
+               // (still respect overrides) and stop the engine. Pre-fix the
+               // engine held the last frame indefinitely with no completion
+               // signal, so scenarioTime ticked toward infinity, the UI showed
+               // "Playing" forever, and any analytics keyed on completion
+               // never fired.
+               if (toFrame.params) {
+                  const filtered = filterOverrides(toFrame.params);
+                  if (Object.keys(filtered).length > 0) setParams(prev => ({ ...prev, ...filtered }));
+               }
+               if (toFrame.rhythm && !overridden.has('rhythm')) setRhythm(toFrame.rhythm);
+               if (toFrame.conditions) {
+                  const filtered = filterOverrides(toFrame.conditions);
+                  if (Object.keys(filtered).length > 0) setConditions(prev => ({ ...prev, ...filtered }));
+               }
+               // Auto-stop ~2s past the last frame to give the final-state
+               // application above a chance to land before the interval
+               // tears down. Schedule the stop outside the setScenarioTime
+               // updater because mutating other state inside it is forbidden.
+               if (nextTime >= toFrame.time + 2) {
+                  setTimeout(() => setScenarioPlaying(false), 0);
+               }
             }
 
             return nextTime;
@@ -1447,6 +1521,8 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                                  <button
                                     onClick={() => setScenarioPlaying(!scenarioPlaying)}
                                     className={`p-2 rounded-full ${scenarioPlaying ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}
+                                    aria-label={scenarioPlaying ? 'Pause scenario' : 'Resume scenario'}
+                                    title={scenarioPlaying ? 'Pause scenario' : 'Resume scenario'}
                                  >
                                     {scenarioPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                                  </button>

@@ -705,6 +705,20 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                             <ScenarioRepository
                                 onSelectScenario={(scenario) => {
                                     if (editingCase) {
+                                        // Stage-5 audit: confirm before clobbering an existing case scenario.
+                                        // Stage 2 added the same guard for the in-wizard scenario picker;
+                                        // the repository import path was an outlier — drag-drop / double-click
+                                        // / keyboard-pick all bypassed it. A typo or misclick here destroyed
+                                        // the timeline silently.
+                                        const existing = editingCase.scenario;
+                                        const hasTimeline = existing && Array.isArray(existing.timeline) && existing.timeline.length > 0;
+                                        if (hasTimeline) {
+                                            const proceed = window.confirm(
+                                                `This case already has a scenario timeline (${existing.timeline.length} frame${existing.timeline.length === 1 ? '' : 's'}). Replace it with "${scenario.name}"? The current timeline will be lost.`
+                                            );
+                                            if (!proceed) return;
+                                        }
+
                                         const scaledScenario = {
                                             enabled: true,
                                             autoStart: false,

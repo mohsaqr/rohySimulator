@@ -1,6 +1,50 @@
 # Session Handoff — 2026-05-05
 
-## Stage 4 (LLM precedence chain) — SHIPPED this session
+## Stage 5 (Scenario engine runtime) — SHIPPED this session
+
+Three Explore agents reviewed the scenario engine state machine,
+persistence/snapshot interactions, and admin/runtime UX. **1 false
+positive** (FP rate ~8%). Real fixes shipped:
+
+1. **Snapshot binding for the scenario engine** (HIGH, Stage-1
+   follow-on) — `PatientMonitor` now mirrors the Stage-4 chat fix:
+   fetches `/api/sessions/:id` once on mount and uses
+   `case_snapshot.scenario` for the timeline source. Pre-fix the engine
+   read `caseData.scenario` (live React state).
+2. **Override guard extended beyond rhythm** (HIGH) — every key the
+   scenario can mutate (params, conditions, discrete switches) is now
+   stripped against `overriddenVitalsRef` before apply. Pre-fix only
+   `rhythm` was guarded; learner manual edits to HR/SpO2/etc were
+   clobbered every beat.
+3. **Auto-stop on scenario complete** (MED) — engine schedules
+   `setScenarioPlaying(false)` via `setTimeout(..., 0)` once `nextTime`
+   passes the last frame by 2s. Pre-fix the engine held the last frame
+   forever; `scenarioTime` ticked toward infinity.
+4. **Scenario picker confirm** (HIGH UX) — repository import path now
+   confirms before clobbering an existing case scenario. Stage 2 added
+   the same guard for the in-wizard picker; this was the outlier.
+5. **Server-side timeline frame validation** (MED) — POST/PUT
+   `/scenarios` reject malformed frames (negative time, non-numeric
+   params, non-object frames). Pre-fix the runtime interpolator hit
+   `NaN` or unknown rhythm strings.
+6. **Aria-label on play/pause button** (cheap MED, a11y).
+
+Verification: `audit-scenario.sh` 7/7. `audit-llm.sh` 7/7.
+`audit-alarms.sh` 13/13. `audit-investigations.sh` 17/17.
+`audit-sessions.sh` 9/9. **53/53 across all stages.** Browser smoke on
+`:5173`: simulator mounts, no error-boundary fires.
+
+**Deferred (architectural / speculative)**:
+- Beat-skipping under load (`setInterval` drift, no `performance.now()`
+  rebase) — speculative.
+- Scenario-disable mid-run banner (admin removes scenario from case
+  config; engine no-ops cleanly but no UX cue).
+- Server-side timeline scaling (`scaleScenarioTimeline` runs only
+  client-side; concurrent admin edits could drift).
+- PUT /scenarios idempotency marker (`already_updated:true`) — minor.
+- Master/copy distinction UI label on imported scenarios.
+
+## Stage 4 (LLM precedence chain) — SHIPPED previous session, COMMITTED
 
 Three Explore agents reviewed the platform → case → agent → session →
 user resolver. **0 false positives** (FP rate 30 → 18 → 11 → 0 → 0%).
@@ -174,7 +218,7 @@ outline below is the executive view.
 | ~~2~~ | ~~Investigations (Lab + Radiology)~~ | ~~HIGH~~ | ✅ DONE | UPSERT POST/labs, bulk PUT/labs replace, DELETE cascade, /order-labs+/order-radiology idempotent, editor delete confirms. L6 resolved. |
 | ~~3~~ | ~~Alarms + Notifications~~ | ~~HIGH~~ | ✅ DONE | Ack endpoint IDOR + idempotency, /alarms/config cross-user read fix, transient state cleared on session change, BannerSurface aria-live. Threshold snapshot deferred. |
 | ~~4~~ | ~~LLM precedence chain~~ | ~~MED~~ | ✅ DONE | Agent layer temperature/max_tokens added (was silently dropped). case_snapshot includes system_prompt; ChatInterface frozen-snapshot. apiKey redacted in GET /sessions/:id. Memory_access server enforcement + user-layer resolver deferred. |
-| 5 | Scenario engine (runtime) | MED | 60–90 min | Storage audited; runtime engine in PatientMonitor:560–682 not yet. Beat application, scenario-disable mid-run, complete state. Stage 1's snapshot decision now constrains what mid-run admin edits do. |
+| ~~5~~ | ~~Scenario engine (runtime)~~ | ~~MED~~ | ✅ DONE | Snapshot binding for engine, override guard extended to all mutable fields, auto-stop on complete, scenario-picker confirm, server-side timeline validation. Beat-drift + mid-run banner deferred. |
 | 6 | Physical exam + body map | MED | 60 min | Region master + per-case + AI-context narrative. Same drift pattern as labs/treatments. |
 | 7 | Auth + user preferences | LOW | 30–45 min | Simple FK relationships; expect 0–1 real findings. |
 | 8 | TNA analytics + event log | LOW | 45–60 min | Read-mostly aggregation; drift is cosmetic. Run after Stage 1 informs event lifecycle. |
