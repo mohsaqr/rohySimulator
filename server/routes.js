@@ -11,6 +11,7 @@ import { authenticateToken, requireAdmin, requireAuth, generateToken } from './m
 import * as labDb from './services/labDatabase.js';
 import { spawn } from 'node:child_process';
 import { buildWavHeader } from './services/wav.js';
+import { EvenByteAligner } from './lib/pcmAlign.js';
 
 // Rate limiters for security
 const authLimiter = rateLimit({
@@ -6990,7 +6991,13 @@ router.get('/tts/usage', authenticateToken, async (req, res) => {
 // ============================================
 
 const PIPER_DIR = path.join(__dirname, 'data', 'piper');
-const PIPER_BIN = process.env.PIPER_BIN || path.join(PIPER_DIR, 'piper', 'piper');
+// piper1-gpl (the maintained successor to the archived rhasspy/piper) is
+// distributed as a Python wheel; install-piper.sh creates a venv at
+// $PIPER_DIR/venv/ and `pip install piper-tts` exposes the CLI at
+// venv/bin/piper. Old standalone-binary installs (rhasspy/piper unpacked
+// into $PIPER_DIR/piper/piper) and Homebrew installs (/opt/homebrew/bin/piper)
+// continue to work via the PIPER_BIN env override.
+const PIPER_BIN = process.env.PIPER_BIN || path.join(PIPER_DIR, 'venv', 'bin', 'piper');
 const TTS_TEXT_LIMIT = 2000;
 
 const readVoiceSidecar = (filename) => {
@@ -7155,6 +7162,7 @@ async function pipePcmStream(res, asyncIter) {
     res.flushHeaders?.();
     if (res.socket) res.socket.setNoDelay(true);
     let headerSent = false;
+    const aligner = new EvenByteAligner();
     for await (const { sampleRate, pcm } of asyncIter) {
         if (!headerSent) {
             const hdr = Buffer.alloc(4);
@@ -7162,12 +7170,14 @@ async function pipePcmStream(res, asyncIter) {
             res.write(hdr);
             headerSent = true;
         }
-        if (!pcm || pcm.length === 0) continue;
+        const aligned = aligner.push(pcm);
+        if (!aligned) continue;
         const lenBuf = Buffer.alloc(4);
-        lenBuf.writeUInt32LE(pcm.length, 0);
+        lenBuf.writeUInt32LE(aligned.length, 0);
         res.write(lenBuf);
-        res.write(pcm);
+        res.write(aligned);
     }
+    aligner.flush(); // residual odd byte (if any) is dropped — half-sample is unrecoverable
     if (!headerSent) {
         const hdr = Buffer.alloc(4);
         hdr.writeUInt32LE(24000, 0);
@@ -7186,7 +7196,7 @@ async function pipePcmStream(res, asyncIter) {
 //   - OpenAI (cloud, lowest latency, native streaming PCM at 24 kHz)
 // based on the `tts_provider` platform setting.
 router.post('/tts', authenticateToken, async (req, res) => {
-    const { text, voice: requestedVoice, rate, gender } = req.body || {};
+    const { text, voice: requestedVoice, rate, gender, provider: bodyProvider } = req.body || {};
 
     if (typeof text !== 'string' || !text.trim()) {
         return res.status(400).json({ error: 'text required' });
@@ -7198,13 +7208,19 @@ router.post('/tts', authenticateToken, async (req, res) => {
         return res.status(400).json({ error: 'voice required' });
     }
 
-    // Provider-override via ?provider=… lets the settings UI preview a voice
-    // without having to switch the platform's active TTS engine. Only honour
-    // the override when it's a known provider; otherwise fall through to
-    // the platform setting.
-    const providerOverride = typeof req.query.provider === 'string' && VOICE_TTS_PROVIDERS.includes(req.query.provider)
+    // Provider-override lets the settings UI preview a voice without having
+    // to switch the platform's active TTS engine. Accept it from query
+    // (?provider=…) for direct curl/test paths AND from the JSON body for
+    // client SDKs (VoiceService.speak) — neither used to be wired, so all
+    // four providers silently collapsed to the platform default. Only honour
+    // an override that names a known provider.
+    const queryProvider = typeof req.query.provider === 'string' && VOICE_TTS_PROVIDERS.includes(req.query.provider)
         ? req.query.provider
         : null;
+    const bodyProviderOverride = typeof bodyProvider === 'string' && VOICE_TTS_PROVIDERS.includes(bodyProvider)
+        ? bodyProvider
+        : null;
+    const providerOverride = queryProvider || bodyProviderOverride;
     const ttsProvider = providerOverride || (await getPlatformSetting('tts_provider')) || 'piper';
 
     // Validate the requested voice against the active provider's catalogue
@@ -7432,7 +7448,11 @@ router.post('/tts', authenticateToken, async (req, res) => {
         return res.status(500).json({ error: 'Failed to prepare TTS input' });
     }
 
-    const args = ['--model', voiceFile, '-i', tmpFile, '--output-raw', '--quiet'];
+    // piper1-gpl (Python rewrite) accepts `-m / --model`, `-i / --input-file`,
+    // `--output-raw`, and `--length-scale` — same names as the old standalone.
+    // It does NOT accept `--quiet`; piper1 logs at WARN level by default which
+    // we discard via stderr handling below, so dropping the flag is harmless.
+    const args = ['--model', voiceFile, '-i', tmpFile, '--output-raw'];
     if (rate !== undefined && rate !== null) {
         const r = parseFloat(rate);
         if (Number.isFinite(r) && r >= 0.5 && r <= 1.5) {

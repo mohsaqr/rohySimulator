@@ -180,7 +180,6 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
                                 }>
                                     <PatientAvatar
                                         patient={config}
-                                        avatarType="3d"
                                         headManifest={manifest}
                                         avatarId={config.avatar_id}
                                         cameraOverride={effectiveCamera}

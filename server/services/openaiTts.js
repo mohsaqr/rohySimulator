@@ -19,6 +19,7 @@
 // "patient is mid-conversation" use case.
 
 import { Buffer } from 'node:buffer';
+import { EvenByteAligner } from '../lib/pcmAlign.js';
 
 const OPENAI_TTS_URL = 'https://api.openai.com/v1/audio/speech';
 const SAMPLE_RATE = 24000;   // OpenAI returns s16le mono at 24 kHz when response_format='pcm'
@@ -95,19 +96,42 @@ export async function* synthesizeOpenaiStream({ text, voice, speed, apiKey, mode
         throw err;
     }
 
-    // res.body is a web-stream ReadableStream. Read incrementally so first
-    // chunk reaches the client (and therefore the browser's audio scheduler)
-    // as soon as OpenAI flushes it, not after the entire utterance is done.
+    // res.body is a web-stream ReadableStream. OpenAI flushes PCM in
+    // arbitrarily-small network chunks (we've seen runs of 6–98 bytes,
+    // ie. 3–50 samples at 24 kHz). Yielding each one as its own frame
+    // makes the browser schedule thousands of micro-AudioBuffers per
+    // second, which produces audible "chec chec sshhh" at every frame
+    // boundary. Coalesce inbound bytes until we have at least
+    // MIN_CHUNK_BYTES before handing off to the aligner — that's still
+    // ~85 ms first-byte latency, well below the LLM streaming cadence,
+    // and playback is gapless. The aligner enforces the s16le even-byte
+    // invariant; without it a half-sample would shift every subsequent
+    // frame and produce pure noise.
+    const MIN_CHUNK_BYTES = 4096; // ≈ 85 ms at 24 kHz mono int16
     const reader = res.body.getReader();
+    const aligner = new EvenByteAligner();
+    let pending = [];
+    let pendingLen = 0;
     try {
         while (true) {
             const { value, done } = await reader.read();
-            if (done) return;
+            if (done) {
+                if (pendingLen > 0) {
+                    const aligned = aligner.push(Buffer.concat(pending, pendingLen));
+                    if (aligned) yield { sampleRate: SAMPLE_RATE, pcm: aligned };
+                }
+                aligner.flush(); // residual odd byte dropped
+                return;
+            }
             if (!value || value.length === 0) continue;
-            yield {
-                sampleRate: SAMPLE_RATE,
-                pcm: Buffer.from(value.buffer, value.byteOffset, value.byteLength)
-            };
+            pending.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
+            pendingLen += value.byteLength;
+            if (pendingLen >= MIN_CHUNK_BYTES) {
+                const aligned = aligner.push(Buffer.concat(pending, pendingLen));
+                pending = [];
+                pendingLen = 0;
+                if (aligned) yield { sampleRate: SAMPLE_RATE, pcm: aligned };
+            }
         }
     } finally {
         try { reader.releaseLock(); } catch { /* noop */ }

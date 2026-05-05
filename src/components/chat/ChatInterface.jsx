@@ -13,7 +13,7 @@ import { useVoice } from '../../contexts/VoiceContext';
 import { stripStageDirections } from '../../utils/stageDirections';
 import { parseConfig } from '../../utils/parseConfig';
 import { extractCompleteSentences } from '../../utils/sentenceSplit';
-import { PROVIDER_FALLBACK_VOICE } from '../../utils/voiceFallbacks';
+import { resolveVoice } from '../../utils/voiceResolver';
 import { useToast } from '../../contexts/ToastContext';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
@@ -674,73 +674,18 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         }
     };
 
-    // Pick the voice for this patient. A per-case `case_voice` (merged in from
-    // Resolve which voice should speak given a per-speaker override (case or
-    // agent) layered on top of the global gender/age slots. Returns the
-    // effective settings the speak() call uses.
-    const resolveSpeakerSettings = (override) => {
-        if (!voiceSettings) return null;
-        const merged = { ...voiceSettings };
-        if (override && typeof override === 'object') {
-            for (const [k, v] of Object.entries(override)) {
-                if (v !== undefined && v !== null && v !== '') merged[k] = v;
-            }
-        }
-        return merged;
-    };
-
-    // Voice resolution precedence (most → least specific):
-    //   case override (case_voice)
-    //     → platform persona default for active provider+gender (default_voice_<provider>_<gender>)
-    //     → platform voice slot for active provider+gender   (voice_<provider>_<gender>)
-    //     → hardcoded fallback per provider                     (PROVIDER_FALLBACK_VOICE)
-    //
-    // Voice IDs are provider-specific so everything that's NOT case_voice has
-    // to be looked up under the active provider's namespace; the server runs
-    // a final upfront-validation that swaps in the same fallback if a stale
-    // voice slips through (e.g. case_voice was set under a different
-    // provider). See server/services/voiceFallbacks.js.
-    const pickVoiceFile = (settings, gender, age) => {
-        if (!settings) return null;
-        if (settings.case_voice) return settings.case_voice;
-        const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
-        const slot = safeAge < 13 ? 'child' : (/^f/i.test(gender || '') ? 'female' : 'male');
-        const provider = settings.tts_provider || 'piper';
-
-        const personaDefault = platformAvatars?.[`default_voice_${provider}_${slot}`];
-        if (personaDefault) return personaDefault;
-
-        const voiceSlot = settings[`voice_${provider}_${slot}`];
-        if (voiceSlot) return voiceSlot;
-
-        return PROVIDER_FALLBACK_VOICE[provider]?.[slot] || null;
-    };
-
-    // Effective rate/pitch for the active speaker. Override (case/agent) wins;
-    // otherwise inherit from platform persona default for this gender; final
-    // fallback is the global tts_rate or 1.0.
-    const resolveRatePitch = (override, gender, age) => {
-        const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
-        const slot = safeAge < 13 ? 'child' : (/^f/i.test(gender || '') ? 'female' : 'male');
-        // Rate and pitch stay flat (provider-independent) — they're scalar
-        // factors that work the same on any TTS engine.
-        const personaRate  = platformAvatars?.[`default_rate_${slot}`];
-        const personaPitch = platformAvatars?.[`default_pitch_${slot}`];
-
-        const pickNum = (...vals) => {
-            for (const v of vals) {
-                if (v == null || v === '') continue;
-                const n = Number(v);
-                if (Number.isFinite(n)) return n;
-            }
-            return undefined;
-        };
-
-        return {
-            rate:  pickNum(override?.tts_rate,  personaRate,  voiceSettings?.tts_rate),
-            pitch: pickNum(override?.tts_pitch, personaPitch, voiceSettings?.tts_pitch)
-        };
-    };
+    // Voice resolution goes through the shared util in src/utils/voiceResolver.js.
+    // See that file's header for the full chain. Returning the resolver's full
+    // shape (file/provider/rate/pitch/tier) lets callers forward the picked
+    // engine to the server — without that, /api/tts silently falls back to
+    // the platform default tts_provider and learners hear the wrong engine.
+    const resolveSpeakerVoice = (override, gender, age) => resolveVoice({
+        voice: override,
+        voiceSettings,
+        platformAvatars,
+        gender,
+        age
+    });
 
     const handleSendToPatient = async (overrideText) => {
         const text = (overrideText ?? input).trim();
@@ -777,13 +722,17 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             const age      = activeCase?.config?.demographics?.age;
             const safeAge  = Number.isFinite(Number(age)) ? Number(age) : 35;
             const slotGender = safeAge < 13 ? 'child' : (/^f/i.test(rawGender || '') ? 'female' : 'male');
-            const settings = resolveSpeakerSettings(override);
-            const voice    = pickVoiceFile(settings, rawGender, age);
-            if (voice) {
-                const { rate, pitch } = resolveRatePitch(override, rawGender, age);
+            const r = resolveSpeakerVoice(override, rawGender, age);
+            if (r.file) {
                 speech = VoiceService.beginSpeechSession({
-                    voice, rate, pitch,
+                    voice: r.file,
+                    rate: r.rate,
+                    pitch: r.pitch,
                     gender: slotGender,
+                    // Forward the resolved engine — without this the server
+                    // silently routes to the platform default tts_provider
+                    // and a Piper-configured case would actually play Google.
+                    provider: r.provider,
                     onStart: () => setSpeaking(true),
                     onVisemes: setVisemes,
                     onEnd: () => {
@@ -865,22 +814,22 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     };
 
     // Shared speak helper used by the agent send path (which doesn't expose an
-    // LLM streaming hook today, so it stays single-shot). Layered override >
-    // platform persona default > global, applied to voice/rate/pitch.
+    // LLM streaming hook today, so it stays single-shot). Goes through the
+    // shared resolver so the engine the case was configured for is the engine
+    // that plays.
     const speakResponse = (responseText, { override, gender, age }) => {
-        const settings = resolveSpeakerSettings(override);
-        const voice = pickVoiceFile(settings, gender, age);
+        const r = resolveSpeakerVoice(override, gender, age);
         const spokenText = stripStageDirections(responseText);
-        if (!voice || !spokenText || responseText.startsWith('Error:')) return;
-        const { rate, pitch } = resolveRatePitch(override, gender, age);
+        if (!r.file || !spokenText || responseText.startsWith('Error:')) return;
         const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
         const slotGender = safeAge < 13 ? 'child' : (/^f/i.test(gender || '') ? 'female' : 'male');
         VoiceService.speak({
             text: spokenText,
-            voice,
-            rate,
-            pitch,
+            voice: r.file,
+            rate: r.rate,
+            pitch: r.pitch,
             gender: slotGender,
+            provider: r.provider,
             onStart: () => setSpeaking(true),
             onVisemes: setVisemes,
             onEnd: () => {

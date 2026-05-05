@@ -1,3 +1,13 @@
+### 2026-05-05 — Persona/Voice/Avatar wiring audit
+- `src/utils/voiceResolver.js` (NEW): single source of truth for voice resolution. Returns `{file, provider, rate, pitch, tier}`; mirrors the server's `resolveTtsVoice` chain. Replaces three previously-duplicated implementations.
+- `src/components/chat/ChatInterface.jsx`: replaced `pickVoiceFile` + `resolveRatePitch` + `resolveSpeakerSettings` with a single call to `resolveVoice()`. Both `beginSpeechSession` and `speak()` now forward `provider` — without this, a case configured for Piper silently played whatever the platform default tts_provider was.
+- `src/hooks/useDiscussionEngine.js`: `resolveDiscussantVoice` now wraps `resolveVoice()` and returns `provider` so `beginSpeechSession` forwards it. Discussant audio now actually plays its configured engine.
+- `src/components/settings/AgentPersonaEditor.jsx`: replaced inline `resolvedVoice` memo with `resolveVoice()`. Editor preview, chat runtime, and discussant runtime now share one resolver.
+- `server/routes.js` (`pipePcmStream`): added even-byte alignment guard. If an upstream provider ever yields an odd-length PCM chunk, the helper now carries the dangling tail byte to the next frame instead of emitting an unaligned int16 stream. (OpenAI's iterator already guards itself; this is a defense-in-depth for Google/Kokoro/future providers.)
+- `src/components/settings/AgentTemplateManager.jsx`: card thumbnails now apply `cameraOverride={resolveCamera(...)}` so admin framing edits are visible in the list view, matching the editor preview and runtime.
+- Removed the dead `avatarType` prop from `PatientAvatar.jsx`. `PatientVisual` keeps the `voiceSettings.avatar_type === 'none'` global kill-switch at parent level. Cleaned five callers (PatientVisual, AgentPersonaEditor, AgentTemplateManager, AvatarsSettingsTab, CaseAvatarVoicePicker, PatientSummaryCard, DiscussionScreen).
+- `scripts/audit-voices.sh` (NEW): end-to-end verification — provider routing, distinct sample rates, PCM s16le alignment, default-persona camera resolution. 10/10 passing locally. Bash 3.2 compatible (no associative arrays).
+
 ### 2026-05-05 — Codex-review pre-commit fixes
 - `server/db.js`: rewrote `seedDefaultAgents()` to insert a shipped row only when no `is_default=1` row exists for that `agent_type` (was: `INSERT OR IGNORE` on `(agent_type,name)`). Prevents the rename-then-restart duplication that would have made reset-to-defaults collide on the unique index.
 - `server/routes.js`:

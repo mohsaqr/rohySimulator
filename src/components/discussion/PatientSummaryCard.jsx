@@ -29,7 +29,6 @@ export default function PatientSummaryCard({ activeCase, headManifest, platformA
                     <Suspense fallback={<div className="w-full h-full rounded-full bg-slate-700" />}>
                         <PatientAvatar
                             patient={{ id: activeCase.id, name, gender }}
-                            avatarType="head"
                             avatarId={avatarId}
                             headManifest={headManifest}
                             platformAvatars={platformAvatars}

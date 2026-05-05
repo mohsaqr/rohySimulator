@@ -222,6 +222,10 @@ async function speakOneSentence(session, text) {
     // Forward gender so the server can pick a gender-appropriate fallback
     // voice if the requested voice isn't in the active provider's catalogue.
     if (session.gender) body.gender = session.gender;
+    // Provider override — when the caller explicitly named an engine
+    // (eg. settings preview), forward it so the server doesn't silently
+    // fall through to the platform default.
+    if (session.provider) body.provider = session.provider;
 
     let res;
     let stream = true;
@@ -270,7 +274,7 @@ async function speakOneSentence(session, text) {
 // enqueue(), each of which fires its own /tts request and gets scheduled
 // onto the shared audio timeline. Call flush() when done to wait for all
 // audio to drain and fire onEnd. cancel() aborts everything immediately.
-function beginSpeechSession({ voice, rate, pitch, gender, onStart, onVisemes, onEnd, onError }) {
+function beginSpeechSession({ voice, rate, pitch, gender, provider, onStart, onVisemes, onEnd, onError }) {
     teardown();  // cancel any prior session/single-shot
 
     const session = {
@@ -280,7 +284,7 @@ function beginSpeechSession({ voice, rate, pitch, gender, onStart, onVisemes, on
         endTime: 0,
         chain: Promise.resolve(),
         abort: new AbortController(),
-        voice, rate, pitch, gender,
+        voice, rate, pitch, gender, provider,
         emit: makeVisemeEmitter(onVisemes),
         onStart, onEnd, onError
     };
@@ -391,7 +395,7 @@ export const VoiceService = {
 
     // Single-shot speak. Sends the whole text in one TTS call. Wraps the
     // session API so there's still one audio code path.
-    async speak({ text, voice, rate, pitch, gender, onStart, onVisemes, onEnd, onError }) {
+    async speak({ text, voice, rate, pitch, gender, provider, onStart, onVisemes, onEnd, onError }) {
         if (!text || typeof text !== 'string') {
             onError?.(new Error('text is required'));
             return;
@@ -400,7 +404,7 @@ export const VoiceService = {
             onError?.(new Error('voice filename is required'));
             return;
         }
-        const session = beginSpeechSession({ voice, rate, pitch, gender, onStart, onVisemes, onEnd, onError });
+        const session = beginSpeechSession({ voice, rate, pitch, gender, provider, onStart, onVisemes, onEnd, onError });
         session.enqueue(text);
         // flush() resolves after audio drains; we don't await it here so the
         // caller's `await speak()` returns once dispatch is in motion (matches

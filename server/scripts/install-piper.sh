@@ -1,58 +1,76 @@
 #!/bin/bash
-# Install Piper TTS binary + a starter set of English voices into server/data/piper/.
-# Voices and binary are NOT checked into git. Re-run this on a fresh clone.
+# Install Piper TTS (piper1-gpl, the maintained successor to the archived
+# rhasspy/piper) into a project-local Python venv at server/data/piper/venv/,
+# plus a starter set of English voices into server/data/piper/.
+#
+# We use the OHF-Voice/piper1-gpl Python package (`pip install piper-tts`)
+# because the original rhasspy/piper repo was archived in 2024 and no longer
+# ships standalone binaries. piper1-gpl is the active fork and bundles
+# espeak-ng inside its wheel, so no system espeak-ng dependency.
+#
+# Voices and the venv are NOT checked into git. Re-run on a fresh clone.
 #
 # Usage:  bash server/scripts/install-piper.sh
-# Override binary URL:  PIPER_RELEASE_URL=... bash server/scripts/install-piper.sh
+# Override Python interpreter:  PIPER_PYTHON=python3.11 bash server/scripts/install-piper.sh
+# Override piper-tts version:   PIPER_TTS_VERSION=1.4.2 bash server/scripts/install-piper.sh
 
 set -euo pipefail
 
 # Resolve paths relative to this script regardless of where it's invoked from.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PIPER_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)/data/piper"
+VENV_DIR="$PIPER_DIR/venv"
+PIPER_BIN="$VENV_DIR/bin/piper"
+PYTHON_BIN="${PIPER_PYTHON:-python3}"
+TTS_VERSION="${PIPER_TTS_VERSION:-1.4.2}"
+
 mkdir -p "$PIPER_DIR"
-cd "$PIPER_DIR"
 
-OS="$(uname -s)"
-ARCH="$(uname -m)"
-
-resolve_release_url() {
-    if [ -n "${PIPER_RELEASE_URL:-}" ]; then
-        echo "$PIPER_RELEASE_URL"; return
+require_python() {
+    if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+        echo "✗ '$PYTHON_BIN' not found. Install Python 3.9+ and re-run."
+        echo "  macOS:  brew install python@3.11"
+        echo "  Ubuntu: sudo apt install python3 python3-venv"
+        echo "  Or set PIPER_PYTHON=/path/to/python3 and re-run."
+        exit 1
     fi
-    case "$OS-$ARCH" in
-        Linux-x86_64)  echo "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz" ;;
-        Linux-aarch64) echo "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz" ;;
-        Darwin-x86_64) echo "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_x64.tar.gz" ;;
-        Darwin-arm64)  echo "" ;; # No official arm64 build; user must `brew install piper-tts` or build from source.
-        *) echo "" ;;
-    esac
+    # piper-tts 1.4.x requires Python 3.9+
+    local pyver
+    pyver="$("$PYTHON_BIN" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+    local major minor
+    major="${pyver%%.*}"
+    minor="${pyver##*.}"
+    if [ "$major" -lt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -lt 9 ]; }; then
+        echo "✗ Python $pyver is too old; piper-tts $TTS_VERSION needs 3.9+."
+        echo "  Set PIPER_PYTHON=/path/to/python3.11 (or newer) and re-run."
+        exit 1
+    fi
+    echo "✓ Using $PYTHON_BIN ($pyver)"
 }
 
-install_binary() {
-    if [ -x "$PIPER_DIR/piper/piper" ]; then
-        echo "✓ Piper binary already present at $PIPER_DIR/piper/piper"
+install_venv() {
+    if [ -x "$PIPER_BIN" ]; then
+        echo "✓ Piper already installed at $PIPER_BIN"
+        # Print version so the user can compare against TTS_VERSION.
+        "$PIPER_BIN" --help >/dev/null 2>&1 || true
         return
     fi
 
-    URL="$(resolve_release_url)"
-    if [ -z "$URL" ]; then
-        echo "⚠ No prebuilt Piper binary for $OS-$ARCH."
-        if [ "$OS" = "Darwin" ] && [ "$ARCH" = "arm64" ]; then
-            echo "  On Apple Silicon: brew install piper-tts"
-            echo "  Then set PIPER_BIN=/opt/homebrew/bin/piper in server/.env"
-        else
-            echo "  Build from source: https://github.com/rhasspy/piper#building"
-        fi
-        return
-    fi
+    echo "→ Creating Python venv at $VENV_DIR"
+    "$PYTHON_BIN" -m venv "$VENV_DIR"
 
-    echo "→ Downloading Piper binary from $URL"
-    curl -fsSL -o piper.tgz "$URL"
-    tar -xzf piper.tgz
-    rm piper.tgz
-    chmod +x piper/piper 2>/dev/null || true
-    echo "✓ Piper binary installed to $PIPER_DIR/piper/piper"
+    # Always upgrade pip first — old pip can fail to resolve the abi3 wheels.
+    "$VENV_DIR/bin/pip" install --quiet --upgrade pip
+
+    echo "→ Installing piper-tts==$TTS_VERSION (this can take ~30 s on first install)"
+    "$VENV_DIR/bin/pip" install --quiet "piper-tts==$TTS_VERSION"
+
+    if [ ! -x "$PIPER_BIN" ]; then
+        echo "✗ pip install completed but $PIPER_BIN is missing."
+        echo "  Check $VENV_DIR/bin/ for the actual entry point."
+        exit 1
+    fi
+    echo "✓ Piper installed: $PIPER_BIN"
 }
 
 install_voice() {
@@ -61,22 +79,30 @@ install_voice() {
     local speaker="$3"
     local quality="$4"
     local base="https://huggingface.co/rhasspy/piper-voices/resolve/main/${locale%_*}/${locale}/${speaker}/${quality}/${voice}"
-    if [ -f "$voice" ] && [ -f "$voice.json" ]; then
+    if [ -f "$PIPER_DIR/$voice" ] && [ -f "$PIPER_DIR/$voice.json" ]; then
         echo "✓ $voice already present"
         return
     fi
     echo "→ Downloading $voice"
-    curl -fsSL -o "$voice"      "$base"
-    curl -fsSL -o "$voice.json" "$base.json"
+    curl -fsSL -o "$PIPER_DIR/$voice"      "$base"
+    curl -fsSL -o "$PIPER_DIR/$voice.json" "$base.json"
 }
 
-install_binary
+require_python
+install_venv
 
 # Starter voices — three English speakers covering male / female / British accent.
+# Voice files live in $PIPER_DIR (NOT inside the venv) so they survive a venv rebuild.
 install_voice en_US-amy-medium.onnx          en_US amy          medium
 install_voice en_US-ryan-medium.onnx         en_US ryan         medium
 install_voice en_GB-jenny_dioco-medium.onnx  en_GB jenny_dioco  medium
 
 echo ""
-echo "✓ Piper setup complete. Voices in $PIPER_DIR:"
+echo "✓ Piper setup complete."
+echo "  Binary: $PIPER_BIN"
+echo "  Voices: $PIPER_DIR"
 ls -1 "$PIPER_DIR"/*.onnx 2>/dev/null | xargs -n1 basename || echo "  (none)"
+echo ""
+echo "If your runtime sets PIPER_BIN explicitly (eg. server/.env), point it at:"
+echo "  $PIPER_BIN"
+echo "Otherwise the server resolves this default automatically."

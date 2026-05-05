@@ -134,7 +134,6 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose }) {
                             <Suspense fallback={<div className="w-full h-full rounded-full bg-slate-700" />}>
                                 <PatientAvatar
                                     patient={{ id: discussant?.id, name: discussant?.name, gender: discussant?.voice?.gender }}
-                                    avatarType="head"
                                     avatarId={discussant?.avatarUrl}
                                     headManifest={headManifest}
                                     speaking={speaking}

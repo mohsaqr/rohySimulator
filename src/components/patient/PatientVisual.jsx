@@ -61,7 +61,6 @@ export default function PatientVisual({ caseData, participant }) {
                                 speaking={speaking}
                                 listening={listening}
                                 visemes={visemes}
-                                avatarType={voiceSettings?.avatar_type || '3d'}
                                 headManifest={headManifest}
                                 avatarId={p.avatar_id}
                                 cameraOverride={p.avatar_camera}

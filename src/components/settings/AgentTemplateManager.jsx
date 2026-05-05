@@ -3,6 +3,7 @@ import { Plus, Trash2, Edit2, Copy, Users, ChevronDown, ChevronUp, Bot, Zap, Bra
 import { useToast } from '../../contexts/ToastContext';
 import { AgentService } from '../../services/AgentService';
 import { useVoice } from '../../contexts/VoiceContext';
+import { resolveCamera } from '../../utils/avatarFraming';
 
 // Lazy — pulls in three.js / r3f only when admin opens an expanded card.
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
@@ -183,9 +184,13 @@ export default function AgentTemplateManager({ onOpenEditor }) {
                            <Suspense fallback={<div className="w-full h-full bg-neutral-900" />}>
                               <PatientAvatar
                                  patient={{ id: `tpl-${template.id}`, name: template.name, gender: cfg.voice?.gender }}
-                                 avatarType="head"
                                  avatarId={template.avatar_url}
                                  headManifest={headManifest}
+                                 // Apply the persona's framing override (or
+                                 // the manifest default) so the list-view
+                                 // thumbnail matches what admins see in the
+                                 // editor and what learners see at runtime.
+                                 cameraOverride={resolveCamera(headManifest, template.avatar_url, cfg.avatar_camera)}
                               />
                            </Suspense>
                         </div>

@@ -48,6 +48,41 @@ A persona template is system-wide; case agents are per-case overrides on top. Th
 
 This makes the scope explicit so admins don't accidentally edit shipped behaviour while configuring a specific case.
 
+## Persona / Voice / Avatar wiring audit (this session, second pass)
+
+After the codex-review fixes landed and the user ran the editor in the
+browser, three more issues surfaced that needed an end-to-end audit:
+
+1. Patient chat and the discussant were both omitting `provider` from
+   `/api/tts` body, so a case configured for Piper actually played
+   whatever the platform default was (Google, on this machine).
+2. The voice resolver was duplicated in three places with comments
+   begging future devs to keep them in sync.
+3. `pipePcmStream` had no even-byte alignment guard; OpenAI had been
+   patched but Google/Kokoro relied on the upstream being well-behaved.
+4. AgentTemplateManager card thumbnails ignored the persona's framing.
+5. The `avatarType` prop on `PatientAvatar` was dead semantics that
+   misled callers (some passed `"head"` thinking it'd give a thumbnail —
+   it didn't).
+
+The audit:
+
+- Extracted `src/utils/voiceResolver.js` as the single source of truth.
+  All three callsites now go through it. The resolver returns `provider`
+  alongside the file/rate/pitch, so callers physically can't forget to
+  forward the engine.
+- Added an even-byte alignment guard to `pipePcmStream` (server/routes.js)
+  mirroring the OpenAI iterator's pattern. Carries dangling bytes forward.
+- Threaded `cameraOverride={resolveCamera(...)}` into AgentTemplateManager's
+  thumbnails so the list view, editor preview, and runtime render the
+  same framing.
+- Removed the `avatarType` prop entirely; the `voiceSettings.avatar_type
+  === 'none'` global kill-switch stays in `PatientVisual` at parent level.
+  Cleaned six other callers.
+- Wrote `scripts/audit-voices.sh` (bash 3.2 compatible) that asserts
+  provider routing, distinct sample rates, stream alignment, and
+  shipped-persona camera integrity. **Passes 10/10 locally.**
+
 ## Codex pre-commit review — fixes landed
 
 Codex flagged 1 blocker, 4 concerns, and 1 nit. All addressed before commit:

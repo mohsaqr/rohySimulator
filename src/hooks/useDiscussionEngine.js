@@ -3,38 +3,29 @@ import { LLMService } from '../services/llmService';
 import { VoiceService } from '../services/voiceService';
 import { apiUrl } from '../config/api';
 import { buildCaseContext } from '../services/discussionService';
-import { PROVIDER_FALLBACK_VOICE } from '../utils/voiceFallbacks';
+import { resolveVoice } from '../utils/voiceResolver';
 import { buildPersonaBlocks } from '../utils/personaBlocks';
 import EventLogger, { COMPONENTS } from '../services/eventLogger';
 
-// Resolve a voice for the discussant using the same precedence chain as the
-// patient chat — discussant template override → platform persona default →
-// platform voice slot → hardcoded provider fallback. The discussant is given
-// a clinician slot ('male' adult) by default since the seeded clinician
-// avatar is male and we want the audio to match.
+// Discussant voice — same shared resolver the patient chat and admin
+// preview use. The discussant is given a male clinician slot by default to
+// match the seeded clinician avatar; the resolver derives slot from gender.
 function resolveDiscussantVoice(discussant, voiceSettings, platformAvatars) {
-    const override = discussant?.voice || {};
     if (!voiceSettings) return null;
-    const merged = { ...voiceSettings };
-    for (const [k, v] of Object.entries(override)) {
-        if (v !== undefined && v !== null && v !== '') merged[k] = v;
-    }
-    if (merged.case_voice) return { voice: merged.case_voice, rate: 1.0, pitch: 1.0, gender: 'male' };
-
-    const slot = override.gender === 'female' ? 'female'
-        : override.gender === 'child' ? 'child'
-        : 'male';
-    const provider = merged.tts_provider || 'piper';
-
-    const voice =
-        platformAvatars?.[`default_voice_${provider}_${slot}`] ||
-        merged[`voice_${provider}_${slot}`] ||
-        PROVIDER_FALLBACK_VOICE[provider]?.[slot] ||
-        null;
-
-    const rate = Number(platformAvatars?.[`default_rate_${slot}`]) || Number(merged.tts_rate) || 1.0;
-    const pitch = Number(platformAvatars?.[`default_pitch_${slot}`]) || 1.0;
-    return voice ? { voice, rate, pitch, gender: slot } : null;
+    const r = resolveVoice({
+        voice: discussant?.voice,
+        voiceSettings,
+        platformAvatars,
+        gender: discussant?.voice?.gender || 'male'
+    });
+    if (!r.file) return null;
+    return {
+        voice: r.file,
+        provider: r.provider,
+        rate: r.rate ?? 1.0,
+        pitch: r.pitch ?? 1.0,
+        gender: discussant?.voice?.gender || 'male'
+    };
 }
 
 const STORAGE_KEY = (sid) => `rohy_discussion_history_${sid}`;
@@ -127,6 +118,11 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
                     rate: resolved.rate,
                     pitch: resolved.pitch,
                     gender: resolved.gender,
+                    // Forward the resolved engine; without this the server
+                    // falls back to the platform default and the discussant
+                    // sounds like whatever Google/whatever is configured
+                    // platform-wide instead of the discussant's own engine.
+                    provider: resolved.provider,
                     onStart: () => setSpeaking(true),
                     onVisemes: setVisemes,
                     onEnd: () => {
@@ -175,10 +171,20 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
                     : m
             ));
             if (speech && speechBuffer.trim()) speech.enqueue?.(speechBuffer.trim());
-            speech?.end?.();
+            // Drain the audio queue and fire onEnd → setSpeaking(false). The
+            // session handle exposes flush/cancel/enqueue (NOT end) — calling
+            // .end?.() silently no-ops because of the optional chaining, which
+            // left `speaking` stuck true forever and the mic suppressed, so
+            // the learner could never reply.
+            speech?.flush?.();
             logTurn(sessionId, 'assistant', finalText);
             EventLogger.messageReceived(finalText, COMPONENTS.DISCUSSION_SCREEN);
         } catch (err) {
+            // LLM stream failed mid-utterance — cancel any in-flight TTS
+            // so we don't leave speaking=true forever on an abort path.
+            try { speech?.cancel?.(); } catch { /* noop */ }
+            setSpeaking(false);
+            setVisemes({ viseme_sil: 1 });
             if (err.name !== 'AbortError') {
                 setMessages(prev => prev.map(m =>
                     m._pendingId === pendingId

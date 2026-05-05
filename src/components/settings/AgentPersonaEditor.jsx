@@ -30,7 +30,7 @@ import { AuthService } from '../../services/authService';
 import { apiUrl, baseUrl } from '../../config/api';
 import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
-import { PROVIDER_FALLBACK_VOICE } from '../../utils/voiceFallbacks';
+import { resolveVoice } from '../../utils/voiceResolver.js';
 
 // Heavy three.js head viewer — lazy so admins who never open the editor
 // don't pay the bundle cost.
@@ -72,10 +72,15 @@ const LLM_PROVIDERS = [
    { value: 'custom', label: 'Custom Endpoint' }
 ];
 
+// Keep these aligned with VoiceSettingsTab.jsx — same providers the platform
+// settings tab exposes (piper / kokoro / google / openai). The voice list
+// fetch (/api/tts/voices?provider=…) handles all four.
 const TTS_PROVIDERS = [
    { value: '', label: 'Inherit (use global)' },
-   { value: 'piper', label: 'Piper (fast, robotic)' },
-   { value: 'kokoro', label: 'Kokoro-82M (slower, expressive)' }
+   { value: 'piper', label: 'Piper — local, fast, robotic' },
+   { value: 'kokoro', label: 'Kokoro-82M — local, expressive' },
+   { value: 'google', label: 'Google Cloud TTS — Neural2 / Chirp HD' },
+   { value: 'openai', label: 'OpenAI TTS — alloy / echo / nova / onyx / shimmer' }
 ];
 
 const UNLOCK_TRIGGERS = [
@@ -209,37 +214,26 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
       return resolveCamera(headManifest, template.avatar_url, cfg.avatar_camera);
    }, [headManifest, template?.avatar_url, cfg.avatar_camera]);
 
-   const resolvedVoiceFile = useMemo(() => {
-      // Faithful mirror of ChatInterface.pickVoiceFile — keep both copies
-      // in sync or admin previews will diverge from what learners hear.
-      // Source of truth: src/components/chat/ChatInterface.jsx pickVoiceFile.
-      //   case_voice override
-      //   → platform persona default voice for (provider, slot)
-      //   → platform voice slot for (provider, slot)
-      //   → hardcoded provider fallback (PROVIDER_FALLBACK_VOICE)
-      //   → null (preview disabled)
-      // slot is `child` when age<13, otherwise male/female from gender prefix.
+   // Voice resolution comes from the shared util — same chain the chat and
+   // discussant runtime use. Passing `ttsVoices` enables the editor-only
+   // 'catalog-first' tier so the preview button can play a voice on a fresh
+   // Piper install with empty platform slots; runtime callsites omit
+   // ttsVoices and correctly 503 in that case.
+   const resolvedVoice = useMemo(() => {
       if (!template) return null;
-      const v = template.config?.voice || {};
-      if (v.case_voice) return v.case_voice;
-      const provider = v.tts_provider || voiceSettings?.tts_provider || 'piper';
-      const genderRaw = v.gender || template.config?.gender || '';
-      const ageRaw = template.config?.age;
-      const safeAge = Number.isFinite(Number(ageRaw)) ? Number(ageRaw) : 35;
-      const slot = safeAge < 13 ? 'child' : (/^f/i.test(genderRaw) ? 'female' : 'male');
-      const personaDefault = platformAvatars?.[`default_voice_${provider}_${slot}`];
-      if (personaDefault) return personaDefault;
-      const slotted = voiceSettings?.[`voice_${provider}_${slot}`];
-      if (slotted) return slotted;
-      return PROVIDER_FALLBACK_VOICE?.[provider]?.[slot] || null;
-   }, [template, voiceSettings, platformAvatars]);
+      return resolveVoice({
+         voice: template.config?.voice,
+         voiceSettings,
+         platformAvatars,
+         gender: template.config?.gender || template.config?.voice?.gender || '',
+         age: template.config?.age,
+         ttsVoices
+      });
+   }, [template, voiceSettings, platformAvatars, ttsVoices]);
 
-   const resolvedRate = useMemo(() => {
-      const v = template?.config?.voice || {};
-      const explicit = Number(v.tts_rate);
-      if (Number.isFinite(explicit) && explicit > 0) return explicit;
-      return Number(voiceSettings?.tts_rate) || 1.0;
-   }, [template?.config?.voice, voiceSettings?.tts_rate]);
+   const resolvedVoiceFile = resolvedVoice?.file || null;
+   const resolvedProvider = resolvedVoice?.provider || 'piper';
+   const resolvedRate = resolvedVoice?.rate ?? 1.0;
 
    // ─── mutators ──────────────────────────────────────────────────────────
    const set = (updater) => setTemplate(prev => updater({ ...prev }));
@@ -395,6 +389,7 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
             text,
             voice: resolvedVoiceFile,
             rate: resolvedRate,
+            provider: resolvedProvider,
             onEnd: () => {
                setPreviewState({ playing: false, text: '' });
                setSpeaking?.(false);
@@ -570,7 +565,6 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
                               <Suspense fallback={<div className="w-full h-full flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-neutral-500" /></div>}>
                                  <PatientAvatar
                                     patient={{ id: `tpl-${template.id || 'new'}`, name: template.name, gender: template.config?.gender }}
-                                    avatarType="3d"
                                     headManifest={headManifest}
                                     avatarId={template.avatar_url}
                                     cameraOverride={effectiveCamera}
@@ -701,7 +695,17 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
                         </button>
                         {resolvedVoiceFile && (
                            <p className="text-[10px] text-neutral-500 truncate" title={resolvedVoiceFile}>
-                              Resolved: <span className="text-neutral-400 font-mono">{resolvedVoiceFile}</span>
+                              {resolvedVoice?.tier === 'override' && <>Using your pick: </>}
+                              {resolvedVoice?.tier === 'platform-default' && <>From platform default: </>}
+                              {resolvedVoice?.tier === 'voice-slot' && <>From platform voice slot: </>}
+                              {resolvedVoice?.tier === 'hardcoded' && <>Hardcoded fallback: </>}
+                              {resolvedVoice?.tier === 'catalog-first' && <>First available (no slot configured — runtime would 503): </>}
+                              <span className="text-neutral-400 font-mono">{resolvedVoiceFile}</span>
+                           </p>
+                        )}
+                        {!resolvedVoiceFile && (cfg.voice?.tts_provider || voiceSettings?.tts_provider) === 'piper' && ttsVoices.length === 0 && (
+                           <p className="text-[10px] text-amber-400">
+                              No Piper voices installed. Run <code className="text-amber-200">bash server/scripts/install-piper.sh</code>.
                            </p>
                         )}
                      </div>

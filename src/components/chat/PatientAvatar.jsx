@@ -99,12 +99,17 @@ function pickHeadFile(patient, manifest) {
     return pool[idx];
 }
 
+// `avatarType` used to be a prop accepting "3d" / "head" / "none" — but the
+// component never branched on "3d" vs "head" (both rendered the same R3F
+// canvas), and the "none" kill-switch is now enforced at the parent level
+// (PatientVisual short-circuits when voiceSettings.avatar_type === 'none'),
+// so the prop has been removed. If you arrived here looking for it, stop
+// passing it from new callsites.
 export default function PatientAvatar({
     patient,
     speaking = false,
     listening = false,
     visemes = null,
-    avatarType,
     headManifest,
     avatarId = null,
     cameraOverride = null,
@@ -142,7 +147,6 @@ export default function PatientAvatar({
         };
     }, []);
 
-    if (avatarType === 'none' || avatarType == null) return null;
     if (!headManifest) return null;
 
     const filename = resolveAvatarId({

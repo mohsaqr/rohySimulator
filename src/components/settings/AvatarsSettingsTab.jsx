@@ -322,7 +322,6 @@ function PersonaCard({ label, gender, manifest, voices, voicesProvider, avatarId
                         <Suspense fallback={<PreviewSpinner />}>
                             <PatientAvatar
                                 patient={{ gender }}
-                                avatarType="3d"
                                 headManifest={manifest}
                                 avatarId={avatarId}
                             />
@@ -424,8 +423,7 @@ function AvatarPickerCard({
                             <Suspense fallback={<PreviewSpinner />}>
                                 <PatientAvatar
                                     patient={{ gender }}
-                                    avatarType="3d"
-                                    headManifest={manifest}
+                                        headManifest={manifest}
                                     avatarId={avatarId}
                                     cameraOverride={camera}
                                 />
@@ -478,7 +476,6 @@ function Gallery({ manifest }) {
                     <Suspense fallback={<PreviewSpinner />}>
                         <PatientAvatar
                             patient={{ gender: selectedItem.gender }}
-                            avatarType="3d"
                             headManifest={manifest}
                             avatarId={selectedItem.id}
                         />
