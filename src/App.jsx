@@ -16,6 +16,7 @@ import { NotificationProvider } from './notifications/NotificationContext';
 import { useNotifications } from './notifications/useNotifications';
 import { setExternalApi } from './notifications/externalApi';
 import { ToastSurface, BannerSurface, AudioSurface, BackendSurface, ConsoleSurface } from './notifications/surfaces';
+import DiagnosticBar from './components/debug/DiagnosticBar';
 import { PatientRecordProvider, usePatientRecord } from './services/PatientRecord';
 import { AuthService } from './services/authService';
 import EventLogger, { COMPONENTS } from './services/eventLogger';
@@ -801,6 +802,10 @@ export default function App() {
                   <AudioSurface />
                   <ConsoleSurface />
                   <BackendSurfaceBridge />
+                  {/* Diagnostic bar — runtime context (LLM, voice, speaker,
+                      session, tenant). Default off; toggle from the floating
+                      pill in the bottom-right or via Settings → General. */}
+                  <DiagnosticBar />
                </VoiceProvider>
             </ToastProvider>
          </ScopedNotificationProvider>

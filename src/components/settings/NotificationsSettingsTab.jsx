@@ -1,15 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bell, BellOff, VolumeX, Volume2, Eye, EyeOff, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Bell, BellOff, VolumeX, Volume2, Eye, EyeOff, AlertTriangle, RotateCcw, Activity } from 'lucide-react';
 import { useNotifications } from '../../notifications/useNotifications';
+import { useAuth } from '../../contexts/AuthContext';
 import { SOURCES, SEVERITIES } from '../../notifications/types';
 import { DEFAULT_PREFS } from '../../notifications/defaults';
 import HistorySurface from '../../notifications/surfaces/HistorySurface';
+import { isDiagnosticBarEnabled, setDiagnosticBarEnabled } from '../debug/DiagnosticBar';
 
 // User-facing settings tab. Every toggle here writes through setPrefs to
 // localStorage immediately and to the backend (best-effort, debounced inside
 // the provider). No save button needed — changes are live.
 export default function NotificationsSettingsTab() {
     const { prefs, setPrefs, history, snoozed, acked, ackAll } = useNotifications();
+    const { user } = useAuth();
+    const [diagOn, setDiagOn] = useState(() => isDiagnosticBarEnabled(user?.id));
+    useEffect(() => { setDiagOn(isDiagnosticBarEnabled(user?.id)); }, [user?.id]);
+    const toggleDiag = (next) => {
+        setDiagnosticBarEnabled(user?.id, next);
+        setDiagOn(next);
+    };
 
     const toggleSource = (src) => {
         const muted = new Set(prefs.mutedSources);
@@ -237,6 +246,22 @@ export default function NotificationsSettingsTab() {
                 >
                     <AlertTriangle className="w-4 h-4" /> Reset to defaults
                 </button>
+            </Section>
+
+            {/* Diagnostics — runtime debug bar */}
+            <Section title="Diagnostics">
+                <Row
+                    label="Diagnostic bar"
+                    hint="Live footer showing the active LLM model, voice, speaker, session, and tenant. Toggle on to debug runtime config; click the Diag pill in the bottom-right of any page to bring it back if you've hidden it. Per-user setting."
+                    right={
+                        <Toggle
+                            on={diagOn}
+                            onChange={toggleDiag}
+                            onIcon={Activity}
+                            offIcon={Activity}
+                        />
+                    }
+                />
             </Section>
 
             {/* History */}
