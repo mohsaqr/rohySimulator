@@ -2815,14 +2815,25 @@ router.get('/sessions/:id/orders', authenticateToken, (req, res) => {
 });
 
 // PUT /api/orders/:id/view - Mark investigation as viewed
+//
+// Pattern-sweep follow-up to Stage 3: this endpoint had the same shape as
+// the alarm-ack IDOR — `req.params.id` + UPDATE without an ownership check
+// and no idempotency on the timestamp. Pre-fix any authenticated user could
+// flip another learner's `viewed_at` (corrupting their analytics) and a
+// network retry on the legitimate owner's PUT re-stamped the viewed_at,
+// destroying the view_delay_ms metric. Fix folds both:
+//   1. JOIN to sessions to verify the requester owns the session (or admin).
+//   2. Only stamp if viewed_at IS NULL; on retry return 200 with the
+//      original timestamp + already_viewed:true, mirroring /alarms/ack.
 router.put('/orders/:id/view', authenticateToken, (req, res) => {
     const orderId = req.params.id;
     const userId = req.user.id;
+    const isAdmin = req.user.role === 'admin' || req.user.is_admin;
 
     // First get the order details for logging
     const getOrderSql = `
         SELECT io.*, ci.test_name, ci.test_group, ci.current_value, ci.unit, ci.is_abnormal,
-               s.case_id, s.id as session_id
+               s.case_id, s.id as session_id, s.user_id as session_user_id
         FROM investigation_orders io
         LEFT JOIN case_investigations ci ON io.investigation_id = ci.id
         LEFT JOIN sessions s ON io.session_id = s.id
@@ -2833,17 +2844,33 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!order) return res.status(404).json({ error: 'Order not found' });
 
+        // Ownership: only the session owner or an admin can mark viewed.
+        if (!isAdmin && order.session_user_id !== userId) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Idempotent: a retry returns the original timestamp without
+        // re-stamping. view_delay_ms calculation relies on viewed_at being
+        // set on first view only; mutating it would silently zero the metric.
+        if (order.viewed_at) {
+            return res.json({
+                message: 'Order already marked as viewed',
+                viewed_at: order.viewed_at,
+                already_viewed: true
+            });
+        }
+
         const now = new Date();
         const orderedAt = new Date(order.ordered_at);
         const availableAt = new Date(order.available_at);
 
-        // Calculate timing metrics
+        // Calculate timing metrics (first-view path only — order.viewed_at is null here)
         const waitTimeMs = availableAt - orderedAt;
-        const viewDelayMs = order.viewed_at ? 0 : (now - availableAt);
+        const viewDelayMs = now - availableAt;
         const totalTimeMs = now - orderedAt;
 
-        // Update viewed_at
-        const updateSql = `UPDATE investigation_orders SET viewed_at = CURRENT_TIMESTAMP WHERE id = ?`;
+        // Update viewed_at (guard with IS NULL so a parallel retry can't double-stamp)
+        const updateSql = `UPDATE investigation_orders SET viewed_at = CURRENT_TIMESTAMP WHERE id = ? AND viewed_at IS NULL`;
 
         db.run(updateSql, [orderId], function(updateErr) {
             if (updateErr) return res.status(500).json({ error: updateErr.message });

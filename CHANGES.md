@@ -1,3 +1,12 @@
+### 2026-05-05 — Pattern sweep: orders/:id/view IDOR + idempotency
+The Stage-3 audit named the IDOR + timestamp-restamp shape as a recurring pattern in LEARNINGS.md. A grep sweep across `server/routes.js` for the same shape (`req.params.id` + UPDATE without ownership JOIN) found one outlier I missed in Stage 2:
+
+- `server/routes.js` PUT `/orders/:id/view`: pre-fix had no ownership check (any authenticated user could mark any other learner's order as viewed) AND re-stamped `viewed_at = CURRENT_TIMESTAMP` on every call (a network retry zeroed the legitimate `view_delay_ms` analytics metric — `view_delay_ms = order.viewed_at ? 0 : (now - availableAt)` reads from the just-mutated row). Fix mirrors the alarm-ack pattern: JOIN through `sessions.user_id`, allow only owner or admin, return 200 with `already_viewed:true` if `viewed_at` is set, otherwise UPDATE `WHERE viewed_at IS NULL`. Verified via the extended `audit-investigations.sh` (now 17 assertions including a cross-user 403 test).
+
+Sweep also verified that the rest of the routes are clean: every `:id`-receiving PUT/DELETE on a user-owned table either checks `requireAdmin`, owner ownership (`scenarios` does this correctly at routes.js:5310, 5347), or has been audited in a prior stage (`/sessions/:id/end` Stage 1; `/alarms/:id/acknowledge` Stage 3). No other instances of the pattern remain.
+
+**Tests:** `audit-investigations.sh` 17/17. `audit-sessions.sh` 9/9. `audit-alarms.sh` 13/13.
+
 ### 2026-05-05 — Alarms + Notifications wiring audit (Stage 3)
 Three Explore agents reviewed alarms/notifications (backend persistence, central dispatcher, five surface components). 11 distinct findings; **0 false positives** on triage (all real, but several were "intentional design" rather than bugs and got reclassified out). Real fixes shipped:
 

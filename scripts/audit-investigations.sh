@@ -370,6 +370,66 @@ else
     fi
 fi
 
+# ── 6. PUT /orders/:id/view ownership + idempotency ───────────────────────
+section "PUT /orders/:id/view enforces ownership + idempotency"
+
+# Use the existing reseed -> order -> view flow. Pull a real order id from
+# the session's orders list.
+curl -s "${AUTH[@]}" "$API/api/sessions/$SESSION_ID/orders" > "$ORDERS_OUT"
+ORDER_ID=$(python3 - "$ORDERS_OUT" <<'PYEOF'
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+orders = data.get('orders') or []
+ready = next((o for o in orders if o.get('id')), None)
+print(ready.get('id') if ready else '')
+PYEOF
+)
+
+if [ -z "$ORDER_ID" ]; then
+    fail "No orders available to test orders/:id/view (skipping)"
+else
+    # First view: should stamp viewed_at (200, already_viewed=False)
+    VIEW1_OUT="$OUT/view1.json"
+    VIEW1_CODE=$(curl -s -o "$VIEW1_OUT" -w "%{http_code}" \
+        -X PUT "${AUTH[@]}" "$API/api/orders/$ORDER_ID/view")
+    if [ "$VIEW1_CODE" = "200" ]; then
+        pass "Owner first-view -> 200"
+    else
+        fail "Owner first-view -> $VIEW1_CODE, body: $(cat "$VIEW1_OUT")"
+    fi
+
+    # Second view (retry): same timestamp + already_viewed:true
+    sleep 1
+    VIEW2_OUT="$OUT/view2.json"
+    curl -s -X PUT "${AUTH[@]}" "$API/api/orders/$ORDER_ID/view" > "$VIEW2_OUT"
+    ALREADY=$(json_get "$VIEW2_OUT" "already_viewed")
+    if [ "$ALREADY" = "True" ]; then
+        pass "Re-view returned already_viewed:true (idempotent — view_delay_ms metric protected)"
+    else
+        fail "Re-view did not report already_viewed:true, body: $(cat "$VIEW2_OUT")"
+    fi
+
+    # Cross-user: log in as student (different user) and try to view this admin's order — should be 403.
+    STUDENT_OUT="$OUT/student.json"
+    STUDENT_TOK=$(curl -s -X POST "$API/api/auth/login" \
+        -H 'Content-Type: application/json' \
+        -d "{\"username\":\"${ROHY_STUDENT_USER:-student}\",\"password\":\"${ROHY_STUDENT_PASS:-student123}\"}" \
+        | python3 -c "import json,sys; print(json.load(sys.stdin).get('token',''))")
+    if [ -n "$STUDENT_TOK" ]; then
+        DENY_OUT="$OUT/view_deny.json"
+        DENY_CODE=$(curl -s -o "$DENY_OUT" -w "%{http_code}" \
+            -X PUT -H "Authorization: Bearer $STUDENT_TOK" "$API/api/orders/$ORDER_ID/view")
+        if [ "$DENY_CODE" = "403" ]; then
+            pass "Cross-user view -> 403 (IDOR fix)"
+        else
+            fail "Cross-user view -> $DENY_CODE (expected 403), body: $(cat "$DENY_OUT")"
+        fi
+    else
+        fail "Could not log in student to verify cross-user denial"
+    fi
+fi
+
 # ── End the audit session ──────────────────────────────────────────────────
 curl -s -X PUT "${AUTH[@]}" "$API/api/sessions/$SESSION_ID/end" > /dev/null || true
 

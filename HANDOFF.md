@@ -146,11 +146,12 @@ budget-permitting.
 
 ### Universal audit pattern (carry forward from prior three audits)
 1. **Explore (parallel, 2–3 agents)** mapping DB → server → frontend → runtime.
-2. **Triage** — verify every claim before fixing. Prior audits had ~30% false-positive rate.
+2. **Triage** — verify every claim before fixing. FP rate has dropped each stage: 30 → 18 → 11 → 0%.
 3. **Decision points** through `AskUserQuestion` for anything architectural.
 4. **Fix HIGH always; cheap MEDIUM (≤15 min) opportunistically**; defer expensive MEDIUM and all LOW.
-5. **Verification** — re-runnable `scripts/audit-<area>.sh` where contract is stable; otherwise manual smoke-list.
-6. **Document** — append CHANGES, replace HANDOFF section, append LEARNINGS.
+5. **Pattern sweep** — after each stage, scan the rest of the codebase for the SHAPE of any HIGH bug just fixed. Subsystem-scoped agents miss outliers; a 3-line grep across all routes finds them. Stage-3 named the IDOR shape, and one sweep surfaced PUT `/orders/:id/view` (missed in Stage 2). Always do this before declaring a stage done.
+6. **Verification** — re-runnable `scripts/audit-<area>.sh` where contract is stable; otherwise manual smoke-list. Plus a Playwright UI smoke (login → render simulator → no error boundary) per Stage-1 lesson.
+7. **Document** — append CHANGES, replace HANDOFF section, append LEARNINGS.
 
 ### Out of scope (won't be addressed in any stage)
 - Cross-language i18n
