@@ -1,3 +1,21 @@
+### 2026-05-05 — Auth + user preferences audit (Stage 7)
+Two Explore agents reviewed auth/user-prefs server-side and the client surfaces. 0 false positives. Real fixes shipped:
+
+- `server/routes.js` GET `/users/preferences`: redacts `apiKey` / `api_key` from `default_llm_settings` JSON. Stage 4 fixed the same shape on GET `/sessions/:id` but missed this twin endpoint — `SELECT *` echoed the saved API key to anyone who'd configured one in `UserProfilePanel`.
+- `server/routes.js` PUT `/user/password`: now calls `logAudit({action: 'change_password_self', ...})` after a successful password update. Pre-fix users could rotate passwords with no audit trail for incident response.
+- `server/routes.js` PUT `/users/:id`: admin-side user edits now log `admin_user_password_reset` and/or `admin_user_role_change` to the audit log when those fields change. Reads prior state to capture `oldValue.role` so post-incident review can see who escalated whom.
+- `src/components/settings/ScenarioRepository.jsx`: replaced `JSON.parse(localStorage.getItem('user') || '{}')` with `useAuth()`. The `localStorage.user` key was never populated by the login flow (only `localStorage.token` is set), so `isAdmin` always evaluated false and admins saw the same UI as students. One-line fix surfaced by the pattern sweep.
+- `scripts/audit-auth.sh` (NEW): asserts the apiKey-redaction round-trip on `/users/preferences`. **3/3 passing**.
+
+Stage-4 follow-on resolved (false alarm): the "user-layer LLM resolver wiring deferred" deferral was incorrect. Verified that `default_llm_settings` IS read at session-start (`routes.js:1164`) and merged into `sessions.llm_settings`, which then flows to `/proxy/llm` as `sessionLlmSettings`. The user layer is correctly captured at the snapshot boundary; runtime doesn't need to re-read it.
+
+Triage outcomes:
+- **NOT A BUG** (intentional): "first user becomes admin" registration path; no forgot-password endpoint (educational platform without email integration).
+
+Browser smoke `:5173`: simulator workspace mounts, no React error-boundary fires.
+
+**Tests:** `audit-auth.sh` 3/3. `audit-physexam.sh` 6/6. `audit-scenario.sh` 7/7. `audit-llm.sh` 7/7. `audit-alarms.sh` 13/13. `audit-investigations.sh` 17/17. `audit-sessions.sh` 9/9. **62/62 across all stages.**
+
 ### 2026-05-05 — Physical exam + body map audit (Stage 6)
 Three Explore agents reviewed the physical-exam subsystem (DB+server, admin editors, runtime UI). 0 false positives. Real fixes shipped:
 

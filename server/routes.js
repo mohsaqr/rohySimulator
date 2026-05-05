@@ -1459,8 +1459,36 @@ router.get('/users/:id', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // PUT /api/users/:id - Update user (Admin only)
+//
+// Stage-7 audit: log password resets and role changes. Pre-fix admins
+// could rotate passwords or escalate roles silently — no audit trail for
+// incident response.
 router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     const { username, name, email, role, password } = req.body;
+    const targetUserId = req.params.id;
+
+    // Read prior state so we can record what changed.
+    const prior = await new Promise((resolve) => {
+        db.get('SELECT username, role FROM users WHERE id = ?', [targetUserId], (err, row) => {
+            if (err) return resolve(null);
+            resolve(row);
+        });
+    });
+
+    const logUserChange = ({ passwordReset, roleChanged }) => {
+        if (!passwordReset && !roleChanged) return;
+        logAudit({
+            userId: req.user.id,
+            username: req.user.username,
+            action: passwordReset && roleChanged
+                ? 'admin_user_password_and_role_change'
+                : passwordReset ? 'admin_user_password_reset' : 'admin_user_role_change',
+            targetType: 'user',
+            targetId: targetUserId,
+            oldValue: prior ? JSON.stringify({ role: prior.role }) : null,
+            newValue: JSON.stringify({ role: role ?? prior?.role })
+        });
+    };
 
     try {
         // If password is provided, validate and hash it
@@ -1471,7 +1499,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
             }
             const password_hash = await bcrypt.hash(password, 10);
             const sql = `UPDATE users SET username = ?, name = ?, email = ?, role = ?, password_hash = ? WHERE id = ?`;
-            db.run(sql, [username, name || null, email, role, password_hash, req.params.id], function (err) {
+            db.run(sql, [username, name || null, email, role, password_hash, targetUserId], function (err) {
                 if (err) {
                     if (err.message.includes('UNIQUE')) {
                         return res.status(409).json({ error: 'Username or email already exists' });
@@ -1481,12 +1509,13 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
                 if (this.changes === 0) {
                     return res.status(404).json({ error: 'User not found' });
                 }
-                res.json({ message: 'User updated successfully', id: req.params.id });
+                logUserChange({ passwordReset: true, roleChanged: prior && prior.role !== role });
+                res.json({ message: 'User updated successfully', id: targetUserId });
             });
         } else {
             // Update without changing password
             const sql = `UPDATE users SET username = ?, name = ?, email = ?, role = ? WHERE id = ?`;
-            db.run(sql, [username, name || null, email, role, req.params.id], function (err) {
+            db.run(sql, [username, name || null, email, role, targetUserId], function (err) {
                 if (err) {
                     if (err.message.includes('UNIQUE')) {
                         return res.status(409).json({ error: 'Username or email already exists' });
@@ -1496,7 +1525,8 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
                 if (this.changes === 0) {
                     return res.status(404).json({ error: 'User not found' });
                 }
-                res.json({ message: 'User updated successfully', id: req.params.id });
+                logUserChange({ passwordReset: false, roleChanged: prior && prior.role !== role });
+                res.json({ message: 'User updated successfully', id: targetUserId });
             });
         }
     } catch (err) {
@@ -5745,6 +5775,11 @@ router.post('/cases/:caseId/restore/:versionId', authenticateToken, requireAdmin
 // --- USER PREFERENCES ---
 
 // GET /api/users/preferences - Get current user's preferences
+//
+// Stage-7 audit: redact apiKey from default_llm_settings JSON before
+// responding. Stage 4 fixed the same shape on GET /sessions/:id but missed
+// this twin endpoint. SELECT * echoed default_llm_settings.apiKey to anyone
+// who saved one in their UserProfilePanel.
 router.get('/users/preferences', authenticateToken, (req, res) => {
     db.get(
         `SELECT * FROM user_preferences WHERE user_id = ?`,
@@ -5752,7 +5787,6 @@ router.get('/users/preferences', authenticateToken, (req, res) => {
         (err, prefs) => {
             if (err) return res.status(500).json({ error: err.message });
             if (!prefs) {
-                // Return default preferences
                 return res.json({
                     theme: 'dark',
                     language: 'en',
@@ -5761,6 +5795,18 @@ router.get('/users/preferences', authenticateToken, (req, res) => {
                     default_llm_settings: null,
                     default_monitor_settings: null
                 });
+            }
+            if (prefs.default_llm_settings) {
+                try {
+                    const parsed = typeof prefs.default_llm_settings === 'string'
+                        ? JSON.parse(prefs.default_llm_settings)
+                        : prefs.default_llm_settings;
+                    if (parsed && typeof parsed === 'object') {
+                        if ('apiKey' in parsed) parsed.apiKey = parsed.apiKey ? '[redacted]' : '';
+                        if ('api_key' in parsed) parsed.api_key = parsed.api_key ? '[redacted]' : '';
+                        prefs.default_llm_settings = JSON.stringify(parsed);
+                    }
+                } catch { /* malformed — leave as-is */ }
             }
             res.json(prefs);
         }
@@ -6810,6 +6856,17 @@ router.put('/user/password', authenticateToken, async (req, res) => {
             [newHash, req.user.id],
             function(err) {
                 if (err) return res.status(500).json({ error: err.message });
+                // Stage-7 audit: log every password change. Other sensitive
+                // mutations (case edits, agent edits, session ends) all call
+                // logAudit() — password changes were the gap. Don't log the
+                // password itself, only the action + user identity.
+                logAudit({
+                    userId: req.user.id,
+                    username: req.user.username,
+                    action: 'change_password_self',
+                    targetType: 'user',
+                    targetId: req.user.id
+                });
                 res.json({ message: 'Password changed successfully' });
             }
         );

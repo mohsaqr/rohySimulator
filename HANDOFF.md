@@ -1,6 +1,34 @@
 # Session Handoff — 2026-05-05
 
-## Stage 6 (Physical exam + body map) — SHIPPED this session
+## Stage 7 (Auth + user preferences) — SHIPPED this session
+
+Two Explore agents reviewed auth + prefs. 0 false positives. Real
+fixes shipped:
+
+1. **GET /users/preferences leaked apiKey** (HIGH) — Stage 4 fixed
+   the same shape on /sessions/:id but missed this twin endpoint.
+   `SELECT *` echoed `default_llm_settings.apiKey` verbatim. Now
+   redacted to `[redacted]` before responding.
+2. **Password-change paths missing audit log** (HIGH) — both
+   `PUT /user/password` (self-service) and `PUT /users/:id` (admin)
+   now call `logAudit()` on success. Admin-side captures `oldValue.role`
+   so escalation events are auditable.
+3. **ScenarioRepository.isAdmin always false** (LOW) — was reading
+   `localStorage.user` (never populated by login). Switched to
+   `useAuth()`. Admins now see the admin UI in scenario repository.
+
+Stage-4 follow-on **resolved as false alarm**: the "user-layer LLM
+resolver wiring deferred" was incorrect. User prefs ARE read at
+session-start (line 1164) and merged into sessions.llm_settings. Runtime
+doesn't need to re-read them.
+
+Verification: `audit-auth.sh` 3/3. All prior stages green.
+**62/62 across all stages.** Browser smoke clean.
+
+**Not bugs / intentional**: "first user becomes admin" registration;
+no forgot-password endpoint (no email integration).
+
+## Stage 6 (Physical exam + body map) — SHIPPED previous session, COMMITTED
 
 Three Explore agents reviewed the physical-exam subsystem. 0 false
 positives. Real fixes shipped:
@@ -248,7 +276,7 @@ outline below is the executive view.
 | ~~4~~ | ~~LLM precedence chain~~ | ~~MED~~ | ✅ DONE | Agent layer temperature/max_tokens added (was silently dropped). case_snapshot includes system_prompt; ChatInterface frozen-snapshot. apiKey redacted in GET /sessions/:id. Memory_access server enforcement + user-layer resolver deferred. |
 | ~~5~~ | ~~Scenario engine (runtime)~~ | ~~MED~~ | ✅ DONE | Snapshot binding for engine, override guard extended to all mutable fields, auto-stop on complete, scenario-picker confirm, server-side timeline validation. Beat-drift + mid-run banner deferred. |
 | ~~6~~ | ~~Physical exam + body map~~ | ~~MED~~ | ✅ DONE | exam-findings idempotent, ManikinPanel snapshot-bound, ClinicalRecordsEditor delete confirms. Two-schema reconciliation deferred (architectural). |
-| 7 | Auth + user preferences | LOW | 30–45 min | Simple FK relationships; expect 0–1 real findings. |
+| ~~7~~ | ~~Auth + user preferences~~ | ~~LOW~~ | ✅ DONE | apiKey redacted in GET /users/preferences (Stage-4 twin endpoint), audit log on password/role change, ScenarioRepository isAdmin fix. Stage-4 user-layer LLM deferral was a false alarm — already wired correctly. |
 | 8 | TNA analytics + event log | LOW | 45–60 min | Read-mostly aggregation; drift is cosmetic. Run after Stage 1 informs event lifecycle. |
 | 9 | Body avatars (if separate from heads) | LOW | 15–60 min | First check: do body GLBs exist as a separate concept? If no, close. |
 
