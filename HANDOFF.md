@@ -1,6 +1,49 @@
 # Session Handoff — 2026-05-05
 
-## Stage 2 (Investigations: Lab + Radiology) — SHIPPED this session
+## Stage 3 (Alarms + Notifications) — SHIPPED this session
+
+Three Explore agents reviewed alarms (backend, central dispatcher, five
+surfaces). 11 findings, **0 false positives** on triage (FP rate has
+dropped each stage: 30 → 18 → 11 → 0%). Real fixes shipped:
+
+1. **PUT `/alarms/:id/acknowledge` IDOR + idempotency** (HIGH) — pre-fix
+   any authenticated user could ack any alarm by ID, AND every retry
+   re-stamped `acknowledged_at`. Now JOINs to `sessions.user_id`,
+   allows owner or admin only, and only stamps if `acknowledged_at IS
+   NULL` (returns original timestamp + `already_acknowledged:true` on
+   re-call).
+2. **GET `/alarms/config/:userId` cross-user read** (HIGH) — pre-fix any
+   authenticated user could read another user's alarm thresholds. Now
+   403 unless self or admin.
+3. **Acks/snoozes leaked across cases within the same user** (HIGH) —
+   `NotificationProvider` was keyed only on `user.id`, with localStorage
+   `acked` set persisted by user. Loading case B inherited case A's
+   `alarm:hr_high` ack, silently silencing brand-new alarms in case B.
+   Fix: new `clearTransient(reason)` API; `AuthenticatedApp` calls it on
+   every `sessionId` change. Prefs and history stay user-scoped.
+4. **BannerSurface aria-live** (MED, cheap) — `role="alert"` + assertive
+   for any CRITICAL banner, otherwise `status` + polite. Toast already
+   did this; banner didn't.
+
+Verification: `bash scripts/audit-alarms.sh` — **13/13 passing**.
+`bash scripts/audit-investigations.sh` 14/14 (no Stage-2 regression).
+`bash scripts/audit-sessions.sh` 9/9 (no Stage-1 regression). Browser
+smoke on `:5173`: simulator workspace mounts, no error-boundary fires.
+
+**Intentional design (not bugs)**: Toast `dismiss()` vs Banner `ack()`
+asymmetry; Banner critical has no Dismiss button (acknowledge IS the
+dismiss); latch resolves on ack but not snooze (snooze is time-bounded).
+
+**Deferred** (architectural):
+- Alarm thresholds are not snapshot-bound at session start. Mid-session
+  admin threshold edits bleed into in-progress sessions, inconsistent
+  with Stage 1's case_snapshot decision. To fix, add `alarm_thresholds`
+  to `sessions.case_snapshot` or store them in a sibling JSON column.
+  Adds breaking complexity to `useAlarms` and the editor; deferred.
+- `/api/alarms/log` not idempotent on `(session, vital, ts, value)` —
+  speculative; deferred unless a real duplicate-row report surfaces.
+
+## Stage 2 (Investigations: Lab + Radiology) — SHIPPED previous session, COMMITTED
 
 Three Explore agents reviewed labs/radiology end-to-end (DB+server,
 admin editors, runtime). 9 findings, **1 false positive** (~11% rate —
@@ -88,7 +131,7 @@ outline below is the executive view.
 |---|---|---|---|---|
 | ~~1~~ | ~~Sessions + lifecycle~~ | ~~HIGH~~ | ✅ DONE | Snapshot decision: snapshot at start. Multi-tab: detect+warn. Vitals: persist on change. /end idempotent. |
 | ~~2~~ | ~~Investigations (Lab + Radiology)~~ | ~~HIGH~~ | ✅ DONE | UPSERT POST/labs, bulk PUT/labs replace, DELETE cascade, /order-labs+/order-radiology idempotent, editor delete confirms. L6 resolved. |
-| 3 | **Alarms + Notifications** | HIGH | 90–120 min | Recent commits show flux. Five surfaces (Audio/Banner/Backend/Console/Toast) all read the same notification stream — easy for one to drift on ack state. |
+| ~~3~~ | ~~Alarms + Notifications~~ | ~~HIGH~~ | ✅ DONE | Ack endpoint IDOR + idempotency, /alarms/config cross-user read fix, transient state cleared on session change, BannerSurface aria-live. Threshold snapshot deferred. |
 | 4 | LLM precedence chain | MED | 45–60 min | platform → case → agent → session → user. Five layers, persona audit just touched the agent layer. |
 | 5 | Scenario engine (runtime) | MED | 60–90 min | Storage audited; runtime engine in PatientMonitor:560–682 not yet. Beat application, scenario-disable mid-run, complete state. Stage 1's snapshot decision now constrains what mid-run admin edits do. |
 | 6 | Physical exam + body map | MED | 60 min | Region master + per-case + AI-context narrative. Same drift pattern as labs/treatments. |

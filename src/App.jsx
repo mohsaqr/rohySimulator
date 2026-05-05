@@ -69,6 +69,21 @@ function MainApp() {
       }
    }, [user?.id]);
 
+   // Stage-3 audit: clear notification transient state (active map, acked
+   // set, snoozed map) on every session change. Acks/snoozes describe
+   // "I've handled this in *this* case" — pre-fix they leaked across cases
+   // within the same user, silently silencing brand-new alarms in case B
+   // because case A's `alarm:hr_high` ack was still in localStorage.
+   const notifications = useNotifications();
+   const lastNotificationSessionRef = useRef(null);
+   useEffect(() => {
+      const prev = lastNotificationSessionRef.current;
+      lastNotificationSessionRef.current = sessionId;
+      if (prev === sessionId) return;
+      if (prev === null && sessionId === null) return;
+      notifications.clearTransient?.('session-change');
+   }, [sessionId, notifications]);
+
    // Fetch and load default case if no session exists
    const loadDefaultCase = async () => {
       try {

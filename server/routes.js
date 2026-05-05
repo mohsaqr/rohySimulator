@@ -2482,16 +2482,54 @@ router.post('/alarms/log', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/alarms/:id/acknowledge - Acknowledge an alarm
+//
+// Stage-3 audit: pre-fix this had no ownership check (any authenticated user
+// could ack any alarm by ID — a textbook IDOR) AND re-stamped acknowledged_at
+// on every call (network retries corrupted the audit trail). The fix folds
+// both: JOIN to sessions to verify the requester owns the session (or admin),
+// and only stamp if acknowledged_at IS NULL so retries return the original
+// timestamp.
 router.put('/alarms/:id/acknowledge', authenticateToken, (req, res) => {
     const alarmId = req.params.id;
-    
-    const sql = `UPDATE alarm_events SET acknowledged_at = CURRENT_TIMESTAMP WHERE id = ?`;
-    
-    db.run(sql, [alarmId], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+    const isAdmin = req.user.role === 'admin' || req.user.is_admin;
+
+    const ownerSql = `
+        SELECT a.id, a.acknowledged_at, s.user_id AS session_user_id
+        FROM alarm_events a
+        LEFT JOIN sessions s ON a.session_id = s.id
+        WHERE a.id = ?
+    `;
+    db.get(ownerSql, [alarmId], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: 'Alarm not found' });
+
+        // Bound to a session: only the session owner or an admin can ack.
+        // Orphan alarms (no session_id) are admin-only.
+        const allowed = isAdmin || (row.session_user_id != null && row.session_user_id === req.user.id);
+        if (!allowed) return res.status(403).json({ error: 'Access denied' });
+
+        // Idempotent: if already acked, return the original timestamp.
+        if (row.acknowledged_at) {
+            return res.json({
+                message: 'Alarm already acknowledged',
+                acknowledged_at: row.acknowledged_at,
+                already_acknowledged: true
+            });
         }
-        res.json({ message: 'Alarm acknowledged' });
+
+        const updateSql = `UPDATE alarm_events SET acknowledged_at = CURRENT_TIMESTAMP WHERE id = ? AND acknowledged_at IS NULL`;
+        db.run(updateSql, [alarmId], function (updateErr) {
+            if (updateErr) return res.status(500).json({ error: updateErr.message });
+            // Re-read the just-stamped value so the caller can record it.
+            db.get(`SELECT acknowledged_at FROM alarm_events WHERE id = ?`, [alarmId], (readErr, fresh) => {
+                if (readErr) return res.status(500).json({ error: readErr.message });
+                res.json({
+                    message: 'Alarm acknowledged',
+                    acknowledged_at: fresh?.acknowledged_at,
+                    already_acknowledged: false
+                });
+            });
+        });
     });
 });
 
@@ -2508,11 +2546,21 @@ router.get('/alarms/config', authenticateToken, (req, res) => {
 });
 
 // GET /api/alarms/config/:userId - Get alarm config for specific user
+//
+// Stage-3 audit: pre-fix this had no scope check, so any authenticated user
+// could read any other user's alarm thresholds by guessing their ID. Now
+// only the user themself or an admin can read.
 router.get('/alarms/config/:userId', authenticateToken, (req, res) => {
-    const userId = req.params.userId;
-    
+    const userId = parseInt(req.params.userId, 10);
+    if (!Number.isInteger(userId)) {
+        return res.status(400).json({ error: 'invalid userId' });
+    }
+    const isAdmin = req.user.role === 'admin' || req.user.is_admin;
+    if (userId !== req.user.id && !isAdmin) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+
     const sql = `SELECT * FROM alarm_config WHERE user_id = ?`;
-    
     db.all(sql, [userId], (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });

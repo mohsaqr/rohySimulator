@@ -1,3 +1,22 @@
+### 2026-05-05 — Alarms + Notifications wiring audit (Stage 3)
+Three Explore agents reviewed alarms/notifications (backend persistence, central dispatcher, five surface components). 11 distinct findings; **0 false positives** on triage (all real, but several were "intentional design" rather than bugs and got reclassified out). Real fixes shipped:
+
+- `server/routes.js` PUT `/alarms/:id/acknowledge`: pre-fix had no ownership check (textbook IDOR — any authenticated user could ack any alarm by ID) AND re-stamped `acknowledged_at` on every call (network retries corrupted the audit trail). Fix folds both concerns: JOIN `alarm_events.session_id → sessions.user_id`, allow only the owner or an admin, then `UPDATE … WHERE id=? AND acknowledged_at IS NULL`. Re-acks return the original timestamp with `already_acknowledged:true`.
+- `server/routes.js` GET `/alarms/config/:userId`: pre-fix had no scope check, so any authenticated user could read any other user's alarm thresholds by guessing their numeric ID. Fix: 403 unless `userId === req.user.id` or admin.
+- `src/notifications/NotificationContext.jsx`: new `clearTransient(reason)` API that empties `active`, `acked`, and `snoozed` (and persists empty sets to localStorage). Prefs and history stay user-scoped because those are real user-level preferences/audit trails. Acks/snoozes are *session-scoped* semantically ("I've handled this in this case"), and the existing user-only persistence let them leak.
+- `src/App.jsx`: on every `sessionId` transition (null→123, 123→124), `AuthenticatedApp` calls `clearTransient('session-change')`. Pre-fix, a user who acked `alarm:hr_high` in case A and then loaded case B would silently *not* hear/see the new HR alarm in case B because the dispatcher's router checked the ack set first.
+- `src/notifications/surfaces/BannerSurface.jsx`: aria-live wired on the banner stack. `role="alert"` + `aria-live="assertive"` when any banner is `CRITICAL`, otherwise `role="status"` + `polite`. Toast already had this; banner did not.
+- `scripts/audit-alarms.sh` (NEW): end-to-end verification — admin/student two-role login, alarm ack ownership (allow owner + admin, deny non-owner with 403), idempotency on re-ack, cross-user config-read denial (403), self-read allowed, admin override allowed. **13/13 passing** against the live API.
+
+Triage outcomes (intentional or deferred, not bugs):
+- **INTENTIONAL**: Toast `dismiss()` vs Banner `ack()` (toast = transient hide, banner = handled-everywhere); Banner critical has no Dismiss (acknowledge IS the dismiss for critical); latch resolves on ack but not snooze (snooze is time-bounded by definition).
+- **DEFERRED** (architectural): alarm thresholds are read live from `alarm_config` rather than snapshot-bound at session start (mid-session admin threshold edits bleed in). Would need adding alarm thresholds to `sessions.case_snapshot` or a parallel structure. Captured in HANDOFF for a future stage.
+- **DEFERRED** (LOW, speculative): `/alarms/log` not idempotent (network retry creates duplicate rows — very rare); localStorage-ack-saves-before-server-PUT-confirms (would need a confirm-then-persist pattern); silenced-still-abnormal not surfaced in `NotificationsSettingsTab` (feature work, not a bug).
+
+Browser smoke on `:5173`: simulator workspace mounts, Laboratory/Radiology/Treatments tabs render, no React error-boundary fires.
+
+**Tests:** `npx vite build` clean. `bash scripts/audit-alarms.sh` 13/13. `bash scripts/audit-investigations.sh` 14/14 (no Stage-2 regression). `bash scripts/audit-sessions.sh` 9/9 (no Stage-1 regression).
+
 ### 2026-05-05 — Investigations: Lab + Radiology wiring audit (Stage 2)
 Three Explore agents reviewed the labs/radiology subsystem (DB+server, admin editors, runtime). 9 distinct findings; **1 false positive** on triage (FP rate ~11%, lower than the prior ~18-30% baseline — three reports cross-referenced against each other catch more upfront). Real findings shipped:
 

@@ -14,8 +14,17 @@ export default function BannerSurface() {
 
     if (banners.length === 0) return null;
 
+    // Stage-3 audit: aria-live so screen readers announce banners as they
+    // arrive. Critical alarms get assertive (interrupts the SR queue);
+    // everything else is polite. Toast already does this; banner did not.
+    const hasCritical = banners.some(n => n.severity === SEVERITY.CRITICAL);
     return (
-        <div className="fixed top-0 left-0 right-0 z-[9998] flex flex-col gap-1 pointer-events-none">
+        <div
+            className="fixed top-0 left-0 right-0 z-[9998] flex flex-col gap-1 pointer-events-none"
+            role={hasCritical ? 'alert' : 'status'}
+            aria-live={hasCritical ? 'assertive' : 'polite'}
+            aria-atomic="false"
+        >
             {banners.map(n => <BannerCard key={n.id} n={n} onAck={() => ack(n.key)} onSnooze={() => snooze(n.key)} />)}
         </div>
     );

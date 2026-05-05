@@ -342,6 +342,32 @@ export function NotificationProvider({ children }) {
         return () => clearTimeout(t);
     }, [active]);
 
+    // Stage-3 audit: clear transient state imperatively when a new session
+    // starts. Acks and snoozes are semantically session-scoped ("I've handled
+    // this in *this* case"), not user-scoped — pre-fix, loading a second
+    // case in the same user inherited acked keys like `alarm:hr_high` and
+    // silently silenced brand-new alarms in the new case. Prefs and history
+    // remain user-scoped (real preferences / audit trail). Called from
+    // AuthenticatedApp on sessionId change.
+    const clearTransient = useCallback((reason = 'session-change') => {
+        setActive(new Map());
+        setAcked(prev => {
+            if (prev.size === 0) return prev;
+            const empty = new Set();
+            saveAckedSync(empty, userIdRef.current);
+            return empty;
+        });
+        setSnoozed(prev => {
+            if (prev.size === 0) return prev;
+            const empty = new Map();
+            saveSnoozedSync(empty, userIdRef.current);
+            return empty;
+        });
+        subscribersRef.current.forEach(fn => {
+            try { fn({ type: 'transient-cleared', reason }); } catch { /* ignore */ }
+        });
+    }, []);
+
     // Periodic snooze GC (also handles the rare case where the setTimeout
     // chain dropped a tick due to tab backgrounding).
     useEffect(() => {
@@ -383,6 +409,7 @@ export function NotificationProvider({ children }) {
         snooze,
         snoozeAll,
         dismiss,
+        clearTransient,
         // Hover-pause for toasts (surface-driven)
         pause,
         resume,
@@ -396,7 +423,7 @@ export function NotificationProvider({ children }) {
         setPrefs,
         // Subscribe for transient surfaces (audio/backend/console)
         subscribe,
-    }), [notify, resolve, ack, ackAll, snooze, snoozeAll, dismiss, pause, resume, activeList, history, snoozedList, ackedList, prefs, setPrefs, subscribe]);
+    }), [notify, resolve, ack, ackAll, snooze, snoozeAll, dismiss, clearTransient, pause, resume, activeList, history, snoozedList, ackedList, prefs, setPrefs, subscribe]);
 
     return (
         <NotificationContextObject.Provider value={value}>
