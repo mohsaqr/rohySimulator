@@ -1,5 +1,53 @@
 # Session Handoff — 2026-05-05
 
+## Remaining audits — staged roadmap
+
+Three wiring audits have shipped this branch (commits below). The case
+audit explicitly deferred several questions to follow-up sessions; this
+section is the north-star for the remaining work. Full plan kept at
+`~/.claude-claudef/plans/now-we-want-a-tranquil-valiant.md` — the outline
+below is the executive view.
+
+**Each stage is its own session and its own commit.** Don't batch.
+
+| # | Stage | Severity | Effort | Why |
+|---|---|---|---|---|
+| 1 | **Sessions + lifecycle** | HIGH | 90–120 min | Most-connected subsystem; mid-session bugs have worst blast radius. Snapshot vs live-binding question deferred from case audit lives here. |
+| 2 | **Investigations (Lab + Radiology)** | HIGH | 60–90 min | Mirrors the treatment-master pattern. Orphan refs, master-edit propagation, format drift expected. L6 from case audit was deferred here. |
+| 3 | **Alarms + Notifications** | HIGH | 90–120 min | Recent commits show flux. Five surfaces (Audio/Banner/Backend/Console/Toast) all read the same notification stream — easy for one to drift on ack state. |
+| 4 | LLM precedence chain | MED | 45–60 min | platform → case → agent → session → user. Five layers, persona audit just touched the agent layer. |
+| 5 | Scenario engine (runtime) | MED | 60–90 min | Storage audited; runtime engine in PatientMonitor:560–682 not yet. Beat application, scenario-disable mid-run, complete state. |
+| 6 | Physical exam + body map | MED | 60 min | Region master + per-case + AI-context narrative. Same drift pattern as labs/treatments. |
+| 7 | Auth + user preferences | LOW | 30–45 min | Simple FK relationships; expect 0–1 real findings. |
+| 8 | TNA analytics + event log | LOW | 45–60 min | Read-mostly aggregation; drift is cosmetic. Run after Stage 1 informs event lifecycle. |
+| 9 | Body avatars (if separate from heads) | LOW | 15–60 min | First check: do body GLBs exist as a separate concept? If no, close. |
+
+**Sequencing**: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9. Stop after Stage 3 if
+the user signals "good enough" — the high-blast-radius work is done at
+that point. Stages 4–6 are tighter, more bounded. Stages 7–9 are
+budget-permitting.
+
+### Universal audit pattern (carry forward from prior three audits)
+1. **Explore (parallel, 2–3 agents)** mapping DB → server → frontend → runtime.
+2. **Triage** — verify every claim before fixing. Prior audits had ~30% false-positive rate.
+3. **Decision points** through `AskUserQuestion` for anything architectural.
+4. **Fix HIGH always; cheap MEDIUM (≤15 min) opportunistically**; defer expensive MEDIUM and all LOW.
+5. **Verification** — re-runnable `scripts/audit-<area>.sh` where contract is stable; otherwise manual smoke-list.
+6. **Document** — append CHANGES, replace HANDOFF section, append LEARNINGS.
+
+### Out of scope (won't be addressed in any stage)
+- Cross-language i18n
+- DB migration framework (Knex/Sequelize) — current `IF NOT EXISTS`/`ALTER ADD COLUMN` works
+- Multi-tenant / multi-org partitioning
+- Mobile / responsive UI (simulator is desktop-only)
+- Bundle-size optimization (vite warning is acknowledged)
+
+### Prior audits (commits)
+- `af9302a` Persona / Voice / Avatar — voice resolver extracted, provider routing fixed, OpenAI alignment, avatarType prop removed.
+- `ff4056b` Case editor — schema fidelity (history mirror), persistence (localStorage stash provenance), session safety (vitals clamps, active-use chip), provenance (scenario.source).
+
+---
+
 ## Completed
 
 Built and wired the comprehensive Agent Personas editor that the previous session was asked to deliver. Standards are now admin-editable in place, with a `Reset to defaults` button restoring shipped values from the JS source-of-truth array. The new full-page editor is reachable from both Settings → Agent Personas (Edit / New Custom) and from the Case Wizard's Agents step (per-case agent → "Edit persona ↗").
