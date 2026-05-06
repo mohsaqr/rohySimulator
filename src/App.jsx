@@ -28,9 +28,10 @@ import TnaDashboard from './components/analytics/tna/TnaDashboardV2';
 import DiscussionScreen from './components/discussion/DiscussionScreen';
 import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
 
-// Session expiry time in milliseconds (default 30 minutes)
-const SESSION_EXPIRY_MS = parseInt(localStorage.getItem('rohy_session_expiry_minutes') || '30') * 60 * 1000;
-
+// Persistence rule: a session ends ONLY through the Exit or End buttons
+// (or an explicit case-switch). Refresh, tab close, idle time — none of
+// those count as exits. We restore whatever the user had whenever the app
+// boots, and never silently wipe based on time-since-last-activity.
 function MainApp() {
    const [showConfig, setShowConfig] = useState(false);
    const [showFullPageSettings, setShowFullPageSettings] = useState(false);
@@ -80,10 +81,15 @@ function MainApp() {
    useEffect(() => {
       const prev = lastNotificationSessionRef.current;
       lastNotificationSessionRef.current = sessionId;
+      // Restore-from-localStorage looks like a session change to this
+      // effect (in-memory ref starts null, becomes the saved sessionId).
+      // Gate on sessionValidated so refresh keeps the user's alarm acks /
+      // snoozes intact; only a *real* subsequent session change clears them.
+      if (!sessionValidated) return;
       if (prev === sessionId) return;
       if (prev === null && sessionId === null) return;
       notifications.clearTransient?.('session-change');
-   }, [sessionId, notifications]);
+   }, [sessionId, sessionValidated, notifications]);
 
    // Stage-6 audit: app-level case snapshot (fetched once on session start).
    // Mirrors the pattern in ChatInterface (Stage 4) and PatientMonitor
@@ -152,87 +158,60 @@ function MainApp() {
       }
    };
 
-   // Validate session on mount
+   // Restore session on mount. Per the persistence rule, refresh NEVER
+   // wipes — we always reinstate whatever we last saved. Server validation
+   // is best-effort and informational only: a server that says "ended" or
+   // an unreachable backend doesn't trigger a clear, because the user
+   // didn't click Exit/End. They can do that themselves; the app stays
+   // showing the case until they do.
    useEffect(() => {
       const validateAndRestoreSession = async () => {
+         let restored = false;
          try {
             const saved = localStorage.getItem('rohy_active_session');
-            if (!saved) {
-               // No saved session - try to load default case
-               await loadDefaultCase();
-               setSessionValidated(true);
-               return;
-            }
-
-            const { activeCase: savedCase, sessionId: savedSessionId, timestamp } = JSON.parse(saved);
-
-            // Check if session has expired due to inactivity
-            const timeSinceActivity = Date.now() - (timestamp || 0);
-            if (timeSinceActivity > SESSION_EXPIRY_MS) {
-               console.log('Session expired due to inactivity');
-               // Tell the server to mark the session ended so it doesn't
-               // linger as a zombie row. /end is idempotent so a duplicate
-               // call (eg. another tab beat us to it) is safe.
-               if (savedSessionId) {
-                  endSessionOnServer(savedSessionId);
-               }
-               localStorage.removeItem('rohy_active_session');
-               localStorage.removeItem('rohy_chat_history');
-               if (savedSessionId) {
-                  localStorage.removeItem(`rohy_discussion_history_${savedSessionId}`);
-               }
-               // Load default case after session expiry
-               await loadDefaultCase();
-               setSessionValidated(true);
-               return;
-            }
-
-            // Validate session exists in backend
-            if (savedSessionId) {
-               try {
-                  const token = AuthService.getToken();
-                  const res = await fetch(apiUrl(`/sessions/${savedSessionId}`), {
-                     headers: { 'Authorization': `Bearer ${token}` }
-                  });
-
-                  if (res.ok) {
-                     const data = await res.json();
-                     // Session is valid and not ended
-                     if (!data.session.end_time) {
-                        console.log('Session validated:', savedSessionId);
-                        setActiveCase(savedCase);
-                        setSessionId(savedSessionId);
-                        lastActivityRef.current = Date.now();
-                        // Log session resume
-                        EventLogger.sessionResumed(savedSessionId, savedCase?.id, savedCase?.name);
-                     } else {
-                        console.log('Session already ended, clearing');
-                        localStorage.removeItem('rohy_active_session');
-                        localStorage.removeItem('rohy_chat_history');
-                        // Load default case after ended session
-                        await loadDefaultCase();
-                     }
-                  } else {
-                     console.log('Session not found in backend, clearing');
-                     localStorage.removeItem('rohy_active_session');
-                     localStorage.removeItem('rohy_chat_history');
-                     // Load default case after invalid session
-                     await loadDefaultCase();
-                  }
-               } catch (err) {
-                  console.error('Failed to validate session:', err);
-                  // Keep local session if backend unavailable
+            if (saved) {
+               const { activeCase: savedCase, sessionId: savedSessionId } = JSON.parse(saved);
+               if (savedCase) {
                   setActiveCase(savedCase);
-                  setSessionId(savedSessionId);
+                  restored = true;
                }
-            } else if (savedCase) {
-               // Case but no session - allow
-               setActiveCase(savedCase);
+               if (savedSessionId) {
+                  setSessionId(savedSessionId);
+                  lastActivityRef.current = Date.now();
+                  // Best-effort server check — purely diagnostic. Never
+                  // mutates state on mismatch; that's what Exit/End is for.
+                  try {
+                     const token = AuthService.getToken();
+                     const res = await fetch(apiUrl(`/sessions/${savedSessionId}`), {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                     });
+                     if (res.ok) {
+                        const data = await res.json();
+                        if (data?.session?.end_time) {
+                           console.log('[Session] restored a server-ended session; user will exit through End');
+                        } else {
+                           EventLogger.sessionResumed(savedSessionId, savedCase?.id, savedCase?.name);
+                        }
+                     } else {
+                        console.warn('[Session] backend non-OK validating saved session; keeping local state');
+                     }
+                  } catch (err) {
+                     console.warn('[Session] validation network error; keeping local state:', err.message);
+                  }
+               }
             }
          } catch (e) {
-            console.warn('Failed to restore session:', e);
+            // Saved blob is corrupt and cannot be parsed at all — there's
+            // nothing to restore. Drop the unparseable key so the next
+            // session can write fresh; this is the one case where clearing
+            // is unavoidable (storage is broken, not a user-driven exit).
+            console.warn('[Session] saved session blob unparseable, dropping:', e.message);
             localStorage.removeItem('rohy_active_session');
-            // Try to load default case even on error
+         }
+         if (!restored) {
+            // No saved case at all → fall back to the default case. Same as
+            // pre-refactor behaviour, just no longer reachable through the
+            // expiry/wipe paths.
             await loadDefaultCase();
          }
          setSessionValidated(true);
@@ -241,20 +220,15 @@ function MainApp() {
       validateAndRestoreSession();
    }, []);
 
-   // Update activity timestamp on user interactions
+   // Track user activity for the End-of-session duration metric only.
+   // The localStorage timestamp churn that lived here previously existed
+   // solely to extend the inactivity-expiry window, which is now gone —
+   // the session lives until the user clicks Exit/End regardless of how
+   // long the tab has been idle.
    const updateActivity = useCallback(() => {
       lastActivityRef.current = Date.now();
-      // Update localStorage timestamp to extend session
-      if (activeCase && sessionId) {
-         localStorage.setItem('rohy_active_session', JSON.stringify({
-            activeCase,
-            sessionId,
-            timestamp: Date.now()
-         }));
-      }
-   }, [activeCase, sessionId]);
+   }, []);
 
-   // Track user activity
    useEffect(() => {
       const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
       events.forEach(event => window.addEventListener(event, updateActivity, { passive: true }));
