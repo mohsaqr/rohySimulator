@@ -1,0 +1,88 @@
+{
+  "data_source_key": "caliper_2026",
+  "release_version": "2026",
+  "license": "CC BY-NC-SA",
+  "license_note": "CALIPER reference intervals are licensed CC BY-NC-SA. They are isolated to this file (and the lab_reference_ranges table) so they can be removed wholesale for commercial deployment without affecting the rest of the curated catalogue.",
+  "match_strategy": "lab_test_name_pattern (case-insensitive substring); skip if no lab_tests row matches",
+  "ranges": [
+    { "lab_test_name_pattern": "Hemoglobin",        "population": "neonatal",   "sex": null, "age_min_years": 0,    "age_max_years": 0.08,  "range_low": 14.0, "range_high": 22.0, "critical_low": 7,    "critical_high": null, "unit": "g/dL",        "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Hemoglobin",        "population": "pediatric",  "sex": null, "age_min_years": 0.08, "age_max_years": 1,     "range_low": 9.5,  "range_high": 13.0, "critical_low": 7,    "critical_high": null, "unit": "g/dL",        "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Hemoglobin",        "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 12,    "range_low": 11.0, "range_high": 13.5, "critical_low": 7,    "critical_high": null, "unit": "g/dL",        "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Hemoglobin",        "population": "pediatric",  "sex": "M",  "age_min_years": 12,   "age_max_years": 18,    "range_low": 13.0, "range_high": 16.0, "critical_low": 7,    "critical_high": null, "unit": "g/dL",        "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Hemoglobin",        "population": "pediatric",  "sex": "F",  "age_min_years": 12,   "age_max_years": 18,    "range_low": 12.0, "range_high": 15.0, "critical_low": 7,    "critical_high": null, "unit": "g/dL",        "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Hematocrit",        "population": "neonatal",   "sex": null, "age_min_years": 0,    "age_max_years": 0.08,  "range_low": 42,   "range_high": 65,   "critical_low": 25,   "critical_high": 70,   "unit": "%",           "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Hematocrit",        "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 12,    "range_low": 33,   "range_high": 39,   "critical_low": 21,   "critical_high": null, "unit": "%",           "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "White Blood Cell",  "population": "neonatal",   "sex": null, "age_min_years": 0,    "age_max_years": 0.08,  "range_low": 9.0,  "range_high": 30.0, "critical_low": 4,    "critical_high": 30,   "unit": "10*3/uL",     "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "White Blood Cell",  "population": "pediatric",  "sex": null, "age_min_years": 0.08, "age_max_years": 1,     "range_low": 6.0,  "range_high": 15.0, "critical_low": 4,    "critical_high": 30,   "unit": "10*3/uL",     "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "White Blood Cell",  "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 12,    "range_low": 5.0,  "range_high": 13.0, "critical_low": 4,    "critical_high": 30,   "unit": "10*3/uL",     "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Platelet",          "population": "pediatric",  "sex": null, "age_min_years": 0,    "age_max_years": 18,    "range_low": 150, "range_high": 450,  "critical_low": 50,   "critical_high": null, "unit": "10*3/uL",     "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Sodium",            "population": "neonatal",   "sex": null, "age_min_years": 0,    "age_max_years": 0.08,  "range_low": 134, "range_high": 144,  "critical_low": 120,  "critical_high": 160,  "unit": "mmol/L",      "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Sodium",            "population": "pediatric",  "sex": null, "age_min_years": 0.08, "age_max_years": 18,    "range_low": 136, "range_high": 145,  "critical_low": 120,  "critical_high": 160,  "unit": "mmol/L",      "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Potassium",         "population": "neonatal",   "sex": null, "age_min_years": 0,    "age_max_years": 0.08,  "range_low": 3.7, "range_high": 5.9,  "critical_low": 2.5,  "critical_high": 7,    "unit": "mmol/L",      "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Potassium",         "population": "pediatric",  "sex": null, "age_min_years": 0.08, "age_max_years": 18,    "range_low": 3.5, "range_high": 5.5,  "critical_low": 2.5,  "critical_high": 6.5,  "unit": "mmol/L",      "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Chloride",          "population": "pediatric",  "sex": null, "age_min_years": 0,    "age_max_years": 18,    "range_low": 95,  "range_high": 110,  "critical_low": null, "critical_high": null, "unit": "mmol/L",      "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "BUN",               "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 18,    "range_low": 5,   "range_high": 18,   "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Creatinine",        "population": "neonatal",   "sex": null, "age_min_years": 0,    "age_max_years": 0.08,  "range_low": 0.3, "range_high": 1.0,  "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Creatinine",        "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 12,    "range_low": 0.3, "range_high": 0.7,  "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Creatinine",        "population": "pediatric",  "sex": "M",  "age_min_years": 12,   "age_max_years": 18,    "range_low": 0.5, "range_high": 1.0,  "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Creatinine",        "population": "pediatric",  "sex": "F",  "age_min_years": 12,   "age_max_years": 18,    "range_low": 0.4, "range_high": 0.9,  "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Glucose",           "population": "neonatal",   "sex": null, "age_min_years": 0,    "age_max_years": 0.08,  "range_low": 40,  "range_high": 100,  "critical_low": 30,   "critical_high": 200,  "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Glucose",           "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 18,    "range_low": 70,  "range_high": 100,  "critical_low": 50,   "critical_high": 250,  "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Calcium",           "population": "neonatal",   "sex": null, "age_min_years": 0,    "age_max_years": 0.08,  "range_low": 8.5, "range_high": 10.5, "critical_low": 7,    "critical_high": 13,   "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Calcium",           "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 18,    "range_low": 8.8, "range_high": 10.5, "critical_low": 7,    "critical_high": 13,   "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Phosphorus",        "population": "pediatric",  "sex": null, "age_min_years": 0,    "age_max_years": 1,     "range_low": 4.5, "range_high": 7.0,  "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Phosphorus",        "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 18,    "range_low": 3.7, "range_high": 5.6,  "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Albumin",           "population": "pediatric",  "sex": null, "age_min_years": 0,    "age_max_years": 18,    "range_low": 3.5, "range_high": 5.0,  "critical_low": null, "critical_high": null, "unit": "g/dL",        "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "ALT",               "population": "pediatric",  "sex": null, "age_min_years": 0,    "age_max_years": 12,    "range_low": 5,   "range_high": 30,   "critical_low": null, "critical_high": null, "unit": "U/L",         "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "ALT",               "population": "pediatric",  "sex": null, "age_min_years": 12,   "age_max_years": 18,    "range_low": 5,   "range_high": 35,   "critical_low": null, "critical_high": null, "unit": "U/L",         "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "AST",               "population": "neonatal",   "sex": null, "age_min_years": 0,    "age_max_years": 0.08,  "range_low": 25,  "range_high": 75,   "critical_low": null, "critical_high": null, "unit": "U/L",         "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "AST",               "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 12,    "range_low": 15,  "range_high": 50,   "critical_low": null, "critical_high": null, "unit": "U/L",         "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Bilirubin, Total",   "population": "neonatal",   "sex": null, "age_min_years": 0,    "age_max_years": 0.02,  "range_low": 1.0, "range_high": 12.0, "critical_low": null, "critical_high": 20,   "unit": "mg/dL",       "source_citation": "AAP hyperbilirubinemia 2022; physiologic neonatal jaundice" },
+    { "lab_test_name_pattern": "Bilirubin, Total",   "population": "pediatric",  "sex": null, "age_min_years": 0.08, "age_max_years": 18,    "range_low": 0.1, "range_high": 1.0,  "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "TSH",               "population": "neonatal",   "sex": null, "age_min_years": 0,    "age_max_years": 0.08,  "range_low": 0.7, "range_high": 15.2, "critical_low": null, "critical_high": null, "unit": "mIU/L",       "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "TSH",               "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 18,    "range_low": 0.7, "range_high": 5.7,  "critical_low": null, "critical_high": null, "unit": "mIU/L",       "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Free T4",           "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 18,    "range_low": 1.0, "range_high": 1.7,  "critical_low": null, "critical_high": null, "unit": "ng/dL",       "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Cortisol",          "population": "pediatric",  "sex": null, "age_min_years": 0,    "age_max_years": 18,    "range_low": 5,   "range_high": 25,   "critical_low": null, "critical_high": null, "unit": "ug/dL",       "source_citation": "CALIPER ped intervals 2026 (AM)" },
+
+    { "lab_test_name_pattern": "LH",                "population": "pediatric",  "sex": null, "age_min_years": 0,    "age_max_years": 9,     "range_low": 0,   "range_high": 1.0,  "critical_low": null, "critical_high": null, "unit": "mIU/mL",      "source_citation": "CALIPER ped intervals 2026 (pre-pubertal)" },
+
+    { "lab_test_name_pattern": "FSH",               "population": "pediatric",  "sex": null, "age_min_years": 0,    "age_max_years": 9,     "range_low": 0,   "range_high": 1.5,  "critical_low": null, "critical_high": null, "unit": "mIU/mL",      "source_citation": "CALIPER ped intervals 2026 (pre-pubertal)" },
+
+    { "lab_test_name_pattern": "Estradiol",         "population": "pediatric",  "sex": null, "age_min_years": 0,    "age_max_years": 9,     "range_low": 0,   "range_high": 10,   "critical_low": null, "critical_high": null, "unit": "pg/mL",       "source_citation": "CALIPER ped intervals 2026 (pre-pubertal)" },
+
+    { "lab_test_name_pattern": "Testosterone",      "population": "pediatric",  "sex": "M",  "age_min_years": 0,    "age_max_years": 9,     "range_low": 0,   "range_high": 30,   "critical_low": null, "critical_high": null, "unit": "ng/dL",       "source_citation": "CALIPER ped intervals 2026 (pre-pubertal)" },
+    { "lab_test_name_pattern": "Testosterone",      "population": "pediatric",  "sex": "F",  "age_min_years": 0,    "age_max_years": 9,     "range_low": 0,   "range_high": 20,   "critical_low": null, "critical_high": null, "unit": "ng/dL",       "source_citation": "CALIPER ped intervals 2026 (pre-pubertal)" },
+
+    { "lab_test_name_pattern": "IgG",               "population": "pediatric",  "sex": null, "age_min_years": 0.08, "age_max_years": 1,     "range_low": 200, "range_high": 800,  "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "IgG",               "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 18,    "range_low": 700, "range_high": 1500, "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "IgA",               "population": "pediatric",  "sex": null, "age_min_years": 0.08, "age_max_years": 1,     "range_low": 10,  "range_high": 90,   "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "IgA",               "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 18,    "range_low": 50,  "range_high": 300,  "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "IgM",               "population": "pediatric",  "sex": null, "age_min_years": 0.08, "age_max_years": 1,     "range_low": 30,  "range_high": 150,  "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "IgM",               "population": "pediatric",  "sex": null, "age_min_years": 1,    "age_max_years": 18,    "range_low": 50,  "range_high": 200,  "critical_low": null, "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Magnesium",         "population": "pediatric",  "sex": null, "age_min_years": 0,    "age_max_years": 18,    "range_low": 1.7, "range_high": 2.4,  "critical_low": 1.0,  "critical_high": null, "unit": "mg/dL",       "source_citation": "CALIPER ped intervals 2026" },
+
+    { "lab_test_name_pattern": "Lactate",           "population": "neonatal",   "sex": null, "age_min_years": 0,    "age_max_years": 0.08,  "range_low": 0.5, "range_high": 3.0,  "critical_low": null, "critical_high": 5,    "unit": "mmol/L",      "source_citation": "CALIPER ped intervals 2026" },
+    { "lab_test_name_pattern": "Lactate",           "population": "pediatric",  "sex": null, "age_min_years": 0.08, "age_max_years": 18,    "range_low": 0.5, "range_high": 2.0,  "critical_low": null, "critical_high": 4,    "unit": "mmol/L",      "source_citation": "CALIPER ped intervals 2026" }
+  ]
+}
