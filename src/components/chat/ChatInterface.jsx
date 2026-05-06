@@ -766,7 +766,17 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             const safeAge  = Number.isFinite(Number(age)) ? Number(age) : 35;
             const slotGender = safeAge < 13 ? 'child' : (/^f/i.test(rawGender || '') ? 'female' : 'male');
             const r = resolveSpeakerVoice(override, rawGender, age);
-            if (r.file) {
+            if (!r.file) {
+                // Silent-fail guard: when nothing in the resolver chain
+                // matches the active provider+slot the runtime path used to
+                // skip without telling anyone. That's the deployed-but-mute
+                // symptom — admin sees no toast, no /api/tts request, no log.
+                // Surface it instead so the missing slot is fixable from the
+                // UI without a DevTools dive.
+                console.warn('[voice] no voice resolved for case', { provider: r.provider, slot: slotGender });
+                toast?.error?.(`No voice configured for provider "${r.provider}" / ${slotGender}. Set a default in Settings → Voice & Avatar, or assign a voice to this case.`);
+                voiceErrored = true;
+            } else {
                 speech = VoiceService.beginSpeechSession({
                     voice: r.file,
                     rate: r.rate,
@@ -863,7 +873,16 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const speakResponse = (responseText, { override, gender, age }) => {
         const r = resolveSpeakerVoice(override, gender, age);
         const spokenText = stripStageDirections(responseText);
-        if (!r.file || !spokenText || responseText.startsWith('Error:')) return;
+        if (!spokenText || responseText.startsWith('Error:')) return;
+        if (!r.file) {
+            // Same silent-fail guard the patient path now has — agents used
+            // to go quiet without explanation if no voice resolved.
+            const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
+            const slot = safeAge < 13 ? 'child' : (/^f/i.test(gender || '') ? 'female' : 'male');
+            console.warn('[voice] no voice resolved for agent', { provider: r.provider, slot });
+            toast?.error?.(`No voice configured for provider "${r.provider}" / ${slot}. Set a default in Settings → Voice & Avatar.`);
+            return;
+        }
         const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
         const slotGender = safeAge < 13 ? 'child' : (/^f/i.test(gender || '') ? 'female' : 'male');
         VoiceService.speak({
