@@ -79,7 +79,7 @@ const ActivityTimelineChart = ({ days, verbs, series, palette = "default" }) => 
     return paths;
   }, [mode, sortedVerbs, series, xScale, yScale]);
   if (days.length === 0) {
-    return <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
+    return <div className="text-center py-8 text-neutral-400 text-sm">
         No activity data available.
       </div>;
   }
@@ -88,22 +88,22 @@ const ActivityTimelineChart = ({ days, verbs, series, palette = "default" }) => 
     /* Controls */
   }
       <div className="flex items-center justify-between mb-3">
-        <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs">
+        <div className="flex rounded-lg border border-neutral-600 overflow-hidden text-xs">
           <button
     onClick={() => setMode("stacked")}
-    className={`px-3 py-1.5 font-medium transition-colors ${mode === "stacked" ? "bg-primary-600 text-white" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
+    className={`px-3 py-1.5 font-medium transition-colors ${mode === "stacked" ? "bg-primary-600 text-white" : "bg-neutral-800/50 text-neutral-300 hover:bg-neutral-700"}`}
   >
             Stacked Bars
           </button>
           <button
     onClick={() => setMode("lines")}
-    className={`px-3 py-1.5 font-medium transition-colors ${mode === "lines" ? "bg-primary-600 text-white" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
+    className={`px-3 py-1.5 font-medium transition-colors ${mode === "lines" ? "bg-primary-600 text-white" : "bg-neutral-800/50 text-neutral-300 hover:bg-neutral-700"}`}
   >
             Lines
           </button>
         </div>
 
-        <div className="text-xs text-gray-500 dark:text-gray-400">
+        <div className="text-xs text-neutral-400">
           {days.length} day{days.length !== 1 ? "s" : ""} &middot; {sortedVerbs.length} verb{sortedVerbs.length !== 1 ? "s" : ""}
         </div>
       </div>
@@ -269,8 +269,8 @@ const ActivityTimelineChart = ({ days, verbs, series, palette = "default" }) => 
       className="w-3 h-3 rounded-sm inline-block flex-shrink-0"
       style={{ backgroundColor: colorMap[verb] }}
     />
-              <span className="text-gray-700 dark:text-gray-300">{verb}</span>
-              <span className="text-gray-400 dark:text-gray-500">({total})</span>
+              <span className="text-neutral-200">{verb}</span>
+              <span className="text-neutral-500">({total})</span>
             </button>;
   })}
       </div>

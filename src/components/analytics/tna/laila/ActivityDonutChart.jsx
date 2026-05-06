@@ -53,13 +53,13 @@ const ActivityDonutChart = ({ data, title, palette = "default" }) => {
     return { slices: s, total: tot, colorMap: cm };
   }, [data, palette]);
   if (slices.length === 0) {
-    return <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">{title}</h3>
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">No data</div>
+    return <div className="bg-neutral-800/50 rounded-xl p-4 border border-neutral-700">
+        <h3 className="text-base font-semibold text-neutral-100 mb-2">{title}</h3>
+        <div className="text-center py-8 text-neutral-400 text-sm">No data</div>
       </div>;
   }
-  return <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-      <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">{title}</h3>
+  return <div className="bg-neutral-800/50 rounded-xl p-4 border border-neutral-700">
+      <h3 className="text-base font-semibold text-neutral-100 mb-2">{title}</h3>
       <div className="flex flex-col items-center">
         <svg
     width={SVG_SIZE}
@@ -136,8 +136,8 @@ const ActivityDonutChart = ({ data, title, palette = "default" }) => {
     className="w-3 h-3 rounded-sm inline-block flex-shrink-0"
     style={{ backgroundColor: colorMap[slice.label] }}
   />
-              <span className="text-gray-700 dark:text-gray-300">{slice.label}</span>
-              <span className="text-gray-400 dark:text-gray-500">({slice.count})</span>
+              <span className="text-neutral-200">{slice.label}</span>
+              <span className="text-neutral-500">({slice.count})</span>
             </button>)}
         </div>
       </div>

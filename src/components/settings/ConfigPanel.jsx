@@ -19,6 +19,7 @@ import CaseTreatmentConfig from './CaseTreatmentConfig';
 import VoiceSettingsTab from './VoiceSettingsTab';
 import AvatarsSettingsTab from './AvatarsSettingsTab';
 import NotificationsSettingsTab from './NotificationsSettingsTab';
+import TnaDashboardV2 from '../analytics/tna/TnaDashboardV2';
 import { Bell as BellIcon } from 'lucide-react';
 import CaseAvatarVoicePicker from './CaseAvatarVoicePicker';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
@@ -282,6 +283,17 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
                 {/* Sidebar */}
                 <div className="w-48 bg-neutral-950 border-r border-neutral-800 flex flex-col pt-4">
+                    {/* Analytics — first item, admin-only. Surfaces the LAILA-style
+                        TNA dashboard (Activity / Network / Clusters / Patterns /
+                        Process Map / Settings) without leaving the settings panel. */}
+                    {isAdmin() && (
+                        <button
+                            onClick={() => setActiveTab('analytics')}
+                            className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'analytics' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                        >
+                            <Activity className="w-4 h-4 text-purple-400" /> Analytics
+                        </button>
+                    )}
                     <button
                         onClick={() => setActiveTab('cases')}
                         className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'cases' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
@@ -366,6 +378,11 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
                 {/* Content Area */}
                 <div className="flex-1 p-8 overflow-y-auto bg-neutral-900">
+
+                    {/* --- ANALYTICS TAB --- TNA dashboard embedded inside settings */}
+                    {activeTab === 'analytics' && isAdmin() && (
+                        <TnaDashboardV2 embedded={true} />
+                    )}
 
                     {/* --- CASES TAB --- */}
                     {activeTab === 'cases' && (

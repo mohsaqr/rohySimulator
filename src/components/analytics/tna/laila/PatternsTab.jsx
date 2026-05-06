@@ -64,8 +64,8 @@ const PatternsTab = ({ sequences, colorMap, shortEnabled, onShortEnabledChange: 
       {
     /* Summary */
   }
-      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
-        <span className="font-semibold text-gray-800 dark:text-gray-200">{total}</span>{" "}
+      <div className="flex items-center gap-2 text-sm text-neutral-400 mb-4">
+        <span className="font-semibold text-neutral-100">{total}</span>{" "}
         {t("patterns_found")}
       </div>
 
@@ -76,13 +76,13 @@ const PatternsTab = ({ sequences, colorMap, shortEnabled, onShortEnabledChange: 
         {
     /* Short patterns */
   }
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <div className="bg-neutral-800/50 rounded-xl border border-neutral-700 p-5">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">
+              <h3 className="text-base font-semibold text-neutral-100">
                 {t("pattern_lengths")} 2–3
               </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              <p className="text-xs text-neutral-400 mt-0.5">
                 {shortPatterns.length} {t("patterns_found")}
               </p>
             </div>
@@ -90,25 +90,25 @@ const PatternsTab = ({ sequences, colorMap, shortEnabled, onShortEnabledChange: 
               {SHORT_LENGTHS.map((len) => <button
     key={len}
     onClick={() => setShortEnabled({ ...shortEnabled, [len]: !shortEnabled[len] })}
-    className={`w-7 h-7 rounded text-xs font-medium transition-colors ${shortEnabled[len] ? "bg-primary-600 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+    className={`w-7 h-7 rounded text-xs font-medium transition-colors ${shortEnabled[len] ? "bg-primary-600 text-white" : "bg-neutral-700 text-neutral-400 hover:bg-neutral-600"}`}
   >
                   {len}
                 </button>)}
             </div>
           </div>
-          {shortPatterns.length > 0 ? <PatternTable patterns={shortPatterns} colorMap={colorMap} /> : <div className="text-sm text-gray-400 dark:text-gray-500 py-8 text-center">{t("no_data")}</div>}
+          {shortPatterns.length > 0 ? <PatternTable patterns={shortPatterns} colorMap={colorMap} /> : <div className="text-sm text-neutral-500 py-8 text-center">{t("no_data")}</div>}
         </div>
 
         {
     /* Long patterns */
   }
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <div className="bg-neutral-800/50 rounded-xl border border-neutral-700 p-5">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">
+              <h3 className="text-base font-semibold text-neutral-100">
                 {t("pattern_lengths")} 4–7
               </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              <p className="text-xs text-neutral-400 mt-0.5">
                 {longPatterns.length} {t("patterns_found")}
               </p>
             </div>
@@ -116,13 +116,13 @@ const PatternsTab = ({ sequences, colorMap, shortEnabled, onShortEnabledChange: 
               {LONG_LENGTHS.map((len) => <button
     key={len}
     onClick={() => setLongEnabled({ ...longEnabled, [len]: !longEnabled[len] })}
-    className={`w-7 h-7 rounded text-xs font-medium transition-colors ${longEnabled[len] ? "bg-primary-600 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+    className={`w-7 h-7 rounded text-xs font-medium transition-colors ${longEnabled[len] ? "bg-primary-600 text-white" : "bg-neutral-700 text-neutral-400 hover:bg-neutral-600"}`}
   >
                   {len}
                 </button>)}
             </div>
           </div>
-          {longPatterns.length > 0 ? <PatternTable patterns={longPatterns} colorMap={colorMap} /> : <div className="text-sm text-gray-400 dark:text-gray-500 py-8 text-center">{t("no_data")}</div>}
+          {longPatterns.length > 0 ? <PatternTable patterns={longPatterns} colorMap={colorMap} /> : <div className="text-sm text-neutral-500 py-8 text-center">{t("no_data")}</div>}
         </div>
       </div>
     </div>;

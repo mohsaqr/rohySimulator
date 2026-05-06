@@ -42,11 +42,11 @@ const CentralityBarChart = ({ centralityData, colorMap, selectedMeasure }) => {
       {
     /* Measure tabs (hidden when controlled externally) */
   }
-      {showTabs && <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs mb-3 w-fit">
+      {showTabs && <div className="flex rounded-lg border border-neutral-600 overflow-hidden text-xs mb-3 w-fit">
           {measureKeys.map((key) => <button
     key={key}
     onClick={() => setInternalMeasure(key)}
-    className={`px-3 py-1 transition-colors ${activeMeasure === key ? "bg-primary-600 text-white" : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"}`}
+    className={`px-3 py-1 transition-colors ${activeMeasure === key ? "bg-primary-600 text-white" : "bg-neutral-700 text-neutral-300 hover:bg-neutral-600"}`}
   >
               {MEASURE_I18N[key] ? t(`courses:${MEASURE_I18N[key]}`) : key}
             </button>)}

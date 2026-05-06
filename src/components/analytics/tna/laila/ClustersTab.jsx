@@ -86,20 +86,20 @@ const ClustersTab = ({
     /* Header row */
   }
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+        <div className="flex items-center gap-4 text-sm text-neutral-400">
           <span>
-            <span className="font-semibold text-gray-800 dark:text-gray-200">{result.details.length}</span>{" "}
+            <span className="font-semibold text-neutral-100">{result.details.length}</span>{" "}
             {t("clusters_found")}
           </span>
           <span>
             {t("silhouette_score")}:{" "}
-            <span className="font-semibold text-gray-800 dark:text-gray-200">
+            <span className="font-semibold text-neutral-100">
               {result.clusters.silhouette.toFixed(3)}
             </span>{" "}
             <span className="text-xs">({silQuality})</span>
           </span>
         </div>
-        <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+        <label className="flex items-center gap-2 text-sm text-neutral-300">
           <span className="font-medium">{t("cluster_count")}:</span>
           <input
     type="number"
@@ -110,7 +110,7 @@ const ClustersTab = ({
       const val = parseInt(e.target.value);
       if (val >= 2 && val <= 10) onKChange(val);
     }}
-    className="w-16 px-2 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-center"
+    className="w-16 px-2 py-1.5 text-sm rounded-lg border border-neutral-600 bg-neutral-800/50 text-neutral-200 text-center"
   />
         </label>
       </div>
@@ -152,16 +152,16 @@ const ClusterColumn = ({
       {
     /* Cluster header with top frequencies */
   }
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+      <div className="bg-neutral-800/50 rounded-xl border border-neutral-700 p-4">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-base font-bold text-gray-900 dark:text-white">
             {t("cluster")} {detail.clusterNum}
           </h3>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
+          <span className="text-sm text-neutral-400">
             {detail.size} ({detail.pct.toFixed(0)}%)
           </span>
         </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        <div className="text-xs text-neutral-400 mb-3">
           {t("avg_sequence_length")}: {detail.avgLen.toFixed(1)}
         </div>
         <div className="space-y-1.5">
@@ -170,14 +170,14 @@ const ClusterColumn = ({
     className="inline-block w-2 h-2 rounded-full flex-shrink-0"
     style={{ backgroundColor: colorMap[state] ?? "#888" }}
   />
-              <span className="text-gray-700 dark:text-gray-300 w-20 truncate">{state}</span>
-              <div className="flex-1 h-3.5 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+              <span className="text-neutral-200 w-20 truncate">{state}</span>
+              <div className="flex-1 h-3.5 bg-neutral-700 rounded overflow-hidden">
                 <div
     className="h-full rounded"
     style={{ width: `${count / topMaxFreq * 100}%`, backgroundColor: colorMap[state] ?? "#888", opacity: 0.75 }}
   />
               </div>
-              <span className="text-gray-500 dark:text-gray-400 tabular-nums w-10 text-right">{count}</span>
+              <span className="text-neutral-400 tabular-nums w-10 text-right">{count}</span>
             </div>)}
         </div>
       </div>
@@ -185,13 +185,13 @@ const ClusterColumn = ({
       {
     /* Network graph */
   }
-      {detail.clusterModel && <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-2 relative">
+      {detail.clusterModel && <div className="bg-neutral-800/50 rounded-xl border border-neutral-700 p-2 relative">
           <button
     onClick={() => setModalOpen(true)}
-    className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-white/80 dark:bg-gray-700/80 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+    className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-neutral-700/80 hover:bg-neutral-600 transition-colors"
     title={t("network_title")}
   >
-            <Expand className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+            <Expand className="w-3.5 h-3.5 text-neutral-400" />
           </button>
           <TnaNetworkGraph
     model={detail.clusterModel}
@@ -213,27 +213,27 @@ const ClusterColumn = ({
       {
     /* Distribution sequence plot */
   }
-      {detail.clusterSeqs.length > 0 && <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3">
+      {detail.clusterSeqs.length > 0 && <div className="bg-neutral-800/50 rounded-xl border border-neutral-700 p-3">
           <TnaDistributionPlot sequences={detail.clusterSeqs} labels={labels} colorMap={colorMap} />
         </div>}
 
       {
     /* InStrength centrality */
   }
-      {detail.instrength && <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3">
-          <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">{t("in_strength")}</h4>
+      {detail.instrength && <div className="bg-neutral-800/50 rounded-xl border border-neutral-700 p-3">
+          <h4 className="text-xs font-semibold text-neutral-400 mb-2">{t("in_strength")}</h4>
           <div className="space-y-1">
             {detail.instrength.map(({ label, value }) => {
     const maxVal = detail.instrength[0].value || 1;
     return <div key={label} className="flex items-center gap-2 text-xs">
-                  <span className="text-gray-700 dark:text-gray-300 w-20 truncate text-right">{label}</span>
-                  <div className="flex-1 h-4 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+                  <span className="text-neutral-200 w-20 truncate text-right">{label}</span>
+                  <div className="flex-1 h-4 bg-neutral-700 rounded overflow-hidden">
                     <div
       className="h-full rounded"
       style={{ width: `${value / maxVal * 100}%`, backgroundColor: "rgba(74, 144, 217, 0.8)" }}
     />
                   </div>
-                  <span className="text-gray-500 dark:text-gray-400 tabular-nums w-12 text-right">{value.toFixed(3)}</span>
+                  <span className="text-neutral-400 tabular-nums w-12 text-right">{value.toFixed(3)}</span>
                 </div>;
   })}
           </div>

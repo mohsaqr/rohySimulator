@@ -11208,23 +11208,87 @@ router.get('/analytics/daily-counts', authenticateToken, requireAdmin, (req, res
     });
 });
 
-// GET /api/analytics/hourly-counts — events per hour-of-day (24 buckets).
+// GET /api/analytics/hourly-counts — day-of-week × hour-of-day grid.
+//
+// Returns the shape LAILA's ActivityHeatmap component expects:
+// `[{ dow: 0..6, hour: 0..23, count }]`. SQLite's strftime('%w', ...)
+// returns 0 (Sunday) through 6 (Saturday) — same convention as JS
+// Date.getDay(). Unobserved cells are returned with count=0 so the
+// heatmap renders a full grid even on sparse data.
 router.get('/analytics/hourly-counts', authenticateToken, requireAdmin, (req, res) => {
     const { case_id, user_id, start_date, end_date } = req.query;
-    let sql = `SELECT CAST(strftime('%H', timestamp) AS INTEGER) AS hour, COUNT(*) AS n
+    let sql = `SELECT CAST(strftime('%w', timestamp) AS INTEGER) AS dow,
+                      CAST(strftime('%H', timestamp) AS INTEGER) AS hour,
+                      COUNT(*) AS n
                  FROM learning_events WHERE 1=1`;
     const params = [];
     if (case_id)    { sql += ' AND case_id = ?';    params.push(case_id); }
     if (user_id)    { sql += ' AND user_id = ?';    params.push(user_id); }
     if (start_date) { sql += ' AND timestamp >= ?'; params.push(start_date); }
     if (end_date)   { sql += ' AND timestamp <= ?'; params.push(end_date); }
-    sql += ' GROUP BY hour ORDER BY hour';
+    sql += ' GROUP BY dow, hour ORDER BY dow, hour';
     db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        // Pad to all 24 buckets so the chart always renders the full day.
-        const counts = Array(24).fill(0);
-        for (const r of rows) if (Number.isInteger(r.hour)) counts[r.hour] = r.n;
-        res.json({ hourly: counts.map((n, hour) => ({ hour, count: n })) });
+        // Build the dense 7×24 grid LAILA's heatmap expects.
+        const grid = [];
+        const observed = new Map();
+        for (const r of rows) {
+            if (Number.isInteger(r.dow) && Number.isInteger(r.hour)) {
+                observed.set(`${r.dow}:${r.hour}`, r.n);
+            }
+        }
+        for (let dow = 0; dow < 7; dow++) {
+            for (let hour = 0; hour < 24; hour++) {
+                grid.push({ dow, hour, count: observed.get(`${dow}:${hour}`) || 0 });
+            }
+        }
+        res.json({ hourly: grid });
+    });
+});
+
+// GET /api/analytics/timeline-series — verb-broken-out daily counts in
+// the shape LAILA's ActivityTimelineChart expects:
+//   { days: ['YYYY-MM-DD', ...], verbs: ['ORDERED_LAB', ...],
+//     series: { ORDERED_LAB: [n_for_day0, n_for_day1, ...], ... } }
+// Limits to the top 10 verbs by total count and folds the rest into a
+// synthetic 'OTHER' series so the legend stays readable.
+router.get('/analytics/timeline-series', authenticateToken, requireAdmin, (req, res) => {
+    const { case_id, user_id, start_date, end_date } = req.query;
+    let sql = `SELECT date(timestamp) AS day, verb, COUNT(*) AS n
+                 FROM learning_events WHERE 1=1`;
+    const params = [];
+    if (case_id)    { sql += ' AND case_id = ?';    params.push(case_id); }
+    if (user_id)    { sql += ' AND user_id = ?';    params.push(user_id); }
+    if (start_date) { sql += ' AND timestamp >= ?'; params.push(start_date); }
+    if (end_date)   { sql += ' AND timestamp <= ?'; params.push(end_date); }
+    sql += ' GROUP BY day, verb ORDER BY day, verb';
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!rows.length) return res.json({ days: [], verbs: [], series: {} });
+
+        const dayIdx = new Map();
+        const days = [];
+        const verbTotals = new Map();
+        for (const r of rows) {
+            if (!dayIdx.has(r.day)) { dayIdx.set(r.day, days.length); days.push(r.day); }
+            verbTotals.set(r.verb, (verbTotals.get(r.verb) || 0) + r.n);
+        }
+
+        // Top 10 verbs by total count, rest into 'OTHER'.
+        const TOP = 10;
+        const sortedVerbs = [...verbTotals.entries()].sort((a, b) => b[1] - a[1]);
+        const topVerbs = new Set(sortedVerbs.slice(0, TOP).map(([v]) => v));
+        const verbs = [...topVerbs];
+        if (sortedVerbs.length > TOP) verbs.push('OTHER');
+
+        const series = {};
+        for (const v of verbs) series[v] = Array(days.length).fill(0);
+        for (const r of rows) {
+            const i = dayIdx.get(r.day);
+            const bucket = topVerbs.has(r.verb) ? r.verb : 'OTHER';
+            if (series[bucket]) series[bucket][i] += r.n;
+        }
+        res.json({ days, verbs, series });
     });
 });
 

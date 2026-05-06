@@ -29,13 +29,13 @@ const PatternTable = ({ patterns, colorMap }) => {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-200 dark:border-gray-700">
-              <th className="text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-300">
+            <tr className="border-b border-neutral-700">
+              <th className="text-left py-2 px-3 font-medium text-neutral-300">
                 {t("pattern")}
               </th>
               {columns.map((col) => <th
     key={col.key}
-    className="text-right py-2 px-3 font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:text-gray-900 dark:hover:text-white select-none whitespace-nowrap"
+    className="text-right py-2 px-3 font-medium text-neutral-300 cursor-pointer hover:text-gray-900 dark:hover:text-white select-none whitespace-nowrap"
     onClick={() => handleSort(col.key)}
   >
                   {col.label}
@@ -48,7 +48,7 @@ const PatternTable = ({ patterns, colorMap }) => {
     const states = p.pattern.split("->");
     return <tr
       key={idx}
-      className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+      className="border-b border-neutral-800 hover:bg-neutral-800/50"
     >
                   <td className="py-1.5 px-3">
                     <div className="flex items-center gap-1 flex-wrap">
@@ -63,7 +63,7 @@ const PatternTable = ({ patterns, colorMap }) => {
                         </span>)}
                     </div>
                   </td>
-                  {columns.map((col) => <td key={col.key} className="text-right py-1.5 px-3 tabular-nums text-gray-600 dark:text-gray-400">
+                  {columns.map((col) => <td key={col.key} className="text-right py-1.5 px-3 tabular-nums text-neutral-400">
                       {col.format(p[col.key])}
                     </td>)}
                 </tr>;

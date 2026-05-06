@@ -98,7 +98,11 @@ function StatCard({ icon, label, value, accent = 'cyan' }) {
     );
 }
 
-export default function TnaDashboardV2({ onClose }) {
+// `embedded`: render as a flat content block (suitable for a Settings
+// tab) instead of the fixed full-screen overlay used when the dashboard
+// is launched from the user menu. When `embedded`, no close button or
+// full-viewport positioning is applied.
+export default function TnaDashboardV2({ onClose, embedded = false }) {
     // --- Filters ---
     const [caseId, setCaseId] = useState('');
     const [userId, setUserId] = useState('');
@@ -189,15 +193,15 @@ export default function TnaDashboardV2({ onClose }) {
 
         Promise.all([
             fetch(apiUrl(`/analytics/summary?${params}`), { headers }).then((r) => r.json()),
-            fetch(apiUrl(`/analytics/daily-counts?${params}`), { headers }).then((r) => r.json()),
+            fetch(apiUrl(`/analytics/timeline-series?${params}`), { headers }).then((r) => r.json()),
             fetch(apiUrl(`/analytics/hourly-counts?${params}`), { headers }).then((r) => r.json()),
             fetch(apiUrl(`/analytics/stats?${params}`), { headers }).then((r) => r.json()),
             fetch(apiUrl(`/analytics/top-resources?${params}`), { headers }).then((r) => r.json()),
-        ]).then(([summaryD, dailyD, hourlyD, statsD, resourcesD]) => {
+        ]).then(([summaryD, timelineD, hourlyD, statsD, resourcesD]) => {
             setActivityBundle({
                 summary: summaryD,
-                daily: dailyD.daily || [],
-                hourly: hourlyD.hourly || [],
+                timeline: timelineD,                  // {days, verbs, series}
+                heatmap: hourlyD.hourly || [],        // [{dow, hour, count}]
                 stats: statsD,
                 resources: resourcesD.resources || [],
             });
@@ -306,10 +310,21 @@ export default function TnaDashboardV2({ onClose }) {
     ];
 
     // ===========================================================================
+    // When embedded inside Settings the parent already paints the page
+    // background (bg-neutral-900), so we don't add another dark layer.
+    // Standalone (full-screen) mode keeps the dark overlay.
+    const Outer = embedded
+        ? ({ children }) => <div>{children}</div>
+        : ({ children }) => (
+            <div className="fixed inset-0 z-40 bg-neutral-900 text-neutral-100 overflow-auto">
+                <div className="max-w-[1600px] mx-auto p-6">{children}</div>
+            </div>
+        );
+
     return (
-        <div className="fixed inset-0 z-40 bg-neutral-950 text-neutral-100 overflow-auto">
-            <div className="max-w-[1600px] mx-auto p-6">
-                {/* Header */}
+        <Outer>
+                {/* Header — hidden when embedded since the parent (Settings tab) already has one */}
+                {!embedded && (
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                         {onClose && (
@@ -331,6 +346,7 @@ export default function TnaDashboardV2({ onClose }) {
                         </button>
                     </div>
                 </div>
+                )}
 
                 {/* Tabs */}
                 <div className="flex flex-wrap gap-1 border-b border-neutral-800 mb-4">
@@ -354,41 +370,41 @@ export default function TnaDashboardV2({ onClose }) {
                 </div>
 
                 {/* Filters */}
-                <div className="flex flex-wrap items-end gap-3 mb-4 p-3 bg-neutral-900/50 border border-neutral-800 rounded-lg">
+                <div className="flex flex-wrap items-end gap-3 mb-4 p-3 bg-neutral-800/50 border border-neutral-700 rounded-lg">
                     <div className="flex flex-col gap-1">
                         <label className="text-xs text-neutral-400">Case</label>
-                        <select value={caseId} onChange={(e) => setCaseId(e.target.value)} className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded">
+                        <select value={caseId} onChange={(e) => setCaseId(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
                             <option value="">All cases</option>
                             {filterOptions.cases.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
                         </select>
                     </div>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs text-neutral-400">Student</label>
-                        <select value={userId} onChange={(e) => setUserId(e.target.value)} className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded">
+                        <select value={userId} onChange={(e) => setUserId(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
                             <option value="">All students</option>
                             {filterOptions.users.map((u) => <option key={u.id} value={u.id}>{u.fullname || u.username}</option>)}
                         </select>
                     </div>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs text-neutral-400">Start</label>
-                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded"/>
+                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded"/>
                     </div>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs text-neutral-400">End</label>
-                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded"/>
+                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded"/>
                     </div>
                     {isAnalyticsRelated && (
                         <>
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-neutral-400">Group by</label>
-                                <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded">
+                                <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
                                     <option value="actor-session">Per session</option>
                                     <option value="actor">Per student</option>
                                 </select>
                             </div>
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-neutral-400">Mode</label>
-                                <select value={sequenceMode} onChange={(e) => setSequenceMode(e.target.value)} className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded">
+                                <select value={sequenceMode} onChange={(e) => setSequenceMode(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
                                     <option value="combined">Clinical state</option>
                                     <option value="verb">Verb only</option>
                                     <option value="objectType">Object only</option>
@@ -435,27 +451,41 @@ export default function TnaDashboardV2({ onClose }) {
                             </div>
                         )}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
                                 <h3 className="text-sm font-bold text-neutral-200 mb-2">Activity over time</h3>
-                                <ActivityTimelineChart daily={activityBundle.daily} />
+                                {activityBundle.timeline?.days?.length ? (
+                                    <ActivityTimelineChart
+                                        days={activityBundle.timeline.days}
+                                        verbs={activityBundle.timeline.verbs}
+                                        series={activityBundle.timeline.series}
+                                        palette={palette}
+                                    />
+                                ) : <div className="text-xs text-neutral-500 py-8 text-center">No timeline data</div>}
                             </div>
-                            <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
-                                <h3 className="text-sm font-bold text-neutral-200 mb-2">Hour-of-day heatmap</h3>
-                                <ActivityHeatmap hourly={activityBundle.hourly} />
+                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
+                                <h3 className="text-sm font-bold text-neutral-200 mb-2">Day-of-week × hour heatmap</h3>
+                                <ActivityHeatmap data={activityBundle.heatmap || []} />
                             </div>
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
                                 <h3 className="text-sm font-bold text-neutral-200 mb-2">Verbs</h3>
-                                <ActivityDonutChart data={activityBundle.stats?.verbs || []} />
+                                {/* Donut expects a plain object {label: count}, not an array. */}
+                                <ActivityDonutChart
+                                    data={Object.fromEntries((activityBundle.stats?.verbs || []).map((r) => [r.label, r.count]))}
+                                    palette={palette}
+                                />
                             </div>
-                            <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
                                 <h3 className="text-sm font-bold text-neutral-200 mb-2">Object types</h3>
-                                <ActivityDonutChart data={activityBundle.stats?.objectTypes || []} />
+                                <ActivityDonutChart
+                                    data={Object.fromEntries((activityBundle.stats?.objectTypes || []).map((r) => [r.label, r.count]))}
+                                    palette={palette}
+                                />
                             </div>
                         </div>
                         {activityBundle.resources?.length > 0 && (
-                            <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
                                 <h3 className="text-sm font-bold text-neutral-200 mb-2">Top resources</h3>
                                 <table className="w-full text-sm">
                                     <thead className="text-xs text-neutral-400">
@@ -479,14 +509,14 @@ export default function TnaDashboardV2({ onClose }) {
                 {/* === NETWORK TAB === */}
                 {activeTab === 'network' && analysis && (
                     <div className="space-y-4">
-                        <div className="flex flex-wrap items-end gap-3 p-3 bg-neutral-900/50 border border-neutral-800 rounded-lg">
+                        <div className="flex flex-wrap items-end gap-3 p-3 bg-neutral-800/50 border border-neutral-700 rounded-lg">
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-neutral-400">Prune: {pruneThreshold.toFixed(2)}</label>
                                 <input type="range" min={0} max={0.5} step={0.01} value={pruneThreshold} onChange={(e) => setPruneThreshold(parseFloat(e.target.value))} className="w-32" />
                             </div>
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-neutral-400">Model</label>
-                                <select value={modelType} onChange={(e) => setModelType(e.target.value)} className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded">
+                                <select value={modelType} onChange={(e) => setModelType(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
                                     <option value="relative">Relative</option>
                                     <option value="frequency">Frequency</option>
                                     <option value="co-occurrence">Co-occurrence</option>
@@ -495,19 +525,19 @@ export default function TnaDashboardV2({ onClose }) {
                             </div>
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-neutral-400">Layout</label>
-                                <select value={graphLayout} onChange={(e) => setGraphLayout(e.target.value)} className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded">
+                                <select value={graphLayout} onChange={(e) => setGraphLayout(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
                                     {LAYOUT_OPTIONS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
                                 </select>
                             </div>
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-neutral-400">Node size</label>
-                                <select value={nodeSizeMetric} onChange={(e) => setNodeSizeMetric(e.target.value)} className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded">
+                                <select value={nodeSizeMetric} onChange={(e) => setNodeSizeMetric(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
                                     {NODE_SIZE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                                 </select>
                             </div>
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-neutral-400">Palette</label>
-                                <select value={palette} onChange={(e) => setPalette(e.target.value)} className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded">
+                                <select value={palette} onChange={(e) => setPalette(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
                                     {PALETTE_NAMES.map((p) => <option key={p} value={p}>{p}</option>)}
                                 </select>
                             </div>
@@ -521,7 +551,7 @@ export default function TnaDashboardV2({ onClose }) {
                             </label>
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
                                 <TnaNetworkGraph
                                     model={analysis.prunedModel}
                                     showSelfLoops={showSelfLoops}
@@ -536,12 +566,12 @@ export default function TnaDashboardV2({ onClose }) {
                             </div>
                             <div className="space-y-4">
                                 {analysis.centralityData && (
-                                    <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+                                    <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
                                         <h3 className="text-sm font-bold mb-2">Centrality</h3>
-                                        <CentralityBarChart data={analysis.centralityData} colorMap={analysis.colorMap} />
+                                        <CentralityBarChart centralityData={analysis.centralityData} colorMap={analysis.colorMap} />
                                     </div>
                                 )}
-                                <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+                                <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <h3 className="text-sm font-bold">{seqView === 'distribution' ? 'State distribution' : 'Index plot'}</h3>
                                         <button onClick={() => setSeqView((v) => v === 'distribution' ? 'index' : 'distribution')} className="text-xs text-cyan-400 hover:text-cyan-300">
@@ -549,18 +579,18 @@ export default function TnaDashboardV2({ onClose }) {
                                         </button>
                                     </div>
                                     {seqView === 'distribution'
-                                        ? <TnaDistributionPlot sequences={transformedData.sequences} colorMap={analysis.colorMap} />
-                                        : <TnaIndexPlot sequences={transformedData.sequences} colorMap={analysis.colorMap} />}
+                                        ? <TnaDistributionPlot sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />
+                                        : <TnaIndexPlot sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />}
                                 </div>
-                                <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+                                <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
                                     <h3 className="text-sm font-bold mb-2">Verb frequency</h3>
-                                    <TnaFrequencyChart sequences={transformedData.sequences} colorMap={analysis.colorMap} />
+                                    <TnaFrequencyChart sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />
                                 </div>
                             </div>
                         </div>
                         {analysis.centralityData && (
-                            <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
-                                <TnaCentralityTable data={analysis.centralityData} />
+                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
+                                <TnaCentralityTable centralityData={analysis.centralityData} colorMap={analysis.colorMap} />
                             </div>
                         )}
                     </div>
@@ -603,7 +633,7 @@ export default function TnaDashboardV2({ onClose }) {
                 {/* === SETTINGS TAB === */}
                 {activeTab === 'settings' && (
                     <div className="space-y-4">
-                        <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+                        <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
                             <h3 className="text-sm font-bold text-neutral-200 mb-2">Cluster controls</h3>
                             <div className="flex flex-wrap gap-3 items-end">
                                 <div className="flex flex-col gap-1">
@@ -612,7 +642,7 @@ export default function TnaDashboardV2({ onClose }) {
                                 </div>
                                 <div className="flex flex-col gap-1">
                                     <label className="text-xs text-neutral-400">Dissimilarity</label>
-                                    <select value={clusterDissimilarity} onChange={(e) => setClusterDissimilarity(e.target.value)} className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded">
+                                    <select value={clusterDissimilarity} onChange={(e) => setClusterDissimilarity(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
                                         <option value="hamming">Hamming</option>
                                         <option value="lv">Levenshtein</option>
                                         <option value="osa">OSA</option>
@@ -621,7 +651,7 @@ export default function TnaDashboardV2({ onClose }) {
                                 </div>
                                 <div className="flex flex-col gap-1">
                                     <label className="text-xs text-neutral-400">Method</label>
-                                    <select value={clusterMethod} onChange={(e) => setClusterMethod(e.target.value)} className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded">
+                                    <select value={clusterMethod} onChange={(e) => setClusterMethod(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
                                         <option value="pam">PAM</option>
                                         <option value="ward">Ward</option>
                                         <option value="single">Single</option>
@@ -633,7 +663,7 @@ export default function TnaDashboardV2({ onClose }) {
                         </div>
 
                         {transformedData?.labels.length > 0 && (
-                            <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
                                 <h3 className="text-sm font-bold text-neutral-200 mb-2">Verb editor</h3>
                                 <p className="text-xs text-neutral-400 mb-2">Rename or exclude states. Renames merge two states into one (use the same target name twice).</p>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-96 overflow-auto">
@@ -665,7 +695,6 @@ export default function TnaDashboardV2({ onClose }) {
                         )}
                     </div>
                 )}
-            </div>
-        </div>
+        </Outer>
     );
 }
