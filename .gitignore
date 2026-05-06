@@ -62,3 +62,13 @@ server/data/piper/
 # Third-party kit tarballs — the unpacked tree is committed; the archive is
 # regeneratable and exceeds GitHub's 100 MB per-file hard limit.
 kits/*.tar.gz
+
+# Test outputs
+test-results.junit.xml
+coverage/
+
+# Playwright e2e outputs
+playwright-report/
+test-results/
+test-results.e2e.junit.xml
+tests/e2e/.auth/

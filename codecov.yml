@@ -1,0 +1,82 @@
+# Codecov configuration — Phase 8 PR coverage diff gate.
+#
+# This file is intentionally PERMISSIVE for the first month of enforcement.
+# The goal of Phase 8 (per TESTING_PLAN.md line 218) is to block egregious
+# PRs that delete tests or ship 200 lines of source with 0 tests — not to
+# bikeshed every 0.1% slip. Tighten thresholds in Phase 9 once the team
+# is calibrated to the signal.
+#
+# Docs: https://docs.codecov.com/docs/codecovyml-reference
+
+codecov:
+    require_ci_to_pass: true
+    notify:
+        # Don't post the PR comment until the test job has actually
+        # finished — avoids flapping comments while CI is still running.
+        wait_for_ci: true
+
+coverage:
+    precision: 2
+    round: down
+    range: '60...85'
+
+    status:
+        # Project-level: total repo coverage vs. the PR's base commit.
+        # `auto` target = whatever main currently sits at; threshold lets
+        # coverage slip by 1% without failing. This is the "don't regress
+        # the whole codebase" guard.
+        project:
+            default:
+                target: auto
+                threshold: 1%
+                base: auto
+                if_ci_failed: error
+                informational: false
+                only_pulls: false
+
+        # Patch-level: of the lines this PR ADDS or MODIFIES, what % are
+        # covered by tests? 60% is deliberately low for the soft-launch
+        # month — it catches "PR adds 200 lines, 0 covered" without
+        # punishing PRs that touch hard-to-test glue code.
+        #
+        # Raise to 75% in Phase 9 once contributors are used to seeing
+        # the check, and to 80% once the codebase reaches Phase 4 totals.
+        patch:
+            default:
+                target: 60%
+                threshold: 5%
+                base: auto
+                if_ci_failed: error
+                informational: false
+                only_pulls: true
+
+# Files / paths Codecov should ignore when computing coverage. Mirrors the
+# `exclude` array in vitest.config.js -> test.coverage so the dashboard and
+# the local report agree on the denominator.
+ignore:
+    - 'node_modules/**'
+    - 'dist/**'
+    - 'frontend/**'
+    - 'kits/**'
+    - 'migrations/**'
+    - 'scripts/**'
+    - 'medkit-app/**'
+    - 'production/**'
+    - 'tests/**'
+    - 'bench/**'
+    - 'docs/**'
+    - 'public/**'
+    - '**/*.test.js'
+    - '**/*.test.jsx'
+    - '**/*.spec.js'
+    - '**/*.spec.jsx'
+    - '**/*.config.js'
+    - '**/*.config.ts'
+    - 'src/main.jsx'
+
+comment:
+    layout: 'reach, diff, flags, files'
+    behavior: default
+    require_changes: false
+    require_base: false
+    require_head: true

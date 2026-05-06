@@ -1,97 +1,100 @@
-// Run with:  node --test src/utils/sentenceSplit.test.js
+// Run with:  npm test
+// Migrated from node:test to vitest as part of Phase 0. Test cases are
+// untouched — only the runner imports changed.
 
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
+import { describe, it, expect } from 'vitest';
 import { extractCompleteSentences } from './sentenceSplit.js';
 
-test('empty buffer', () => {
-    const r = extractCompleteSentences('');
-    assert.deepEqual(r.sentences, []);
-    assert.equal(r.remainder, '');
-});
+describe('extractCompleteSentences', () => {
+    it('empty buffer', () => {
+        const r = extractCompleteSentences('');
+        expect(r.sentences).toEqual([]);
+        expect(r.remainder).toBe('');
+    });
 
-test('one complete sentence with trailing space', () => {
-    const r = extractCompleteSentences('Hello world. ');
-    assert.deepEqual(r.sentences, ['Hello world.']);
-    assert.equal(r.remainder, '');
-});
+    it('one complete sentence with trailing space', () => {
+        const r = extractCompleteSentences('Hello world. ');
+        expect(r.sentences).toEqual(['Hello world.']);
+        expect(r.remainder).toBe('');
+    });
 
-test('terminal at end-of-buffer is held back (next delta might be a space or more abbrev)', () => {
-    const r = extractCompleteSentences('Hello world.');
-    assert.deepEqual(r.sentences, []);
-    assert.equal(r.remainder, 'Hello world.');
-});
+    it('terminal at end-of-buffer is held back (next delta might be a space or more abbrev)', () => {
+        const r = extractCompleteSentences('Hello world.');
+        expect(r.sentences).toEqual([]);
+        expect(r.remainder).toBe('Hello world.');
+    });
 
-test('two complete sentences plus partial remainder', () => {
-    const r = extractCompleteSentences('First. Second! And the third');
-    assert.deepEqual(r.sentences, ['First.', 'Second!']);
-    assert.equal(r.remainder, 'And the third');
-});
+    it('two complete sentences plus partial remainder', () => {
+        const r = extractCompleteSentences('First. Second! And the third');
+        expect(r.sentences).toEqual(['First.', 'Second!']);
+        expect(r.remainder).toBe('And the third');
+    });
 
-test('decimal point does not split', () => {
-    const r = extractCompleteSentences('Pi is 3.14 and tau is 6.28. Done. ');
-    assert.deepEqual(r.sentences, ['Pi is 3.14 and tau is 6.28.', 'Done.']);
-    assert.equal(r.remainder, '');
-});
+    it('decimal point does not split', () => {
+        const r = extractCompleteSentences('Pi is 3.14 and tau is 6.28. Done. ');
+        expect(r.sentences).toEqual(['Pi is 3.14 and tau is 6.28.', 'Done.']);
+        expect(r.remainder).toBe('');
+    });
 
-test('common abbreviations do not split', () => {
-    const r = extractCompleteSentences('Dr. Smith and Mr. Jones met. Then they left. ');
-    assert.deepEqual(r.sentences, ['Dr. Smith and Mr. Jones met.', 'Then they left.']);
-    assert.equal(r.remainder, '');
-});
+    it('common abbreviations do not split', () => {
+        const r = extractCompleteSentences('Dr. Smith and Mr. Jones met. Then they left. ');
+        expect(r.sentences).toEqual(['Dr. Smith and Mr. Jones met.', 'Then they left.']);
+        expect(r.remainder).toBe('');
+    });
 
-test('e.g. and i.e. do not split', () => {
-    const r = extractCompleteSentences('Many fruits, e.g. apples and pears. Done. ');
-    assert.deepEqual(r.sentences, ['Many fruits, e.g. apples and pears.', 'Done.']);
-    assert.equal(r.remainder, '');
-});
+    it('e.g. and i.e. do not split', () => {
+        const r = extractCompleteSentences('Many fruits, e.g. apples and pears. Done. ');
+        expect(r.sentences).toEqual(['Many fruits, e.g. apples and pears.', 'Done.']);
+        expect(r.remainder).toBe('');
+    });
 
-test('ellipsis treated as one boundary', () => {
-    const r = extractCompleteSentences('Hmm... yes. Okay. ');
-    assert.deepEqual(r.sentences, ['Hmm...', 'yes.', 'Okay.']);
-    assert.equal(r.remainder, '');
-});
+    it('ellipsis treated as one boundary', () => {
+        const r = extractCompleteSentences('Hmm... yes. Okay. ');
+        expect(r.sentences).toEqual(['Hmm...', 'yes.', 'Okay.']);
+        expect(r.remainder).toBe('');
+    });
 
-test('?! interrobang treated as one boundary', () => {
-    const r = extractCompleteSentences('Really?! Yes. ');
-    assert.deepEqual(r.sentences, ['Really?!', 'Yes.']);
-    assert.equal(r.remainder, '');
-});
+    it('?! interrobang treated as one boundary', () => {
+        const r = extractCompleteSentences('Really?! Yes. ');
+        expect(r.sentences).toEqual(['Really?!', 'Yes.']);
+        expect(r.remainder).toBe('');
+    });
 
-test('newline counts as boundary whitespace', () => {
-    const r = extractCompleteSentences('First line.\nSecond line. ');
-    assert.deepEqual(r.sentences, ['First line.', 'Second line.']);
-    assert.equal(r.remainder, '');
-});
+    it('newline counts as boundary whitespace', () => {
+        const r = extractCompleteSentences('First line.\nSecond line. ');
+        expect(r.sentences).toEqual(['First line.', 'Second line.']);
+        expect(r.remainder).toBe('');
+    });
 
-test('stage directions remain part of the sentence (caller strips later)', () => {
-    const r = extractCompleteSentences('I feel sick *coughs*. Help me. ');
-    assert.deepEqual(r.sentences, ['I feel sick *coughs*.', 'Help me.']);
-});
+    it('stage directions remain part of the sentence (caller strips later)', () => {
+        const r = extractCompleteSentences('I feel sick *coughs*. Help me. ');
+        expect(r.sentences).toEqual(['I feel sick *coughs*.', 'Help me.']);
+    });
 
-test('single capital letter abbreviation (initial) does not split', () => {
-    const r = extractCompleteSentences('John F. Kennedy spoke. Done. ');
-    assert.deepEqual(r.sentences, ['John F. Kennedy spoke.', 'Done.']);
-});
+    it('single capital letter abbreviation (initial) does not split', () => {
+        const r = extractCompleteSentences('John F. Kennedy spoke. Done. ');
+        expect(r.sentences).toEqual(['John F. Kennedy spoke.', 'Done.']);
+    });
 
-test('streaming reassembly: feed deltas one chunk at a time', () => {
-    // Simulate the runtime use: append a delta, extract sentences, keep remainder.
-    const deltas = ['Hel', 'lo Dr. Jo', 'nes. How ', 'are you', '? I am fine.'];
-    let buf = '';
-    const out = [];
-    for (const d of deltas) {
-        buf += d;
-        const r = extractCompleteSentences(buf);
-        out.push(...r.sentences);
-        buf = r.remainder;
-    }
-    // Final flush of the remainder (in real code, on stream end; here, trailing terminal already in last delta with space)
-    if (buf.trim()) out.push(buf.trim());
-    assert.deepEqual(out, ['Hello Dr. Jones.', 'How are you?', 'I am fine.']);
-});
+    it('streaming reassembly: feed deltas one chunk at a time', () => {
+        // Simulate the runtime use: append a delta, extract sentences, keep remainder.
+        const deltas = ['Hel', 'lo Dr. Jo', 'nes. How ', 'are you', '? I am fine.'];
+        let buf = '';
+        const out = [];
+        for (const d of deltas) {
+            buf += d;
+            const r = extractCompleteSentences(buf);
+            out.push(...r.sentences);
+            buf = r.remainder;
+        }
+        // Final flush of the remainder (in real code, on stream end; here, trailing terminal already in last delta with space)
+        if (buf.trim()) out.push(buf.trim());
+        expect(out).toEqual(['Hello Dr. Jones.', 'How are you?', 'I am fine.']);
+    });
 
-test('whitespace-only buffer produces nothing', () => {
-    const r = extractCompleteSentences('   \n  ');
-    assert.deepEqual(r.sentences, []);
-    assert.equal(r.remainder.trim(), '');
+    it('whitespace-only buffer produces nothing', () => {
+        const r = extractCompleteSentences('   \n  ');
+        expect(r.sentences).toEqual([]);
+        expect(r.remainder.trim()).toBe('');
+    });
 });

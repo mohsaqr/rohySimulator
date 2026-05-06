@@ -1,0 +1,184 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: ESLint
+        run: npm run lint
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        node-version: [22.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        # Project's build script writes to frontend/ for production serving;
+        # we accept that side effect in CI but don't upload the artifact —
+        # the audit job rebuilds when it needs a frontend present.
+        run: npm run build
+
+  test:
+    name: Vitest
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        node-version: [22.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests with coverage and JUnit
+        run: npm run test:ci
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.node-version }}
+          path: test-results.junit.xml
+          if-no-files-found: warn
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.node-version }}
+          path: coverage/
+          if-no-files-found: warn
+      - name: Upload coverage to Codecov
+        # Phase 8 — PR coverage diff gate.
+        #
+        # Vitest emits coverage/lcov.info via the v8 provider (see
+        # vitest.config.js -> test.coverage.reporter). Codecov diff-checks
+        # the PR head against main and posts a status check. Thresholds
+        # live in codecov.yml at the repo root — they are intentionally
+        # SOFT for the first month so existing PRs don't break.
+        #
+        # Setup: a maintainer must add CODECOV_TOKEN to the repo's Actions
+        # secrets (Settings -> Secrets and variables -> Actions). Without
+        # the token the upload step soft-fails (fail_ci_if_error: false)
+        # so CI stays green until the secret is wired up.
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: vitest-${{ matrix.node-version }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          verbose: true
+
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        node-version: [22.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        # --with-deps pulls system libs (ffmpeg, fonts, etc.) chromium
+        # needs on Ubuntu. Locally devs run `npm run test:e2e:install`
+        # which is the same command minus the system-libs step.
+        run: npx playwright install --with-deps chromium
+      - name: Build SPA for e2e
+        # server/server.js serves frontend/ statically at root. The
+        # default `npm run build` bakes in `--base=/rohy/` which assumes
+        # a reverse proxy strips that prefix in production — for e2e we
+        # serve directly, so we need base=/ instead. We mirror the rest
+        # of `npm run build` (clean + copy to frontend/) by hand.
+        run: |
+          npx vite build --base=/
+          rm -rf frontend
+          mkdir -p frontend
+          cp -r dist/* frontend/
+      - name: Run e2e tests
+        run: npm run test:e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.node-version }}
+          path: playwright-report/
+          if-no-files-found: warn
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-junit-${{ matrix.node-version }}
+          path: test-results.e2e.junit.xml
+          if-no-files-found: warn
+
+  audit:
+    name: HTTP audit scripts
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        node-version: [22.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run audit scripts
+        # Each audit-*.sh script spins up its own throwaway server on a
+        # high port (3900+) using a temp ROHY_DB and tears it down on exit
+        # (see scripts/audit-observability.sh for the reference pattern).
+        # We run them sequentially — the scripts assume isolation but
+        # share the 3900–4399 port range, so parallelism risks collisions.
+        run: |
+          set -e
+          shopt -s nullglob
+          for script in scripts/audit-*.sh; do
+            echo "::group::${script}"
+            bash "${script}"
+            echo "::endgroup::"
+          done
