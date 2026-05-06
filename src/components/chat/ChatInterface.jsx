@@ -907,8 +907,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     };
 
     const startVoiceTurn = () => {
+        if (!VoiceService.isSttSupported()) {
+            toast?.error?.('Speech recognition is not supported in this browser. Use Chrome or Edge over HTTPS.');
+            return;
+        }
         if (!voiceSettings?.stt_language) {
-            console.warn('No STT language configured');
+            toast?.error?.('No STT language configured. Set one in Settings → Voice & Avatar before pressing-to-talk.');
             return;
         }
         if (listening) {
@@ -921,6 +925,8 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         setVisemes({ viseme_sil: 1 });
         setListening(true);
 
+        let sawError = false;
+
         VoiceService.startListening({
             lang: voiceSettings.stt_language,
             onResult: ({ final, interim, isFinal }) => {
@@ -930,13 +936,38 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 }
             },
             onError: (err) => {
+                // Make the silent-immediate-return symptom debuggable. The
+                // browser fires deterministic error codes ('not-allowed',
+                // 'service-not-allowed', 'network', 'audio-capture',
+                // 'no-speech', 'aborted') — surface them verbatim so the
+                // admin can tell HTTP-origin vs. mic-permission vs. firewall.
+                sawError = true;
                 console.warn('STT error:', err.message);
+                const code = err?.message || 'unknown';
+                if (code === 'not-allowed' || code === 'service-not-allowed') {
+                    toast?.error?.('Microphone blocked. Allow mic access for this site, and ensure the page is served over HTTPS.');
+                } else if (code === 'network') {
+                    toast?.error?.('Speech recognition could not reach the network service. Check internet/firewall.');
+                } else if (code === 'audio-capture') {
+                    toast?.error?.('No microphone detected. Plug one in or check OS audio input.');
+                } else if (code === 'no-speech') {
+                    toast?.error?.('Did not hear anything. Try speaking closer to the mic.');
+                } else if (code === 'aborted') {
+                    // Self-aborted (we called stopListening); not a user-facing error.
+                } else {
+                    toast?.error?.(`Speech recognition error: ${code}`);
+                }
                 setListening(false);
             },
             onEnd: ({ final }) => {
                 setListening(false);
                 if (final) {
                     handleSendToPatient(final);
+                } else if (!sawError) {
+                    // Recogniser ended without ever hearing speech and without
+                    // emitting a code — typical of "started, immediately ended"
+                    // on an insecure origin where Chrome silently refuses.
+                    toast?.error?.('Listening ended without picking up any speech. If this happens immediately, the page may need to be served over HTTPS.');
                 }
             }
         });
