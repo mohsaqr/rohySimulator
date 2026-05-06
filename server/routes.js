@@ -22,6 +22,7 @@ import {
     normalizeRole
 } from './middleware/auth.js';
 import * as labDb from './services/labDatabase.js';
+import catalogueRouter from './routes/catalogue.js';
 import { spawn } from 'node:child_process';
 import { buildWavHeader } from './services/wav.js';
 import { EvenByteAligner } from './lib/pcmAlign.js';
@@ -92,6 +93,13 @@ const router = express.Router();
 // routes also have authLimiter / registerLimiter middleware that runs first
 // (in addition, not instead of), tightening to ~10/15min for /auth/login.
 router.use(generalLimiter);
+
+// Tiered drug + lab catalogue (Session 2 of catalogue plan).
+// Mounted before the legacy /master/* routes so /api/catalogue is owned
+// by the new scope-aware sub-router. The legacy /master/* paths are
+// untouched for back-compat with the existing settings UI; Session 3
+// will migrate consumers and we can deprecate them then.
+router.use('/catalogue', catalogueRouter);
 
 const canManageOwnedResource = (ownerId, user) => ownerId === user?.id || hasRoleAtLeast(user, ROLE_RANKS.educator);
 const canReadAcrossUsers = (user) => hasRoleAtLeast(user, ROLE_RANKS.reviewer);
