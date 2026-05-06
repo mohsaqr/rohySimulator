@@ -930,10 +930,11 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         VoiceService.startListening({
             lang: voiceSettings.stt_language,
             onResult: ({ final, interim, isFinal }) => {
+                // Continuous mode (default in voiceService): show whatever's
+                // currently transcribed but DO NOT stop on isFinal — pauses
+                // mid-sentence shouldn't kill the mic. The user explicitly
+                // taps the button again to end and send.
                 setInput(interim || final);
-                if (isFinal && final) {
-                    VoiceService.stopListening();
-                }
             },
             onError: (err) => {
                 // Make the silent-immediate-return symptom debuggable. The

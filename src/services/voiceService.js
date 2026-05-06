@@ -453,7 +453,7 @@ export const VoiceService = {
         return !!SR;
     },
 
-    startListening({ lang, onResult, onError, onEnd }) {
+    startListening({ lang, onResult, onError, onEnd, continuous = true }) {
         if (!SR) {
             onError?.(new Error('SpeechRecognition not supported in this browser'));
             return;
@@ -467,7 +467,12 @@ export const VoiceService = {
         const rec = new SR();
         rec.lang = lang;
         rec.interimResults = true;
-        rec.continuous = false;
+        // continuous=true keeps the mic open across pauses so a learner can
+        // think mid-sentence without the recognizer ending the session.
+        // The Web Speech API default is false (built for one-shot voice
+        // commands); for conversational UX we want the opposite. Callers can
+        // still opt out by passing continuous: false.
+        rec.continuous = continuous;
 
         let finalT = '';
         rec.onresult = (e) => {

@@ -28,11 +28,16 @@ export default function VoiceControl({ onSend, busy, speaking, sttLang = 'en-US'
         VoiceService.startListening({
             lang: sttLang,
             onResult: ({ final, interim: live, isFinal }) => {
+                // In continuous mode the recognizer keeps streaming both
+                // interim and successive final segments; finalT already
+                // accumulates them in voiceService. We update the UI on
+                // every callback but DO NOT stop on isFinal — the user
+                // ends the session by tapping the button (or by the
+                // discussant starting to speak via the speaking effect).
                 if (live) setInterim(live);
                 if (isFinal && final) {
                     finalRef.current = final;
                     setInterim(final);
-                    VoiceService.stopListening();
                 }
             },
             onError: (err) => {
