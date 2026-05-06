@@ -83,7 +83,13 @@ function resolveApiKey(callerKey) {
 // Streaming-shaped iterator (yields one chunk because the REST API is
 // non-streaming). Per-sentence dispatch on the client still gives us
 // first-sentence-fast playback, since each sentence is its own request.
-export async function* synthesizeGoogleStream({ text, voice, speed, apiKey }) {
+function clampPitchSemitones(pitch) {
+    const n = Number(pitch);
+    if (!Number.isFinite(n)) return null;
+    return Math.max(-10, Math.min(10, n));
+}
+
+export async function* synthesizeGoogleStream({ text, voice, speed, pitch, apiKey }) {
     if (!VALID_VOICES.has(voice)) {
         const err = new Error(`unknown Google voice "${voice}" (expected one of: ${[...VALID_VOICES].slice(0, 5).join(', ')}, …)`);
         err.code = 'UNKNOWN_VOICE';
@@ -101,25 +107,31 @@ export async function* synthesizeGoogleStream({ text, voice, speed, apiKey }) {
     const parts = voice.split('-');
     const languageCode = parts.length >= 2 ? `${parts[0]}-${parts[1]}` : 'en-US';
 
+    const pitchSemitones = clampPitchSemitones(pitch);
+    const audioConfig = {
+        audioEncoding: 'LINEAR16',
+        sampleRateHertz: SAMPLE_RATE,
+        // Google's speakingRate is 0.25–4.0; the route layer clamps
+        // the user-facing range before we get here.
+        speakingRate: typeof speed === 'number' ? speed : 1,
+        // headphone-class-device applies Google's headphone-tuned EQ.
+        // Free, no quality regression on speakers, and noticeably
+        // improves perceived clarity on headphones (where most of our
+        // students are listening). One of the cheapest perceived-quality
+        // wins in the API.
+        effectsProfileId: ['headphone-class-device']
+    };
+    if (pitchSemitones !== null && pitchSemitones !== 0) {
+        audioConfig.pitch = pitchSemitones;
+    }
+
     const res = await fetch(`${GOOGLE_TTS_URL}?key=${encodeURIComponent(key)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             input: { text },
             voice: { languageCode, name: voice },
-            audioConfig: {
-                audioEncoding: 'LINEAR16',
-                sampleRateHertz: SAMPLE_RATE,
-                // Google's speakingRate is 0.25–4.0; the route layer clamps
-                // the user-facing range before we get here.
-                speakingRate: typeof speed === 'number' ? speed : 1,
-                // headphone-class-device applies Google's headphone-tuned EQ.
-                // Free, no quality regression on speakers, and noticeably
-                // improves perceived clarity on headphones (where most of our
-                // students are listening). One of the cheapest perceived-quality
-                // wins in the API.
-                effectsProfileId: ['headphone-class-device']
-            }
+            audioConfig
         })
     });
 
@@ -149,10 +161,10 @@ export async function* synthesizeGoogleStream({ text, voice, speed, apiKey }) {
     yield { sampleRate: SAMPLE_RATE, pcm };
 }
 
-export async function synthesizeGoogleWav({ text, voice, speed, apiKey }) {
+export async function synthesizeGoogleWav({ text, voice, speed, pitch, apiKey }) {
     const chunks = [];
     let totalLen = 0;
-    for await (const { pcm } of synthesizeGoogleStream({ text, voice, speed, apiKey })) {
+    for await (const { pcm } of synthesizeGoogleStream({ text, voice, speed, pitch, apiKey })) {
         chunks.push(pcm);
         totalLen += pcm.length;
     }

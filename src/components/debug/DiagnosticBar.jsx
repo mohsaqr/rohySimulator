@@ -8,7 +8,7 @@
 // by clicking the floating "Diag" pill in the bottom-right corner.
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { ChevronUp, ChevronDown, X, Activity } from 'lucide-react';
+import { ChevronUp, ChevronDown, X, Activity, Play, Square } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiUrl } from '../../config/api';
@@ -16,6 +16,7 @@ import { AuthService } from '../../services/authService';
 import EventLogger from '../../services/eventLogger';
 import { resolveVoice } from '../../utils/voiceResolver';
 import { parseConfig } from '../../utils/parseConfig';
+import { getLastTtsRequest, getRecentTtsRequests, auditionWirePayload } from '../../services/voiceService';
 
 const KEY_PREFIX = 'rohy_diag_bar_enabled_';
 const storageKey = (uid) => `${KEY_PREFIX}${uid ?? 'anon'}`;
@@ -52,12 +53,88 @@ export default function DiagnosticBar() {
     // active. This is the diagnostic surface that answers "the setting says
     // Neural2 but I hear Charon" — by showing both rows side-by-side.
     const [configuredSpeakers, setConfiguredSpeakers] = useState([]);
+    // Last literal /api/tts request body the runtime actually sent. The
+    // configured-speakers table above is a static prediction (resolveVoice on
+    // a snapshot of state); this row is the truth — what `voiceService.ttsFetch`
+    // actually put on the wire and what response came back. Without this,
+    // "the bar says voice X but I hear voice Y" arguments stall on hypothesis.
+    const [lastTts, setLastTts] = useState(() => getLastTtsRequest());
+    // Full ring buffer (newest first). The "last" pointer above is a
+    // convenience for the one-liner; the table below uses the full history so
+    // the user can see whether the voice changed mid-stream.
+    const [wireHistory, setWireHistory] = useState(() => getRecentTtsRequests());
+    // Audition state: {id} of the wire currently playing back, plus the stop
+    // handle so the user can cancel mid-playback.
+    const [auditionId, setAuditionId] = useState(null);
+    const auditionStopRef = React.useRef(null);
+    const [auditionError, setAuditionError] = useState(null);
 
     // Re-read enabled flag when the user changes (login/logout) so the bar
     // honours the per-user toggle without a full reload.
     useEffect(() => {
         setEnabledState(isDiagnosticBarEnabled(userId));
     }, [userId]);
+
+    // Subscribe to live TTS wire events emitted by voiceService.ttsFetch.
+    // Fires once per request lifecycle phase (pending, ok, error, aborted),
+    // so the bar reflects the most-recent attempt without polling.
+    useEffect(() => {
+        if (!enabled) return;
+        const handler = (e) => {
+            setLastTts(e.detail);
+            // Snapshot the buffer rather than mutate-in-place so React diffs.
+            setWireHistory(getRecentTtsRequests());
+        };
+        window.addEventListener('rohy:tts-request', handler);
+        // Pick up any request that fired before the bar was enabled.
+        setLastTts(getLastTtsRequest());
+        setWireHistory(getRecentTtsRequests());
+        return () => window.removeEventListener('rohy:tts-request', handler);
+    }, [enabled]);
+
+    // Audition control. Plays the captured wire payload (default voice) or a
+    // chosen alternative (e.g. Charon) so the user can verify against what
+    // they think they heard. We stop any prior audition before starting a new
+    // one — the underlying VoiceService.teardown() also cancels live runtime
+    // playback, which is the right behaviour: pausing the runtime to listen
+    // to a captured payload is exactly the workflow this is meant to support.
+    const handleAudition = useCallback(async (wire, override) => {
+        if (auditionStopRef.current) {
+            try { auditionStopRef.current.stop(); } catch { /* noop */ }
+            auditionStopRef.current = null;
+        }
+        if (auditionId === auditionKey(wire, override)) {
+            // Toggle off if user re-clicks the same row+voice combo.
+            setAuditionId(null);
+            return;
+        }
+        setAuditionError(null);
+        setAuditionId(auditionKey(wire, override));
+        try {
+            const handle = await auditionWirePayload(wire, override || {});
+            auditionStopRef.current = handle;
+            // When playback ends naturally, clear the spinner state.
+            const totalMs = Math.ceil((handle.durationSec || 0) * 1000) + 200;
+            setTimeout(() => {
+                if (auditionStopRef.current === handle) {
+                    auditionStopRef.current = null;
+                    setAuditionId(prev => prev === auditionKey(wire, override) ? null : prev);
+                }
+            }, totalMs);
+        } catch (err) {
+            setAuditionError(err?.message || 'audition failed');
+            setAuditionId(null);
+        }
+    }, [auditionId]);
+
+    // Stop any in-flight audition when the bar is hidden so audio doesn't
+    // continue after the user collapses the UI.
+    useEffect(() => () => {
+        if (auditionStopRef.current) {
+            try { auditionStopRef.current.stop(); } catch { /* noop */ }
+            auditionStopRef.current = null;
+        }
+    }, []);
 
     // Fetch platform LLM block once when the bar appears. Cheap (cached
     // server-side) and the values rarely change mid-session.
@@ -187,11 +264,19 @@ export default function DiagnosticBar() {
 
     // Build the compact one-liner. Show only fields that have a value so the
     // bar stays readable. Voice tier appears next to the file so the user can
-    // tell at a glance whether it's an override or a fallback.
+    // tell at a glance whether it's an override or a fallback. When a wire
+    // payload is available, prefer it over the static prediction — that's the
+    // ground truth the user actually heard.
     const oneLiner = useMemo(() => {
         const parts = [];
         if (llm?.provider) parts.push(`LLM: ${llm.provider}/${llm.model || '(default)'}`);
-        if (voiceSettings?.tts_provider) {
+        const wireVoice = lastTts?.voice;
+        const wireProvider = lastTts?.provider;
+        if (wireVoice) {
+            // Live row wins. Surface the literal voice that was last sent on
+            // the wire so the bar's headline matches what the user is hearing.
+            parts.push(`TTS wire: ${wireProvider || '?'} · ${wireVoice}`);
+        } else if (voiceSettings?.tts_provider) {
             const v = speakerVoice || activeVoiceSlot(voiceSettings, activeParticipant);
             const tierTag = speakerTier ? ` (${speakerTier})` : '';
             parts.push(`TTS: ${voiceSettings.tts_provider}${v ? ` · ${v}${tierTag}` : ''}`);
@@ -201,7 +286,7 @@ export default function DiagnosticBar() {
         if (eventStatus.sessionId) parts.push(`s${eventStatus.sessionId}`);
         if (user?.tenant_id) parts.push(`t${user.tenant_id}`);
         return parts.join(' · ');
-    }, [llm, voiceSettings, voiceMode, speakerVoice, speakerTier, activeParticipant, eventStatus.sessionId, user?.tenant_id]);
+    }, [llm, voiceSettings, voiceMode, speakerVoice, speakerTier, activeParticipant, eventStatus.sessionId, user?.tenant_id, lastTts]);
 
     // Floating toggle when bar is disabled — a tiny pill bottom-right that
     // surfaces the feature without requiring the user to dig into Settings.
@@ -301,6 +386,98 @@ export default function DiagnosticBar() {
                         </Section>
                     </div>
 
+                    {/* Live TTS wire history — the literal payloads the runtime
+                        last sent to /api/tts (newest first, ring buffer). This
+                        is the ground truth: every row above is a static
+                        prediction; these rows are what actually flew. The play
+                        button on each row replays the payload and the [vs.
+                        male slot] button replays the same TEXT through the
+                        platform's `voice_<provider>_male` slot so the user can
+                        do an A/B comparison and confirm whether what they
+                        heard matches the configured voice or a different one. */}
+                    {wireHistory.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-neutral-800">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="text-emerald-400 font-bold tracking-wider uppercase">
+                                    TTS wire history (last {wireHistory.length}, newest first)
+                                </div>
+                                {auditionError && (
+                                    <div className="text-[10px] text-red-400">audition: {auditionError}</div>
+                                )}
+                            </div>
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-left text-neutral-500 border-b border-neutral-900">
+                                        <th className="pr-2 py-1 font-normal w-8"></th>
+                                        <th className="pr-3 py-1 font-normal">when</th>
+                                        <th className="pr-3 py-1 font-normal">voice</th>
+                                        <th className="pr-3 py-1 font-normal">provider</th>
+                                        <th className="pr-3 py-1 font-normal">rate</th>
+                                        <th className="pr-3 py-1 font-normal">status</th>
+                                        <th className="pr-3 py-1 font-normal">text preview</th>
+                                        <th className="pr-2 py-1 font-normal">A/B</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {wireHistory.map(w => {
+                                        const playKey = auditionKey(w);
+                                        const altVoice = pickSlot(voiceSettings, deriveSlotForGender(w.gender));
+                                        const altKey = altVoice ? auditionKey(w, { voice: altVoice }) : null;
+                                        const isPlayingPrimary = auditionId === playKey;
+                                        const isPlayingAlt = altKey && auditionId === altKey;
+                                        return (
+                                            <tr key={w.id} className="border-b border-neutral-900/50 hover:bg-neutral-900/40">
+                                                <td className="pr-2 py-1">
+                                                    <button
+                                                        onClick={() => handleAudition(w)}
+                                                        disabled={w.status !== 'ok'}
+                                                        title={w.status === 'ok'
+                                                            ? `Re-play this wire payload (${w.voice})`
+                                                            : 'replay only available for successful (ok) requests'}
+                                                        className="w-5 h-5 flex items-center justify-center rounded bg-neutral-800 hover:bg-emerald-700 text-neutral-300 hover:text-white disabled:opacity-30 disabled:hover:bg-neutral-800"
+                                                    >
+                                                        {isPlayingPrimary
+                                                            ? <Square className="w-3 h-3" />
+                                                            : <Play className="w-3 h-3" />}
+                                                    </button>
+                                                </td>
+                                                <td className="pr-3 py-1 text-neutral-500 whitespace-nowrap">
+                                                    {w.sentAt ? `${Math.max(0, Math.round((now - w.sentAt) / 1000))}s ago` : ''}
+                                                </td>
+                                                <td className="pr-3 py-1 text-white">{w.voice || <span className="italic text-neutral-600">none</span>}</td>
+                                                <td className="pr-3 py-1 text-neutral-300">{w.provider || ''}</td>
+                                                <td className="pr-3 py-1 text-neutral-400">{w.rate ?? ''}</td>
+                                                <td className="pr-3 py-1">
+                                                    <WireStatusBadge wire={w} />
+                                                </td>
+                                                <td className="pr-3 py-1 text-neutral-300 truncate max-w-[18ch]" title={w.textPreview}>
+                                                    {w.textPreview || ''}
+                                                </td>
+                                                <td className="pr-2 py-1">
+                                                    {altVoice && altVoice !== w.voice ? (
+                                                        <button
+                                                            onClick={() => handleAudition(w, { voice: altVoice })}
+                                                            disabled={w.status !== 'ok'}
+                                                            title={`Play same text with ${altVoice} (platform male slot) for A/B comparison`}
+                                                            className="text-[10px] px-1.5 py-0.5 rounded border border-amber-800 bg-amber-900/30 text-amber-300 hover:bg-amber-900/60 disabled:opacity-30"
+                                                        >
+                                                            {isPlayingAlt ? '■ stop' : `vs. ${shortVoice(altVoice)}`}
+                                                        </button>
+                                                    ) : null}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                            <div className="mt-2 text-[10px] text-neutral-600">
+                                <strong>Re-play</strong> (▶) re-fires the same /api/tts payload so you hear the captured voice.{' '}
+                                <strong>vs. &lt;voice&gt;</strong> sends the same TEXT through the platform's male/female/child slot so you can A/B compare.{' '}
+                                If the original (▶) sounds the same as what you heard during runtime, the wiring is correct.
+                            </div>
+                        </div>
+                    )}
+
                     {/* Configured speakers — patient + every agent attached to
                         the case, with the voice each one would actually play
                         right now. Shows tier so you can see whether a row is
@@ -388,6 +565,61 @@ function maskKey(key) {
     if (s === '[redacted]') return '[redacted] (server-side)';
     if (s.length <= 10) return s;
     return `${s.slice(0, 6)}…${s.slice(-4)} (${s.length} chars)`;
+}
+
+// Compact label for the wire row. "ok" wins over the raw lifecycle phase
+// because most of the time we land on success; the other phases are the ones
+// that need attention.
+function ttsStatusLabel(wire) {
+    if (!wire) return '';
+    if (wire.status === 'ok') return `ok${wire.httpStatus ? ` (${wire.httpStatus})` : ''}`;
+    if (wire.status === 'error') return `error${wire.httpStatus ? ` (${wire.httpStatus})` : ''}`;
+    if (wire.status === 'aborted') return 'aborted';
+    if (wire.status === 'pending') return 'pending…';
+    return wire.status;
+}
+
+// Color the status by lifecycle phase so the eye picks up the rare error /
+// aborted entries in a fast scan.
+function WireStatusBadge({ wire }) {
+    const palette = {
+        ok: 'bg-emerald-900/30 text-emerald-300 border-emerald-800',
+        error: 'bg-red-900/40 text-red-300 border-red-800',
+        aborted: 'bg-neutral-800 text-neutral-400 border-neutral-700',
+        pending: 'bg-amber-900/30 text-amber-300 border-amber-800'
+    };
+    const cls = palette[wire?.status] || 'bg-neutral-800 text-neutral-400 border-neutral-700';
+    return (
+        <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider border ${cls}`}>
+            {ttsStatusLabel(wire)}
+        </span>
+    );
+}
+
+// Stable identity for an audition — same row + same voice override means the
+// user is toggling the same playback, so we treat re-clicks as stop. Using
+// id+voice instead of id alone lets the [vs. <slot>] button track separately
+// from the primary [▶] button on the same row.
+function auditionKey(wire, override) {
+    if (!wire) return null;
+    return `${wire.id}::${override?.voice || wire.voice}`;
+}
+
+// Map a wire's gender field to the slot key used in voice_*_<slot> platform
+// settings. Mirrors voiceResolver.deriveSlot but without age (the wire never
+// captures age — it's already been resolved out by the time we record).
+function deriveSlotForGender(gender) {
+    if (gender === 'child') return 'child';
+    return /^f/i.test(gender || '') ? 'female' : 'male';
+}
+
+// Shorten a long voice name for the inline A/B button. Prefers the trailing
+// distinctive segment (e.g. "Charon" or "Neural2-D") over the full string.
+function shortVoice(voice) {
+    if (!voice) return '?';
+    const parts = voice.split('-');
+    if (parts.length <= 3) return voice;
+    return parts.slice(-2).join('-');
 }
 
 function TierBadge({ tier }) {

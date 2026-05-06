@@ -646,7 +646,7 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
                         <Field label="Pitch">
                            <input
                               type="number"
-                              step="0.05" min="0.5" max="1.5"
+                              step="0.25" min="-10" max="10"
                               value={cfg.voice?.tts_pitch ?? ''}
                               placeholder="Inherit"
                               onChange={(e) => {

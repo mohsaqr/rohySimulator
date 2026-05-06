@@ -13,7 +13,7 @@ import { AuthService } from '../../services/authService.js';
 //              name, or Google voice name)
 //   provider — 'piper' | 'kokoro' | 'openai' | 'google'
 //   rate     — optional speech rate (defaults to platform value server-side)
-//   pitch    — optional client-side playbackRate (couples pitch + speed)
+//   pitch    — optional provider pitch in semitones (Google supports this)
 //   text     — optional sample phrase (sensible default below)
 //   size     — 'sm' (24px button, default) | 'md' (32px)
 
@@ -70,6 +70,7 @@ export default function TestVoiceButton({
         try {
             const body = { text, voice };
             if (rate != null) body.rate = rate;
+            if (pitch != null) body.pitch = pitch;
             const res = await fetch(apiUrl(`/tts?provider=${encodeURIComponent(provider)}`), {
                 method: 'POST',
                 headers: { ...AuthService.authHeaders(), 'Content-Type': 'application/json' },
@@ -85,14 +86,6 @@ export default function TestVoiceButton({
             if (abort.signal.aborted) return;
             const url = URL.createObjectURL(blob);
             const audio = new Audio(url);
-            if (pitch != null && pitch > 0 && pitch !== 1) {
-                // Match the runtime pitch behaviour: HTMLAudioElement honours
-                // playbackRate the same way AudioBufferSourceNode does — pitch
-                // and tempo couple. preservesPitch defaults to true on some
-                // browsers (which would defeat the point), so disable it.
-                audio.playbackRate = pitch;
-                if ('preservesPitch' in audio) audio.preservesPitch = false;
-            }
             audioRef.current = audio;
             audio.onended = () => {
                 URL.revokeObjectURL(url);

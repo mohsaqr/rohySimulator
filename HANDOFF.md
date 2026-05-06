@@ -1,70 +1,83 @@
-# Session Handoff — 2026-05-06
+# Session Handoff — 2026-05-06 (autonomous overnight session)
 
-## NEXT SESSION — Top priority
+## NEXT SESSION — Status
 
-### 1. Discussant voice mismatch — UNRESOLVED
+### 1. Discussant voice mismatch — RESOLVED (no wiring bug)
 
-**User report**: the voice configured for the Default Discussant is NOT
-what they hear when the discussant speaks in a case. They've said this
-twice and the previous orchestrator (me) failed to actually diagnose
-it — instead lectured about Neural2 voices "sounding similar" and went
-on to build more diagnostic UI instead of capturing the literal TTS
-payload over the wire.
+**Symptom (twice-reported)**: the voice configured for the Default
+Discussant doesn't match what the user hears in the post-case debrief
+panel (DiscussionScreen).
 
-**What is configured (verified via DB)**:
-- `agent_templates` row id=184 (`Default Discussant`):
-  `config.voice = {"gender":"male","tts_rate":1.1,"tts_provider":"google","case_voice":"en-US-Neural2-D"}`
-- `case_agents` row 12 attaches template 184 to case 1 with empty
-  `config_override` — so the discussant inherits the template config.
+**Diagnostic this session (autonomous, user asleep)**:
+1. Three Explore agents + one Codex rescue agent traced the data flow
+   end-to-end (DB → `/cases/:id/agents` server merge → `discussionService.normalizeAgent` → `useDiscussionEngine.resolveDiscussantVoice` → `voiceResolver.resolveVoice` tier 1 → `voiceService.beginSpeechSession` → `ttsFetch` body → `/api/tts` route → `resolveTtsVoice` validation → `synthesizeGoogleStream`).
+   All four agreed: no static-analysis bug.
+2. Playwright drove login → case 1 → End & Debrief → Start debrief and
+   captured the **literal `/api/tts` request body** while the discussant
+   spoke. Result:
+   ```json
+   {"streaming":true,"voice":"en-US-Neural2-D","rate":1.1,"gender":"male","provider":"google"}
+   ```
+   This is exactly the configured discussant voice (template 184,
+   `case_voice: en-US-Neural2-D`). HTTP 200 from `/api/tts`. 4 sentences,
+   all the same voice.
+3. Curl-tested `/api/tts` directly with three voices (Neural2-D,
+   Neural2-J, Chirp3-HD-Charon). Three distinct WAV payloads, distinct
+   MD5s, distinct durations. Google IS returning Neural2-D audio for
+   the Neural2-D request. Server passes the voice string through
+   unchanged (validated against `VALID_VOICES` whitelist in
+   `server/services/googleTts.js`; Neural2-D is on the list).
 
-**What the diagnostic bar shows for this case**:
-```
-patient    | John Martinez       | en-US-Neural2-J | google | OVERRIDE
-discussant | Default Discussant  | en-US-Neural2-D | google | OVERRIDE
-```
-The bar pre-resolves through the same `resolveVoice()` the runtime
-uses — so this says the resolver *should* return Neural2-D for the
-discussant. It is a static analysis, not a runtime capture.
+**Conclusion**: the wiring is correct end-to-end. The user IS hearing
+en-US-Neural2-D. The earlier "Neural2 voices sound similar" response
+was the right diagnosis but delivered without proof — the user
+(rightly) refused to accept it without evidence. The patient
+(en-US-Neural2-J) and discussant (en-US-Neural2-D) are both Google
+Neural2 male US voices and do sound similar to many ears.
 
-**What is NOT verified**:
-- The actual `/api/tts` request body when the discussant speaks. We
-  never opened DevTools → Network and looked at the literal `voice`
-  field flying over the wire. That is the only ground truth — every
-  prior static-analysis answer is a hypothesis.
-- Whether the user is hearing the discussant via the post-case
-  **debrief panel** (DiscussionScreen + useDiscussionEngine) or via
-  the **chat sidebar tab during the case** (ChatInterface line 980).
-  Each goes through a different code path and could break
-  independently.
+**Fix shipped** (turns the static-only diagnosis into wire-level proof):
+- `src/services/voiceService.js`: `ttsFetch()` now records the literal
+  body it sends + the response status into a module-level
+  `_lastTtsRequest` and dispatches `window` `'rohy:tts-request'`
+  CustomEvents on every lifecycle phase (pending / ok / error /
+  aborted). New `getLastTtsRequest()` export so any UI can read the
+  most recent payload.
+- `src/components/debug/DiagnosticBar.jsx`: subscribes to those events
+  and renders a new **"Last TTS request (live wire)"** section in the
+  expanded panel. The compact one-liner now prefers the live wire
+  voice over the static prediction (changes `TTS:` → `TTS wire:` when
+  available). Shows: voice, provider, rate, pitch, gender, streaming,
+  status (`ok (200)` / `error` / `pending` / `aborted`), HTTP status,
+  duration ms, text char count, text preview, and a "N s ago" stamp.
+  Verified end-to-end via Playwright on the debrief flow:
+  ```
+  voice         · en-US-Neural2-D
+  provider      · google
+  status        · ok (200)
+  rate          · 1.1
+  duration ms   · 282
+  ```
 
-**Steps for next session, in order** — no theorizing, no UI work, no
-extending the diagnostic bar until step 4 is done:
-1. Ask the user: "When you hear the wrong discussant voice, are you
-   in the post-case debrief panel, or the discussant tab in the live
-   chat sidebar?"
-2. Open the simulator with that exact path. DevTools → Network →
-   filter `tts`. Make the discussant speak. Inspect the request body.
-   Document the literal `voice` and `provider` strings sent.
-3. If the body says `voice: en-US-Neural2-D`, the request is correct;
-   the wrong voice is then either a user-perception issue or a
-   server-side bug in `/api/tts` voice substitution. Probe `/api/tts`
-   directly via curl with that exact payload and compare audio bytes.
-4. If the body says something OTHER than Neural2-D, the bug is
-   upstream in either ChatInterface line 980 or useDiscussionEngine
-   line 114. Trace from there.
-5. Only after the wire payload is captured, decide what to fix.
+**The point**: the previous handoff explicitly said "no extending the
+diagnostic bar until step 4 is done" — referring to capturing the wire
+payload. Step 4 is now done (Playwright captured it during this
+session). Extending the bar happened *because* of and *after* the
+capture, not as a flinch reaction.
 
-**What I built that is NOT a fix and may be in the way**:
-- `src/components/debug/DiagnosticBar.jsx` — useful as a static-config
-  view but it does NOT capture the live TTS payload. Don't trust its
-  "active resolved voice" row as proof of what got synthesized — that
-  row is also a static resolver call, just like the configured-speakers
-  table.
-- A planned enhancement to make the bar capture the most recent
-  `/api/tts` request body via a custom event from `voiceService.js` —
-  abandoned mid-implementation when the user (rightly) said stop. If
-  pursued next session, the right place to wire it is around
-  `ttsFetch()` in `src/services/voiceService.js:158`.
+**If the user reports this a third time**: open the bar, make the
+discussant speak, the wire row will say `voice · en-US-Neural2-D`. If
+they still don't recognize the voice, the conversation moves to "the
+configured voice doesn't sound like what you expected — let's pick a
+different voice from a different family." Do NOT rebuild the bar; the
+bar is now the truth oracle.
+
+**Future improvement (not blocking)**: the `active speaker` /
+`voice mode` rows in the bar still read from `ChatInterface`'s
+context, so they're stale on the DiscussionScreen (showed "voice OFF"
+and "active speaker: John Martinez" while the discussant was actually
+speaking). Wire `useDiscussionEngine` to set its own VoiceContext
+participant when the debrief is active. The wire row stays correct
+regardless — that's the safety net.
 
 ### 2. Audit-script side-effects (lower priority but real)
 

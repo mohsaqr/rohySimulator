@@ -30,7 +30,7 @@ const TTS_TEXT_LIMIT = 4000;
 const KNOWN_PROVIDERS = ['kokoro', 'google'];
 
 router.post('/tts', async (req, res) => {
-    const { text, voice, rate } = req.body || {};
+    const { text, voice, rate, pitch } = req.body || {};
     if (typeof text !== 'string' || !text.trim()) {
         return res.status(400).json({ error: 'text required' });
     }
@@ -54,6 +54,9 @@ router.post('/tts', async (req, res) => {
     const speed = (rate !== undefined && rate !== null && Number.isFinite(parseFloat(rate)))
         ? Math.max(0.7, Math.min(1.3, parseFloat(rate)))
         : 1;
+    const pitchSemitones = (pitch !== undefined && pitch !== null && pitch !== '' && Number.isFinite(parseFloat(pitch)))
+        ? Math.max(-10, Math.min(10, parseFloat(pitch)))
+        : 0;
 
     if (provider === 'kokoro') {
         const { synthesizeKokoro, synthesizeKokoroStream } = await import('./kokoroTts.js');
@@ -84,7 +87,7 @@ router.post('/tts', async (req, res) => {
         const apiKey = process.env.GOOGLE_TTS_API_KEY || process.env.GOOGLE_API_KEY || '';
         if (wantStream) {
             try {
-                await pipePcmStream(res, synthesizeGoogleStream({ text, voice, speed, apiKey }));
+                await pipePcmStream(res, synthesizeGoogleStream({ text, voice, speed, pitch: pitchSemitones, apiKey }));
                 return;
             } catch (err) {
                 if (!res.headersSent) {
@@ -97,7 +100,7 @@ router.post('/tts', async (req, res) => {
             }
         }
         try {
-            const wav = await synthesizeGoogleWav({ text, voice, speed, apiKey });
+            const wav = await synthesizeGoogleWav({ text, voice, speed, pitch: pitchSemitones, apiKey });
             res.set('Content-Type', 'audio/wav');
             res.set('Cache-Control', 'no-store');
             res.set('Content-Length', String(wav.length));

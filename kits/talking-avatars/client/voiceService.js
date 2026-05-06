@@ -25,12 +25,9 @@
 // blob: URL — broken on some Chrome versions) and feed an
 // AudioBufferSourceNode straight into wawa's internal analyser instead.
 //
-// Pitch: applied client-side via AudioBufferSourceNode.playbackRate. This
-// couples pitch with playback speed (lower pitch → slower audio); the
-// independent tempo control lives server-side as `rate` (Kokoro speed /
-// Piper --length-scale). No native independent pitch shift is available
-// in Web Audio without a third-party DSP library, and the user has
-// accepted the coupling.
+// Rate is the only client-side playback tempo control. Pitch is forwarded to
+// providers that support it server-side (Google pitch in semitones) so pitch
+// and speed do not couple in the browser.
 
 import { Lipsync } from 'wawa-lipsync';
 import { apiUrl } from './config.js';
@@ -176,13 +173,12 @@ function scheduleChunk(session, audioCtx, analyser, audioBuffer) {
     if (session.aborted) return;
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffer;
-    const playbackRate = (session.pitch != null && session.pitch > 0) ? session.pitch : 1.0;
-    source.playbackRate.value = playbackRate;
+    source.playbackRate.value = 1.0;
     source.connect(analyser);
 
     const startAt = Math.max(audioCtx.currentTime, session.nextStartTime);
     source.start(startAt);
-    const playDuration = audioBuffer.duration / playbackRate;
+    const playDuration = audioBuffer.duration;
     session.nextStartTime = startAt + playDuration;
     session.endTime = session.nextStartTime;
     attachSource(source);
@@ -209,6 +205,7 @@ async function speakOneSentence(session, text) {
     if (session.aborted) return;
     const body = { text, voice: session.voice };
     if (session.rate != null) body.rate = session.rate;
+    if (session.pitch != null) body.pitch = session.pitch;
     // Forward gender so the server can pick a gender-appropriate fallback
     // voice if the requested voice isn't in the active provider's catalogue.
     if (session.gender) body.gender = session.gender;

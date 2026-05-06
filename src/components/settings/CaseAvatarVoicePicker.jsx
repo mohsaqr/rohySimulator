@@ -13,7 +13,7 @@ import TestVoiceButton from './TestVoiceButton.jsx';
 //   config.voice.tts_provider  — 'piper' | 'kokoro' | '' (inherit)
 //   config.voice.case_voice    — single voice id; wins over the gender slot
 //   config.voice.tts_rate      — server tempo (0.5–1.5), blank = inherit
-//   config.voice.tts_pitch     — client playbackRate (0.7–1.4), blank = inherit
+//   config.voice.tts_pitch     — provider pitch in semitones, blank = inherit
 //
 // Empty-string values mean "inherit from the platform persona default for
 // this case's gender". ChatInterface.resolveSpeakerSettings strips empties
@@ -283,8 +283,8 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
 
                 <SliderRow
                     label="Pitch"
-                    hint="client playbackRate — couples with speed"
-                    min={0.7} max={1.4} step={0.05}
+                    hint="semitones (Google only)"
+                    min={-10} max={10} step={0.25}
                     value={voice.tts_pitch}
                     inherited={inheritedPitch}
                     onChange={v => updateVoice('tts_pitch', v)}

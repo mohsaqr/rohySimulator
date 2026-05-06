@@ -308,10 +308,10 @@ function PersonaCard({ label, gender, manifest, voices, voicesProvider, avatarId
                     />
                     <SliderField
                         label="Pitch"
-                        hint="couples with speed"
+                        hint="semitones"
                         value={pitch}
-                        defaultDisplay="1.00"
-                        min={0.7} max={1.4} step={0.05}
+                        defaultDisplay="0.00"
+                        min={-10} max={10} step={0.25}
                         onChange={v => onChange('pitch', v)}
                     />
                 </div>

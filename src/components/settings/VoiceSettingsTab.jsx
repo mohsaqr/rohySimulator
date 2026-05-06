@@ -40,7 +40,7 @@ const blankSettings = {
     // slots only; save only writes the current provider's three keys.
     voiceSlots: emptyVoiceSlots(),
     tts_rate: 1.0,
-    tts_pitch: 1.0,
+    tts_pitch: 0,
     stt_provider: 'browser',
     stt_language: 'en-US',
     avatar_type: '3d_head',
@@ -91,7 +91,7 @@ export default function VoiceSettingsTab() {
                 tts_provider: provider,
                 voiceSlots,
                 tts_rate: s.tts_rate ?? 1.0,
-                tts_pitch: s.tts_pitch ?? 1.0,
+                tts_pitch: s.tts_pitch ?? 0,
                 stt_provider: s.stt_provider || 'browser',
                 stt_language: s.stt_language || 'en-US',
                 avatar_type: s.avatar_type || '3d_head',
@@ -385,12 +385,12 @@ export default function VoiceSettingsTab() {
                 </label>
                 <label className="block">
                     <span className="text-xs text-neutral-400 block mb-1">
-                        Pitch ({settings.tts_pitch.toFixed(2)}×){' '}
-                        <span className="text-neutral-600">— browser TTS only</span>
+                        Pitch ({settings.tts_pitch.toFixed(2)} st){' '}
+                        <span className="text-neutral-600">— Google only</span>
                     </span>
                     <input
                         type="range"
-                        min="0.5" max="1.5" step="0.05"
+                        min="-10" max="10" step="0.25"
                         value={settings.tts_pitch}
                         onChange={(e) => update('tts_pitch', Number(e.target.value))}
                         className="w-full accent-purple-500"

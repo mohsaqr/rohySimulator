@@ -8423,10 +8423,10 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
             }
         }
 
-        const validateRate = (v) => {
+        const validateRange = (v, min, max) => {
             if (v === null || v === undefined || v === '') return null;
             const f = parseFloat(v);
-            if (!Number.isFinite(f) || f < 0.5 || f > 1.5) return undefined;
+            if (!Number.isFinite(f) || f < min || f > max) return undefined;
             return String(f);
         };
 
@@ -8455,14 +8455,19 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
                 setIfPresent(k, body[k] || '');
             }
         }
-        for (const k of ['tts_rate', 'tts_pitch']) {
-            if (k in body) {
-                const v = validateRate(body[k]);
-                if (v === undefined) {
-                    return res.status(400).json({ error: `${k} must be between 0.5 and 1.5` });
-                }
-                setIfPresent(k, v ?? '');
+        if ('tts_rate' in body) {
+            const v = validateRange(body.tts_rate, 0.5, 1.5);
+            if (v === undefined) {
+                return res.status(400).json({ error: 'tts_rate must be between 0.5 and 1.5' });
             }
+            setIfPresent('tts_rate', v ?? '');
+        }
+        if ('tts_pitch' in body) {
+            const v = validateRange(body.tts_pitch, -10, 10);
+            if (v === undefined) {
+                return res.status(400).json({ error: 'tts_pitch must be between -10 and 10 semitones' });
+            }
+            setIfPresent('tts_pitch', v ?? '');
         }
         if ('stt_provider' in body) {
             if (body.stt_provider !== null && !VOICE_STT_PROVIDERS.includes(body.stt_provider)) {
@@ -8520,7 +8525,7 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
 //   FLAT (provider-independent):
 //     default_avatar_<gender>   — GLB filename, no TTS interaction
 //     default_rate_<gender>     — TTS speed (0.5–1.5), applies to any engine
-//     default_pitch_<gender>    — client-side playbackRate (0.7–1.4)
+//     default_pitch_<gender>    — provider pitch in semitones (-10–10)
 //
 //   PER-PROVIDER (because voice IDs are provider-specific):
 //     default_voice_<provider>_<gender>  — voice ID for that provider
@@ -8588,8 +8593,8 @@ router.put('/platform-settings/avatars', authenticateToken, requireAdmin, async 
             if (k.startsWith('default_rate_')  && !inRange(raw, 0.5, 1.5)) {
                 return res.status(400).json({ error: `${k} must be between 0.5 and 1.5` });
             }
-            if (k.startsWith('default_pitch_') && !inRange(raw, 0.7, 1.4)) {
-                return res.status(400).json({ error: `${k} must be between 0.7 and 1.4` });
+            if (k.startsWith('default_pitch_') && !inRange(raw, -10, 10)) {
+                return res.status(400).json({ error: `${k} must be between -10 and 10 semitones` });
             }
             await setAuditedPlatformSetting(req, k, String(raw), 'update_platform_avatar_defaults');
         }
@@ -8886,7 +8891,7 @@ async function pipePcmStream(res, asyncIter) {
 //   - OpenAI (cloud, lowest latency, native streaming PCM at 24 kHz)
 // based on the `tts_provider` platform setting.
 router.post('/tts', authenticateToken, async (req, res) => {
-    const { text, voice: requestedVoice, rate, gender, provider: bodyProvider } = req.body || {};
+    const { text, voice: requestedVoice, rate, pitch, gender, provider: bodyProvider } = req.body || {};
 
     if (typeof text !== 'string' || !text.trim()) {
         return res.status(400).json({ error: 'text required' });
@@ -8937,10 +8942,13 @@ router.post('/tts', authenticateToken, async (req, res) => {
         const speed = (rate !== undefined && rate !== null && Number.isFinite(parseFloat(rate)))
             ? Math.max(0.7, Math.min(1.3, parseFloat(rate)))
             : 1;
+        const pitchSemitones = (pitch !== undefined && pitch !== null && pitch !== '' && Number.isFinite(parseFloat(pitch)))
+            ? Math.max(-10, Math.min(10, parseFloat(pitch)))
+            : 0;
         const apiKey = (await getPlatformSetting('google_tts_api_key')) || '';
         if (stream) {
             try {
-                await pipePcmStream(res, synthesizeGoogleStream({ text, voice, speed, apiKey }));
+                await pipePcmStream(res, synthesizeGoogleStream({ text, voice, speed, pitch: pitchSemitones, apiKey }));
                 return;
             } catch (err) {
                 console.error('[google-tts] streaming synthesis failed', err);
@@ -8954,7 +8962,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
             }
         }
         try {
-            const wav = await synthesizeGoogleWav({ text, voice, speed, apiKey });
+            const wav = await synthesizeGoogleWav({ text, voice, speed, pitch: pitchSemitones, apiKey });
             res.set('Content-Type', 'audio/wav');
             res.set('Cache-Control', 'no-store');
             res.set('Content-Length', String(wav.length));

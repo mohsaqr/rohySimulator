@@ -25,12 +25,9 @@
 // blob: URL — broken on some Chrome versions) and feed an
 // AudioBufferSourceNode straight into wawa's internal analyser instead.
 //
-// Pitch: applied client-side via AudioBufferSourceNode.playbackRate. This
-// couples pitch with playback speed (lower pitch → slower audio); the
-// independent tempo control lives server-side as `rate` (Kokoro speed /
-// Piper --length-scale). No native independent pitch shift is available
-// in Web Audio without a third-party DSP library, and the user has
-// accepted the coupling.
+// Rate is the only client-side playback tempo control. Pitch is forwarded to
+// providers that support it server-side (Google pitch in semitones) so pitch
+// and speed do not couple in the browser.
 
 import { Lipsync } from 'wawa-lipsync';
 import { apiUrl } from '../config/api.js';
@@ -155,29 +152,149 @@ function attachSource(source) {
     };
 }
 
-async function ttsFetch(streaming, body, signal) {
-    const res = await fetch(apiUrl(streaming ? '/tts?stream=1' : '/tts'), {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${AuthService.getToken()}`,
-            ...(streaming && { 'Accept': 'application/x-rohy-pcm-stream' })
-        },
-        body: JSON.stringify(body),
-        signal
+// Runtime wire-capture for the diagnostic bar. The static resolver tells us
+// what voice the runtime *would* play; this captures what was *actually* sent.
+// The previous orchestrator was scolded for relying on static analysis when a
+// user reported a wrong voice — this bridge closes that gap so future "I hear
+// the wrong voice" reports can be triaged against the literal payload, not a
+// resolver prediction.
+//
+// We keep a small ring buffer (last MAX_WIRE_HISTORY requests) so the user can
+// see whether the voice changed mid-stream — a single "last" payload is
+// misleading if sentence-1 used voice X and sentence-5 used voice Y. Each
+// entry has a stable `id` for replay/audition.
+let _lastTtsRequest = null;
+const _wireHistory = [];
+const MAX_WIRE_HISTORY = 12;
+let _wireIdCounter = 0;
+
+export function getLastTtsRequest() {
+    return _lastTtsRequest;
+}
+
+export function getRecentTtsRequests() {
+    // Newest first.
+    return _wireHistory.slice().reverse();
+}
+
+function emitTtsRequest(detail) {
+    _lastTtsRequest = detail;
+    // Update or insert into the ring buffer keyed by sentAt+id. A request
+    // emits multiple times across its lifecycle (pending → ok / error /
+    // aborted); the buffer should reflect the latest known state for that
+    // single request, not duplicate it.
+    const existingIdx = _wireHistory.findIndex(w => w.id === detail.id);
+    if (existingIdx >= 0) {
+        _wireHistory[existingIdx] = detail;
+    } else {
+        _wireHistory.push(detail);
+        if (_wireHistory.length > MAX_WIRE_HISTORY) _wireHistory.shift();
+    }
+    if (typeof window !== 'undefined') {
+        try { window.dispatchEvent(new CustomEvent('rohy:tts-request', { detail })); }
+        catch { /* CustomEvent may be polyfilled or restricted; ignore */ }
+    }
+}
+
+// Audition a captured wire payload by re-firing /api/tts with the literal
+// recorded body. It deliberately uses ttsFetch + attachSource so diagnostic
+// playback is visible in the wire history and cancellable by shared teardown.
+export async function auditionWirePayload(wire, opts = {}) {
+    if (!wire?.voice || !wire?.provider) {
+        throw new Error('cannot audition: wire entry missing voice or provider');
+    }
+    if (!wire.textPreview && !wire.text) {
+        throw new Error('cannot audition: wire entry missing text');
+    }
+    teardown();
+    const audioCtx = (await ensureLipsync()).audioContext;
+    const text = wire.text || wire.textPreview;
+    // Use a non-streaming WAV request so we get a single decodable blob; this
+    // is the cheapest path for an audition, no PCM framing ceremony needed.
+    const res = await ttsFetch(false, {
+        text,
+        voice: opts.voice ?? wire.voice,
+        provider: opts.provider ?? wire.provider,
+        ...(wire.rate != null && { rate: wire.rate }),
+        ...(wire.pitch != null && { pitch: wire.pitch }),
+        ...(wire.gender && { gender: wire.gender })
     });
-    if (!res.ok) {
-        let msg = `TTS request failed (${res.status})`;
-        try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* not json */ }
-        throw new Error(msg);
-    }
-    if (streaming) {
-        const ctype = res.headers.get('Content-Type') || '';
-        if (!ctype.includes('application/x-rohy-pcm-stream')) {
-            throw new Error(`expected pcm-stream, got ${ctype}`);
+    const buf = await res.arrayBuffer();
+    const decoded = await audioCtx.decodeAudioData(buf.slice(0));
+    const source = audioCtx.createBufferSource();
+    source.buffer = decoded;
+    source.connect(audioCtx.destination);
+    source.start();
+    attachSource(source);
+    // Return a handle so the bar can stop playback if the user clicks again.
+    return {
+        stop: () => { try { source.stop(); } catch { /* noop */ } },
+        durationSec: decoded.duration
+    };
+}
+
+async function ttsFetch(streaming, body, signal) {
+    const sentAt = Date.now();
+    const id = ++_wireIdCounter;
+    const fullText = typeof body?.text === 'string' ? body.text : '';
+    const textPreview = fullText.length > 60 ? `${fullText.slice(0, 57)}…` : fullText;
+    const wire = {
+        id,
+        sentAt,
+        streaming,
+        voice: body?.voice ?? null,
+        provider: body?.provider ?? null,
+        rate: body?.rate ?? null,
+        pitch: body?.pitch ?? null,
+        gender: body?.gender ?? null,
+        textChars: fullText.length,
+        textPreview,
+        // Keep the full text in-memory only — never logged. Used by the
+        // audition button so the bar can replay the literal sentence.
+        text: fullText,
+        status: 'pending',
+        httpStatus: null,
+        error: null,
+        durationMs: null
+    };
+    emitTtsRequest(wire);
+
+    try {
+        const res = await fetch(apiUrl(streaming ? '/tts?stream=1' : '/tts'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AuthService.getToken()}`,
+                ...(streaming && { 'Accept': 'application/x-rohy-pcm-stream' })
+            },
+            body: JSON.stringify(body),
+            signal
+        });
+        if (!res.ok) {
+            let msg = `TTS request failed (${res.status})`;
+            try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* not json */ }
+            emitTtsRequest({ ...wire, id, status: 'error', httpStatus: res.status, error: msg, durationMs: Date.now() - sentAt });
+            throw new Error(msg);
         }
+        if (streaming) {
+            const ctype = res.headers.get('Content-Type') || '';
+            if (!ctype.includes('application/x-rohy-pcm-stream')) {
+                const err = `expected pcm-stream, got ${ctype}`;
+                emitTtsRequest({ ...wire, status: 'error', httpStatus: res.status, error: err, durationMs: Date.now() - sentAt });
+                throw new Error(err);
+            }
+        }
+        emitTtsRequest({ ...wire, status: 'ok', httpStatus: res.status, durationMs: Date.now() - sentAt });
+        return res;
+    } catch (err) {
+        if (err?.name === 'AbortError') {
+            emitTtsRequest({ ...wire, status: 'aborted', durationMs: Date.now() - sentAt });
+        } else if (_lastTtsRequest?.id === id && _lastTtsRequest?.status === 'pending') {
+            // Network/transport failure before we got a response.
+            emitTtsRequest({ ...wire, status: 'error', error: err?.message || String(err), durationMs: Date.now() - sentAt });
+        }
+        throw err;
     }
-    return res;
 }
 
 // Schedule one decoded AudioBuffer onto the session's running timeline cursor.
@@ -186,13 +303,12 @@ function scheduleChunk(session, audioCtx, analyser, audioBuffer) {
     if (session.aborted) return;
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffer;
-    const playbackRate = (session.pitch != null && session.pitch > 0) ? session.pitch : 1.0;
-    source.playbackRate.value = playbackRate;
+    source.playbackRate.value = 1.0;
     source.connect(analyser);
 
     const startAt = Math.max(audioCtx.currentTime, session.nextStartTime);
     source.start(startAt);
-    const playDuration = audioBuffer.duration / playbackRate;
+    const playDuration = audioBuffer.duration;
     session.nextStartTime = startAt + playDuration;
     session.endTime = session.nextStartTime;
     attachSource(source);
@@ -219,6 +335,7 @@ async function speakOneSentence(session, text) {
     if (session.aborted) return;
     const body = { text, voice: session.voice };
     if (session.rate != null) body.rate = session.rate;
+    if (session.pitch != null) body.pitch = session.pitch;
     // Forward gender so the server can pick a gender-appropriate fallback
     // voice if the requested voice isn't in the active provider's catalogue.
     if (session.gender) body.gender = session.gender;

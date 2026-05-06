@@ -129,8 +129,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         setActiveParticipant
     } = useVoice();
 
-    // Raw global voice settings live separately so per-case overrides can be
-    // re-merged on top whenever the active case changes.
+    // Raw global voice settings live separately from per-case voice overrides.
+    // VoiceContext must stay platform-only; patient/case overrides are passed
+    // directly to resolveSpeakerVoice at the patient TTS callsite.
     const [globalVoiceSettings, setGlobalVoiceSettings] = useState(null);
 
     // Multi-agent state
@@ -223,23 +224,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         return () => { cancelled = true; };
     }, []);
 
-    // Merge per-case voice override (caseData.config.voice) on top of the
-    // global blob. Empty / undefined per-case fields inherit from global.
-    // Pushed into VoiceContext so consumers (this component, downstream) all
-    // see the effective settings.
     useEffect(() => {
         if (!globalVoiceSettings) return;
-        const override = activeCase?.config?.voice;
-        if (override && typeof override === 'object') {
-            const merged = { ...globalVoiceSettings };
-            for (const [k, v] of Object.entries(override)) {
-                if (v !== undefined && v !== null && v !== '') merged[k] = v;
-            }
-            setVoiceSettings(merged);
-        } else {
-            setVoiceSettings(globalVoiceSettings);
-        }
-    }, [globalVoiceSettings, activeCase?.id, setVoiceSettings]);
+        setVoiceSettings(globalVoiceSettings);
+    }, [globalVoiceSettings, setVoiceSettings]);
 
     // Push the active participant into VoiceContext so PatientVisual mirrors
     // whoever the trainee is talking to. Updates skip when nothing changed

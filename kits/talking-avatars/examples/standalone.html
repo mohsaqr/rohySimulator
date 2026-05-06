@@ -325,7 +325,7 @@ async function speak() {
                 'Content-Type': 'application/json',
                 'Accept': 'application/x-rohy-pcm-stream',
             },
-            body: JSON.stringify({ text, voice }),
+            body: JSON.stringify({ text, voice, pitch: 0 }),
             signal: abortController.signal,
         });
     } catch (err) {
