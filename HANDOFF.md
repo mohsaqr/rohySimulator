@@ -1,137 +1,135 @@
-# Session Handoff — 2026-05-06 (TNA analytics rebuild on dynajs)
+# Session Handoff — 2026-05-06 (Analytics theme + Settings header + tests green)
 
-## Completed
+## What shipped this session
 
-Replaced the thin tnaj-based TNA dashboard with a LAILA-grade six-tab
-analytics page powered by dynajs. No reinvention — sixteen TNA components
-were lifted verbatim from LAILA-v3 via esbuild type-strip; a 200-line
-ProcessMap tab uses dynajs's `buildDFGFromSequences` + dagre + Carmdash's
-cumulative-95% pruning.
+Picks up from the morning's TNA rebuild on dynajs. Tonight closed three
+loops: the dashboard actually rendering against real data, the visual
+theme moving from "horrible black" to a calm light grey, and the test
+suite catching up with the new endpoint shapes. Plus a small header
+reshuffle the operator asked for.
 
-- `package.json`: dropped `tnaj` (v0.1.0, smaller surface), added `dynajs`
-  and `dagre`.
-- `server/routes.js`: rewrote `/api/analytics/tna-sequences` to LAILA's
-  contract (parallel sequences + objectTypeSequences arrays, P95 chunking,
-  actor / actor-session grouping, rich metadata). Added six sibling
-  endpoints: `/daily-counts`, `/hourly-counts`, `/summary`, `/stats`,
-  `/top-resources`, `/filter-options`.
-- `src/components/analytics/tna/laila/` (NEW, 18 files): the verbatim
-  LAILA TNA components (TS-stripped + i18n shimmed) plus three local shims
-  (i18nShim, Loading, useTheme) and the new ProcessMap.jsx.
-- `src/components/analytics/tna/clinicalStates.js`: 10-state simulator
-  resolver chain (assessing / examining / investigating / treating /
-  communicating / documenting / monitoring / regulating / reflecting /
-  navigating) with explicit-pair → object-type → verb-fallback precedence.
-- `src/components/analytics/tna/TnaDashboardV2.jsx`: 480-line LAILA-style
-  page; six tabs (Activity / Network / Clusters / Patterns / Process Map /
-  Settings); 4 sequence modes; 4 model types; 9 layouts; verb editor.
-- `src/App.jsx`: TnaDashboard import flipped to V2.
-- Tests: 15 server-integration + 10 unit tests, all 25 green.
-- `CHANGES.md`, `LEARNINGS.md`, `HANDOFF.md` updated.
+Four commits pushed to `origin/main`:
+
+| Commit | Subject |
+|---|---|
+| `94febe0` | Catalogue Session 1 — schema + JSON-driven seeders |
+| `419ae47` | Catalogue Session 2 — search proxies + scope-aware /api/catalogue routes |
+| `a2c0611` | Clickable + editable medication rows in MedicationManager |
+| `7c00c0d` | TNA rebuild on dynajs — LAILA replication + process map |
+| `6623435` | Make TNA dashboard render correctly + embed in Settings |
+| `89d6cc7` | Light-grey theme + Settings header + test for new shape |
 
 ## Current State
 
-| Layer | Before | After |
-|---|---|---|
-| Engine | tnaj 0.1.0 | dynajs (full surface incl. DFG, patterns, layout) |
-| Server endpoints | 1 thin TNA endpoint | 7 endpoints (TNA + 6 activity / filter sources) |
-| Client tabs | 1 (network only) | 6 (Activity / Network / Clusters / Patterns / Process Map / Settings) |
-| Sequence modes | verb only | verb / object / combined / raw |
-| Model types | relative only | relative / frequency / co-occurrence / attention |
-| Layouts | hand-rolled circle | 9 (dynajs.layout) |
-| Cluster methods | PAM × Levenshtein only | 5 methods × 4 dissimilarities (dynajs.clusterData) |
-| Patterns | none | discoverPatterns short (2–3) + long (4–7) |
-| Process mining | none | DFG + cumulative-95% pruning + dagre layout |
-| Activity timeline | none | Daily timeline + hourly heatmap + verb donut + object donut + top-resources |
+**Where the user lands now:**
+- Top-left of every page: a single **"Settings"** pill (cog icon). Click
+  → dropdown with `My Profile` / `Open Settings` / `Analytics` / `Logout`.
+- Case-name pill (`Case: Acute Chest Pain - STEMI`) hidden — no more
+  diagnosis spoiler in the header.
+- `End & Debrief` moved to the bottom-left of the avatar tile (was at
+  the top with the case banner).
+- Settings → first sidebar item: **Analytics**. Six tabs across the top:
+  Activity / Network / Clusters / Patterns / Process Map / Settings.
+- Analytics surface is **light grey** (`bg-gray-200`) with white cards.
+  This is deliberately different from the rest of the simulator (which
+  stays dark) because the user asked for it — and because LAILA's
+  components are designed for light backgrounds.
 
-Test counts: 752 → 746 passing in full parallel suite (parallel flakes
-expanded — same SQLITE_READONLY macOS issue), 25 new analytics tests all
-green in isolation. Catalogue tests (57): all green. Build clean.
+**Tests:**
+- 45/45 test files pass.
+- 775 tests green, 10 skipped.
+- The macOS `auth.test.js` parallel-flake didn't fire this run (passes
+  100% in isolation either way).
+- Catalogue tests (Sessions 1+2): 57/57 still green.
+- Analytics tests: 13 server-integration + 10 unit = 23 green.
 
-What works:
-- All six tabs render against the seeded DB (5 sessions, 760 events,
-  14 verb:object combos visible after filtering).
-- Sequence-mode toggle re-derives states client-side without re-fetching.
-- ProcessMap with start/end gates + cumulative-coverage slider.
-- Verb renames + excludes editor in Settings tab.
-- All endpoints respect case_id / user_id / start_date / end_date filters.
-
-What is unfinished:
-- The legacy `TnaDashboard.jsx` + 9 sibling charts under `src/components/
-  analytics/tna/*.jsx` remain on disk but unused. Delete after one cycle of
-  V2 in production.
-- `tnaUtils.js` no longer used. Same — delete after a cycle.
-- macOS parallel-test flake now also catches the new analytics-tna test.
-  Fix is per-worker DB isolation (separate concern).
-- Per-student / cohort comparison view (LAILA has it under Activity tab
-  with `mode='student'`) is deferred — the simulator only has one user
-  in the seed DB so cohort views aren't useful yet.
+**Build:** clean. ~6s for client, ~10ms for server reload via watch.
 
 ## Key Decisions
 
-- **Copy-paste, not re-derive**. Per the user's directive ("0 reinvention").
-  All 16 LAILA TNA components copied verbatim via `esbuild.transformSync`
-  with `loader: 'tsx', jsx: 'preserve'`. Type strip only, no logic edits.
-- **i18n via 50-line shim**, not adding `react-i18next` to a single-locale
-  project. The shim exposes `useTranslation()` returning `{ t }` so call
-  sites stay unchanged; humanises unknown keys + overrides ~50 user-facing
-  labels.
-- **Process Map = `buildDFGFromSequences` + dagre + cumulative-95% prune**.
-  Same recipe Carmdash documents in its CLAUDE.md. ~200 lines including SVG.
-- **Ten clinical states, not LAILA's twelve educational states**. The
-  domain is clinical reasoning, not course consumption. Reflects the
-  encounter loop, not the LMS.
-- **Side-by-side V1 / V2 dashboard** for one cycle. Old code stays on
-  disk; App.jsx flipped to V2. Delete the legacy tree after a successful
-  in-production demo.
-- **`skip_merges=true` from V2 client**, server-side merging skipped.
-  The new clinical resolver chain on the client supersedes the
-  `TNA_VERB_MERGE_MAP`; sending `skip_merges` keeps the legacy V1 path
-  working unchanged for any external caller.
+- **Tailwind dark mode rebound to class**, not `prefers-color-scheme`.
+  Rohy itself has zero `dark:` usage (its dark UI is hard-coded with
+  `bg-neutral-*`), so flipping the variant binding is safe everywhere.
+  The LAILA components carry `dark:bg-gray-800` everywhere; without
+  this fix they all fired automatically on macOS dark-mode systems and
+  the analytics page rendered as a dark mess. Single line in
+  `src/index.css`:
+  ```css
+  @custom-variant dark (&:where(.dark, .dark *));
+  ```
+- **Light grey for analytics, not light white.** `bg-gray-100` was too
+  bright; `bg-gray-200` reads as "calm work surface" and gives white
+  cards visible edges.
+- **ProcessMap SVG nodes are `#ffffff` with `#cbd5e1` borders and dark
+  text**. The earlier `#1e293b` slate worked on dark themes only;
+  hardcoded SVG colours need to flip with the theme.
+- **"Settings" replaces the username+Admin pill** at the operator's
+  request. The state name (`showTnaAnalytics`) stays — that's not user-
+  visible.
+- **Two coexisting analytics entry points**: the old user-menu launcher
+  → modal, plus the new Settings sidebar tab → embedded. `embedded` prop
+  on `TnaDashboardV2` toggles between the two layouts.
+- **Verbatim copy from LAILA + esbuild type-strip + i18n shim** is the
+  scaling pattern. All sixteen LAILA TNA components were lifted exactly
+  as written; only foreign imports (i18n, useTheme, Loading) were
+  patched. The light/dark Tailwind classes were left untouched, with
+  the variant fix doing the work globally.
 
 ## Open Issues
 
-- **macOS parallel-test SQLITE_READONLY flake** is now hitting three
-  test files (`auth.test.js`, `discussion-screen.test.jsx`,
-  `analytics-tna.test.js`). All pass in isolation. Per-worker DB
-  isolation in `tests/utils/seedDb.js` would fix it cleanly.
-- **Empty seed data on Activity tab in a fresh DB** — the simulator
-  needs at least one completed session before the timeline / heatmap
-  render anything useful. Document this in the user-facing onboarding
-  text on the Activity tab if it confuses people.
-- **Bundle size grew by ~600 KB** (from the verbatim LAILA + dynajs
-  imports). Acceptable for an internal admin page; if we ever expose
-  the dashboard to students at scale, dynamic-import the page.
+- **macOS parallel-test SQLITE_READONLY flake** — not deterministic.
+  Sometimes hits `auth.test.js`, sometimes `discussion-screen.test.jsx`,
+  sometimes none. Per-worker DB isolation in `tests/utils/seedDb.js`
+  would fix it; not blocking.
+- **Legacy V1 analytics tree on disk but unused** —
+  `src/components/analytics/tna/TnaDashboard.jsx` (V1) + 9 sibling
+  charts + `tnaUtils.js`. App.jsx imports V2 only. Delete after one
+  more cycle in production. ~1500 LOC.
+- **Catalogue Session 3 still parked** — settings UI lift to 3-tab
+  Curated/My/Search, group builder modal, OrdersDrawer surface. Plan
+  in `project_drug_lab_catalogue_plan.md` (memory).
+- **Bundle size grew ~600 KB** from the LAILA + dynajs imports (~1.3 MB
+  total minified, ~340 KB gzipped). Acceptable for the admin-only
+  analytics page; if students get exposed to the dashboard at scale,
+  dynamic-import it.
+- **`ActivityTimelineChart` series sort by total** can produce a flicker
+  when the user scrubs the date range — minor.
 
 ## Next Steps
 
-1. **Smoke-test V2 in a real browser** — load Settings → toggle TNA
-   button → drive through Activity / Network / Process Map. Catch any
-   runtime breaks in the verbatim-copied components (TS strip + i18n
-   shim are the most likely failure surfaces).
-2. **Delete the legacy V1 tree** once V2 is verified — `TnaDashboard.jsx`
-   and the 9 sibling charts under `src/components/analytics/tna/*.jsx`
-   plus `tnaUtils.js`. About 1500 lines of removable code.
-3. **Per-worker DB isolation** in `tests/utils/seedDb.js` — fixes the
-   macOS parallel-test flake permanently.
-4. **Catalogue Session 3** (settings UI lift to 3-tab Curated/My/Search,
-   group builder, OrdersDrawer surface) — the original plan from
-   `project_drug_lab_catalogue_plan.md` is still parked.
-5. **Cohort comparison view** — LAILA's `mode='student'` analogue. Add a
-   "compare to cohort" toggle on the Activity tab that overlays the
-   selected student against the case-level mean. Needs more than one
-   student in the DB to be meaningful.
+1. **Smoke the production build path.** `npm run build` writes the
+   `--base=/rohy/` static bundle into `frontend/`. Locally hitting
+   `localhost:3000/` is broken until that base is `/`. Either fix the
+   build script or document that prod runs at `/rohy/`. Bothered users
+   in the past — would bother future ones.
+2. **Delete legacy V1 analytics tree.** `git rm` the ten files listed
+   above. ~1500 LOC.
+3. **Catalogue Session 3** — UI lift to 3-tab layout. Plan in memory.
+4. **Per-worker DB isolation** in `tests/utils/seedDb.js` — kills the
+   parallel-test flake permanently.
+5. **Cohort comparison view** for the analytics Activity tab — overlay a
+   single student against case mean. Needs more than one student in the
+   seed DB to be meaningful.
 
 ## Context
 
-- Test runners (in isolation):
-  - Server TNA: `npx vitest run tests/server/analytics-tna.test.js`
-  - Resolver: `npx vitest run src/components/analytics/tna/clinicalStates.test.js`
-  - Catalogue: `npx vitest run tests/server/catalogue-*.test.js`
-- Client smoke (manual): `npm run client` → log in as admin → bottom-bar
-  Activity icon → six tabs across the top.
-- `dynajs` lives at `~/Documents/Github/dynajs` — same sibling as
-  `LAILA-v3` and `Carmdash` use. `npm i file:../dynajs` rebinds.
-- Build: `npx vite build` (clean, ~8s).
-- All commercial-safe sources except CALIPER (CC BY-NC-SA), still
-  isolated as before.
+- Dev runner: `npm run dev` (concurrent vite at :5173 + node --watch
+  server at :3000).
+- After dependency changes (e.g. swapping `dynajs` versions), wipe
+  `node_modules/.vite` cache and restart vite — it pre-bundles deps once
+  and never refreshes them on its own. Same gotcha LAILA's LEARNINGS
+  flags.
+- Test runners:
+  - Server analytics: `npx vitest run tests/server/analytics-tna.test.js`
+  - Catalogue (all 3 files): `npx vitest run tests/server/catalogue-*.test.js`
+  - Resolver unit: `npx vitest run src/components/analytics/tna/clinicalStates.test.js`
+  - Full suite: `npx vitest run --reporter=dot`
+- Dynajs lives at `~/Documents/Github/dynajs` as a sibling. `npm i
+  file:../dynajs` rebinds.
+- `src/index.css` carries the `@custom-variant dark` line that disables
+  system-pref dark mode across the whole app; do not "tidy it away" —
+  the LAILA components depend on it being there.
+- Analytics filter dropdowns surface every user that has at least one
+  `learning_events` row. If a freshly-seeded DB has none, the
+  dropdowns will be empty and the dashboard renders no data — drive a
+  case briefly to populate.
