@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import https from 'https';
 import apiRoutes from './routes.js';
 import path from 'path';
 import fs from "fs";
@@ -16,6 +17,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 3000;
+// Optional HTTPS listener — needed in any deployment that isn't
+// localhost/127.0.0.1, because Chrome blocks getUserMedia and
+// SpeechRecognition on insecure origins (private LAN IPs included).
+// Set TLS_CERT_PATH + TLS_KEY_PATH to enable; HTTPS_PORT defaults to
+// PORT+1000 (so 3000→4000, 4001→5001) to avoid clashing with the HTTP
+// listener. The HTTP listener stays up so existing bookmarks keep
+// working — but mic-using paths require HTTPS.
+const HTTPS_PORT = parseInt(process.env.HTTPS_PORT, 10) || (PORT + 1000);
+const TLS_CERT_PATH = process.env.TLS_CERT_PATH || '';
+const TLS_KEY_PATH = process.env.TLS_KEY_PATH || '';
 
 instrumentSqliteDb(db);
 
@@ -93,6 +104,38 @@ function startServer(port, maxRetries = 10) {
     });
 
     return server;
+}
+
+// Optional HTTPS listener. Only starts when TLS_CERT_PATH + TLS_KEY_PATH
+// point at readable PEM files. Failures here are non-fatal — the HTTP
+// listener stays up so the rest of the app remains usable; the warning
+// makes it obvious why the mic would still be blocked.
+function startHttpsServer(port) {
+    if (!TLS_CERT_PATH || !TLS_KEY_PATH) {
+        console.log(`[https] disabled (set TLS_CERT_PATH + TLS_KEY_PATH to enable)`);
+        return null;
+    }
+    let cert, key;
+    try {
+        cert = fs.readFileSync(TLS_CERT_PATH);
+        key = fs.readFileSync(TLS_KEY_PATH);
+    } catch (err) {
+        console.warn(`[https] could not read TLS files: ${err.message}`);
+        return null;
+    }
+    try {
+        const server = https.createServer({ cert, key }, app).listen(port, '0.0.0.0', () => {
+            console.log(`HTTPS server is running on https://0.0.0.0:${port}`);
+            console.log(`Use this origin for any feature that needs the mic (press-to-talk, voice mode).`);
+        });
+        server.on('error', (err) => {
+            console.warn(`[https] listener error: ${err.message}`);
+        });
+        return server;
+    } catch (err) {
+        console.warn(`[https] could not start HTTPS listener: ${err.message}`);
+        return null;
+    }
 }
 
 // Fire-and-forget Kokoro warmup. The model is ~330 MB and the first /tts
@@ -201,6 +244,7 @@ async function initializeAndStart() {
 
     // Start the server, then trigger TTS warmup async.
     startServer(PORT);
+    startHttpsServer(HTTPS_PORT);
     maybeWarmupKokoro();
 }
 
