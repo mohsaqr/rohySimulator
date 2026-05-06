@@ -11032,118 +11032,290 @@ const TNA_VERB_MERGE_MAP = {
     'TREATMENT_EFFECT_ENDED': null,
 };
 
-// GET /api/analytics/tna-sequences - Extract TNA sequences from learning events
+// GET /api/analytics/tna-sequences — LAILA-shaped TNA sequence builder
+//
+// Returns parallel arrays { sequences[][], objectTypeSequences[][] } so the
+// client can flip between verb-only, object-only, combined-state, and raw
+// verb:object views without re-fetching. Mirrors the contract of
+// LAILA-v3 server/src/services/activityLog.service.ts:getTnaSequences().
+//
+// Pipeline (in order):
+//   1. SELECT learning_events filtered by case_id / user_id / date / session
+//   2. Optional verb merge via TNA_VERB_MERGE_MAP (skipMerges=true bypasses;
+//      client-side resolver chain handles the same job in the new dashboard)
+//   3. Count verb frequencies; rare verbs (< minVerbPct) become 'OTHER'
+//   4. Group by ('actor' = user_id) or ('actor-session' = user_id::session_id)
+//   5. Min-length filter: drop sequences with fewer than minSequenceLength events
+//   6. P95 chunking: split sequences longer than the 95th-percentile length
+//      into non-overlapping chunks (prevents one runaway tab from blowing up
+//      the distance matrix in the Clusters tab)
 router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, (req, res) => {
-    const { case_id, start_date, end_date, min_verb_pct = '0.05' } = req.query;
-    const minPct = parseFloat(min_verb_pct) || 0.05;
+    const {
+        case_id, user_id, start_date, end_date,
+        min_sequence_length = '2',
+        min_verb_pct = '0.05',
+        skip_merges,
+        group_by = 'actor-session',
+    } = req.query;
+    const minLen = Math.max(2, parseInt(min_sequence_length, 10) || 2);
+    const minVerbPct = Math.max(0, parseFloat(min_verb_pct) || 0);
+    const skipMerges = String(skip_merges) === 'true';
+    const grouping = group_by === 'actor' ? 'actor' : 'actor-session';
 
     let sql = `
-        SELECT user_id, verb, timestamp
-        FROM learning_events
-        WHERE 1=1
-    `;
+        SELECT le.user_id, le.session_id, le.verb, le.object_type, le.timestamp,
+               c.name AS case_title
+          FROM learning_events le
+          LEFT JOIN cases c ON c.id = le.case_id
+         WHERE 1=1`;
     const params = [];
-
-    if (case_id) {
-        sql += ` AND case_id = ?`;
-        params.push(case_id);
-    }
-    if (start_date) {
-        sql += ` AND timestamp >= ?`;
-        params.push(start_date);
-    }
-    if (end_date) {
-        sql += ` AND timestamp <= ?`;
-        params.push(end_date);
-    }
-
-    sql += ` ORDER BY user_id, timestamp ASC LIMIT 50000`;
+    if (case_id)    { sql += ' AND le.case_id = ?';    params.push(case_id); }
+    if (user_id)    { sql += ' AND le.user_id = ?';    params.push(user_id); }
+    if (start_date) { sql += ' AND le.timestamp >= ?'; params.push(start_date); }
+    if (end_date)   { sql += ' AND le.timestamp <= ?'; params.push(end_date); }
+    sql += ' ORDER BY le.user_id ASC, le.timestamp ASC LIMIT 50000';
 
     db.all(sql, params, (err, rows) => {
         if (err) {
             console.error('TNA sequences query error:', err);
             return res.status(500).json({ error: err.message });
         }
-
         if (!rows || rows.length === 0) {
             return res.json({
-                sequences: [],
-                metadata: { totalUsers: 0, totalEvents: 0, uniqueVerbs: [], dateRange: { start: start_date || null, end: end_date || null } }
+                sequences: [], objectTypeSequences: [],
+                metadata: {
+                    totalSequences: 0, totalEvents: 0, groupBy: grouping,
+                    uniqueVerbs: [], uniqueObjectTypes: [],
+                    caseTitle: null, dateRange: null,
+                },
             });
         }
 
-        // Step 1: Apply verb merge map
+        // 1. Apply verb merge unless skipped. Null mapping means "drop event".
         const merged = [];
         for (const row of rows) {
-            const mapped = TNA_VERB_MERGE_MAP.hasOwnProperty(row.verb)
-                ? TNA_VERB_MERGE_MAP[row.verb]
-                : row.verb; // Keep unmapped verbs as-is
-            if (mapped !== null) {
-                merged.push({ user_id: row.user_id, verb: mapped });
+            let v = row.verb;
+            if (!skipMerges && Object.prototype.hasOwnProperty.call(TNA_VERB_MERGE_MAP, v)) {
+                v = TNA_VERB_MERGE_MAP[v];
+                if (v === null) continue;
             }
+            merged.push({ ...row, verb: v });
         }
 
-        // Step 2: Count verb frequencies for rare-verb filtering
+        // 2. Rare-verb collapsing.
         const verbCounts = Object.create(null);
-        for (const m of merged) {
-            verbCounts[m.verb] = (verbCounts[m.verb] || 0) + 1;
-        }
-        const totalMerged = merged.length;
+        for (const m of merged) verbCounts[m.verb] = (verbCounts[m.verb] || 0) + 1;
+        const totalEvents = merged.length;
         const rareVerbs = new Set();
-        for (const [verb, count] of Object.entries(verbCounts)) {
-            if (count / totalMerged < minPct) {
-                rareVerbs.add(verb);
+        if (minVerbPct > 0 && totalEvents > 0) {
+            for (const [v, count] of Object.entries(verbCounts)) {
+                if (count / totalEvents < minVerbPct) rareVerbs.add(v);
             }
         }
 
-        // Step 3: Replace rare verbs with OTHER, collapse consecutive duplicates
-        const processed = merged.map(m => ({
-            user_id: m.user_id,
-            verb: rareVerbs.has(m.verb) ? 'OTHER' : m.verb
-        }));
+        // 3. Group into sequences. session_id may be null for events logged
+        //    outside a session — fall back to actor for those.
+        const seqMap = Object.create(null);
+        const objMap = Object.create(null);
+        for (const m of merged) {
+            const key = grouping === 'actor-session' && m.session_id
+                ? `${m.user_id}::${m.session_id}`
+                : String(m.user_id);
+            if (!seqMap[key]) { seqMap[key] = []; objMap[key] = []; }
+            seqMap[key].push(rareVerbs.has(m.verb) ? 'OTHER' : m.verb);
+            objMap[key].push(m.object_type || '');
+        }
 
-        // Step 4: Group by user_id into sequences, collapse consecutive duplicates
-        const userSeqs = Object.create(null);
-        for (const p of processed) {
-            if (!userSeqs[p.user_id]) {
-                userSeqs[p.user_id] = [];
+        // 4. Min-length filter.
+        const rawSeqs = [];
+        const rawObjSeqs = [];
+        for (const key of Object.keys(seqMap)) {
+            if (seqMap[key].length >= minLen) {
+                rawSeqs.push(seqMap[key]);
+                rawObjSeqs.push(objMap[key]);
             }
-            const seq = userSeqs[p.user_id];
-            // Collapse consecutive duplicates
-            if (seq.length === 0 || seq[seq.length - 1] !== p.verb) {
-                seq.push(p.verb);
+        }
+
+        // 5. P95 chunking. The cap = max(p95Length, 2 × minLen) so we don't
+        //    chop normal sessions just because one user left a tab open.
+        const sequences = [];
+        const objectTypeSequences = [];
+        if (rawSeqs.length > 0) {
+            const lens = rawSeqs.map((s) => s.length).sort((a, b) => a - b);
+            const p95Idx = Math.floor(lens.length * 0.95);
+            const p95 = lens[Math.min(p95Idx, lens.length - 1)];
+            const maxLen = Math.max(p95, minLen * 2);
+
+            for (let i = 0; i < rawSeqs.length; i++) {
+                if (rawSeqs[i].length <= maxLen) {
+                    sequences.push(rawSeqs[i]);
+                    objectTypeSequences.push(rawObjSeqs[i]);
+                } else {
+                    for (let s = 0; s < rawSeqs[i].length; s += maxLen) {
+                        const chunk = rawSeqs[i].slice(s, s + maxLen);
+                        const objChunk = rawObjSeqs[i].slice(s, s + maxLen);
+                        if (chunk.length >= minLen) {
+                            sequences.push(chunk);
+                            objectTypeSequences.push(objChunk);
+                        }
+                    }
+                }
             }
         }
 
-        // Step 5: Filter sequences with length < 2, preserving user_id mapping
-        const userSequences = {};
-        for (const [userId, seq] of Object.entries(userSeqs)) {
-            if (seq.length >= 2) userSequences[userId] = seq;
+        // 6. Metadata.
+        const uniqueVerbs = new Set();
+        const uniqueObjectTypes = new Set();
+        for (let i = 0; i < sequences.length; i++) {
+            for (const v of sequences[i]) uniqueVerbs.add(v);
+            for (const o of objectTypeSequences[i]) if (o) uniqueObjectTypes.add(o);
         }
-        const sequences = Object.values(userSequences);
-
-        // Collect unique verbs from final sequences
-        const uniqueVerbSet = new Set();
-        for (const seq of sequences) {
-            for (const v of seq) {
-                uniqueVerbSet.add(v);
-            }
-        }
+        const caseTitle = rows.find((r) => r.case_title)?.case_title || null;
+        const dateRange = rows.length
+            ? { start: rows[0].timestamp, end: rows[rows.length - 1].timestamp }
+            : null;
 
         res.json({
             sequences,
-            userSequences,
+            objectTypeSequences,
             metadata: {
-                totalUsers: sequences.length,
-                totalEvents: rows.length,
-                uniqueVerbs: Array.from(uniqueVerbSet).sort(),
-                dateRange: {
-                    start: start_date || (rows[0] ? rows[0].timestamp : null),
-                    end: end_date || (rows[rows.length - 1] ? rows[rows.length - 1].timestamp : null)
-                }
-            }
+                totalSequences: sequences.length,
+                totalEvents,
+                groupBy: grouping,
+                uniqueVerbs: [...uniqueVerbs].sort(),
+                uniqueObjectTypes: [...uniqueObjectTypes].sort(),
+                caseTitle,
+                dateRange,
+            },
         });
     });
+});
+
+// GET /api/analytics/daily-counts — events per calendar day for the timeline.
+router.get('/analytics/daily-counts', authenticateToken, requireAdmin, (req, res) => {
+    const { case_id, user_id, start_date, end_date } = req.query;
+    let sql = `SELECT date(timestamp) AS day, COUNT(*) AS n
+                 FROM learning_events WHERE 1=1`;
+    const params = [];
+    if (case_id)    { sql += ' AND case_id = ?';    params.push(case_id); }
+    if (user_id)    { sql += ' AND user_id = ?';    params.push(user_id); }
+    if (start_date) { sql += ' AND timestamp >= ?'; params.push(start_date); }
+    if (end_date)   { sql += ' AND timestamp <= ?'; params.push(end_date); }
+    sql += ' GROUP BY day ORDER BY day';
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ daily: rows.map((r) => ({ date: r.day, count: r.n })) });
+    });
+});
+
+// GET /api/analytics/hourly-counts — events per hour-of-day (24 buckets).
+router.get('/analytics/hourly-counts', authenticateToken, requireAdmin, (req, res) => {
+    const { case_id, user_id, start_date, end_date } = req.query;
+    let sql = `SELECT CAST(strftime('%H', timestamp) AS INTEGER) AS hour, COUNT(*) AS n
+                 FROM learning_events WHERE 1=1`;
+    const params = [];
+    if (case_id)    { sql += ' AND case_id = ?';    params.push(case_id); }
+    if (user_id)    { sql += ' AND user_id = ?';    params.push(user_id); }
+    if (start_date) { sql += ' AND timestamp >= ?'; params.push(start_date); }
+    if (end_date)   { sql += ' AND timestamp <= ?'; params.push(end_date); }
+    sql += ' GROUP BY hour ORDER BY hour';
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        // Pad to all 24 buckets so the chart always renders the full day.
+        const counts = Array(24).fill(0);
+        for (const r of rows) if (Number.isInteger(r.hour)) counts[r.hour] = r.n;
+        res.json({ hourly: counts.map((n, hour) => ({ hour, count: n })) });
+    });
+});
+
+// GET /api/analytics/summary — top-line stat-card numbers.
+router.get('/analytics/summary', authenticateToken, requireAdmin, (req, res) => {
+    const { case_id, user_id, start_date, end_date } = req.query;
+    let where = ' WHERE 1=1';
+    const params = [];
+    if (case_id)    { where += ' AND case_id = ?';    params.push(case_id); }
+    if (user_id)    { where += ' AND user_id = ?';    params.push(user_id); }
+    if (start_date) { where += ' AND timestamp >= ?'; params.push(start_date); }
+    if (end_date)   { where += ' AND timestamp <= ?'; params.push(end_date); }
+
+    const sql = `SELECT COUNT(*) AS totalActivities,
+                        COUNT(DISTINCT user_id) AS uniqueUsers,
+                        COUNT(DISTINCT session_id) AS uniqueSessions
+                   FROM learning_events ${where}`;
+    db.get(sql, params, (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const total = row?.totalActivities || 0;
+        const users = row?.uniqueUsers || 0;
+        res.json({
+            totalActivities: total,
+            uniqueUsers: users,
+            uniqueSessions: row?.uniqueSessions || 0,
+            avgPerUser: users > 0 ? Math.round(total / users) : 0,
+        });
+    });
+});
+
+// GET /api/analytics/stats — verb + object type frequency for donut charts.
+router.get('/analytics/stats', authenticateToken, requireAdmin, (req, res) => {
+    const { case_id, start_date, end_date } = req.query;
+    let where = ' WHERE 1=1';
+    const params = [];
+    if (case_id)    { where += ' AND case_id = ?';    params.push(case_id); }
+    if (start_date) { where += ' AND timestamp >= ?'; params.push(start_date); }
+    if (end_date)   { where += ' AND timestamp <= ?'; params.push(end_date); }
+
+    const verbsSql = `SELECT verb AS label, COUNT(*) AS count FROM learning_events ${where} GROUP BY verb ORDER BY count DESC`;
+    const objsSql  = `SELECT object_type AS label, COUNT(*) AS count FROM learning_events ${where} GROUP BY object_type ORDER BY count DESC`;
+    db.all(verbsSql, params, (err1, verbs) => {
+        if (err1) return res.status(500).json({ error: err1.message });
+        db.all(objsSql, params, (err2, objs) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            res.json({ verbs: verbs || [], objectTypes: objs || [] });
+        });
+    });
+});
+
+// GET /api/analytics/top-resources — most-touched object_id+name (the
+// simulator equivalent of LAILA's top resources). Useful to spot which
+// labs / treatments / patients the cohort gravitates to.
+router.get('/analytics/top-resources', authenticateToken, requireAdmin, (req, res) => {
+    const { case_id, user_id, start_date, end_date, limit = '10' } = req.query;
+    let sql = `SELECT object_type, object_name, COUNT(*) AS n
+                 FROM learning_events
+                WHERE object_name IS NOT NULL AND object_name != ''`;
+    const params = [];
+    if (case_id)    { sql += ' AND case_id = ?';    params.push(case_id); }
+    if (user_id)    { sql += ' AND user_id = ?';    params.push(user_id); }
+    if (start_date) { sql += ' AND timestamp >= ?'; params.push(start_date); }
+    if (end_date)   { sql += ' AND timestamp <= ?'; params.push(end_date); }
+    sql += ' GROUP BY object_type, object_name ORDER BY n DESC LIMIT ?';
+    params.push(Math.min(parseInt(limit, 10) || 10, 100));
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ resources: rows || [] });
+    });
+});
+
+// GET /api/analytics/filter-options — courses + students for dropdown filters.
+router.get('/analytics/filter-options', authenticateToken, requireAdmin, (req, res) => {
+    db.all(
+        `SELECT id, name AS title FROM cases WHERE deleted_at IS NULL ORDER BY name`,
+        [],
+        (err1, cases) => {
+            if (err1) return res.status(500).json({ error: err1.message });
+            db.all(
+                `SELECT DISTINCT u.id, u.username, u.name AS fullname, u.email
+                   FROM users u
+                   JOIN learning_events le ON le.user_id = u.id
+                  ORDER BY u.username`,
+                [],
+                (err2, users) => {
+                    if (err2) return res.status(500).json({ error: err2.message });
+                    res.json({ cases: cases || [], users: users || [] });
+                }
+            );
+        }
+    );
 });
 
 // ============================================================

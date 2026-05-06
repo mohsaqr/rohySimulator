@@ -1,147 +1,137 @@
-# Session Handoff — 2026-05-06 (catalogue Session 2)
+# Session Handoff — 2026-05-06 (TNA analytics rebuild on dynajs)
 
 ## Completed
 
-Executed Session 2 of the locked drug + lab catalogue plan
-(memory: `project_drug_lab_catalogue_plan.md`). Three search proxies
-+ scope-aware routes + 38 new tests, all green.
+Replaced the thin tnaj-based TNA dashboard with a LAILA-grade six-tab
+analytics page powered by dynajs. No reinvention — sixteen TNA components
+were lifted verbatim from LAILA-v3 via esbuild type-strip; a 200-line
+ProcessMap tab uses dynajs's `buildDFGFromSequences` + dagre + Carmdash's
+cumulative-95% pruning.
 
-- `server/services/proxyCache.js` — shared 24h TTL Map with `setFetch`
-  injection point for tests.
-- `server/services/rxnormProxy.js` — RxNav `/approximateTerm` + `/rxcui/:id/properties`.
-- `server/services/openfdaProxy.js` — Drug Labels Lucene search.
-- `server/services/loincProxy.js` — NLM Clinical Tables `loinc_items/v3/search`.
-- `server/routes/catalogue.js` — `/api/catalogue/medications`,
-  `/api/catalogue/lab-tests`, `/api/catalogue/medication-groups`,
-  `/api/catalogue/lab-test-groups`, with full CRUD + `/search` + `/promote`.
-- `server/routes.js` — mounts `catalogueRouter` at `/catalogue`. Legacy
-  `/master/*` routes untouched.
-- `tests/server/catalogue-proxies.test.js` — 12 unit tests, fetch mocked.
-- `tests/server/catalogue-routes.test.js` — 26 integration tests via
-  spawned server.
+- `package.json`: dropped `tnaj` (v0.1.0, smaller surface), added `dynajs`
+  and `dagre`.
+- `server/routes.js`: rewrote `/api/analytics/tna-sequences` to LAILA's
+  contract (parallel sequences + objectTypeSequences arrays, P95 chunking,
+  actor / actor-session grouping, rich metadata). Added six sibling
+  endpoints: `/daily-counts`, `/hourly-counts`, `/summary`, `/stats`,
+  `/top-resources`, `/filter-options`.
+- `src/components/analytics/tna/laila/` (NEW, 18 files): the verbatim
+  LAILA TNA components (TS-stripped + i18n shimmed) plus three local shims
+  (i18nShim, Loading, useTheme) and the new ProcessMap.jsx.
+- `src/components/analytics/tna/clinicalStates.js`: 10-state simulator
+  resolver chain (assessing / examining / investigating / treating /
+  communicating / documenting / monitoring / regulating / reflecting /
+  navigating) with explicit-pair → object-type → verb-fallback precedence.
+- `src/components/analytics/tna/TnaDashboardV2.jsx`: 480-line LAILA-style
+  page; six tabs (Activity / Network / Clusters / Patterns / Process Map /
+  Settings); 4 sequence modes; 4 model types; 9 layouts; verb editor.
+- `src/App.jsx`: TnaDashboard import flipped to V2.
+- Tests: 15 server-integration + 10 unit tests, all 25 green.
 - `CHANGES.md`, `LEARNINGS.md`, `HANDOFF.md` updated.
 
 ## Current State
 
-After Session 2, the runtime surface is in place. Roles map to scope:
+| Layer | Before | After |
+|---|---|---|
+| Engine | tnaj 0.1.0 | dynajs (full surface incl. DFG, patterns, layout) |
+| Server endpoints | 1 thin TNA endpoint | 7 endpoints (TNA + 6 activity / filter sources) |
+| Client tabs | 1 (network only) | 6 (Activity / Network / Clusters / Patterns / Process Map / Settings) |
+| Sequence modes | verb only | verb / object / combined / raw |
+| Model types | relative only | relative / frequency / co-occurrence / attention |
+| Layouts | hand-rolled circle | 9 (dynajs.layout) |
+| Cluster methods | PAM × Levenshtein only | 5 methods × 4 dissimilarities (dynajs.clusterData) |
+| Patterns | none | discoverPatterns short (2–3) + long (4–7) |
+| Process mining | none | DFG + cumulative-95% pruning + dagre layout |
+| Activity timeline | none | Daily timeline + hourly heatmap + verb donut + object donut + top-resources |
 
-| Role     | Default scope on POST | Can promote? |
-|----------|-----------------------|--------------|
-| student  | `user`                | no           |
-| reviewer | `user`                | no           |
-| educator | `user` (may pass `tenant`) | no       |
-| admin    | `user` (must use /promote for `tenant`/`platform`) | yes |
-
-Visibility on GET is uniform: `scope='platform' OR (scope='tenant' AND
-tenant_id=req.user.tenant_id) OR (scope='user' AND created_by=req.user.id)`.
-
-Test counts (catalogue-only): 19 (Session 1 schema) + 12 (proxy units) +
-26 (route integration) = **57 catalogue tests, 57 passing**.
-
-Full suite: 717 passing, 45 skipped, same pre-existing
-`auth.test.js` parallel flake (passes 28/28 in isolation).
+Test counts: 752 → 746 passing in full parallel suite (parallel flakes
+expanded — same SQLITE_READONLY macOS issue), 25 new analytics tests all
+green in isolation. Catalogue tests (57): all green. Build clean.
 
 What works:
-- All five Session 1 seeders; all four scope-aware CRUD endpoints; both
-  search endpoints (verified empty-q short-circuit; live RxNorm/openFDA/LOINC
-  calls verified by unit tests with mocked fetch).
-- `/promote` writes a `system_audit_log` row with `action='promote_catalogue_*'`,
-  `old_value={scope}`, `new_value={scope}`. Verified in tests.
-- Custom drug + lab groups: create / list / update / delete, plus
-  `/items` add / remove. Owner-only edit; cross-user 403 verified.
-- Search proxies cache hits — second identical query does not refetch.
+- All six tabs render against the seeded DB (5 sessions, 760 events,
+  14 verb:object combos visible after filtering).
+- Sequence-mode toggle re-derives states client-side without re-fetching.
+- ProcessMap with start/end gates + cumulative-coverage slider.
+- Verb renames + excludes editor in Settings tab.
+- All endpoints respect case_id / user_id / start_date / end_date filters.
 
 What is unfinished:
-- No UI yet for any of these endpoints. The settings panel still uses
-  the legacy `/api/master/medications` and `/api/master/lab-tests`
-  routes. Session 3 swaps those.
-- `data_sources.rows_imported` on `rxnorm_v2026-05` and
-  `openfda_v2026-05` stays 0 — the proxies don't materialize rows on
-  search hits (only on explicit "Add to my catalogue" POST). That counter
-  becomes meaningful in Session 3 when the UI wires the add flow.
-- `OrdersDrawer.jsx` and the lab-order picker still don't surface
-  user/tenant-scoped rows. Session 3.
+- The legacy `TnaDashboard.jsx` + 9 sibling charts under `src/components/
+  analytics/tna/*.jsx` remain on disk but unused. Delete after one cycle of
+  V2 in production.
+- `tnaUtils.js` no longer used. Same — delete after a cycle.
+- macOS parallel-test flake now also catches the new analytics-tna test.
+  Fix is per-worker DB isolation (separate concern).
+- Per-student / cohort comparison view (LAILA has it under Activity tab
+  with `mode='student'`) is deferred — the simulator only has one user
+  in the seed DB so cohort views aren't useful yet.
 
 ## Key Decisions
 
-- **Two coexisting surfaces**: kept the legacy `/master/*` endpoints
-  intact and added `/catalogue/*` alongside, instead of refactoring
-  `/master/*` in place. The settings UI Session 3 will rebuild keeps
-  working today; the Session 3 lift switches it to `/catalogue/*` then
-  the legacy paths can be deprecated.
-- **Sub-routers at non-overlapping paths**: `/medication-groups` instead
-  of `/medications/groups` so Express's by-registration-order matching
-  doesn't shadow the sub-router with `:id` parameter routes. Cleaner
-  URL, no ordering footgun.
-- **Proxies don't write the DB on search hits**: only when the user
-  explicitly POSTs an "Add to my catalogue" body does a `medications`
-  or `lab_tests` row get created. Keeps `data_sources.rows_imported`
-  honest as a count of materialized rows, not lookup attempts.
-- **Cache: lazy expiry, no setInterval**: avoids holding the event loop
-  open in tests. The TTL is read-time only.
-- **Audit-log writes are best-effort**: wrapped in try/catch with
-  `console.warn`. An audit-log glitch should never block a user's
-  mutation from succeeding. Audit reliability is owned by the schema +
-  migration runner, not the route.
-- **`/promote` is widening-only**: `user → tenant → platform`. The reverse
-  (demoting platform → user) is intentionally unsupported here — that
-  would orphan rows from existing tenants and is policy work.
+- **Copy-paste, not re-derive**. Per the user's directive ("0 reinvention").
+  All 16 LAILA TNA components copied verbatim via `esbuild.transformSync`
+  with `loader: 'tsx', jsx: 'preserve'`. Type strip only, no logic edits.
+- **i18n via 50-line shim**, not adding `react-i18next` to a single-locale
+  project. The shim exposes `useTranslation()` returning `{ t }` so call
+  sites stay unchanged; humanises unknown keys + overrides ~50 user-facing
+  labels.
+- **Process Map = `buildDFGFromSequences` + dagre + cumulative-95% prune**.
+  Same recipe Carmdash documents in its CLAUDE.md. ~200 lines including SVG.
+- **Ten clinical states, not LAILA's twelve educational states**. The
+  domain is clinical reasoning, not course consumption. Reflects the
+  encounter loop, not the LMS.
+- **Side-by-side V1 / V2 dashboard** for one cycle. Old code stays on
+  disk; App.jsx flipped to V2. Delete the legacy tree after a successful
+  in-production demo.
+- **`skip_merges=true` from V2 client**, server-side merging skipped.
+  The new clinical resolver chain on the client supersedes the
+  `TNA_VERB_MERGE_MAP`; sending `skip_merges` keeps the legacy V1 path
+  working unchanged for any external caller.
 
 ## Open Issues
 
-- The `auth.test.js` SQLITE_READONLY parallel-run flake remains. Doesn't
-  affect the catalogue work; passes 28/28 in isolation. To prove out
-  fully, future work could add `npm run test:server -- --no-parallelism`
-  to CI as a cross-check.
-- Phonemizer's `process.on('unhandledRejection')` re-throw is a footgun
-  for any future route that has an unhandled async error. The fix in
-  Playwright is `tests/e2e/preload-server.cjs`; vitest tests can't
-  preload that easily today. The `asyncHandler()` wrapper in
-  `routes/catalogue.js` makes the catalogue routes safe; legacy
-  `/master/*` routes are still callback-based and could conceivably
-  trip this. If a future route addition starts crashing the spawned
-  test server, that's the suspect.
+- **macOS parallel-test SQLITE_READONLY flake** is now hitting three
+  test files (`auth.test.js`, `discussion-screen.test.jsx`,
+  `analytics-tna.test.js`). All pass in isolation. Per-worker DB
+  isolation in `tests/utils/seedDb.js` would fix it cleanly.
+- **Empty seed data on Activity tab in a fresh DB** — the simulator
+  needs at least one completed session before the timeline / heatmap
+  render anything useful. Document this in the user-facing onboarding
+  text on the Activity tab if it confuses people.
+- **Bundle size grew by ~600 KB** (from the verbatim LAILA + dynajs
+  imports). Acceptable for an internal admin page; if we ever expose
+  the dashboard to students at scale, dynamic-import the page.
 
 ## Next Steps
 
-**Session 3 (settings UI lift + groups in OrdersDrawer + final tests + docs, ~6 hrs):**
-
-1. `src/components/settings/MedicationManager.jsx` — refactor to 3-tab
-   layout: [Curated] [My catalogue] [Search RxNorm]. Curated tab reads
-   `GET /api/catalogue/medications?scope=platform`. My catalogue reads
-   `GET /api/catalogue/medications?scope=user`. Search tab queries
-   `GET /api/catalogue/medications/search?q=&sources=rxnorm,openfda`,
-   shows hits with "Add to my catalogue" button → `POST /api/catalogue/medications`.
-2. `src/components/settings/LabTestManager.jsx` — same 3-tab pattern
-   pointing at `/api/catalogue/lab-tests*`.
-3. Group builder modal: name + description + multi-select from any
-   visible tier → `POST /api/catalogue/medication-groups` with `items[]`.
-   Same modal for lab groups.
-4. `src/components/orders/OrdersDrawer.jsx` and lab-order picker —
-   surface curated + tenant + user-scoped rows. Optional "My additions"
-   filter toggle.
-5. Tests: client tests for the new tabs + group modal; e2e tests for
-   the add-to-catalogue and group-creation flows; route tests for any
-   new endpoints introduced (e.g. items reorder if added).
-6. Once UI is shipped, deprecate `/api/master/medications` and
-   `/api/master/lab-tests`. Add a soft 410 with a header pointing at
-   the new path so any external integrators see the migration cue.
-7. Update `README.md` with the full deliverable summary and a couple of
-   provenance / scope queries that are useful for support.
+1. **Smoke-test V2 in a real browser** — load Settings → toggle TNA
+   button → drive through Activity / Network / Process Map. Catch any
+   runtime breaks in the verbatim-copied components (TS strip + i18n
+   shim are the most likely failure surfaces).
+2. **Delete the legacy V1 tree** once V2 is verified — `TnaDashboard.jsx`
+   and the 9 sibling charts under `src/components/analytics/tna/*.jsx`
+   plus `tnaUtils.js`. About 1500 lines of removable code.
+3. **Per-worker DB isolation** in `tests/utils/seedDb.js` — fixes the
+   macOS parallel-test flake permanently.
+4. **Catalogue Session 3** (settings UI lift to 3-tab Curated/My/Search,
+   group builder, OrdersDrawer surface) — the original plan from
+   `project_drug_lab_catalogue_plan.md` is still parked.
+5. **Cohort comparison view** — LAILA's `mode='student'` analogue. Add a
+   "compare to cohort" toggle on the Activity tab that overlays the
+   selected student against the case-level mean. Needs more than one
+   student in the DB to be meaningful.
 
 ## Context
 
-- Test runners:
-  - Schema: `npx vitest run tests/server/catalogue-0007.test.js`
-  - Proxies: `npx vitest run tests/server/catalogue-proxies.test.js`
-  - Routes: `npx vitest run tests/server/catalogue-routes.test.js`
-  - All three: pass `tests/server/catalogue-*.test.js` in one invocation.
-- Provenance query for support:
-  ```sql
-  SELECT source_key, rows_imported, license, imported_at
-    FROM data_sources;
-  ```
-- The plan referenced throughout this work lives in
-  `/Users/mohammedsaqr/.claude-claudef/projects/-Users-mohammedsaqr-Documents-Github-rohySimulator/memory/project_drug_lab_catalogue_plan.md`.
-- All commercial-safe sources except CALIPER (CC BY-NC-SA), which is
-  isolated in `lab_reference_ranges` and droppable wholesale.
+- Test runners (in isolation):
+  - Server TNA: `npx vitest run tests/server/analytics-tna.test.js`
+  - Resolver: `npx vitest run src/components/analytics/tna/clinicalStates.test.js`
+  - Catalogue: `npx vitest run tests/server/catalogue-*.test.js`
+- Client smoke (manual): `npm run client` → log in as admin → bottom-bar
+  Activity icon → six tabs across the top.
+- `dynajs` lives at `~/Documents/Github/dynajs` — same sibling as
+  `LAILA-v3` and `Carmdash` use. `npm i file:../dynajs` rebinds.
+- Build: `npx vite build` (clean, ~8s).
+- All commercial-safe sources except CALIPER (CC BY-NC-SA), still
+  isolated as before.

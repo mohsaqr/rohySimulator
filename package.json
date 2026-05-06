@@ -35,7 +35,9 @@
     "@tailwindcss/postcss": "^4.1.18",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
+    "dagre": "^0.8.5",
     "dotenv": "^17.2.3",
+    "dynajs": "file:../dynajs",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "jsonwebtoken": "^9.0.3",
@@ -46,7 +48,6 @@
     "react-dom": "^19.2.0",
     "sqlite3": "^5.1.7",
     "three": "^0.184.0",
-    "tnaj": "github:mohsaqr/tna-js",
     "wawa-lipsync": "^0.0.2"
   },
   "devDependencies": {

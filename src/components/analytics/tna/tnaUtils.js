@@ -1,14 +1,15 @@
 /**
- * TNA computation utilities — thin wrappers around the tnaj package.
- * Converts tnaj Matrix objects to plain 2D arrays so downstream
- * components (NetworkGraph, CentralityChart) can use weights[i][j].
+ * TNA computation utilities — compatibility shim that used to wrap the
+ * deprecated `tnaj` package. We migrated to `dynajs` (Session 26+) which
+ * has the same `tna`/`prune`/`centralities` surface plus DFG, patterns,
+ * layout, and 4 cluster methods. The legacy TnaDashboard imports below
+ * keep working while the LAILA-style replacement lands; once that's the
+ * default, delete this file.
  */
 import {
   tna as tnajTna,
-  prune as tnajPrune,
-  clusterSequences as tnajCluster,
-  centralities as tnajCentralities,
-} from 'tnaj';
+  clusterData as tnajCluster,
+} from 'dynajs';
 
 /**
  * Convert a tnaj Matrix to a plain 2D array.

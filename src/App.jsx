@@ -24,7 +24,7 @@ import { apiUrl } from './config/api';
 import { Settings, X, LogOut, User, RotateCcw, ChevronDown, Activity } from 'lucide-react';
 import ManikinPanel from './components/examination/ManikinPanel';
 import BodyMapDebug from './components/examination/BodyMapDebug';
-import TnaDashboard from './components/analytics/tna/TnaDashboard';
+import TnaDashboard from './components/analytics/tna/TnaDashboardV2';
 import DiscussionScreen from './components/discussion/DiscussionScreen';
 import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
 

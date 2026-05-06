@@ -1,3 +1,68 @@
+### 2026-05-06 — TNA analytics rebuild on dynajs (LAILA replication + process map)
+Replaces the thin tnaj-based TNA dashboard with a LAILA-grade six-tab analytics
+page powered by dynajs. No reinvention — all sixteen TNA components were lifted
+verbatim from LAILA-v3/client/src/components/tna/ via esbuild type-strip; the
+i18n hook was swapped for a local English shim, useTheme stubbed to dark.
+Process Map is a new tab using dynajs's buildDFGFromSequences + dagre layout +
+the cumulative-95% pruning approach Carmdash documents in its CLAUDE.md.
+
+- `package.json`: replaced `tnaj` (github:mohsaqr/tna-js, v0.1.0 — limited surface)
+  with `dynajs` (file:../dynajs, has tna/ftna/ctna/atna + prune + centralities +
+  summary + layout (10 algorithms) + clusterData + discoverPatterns +
+  buildDFG + stateFrequencies + networkDensity). Added `dagre` for process-map
+  hierarchical layout.
+- `server/routes.js` /analytics/tna-sequences rewritten to LAILA's contract:
+  returns parallel `sequences[][]` + `objectTypeSequences[][]`; supports
+  `group_by=actor|actor-session`, `min_sequence_length`, `min_verb_pct`,
+  `skip_merges`; P95 chunking caps long sessions; rich metadata
+  ({totalSequences, totalEvents, uniqueVerbs, uniqueObjectTypes, caseTitle,
+  dateRange, groupBy}). Six new sibling endpoints power the Activity tab and
+  filter dropdowns: /daily-counts, /hourly-counts, /summary, /stats,
+  /top-resources, /filter-options.
+- `src/components/analytics/tna/laila/` (NEW directory, 18 files): the verbatim
+  LAILA components — TnaNetworkGraph, NetworkModal (+ ClusterNetworkModal),
+  CentralityBarChart, TnaCentralityTable, TnaDistributionPlot, TnaIndexPlot,
+  TnaFrequencyChart, TransitionHeatmap, ActivityDonutChart, ActivityHeatmap,
+  ActivityTimelineChart, ClustersTab, ClusterPanel, PatternsTab, PatternTable,
+  colorFix.js — plus three local shims: i18nShim.js (humanises unknown keys,
+  overrides for the ~50 user-facing labels), Loading.jsx, useTheme.js.
+- `src/components/analytics/tna/laila/ProcessMap.jsx` (NEW, 200 lines): dynajs
+  buildDFGFromSequences + dagre rankdir=TB. Cumulative-weight 95% auto-prune
+  per active metric (absoluteCount / relativeCount / caseCount). Synthetic
+  ▶ start / end ■ nodes optional. Edge stroke + opacity scale with the
+  active metric.
+- `src/components/analytics/tna/clinicalStates.js` (NEW, ~150 lines): the
+  simulator-domain analogue of LAILA's 12 educational states. Ten clinical
+  states (assessing / examining / investigating / treating / communicating /
+  documenting / monitoring / regulating / reflecting / navigating). Three-tier
+  resolver: explicit verb:object_type → object_type override → verb fallback →
+  literal `verb_object` fallback. ~80 verb fallbacks + 22 object overrides +
+  10 explicit pairs cover the existing 14 verb:object combos in the prod DB
+  plus likely additions.
+- `src/components/analytics/tna/TnaDashboardV2.jsx` (NEW, 480 lines): LAILA's
+  Dashboard.tsx structure adapted to the simulator. Six tabs: Activity /
+  Network / Clusters / Patterns / Process Map / Settings. Four sequence modes
+  (combined / verb-only / object-only / raw). Four model types
+  (relative / frequency / co-occurrence / attention). Nine layout algorithms.
+  Verb renames + excludes editor in Settings tab. React-Query replaced with
+  useState + useEffect + fetch (matches the rohy pattern; auth via
+  AuthService.getToken). The old TnaDashboard.jsx and its 9 hand-rolled
+  charts kept on disk for one cycle but no longer mounted (App.jsx now
+  imports TnaDashboardV2).
+- `src/components/analytics/tna/tnaUtils.js`: legacy file — kept the file but
+  swapped its `tnaj` imports for `dynajs` so the legacy dashboard's nothing
+  else still imports the file. Documented as deletable once V2 is the
+  default for one cycle.
+- `src/App.jsx`: import flipped from `./TnaDashboard` to `./TnaDashboardV2`.
+- Tests: `tests/server/analytics-tna.test.js` (15 server integration tests)
+  asserts the new endpoint contract — parallel sequences + objectTypeSequences,
+  actor vs actor-session grouping, P95 length filter, case title surfacing,
+  unique-verb metadata, summary/daily/hourly/stats/filter-options shapes.
+  `src/components/analytics/tna/clinicalStates.test.js` (10 unit tests) locks
+  the resolver chain precedence and asserts every value in
+  DEFAULT_INTERPRETATIONS / OBJECT_OVERRIDES / VERB_FALLBACKS is one of the
+  canonical ten states. All 22 new tests green; full suite 746 passing.
+
 ### 2026-05-06 — Tiered drug + lab catalogue, Session 2 (search proxies + scope-aware routes + tests)
 Second of three sessions. Adds the runtime surface on top of Session 1's schema: three search proxies wrapping NLM/FDA APIs with a 24h in-memory cache, a new `/api/catalogue/*` mount point with full CRUD that respects the `scope` column from migration 0007, an admin-only `/promote` endpoint that widens scope (user → tenant → platform) with audit logs, and 38 new tests (12 unit + 26 integration). The legacy `/api/master/*` routes are left untouched so the existing settings UI keeps working until the Session 3 lift.
 
