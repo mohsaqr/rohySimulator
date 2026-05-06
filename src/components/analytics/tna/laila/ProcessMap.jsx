@@ -134,13 +134,13 @@ export function ProcessMap({ sequences, labels }) {
     return (
         <div className="space-y-3">
             {/* Controls */}
-            <div className="flex flex-wrap items-end gap-3 p-3 bg-neutral-900/50 border border-neutral-800 rounded-lg">
+            <div className="flex flex-wrap items-end gap-3 p-3 bg-white border border-gray-200 rounded-lg">
                 <div className="flex flex-col gap-1">
                     <label className="text-xs text-neutral-400 flex items-center gap-1"><GitBranch className="w-3 h-3"/> Metric</label>
                     <select
                         value={metric}
                         onChange={(e) => setMetric(e.target.value)}
-                        className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded"
+                        className="px-2 py-1 text-sm bg-white border border-gray-300 rounded"
                     >
                         {METRICS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                     </select>
@@ -168,7 +168,7 @@ export function ProcessMap({ sequences, labels }) {
             </div>
 
             {/* Map */}
-            <div className="relative overflow-auto bg-neutral-900/30 border border-neutral-800 rounded-lg" style={{ minHeight: 400 }}>
+            <div className="relative overflow-auto bg-gray-50 border border-gray-200 rounded-lg" style={{ minHeight: 400 }}>
                 {layout ? (
                     <svg width={layout.width} height={layout.height} className="block">
                         <defs>
@@ -198,7 +198,7 @@ export function ProcessMap({ sequences, labels }) {
                                     <text
                                         x={midX} y={midY}
                                         textAnchor="middle"
-                                        fill="#94a3b8"
+                                        fill="#475569"
                                         fontSize="10"
                                         dy="-2"
                                         style={{ paintOrder: 'stroke', stroke: '#0f172a', strokeWidth: 3 }}
@@ -212,20 +212,21 @@ export function ProcessMap({ sequences, labels }) {
                         {layout.nodes.map((n) => {
                             const isStart = n.type === 'start';
                             const isEnd = n.type === 'end';
-                            const fill = isStart ? '#10b981' : isEnd ? '#ef4444' : '#1e293b';
-                            const stroke = isStart ? '#34d399' : isEnd ? '#f87171' : '#475569';
+                            const fill = isStart ? '#10b981' : isEnd ? '#ef4444' : '#ffffff';
+                            const stroke = isStart ? '#059669' : isEnd ? '#dc2626' : '#cbd5e1';
+                            const textColor = (isStart || isEnd) ? '#ffffff' : '#1f2937';
                             return (
                                 <g key={n.id} transform={`translate(${n.x - NODE_W / 2}, ${n.y - NODE_H / 2})`}>
                                     <rect width={NODE_W} height={NODE_H} rx={6} fill={fill} stroke={stroke} strokeWidth={1.5} />
                                     <text
                                         x={NODE_W / 2} y={NODE_H / 2 + 4}
-                                        textAnchor="middle" fill="#f1f5f9"
+                                        textAnchor="middle" fill={textColor}
                                         fontSize="11" fontWeight={600}
                                     >
                                         {isStart ? '▶ start' : isEnd ? 'end ■' : (n.id.length > 16 ? n.id.slice(0, 14) + '…' : n.id)}
                                     </text>
                                     {!isStart && !isEnd && (
-                                        <text x={NODE_W / 2} y={NODE_H + 12} textAnchor="middle" fill="#94a3b8" fontSize="9">
+                                        <text x={NODE_W / 2} y={NODE_H + 12} textAnchor="middle" fill="#475569" fontSize="9">
                                             n={n.absoluteFreq}
                                         </text>
                                     )}

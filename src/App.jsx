@@ -506,69 +506,55 @@ function MainApp() {
             <div className="h-[45%] border-b border-neutral-800 relative">
                <PatientVisual caseData={activeCase} />
 
-               {/* Top Right Controls */}
-               <div className="absolute top-4 right-4 flex gap-2 z-10">
-                  {/* User Menu Dropdown */}
+               {/* Settings menu — far-left top corner. Replaces the old
+                   admin/username pill. The dropdown still contains Profile /
+                   TNA Analytics / Logout for the admin role. The case-name
+                   banner that used to sit here was hidden per the operator
+                   request — students don't need the diagnosis spoiled in
+                   the header. */}
+               <div className="absolute top-4 left-4 z-10">
                   <div className="relative">
                      <button
                         onClick={() => setShowUserMenu(!showUserMenu)}
                         className="px-3 py-2 bg-black/50 backdrop-blur-md rounded-full flex items-center gap-2 text-sm hover:bg-black/70 transition-colors"
+                        title="Settings & profile"
                      >
-                        <User className="w-4 h-4 text-neutral-400" />
-                        <span className="text-neutral-300">{user?.username}</span>
-                        {isAdmin() && (
-                           <span className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded">Admin</span>
-                        )}
+                        <Settings className="w-4 h-4 text-neutral-300" />
+                        <span className="text-neutral-200">Settings</span>
                         <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
                      </button>
 
-                     {/* Dropdown Menu */}
+                     {/* Dropdown */}
                      {showUserMenu && (
                         <>
-                           {/* Backdrop to close menu */}
-                           <div
-                              className="fixed inset-0 z-40"
-                              onClick={() => setShowUserMenu(false)}
-                           />
-                           <div className="absolute right-0 top-full mt-2 w-48 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                           <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                           <div className="absolute left-0 top-full mt-2 w-48 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl z-50 overflow-hidden">
                               <button
-                                 onClick={() => {
-                                    setShowUserProfile(true);
-                                    setShowUserMenu(false);
-                                 }}
+                                 onClick={() => { setShowUserProfile(true); setShowUserMenu(false); }}
                                  className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
                               >
                                  <User className="w-4 h-4 text-blue-400" />
                                  My Profile
                               </button>
                               <button
-                                 onClick={() => {
-                                    handleOpenSettings();
-                                    setShowUserMenu(false);
-                                 }}
+                                 onClick={() => { handleOpenSettings(); setShowUserMenu(false); }}
                                  className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
                               >
                                  <Settings className="w-4 h-4 text-neutral-400" />
-                                 Settings
+                                 Open Settings
                               </button>
                               {isAdmin() && (
                                  <button
-                                    onClick={() => {
-                                       setShowTnaAnalytics(true);
-                                       setShowUserMenu(false);
-                                    }}
+                                    onClick={() => { setShowTnaAnalytics(true); setShowUserMenu(false); }}
                                     className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
                                  >
                                     <Activity className="w-4 h-4 text-purple-400" />
-                                    TNA Analytics
+                                    Analytics
                                  </button>
                               )}
                               <div className="border-t border-neutral-700" />
                               <button
-                                 onClick={() => {
-                                    logout();
-                                    setShowUserMenu(false);
-                                 }}
+                                 onClick={() => { logout(); setShowUserMenu(false); }}
                                  className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-red-900/30 flex items-center gap-3"
                               >
                                  <LogOut className="w-4 h-4" />
@@ -580,21 +566,18 @@ function MainApp() {
                   </div>
                </div>
 
-               {/* Case Banner with End Session */}
+               {/* End & Debrief — bottom-left of the avatar tile, out of the
+                   way of the head/face render but easy to reach. Was at the
+                   top by the case banner; moved here per operator request. */}
                {activeCase && (
-                  <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
-                     <div className="px-3 py-1 bg-blue-900/80 backdrop-blur border border-blue-500/30 rounded text-xs font-bold text-blue-100">
-                        Case: {activeCase.name}
-                     </div>
-                     <button
-                        onClick={handleEndSession}
-                        className="px-2 py-1 bg-red-900/80 hover:bg-red-800 backdrop-blur border border-red-500/30 rounded text-xs font-bold text-red-100 flex items-center gap-1 transition-colors"
-                        title="End simulation session"
-                     >
-                        <X className="w-3 h-3" />
-                        End & Debrief
-                     </button>
-                  </div>
+                  <button
+                     onClick={handleEndSession}
+                     className="absolute bottom-4 left-4 z-10 px-3 py-1.5 bg-red-900/80 hover:bg-red-800 backdrop-blur border border-red-500/30 rounded text-xs font-bold text-red-100 flex items-center gap-1 transition-colors"
+                     title="End simulation session"
+                  >
+                     <X className="w-3 h-3" />
+                     End & Debrief
+                  </button>
                )}
             </div>
 

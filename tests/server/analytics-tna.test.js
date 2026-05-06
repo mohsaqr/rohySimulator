@@ -217,12 +217,34 @@ describe('/api/analytics — LAILA-shaped endpoints', () => {
             }
         });
 
-        it('hourly is always 24 buckets, padded with zeros', async () => {
+        it('hourly returns dense 7×24 day-of-week × hour grid', async () => {
             const res = await authedFetch('/api/analytics/hourly-counts');
             const body = await res.json();
-            expect(body.hourly).toHaveLength(24);
-            for (let h = 0; h < 24; h++) {
-                expect(body.hourly[h]).toEqual({ hour: h, count: expect.any(Number) });
+            // LAILA's ActivityHeatmap expects {dow, hour, count} — 7 days × 24 hours = 168 cells.
+            expect(body.hourly).toHaveLength(7 * 24);
+            // Spot-check the corners.
+            expect(body.hourly[0]).toEqual({ dow: 0, hour: 0, count: expect.any(Number) });
+            expect(body.hourly[167]).toEqual({ dow: 6, hour: 23, count: expect.any(Number) });
+            // Every cell has the expected shape.
+            for (const cell of body.hourly) {
+                expect(cell).toEqual({ dow: expect.any(Number), hour: expect.any(Number), count: expect.any(Number) });
+                expect(cell.dow).toBeGreaterThanOrEqual(0);
+                expect(cell.dow).toBeLessThanOrEqual(6);
+                expect(cell.hour).toBeGreaterThanOrEqual(0);
+                expect(cell.hour).toBeLessThanOrEqual(23);
+            }
+        });
+
+        it('timeline-series returns days + verbs + per-verb count series', async () => {
+            const res = await authedFetch('/api/analytics/timeline-series');
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(Array.isArray(body.days)).toBe(true);
+            expect(Array.isArray(body.verbs)).toBe(true);
+            expect(typeof body.series).toBe('object');
+            // Each verb's series must have one count per day.
+            for (const verb of body.verbs) {
+                expect(body.series[verb]).toHaveLength(body.days.length);
             }
         });
     });

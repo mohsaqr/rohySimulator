@@ -42,7 +42,7 @@ const ActivityHeatmap = ({ data, baseColor = "#5ab4ac" }) => {
   const svgW = ROW_LABEL_W + 24 * (CELL_SIZE + GAP);
   const svgH = COL_LABEL_H + 7 * (CELL_SIZE + GAP) + 4;
   if (data.length === 0) {
-    return <div className="text-center py-8 text-neutral-400 text-sm">
+    return <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
         No heatmap data available.
       </div>;
   }
@@ -131,7 +131,7 @@ const ActivityHeatmap = ({ data, baseColor = "#5ab4ac" }) => {
       {
     /* Color scale legend */
   }
-      <div className="flex items-center justify-center gap-2 mt-2 text-xs text-neutral-400">
+      <div className="flex items-center justify-center gap-2 mt-2 text-xs text-gray-500 dark:text-gray-400">
         <span>0</span>
         <div className="flex gap-0.5">
           {[0, 0.25, 0.5, 0.75, 1].map((t) => <div

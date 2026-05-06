@@ -23,11 +23,11 @@ const ClusterPanel = ({ clusters, sequences, colorMap }) => {
   const silQuality = clusters.silhouette > 0.5 ? t("cluster_good") : clusters.silhouette > 0.25 ? t("cluster_fair") : t("cluster_weak");
   return <div>
       <div className="flex items-center gap-4 mb-4">
-        <div className="text-sm text-neutral-400">
-          <span className="font-medium text-neutral-100">{k}</span> {t("clusters_found")}
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          <span className="font-medium text-gray-800 dark:text-gray-200">{k}</span> {t("clusters_found")}
         </div>
-        <div className="text-sm text-neutral-400">
-          {t("silhouette_score")}: <span className="font-medium text-neutral-100">
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          {t("silhouette_score")}: <span className="font-medium text-gray-800 dark:text-gray-200">
             {clusters.silhouette.toFixed(3)}
           </span>
           <span className="ml-1 text-xs">({silQuality})</span>
@@ -37,18 +37,18 @@ const ClusterPanel = ({ clusters, sequences, colorMap }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {clusterDetails.map((detail) => <div
     key={detail.clusterNum}
-    className="rounded-lg border border-neutral-700 p-4"
+    className="rounded-lg border border-gray-200 dark:border-gray-700 p-4"
     style={{ borderLeftColor: clusterColors[detail.clusterNum - 1], borderLeftWidth: 4 }}
   >
             <div className="flex items-center justify-between mb-2">
-              <h4 className="font-semibold text-neutral-100">
+              <h4 className="font-semibold text-gray-800 dark:text-gray-200">
                 {t("cluster")} {detail.clusterNum}
               </h4>
-              <span className="text-sm text-neutral-400">
+              <span className="text-sm text-gray-500 dark:text-gray-400">
                 {detail.size} ({detail.pct.toFixed(0)}%)
               </span>
             </div>
-            <div className="text-xs text-neutral-400 mb-2">
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
               {t("avg_sequence_length")}: {detail.avgLen.toFixed(1)}
             </div>
             <div className="space-y-1">
@@ -60,8 +60,8 @@ const ClusterPanel = ({ clusters, sequences, colorMap }) => {
       className="inline-block w-2 h-2 rounded-full flex-shrink-0"
       style={{ backgroundColor: colorMap[state] ?? "#888" }}
     />
-                    <span className="text-neutral-200 w-20 truncate">{state}</span>
-                    <div className="flex-1 h-2 bg-neutral-700 rounded-full overflow-hidden">
+                    <span className="text-gray-700 dark:text-gray-300 w-20 truncate">{state}</span>
+                    <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                       <div
       className="h-full rounded-full"
       style={{
@@ -71,7 +71,7 @@ const ClusterPanel = ({ clusters, sequences, colorMap }) => {
       }}
     />
                     </div>
-                    <span className="text-neutral-400 tabular-nums w-8 text-right">
+                    <span className="text-gray-500 dark:text-gray-400 tabular-nums w-8 text-right">
                       {count}
                     </span>
                   </div>;

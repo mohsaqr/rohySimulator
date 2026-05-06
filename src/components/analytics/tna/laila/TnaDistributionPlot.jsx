@@ -48,7 +48,7 @@ const TnaDistributionPlot = ({ sequences, labels, colorMap: externalColorMap }) 
     y1={plotH - v * plotH}
     y2={plotH - v * plotH}
     stroke="currentColor"
-    className="text-neutral-700"
+    className="text-gray-200 dark:text-gray-700"
     strokeWidth={0.5}
   />
               <text

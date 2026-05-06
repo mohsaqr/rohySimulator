@@ -81,11 +81,11 @@ function resolveInterpretation(key, customMap) {
 
 function StatCard({ icon, label, value, accent = 'cyan' }) {
     const colors = {
-        cyan:   'bg-cyan-900/30 text-cyan-300 border-cyan-800',
-        green:  'bg-emerald-900/30 text-emerald-300 border-emerald-800',
-        amber:  'bg-amber-900/30 text-amber-300 border-amber-800',
-        violet: 'bg-violet-900/30 text-violet-300 border-violet-800',
-        rose:   'bg-rose-900/30 text-rose-300 border-rose-800',
+        cyan:   'bg-cyan-50 text-cyan-700 border-cyan-200',
+        green:  'bg-emerald-50 text-emerald-700 border-emerald-200',
+        amber:  'bg-amber-50 text-amber-700 border-amber-200',
+        violet: 'bg-violet-50 text-violet-700 border-violet-200',
+        rose:   'bg-rose-50 text-rose-700 border-rose-200',
     };
     return (
         <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${colors[accent] || colors.cyan}`}>
@@ -310,13 +310,16 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
     ];
 
     // ===========================================================================
-    // When embedded inside Settings the parent already paints the page
-    // background (bg-neutral-900), so we don't add another dark layer.
-    // Standalone (full-screen) mode keeps the dark overlay.
+    // Light-grey theme — analytics deliberately breaks from the
+    // simulator's near-black cockpit. `-m-8 p-8` lets the embedded
+    // wrapper bleed past the Settings padding so the grey reaches the
+    // panel edges instead of leaving a black border.
     const Outer = embedded
-        ? ({ children }) => <div>{children}</div>
+        ? ({ children }) => (
+            <div className="-m-8 p-8 bg-gray-200 text-gray-900 min-h-full">{children}</div>
+        )
         : ({ children }) => (
-            <div className="fixed inset-0 z-40 bg-neutral-900 text-neutral-100 overflow-auto">
+            <div className="fixed inset-0 z-40 bg-gray-200 text-gray-900 overflow-auto">
                 <div className="max-w-[1600px] mx-auto p-6">{children}</div>
             </div>
         );
@@ -328,20 +331,20 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                         {onClose && (
-                            <button onClick={onClose} className="p-2 rounded hover:bg-neutral-800" title="Close">
+                            <button onClick={onClose} className="p-2 rounded hover:bg-gray-200" title="Close">
                                 <ArrowLeft className="w-5 h-5" />
                             </button>
                         )}
                         <h1 className="text-2xl font-bold">Analytics</h1>
                         {tnaData?.metadata?.caseTitle && (
-                            <span className="text-sm text-neutral-400">{tnaData.metadata.caseTitle}</span>
+                            <span className="text-sm text-gray-600">{tnaData.metadata.caseTitle}</span>
                         )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-neutral-500">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
                         {lastUpdated > 0 && (
                             <span>{new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         )}
-                        <button onClick={refresh} className="p-2 rounded hover:bg-neutral-800" title="Refresh">
+                        <button onClick={refresh} className="p-2 rounded hover:bg-gray-200" title="Refresh">
                             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                         </button>
                     </div>
@@ -358,8 +361,8 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`px-4 py-2 text-sm font-medium rounded-t flex items-center gap-2 transition-colors ${
                                     activeTab === tab.id
-                                        ? 'bg-neutral-800 text-cyan-300 border-b-2 border-cyan-500'
-                                        : 'text-neutral-400 hover:text-neutral-100'
+                                        ? 'bg-cyan-50 text-cyan-700 border-b-2 border-cyan-500'
+                                        : 'text-gray-600 hover:text-gray-900'
                                 }`}
                             >
                                 <Icon className="w-4 h-4" />
@@ -370,41 +373,41 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                 </div>
 
                 {/* Filters */}
-                <div className="flex flex-wrap items-end gap-3 mb-4 p-3 bg-neutral-800/50 border border-neutral-700 rounded-lg">
+                <div className="flex flex-wrap items-end gap-3 mb-4 p-3 bg-white border border-gray-200 rounded-lg">
                     <div className="flex flex-col gap-1">
-                        <label className="text-xs text-neutral-400">Case</label>
-                        <select value={caseId} onChange={(e) => setCaseId(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
+                        <label className="text-xs text-gray-600">Case</label>
+                        <select value={caseId} onChange={(e) => setCaseId(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
                             <option value="">All cases</option>
                             {filterOptions.cases.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
                         </select>
                     </div>
                     <div className="flex flex-col gap-1">
-                        <label className="text-xs text-neutral-400">Student</label>
-                        <select value={userId} onChange={(e) => setUserId(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
+                        <label className="text-xs text-gray-600">Student</label>
+                        <select value={userId} onChange={(e) => setUserId(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
                             <option value="">All students</option>
                             {filterOptions.users.map((u) => <option key={u.id} value={u.id}>{u.fullname || u.username}</option>)}
                         </select>
                     </div>
                     <div className="flex flex-col gap-1">
-                        <label className="text-xs text-neutral-400">Start</label>
-                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded"/>
+                        <label className="text-xs text-gray-600">Start</label>
+                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded"/>
                     </div>
                     <div className="flex flex-col gap-1">
-                        <label className="text-xs text-neutral-400">End</label>
-                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded"/>
+                        <label className="text-xs text-gray-600">End</label>
+                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded"/>
                     </div>
                     {isAnalyticsRelated && (
                         <>
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs text-neutral-400">Group by</label>
-                                <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
+                                <label className="text-xs text-gray-600">Group by</label>
+                                <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
                                     <option value="actor-session">Per session</option>
                                     <option value="actor">Per student</option>
                                 </select>
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs text-neutral-400">Mode</label>
-                                <select value={sequenceMode} onChange={(e) => setSequenceMode(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
+                                <label className="text-xs text-gray-600">Mode</label>
+                                <select value={sequenceMode} onChange={(e) => setSequenceMode(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
                                     <option value="combined">Clinical state</option>
                                     <option value="verb">Verb only</option>
                                     <option value="objectType">Object only</option>
@@ -451,8 +454,8 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                             </div>
                         )}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
-                                <h3 className="text-sm font-bold text-neutral-200 mb-2">Activity over time</h3>
+                            <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                <h3 className="text-sm font-bold text-gray-800 mb-2">Activity over time</h3>
                                 {activityBundle.timeline?.days?.length ? (
                                     <ActivityTimelineChart
                                         days={activityBundle.timeline.days}
@@ -460,24 +463,24 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                                         series={activityBundle.timeline.series}
                                         palette={palette}
                                     />
-                                ) : <div className="text-xs text-neutral-500 py-8 text-center">No timeline data</div>}
+                                ) : <div className="text-xs text-gray-500 py-8 text-center">No timeline data</div>}
                             </div>
-                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
-                                <h3 className="text-sm font-bold text-neutral-200 mb-2">Day-of-week × hour heatmap</h3>
+                            <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                <h3 className="text-sm font-bold text-gray-800 mb-2">Day-of-week × hour heatmap</h3>
                                 <ActivityHeatmap data={activityBundle.heatmap || []} />
                             </div>
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
-                                <h3 className="text-sm font-bold text-neutral-200 mb-2">Verbs</h3>
+                            <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                <h3 className="text-sm font-bold text-gray-800 mb-2">Verbs</h3>
                                 {/* Donut expects a plain object {label: count}, not an array. */}
                                 <ActivityDonutChart
                                     data={Object.fromEntries((activityBundle.stats?.verbs || []).map((r) => [r.label, r.count]))}
                                     palette={palette}
                                 />
                             </div>
-                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
-                                <h3 className="text-sm font-bold text-neutral-200 mb-2">Object types</h3>
+                            <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                <h3 className="text-sm font-bold text-gray-800 mb-2">Object types</h3>
                                 <ActivityDonutChart
                                     data={Object.fromEntries((activityBundle.stats?.objectTypes || []).map((r) => [r.label, r.count]))}
                                     palette={palette}
@@ -485,16 +488,16 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                             </div>
                         </div>
                         {activityBundle.resources?.length > 0 && (
-                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
-                                <h3 className="text-sm font-bold text-neutral-200 mb-2">Top resources</h3>
+                            <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                <h3 className="text-sm font-bold text-gray-800 mb-2">Top resources</h3>
                                 <table className="w-full text-sm">
-                                    <thead className="text-xs text-neutral-400">
+                                    <thead className="text-xs text-gray-600">
                                         <tr><th className="text-left py-1">Object type</th><th className="text-left py-1">Name</th><th className="text-right py-1">Count</th></tr>
                                     </thead>
                                     <tbody>
                                         {activityBundle.resources.map((r, i) => (
                                             <tr key={i} className="border-t border-neutral-800">
-                                                <td className="py-1 text-neutral-400">{r.object_type}</td>
+                                                <td className="py-1 text-gray-600">{r.object_type}</td>
                                                 <td className="py-1">{r.object_name}</td>
                                                 <td className="py-1 text-right text-cyan-300">{r.n}</td>
                                             </tr>
@@ -509,14 +512,14 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                 {/* === NETWORK TAB === */}
                 {activeTab === 'network' && analysis && (
                     <div className="space-y-4">
-                        <div className="flex flex-wrap items-end gap-3 p-3 bg-neutral-800/50 border border-neutral-700 rounded-lg">
+                        <div className="flex flex-wrap items-end gap-3 p-3 bg-white border border-gray-200 rounded-lg">
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs text-neutral-400">Prune: {pruneThreshold.toFixed(2)}</label>
+                                <label className="text-xs text-gray-600">Prune: {pruneThreshold.toFixed(2)}</label>
                                 <input type="range" min={0} max={0.5} step={0.01} value={pruneThreshold} onChange={(e) => setPruneThreshold(parseFloat(e.target.value))} className="w-32" />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs text-neutral-400">Model</label>
-                                <select value={modelType} onChange={(e) => setModelType(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
+                                <label className="text-xs text-gray-600">Model</label>
+                                <select value={modelType} onChange={(e) => setModelType(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
                                     <option value="relative">Relative</option>
                                     <option value="frequency">Frequency</option>
                                     <option value="co-occurrence">Co-occurrence</option>
@@ -524,34 +527,34 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                                 </select>
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs text-neutral-400">Layout</label>
-                                <select value={graphLayout} onChange={(e) => setGraphLayout(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
+                                <label className="text-xs text-gray-600">Layout</label>
+                                <select value={graphLayout} onChange={(e) => setGraphLayout(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
                                     {LAYOUT_OPTIONS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
                                 </select>
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs text-neutral-400">Node size</label>
-                                <select value={nodeSizeMetric} onChange={(e) => setNodeSizeMetric(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
+                                <label className="text-xs text-gray-600">Node size</label>
+                                <select value={nodeSizeMetric} onChange={(e) => setNodeSizeMetric(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
                                     {NODE_SIZE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                                 </select>
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs text-neutral-400">Palette</label>
-                                <select value={palette} onChange={(e) => setPalette(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
+                                <label className="text-xs text-gray-600">Palette</label>
+                                <select value={palette} onChange={(e) => setPalette(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
                                     {PALETTE_NAMES.map((p) => <option key={p} value={p}>{p}</option>)}
                                 </select>
                             </div>
-                            <label className="text-xs text-neutral-300 flex items-center gap-1">
+                            <label className="text-xs text-gray-700 flex items-center gap-1">
                                 <input type="checkbox" checked={showSelfLoops} onChange={(e) => setShowSelfLoops(e.target.checked)} />
                                 Self-loops
                             </label>
-                            <label className="text-xs text-neutral-300 flex items-center gap-1">
+                            <label className="text-xs text-gray-700 flex items-center gap-1">
                                 <input type="checkbox" checked={showEdgeLabels} onChange={(e) => setShowEdgeLabels(e.target.checked)} />
                                 Edge labels
                             </label>
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
+                            <div className="bg-white border border-gray-200 rounded-lg p-4">
                                 <TnaNetworkGraph
                                     model={analysis.prunedModel}
                                     showSelfLoops={showSelfLoops}
@@ -566,12 +569,12 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                             </div>
                             <div className="space-y-4">
                                 {analysis.centralityData && (
-                                    <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
+                                    <div className="bg-white border border-gray-200 rounded-lg p-4">
                                         <h3 className="text-sm font-bold mb-2">Centrality</h3>
                                         <CentralityBarChart centralityData={analysis.centralityData} colorMap={analysis.colorMap} />
                                     </div>
                                 )}
-                                <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
+                                <div className="bg-white border border-gray-200 rounded-lg p-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <h3 className="text-sm font-bold">{seqView === 'distribution' ? 'State distribution' : 'Index plot'}</h3>
                                         <button onClick={() => setSeqView((v) => v === 'distribution' ? 'index' : 'distribution')} className="text-xs text-cyan-400 hover:text-cyan-300">
@@ -582,14 +585,14 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                                         ? <TnaDistributionPlot sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />
                                         : <TnaIndexPlot sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />}
                                 </div>
-                                <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
+                                <div className="bg-white border border-gray-200 rounded-lg p-4">
                                     <h3 className="text-sm font-bold mb-2">Verb frequency</h3>
                                     <TnaFrequencyChart sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />
                                 </div>
                             </div>
                         </div>
                         {analysis.centralityData && (
-                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
+                            <div className="bg-white border border-gray-200 rounded-lg p-4">
                                 <TnaCentralityTable centralityData={analysis.centralityData} colorMap={analysis.colorMap} />
                             </div>
                         )}
@@ -633,16 +636,16 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                 {/* === SETTINGS TAB === */}
                 {activeTab === 'settings' && (
                     <div className="space-y-4">
-                        <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
-                            <h3 className="text-sm font-bold text-neutral-200 mb-2">Cluster controls</h3>
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                            <h3 className="text-sm font-bold text-gray-800 mb-2">Cluster controls</h3>
                             <div className="flex flex-wrap gap-3 items-end">
                                 <div className="flex flex-col gap-1">
-                                    <label className="text-xs text-neutral-400">k = {clusterK}</label>
+                                    <label className="text-xs text-gray-600">k = {clusterK}</label>
                                     <input type="range" min={2} max={8} value={clusterK} onChange={(e) => setClusterK(parseInt(e.target.value, 10))} className="w-32"/>
                                 </div>
                                 <div className="flex flex-col gap-1">
-                                    <label className="text-xs text-neutral-400">Dissimilarity</label>
-                                    <select value={clusterDissimilarity} onChange={(e) => setClusterDissimilarity(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
+                                    <label className="text-xs text-gray-600">Dissimilarity</label>
+                                    <select value={clusterDissimilarity} onChange={(e) => setClusterDissimilarity(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
                                         <option value="hamming">Hamming</option>
                                         <option value="lv">Levenshtein</option>
                                         <option value="osa">OSA</option>
@@ -650,8 +653,8 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                                     </select>
                                 </div>
                                 <div className="flex flex-col gap-1">
-                                    <label className="text-xs text-neutral-400">Method</label>
-                                    <select value={clusterMethod} onChange={(e) => setClusterMethod(e.target.value)} className="px-2 py-1 text-sm bg-neutral-900 border border-neutral-700 rounded">
+                                    <label className="text-xs text-gray-600">Method</label>
+                                    <select value={clusterMethod} onChange={(e) => setClusterMethod(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
                                         <option value="pam">PAM</option>
                                         <option value="ward">Ward</option>
                                         <option value="single">Single</option>
@@ -663,31 +666,31 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                         </div>
 
                         {transformedData?.labels.length > 0 && (
-                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
-                                <h3 className="text-sm font-bold text-neutral-200 mb-2">Verb editor</h3>
-                                <p className="text-xs text-neutral-400 mb-2">Rename or exclude states. Renames merge two states into one (use the same target name twice).</p>
+                            <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                <h3 className="text-sm font-bold text-gray-800 mb-2">Verb editor</h3>
+                                <p className="text-xs text-gray-600 mb-2">Rename or exclude states. Renames merge two states into one (use the same target name twice).</p>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-96 overflow-auto">
                                     {transformedData.labels.map((label) => (
-                                        <div key={label} className="flex items-center gap-2 px-2 py-1 bg-neutral-800 rounded text-xs">
+                                        <div key={label} className="flex items-center gap-2 px-2 py-1 bg-gray-100 rounded text-xs">
                                             <input
                                                 type="checkbox"
                                                 checked={!verbExcludes[label]}
                                                 onChange={(e) => setVerbExcludes({ ...verbExcludes, [label]: !e.target.checked })}
                                                 title={verbExcludes[label] ? 'Hidden' : 'Visible'}
                                             />
-                                            <span className="text-neutral-400 truncate flex-1">{label}</span>
+                                            <span className="text-gray-600 truncate flex-1">{label}</span>
                                             <input
                                                 type="text"
                                                 placeholder="rename to…"
                                                 value={verbRenames[label] || ''}
                                                 onChange={(e) => setVerbRenames({ ...verbRenames, [label]: e.target.value })}
-                                                className="w-24 px-1 py-0.5 bg-neutral-900 border border-neutral-700 rounded text-xs"
+                                                className="w-24 px-1 py-0.5 bg-white border border-gray-300 rounded text-xs"
                                             />
                                         </div>
                                     ))}
                                 </div>
                                 <div className="flex justify-end gap-2 mt-3">
-                                    <button onClick={() => { setVerbRenames({}); setVerbExcludes({}); }} className="px-3 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 rounded">
+                                    <button onClick={() => { setVerbRenames({}); setVerbExcludes({}); }} className="px-3 py-1 text-xs bg-white hover:bg-gray-100 border border-gray-200 rounded">
                                         Reset
                                     </button>
                                 </div>

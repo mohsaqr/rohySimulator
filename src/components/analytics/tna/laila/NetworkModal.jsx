@@ -85,14 +85,14 @@ const NetworkModal = ({
       {
     /* Controls */
   }
-      <div className="px-6 py-3 border-b border-neutral-700/50 bg-neutral-800/30">
+      <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/50">
         <div className="flex flex-wrap gap-x-6 gap-y-3 items-center text-sm">
-          <label className="flex items-center gap-2 text-neutral-300">
+          <label className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
             <span className="font-medium">{t("model_type")}:</span>
             <select
     value={modelType}
     onChange={(e) => setModelType(e.target.value)}
-    className="px-2.5 py-1.5 rounded-lg border border-neutral-600 bg-neutral-700 text-neutral-200 text-sm"
+    className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm"
   >
               <option value="relative">{t("model_relative")}</option>
               <option value="frequency">{t("model_frequency")}</option>
@@ -100,7 +100,7 @@ const NetworkModal = ({
               <option value="attention">{t("model_attention")}</option>
             </select>
           </label>
-          <label className="flex items-center gap-2 text-neutral-300">
+          <label className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
             <span className="font-medium">{t("prune_threshold")}:</span>
             <input
     type="range"
@@ -113,7 +113,7 @@ const NetworkModal = ({
   />
             <span className="text-xs tabular-nums w-8">{pruneThreshold.toFixed(2)}</span>
           </label>
-          <label className="flex items-center gap-2 text-neutral-300">
+          <label className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
             <span className="font-medium">{t("node_radius")}:</span>
             <input
     type="range"
@@ -125,27 +125,27 @@ const NetworkModal = ({
   />
             <span className="text-xs tabular-nums w-5">{nodeRadius}</span>
           </label>
-          <label className="flex items-center gap-2 text-neutral-300">
+          <label className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
             <span className="font-medium">{t("node_size_by")}:</span>
             <select
     value={nodeSizeMetric}
     onChange={(e) => setNodeSizeMetric(e.target.value)}
-    className="px-2.5 py-1.5 rounded-lg border border-neutral-600 bg-neutral-700 text-neutral-200 text-sm"
+    className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm"
   >
               {NODE_SIZE_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{t(opt.i18nKey)}</option>)}
             </select>
           </label>
-          <label className="flex items-center gap-2 text-neutral-300">
+          <label className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
             <span className="font-medium">{t("layout")}:</span>
             <select
     value={graphLayout}
     onChange={(e) => setGraphLayout(e.target.value)}
-    className="px-2.5 py-1.5 rounded-lg border border-neutral-600 bg-neutral-700 text-neutral-200 text-sm"
+    className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm"
   >
               {LAYOUT_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{t(opt.i18nKey)}</option>)}
             </select>
           </label>
-          <label className="flex items-center gap-1.5 text-neutral-300">
+          <label className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
             <input
     type="checkbox"
     checked={showSelfLoops}
@@ -154,7 +154,7 @@ const NetworkModal = ({
   />
             {t("show_self_loops")}
           </label>
-          <label className="flex items-center gap-1.5 text-neutral-300">
+          <label className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
             <input
     type="checkbox"
     checked={showEdgeLabels}
@@ -181,7 +181,7 @@ const NetworkModal = ({
     nodeSizeMetric={nodeSizeMetric}
     modelType={modelType}
     externalPositions={graphPositions}
-  /> : <div className="text-neutral-500 text-sm">{t("no_tna_data")}</div>}
+  /> : <div className="text-gray-400 dark:text-gray-500 text-sm">{t("no_tna_data")}</div>}
       </div>
     </ModalShell>;
 };
@@ -202,9 +202,9 @@ const ClusterNetworkModal = ({
       {
     /* Controls */
   }
-      <div className="px-6 py-3 border-b border-neutral-700/50 bg-neutral-800/30">
+      <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/50">
         <div className="flex flex-wrap gap-x-6 gap-y-3 items-center text-sm">
-          <label className="flex items-center gap-2 text-neutral-300">
+          <label className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
             <span className="font-medium">{t("node_radius")}:</span>
             <input
     type="range"
@@ -216,7 +216,7 @@ const ClusterNetworkModal = ({
   />
             <span className="text-xs tabular-nums w-5">{nodeRadius}</span>
           </label>
-          <label className="flex items-center gap-1.5 text-neutral-300">
+          <label className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
             <input
     type="checkbox"
     checked={showSelfLoops}
@@ -225,7 +225,7 @@ const ClusterNetworkModal = ({
   />
             {t("show_self_loops")}
           </label>
-          <label className="flex items-center gap-1.5 text-neutral-300">
+          <label className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
             <input
     type="checkbox"
     checked={showEdgeLabels}
@@ -268,14 +268,14 @@ const ModalShell = ({
   children
 }) => <div className="fixed inset-0 z-50 flex items-center justify-center">
     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-    <div className="relative z-10 w-[95vw] max-w-5xl max-h-[92vh] bg-neutral-800/50 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-700">
+    <div className="relative z-10 w-[95vw] max-w-5xl max-h-[92vh] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
         <button
   onClick={onClose}
-  className="p-2 rounded-lg hover:bg-neutral-700 transition-colors"
+  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
 >
-          <X className="w-5 h-5 text-neutral-400" />
+          <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
         </button>
       </div>
       {children}

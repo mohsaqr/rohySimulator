@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/* Tailwind v4 defaults dark mode to `prefers-color-scheme: dark`, so
+   every `dark:foo` class fires whenever the user's OS is in dark mode.
+   Rohy itself uses zero `dark:` variants (its dark UI is hard-coded via
+   neutral-* classes), but the LAILA TNA components copied into
+   `components/analytics/tna/laila/` carry `dark:bg-gray-800` everywhere,
+   which forces their cards dark on macOS-dark-mode systems even though
+   the analytics surface is meant to render light. Switching the dark
+   variant to class-based and never setting `.dark` makes the LAILA
+   components render their light defaults. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: "Fira Code", monospace;
