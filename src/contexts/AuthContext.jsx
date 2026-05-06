@@ -60,7 +60,24 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             console.error('Failed to log logout:', error);
         }
-        
+
+        // Logout is an explicit exit (per the persistence rule), so we
+        // wipe the per-user session/view/chat blobs. Without this,
+        // logging out and back in as the same user — or as a different
+        // user on a shared machine — would silently restore the prior
+        // user's case, view, and chat into the new login.
+        try {
+            localStorage.removeItem('rohy_active_session');
+            localStorage.removeItem('rohy_chat_history');
+            localStorage.removeItem('rohy_view');
+            // Per-session debrief keys are tagged with the session id; we
+            // don't have it in scope here, but they'll be overwritten on
+            // the next session and never read without a matching active
+            // session anyway, so they self-prune.
+        } catch (e) {
+            console.warn('[Auth] failed to clear local session state on logout:', e.message);
+        }
+
         AuthService.logout();
         setUser(null);
     };

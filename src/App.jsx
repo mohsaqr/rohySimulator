@@ -158,6 +158,54 @@ function MainApp() {
       }
    };
 
+   // View persistence ("breadcrumbs"). Same rule as session state: only
+   // Exit/End/case-switch clears it. On refresh we land back on whatever
+   // surface the user last had open — Settings tab + wizard step,
+   // analytics, debrief, or the persona editor. Stored as one
+   // serialisable blob so we don't end up with N localStorage keys to
+   // keep in sync.
+   const VIEW_STORAGE_KEY = 'rohy_view';
+   const captureView = useCallback(() => {
+      let view = 'home';
+      if (personaEditorTarget !== null) view = 'persona-editor';
+      else if (showFullPageSettings)    view = 'settings';
+      else if (showTnaAnalytics)        view = 'tna';
+      else if (showDiscussion)          view = 'discussion';
+      return {
+         view,
+         settingsTab:  settingsInitialTab,
+         settingsStep: settingsInitialStep,
+         personaEditorTarget,
+         personaEditorReturn,
+         showUserProfile,
+      };
+   }, [
+      personaEditorTarget, personaEditorReturn,
+      showFullPageSettings, showTnaAnalytics, showDiscussion, showUserProfile,
+      settingsInitialTab, settingsInitialStep,
+   ]);
+   const applyView = (saved) => {
+      if (!saved || typeof saved !== 'object') return;
+      // Apply leaf state first; the boolean view selector is set last so
+      // the conditional renders pick up the right tab/step on first paint.
+      if (typeof saved.settingsTab  === 'string') setSettingsInitialTab(saved.settingsTab);
+      if (Number.isFinite(saved.settingsStep))    setSettingsInitialStep(saved.settingsStep);
+      if (saved.personaEditorTarget !== undefined) setPersonaEditorTarget(saved.personaEditorTarget);
+      if (saved.personaEditorReturn !== undefined) setPersonaEditorReturn(saved.personaEditorReturn);
+      if (typeof saved.showUserProfile === 'boolean') setShowUserProfile(saved.showUserProfile);
+      switch (saved.view) {
+         case 'persona-editor':
+            // personaEditorTarget already applied above; that's the trigger
+            // for the persona-editor route in the conditional render.
+            break;
+         case 'settings':    setShowFullPageSettings(true); break;
+         case 'tna':         setShowTnaAnalytics(true); break;
+         case 'discussion':  setShowDiscussion(true); break;
+         case 'home':
+         default: /* no-op — case view */ break;
+      }
+   };
+
    // Restore session on mount. Per the persistence rule, refresh NEVER
    // wipes — we always reinstate whatever we last saved. Server validation
    // is best-effort and informational only: a server that says "ended" or
@@ -214,11 +262,35 @@ function MainApp() {
             // expiry/wipe paths.
             await loadDefaultCase();
          }
+         // Rehydrate the breadcrumb view state. Done after the session
+         // restore so the conditional renders see the right activeCase
+         // when they mount (settings/tna don't need it, but discussion +
+         // persona-editor read it during render).
+         try {
+            const savedView = localStorage.getItem(VIEW_STORAGE_KEY);
+            if (savedView) applyView(JSON.parse(savedView));
+         } catch (e) {
+            console.warn('[View] saved view blob unparseable, dropping:', e.message);
+            localStorage.removeItem(VIEW_STORAGE_KEY);
+         }
          setSessionValidated(true);
       };
 
       validateAndRestoreSession();
    }, []);
+
+   // Persist the current view whenever it changes. Gated on
+   // sessionValidated so the rehydrate path can finish before we start
+   // writing — otherwise the React initial state ('home', settings tab
+   // 'cases', step 1) would clobber the saved value on first render.
+   useEffect(() => {
+      if (!sessionValidated) return;
+      try {
+         localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify(captureView()));
+      } catch (e) {
+         console.warn('[View] failed to persist view:', e.message);
+      }
+   }, [sessionValidated, captureView]);
 
    // Track user activity for the End-of-session duration metric only.
    // The localStorage timestamp churn that lived here previously existed
@@ -306,6 +378,7 @@ function MainApp() {
       if (caseEnded) {
          localStorage.removeItem('rohy_active_session');
          localStorage.removeItem('rohy_chat_history');
+         localStorage.removeItem(VIEW_STORAGE_KEY);
          // The debrief transcript is keyed per-session and stored separately;
          // clear it on full session end so the next session on the same case
          // doesn't show last session's debrief on first open.
@@ -331,8 +404,11 @@ function MainApp() {
       if (sessionId) {
          endSessionOnServer(sessionId);
       }
-      // Clear previous session data when loading new case
+      // Clear previous session data when loading new case. Also drops the
+      // view breadcrumb so the new case lands on the case view, not on
+      // whatever surface the previous case was last looking at.
       localStorage.removeItem('rohy_chat_history');
+      localStorage.removeItem(VIEW_STORAGE_KEY);
       if (sessionId) {
          localStorage.removeItem(`rohy_discussion_history_${sessionId}`);
       }
