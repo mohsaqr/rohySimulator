@@ -1,31 +1,232 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     Search, Plus, Trash2, Loader2, Upload, Download, Edit2, Save, X,
-    Pill, Filter, Database, RefreshCw
+    Pill, Database, RefreshCw, ChevronDown, ChevronRight, Lock
 } from 'lucide-react';
 import { AuthService } from '../../services/authService';
+import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { apiUrl } from '../../config/api';
+
+// Role rank table mirrors server/middleware/auth.js so we can gate the
+// Edit button by the same rules canMutate() enforces server-side. Keeps
+// the UI honest about what a click will actually achieve — no point
+// flashing an Edit affordance the server will 403.
+const ROLE_RANKS = { guest: 0, student: 1, user: 1, reviewer: 2, educator: 3, admin: 4 };
+function rankOf(user) {
+    return ROLE_RANKS[user?.role] ?? 0;
+}
+function canEditRow(user, row) {
+    if (!user || !row) return false;
+    if (row.created_by === user.id) return true;
+    if (row.scope === 'tenant' && row.tenant_id === (user.tenant_id ?? 1) && rankOf(user) >= ROLE_RANKS.educator) return true;
+    if (row.scope === 'platform' && rankOf(user) >= ROLE_RANKS.admin) return true;
+    return false;
+}
+
+// JSON columns come back as strings on some legacy rows and as arrays on
+// others. Normalize to a string the user can edit, and back to an array
+// when saving.
+function jsonToCsv(value) {
+    if (Array.isArray(value)) return value.join(', ');
+    if (!value) return '';
+    if (typeof value === 'string') {
+        try {
+            const parsed = JSON.parse(value);
+            return Array.isArray(parsed) ? parsed.join(', ') : String(value);
+        } catch {
+            return value;
+        }
+    }
+    return String(value);
+}
+function csvToArray(value) {
+    if (!value) return [];
+    return String(value).split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+const ROUTE_OPTIONS = ['oral', 'iv', 'im', 'sc', 'topical', 'inhaled', 'sublingual', 'rectal', 'other'];
+
+function ScopeBadge({ scope, isCurated }) {
+    const map = {
+        platform: { label: isCurated ? 'Curated' : 'Platform', color: 'bg-cyan-900/40 text-cyan-300 border-cyan-700' },
+        tenant:   { label: 'Tenant',   color: 'bg-amber-900/40 text-amber-300 border-amber-700' },
+        user:     { label: 'My',       color: 'bg-emerald-900/40 text-emerald-300 border-emerald-700' },
+        session:  { label: 'Session',  color: 'bg-neutral-800 text-neutral-400 border-neutral-700' },
+    };
+    const meta = map[scope] || map.platform;
+    return <span className={`inline-flex items-center text-[10px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded border ${meta.color}`}>{meta.label}</span>;
+}
+
+function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, saving }) {
+    const [draft, setDraft] = useState(() => ({
+        generic_name: med.generic_name || '',
+        drug_class: med.drug_class || '',
+        category: med.category || '',
+        route: med.route || 'oral',
+        typical_dose: med.typical_dose || '',
+        dose_unit: med.dose_unit || '',
+        frequency: med.frequency || '',
+        rxcui: med.rxcui || '',
+        ndc_primary: med.ndc_primary || '',
+        atc_code: med.atc_code || '',
+        boxed_warning: med.boxed_warning || '',
+        indications: jsonToCsv(med.indications),
+        contraindications: jsonToCsv(med.contraindications),
+        side_effects: jsonToCsv(med.side_effects),
+    }));
+
+    if (!isEditing) {
+        const dose = [med.typical_dose, med.dose_unit].filter(Boolean).join(' ');
+        const editable = canEditRow(currentUser, med);
+        return (
+            <div className="px-6 py-4 bg-neutral-900/60 border-t border-neutral-800 grid grid-cols-2 gap-4 text-xs">
+                <div className="col-span-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <ScopeBadge scope={med.scope} isCurated={med.is_curated} />
+                        {med.data_source_key && (
+                            <span className="text-[10px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded border bg-neutral-800 text-neutral-400 border-neutral-700">
+                                {med.data_source_key}
+                            </span>
+                        )}
+                        {med.rxcui && (
+                            <a
+                                href={`https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${med.rxcui}`}
+                                target="_blank" rel="noreferrer"
+                                className="text-[10px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded border bg-violet-900/30 text-violet-300 border-violet-700 hover:bg-violet-900/50"
+                            >
+                                RxCUI {med.rxcui}
+                            </a>
+                        )}
+                    </div>
+                    {editable ? (
+                        <button
+                            onClick={onEdit}
+                            className="flex items-center gap-1 px-3 py-1 text-xs bg-cyan-700/50 hover:bg-cyan-600 rounded"
+                        >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            Edit
+                        </button>
+                    ) : (
+                        <span className="flex items-center gap-1 text-[10px] text-neutral-500" title="Insufficient role to edit this row">
+                            <Lock className="w-3 h-3" />
+                            Read-only
+                        </span>
+                    )}
+                </div>
+                <Field label="Drug class">{med.drug_class || '—'}</Field>
+                <Field label="Category">{med.category || '—'}</Field>
+                <Field label="Route">{med.route || '—'}</Field>
+                <Field label="Dose">{dose || '—'}</Field>
+                <Field label="Frequency">{med.frequency || '—'}</Field>
+                <Field label="NDC / ATC">{[med.ndc_primary, med.atc_code].filter(Boolean).join(' / ') || '—'}</Field>
+                {med.boxed_warning && (
+                    <Field label="Boxed warning" wide>
+                        <span className="text-red-300">{med.boxed_warning}</span>
+                    </Field>
+                )}
+                <Field label="Indications" wide>{jsonToCsv(med.indications) || '—'}</Field>
+                <Field label="Contraindications" wide>{jsonToCsv(med.contraindications) || '—'}</Field>
+                <Field label="Side effects" wide>{jsonToCsv(med.side_effects) || '—'}</Field>
+            </div>
+        );
+    }
+
+    return (
+        <div className="px-6 py-4 bg-neutral-900/60 border-t border-neutral-800 grid grid-cols-2 gap-3 text-xs">
+            <Input label="Generic name" value={draft.generic_name} onChange={(v) => setDraft({ ...draft, generic_name: v })} />
+            <Input label="Drug class" value={draft.drug_class} onChange={(v) => setDraft({ ...draft, drug_class: v })} />
+            <Input label="Category" value={draft.category} onChange={(v) => setDraft({ ...draft, category: v })} />
+            <div>
+                <label className="block text-[10px] uppercase tracking-wide text-neutral-400 mb-1">Route</label>
+                <select
+                    value={draft.route}
+                    onChange={(e) => setDraft({ ...draft, route: e.target.value })}
+                    className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-600 rounded text-xs focus:border-cyan-500 outline-none"
+                >
+                    {ROUTE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+            </div>
+            <Input label="Typical dose" value={draft.typical_dose} onChange={(v) => setDraft({ ...draft, typical_dose: v })} />
+            <Input label="Dose unit" value={draft.dose_unit} onChange={(v) => setDraft({ ...draft, dose_unit: v })} />
+            <Input label="Frequency" value={draft.frequency} onChange={(v) => setDraft({ ...draft, frequency: v })} />
+            <Input label="RxCUI" value={draft.rxcui} onChange={(v) => setDraft({ ...draft, rxcui: v })} />
+            <Input label="NDC primary" value={draft.ndc_primary} onChange={(v) => setDraft({ ...draft, ndc_primary: v })} />
+            <Input label="ATC code" value={draft.atc_code} onChange={(v) => setDraft({ ...draft, atc_code: v })} />
+            <Input label="Boxed warning" value={draft.boxed_warning} onChange={(v) => setDraft({ ...draft, boxed_warning: v })} wide />
+            <Input label="Indications (comma-separated)" value={draft.indications} onChange={(v) => setDraft({ ...draft, indications: v })} wide />
+            <Input label="Contraindications (comma-separated)" value={draft.contraindications} onChange={(v) => setDraft({ ...draft, contraindications: v })} wide />
+            <Input label="Side effects (comma-separated)" value={draft.side_effects} onChange={(v) => setDraft({ ...draft, side_effects: v })} wide />
+            <div className="col-span-2 flex justify-end gap-2 pt-2 border-t border-neutral-800">
+                <button
+                    onClick={onCancel}
+                    disabled={saving}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-neutral-800 hover:bg-neutral-700 rounded"
+                >
+                    <X className="w-3.5 h-3.5" /> Cancel
+                </button>
+                <button
+                    onClick={() => onSave({
+                        ...draft,
+                        indications: csvToArray(draft.indications),
+                        contraindications: csvToArray(draft.contraindications),
+                        side_effects: csvToArray(draft.side_effects),
+                    })}
+                    disabled={saving || !draft.generic_name.trim()}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-cyan-600 hover:bg-cyan-500 disabled:bg-neutral-700 rounded font-bold"
+                >
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    Save
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function Field({ label, children, wide }) {
+    return (
+        <div className={wide ? 'col-span-2' : ''}>
+            <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-0.5">{label}</div>
+            <div className="text-neutral-200">{children}</div>
+        </div>
+    );
+}
+
+function Input({ label, value, onChange, wide }) {
+    return (
+        <div className={wide ? 'col-span-2' : ''}>
+            <label className="block text-[10px] uppercase tracking-wide text-neutral-400 mb-1">{label}</label>
+            <input
+                type="text"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-600 rounded text-xs focus:border-cyan-500 outline-none"
+            />
+        </div>
+    );
+}
 
 /**
  * Medication Manager Component
  * Features:
- * - View all medications with search
- * - Add new medications
- * - Edit medications
- * - Bulk import
+ * - View all medications with search; click a row to expand details
+ * - Edit existing medications (scope-aware via /api/catalogue/medications/:id)
+ * - Add new medications (legacy /master path; Session 3 will migrate)
+ * - Bulk import (legacy /master path)
  * - Delete medications
  */
 export default function MedicationManager() {
     const toast = useToast();
+    const { user: currentUser } = useAuth();
 
     const [activeTab, setActiveTab] = useState('browse');
     const [medications, setMedications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [editingMed, setEditingMed] = useState(null);
+    const [expandedId, setExpandedId] = useState(null);
+    const [editingId, setEditingId] = useState(null);
+    const [savingId, setSavingId] = useState(null);
 
-    // New medication form
     const [newMed, setNewMed] = useState({
         generic_name: '',
         drug_class: '',
@@ -36,10 +237,8 @@ export default function MedicationManager() {
         side_effects: ''
     });
 
-    // Import state
     const [importData, setImportData] = useState('');
 
-    // Fetch all medications
     const fetchMedications = async () => {
         setLoading(true);
         try {
@@ -61,17 +260,57 @@ export default function MedicationManager() {
         fetchMedications();
     }, []);
 
-    // Filter medications
     const filteredMedications = useMemo(() => {
         if (!searchQuery) return medications;
         const query = searchQuery.toLowerCase();
         return medications.filter(m =>
             m.generic_name?.toLowerCase().includes(query) ||
-            m.drug_class?.toLowerCase().includes(query)
+            m.drug_class?.toLowerCase().includes(query) ||
+            m.rxcui?.toLowerCase().includes(query)
         );
     }, [medications, searchQuery]);
 
-    // Add new medication
+    const toggleRow = (id) => {
+        if (editingId === id) return; // don't collapse mid-edit
+        setExpandedId((prev) => (prev === id ? null : id));
+    };
+
+    const handleEditClick = (id) => {
+        setEditingId(id);
+        setExpandedId(id);
+    };
+
+    const handleCancelEdit = () => {
+        setEditingId(null);
+    };
+
+    const handleSaveEdit = async (id, draft) => {
+        setSavingId(id);
+        try {
+            const token = AuthService.getToken();
+            // Use the new scope-aware endpoint — it supports PUT, the legacy
+            // /master path does not. Server enforces the same canMutate rule
+            // the UI gates the Edit button by, so 403s here would only fire
+            // for race conditions (someone else changed scope).
+            const res = await fetch(apiUrl(`/catalogue/medications/${id}`), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(draft),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || `Failed to save (${res.status})`);
+            }
+            toast.success('Medication updated');
+            setEditingId(null);
+            await fetchMedications();
+        } catch (err) {
+            toast.error(err.message);
+        } finally {
+            setSavingId(null);
+        }
+    };
+
     const handleAddMed = async () => {
         if (!newMed.generic_name) {
             toast.error('Medication name is required');
@@ -82,16 +321,13 @@ export default function MedicationManager() {
             const token = AuthService.getToken();
             const medData = {
                 ...newMed,
-                indications: newMed.indications ? newMed.indications.split(',').map(s => s.trim()) : [],
-                side_effects: newMed.side_effects ? newMed.side_effects.split(',').map(s => s.trim()) : []
+                indications: csvToArray(newMed.indications),
+                side_effects: csvToArray(newMed.side_effects),
             };
 
             const res = await fetch(apiUrl('/master/medications'), {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(medData)
             });
 
@@ -117,7 +353,6 @@ export default function MedicationManager() {
         }
     };
 
-    // Delete medication
     const handleDeleteMed = async (id, name) => {
         if (!confirm(`Delete "${name}"?`)) return;
 
@@ -131,13 +366,14 @@ export default function MedicationManager() {
             if (!res.ok) throw new Error('Failed to delete');
 
             toast.success('Medication deleted');
+            if (expandedId === id) setExpandedId(null);
+            if (editingId === id) setEditingId(null);
             fetchMedications();
         } catch (err) {
             toast.error(err.message);
         }
     };
 
-    // Clear all medications
     const handleClearAll = async () => {
         if (!confirm('Delete ALL medications? This cannot be undone.')) return;
 
@@ -157,7 +393,6 @@ export default function MedicationManager() {
         }
     };
 
-    // Bulk import
     const handleBulkImport = async () => {
         if (!importData.trim()) {
             toast.error('Enter medication names (one per line)');
@@ -174,17 +409,13 @@ export default function MedicationManager() {
             const token = AuthService.getToken();
             const res = await fetch(apiUrl('/master/medications/bulk'), {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
                     medications: names.map(name => ({ name }))
                 })
             });
 
             const data = await res.json();
-
             if (!res.ok) throw new Error(data.error || 'Import failed');
 
             toast.success(`Imported ${data.inserted} medications (${data.skipped} skipped)`);
@@ -196,12 +427,11 @@ export default function MedicationManager() {
         }
     };
 
-    // Export to CSV
     const handleExport = () => {
         const csv = [
-            'Name,Class,Category,Route,Dose',
+            'Name,Class,Category,Route,Dose,RxCUI,Scope',
             ...medications.map(m =>
-                `"${m.generic_name}","${m.drug_class || ''}","${m.category || ''}","${m.route || ''}","${m.typical_dose || ''}"`
+                `"${m.generic_name}","${m.drug_class || ''}","${m.category || ''}","${m.route || ''}","${m.typical_dose || ''}","${m.rxcui || ''}","${m.scope || ''}"`
             )
         ].join('\n');
 
@@ -286,46 +516,76 @@ export default function MedicationManager() {
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Search medications..."
+                            placeholder="Search by name, class, or RxCUI..."
                             className="w-full pl-10 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm focus:border-cyan-500 outline-none"
                         />
                     </div>
 
                     {/* Medications List */}
-                    <div className="max-h-[500px] overflow-y-auto border border-neutral-700 rounded-lg">
+                    <div className="max-h-[600px] overflow-y-auto border border-neutral-700 rounded-lg">
                         <table className="w-full text-sm">
-                            <thead className="bg-neutral-800 sticky top-0">
+                            <thead className="bg-neutral-800 sticky top-0 z-10">
                                 <tr>
+                                    <th className="w-8"></th>
                                     <th className="px-4 py-3 text-left font-bold">Name</th>
                                     <th className="px-4 py-3 text-left font-bold">Class</th>
                                     <th className="px-4 py-3 text-left font-bold">Route</th>
+                                    <th className="px-4 py-3 text-left font-bold">Scope</th>
                                     <th className="px-4 py-3 text-right font-bold w-20">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredMedications.length === 0 ? (
                                     <tr>
-                                        <td colSpan="4" className="text-center py-8 text-neutral-500">
+                                        <td colSpan="6" className="text-center py-8 text-neutral-500">
                                             {searchQuery ? 'No medications match your search' : 'No medications in database'}
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredMedications.map((med) => (
-                                        <tr key={med.id} className="border-t border-neutral-800 hover:bg-neutral-800/50">
-                                            <td className="px-4 py-2 font-medium">{med.generic_name}</td>
-                                            <td className="px-4 py-2 text-neutral-400">{med.drug_class || '-'}</td>
-                                            <td className="px-4 py-2 text-neutral-400">{med.route || '-'}</td>
-                                            <td className="px-4 py-2 text-right">
-                                                <button
-                                                    onClick={() => handleDeleteMed(med.id, med.generic_name)}
-                                                    className="p-1 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded"
-                                                    title="Delete"
+                                    filteredMedications.map((med) => {
+                                        const isOpen = expandedId === med.id;
+                                        const isEditing = editingId === med.id;
+                                        return (
+                                            <React.Fragment key={med.id}>
+                                                <tr
+                                                    className="border-t border-neutral-800 hover:bg-neutral-800/50 cursor-pointer"
+                                                    onClick={() => toggleRow(med.id)}
                                                 >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))
+                                                    <td className="px-2 py-2 text-neutral-500">
+                                                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                                    </td>
+                                                    <td className="px-4 py-2 font-medium">{med.generic_name}</td>
+                                                    <td className="px-4 py-2 text-neutral-400">{med.drug_class || '-'}</td>
+                                                    <td className="px-4 py-2 text-neutral-400 uppercase text-xs">{med.route || '-'}</td>
+                                                    <td className="px-4 py-2"><ScopeBadge scope={med.scope} isCurated={med.is_curated} /></td>
+                                                    <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={() => handleDeleteMed(med.id, med.generic_name)}
+                                                            className="p-1 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded"
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                {isOpen && (
+                                                    <tr>
+                                                        <td colSpan="6" className="p-0">
+                                                            <MedDetail
+                                                                med={med}
+                                                                currentUser={currentUser}
+                                                                isEditing={isEditing}
+                                                                saving={savingId === med.id}
+                                                                onEdit={() => handleEditClick(med.id)}
+                                                                onCancel={handleCancelEdit}
+                                                                onSave={(draft) => handleSaveEdit(med.id, draft)}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })
                                 )}
                             </tbody>
                         </table>
@@ -379,14 +639,7 @@ export default function MedicationManager() {
                                 onChange={(e) => setNewMed({ ...newMed, route: e.target.value })}
                                 className="w-full px-3 py-2 bg-neutral-800 border border-neutral-600 rounded text-sm focus:border-cyan-500 outline-none"
                             >
-                                <option value="oral">Oral</option>
-                                <option value="iv">IV</option>
-                                <option value="im">IM</option>
-                                <option value="sc">Subcutaneous</option>
-                                <option value="topical">Topical</option>
-                                <option value="inhaled">Inhaled</option>
-                                <option value="sublingual">Sublingual</option>
-                                <option value="other">Other</option>
+                                {ROUTE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
                             </select>
                         </div>
                         <div>
