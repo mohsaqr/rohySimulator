@@ -402,6 +402,92 @@ describe('auth middleware — authenticateToken', () => {
     });
 });
 
+describe('auth middleware — server-side token revocation via active_sessions', () => {
+    // Each test uses a unique jwtid so payload-derived JWTs don't collide on
+    // active_sessions.token_hash (UNIQUE) — a deterministic-payload artefact,
+    // not the production behaviour (real tokens carry an iat that always
+    // differs).
+
+    it('accepts a token whose active_sessions row has is_active=1', async () => {
+        const token = signToken({ id: 104, role: 'admin' }, { jwtid: 'rev-accept' });
+        await auth.recordActiveSession(token, { id: 104, tenant_id: 1 });
+
+        const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.__nextCalled).toBe(true);
+        expect(req.user.id).toBe(104);
+        expect(req.tokenHash).toBe(auth.hashToken(token));
+    });
+
+    it('rejects 401 "Session revoked" once the row is marked is_active=0', async () => {
+        const token = signToken({ id: 104, role: 'admin' }, { jwtid: 'rev-revoked' });
+        await auth.recordActiveSession(token, { id: 104, tenant_id: 1 });
+        // Logout / admin force-logout / password change all flip is_active.
+        await auth.revokeActiveSessionByToken(token);
+
+        const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.statusCode).toBe(401);
+        expect(res.body).toEqual({ error: 'Session revoked' });
+        expect(res.__nextCalled).toBeFalsy();
+    });
+
+    it('accepts a token with NO active_sessions row at all (legacy compatibility)', async () => {
+        // Tokens issued before this feature have no row to revoke. We let
+        // them through so a deploy doesn't force every signed-in user to
+        // re-login; their natural JWT expiry caps the worst case.
+        const token = signToken({ id: 104, role: 'admin' }, { jwtid: 'rev-legacy' });
+        // Deliberately no recordActiveSession call.
+
+        const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.__nextCalled).toBe(true);
+        expect(req.user.id).toBe(104);
+    });
+
+    it('rejects 401 "Session expired" if the row\'s expires_at is in the past', async () => {
+        const token = signToken({ id: 104, role: 'admin' }, { jwtid: 'rev-expired' });
+        const tokenHash = auth.hashToken(token);
+        // Insert a row whose expires_at is already in the past.
+        await pRun(
+            testDb,
+            `INSERT INTO active_sessions (user_id, token_hash, expires_at, tenant_id, is_active)
+             VALUES (?, ?, datetime('now', '-1 hour'), ?, 1)`,
+            [104, tokenHash, 1]
+        );
+
+        const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.statusCode).toBe(401);
+        expect(res.body).toEqual({ error: 'Session expired' });
+    });
+
+    it('two distinct tokens for the same user revoke independently', async () => {
+        // CONTRACT: the row is keyed by token_hash, not user_id. Revoking
+        // one device must not log out the user's other sessions. Locks
+        // the "force-logout one machine but stay logged in elsewhere" UX.
+        const tokenA = signToken({ id: 104, role: 'admin' }, { jwtid: 'A' });
+        const tokenB = signToken({ id: 104, role: 'admin' }, { jwtid: 'B' });
+        await auth.recordActiveSession(tokenA, { id: 104, tenant_id: 1 });
+        await auth.recordActiveSession(tokenB, { id: 104, tenant_id: 1 });
+        await auth.revokeActiveSessionByToken(tokenA);
+
+        const reqA = makeReq({ headers: { authorization: `Bearer ${tokenA}` } });
+        const resA = makeRes();
+        await runMiddleware(auth.authenticateToken, reqA, resA);
+        expect(resA.statusCode).toBe(401);
+
+        const reqB = makeReq({ headers: { authorization: `Bearer ${tokenB}` } });
+        const resB = makeRes();
+        await runMiddleware(auth.authenticateToken, reqB, resB);
+        expect(resB.__nextCalled).toBe(true);
+    });
+});
+
 describe('auth middleware — resolveTenant fallback chain', () => {
     it('returns req.user.tenant_id when present', () => {
         // CONTRACT (line 56 of auth.js): `req.user?.tenant_id || 1`.

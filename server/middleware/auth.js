@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import db from '../db.js';
@@ -19,7 +20,28 @@ if (!JWT_SECRET) {
     process.exit(1);
 }
 
-// Middleware to authenticate JWT token
+// Hash a bearer token the same way login/register does so we can look it up
+// in active_sessions. SHA-256 is sufficient — the table is internal and never
+// exposed to clients; we just need a deterministic, fixed-length key.
+export function hashToken(token) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+// Middleware to authenticate JWT token.
+//
+// Two-stage check:
+//   1. JWT signature + expiry (fast, in-memory).
+//   2. Server-side revocation: look up the token's sha256 hash in
+//      active_sessions. If a row exists with is_active=0, the token has been
+//      explicitly revoked (logout, admin force-logout, or password change)
+//      and we reject 401 *even though* the JWT itself is still cryptographically
+//      valid. This is the missing half of the audit's "token revocation not
+//      enforced" finding.
+//
+// Tokens that pre-date this change have no active_sessions row at all. We
+// accept those (legacy compatibility) so rolling out doesn't force every
+// signed-in user to re-login on the deploy. Once they expire (4h default),
+// the next login goes through the new path.
 export const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -32,26 +54,86 @@ export const authenticateToken = (req, res, next) => {
         if (err) {
             return res.status(403).json({ error: 'Invalid or expired token' });
         }
+
+        const tokenHash = hashToken(token);
         db.get(
-            `SELECT tenant_id, role, status, deleted_at FROM users WHERE id = ?`,
-            [user.id],
-            (lookupErr, row) => {
-                if (lookupErr) {
-                    return res.status(500).json({ error: 'Failed to resolve authenticated user' });
+            `SELECT is_active, expires_at FROM active_sessions WHERE token_hash = ? LIMIT 1`,
+            [tokenHash],
+            (sessionErr, sessionRow) => {
+                if (sessionErr) {
+                    return res.status(500).json({ error: 'Failed to verify session state' });
                 }
-                if (!row || row.deleted_at || row.status !== 'active') {
-                    return res.status(403).json({ error: 'Invalid or inactive user' });
+
+                // If there IS a row, enforce its state. Missing row = legacy
+                // token; fall through to the user lookup as before.
+                if (sessionRow) {
+                    if (!sessionRow.is_active) {
+                        return res.status(401).json({ error: 'Session revoked' });
+                    }
+                    if (sessionRow.expires_at && new Date(sessionRow.expires_at) < new Date()) {
+                        return res.status(401).json({ error: 'Session expired' });
+                    }
+                    // Best-effort touch — failure is non-fatal.
+                    db.run(
+                        `UPDATE active_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE token_hash = ?`,
+                        [tokenHash],
+                        () => { /* ignore */ }
+                    );
                 }
-                req.user = {
-                    ...user,
-                    role: row.role || user.role,
-                    tenant_id: row.tenant_id || user.tenant_id || 1
-                };
-                next();
+
+                db.get(
+                    `SELECT tenant_id, role, status, deleted_at FROM users WHERE id = ?`,
+                    [user.id],
+                    (lookupErr, row) => {
+                        if (lookupErr) {
+                            return res.status(500).json({ error: 'Failed to resolve authenticated user' });
+                        }
+                        if (!row || row.deleted_at || row.status !== 'active') {
+                            return res.status(403).json({ error: 'Invalid or inactive user' });
+                        }
+                        req.user = {
+                            ...user,
+                            role: row.role || user.role,
+                            tenant_id: row.tenant_id || user.tenant_id || 1
+                        };
+                        // Stash the hash so /auth/logout can revoke this exact session
+                        // without having to recompute it from the auth header.
+                        req.tokenHash = tokenHash;
+                        next();
+                    }
+                );
             }
         );
     });
 };
+
+// Promise-style helpers so route handlers can await session state changes.
+
+export function recordActiveSession(token, user, { ipAddress = null, userAgent = null, expiresIn = '+4 hours' } = {}) {
+    const tokenHash = hashToken(token);
+    return new Promise((resolve, reject) => {
+        db.run(
+            `INSERT INTO active_sessions (user_id, token_hash, ip_address, user_agent, expires_at, tenant_id)
+             VALUES (?, ?, ?, ?, datetime('now', ?), ?)`,
+            [user.id, tokenHash, ipAddress, userAgent, expiresIn, user.tenant_id || 1],
+            (err) => err ? reject(err) : resolve(tokenHash)
+        );
+    });
+}
+
+export function revokeActiveSessionByToken(token) {
+    return revokeActiveSessionByHash(hashToken(token));
+}
+
+export function revokeActiveSessionByHash(tokenHash) {
+    return new Promise((resolve, reject) => {
+        db.run(
+            `UPDATE active_sessions SET is_active = 0 WHERE token_hash = ?`,
+            [tokenHash],
+            function (err) { err ? reject(err) : resolve(this.changes); }
+        );
+    });
+}
 
 export function resolveTenant(req) {
     return req.user?.tenant_id || 1;
@@ -122,11 +204,12 @@ export const requireAuth = (req, res, next) => {
 
 // Helper function to generate JWT token.
 //
-// Default TTL is 4h. Tokens are not server-revocable today (the
-// `active_sessions` table tracks them but `authenticateToken` doesn't
-// consult it), so a long TTL means a demoted/disabled user keeps their
-// access until the token expires. 4h limits that blast radius without
-// being so short that users are constantly re-logging in.
+// Default TTL is 4h. Tokens are now server-revocable: authenticateToken
+// consults active_sessions, so logout / admin force-logout / password change
+// can immediately invalidate a still-cryptographically-valid JWT. The 4h
+// TTL still bounds the worst-case window for legacy tokens (those issued
+// before the active_sessions check landed) since those have no row to
+// revoke.
 //
 // Override via JWT_EXPIRY env var (e.g. '7d' for a kiosk deployment).
 export const generateToken = (user) => {

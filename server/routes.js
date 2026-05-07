@@ -14,6 +14,8 @@ import {
     requireEducator,
     requireReviewer,
     generateToken,
+    recordActiveSession,
+    revokeActiveSessionByHash,
     resolveTenant,
     ROLE_RANKS,
     VALID_ROLES,
@@ -1104,16 +1106,15 @@ router.post('/auth/login', authLimiter, (req, res) => {
 
             const token = generateToken(user);
 
-            // Track active session
-            const crypto = await import('crypto');
-            const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-            db.run(
-                // Expires_at mirrors the JWT TTL (default 4h). If you change
-                // JWT_EXPIRY, update this. For non-default expiries the row
-                // is still informational — JWT verification is the source of truth.
-                `INSERT INTO active_sessions (user_id, token_hash, ip_address, user_agent, expires_at, tenant_id) VALUES (?, ?, ?, ?, datetime('now', '+4 hours'), ?)`,
-                [user.id, tokenHash, ipAddress, userAgent, user.tenant_id || 1]
-            );
+            // Track active session via the centralised helper so the row
+            // shape stays in lockstep with authenticateToken's revocation
+            // check. Failure here is non-fatal — login still succeeds, the
+            // user just won't be server-revocable on this token.
+            try {
+                await recordActiveSession(token, user, { ipAddress, userAgent });
+            } catch (e) {
+                console.warn('[auth] failed to record active_sessions row:', e.message);
+            }
 
             res.json({
                 message: 'Login successful',
@@ -1161,10 +1162,21 @@ router.get('/auth/profile', authenticateToken, (req, res) => {
     });
 });
 
-// POST /api/auth/logout - Log logout event
-router.post('/auth/logout', authenticateToken, (req, res) => {
+// POST /api/auth/logout - Log logout event AND revoke this session.
+// The revoke half is what makes server-side logout actually work: even though
+// the JWT is still cryptographically valid, future requests presenting it will
+// fail at authenticateToken's active_sessions check.
+router.post('/auth/logout', authenticateToken, async (req, res) => {
     const ipAddress = req.ip || req.socket?.remoteAddress;
     const userAgent = req.headers['user-agent'];
+
+    if (req.tokenHash) {
+        try {
+            await revokeActiveSessionByHash(req.tokenHash);
+        } catch (e) {
+            console.warn('[auth] failed to revoke session row:', e.message);
+        }
+    }
 
     db.run(
         `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
