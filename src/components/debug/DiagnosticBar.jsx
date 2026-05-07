@@ -20,8 +20,6 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { ChevronUp, ChevronDown, X, Activity, Play, Square } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { apiUrl } from '../../config/api';
-import { AuthService } from '../../services/authService';
 import { apiFetch } from '../../services/apiClient';
 import EventLogger from '../../services/eventLogger';
 import { resolveVoice } from '../../utils/voiceResolver';
@@ -180,16 +178,14 @@ export default function DiagnosticBar() {
     }, []);
 
     // Fetch platform LLM block once when the bar appears. Cheap (cached
-    // server-side) and the values rarely change mid-session.
+    // server-side) and the values rarely change mid-session. Uses
+    // apiFetch so cookie-mode users (no localStorage token) are still
+    // authed via the rohy_auth cookie — pre-fix this raw-fetch sent
+    // literal "Bearer null" and silently 403'd.
     useEffect(() => {
         if (!enabled) return;
-        const token = AuthService.getToken();
-        if (!token) return;
         let cancelled = false;
-        fetch(apiUrl('/platform-settings/llm'), {
-            headers: { Authorization: `Bearer ${token}` }
-        })
-            .then(r => r.ok ? r.json() : null)
+        apiFetch('/platform-settings/llm')
             .then(data => { if (!cancelled && data) setLlm(data); })
             .catch(() => { /* ignore — bar just shows blanks */ });
         return () => { cancelled = true; };
@@ -244,19 +240,17 @@ export default function DiagnosticBar() {
     const caseId = eventStatus.caseId;
     useEffect(() => {
         if (!enabled || !caseId) { setConfiguredSpeakers([]); return; }
-        const token = AuthService.getToken();
-        if (!token) return;
         let cancelled = false;
         (async () => {
             try {
-                // Fetch case + case_agents in parallel.
-                const [caseRes, agentsRes] = await Promise.all([
-                    fetch(apiUrl(`/cases/${caseId}`), { headers: { Authorization: `Bearer ${token}` } }),
-                    fetch(apiUrl(`/cases/${caseId}/agents`), { headers: { Authorization: `Bearer ${token}` } })
+                // Fetch case + case_agents in parallel via apiFetch (cookie-
+                // or-bearer auth handled centrally; null-token surfaces as
+                // missing-Authorization → cookie fallback, not "Bearer null").
+                const [caseData, agentsData] = await Promise.all([
+                    apiFetch(`/cases/${caseId}`).catch(() => null),
+                    apiFetch(`/cases/${caseId}/agents`).catch(() => null),
                 ]);
                 if (cancelled) return;
-                const caseData = caseRes.ok ? await caseRes.json() : null;
-                const agentsData = agentsRes.ok ? await agentsRes.json() : null;
                 const speakers = [];
 
                 // Patient row.

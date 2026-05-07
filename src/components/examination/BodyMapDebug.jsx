@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { AuthService } from '../../services/authService';
 import DEFAULT_REGIONS from '../../utils/defaultRegions';
 import { baseUrl } from '../../config/api';
 import { apiFetch, apiPost } from '../../services/apiClient';
@@ -117,10 +116,13 @@ export default function BodyMapDebug({ gender = 'male', view = 'anterior' }) {
             // Save to localStorage immediately
             localStorage.setItem(STORAGE_KEY, JSON.stringify(regions));
 
-            // Also save to server for persistence
-            if (AuthService.getToken()) {
-                await apiPost('/bodymap-regions', { regions });
-            }
+            // Also save to server for persistence. Pre-fix this gated on
+            // AuthService.getToken() — but cookie-mode users have no
+            // localStorage token, so the gate evaluated false and the
+            // server save was silently skipped. apiPost handles auth
+            // centrally (cookie or bearer); if the user genuinely isn't
+            // authed, the 401 lands in catch() and we surface saved-local.
+            await apiPost('/bodymap-regions', { regions });
 
             setSaveStatus('saved');
             setHasChanges(false);
