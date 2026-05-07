@@ -46,8 +46,10 @@ export const CATEGORIES = {
 export const VERBS = {
     STARTED_SESSION: 'STARTED_SESSION', ENDED_SESSION: 'ENDED_SESSION',
     RESUMED_SESSION: 'RESUMED_SESSION', IDLE_TIMEOUT: 'IDLE_TIMEOUT',
+    UNLOAD: 'UNLOAD',
     VIEWED: 'VIEWED', OPENED: 'OPENED', CLOSED: 'CLOSED', NAVIGATED: 'NAVIGATED',
     SWITCHED_TAB: 'SWITCHED_TAB', SCROLLED: 'SCROLLED',
+    LOST_FOCUS: 'LOST_FOCUS', RESUMED_FOCUS: 'RESUMED_FOCUS',
     CLICKED: 'CLICKED', SELECTED: 'SELECTED', DESELECTED: 'DESELECTED',
     TOGGLED: 'TOGGLED', EXPANDED: 'EXPANDED', COLLAPSED: 'COLLAPSED',
     ORDERED_LAB: 'ORDERED_LAB', CANCELLED_LAB: 'CANCELLED_LAB',
@@ -67,6 +69,7 @@ export const VERBS = {
     OPENED_EXAM_PANEL: 'OPENED_EXAM_PANEL', CLOSED_EXAM_PANEL: 'CLOSED_EXAM_PANEL',
     SENT_MESSAGE: 'SENT_MESSAGE', RECEIVED_MESSAGE: 'RECEIVED_MESSAGE',
     COPIED_MESSAGE: 'COPIED_MESSAGE', EDITED_MESSAGE: 'EDITED_MESSAGE',
+    STT_RESULT: 'STT_RESULT', STT_ERROR: 'STT_ERROR', TTS_PLAYED: 'TTS_PLAYED',
     ADJUSTED_VITAL: 'ADJUSTED_VITAL', ACKNOWLEDGED_ALARM: 'ACKNOWLEDGED_ALARM',
     SILENCED_ALARM: 'SILENCED_ALARM', ALARM_TRIGGERED: 'ALARM_TRIGGERED',
     VIEWED_TRENDS: 'VIEWED_TRENDS',
@@ -90,11 +93,14 @@ const VERB_METADATA = {
     ENDED_SESSION: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.SESSION },
     RESUMED_SESSION: { severity: SEVERITY.INFO, category: CATEGORIES.SESSION },
     IDLE_TIMEOUT: { severity: SEVERITY.INFO, category: CATEGORIES.SESSION },
+    UNLOAD: { severity: SEVERITY.INFO, category: CATEGORIES.SESSION },
     VIEWED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
     OPENED: { severity: SEVERITY.INFO, category: CATEGORIES.NAVIGATION },
     CLOSED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
     NAVIGATED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
     SWITCHED_TAB: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
+    LOST_FOCUS: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
+    RESUMED_FOCUS: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
     CLICKED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
     SELECTED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
     DESELECTED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
@@ -129,6 +135,9 @@ const VERB_METADATA = {
     SENT_MESSAGE: { severity: SEVERITY.INFO, category: CATEGORIES.COMMUNICATION },
     RECEIVED_MESSAGE: { severity: SEVERITY.INFO, category: CATEGORIES.COMMUNICATION },
     COPIED_MESSAGE: { severity: SEVERITY.DEBUG, category: CATEGORIES.COMMUNICATION },
+    STT_RESULT: { severity: SEVERITY.DEBUG, category: CATEGORIES.COMMUNICATION },
+    STT_ERROR: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.ERROR },
+    TTS_PLAYED: { severity: SEVERITY.DEBUG, category: CATEGORIES.COMMUNICATION },
     ADJUSTED_VITAL: { severity: SEVERITY.INFO, category: CATEGORIES.MONITORING },
     ACKNOWLEDGED_ALARM: { severity: SEVERITY.INFO, category: CATEGORIES.MONITORING },
     SILENCED_ALARM: { severity: SEVERITY.INFO, category: CATEGORIES.MONITORING },
@@ -303,6 +312,9 @@ class EventLoggerService {
         this.setContext({ sessionId, caseId });
         this.log(VERBS.RESUMED_SESSION, OBJECT_TYPES.SESSION, { objectId: String(sessionId), objectName: caseName, component: COMPONENTS.APP });
     }
+    focusLost() { this.log(VERBS.LOST_FOCUS, OBJECT_TYPES.COMPONENT, { objectId: COMPONENTS.APP, objectName: 'Window blur', component: COMPONENTS.APP }); }
+    focusResumed() { this.log(VERBS.RESUMED_FOCUS, OBJECT_TYPES.COMPONENT, { objectId: COMPONENTS.APP, objectName: 'Window focus', component: COMPONENTS.APP }); }
+    unload() { this.log(VERBS.UNLOAD, OBJECT_TYPES.SESSION, { objectId: String(this.sessionId || ''), objectName: 'Window unload', component: COMPONENTS.APP }); }
     caseLoaded(caseId, caseName) {
         this.log(VERBS.LOADED_CASE, OBJECT_TYPES.CASE, { objectId: String(caseId), objectName: caseName, component: COMPONENTS.CONFIG_PANEL });
     }
@@ -321,6 +333,31 @@ class EventLoggerService {
     messageSent(content, c) { this.log(VERBS.SENT_MESSAGE, OBJECT_TYPES.CHAT_MESSAGE, { component: c, messageContent: content, messageRole: 'user' }); }
     messageReceived(content, c) { this.log(VERBS.RECEIVED_MESSAGE, OBJECT_TYPES.CHAT_MESSAGE, { component: c, messageContent: content, messageRole: 'assistant' }); }
     messageCopied(c) { this.log(VERBS.COPIED_MESSAGE, OBJECT_TYPES.CHAT_MESSAGE, { component: c }); }
+    sttResult({ finalLength = 0, interimLength = 0, isFinal = false, lang = null } = {}) {
+        this.log(VERBS.STT_RESULT, OBJECT_TYPES.COMPONENT, {
+            objectId: 'speech_recognition',
+            objectName: 'Speech recognition result',
+            component: 'VoiceService',
+            context: { finalLength, interimLength, isFinal, lang },
+        });
+    }
+    sttError(message, ctx = null) {
+        this.log(VERBS.STT_ERROR, OBJECT_TYPES.COMPONENT, {
+            objectId: 'speech_recognition',
+            objectName: 'Speech recognition error',
+            result: message || 'speech recognition error',
+            component: 'VoiceService',
+            context: ctx,
+        });
+    }
+    ttsPlayed(ctx = null) {
+        this.log(VERBS.TTS_PLAYED, OBJECT_TYPES.COMPONENT, {
+            objectId: 'tts_audio',
+            objectName: 'TTS audio played',
+            component: 'VoiceService',
+            context: ctx,
+        });
+    }
     emotionExpressed(e, c) { this.log(VERBS.EXPRESSED_EMOTION, OBJECT_TYPES.EMOTION, { objectName: e, component: c, context: { emotion: e } }); }
     vitalAdjusted(v, oldV, newV, c) { this.log(VERBS.ADJUSTED_VITAL, OBJECT_TYPES.VITAL_SIGN, { objectId: v, objectName: v, component: c, context: { oldValue: oldV, newValue: newV } }); }
     alarmAcknowledged(t, c) { this.log(VERBS.ACKNOWLEDGED_ALARM, OBJECT_TYPES.ALARM, { objectId: t, objectName: t, component: c }); }
@@ -368,4 +405,20 @@ class EventLoggerService {
 }
 
 const EventLogger = new EventLoggerService();
+
+export function registerWindowLifecycleLogging(target = globalThis.window) {
+    if (!target?.addEventListener) return () => {};
+    const onBlur = () => EventLogger.focusLost();
+    const onFocus = () => EventLogger.focusResumed();
+    const onBeforeUnload = () => EventLogger.unload();
+    target.addEventListener('blur', onBlur);
+    target.addEventListener('focus', onFocus);
+    target.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+        target.removeEventListener('blur', onBlur);
+        target.removeEventListener('focus', onFocus);
+        target.removeEventListener('beforeunload', onBeforeUnload);
+    };
+}
+
 export default EventLogger;

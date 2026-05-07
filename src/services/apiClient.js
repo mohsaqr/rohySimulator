@@ -65,6 +65,42 @@ function readCsrfToken() {
 }
 
 const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const REQUEST_ID_HEADER = 'X-Request-Id';
+
+function generateClientRequestId() {
+    if (globalThis.crypto?.randomUUID) {
+        return globalThis.crypto.randomUUID();
+    }
+    // Old embedded browsers are not a supported primary target, but keep a
+    // RFC4122-v4 fallback so the correlation header never disappears.
+    return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (c) =>
+        (Number(c) ^ (Math.random() * 16 >> (Number(c) / 4))).toString(16)
+    );
+}
+
+function attachRequestId(value, requestId) {
+    if (!requestId || value == null) return value;
+    if ((typeof value !== 'object' && typeof value !== 'function')) return value;
+    try {
+        Object.defineProperty(value, '__requestId', {
+            value: requestId,
+            enumerable: false,
+            configurable: true,
+        });
+    } catch {
+        // Some host objects are non-extensible; callers can still read the
+        // response header when parseAs:'response' was requested.
+    }
+    return value;
+}
+
+function responseRequestId(response, fallback) {
+    try {
+        return response?.headers?.get?.(REQUEST_ID_HEADER) || fallback;
+    } catch {
+        return fallback;
+    }
+}
 
 function resolveUrl(path) {
     if (typeof path !== 'string') {
@@ -92,15 +128,15 @@ async function readErrorBody(response) {
     }
 }
 
-async function parseResponse(response, parseAs) {
+async function parseResponse(response, parseAs, requestId) {
     if (parseAs === 'response') return response;
-    if (parseAs === 'blob') return response.blob();
+    if (parseAs === 'blob') return attachRequestId(await response.blob(), requestId);
     if (parseAs === 'arrayBuffer') return response.arrayBuffer();
     if (parseAs === 'text') return response.text();
-    if (parseAs === 'json') return response.json();
+    if (parseAs === 'json') return attachRequestId(await response.json(), requestId);
     if (response.status === 204) return null;
     const ct = response.headers.get('content-type') || '';
-    if (ct.includes('application/json')) return response.json();
+    if (ct.includes('application/json')) return attachRequestId(await response.json(), requestId);
     return response.text();
 }
 
@@ -134,6 +170,8 @@ export async function apiFetch(path, options = {}) {
 
     const url = resolveUrl(path);
     const headers = {};
+    const clientRequestId = generateClientRequestId();
+    headers[REQUEST_ID_HEADER] = clientRequestId;
 
     if (auth) {
         const token = readToken();
@@ -183,6 +221,7 @@ export async function apiFetch(path, options = {}) {
     }
 
     if (parseAs === 'response') {
+        attachRequestId(response, responseRequestId(response, clientRequestId));
         return response;
     }
 
@@ -196,7 +235,7 @@ export async function apiFetch(path, options = {}) {
         });
     }
 
-    return parseResponse(response, parseAs);
+    return parseResponse(response, parseAs, responseRequestId(response, clientRequestId));
 }
 
 export const apiGet = (path, options = {}) =>

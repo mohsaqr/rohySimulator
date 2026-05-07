@@ -408,3 +408,69 @@ Phase 1 route-family logging and Phase 2 audit-chain work have landed in the
 working tree. See the "Continuation Handoff — 2026-05-07 (observability +
 audit trail Phases 1-2)" section earlier in this file for the detailed file
 list, decisions, deferrals, and verification commands.
+
+---
+
+# Continuation Handoff — 2026-05-07 (observability Phases 3-4)
+
+## Landed in this run
+
+- **Phase 3 request correlation.** `src/services/apiClient.js` now generates
+  a UUID-v4 `X-Request-Id` per request, sends it on every fetch, and captures
+  the echoed response id. JSON bodies get a non-enumerable `__requestId`; raw
+  `Response` returns keep the header and also get non-enumerable
+  `__requestId` when possible.
+- **Phase 3 client log storage/routes.** Added
+  `migrations/0009_client_logs.sql` with `client_logs` and the
+  `(tenant_id, session_id, received_at)` replay index. Added authenticated
+  `POST /api/client-logs/batch` with validation, max 100 entries per batch,
+  per-user rate limit of 60 batches / 5 minutes, request/user/session/tenant
+  correlation, and `GET /api/client-logs` for educator/admin tenant-scoped
+  newest-first replay.
+- **Phase 3 EventLogger verbs.** Added `LOST_FOCUS`, `RESUMED_FOCUS`,
+  `UNLOAD`, `STT_RESULT`, `STT_ERROR`, and `TTS_PLAYED` metadata and helpers.
+  App shell registers focus/blur/beforeunload listeners and cleans them up on
+  user changes. `voiceService` logs STT result/error metadata and TTS playback
+  completion without logging transcript text.
+- **Phase 3 DiagnosticBar replay.** Admin/educator DiagnosticBar now fetches
+  `GET /api/client-logs?limit=50` or session-scoped replay while expanded,
+  refreshes every 5s, pauses when collapsed, and renders a compact color-coded
+  client-log table.
+- **Learning-event verb parity.** Server `LEARNING_VERBS` now includes the
+  full `EventLogger.VERBS` catalogue so BackendSurface telemetry for less
+  common verbs is not rejected.
+- **Phase 4 docs.** Added `docs/OBSERVABILITY.md`,
+  `docs/AUDIT_TRAIL.md`, and `docs/LEARNING_ANALYTICS.md`; added an "Audit
+  chain broken" playbook to `docs/INCIDENT_RESPONSE.md`; added the requested
+  documentation map to `CLAUDE.md`.
+
+## Decisions
+
+- `client_logs.user_id` is nullable in schema as requested, but the current
+  authenticated batch route sets it from `req.user.id`. Post-logout delivery
+  would need a separate authenticated/queued client strategy; no new auth path
+  was introduced.
+- Client STT logging records lengths, final/interim state, language, and error
+  codes only. It deliberately does not place raw transcripts in telemetry
+  context.
+- DiagnosticBar replay uses `apiFetch`, so cookie and legacy bearer auth stay
+  in the existing dual-mode lane.
+- The `GET /api/client-logs` query uses fixed SQL strings for the session vs
+  non-session paths to stay inside the SQL interpolation guard.
+
+## Verification
+
+- `node --check server/routes.js`
+- `node --check server/migrationRunner.js`
+- Focused: `npm test -- src/services/apiClient.test.js src/services/eventLogger.test.js src/components/debug/DiagnosticBar.test.jsx tests/server/client-logs.test.js tests/server/sql-injection-guard.test.js`
+- Regression rerun after fixing Response-like mocks:
+  `npm test -- src/components/settings/TestVoiceButton.test.jsx src/services/apiClient.test.js`
+- `npm test` passed: 76 files, 1020 tests passing, 10 skipped.
+- `npm run build` passed. Vite still reports the existing large chunk warning.
+
+## Outstanding
+
+- No Phase 3/4 deliverables are intentionally deferred.
+- The client-log POST route exists and is tested, but no general-purpose
+  browser log shipper beyond DiagnosticBar replay was added because the
+  requested EventLogger telemetry already flows through `learning_events`.

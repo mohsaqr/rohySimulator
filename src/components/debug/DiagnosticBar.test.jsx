@@ -47,6 +47,10 @@ vi.mock('../../services/eventLogger', () => ({
     default: { getStatus: () => ({}) },
 }));
 
+vi.mock('../../services/apiClient', () => ({
+    apiFetch: vi.fn(async () => ({ logs: [] })),
+}));
+
 // AuthService.getToken is consulted before the bar fetches platform LLM/case
 // info. Returning null short-circuits those fetches so we never have to mock
 // global fetch. verifyToken returns an admin user so the audit-#22 role gate
@@ -85,6 +89,7 @@ vi.mock('../../contexts/AuthContext', async (importActual) => {
 
 import DiagnosticBar from './DiagnosticBar.jsx';
 import * as voiceService from '../../services/voiceService.js';
+import { apiFetch } from '../../services/apiClient';
 import { useVoice } from '../../contexts/VoiceContext.jsx';
 import { useEffect } from 'react';
 
@@ -136,6 +141,8 @@ beforeEach(() => {
     voiceService.getLastTtsRequest.mockReturnValue(null);
     voiceService.getRecentTtsRequests.mockReturnValue([]);
     voiceService.auditionWirePayload.mockResolvedValue({ stop: vi.fn(), durationSec: 0 });
+    apiFetch.mockReset();
+    apiFetch.mockResolvedValue({ logs: [] });
 });
 
 afterEach(() => {
@@ -187,6 +194,30 @@ describe('DiagnosticBar — render gating', () => {
 });
 
 describe('DiagnosticBar — wire history table', () => {
+    it('fetches and renders client log replay rows for an admin user', async () => {
+        enableBarForAnon();
+        apiFetch.mockResolvedValue({
+            logs: [{
+                id: 10,
+                ts: '2026-05-07T12:34:56.000Z',
+                level: 'warn',
+                component: 'VoiceService',
+                msg: 'speech recognition stalled briefly',
+                request_id: '123e4567-e89b-42d3-a456-426614174000',
+            }],
+        });
+
+        renderWithProviders(<DiagnosticBar />);
+        await act(async () => {
+            fireEvent.click(screen.getByLabelText(/expand details/i));
+        });
+
+        expect(apiFetch).toHaveBeenCalledWith('/client-logs?limit=50');
+        expect(await screen.findByText('VoiceService')).toBeInTheDocument();
+        expect(screen.getByText('speech recognition stalled briefly')).toBeInTheDocument();
+        expect(screen.getByText('123e4567-e89b-42d3-a456-426614174000')).toBeInTheDocument();
+    });
+
     it('populates one row per entry returned by getRecentTtsRequests()', async () => {
         enableBarForAnon();
         const wires = [

@@ -130,7 +130,47 @@ but `rohy_auth` is there, the user logged in before the CSRF deploy.
 
 ---
 
-## 4. "Slow / unresponsive / 503 on TTS"
+## 4. "Audit chain broken"
+
+### Symptoms
+- `GET /api/admin/audit/verify` returns `{ ok: false, brokenAt, expected, actual }`.
+- Direct verification through `verifyAuditChain({ tenant_id })` reports the
+  same first broken row.
+
+### Likely cause
+Someone changed, deleted, or reordered `system_audit_log` rows after they
+were committed, or restored only part of the table from backup. The hash
+chain is tenant-scoped and ordered by `id`, so one broken row invalidates
+that row and every later row in the same tenant chain.
+
+### Diagnosis
+1. Record `tenant_id`, `brokenAt`, `expected`, and `actual`.
+2. Export rows around the break:
+   ```sql
+   SELECT * FROM system_audit_log
+   WHERE tenant_id = ? AND id BETWEEN ? - 5 AND ? + 5
+   ORDER BY id;
+   ```
+3. Compare those rows with the latest known-good backup and server logs for
+   the same `request_id` or timestamp window.
+
+### Recovery
+1. Freeze audit-writing traffic if compliance requires a clean chain.
+2. Preserve a forensic copy of the current database before repair.
+3. Prefer restoring `system_audit_log` from a known-good backup.
+4. If restore is impossible and operations must continue, document the break,
+   preserve the broken table, and start a new chain segment only as an
+   explicit incident decision.
+
+### Prevention
+- All application audit writes must go through `appendAuditEntry`.
+- Do not hand-edit `system_audit_log` in production.
+- This chain detects post-commit tampering; it does not stop a privileged
+  writer from forging a valid row at insert time.
+
+---
+
+## 5. "Slow / unresponsive / 503 on TTS"
 
 ### Symptoms
 - Voice playback never starts.
@@ -157,7 +197,7 @@ but `rohy_auth` is there, the user logged in before the CSRF deploy.
 
 ---
 
-## 5. "Refresh-token loop / user can't stay logged in past 4 hours"
+## 6. "Refresh-token loop / user can't stay logged in past 4 hours"
 
 ### Symptoms
 - User reports being logged out after exactly the JWT TTL.
@@ -186,7 +226,7 @@ but `rohy_auth` is there, the user logged in before the CSRF deploy.
 
 ---
 
-## 6. "Admin says I rotated keys; clients still authenticate with old JWT"
+## 7. "Admin says I rotated keys; clients still authenticate with old JWT"
 
 ### Symptoms
 - Rotated `JWT_SECRET` in deploy; expected all sessions to invalidate.
@@ -213,7 +253,7 @@ the request should 403 with `Invalid or expired token`.
 
 ---
 
-## 7. "Database is locked / slow"
+## 8. "Database is locked / slow"
 
 ### Symptoms
 - Any SQL operation hangs or fails with `SQLITE_BUSY`.

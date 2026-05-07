@@ -87,6 +87,15 @@ const registerLimiter = rateLimit({
     legacyHeaders: false
 });
 
+const clientLogLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 60,
+    message: { error: 'Too many client log batches. Please slow down.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `${req.user?.tenant_id || 'tenant'}:${req.user?.id || 'user'}`
+});
+
 // Per-IP general limiter for the API surface. The limit is tuned to live
 // session traffic: monitor + treatment-effects + telemetry polling alone
 // produce ~50–80 req/min per active user, and a 25-student class behind a
@@ -2990,27 +2999,49 @@ router.get('/sessions/:id/events', authenticateToken, async (req, res) => {
 // Standard xAPI-style verbs for learning analytics
 const LEARNING_VERBS = [
     // Session lifecycle
-    'STARTED_SESSION', 'ENDED_SESSION', 'RESUMED_SESSION',
+    'STARTED_SESSION', 'ENDED_SESSION', 'RESUMED_SESSION', 'IDLE_TIMEOUT', 'UNLOAD',
     // Navigation
     'VIEWED', 'OPENED', 'CLOSED', 'NAVIGATED', 'SWITCHED_TAB',
+    'SCROLLED', 'LOST_FOCUS', 'RESUMED_FOCUS',
     // Interactions
     'CLICKED', 'SELECTED', 'DESELECTED', 'TOGGLED', 'EXPANDED', 'COLLAPSED',
     // Lab/Investigation actions
-    'ORDERED_LAB', 'VIEWED_LAB_RESULT', 'SEARCHED_LABS', 'FILTERED_LABS',
+    'ORDERED_LAB', 'CANCELLED_LAB', 'VIEWED_LAB_RESULT', 'SEARCHED_LABS',
+    'FILTERED_LABS', 'LAB_RESULT_READY',
+    // Medication/treatment actions
+    'ORDERED_MEDICATION', 'ADMINISTERED_MEDICATION', 'CANCELLED_MEDICATION',
+    'ORDERED_TREATMENT', 'PERFORMED_INTERVENTION', 'ORDERED_IV_FLUID',
+    'STARTED_OXYGEN', 'STOPPED_OXYGEN', 'ORDERED_NURSING',
+    'DISCONTINUED_TREATMENT', 'TREATMENT_EFFECT_STARTED',
+    'TREATMENT_EFFECT_PEAKED', 'TREATMENT_EFFECT_ENDED',
+    'CONTRAINDICATED_TREATMENT_ORDERED', 'EXPECTED_TREATMENT_GIVEN',
+    'EXPECTED_TREATMENT_MISSED',
+    // Physical examination
+    'PERFORMED_PHYSICAL_EXAM', 'OPENED_EXAM_PANEL', 'CLOSED_EXAM_PANEL',
     // Chat interactions
     'SENT_MESSAGE', 'RECEIVED_MESSAGE', 'COPIED_MESSAGE',
+    'EDITED_MESSAGE', 'STT_RESULT', 'STT_ERROR', 'TTS_PLAYED',
     // Monitor interactions
     'ADJUSTED_VITAL', 'ACKNOWLEDGED_ALARM', 'SILENCED_ALARM',
+    'ALARM_TRIGGERED', 'VIEWED_TRENDS',
+    // Patient record
+    'VIEWED_PATIENT_SUMMARY', 'VIEWED_HISTORY', 'VIEWED_MEDICATIONS',
+    'VIEWED_ALLERGIES',
     // Settings
-    'CHANGED_SETTING', 'SAVED_SETTING',
+    'CHANGED_SETTING', 'SAVED_SETTING', 'RESET_SETTING',
     // Case interactions
     'LOADED_CASE', 'VIEWED_PATIENT_INFO', 'VIEWED_RECORDS',
+    'SAVED_CASE', 'EXPORTED_CASE',
     // Scenario interactions
     'STARTED_SCENARIO', 'PAUSED_SCENARIO', 'RESUMED_SCENARIO',
+    'COMPLETED_SCENARIO', 'RESET_SCENARIO',
     // Submissions
-    'SUBMITTED', 'ANSWERED', 'ATTEMPTED',
+    'SUBMITTED', 'ANSWERED', 'ATTEMPTED', 'CORRECT_ANSWER',
+    'INCORRECT_ANSWER',
     // Emotion
-    'EXPRESSED_EMOTION'
+    'EXPRESSED_EMOTION',
+    // Errors
+    'ERROR_OCCURRED', 'API_ERROR', 'VALIDATION_ERROR'
 ];
 
 // POST /api/learning-events - Log a learning event
@@ -3151,6 +3182,124 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
         }
         res.json({ inserted, total: events.length });
     });
+});
+
+const CLIENT_LOG_LEVELS = new Set(['debug', 'info', 'warn', 'error']);
+
+function isPlainObject(value) {
+    if (!value || typeof value !== 'object') return false;
+    const proto = Object.getPrototypeOf(value);
+    return proto === Object.prototype || proto === null;
+}
+
+function isIsoTimestamp(value) {
+    if (typeof value !== 'string' || !value.includes('T')) return false;
+    return !Number.isNaN(Date.parse(value));
+}
+
+function parseOptionalSessionHeader(req) {
+    const raw = req.get('X-Rohy-Session-Id');
+    if (raw == null || raw === '') return { ok: true, value: null };
+    if (!/^\d+$/.test(String(raw))) {
+        return { ok: false, error: 'X-Rohy-Session-Id must be an integer' };
+    }
+    return { ok: true, value: Number(raw) };
+}
+
+function validateClientLogEntry(entry, index) {
+    if (!isPlainObject(entry)) return `entries[${index}] must be an object`;
+    if (!CLIENT_LOG_LEVELS.has(entry.level)) return `entries[${index}].level is invalid`;
+    if (typeof entry.component !== 'string' || entry.component.trim() === '') {
+        return `entries[${index}].component is required`;
+    }
+    if (typeof entry.msg !== 'string') return `entries[${index}].msg is required`;
+    if (entry.fields !== undefined && !isPlainObject(entry.fields)) {
+        return `entries[${index}].fields must be an object`;
+    }
+    if (!isIsoTimestamp(entry.ts)) return `entries[${index}].ts must be an ISO8601 timestamp`;
+    return null;
+}
+
+// POST /api/client-logs/batch - Persist client-side structured logs.
+router.post('/client-logs/batch', authenticateToken, clientLogLimiter, async (req, res) => {
+    const { entries } = req.body || {};
+    if (!Array.isArray(entries)) {
+        return res.status(400).json({ error: 'entries array is required' });
+    }
+    if (entries.length > 100) {
+        return res.status(400).json({ error: 'entries must contain at most 100 items' });
+    }
+
+    const session = parseOptionalSessionHeader(req);
+    if (!session.ok) return res.status(400).json({ error: session.error });
+
+    for (let i = 0; i < entries.length; i += 1) {
+        const error = validateClientLogEntry(entries[i], i);
+        if (error) return res.status(400).json({ error });
+    }
+
+    const sql = `
+        INSERT INTO client_logs (
+            tenant_id, user_id, session_id, request_id,
+            level, component, msg, fields_json, ts
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    try {
+        for (const entry of entries) {
+            await dbRun(sql, [
+                tenantId(req),
+                req.user.id,
+                session.value,
+                req.request_id || req.requestId || null,
+                entry.level,
+                entry.component.trim(),
+                entry.msg,
+                entry.fields === undefined ? null : JSON.stringify(entry.fields),
+                entry.ts,
+            ]);
+        }
+        res.json({ accepted: entries.length, rejected: 0 });
+    } catch (err) {
+        req.log?.error('client log batch persist failed', { error: err.message });
+        res.status(500).json({ error: 'Failed to persist client logs' });
+    }
+});
+
+// GET /api/client-logs - Tenant-scoped replay for DiagnosticBar.
+router.get('/client-logs', authenticateToken, requireEducator, (req, res) => {
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 50, 1), 200);
+    const params = [tenantId(req)];
+    let sql = `SELECT id, tenant_id, user_id, session_id, request_id, level, component,
+                      msg, fields_json, ts, received_at
+                 FROM client_logs
+                WHERE tenant_id = ?
+                ORDER BY received_at DESC, id DESC
+                LIMIT ?`;
+
+    if (req.query.session_id !== undefined && req.query.session_id !== '') {
+        if (!/^\d+$/.test(String(req.query.session_id))) {
+            return res.status(400).json({ error: 'session_id must be an integer' });
+        }
+        sql = `SELECT id, tenant_id, user_id, session_id, request_id, level, component,
+                      msg, fields_json, ts, received_at
+                 FROM client_logs
+                WHERE tenant_id = ? AND session_id = ?
+                ORDER BY received_at DESC, id DESC
+                LIMIT ?`;
+        params.push(Number(req.query.session_id));
+    }
+    params.push(limit);
+
+    db.all(
+        sql,
+        params,
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ logs: rows || [] });
+        }
+    );
 });
 
 // GET /api/learning-events/session/:id - Get all learning events for a session

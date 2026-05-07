@@ -22,6 +22,7 @@ import { useVoice } from '../../contexts/VoiceContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiUrl } from '../../config/api';
 import { AuthService } from '../../services/authService';
+import { apiFetch } from '../../services/apiClient';
 import EventLogger from '../../services/eventLogger';
 import { resolveVoice } from '../../utils/voiceResolver';
 import { parseConfig } from '../../utils/parseConfig';
@@ -96,6 +97,8 @@ export default function DiagnosticBar() {
     // we re-read the snapshot on each event so a sudden burst of alarm-log
     // failures becomes visible without polling.
     const [backendTelemetry, setBackendTelemetry] = useState(() => getBackendTelemetry());
+    const [clientLogs, setClientLogs] = useState([]);
+    const [clientLogsError, setClientLogsError] = useState(null);
 
     // Subscribe to BackendSurface telemetry events so the panel reflects
     // failures live. Listener is idempotent: re-reads the full snapshot
@@ -209,6 +212,31 @@ export default function DiagnosticBar() {
         const id = setInterval(tick, 1000);
         return () => clearInterval(id);
     }, [enabled]);
+
+    useEffect(() => {
+        if (!enabled || !expanded || !roleAllowed) return;
+        let cancelled = false;
+        const load = async () => {
+            const session = eventStatus.sessionId;
+            const qs = new URLSearchParams({ limit: '50' });
+            if (session) qs.set('session_id', String(session));
+            try {
+                const data = await apiFetch(`/client-logs?${qs.toString()}`);
+                if (cancelled) return;
+                setClientLogs(Array.isArray(data?.logs) ? data.logs : []);
+                setClientLogsError(null);
+            } catch (err) {
+                if (cancelled) return;
+                setClientLogsError(err?.message || 'failed to load client logs');
+            }
+        };
+        load();
+        const id = setInterval(load, 5000);
+        return () => {
+            cancelled = true;
+            clearInterval(id);
+        };
+    }, [enabled, expanded, roleAllowed, eventStatus.sessionId]);
 
     // Whenever the case changes, fetch its case_agents (patient template +
     // attached agents) and pre-resolve each one's voice. Shows the user every
@@ -452,6 +480,10 @@ export default function DiagnosticBar() {
                                 />
                             ))}
                         </Section>
+                        <Section title="Client log replay">
+                            <Row k="rows" v={clientLogs.length} />
+                            <Row k="status" v={clientLogsError || 'ok'} warn={Boolean(clientLogsError)} />
+                        </Section>
                         <Section title="Platform avatars">
                             <Row k="default_male" v={platformAvatars?.default_avatar_male} />
                             <Row k="default_female" v={platformAvatars?.default_avatar_female} />
@@ -459,6 +491,36 @@ export default function DiagnosticBar() {
                             <Row k="avatar_type" v={voiceSettings?.avatar_type ?? platformAvatars?.avatar_type} />
                         </Section>
                     </div>
+
+                    {clientLogs.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-neutral-800">
+                            <div className="text-emerald-400 font-bold tracking-wider uppercase mb-2">
+                                Client log replay
+                            </div>
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-left text-neutral-500 border-b border-neutral-900">
+                                        <th className="pr-3 py-1 font-normal">ts</th>
+                                        <th className="pr-3 py-1 font-normal">level</th>
+                                        <th className="pr-3 py-1 font-normal">component</th>
+                                        <th className="pr-3 py-1 font-normal">msg</th>
+                                        <th className="pr-3 py-1 font-normal">request_id</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {clientLogs.map(log => (
+                                        <tr key={log.id} className="border-b border-neutral-900/50 hover:bg-neutral-900/40">
+                                            <td className="pr-3 py-1 text-neutral-500 whitespace-nowrap">{formatLogTime(log.ts)}</td>
+                                            <td className="pr-3 py-1"><ClientLogLevel level={log.level} /></td>
+                                            <td className="pr-3 py-1 text-neutral-300">{log.component}</td>
+                                            <td className="pr-3 py-1 text-white truncate max-w-[60ch]" title={log.msg}>{log.msg}</td>
+                                            <td className="pr-3 py-1 text-neutral-400 font-mono text-[10px]">{log.request_id || ''}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
 
                     {/* Live TTS wire history — the literal payloads the runtime
                         last sent to /api/tts (newest first, ring buffer). This
@@ -628,6 +690,27 @@ function Row({ k, v, warn = false }) {
             <span className="text-neutral-700">·</span>
             <span className={valueClass} title={String(v)}>{String(v)}</span>
         </div>
+    );
+}
+
+function formatLogTime(ts) {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toISOString().split('T')[1].slice(0, 8);
+}
+
+function ClientLogLevel({ level }) {
+    const palette = {
+        debug: 'bg-neutral-800 text-neutral-300 border-neutral-700',
+        info: 'bg-blue-900/30 text-blue-300 border-blue-800',
+        warn: 'bg-amber-900/30 text-amber-300 border-amber-800',
+        error: 'bg-red-900/40 text-red-300 border-red-800',
+    };
+    const cls = palette[level] || palette.info;
+    return (
+        <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider border ${cls}`}>
+            {level}
+        </span>
     );
 }
 

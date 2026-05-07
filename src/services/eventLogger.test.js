@@ -141,6 +141,64 @@ describe('eventLogger — xAPI verb mapping (5+ representative verbs)', () => {
         log.log(VERBS.ORDERED_LAB, OBJECT_TYPES.LAB_TEST, { objectId: 'cbc' });
         expect(notify.mock.calls[0][0].data.category).toBe('CLINICAL');
     });
+
+    it('forwards new observability verbs with the expected severity/category shape', async () => {
+        const notify = mountCenter();
+        const { default: log } = await loadFreshLogger();
+
+        log.focusLost();
+        log.focusResumed();
+        log.unload();
+        log.sttResult({ finalLength: 4, interimLength: 2, isFinal: true, lang: 'en-US' });
+        log.sttError('no-speech', { lang: 'en-US' });
+        log.ttsPlayed({ voice: 'voice-a', provider: 'piper' });
+
+        const payloads = notify.mock.calls.map(c => c[0]);
+        expect(payloads.map(p => p.data.verb)).toEqual([
+            'LOST_FOCUS',
+            'RESUMED_FOCUS',
+            'UNLOAD',
+            'STT_RESULT',
+            'STT_ERROR',
+            'TTS_PLAYED',
+        ]);
+        expect(payloads.find(p => p.data.verb === 'LOST_FOCUS').severity).toBe('debug');
+        expect(payloads.find(p => p.data.verb === 'RESUMED_FOCUS').data.category).toBe('NAVIGATION');
+        expect(payloads.find(p => p.data.verb === 'UNLOAD').data.category).toBe('SESSION');
+        expect(payloads.find(p => p.data.verb === 'STT_RESULT').data.context).toMatchObject({
+            finalLength: 4,
+            interimLength: 2,
+            isFinal: true,
+            lang: 'en-US',
+        });
+        expect(payloads.find(p => p.data.verb === 'STT_ERROR').severity).toBe('warning');
+        expect(payloads.find(p => p.data.verb === 'TTS_PLAYED').data.context).toMatchObject({
+            voice: 'voice-a',
+            provider: 'piper',
+        });
+    });
+});
+
+describe('eventLogger — app lifecycle window wiring', () => {
+    it('registers blur/focus/beforeunload listeners and cleans them up', async () => {
+        const notify = mountCenter();
+        const { registerWindowLifecycleLogging } = await loadFreshLogger();
+
+        const cleanup = registerWindowLifecycleLogging(window);
+        window.dispatchEvent(new Event('blur'));
+        window.dispatchEvent(new Event('focus'));
+        window.dispatchEvent(new Event('beforeunload'));
+
+        expect(notify.mock.calls.map(c => c[0].data.verb)).toEqual([
+            'LOST_FOCUS',
+            'RESUMED_FOCUS',
+            'UNLOAD',
+        ]);
+
+        cleanup();
+        window.dispatchEvent(new Event('blur'));
+        expect(notify).toHaveBeenCalledTimes(3);
+    });
 });
 
 describe('eventLogger — session status transitions', () => {

@@ -18,7 +18,7 @@ import { setExternalApi } from './notifications/externalApi';
 import { ToastSurface, BannerSurface, AudioSurface, BackendSurface, ConsoleSurface } from './notifications/surfaces';
 import DiagnosticBar from './components/debug/DiagnosticBar';
 import { PatientRecordProvider, usePatientRecord } from './services/PatientRecord';
-import EventLogger, { COMPONENTS } from './services/eventLogger';
+import EventLogger, { COMPONENTS, registerWindowLifecycleLogging } from './services/eventLogger';
 import { ApiError, apiFetch, apiPut } from './services/apiClient';
 import { Settings, X, LogOut, User, RotateCcw, ChevronDown, Activity } from 'lucide-react';
 import ManikinPanel from './components/examination/ManikinPanel';
@@ -68,6 +68,11 @@ function MainApp() {
       if (user?.id) {
          EventLogger.setContext({ userId: user.id });
       }
+   }, [user?.id]);
+
+   useEffect(() => {
+      if (!user?.id) return undefined;
+      return registerWindowLifecycleLogging(window);
    }, [user?.id]);
 
    // Stage-3 audit: clear notification transient state (active map, acked

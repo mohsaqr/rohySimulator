@@ -31,6 +31,7 @@
 
 import { Lipsync } from 'wawa-lipsync';
 import { apiFetch } from './apiClient.js';
+import EventLogger from './eventLogger.js';
 
 const SR = (typeof window !== 'undefined')
     ? (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -433,6 +434,10 @@ function beginSpeechSession({ voice, rate, pitch, gender, provider, onStart, onV
             if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
             _started = false;
             _session = null;
+            EventLogger.ttsPlayed({
+                voice: session.voice || null,
+                provider: session.provider || null,
+            });
             onEnd?.();
         },
 
@@ -483,8 +488,18 @@ export const VoiceService = {
                 interim: interim.trim(),
                 isFinal: !!finalT
             });
+            EventLogger.sttResult({
+                finalLength: finalT.trim().length,
+                interimLength: interim.trim().length,
+                isFinal: !!finalT,
+                lang: rec.lang,
+            });
         };
-        rec.onerror = (e) => onError?.(new Error(e.error || 'speech recognition error'));
+        rec.onerror = (e) => {
+            const message = e.error || 'speech recognition error';
+            EventLogger.sttError(message, { lang: rec.lang });
+            onError?.(new Error(message));
+        };
         rec.onend = () => {
             _recognition = null;
             onEnd?.({ final: finalT.trim() });

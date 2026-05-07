@@ -4,6 +4,14 @@ Project-specific guidance for Claude Code and human contributors. The parent
 `Documents/Github/CLAUDE.md` covers the surrounding multi-project workspace;
 this file only covers what is unique to rohySimulator.
 
+## Documentation Map
+
+- `docs/OBSERVABILITY.md` — server/client logging components, fields, levels, retention, and log-reading workflow.
+- `docs/AUDIT_TRAIL.md` — `system_audit_log` schema, hash-chain canonicalisation, verification, and recovery limits.
+- `docs/LEARNING_ANALYTICS.md` — EventLogger verb catalogue and xAPI-style `learning_events` mapping.
+- `docs/INCIDENT_RESPONSE.md` — operational playbooks for auth, CSRF, persistence, audit-chain, TTS, JWT, and DB incidents.
+- `src/notifications/SAFETY.md` — clinical alarm notification safety contract and acceptance criteria.
+
 ## Testing
 
 Phase 8 status: ~242 server tests + ~290 client tests + ~71 Playwright e2e

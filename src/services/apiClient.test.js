@@ -19,6 +19,7 @@ function textResponse(body, init = {}) {
 
 describe('apiClient', () => {
     let fetchSpy;
+    const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
     beforeEach(() => {
         localStorage.clear();
@@ -30,6 +31,19 @@ describe('apiClient', () => {
     });
 
     describe('auth header injection', () => {
+        it('attaches a fresh X-Request-Id UUID v4 to every request', async () => {
+            fetchSpy.mockImplementation(() => Promise.resolve(jsonResponse({ ok: true })));
+
+            await apiFetch('/one');
+            await apiFetch('/two');
+
+            const first = fetchSpy.mock.calls[0][1].headers['X-Request-Id'];
+            const second = fetchSpy.mock.calls[1][1].headers['X-Request-Id'];
+            expect(first).toMatch(uuidV4);
+            expect(second).toMatch(uuidV4);
+            expect(second).not.toBe(first);
+        });
+
         it('attaches Bearer token from localStorage by default', async () => {
             localStorage.setItem('token', 'abc.def.ghi');
             fetchSpy.mockResolvedValue(jsonResponse({ ok: true }));
@@ -103,9 +117,13 @@ describe('apiClient', () => {
 
     describe('response parsing', () => {
         it('auto-parses JSON when Content-Type is application/json', async () => {
-            fetchSpy.mockResolvedValue(jsonResponse({ greeting: 'hi' }));
+            fetchSpy.mockResolvedValue(jsonResponse({ greeting: 'hi' }, {
+                headers: { 'X-Request-Id': '123e4567-e89b-42d3-a456-426614174000' },
+            }));
             const data = await apiGet('/x');
             expect(data).toEqual({ greeting: 'hi' });
+            expect(data.__requestId).toBe('123e4567-e89b-42d3-a456-426614174000');
+            expect(Object.keys(data)).toEqual(['greeting']);
         });
 
         it('auto-returns text for non-JSON responses', async () => {
@@ -121,9 +139,13 @@ describe('apiClient', () => {
         });
 
         it('parseAs:response returns the raw Response for streaming/binary callers', async () => {
-            fetchSpy.mockResolvedValue(jsonResponse({ ok: true }));
+            fetchSpy.mockResolvedValue(jsonResponse({ ok: true }, {
+                headers: { 'X-Request-Id': '123e4567-e89b-42d3-a456-426614174999' },
+            }));
             const res = await apiFetch('/x', { parseAs: 'response' });
             expect(res).toBeInstanceOf(Response);
+            expect(res.headers.get('X-Request-Id')).toBe('123e4567-e89b-42d3-a456-426614174999');
+            expect(res.__requestId).toBe('123e4567-e89b-42d3-a456-426614174999');
             const body = await res.json();
             expect(body).toEqual({ ok: true });
         });
