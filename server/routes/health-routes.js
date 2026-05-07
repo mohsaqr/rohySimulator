@@ -46,52 +46,54 @@ router.get('/health', (req, res) => {
     });
 });
 
-// Readiness — proves the app is actually able to serve traffic.
-// Uses dbAdapter.get with a 2s timeout race so a hung sqlite (very rare,
-// but possible during heavy backups / locks) yields 503 instead of hanging.
+// Readiness — proves the app is actually able to serve traffic. Both
+// probes run in parallel under a single 2s deadline; under nginx
+// active-health-checks every second the latency cost matters.
+const READY_TIMEOUT_MS = 2000;
+
+function adapterGet(sql) {
+    return new Promise((resolve, reject) => {
+        dbAdapter.get(sql, [], (err, row) => err ? reject(err) : resolve(row));
+    });
+}
+
 router.get('/ready', async (req, res) => {
     const checks = { db: 'unknown', migrations: 'unknown' };
     let healthy = true;
 
-    // DB ping — minimal SELECT against sqlite_master so we don't depend on
-    // any application table existing.
-    try {
-        const dbPing = new Promise((resolve, reject) => {
-            dbAdapter.get('SELECT 1 AS ok', [], (err, row) => {
-                if (err) return reject(err);
-                resolve(row?.ok === 1);
-            });
-        });
-        const timeout = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('db ping timed out (2s)')), 2000)
-        );
-        const ok = await Promise.race([dbPing, timeout]);
-        checks.db = ok ? 'ok' : 'unexpected_response';
-        if (!ok) healthy = false;
-    } catch (err) {
-        checks.db = `error: ${err.message}`;
-        healthy = false;
-    }
+    const probes = Promise.all([
+        adapterGet('SELECT 1 AS ok')
+            .then((row) => row?.ok === 1
+                ? { key: 'db', value: 'ok', ok: true }
+                : { key: 'db', value: 'unexpected_response', ok: false })
+            .catch((err) => ({ key: 'db', value: `error: ${err.message}`, ok: false })),
+        adapterGet('SELECT MAX(version) AS latest, COUNT(*) AS applied FROM schema_migrations')
+            .then((row) => (!row || row.applied === 0)
+                ? { key: 'migrations', value: 'none_applied', ok: false }
+                : { key: 'migrations', value: `at ${row.latest} (${row.applied} applied)`, ok: true })
+            .catch((err) => ({ key: 'migrations', value: `error: ${err.message}`, ok: false })),
+    ]);
 
-    // Migration status — most recent applied version. A schema_migrations
-    // row count of 0 is a "boot before migrations applied" signal.
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(
+            () => reject(new Error(`readiness probe timed out (${READY_TIMEOUT_MS}ms)`)),
+            READY_TIMEOUT_MS,
+        );
+    });
+
     try {
-        const row = await new Promise((resolve, reject) => {
-            dbAdapter.get(
-                'SELECT MAX(version) AS latest, COUNT(*) AS applied FROM schema_migrations',
-                [],
-                (err, r) => err ? reject(err) : resolve(r),
-            );
-        });
-        if (!row || row.applied === 0) {
-            checks.migrations = 'none_applied';
-            healthy = false;
-        } else {
-            checks.migrations = `at ${row.latest} (${row.applied} applied)`;
+        const results = await Promise.race([probes, timeout]);
+        for (const r of results) {
+            checks[r.key] = r.value;
+            if (!r.ok) healthy = false;
         }
     } catch (err) {
-        checks.migrations = `error: ${err.message}`;
+        checks.db = checks.db === 'unknown' ? `error: ${err.message}` : checks.db;
+        checks.migrations = checks.migrations === 'unknown' ? `error: ${err.message}` : checks.migrations;
         healthy = false;
+    } finally {
+        clearTimeout(timeoutId);
     }
 
     res.status(healthy ? 200 : 503).json({

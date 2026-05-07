@@ -63,9 +63,14 @@ export function routeTimeout(opts = {}) {
         // Don't keep the event loop alive just for this timer.
         timer.unref?.();
 
-        const cleanup = () => clearTimeout(timer);
-        res.on('finish', cleanup);
-        res.on('close', cleanup);
+        let cleared = false;
+        const cleanup = () => {
+            if (cleared) return;
+            cleared = true;
+            clearTimeout(timer);
+        };
+        res.once('finish', cleanup);
+        res.once('close', cleanup);
         next();
     };
 }

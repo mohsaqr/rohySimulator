@@ -20,7 +20,25 @@ const STT_LANGUAGES = [
 // Voice slots are stored per-provider since voice IDs are provider-specific
 // (a Google "en-US-Neural2-F" can't be played by Kokoro). The four supported
 // catalogue providers; 'browser' speaks via Web Speech API and has no slots.
-const PROVIDERS = ['piper', 'kokoro', 'openai', 'google'];
+const TTS_PROVIDERS = {
+    kokoro: {
+        label: 'Kokoro',
+        emptyHint: 'No Kokoro voices loaded yet. The model loads on first request — try saving and synthesizing once.',
+    },
+    piper: {
+        label: 'Piper',
+        emptyHint: <>No voices installed. Drop <code>.onnx</code> + <code>.onnx.json</code> files into <code>server/data/piper/</code> and refresh.</>,
+    },
+    google: {
+        label: 'Google Cloud TTS',
+        emptyHint: 'No Google voices available — check that the Google TTS API key is a valid Google Cloud key (starts with "AIza"), not an OpenAI/other key.',
+    },
+    openai: {
+        label: 'OpenAI TTS',
+        emptyHint: 'No OpenAI voices available — check that the OpenAI TTS API key is valid (starts with "sk-").',
+    },
+};
+const PROVIDERS = Object.keys(TTS_PROVIDERS);
 const GENDERS = ['male', 'female', 'child'];
 
 function emptyVoiceSlots() {
@@ -214,24 +232,9 @@ export default function VoiceSettingsTab() {
 
     const isKokoro = settings.tts_provider === 'kokoro';
     const showPiperWarning = settings.tts_provider === 'piper' && !piperInstalled;
-    const providerLabel = (
-        settings.tts_provider === 'kokoro' ? 'Kokoro' :
-        settings.tts_provider === 'piper' ? 'Piper' :
-        settings.tts_provider === 'google' ? 'Google Cloud TTS' :
-        settings.tts_provider === 'openai' ? 'OpenAI TTS' :
-        settings.tts_provider
-    );
-    const emptyVoicesHint = (
-        settings.tts_provider === 'kokoro'
-            ? 'No Kokoro voices loaded yet. The model loads on first request — try saving and synthesizing once.'
-        : settings.tts_provider === 'piper'
-            ? <>No voices installed. Drop <code>.onnx</code> + <code>.onnx.json</code> files into <code>server/data/piper/</code> and refresh.</>
-        : settings.tts_provider === 'google'
-            ? 'No Google voices available — check that the Google TTS API key is a valid Google Cloud key (starts with "AIza"), not an OpenAI/other key.'
-        : settings.tts_provider === 'openai'
-            ? 'No OpenAI voices available — check that the OpenAI TTS API key is valid (starts with "sk-").'
-        : `No voices available for provider "${settings.tts_provider}".`
-    );
+    const providerInfo = TTS_PROVIDERS[settings.tts_provider];
+    const providerLabel = providerInfo?.label ?? settings.tts_provider;
+    const emptyVoicesHint = providerInfo?.emptyHint ?? `No voices available for provider "${settings.tts_provider}".`;
 
     return (
         <div className="space-y-6 max-w-3xl">

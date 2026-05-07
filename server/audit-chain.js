@@ -103,7 +103,14 @@ export function computeEntryHash(prevHash, canonicalJson) {
         .digest('hex');
 }
 
+// Per-handle schema-ensured cache. PRAGMA + ALTER ran inside the audit
+// mutex on every append before this — head-of-line blocking on every
+// fire-and-forget audit write. WeakMap so test fixtures with their own
+// handles don't share cache entries with the prod singleton.
+const schemaEnsured = new WeakMap();
+
 export async function ensureAuditChainColumns(database) {
+    if (schemaEnsured.get(database)) return;
     const columns = await dbAll(database, 'PRAGMA table_info(system_audit_log)');
     const names = new Set(columns.map((column) => column.name));
     if (!names.has('prev_hash')) {
@@ -112,6 +119,7 @@ export async function ensureAuditChainColumns(database) {
     if (!names.has('entry_hash')) {
         await dbRun(database, 'ALTER TABLE system_audit_log ADD COLUMN entry_hash TEXT');
     }
+    schemaEnsured.set(database, true);
 }
 
 export async function backfillAuditChain(database) {

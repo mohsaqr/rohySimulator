@@ -28,15 +28,9 @@ function splitParamsAndCallback(params, callback) {
     if (typeof params === 'function') {
         return { params: [], callback: params };
     }
-    // Defensive: catch the variadic-args misuse pattern where a caller
-    // writes `.run(a, b, c, fn)` instead of `.run([a, b, c], fn)`. Without
-    // this guard the legacy code path silently mangles the call (params
-    // becomes `a`, callback becomes `b`) and then crashes the WHOLE
-    // process with `TypeError: args.callback.call is not a function`.
-    // Prefer a thrown error here — the route-level error handler catches
-    // it as a request-scope failure instead of an uncaught exception that
-    // takes the process down. See 2026-05-08 incident for the symptom
-    // (TTS 502s caused by patient-record-sync silently mangling args).
+    // Throw on the variadic-args misuse — `.run(a, b, c, fn)` would
+    // otherwise silently shift `b` into the callback slot and surface
+    // later as an uncaught TypeError that crashes the whole process.
     if (callback != null && typeof callback !== 'function') {
         throw new TypeError(
             `dbAdapter callback must be a function or undefined; got ${typeof callback}. ` +

@@ -14,8 +14,10 @@
 // killing vitest.
 
 import path from 'node:path';
+import { logger } from '../logger.js';
 
 const MIN_JWT_SECRET_LENGTH = 32;
+const defaultLog = logger('env');
 
 function isProd(env) {
     return env.NODE_ENV === 'production';
@@ -149,25 +151,16 @@ export function validateEnv(env = process.env) {
     return { errors, warnings };
 }
 
-// Process-killing wrapper. Logger has the same shape as logger('foo') — uses
-// .error/.warn/.info methods. Defaults to console for callers that haven't
-// initialized the project logger yet (e.g. very early in server.js boot).
-export function validateEnvOrExit(env = process.env, log = console) {
+// Process-killing wrapper. log defaults to the project `logger('env')` so
+// the output format matches every other server component.
+export function validateEnvOrExit(env = process.env, log = defaultLog) {
     const { errors, warnings } = validateEnv(env);
 
-    for (const w of warnings) {
-        if (typeof log.warn === 'function') log.warn('[env] ' + w);
-        else if (typeof log.info === 'function') log.info('[env] WARN ' + w);
-    }
-    for (const e of errors) {
-        if (typeof log.error === 'function') log.error('[env] ' + e);
-    }
+    for (const w of warnings) log.warn?.(w);
+    for (const e of errors) log.error?.(e);
 
     if (errors.length > 0) {
-        const msg = `[env] ${errors.length} fatal config error(s) — refusing to start. Fix the env file and try again.`;
-        if (typeof log.error === 'function') log.error(msg);
-        // Tests cover validateEnv() pure form; this branch is intentionally
-        // not unit-tested via process.exit but covered via spawn-based test.
+        log.error?.(`${errors.length} fatal config error(s) — refusing to start. Fix the env file and try again.`);
         process.exit(1);
     }
 
