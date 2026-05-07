@@ -6,11 +6,15 @@ import { describe, it, expect } from 'vitest';
 import { parseConfig } from './parseConfig.js';
 
 describe('parseConfig', () => {
-    it('object input passes through by reference (no clone)', () => {
+    it('object input is deep-cloned (audit #23 — callers must not mutate the source)', () => {
         const input = { a: 1, nested: { b: 2 } };
         const result = parseConfig(input);
-        expect(result).toBe(input); // same reference, not a clone
+        expect(result).not.toBe(input);            // different reference
+        expect(result.nested).not.toBe(input.nested); // deep clone
         expect(result).toEqual({ a: 1, nested: { b: 2 } });
+        // Mutating the result must not bleed back into the source.
+        result.nested.b = 999;
+        expect(input.nested.b).toBe(2);
     });
 
     it('valid JSON string parses into the expected object', () => {
@@ -61,12 +65,15 @@ describe('parseConfig', () => {
         expect(parseConfig(true)).toBe(true);
     });
 
-    it('array input passes through by reference (not wrapped in object)', () => {
-        const arr = [1, 2, 3];
+    it('array input is deep-cloned (audit #23 — callers must not mutate the source)', () => {
+        const arr = [1, 2, { nested: 'x' }];
         const result = parseConfig(arr);
-        expect(result).toBe(arr); // same reference
+        expect(result).not.toBe(arr);
         expect(Array.isArray(result)).toBe(true);
-        expect(result).toEqual([1, 2, 3]);
+        expect(result).toEqual([1, 2, { nested: 'x' }]);
+        // Mutating the result must not bleed back into the source array.
+        result[2].nested = 'mutated';
+        expect(arr[2].nested).toBe('x');
     });
 
     it('valid JSON array string parses into an array (not coerced to object)', () => {

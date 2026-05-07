@@ -108,14 +108,15 @@ export function clusterSequences(userSequences, labels, k) {
 }
 
 /**
- * Compute centrality metrics using tnaj.
+ * Compute centrality metrics from a 2D weights matrix.
+ *
+ * Was a wrapper around tnaj.centralities, but tnaj expects its own
+ * Matrix weights and we already have a 2D array — so the function
+ * computes in/out strength directly. Cleanup #23 removed the dead
+ * `tnajTna([['_dummy']])` allocation that was confusing readers.
  */
 export function centralities(model) {
-  // Build a tnaj model from our 2D array weights
   const n = model.labels.length;
-  const tnajModel = tnajTna([['_dummy']]);
-  // Instead, compute centralities manually from our 2D weights
-  // (tnaj centralities expects a tnaj model with Matrix weights)
   const { labels, weights } = model;
 
   return labels.map((label, i) => {
