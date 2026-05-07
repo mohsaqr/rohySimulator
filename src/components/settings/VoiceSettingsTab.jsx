@@ -214,6 +214,24 @@ export default function VoiceSettingsTab() {
 
     const isKokoro = settings.tts_provider === 'kokoro';
     const showPiperWarning = settings.tts_provider === 'piper' && !piperInstalled;
+    const providerLabel = (
+        settings.tts_provider === 'kokoro' ? 'Kokoro' :
+        settings.tts_provider === 'piper' ? 'Piper' :
+        settings.tts_provider === 'google' ? 'Google Cloud TTS' :
+        settings.tts_provider === 'openai' ? 'OpenAI TTS' :
+        settings.tts_provider
+    );
+    const emptyVoicesHint = (
+        settings.tts_provider === 'kokoro'
+            ? 'No Kokoro voices loaded yet. The model loads on first request — try saving and synthesizing once.'
+        : settings.tts_provider === 'piper'
+            ? <>No voices installed. Drop <code>.onnx</code> + <code>.onnx.json</code> files into <code>server/data/piper/</code> and refresh.</>
+        : settings.tts_provider === 'google'
+            ? 'No Google voices available — check that the Google TTS API key is a valid Google Cloud key (starts with "AIza"), not an OpenAI/other key.'
+        : settings.tts_provider === 'openai'
+            ? 'No OpenAI voices available — check that the OpenAI TTS API key is valid (starts with "sk-").'
+        : `No voices available for provider "${settings.tts_provider}".`
+    );
 
     return (
         <div className="space-y-6 max-w-3xl">
@@ -321,15 +339,10 @@ export default function VoiceSettingsTab() {
             {/* TTS voices */}
             <fieldset className="space-y-3">
                 <legend className="text-sm font-bold text-white">
-                    Patient voices ({isKokoro ? 'Kokoro' : 'Piper'})
+                    Patient voices ({providerLabel})
                 </legend>
                 {voices.length === 0 ? (
-                    <div className="text-sm text-neutral-500">
-                        {isKokoro
-                            ? 'No Kokoro voices loaded yet. The model loads on first request — try saving and synthesizing once.'
-                            : <>No voices installed. Drop <code>.onnx</code> + <code>.onnx.json</code> files into <code>server/data/piper/</code> and refresh.</>
-                        }
-                    </div>
+                    <div className="text-sm text-neutral-500">{emptyVoicesHint}</div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         {GENDERS.map(g => {

@@ -167,4 +167,36 @@ describe('VoiceSettingsTab apiFetch migration', () => {
 
         expect(await screen.findByRole('option', { name: /all users/i })).toBeInTheDocument();
     });
+
+    // Regression lock: 2026-05-08. The legend used `isKokoro ? 'Kokoro' : 'Piper'`
+    // so picking Google or OpenAI fell through to "Piper" — looked like the UI
+    // wasn't switching providers at all.
+    it.each([
+        ['google', /Patient voices \(Google Cloud TTS\)/i],
+        ['openai', /Patient voices \(OpenAI TTS\)/i],
+        ['kokoro', /Patient voices \(Kokoro\)/i],
+        ['piper',  /Patient voices \(Piper\)/i],
+    ])('legend shows the actual provider name when tts_provider=%s', async (provider, expected) => {
+        fetchSpy.mockImplementation((url) => {
+            if (typeof url === 'string' && url.endsWith('/api/platform-settings/voice')) {
+                return Promise.resolve(jsonResponse({
+                    voice_mode_enabled: true,
+                    tts_provider: provider,
+                    tts_rate: 1, tts_pitch: 0,
+                    stt_provider: 'browser', stt_language: 'en-US', avatar_type: '3d_head',
+                }));
+            }
+            if (typeof url === 'string' && url.endsWith('/api/llm/models')) return Promise.resolve(jsonResponse({ models: [] }));
+            if (typeof url === 'string' && url.includes('/api/tts/voices')) return Promise.resolve(jsonResponse({ voices: [] }));
+            if (typeof url === 'string' && url.includes('/api/tts/usage')) return Promise.resolve(jsonResponse({ today: [], last_7_days: [], this_month: [], all_time: [] }));
+            return Promise.resolve(jsonResponse({}));
+        });
+
+        renderWithProviders(
+            <VoiceSettingsTab />,
+            { withAuth: false, withNotifications: false, withToast: false }
+        );
+
+        expect(await screen.findByText(expected)).toBeInTheDocument();
+    });
 });
