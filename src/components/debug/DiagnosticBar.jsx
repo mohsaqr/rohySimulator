@@ -6,6 +6,15 @@
 //   localStorage[rohy_diag_bar_enabled_<userId>] = '1' | '0'
 // Default OFF. Admin enables via Settings → Notifications → Diagnostics or
 // by clicking the floating "Diag" pill in the bottom-right corner.
+//
+// Audit #22 — role gating:
+// The bar surfaces operational metadata (platform LLM endpoint, TTS wire
+// payloads, voice resolver tier) that should not be visible to learners
+// even with browser-storage access. Visibility is now gated to
+// admin / educator roles regardless of the localStorage flag. A non-
+// admin user with rohy_diag_bar_enabled_<id>=1 still sees nothing — the
+// per-user flag is preserved (so admins keep their preference), but the
+// render gate adds a role check on top.
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { ChevronUp, ChevronDown, X, Activity, Play, Square } from 'lucide-react';
@@ -35,9 +44,22 @@ export function setDiagnosticBarEnabled(userId, enabled) {
     } catch { /* ignore quota */ }
 }
 
+// Roles allowed to see the diagnostic bar. Locked at the top of the file so
+// auditors can see the policy without spelunking. Educators get access for
+// course authoring (resolving "why does the patient sound wrong"); admins
+// always; everyone else (student, reviewer, guest) is hidden.
+const DIAG_BAR_VISIBLE_ROLES = new Set(['admin', 'educator']);
+
+export function isDiagBarRoleAllowed(user) {
+    if (!user) return false;
+    const role = user.role === 'user' ? 'student' : user.role;
+    return DIAG_BAR_VISIBLE_ROLES.has(role);
+}
+
 export default function DiagnosticBar() {
     const { user } = useAuth();
     const userId = user?.id ?? null;
+    const roleAllowed = isDiagBarRoleAllowed(user);
     const {
         voiceMode, listening, speaking,
         voiceSettings, platformAvatars, activeParticipant
@@ -287,6 +309,12 @@ export default function DiagnosticBar() {
         if (user?.tenant_id) parts.push(`t${user.tenant_id}`);
         return parts.join(' · ');
     }, [llm, voiceSettings, voiceMode, speakerVoice, speakerTier, activeParticipant, eventStatus.sessionId, user?.tenant_id, lastTts]);
+
+    // Audit #22: hard role gate. Non-admin/educator users see nothing,
+    // even if their localStorage flag says enabled. Returning early
+    // before any of the floating-pill / expanded-bar branches makes
+    // the gate impossible to bypass via flag flipping.
+    if (!roleAllowed) return null;
 
     // Floating toggle when bar is disabled — a tiny pill bottom-right that
     // surfaces the feature without requiring the user to dig into Settings.

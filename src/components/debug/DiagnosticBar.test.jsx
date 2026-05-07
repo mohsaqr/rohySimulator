@@ -49,13 +49,39 @@ vi.mock('../../services/eventLogger', () => ({
 
 // AuthService.getToken is consulted before the bar fetches platform LLM/case
 // info. Returning null short-circuits those fetches so we never have to mock
-// global fetch.
+// global fetch. verifyToken returns an admin user so the audit-#22 role gate
+// (admin/educator only) is satisfied for these render-gating tests; the
+// gate itself is exercised by DiagnosticBar.role-gate.test.jsx.
 vi.mock('../../services/authService', () => ({
     AuthService: {
         getToken: () => null,
         verifyToken: vi.fn(async () => null),
     },
 }));
+
+// Audit #22 introduced a role gate (admin/educator only) on the bar. Mock
+// useAuth synchronously here so the gate is satisfied on the very first
+// render — without this, the component returns null before AuthProvider
+// has a chance to resolve verifyToken. The role-gate behaviour itself is
+// covered by DiagnosticBar.role-gate.test.jsx; this mock just keeps the
+// existing render-gating tests focused on the localStorage flag.
+const mockUseAuth = vi.fn(() => ({
+    user: { username: 'admin', role: 'admin' },
+    loading: false,
+    isAuthenticated: true,
+    isAdmin: () => true,
+    login: vi.fn(),
+    register: vi.fn(),
+    logout: vi.fn(),
+}));
+
+vi.mock('../../contexts/AuthContext', async (importActual) => {
+    const actual = await importActual();
+    return {
+        ...actual,
+        useAuth: () => mockUseAuth(),
+    };
+});
 
 import DiagnosticBar from './DiagnosticBar.jsx';
 import * as voiceService from '../../services/voiceService.js';
@@ -118,12 +144,29 @@ afterEach(() => {
 });
 
 describe('DiagnosticBar — render gating', () => {
-    it('returns null when disabled AND no user is present (no token)', () => {
-        // Default: no localStorage flag set, no user — should render nothing.
-        const { container } = renderWithProviders(<DiagnosticBar />);
-        expect(container.querySelector('[role="status"]')).toBeNull();
-        // The "Diag" floating pill should also be absent (no user).
-        expect(screen.queryByLabelText(/show diagnostic bar/i)).toBeNull();
+    it('renders nothing for non-admin users even when localStorage says enabled (audit #22 role gate)', () => {
+        // Lock the audit-#22 role gate at the integration layer: even if
+        // localStorage says enabled and a user exists, a non-admin/educator
+        // user must see nothing. The pure-function policy is covered by
+        // DiagnosticBar.role-gate.test.jsx; this test pins the wiring.
+        const original = mockUseAuth.getMockImplementation();
+        mockUseAuth.mockImplementation(() => ({
+            user: { role: 'student' },
+            loading: false,
+            isAuthenticated: true,
+            isAdmin: () => false,
+            login: vi.fn(),
+            register: vi.fn(),
+            logout: vi.fn(),
+        }));
+        try {
+            enableBarForAnon();
+            const { container } = renderWithProviders(<DiagnosticBar />);
+            expect(container.querySelector('[role="status"]')).toBeNull();
+            expect(screen.queryByLabelText(/show diagnostic bar/i)).toBeNull();
+        } finally {
+            mockUseAuth.mockImplementation(original);
+        }
     });
 
     it('renders the footer (role=status) when localStorage flag is "1"', () => {
