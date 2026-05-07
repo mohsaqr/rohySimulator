@@ -477,4 +477,97 @@ describe('server/migrationRunner.js', () => {
         );
         expect(tbl).not.toBeNull();
     });
+
+    // -----------------------------------------------------------------------
+    // 9. Audit #13 — downgrade / dirty-database safety
+    // -----------------------------------------------------------------------
+
+    it('"future" migration versions in DB are tolerated (downgrade contract)', async () => {
+        // Scenario: a deploy applied 0001..0005, then was rolled back to a
+        // build that only ships 0001..0003 on disk. The schema_migrations
+        // table contains versions newer than discoverMigrations() can see.
+        // The runner must NOT crash, must NOT re-run already-applied 0001-0003,
+        // and must report no new work — the operator can then redeploy the
+        // newer build to catch up.
+        writeMigration(env.migrationsDir, '0001_a.sql', 'CREATE TABLE t1 (id INTEGER);');
+        writeMigration(env.migrationsDir, '0002_b.sql', 'CREATE TABLE t2 (id INTEGER);');
+
+        // Apply the on-disk migrations.
+        await runMigrations(db, { migrationsDir: env.migrationsDir });
+
+        // Pretend a future deploy applied a 0003 we no longer have on disk.
+        const fakeChecksum = crypto.createHash('sha256').update('-- removed').digest('hex');
+        await new Promise((resolve, reject) => {
+            db.run(
+                `INSERT INTO schema_migrations (version, name, applied_at, checksum)
+                 VALUES ('0003', '0003_future.sql', CURRENT_TIMESTAMP, ?)`,
+                [fakeChecksum],
+                (err) => err ? reject(err) : resolve()
+            );
+        });
+
+        // Re-running against the older directory must not crash.
+        const result = await runMigrations(db, { migrationsDir: env.migrationsDir });
+        expect(result.applied).toEqual([]);
+        expect(result.dryRun).toBe(false);
+
+        // The future row is still there — the runner did not touch it.
+        const future = await pGet(
+            db,
+            'SELECT version FROM schema_migrations WHERE version = ?',
+            ['0003']
+        );
+        expect(future).not.toBeNull();
+    });
+
+    it('a multi-statement migration with a mid-statement failure leaves the DB clean', async () => {
+        // Scenario (audit #13): operator authors 0001 with two statements;
+        // the second fails. The transaction wrapper must roll back so the
+        // first statement's effect is gone and the migration is NOT
+        // recorded — re-running the migration after the operator fixes the
+        // SQL must apply the (corrected) version cleanly.
+        writeMigration(
+            env.migrationsDir,
+            '0001_partial.sql',
+            `CREATE TABLE partial_t (id INTEGER);
+             INSERT INTO doesnt_exist (id) VALUES (1);` // second statement errors
+        );
+
+        await expect(
+            runMigrations(db, { migrationsDir: env.migrationsDir })
+        ).rejects.toThrow();
+
+        // BEGIN/COMMIT rollback: partial_t must NOT exist.
+        const partial = await pGet(
+            db,
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='partial_t'"
+        );
+        expect(partial).toBeNull();
+
+        // schema_migrations row not created.
+        const row = await pGet(
+            db,
+            'SELECT version FROM schema_migrations WHERE version = ?',
+            ['0001']
+        );
+        expect(row).toBeNull();
+
+        // Operator fixes the SQL — second run applies cleanly.
+        writeMigration(
+            env.migrationsDir,
+            '0001_partial.sql',
+            `CREATE TABLE partial_t (id INTEGER);
+             INSERT INTO partial_t (id) VALUES (1);`
+        );
+        await runMigrations(db, { migrationsDir: env.migrationsDir });
+
+        const fixed = await pGet(
+            db,
+            'SELECT version FROM schema_migrations WHERE version = ?',
+            ['0001']
+        );
+        expect(fixed).not.toBeNull();
+        const inserted = await pGet(db, 'SELECT id FROM partial_t WHERE id = ?', [1]);
+        expect(inserted).not.toBeNull();
+    });
 });
