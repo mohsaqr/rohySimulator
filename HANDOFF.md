@@ -589,3 +589,64 @@ npm test
 - There were pre-existing unrelated working-tree changes in
   `server/security-headers.js` and `tests/server/security-headers.test.js`;
   this run did not touch or revert them.
+
+---
+
+# Continuation Handoff — 2026-05-07 (Item A completion)
+
+## Completed in this run
+
+### Item A continuation — admin editor apiFetch migration
+
+- `src/components/settings/MedicationManager.jsx`
+  - Migrated medication GET/POST/PUT/DELETE/bulk import paths to
+    `apiFetch`/`apiPost`/`apiPut`/`apiDelete`.
+  - Removed `AuthService`/`apiUrl` usage.
+  - Added a direct-mount admin gate so non-admin users do not render the
+    medication management surface.
+  - Added `src/components/settings/MedicationManager.test.jsx` covering bearer
+    auth on load, POST/PUT JSON bodies, ApiError toast, and non-admin gating.
+- `src/components/settings/ConfigPanel.jsx`
+  - Migrated the large in-file settings flows to apiClient helpers:
+    case load/save/delete/import, case availability/default toggles,
+    body-image uploads, platform settings, LLM settings, chat/monitor settings,
+    system logs/export, user management, lab selector, case agents, and public
+    scenario loading.
+  - Extended `src/components/settings/ConfigPanel.test.jsx` to assert bearer
+    auth, request id propagation, and JSON body shape on case load/save.
+- Broader settings guard cleanup:
+  - `AgentPersonaEditor.jsx`, `LabInvestigationEditor.jsx`, and
+    `ScenarioRepository.jsx` still matched the task's broad
+    `fetch(apiUrl(` stop check, so they were migrated to apiClient helpers too.
+  - Added `LabInvestigationEditor.test.jsx` and `ScenarioRepository.test.jsx`;
+    existing `AgentPersonaEditor.test.jsx` covers that component.
+
+## Verification
+
+```text
+grep -rln "AuthService.authHeaders\|fetch(apiUrl(" src/components/settings/
+src/components/settings/TestVoiceButton.test.jsx
+```
+
+The only remaining match is a test comment/fixture lock for `TestVoiceButton`.
+
+```text
+npm test
+86 files passed
+1051 passed, 10 skipped
+```
+
+## Deferred / boundary
+
+- **Item D skipped:** `server/routes.js` domain split not started.
+- **Item C skipped:** dbAdapter migration and static guard not started.
+- **Item B skipped:** TTS/LLM concurrency budget tracker not started.
+
+This is a clean Item A boundary. The next run should start with **Item D Slice
+D1** (`server/routes.js` helper extraction) before any dbAdapter or budget work.
+
+## Notes
+
+- No budget defaults were chosen in this run because Item B was not started.
+- There is an unrelated pre-existing modification in `src/contexts/AuthContext.jsx`
+  visible in `git status`; this run did not edit or revert it.

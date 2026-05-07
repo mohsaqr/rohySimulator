@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Plus, Trash2, Edit, Download, Upload, Globe, Lock, Play, X, Copy, Clock, ChevronDown, ChevronUp, Save, FileText, Search, Filter, Package, Database, AlertCircle } from 'lucide-react';
-import { AuthService } from '../../services/authService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { apiUrl } from '../../config/api';
+import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
 import { SCENARIO_TEMPLATES } from '../../data/scenarioTemplates';
 
 const CATEGORIES = [
@@ -79,11 +78,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
 
     const loadScenarios = async () => {
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/scenarios'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
+            const data = await apiFetch('/scenarios');
             setDbScenarios(data.scenarios || []);
         } catch (error) {
             console.error('Failed to load scenarios:', error);
@@ -167,16 +162,12 @@ export default function ScenarioRepository({ onSelectScenario }) {
         if (!confirmed) return;
 
         try {
-            const token = AuthService.getToken();
-            await fetch(apiUrl(`/scenarios/${id}`), {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            await apiDelete(`/scenarios/${id}`);
             loadScenarios();
             toast.success('Scenario deleted');
         } catch (error) {
             console.error('Failed to delete scenario:', error);
-            toast.error('Failed to delete scenario');
+            toast.error(error instanceof ApiError ? error.message : 'Failed to delete scenario');
         }
     };
 
@@ -191,37 +182,27 @@ export default function ScenarioRepository({ onSelectScenario }) {
         }
 
         try {
-            const token = AuthService.getToken();
             const isNew = !editingScenario.id || String(editingScenario.id).startsWith('builtin_');
-            const method = isNew ? 'POST' : 'PUT';
-            const url = isNew
-                ? apiUrl('/scenarios')
-                : apiUrl(`/scenarios/${editingScenario.id}`);
-
-            const res = await fetch(url, {
-                method,
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    name: editingScenario.name,
-                    description: editingScenario.description,
-                    category: editingScenario.category,
-                    duration_minutes: editingScenario.duration_minutes,
-                    timeline: editingScenario.timeline,
-                    is_public: editingScenario.is_public
-                })
-            });
-
-            if (!res.ok) throw new Error('Failed to save');
+            const payload = {
+                name: editingScenario.name,
+                description: editingScenario.description,
+                category: editingScenario.category,
+                duration_minutes: editingScenario.duration_minutes,
+                timeline: editingScenario.timeline,
+                is_public: editingScenario.is_public
+            };
+            if (isNew) {
+                await apiPost('/scenarios', payload);
+            } else {
+                await apiPut(`/scenarios/${editingScenario.id}`, payload);
+            }
 
             setEditingScenario(null);
             loadScenarios();
             toast.success(isNew ? 'Scenario created' : 'Scenario updated');
         } catch (error) {
             console.error('Failed to save scenario:', error);
-            toast.error('Failed to save scenario');
+            toast.error(error instanceof ApiError ? error.message : 'Failed to save scenario');
         }
     };
 

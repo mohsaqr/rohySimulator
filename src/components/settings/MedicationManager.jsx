@@ -3,10 +3,9 @@ import {
     Search, Plus, Trash2, Loader2, Upload, Download, Edit2, Save, X,
     Pill, Database, RefreshCw, ChevronDown, ChevronRight, Lock
 } from 'lucide-react';
-import { AuthService } from '../../services/authService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { apiUrl } from '../../config/api';
+import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
 
 // Role rank table mirrors server/middleware/auth.js so we can gate the
 // Edit button by the same rules canMutate() enforces server-side. Keeps
@@ -242,14 +241,10 @@ export default function MedicationManager() {
     const fetchMedications = async () => {
         setLoading(true);
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/master/medications'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
+            const data = await apiFetch('/master/medications');
             setMedications(data.medications || []);
         } catch (err) {
-            toast.error('Failed to load medications');
+            toast.error(err instanceof ApiError ? err.message : 'Failed to load medications');
             console.error(err);
         } finally {
             setLoading(false);
@@ -257,8 +252,12 @@ export default function MedicationManager() {
     };
 
     useEffect(() => {
-        fetchMedications();
-    }, []);
+        if (rankOf(currentUser) >= ROLE_RANKS.admin) {
+            fetchMedications();
+        } else {
+            setLoading(false);
+        }
+    }, [currentUser]);
 
     const filteredMedications = useMemo(() => {
         if (!searchQuery) return medications;
@@ -287,25 +286,16 @@ export default function MedicationManager() {
     const handleSaveEdit = async (id, draft) => {
         setSavingId(id);
         try {
-            const token = AuthService.getToken();
             // Use the new scope-aware endpoint — it supports PUT, the legacy
             // /master path does not. Server enforces the same canMutate rule
             // the UI gates the Edit button by, so 403s here would only fire
             // for race conditions (someone else changed scope).
-            const res = await fetch(apiUrl(`/catalogue/medications/${id}`), {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(draft),
-            });
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.error || `Failed to save (${res.status})`);
-            }
+            await apiPut(`/catalogue/medications/${id}`, draft);
             toast.success('Medication updated');
             setEditingId(null);
             await fetchMedications();
         } catch (err) {
-            toast.error(err.message);
+            toast.error(err instanceof ApiError ? err.message : err.message || 'Failed to save medication');
         } finally {
             setSavingId(null);
         }
@@ -318,23 +308,13 @@ export default function MedicationManager() {
         }
 
         try {
-            const token = AuthService.getToken();
             const medData = {
                 ...newMed,
                 indications: csvToArray(newMed.indications),
                 side_effects: csvToArray(newMed.side_effects),
             };
 
-            const res = await fetch(apiUrl('/master/medications'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(medData)
-            });
-
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.error || 'Failed to add medication');
-            }
+            await apiPost('/master/medications', medData);
 
             toast.success('Medication added');
             setNewMed({
@@ -349,7 +329,7 @@ export default function MedicationManager() {
             fetchMedications();
             setActiveTab('browse');
         } catch (err) {
-            toast.error(err.message);
+            toast.error(err instanceof ApiError ? err.message : err.message || 'Failed to add medication');
         }
     };
 
@@ -357,20 +337,14 @@ export default function MedicationManager() {
         if (!confirm(`Delete "${name}"?`)) return;
 
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl(`/master/medications/${id}`), {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (!res.ok) throw new Error('Failed to delete');
+            await apiDelete(`/master/medications/${id}`);
 
             toast.success('Medication deleted');
             if (expandedId === id) setExpandedId(null);
             if (editingId === id) setEditingId(null);
             fetchMedications();
         } catch (err) {
-            toast.error(err.message);
+            toast.error(err instanceof ApiError ? err.message : err.message || 'Failed to delete');
         }
     };
 
@@ -378,18 +352,12 @@ export default function MedicationManager() {
         if (!confirm('Delete ALL medications? This cannot be undone.')) return;
 
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/master/medications/all'), {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (!res.ok) throw new Error('Failed to delete');
+            await apiDelete('/master/medications/all');
 
             toast.success('All medications deleted');
             fetchMedications();
         } catch (err) {
-            toast.error(err.message);
+            toast.error(err instanceof ApiError ? err.message : err.message || 'Failed to delete');
         }
     };
 
@@ -406,24 +374,16 @@ export default function MedicationManager() {
         }
 
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/master/medications/bulk'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({
-                    medications: names.map(name => ({ name }))
-                })
+            const data = await apiPost('/master/medications/bulk', {
+                medications: names.map(name => ({ name }))
             });
-
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Import failed');
 
             toast.success(`Imported ${data.inserted} medications (${data.skipped} skipped)`);
             setImportData('');
             fetchMedications();
             setActiveTab('browse');
         } catch (err) {
-            toast.error(err.message);
+            toast.error(err instanceof ApiError ? err.message : err.message || 'Import failed');
         }
     };
 
@@ -448,6 +408,14 @@ export default function MedicationManager() {
         return (
             <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+            </div>
+        );
+    }
+
+    if (rankOf(currentUser) < ROLE_RANKS.admin) {
+        return (
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-6 text-sm text-neutral-400">
+                Medication management requires an administrator account.
             </div>
         );
     }

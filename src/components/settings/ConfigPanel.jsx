@@ -3,8 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy, Mic } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { AuthService } from '../../services/authService';
-import { apiUrl } from '../../config/api';
+import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
 import EventLog from '../monitor/EventLog';
 import SessionLogViewer from '../analytics/SessionLogViewer';
 import ScenarioRepository from './ScenarioRepository';
@@ -104,13 +103,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
     // Load Cases on Mount
     useEffect(() => {
-        const token = AuthService.getToken();
-        fetch(apiUrl('/cases'), {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        })
-            .then(res => res.json())
+        apiFetch('/cases')
             .then(data => {
                 setCases(data.cases || []);
                 if (data.cases?.length > 0) setSelectedCaseId(data.cases[0].id);
@@ -131,9 +124,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
         }
 
         const isUpdate = !!editingCase.id;
-        const url = apiUrl(isUpdate
-            ? `/cases/${editingCase.id}`
-            : '/cases');
+        const path = isUpdate ? `/cases/${editingCase.id}` : '/cases';
 
         // Auto-generate system prompt if empty
         const sysPrompt = editingCase.system_prompt || `You are ${editingCase.name}. ${editingCase.description}`;
@@ -151,42 +142,10 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
         console.log('[ConfigPanel] Saving case with scenario:', editingCase.scenario ? 'present' : 'null');
 
-        const token = AuthService.getToken();
-
-        if (!token) {
-            toast.error('Authentication required. Please log in again.');
-            return false;
-        }
-
-        console.log('Saving case:', { isUpdate, url, payload: { ...payload, config: 'omitted for brevity' } });
+        console.log('Saving case:', { isUpdate, path, payload: { ...payload, config: 'omitted for brevity' } });
 
         try {
-            const res = await fetch(url, {
-                method: isUpdate ? 'PUT' : 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
-            });
-
-            console.log('Response status:', res.status);
-
-            if (!res.ok) {
-                // Check if response is JSON
-                const contentType = res.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    const error = await res.json();
-                    throw new Error(error.error || `Failed to save case (${res.status})`);
-                } else {
-                    // Response is not JSON (likely HTML error page)
-                    const text = await res.text();
-                    console.error('Non-JSON response:', text);
-                    throw new Error(`Server error (${res.status}). Check console for details.`);
-                }
-            }
-
-            const saved = await res.json();
+            const saved = isUpdate ? await apiPut(path, payload) : await apiPost(path, payload);
             console.log('Case saved successfully:', saved);
 
             // Stage-2 audit: bulk-replace labs in one atomic call. Pre-fix
@@ -198,14 +157,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             const caseId = saved.id;
             const labs = editingCase.config?.investigations?.labs || [];
             try {
-                await fetch(apiUrl(`/cases/${caseId}/labs`), {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ labs })
-                });
+                await apiPut(`/cases/${caseId}/labs`, { labs });
             } catch (labErr) {
                 console.error('Failed to replace labs:', labErr);
             }
@@ -238,18 +190,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
         const confirmed = await toast.confirm('Are you sure you want to delete this case?', { title: 'Delete Case', type: 'danger', confirmText: 'Delete' });
         if (!confirmed) return;
 
-        const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl(`/cases/${caseId}`), {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (!res.ok) {
-                throw new Error('Failed to delete case');
-            }
+            await apiDelete(`/cases/${caseId}`);
 
             setCases(prev => prev.filter(c => c.id !== caseId));
             toast.success('Case deleted successfully!');
@@ -257,6 +199,16 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             console.error(err);
             toast.error('Failed to delete case');
         }
+    };
+
+    const uploadBodyImage = (file, type) => {
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('type', type);
+        return apiFetch('/upload-body-image', {
+            method: 'POST',
+            body: formData,
+        });
     };
 
     return (
@@ -419,28 +371,10 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                         throw new Error('Invalid case file format');
                                                                     }
 
-                                                                    // Save to database
-                                                                    const token = AuthService.getToken();
-                                                                    const res = await fetch(apiUrl('/cases'), {
-                                                                        method: 'POST',
-                                                                        headers: {
-                                                                            'Content-Type': 'application/json',
-                                                                            'Authorization': `Bearer ${token}`
-                                                                        },
-                                                                        body: JSON.stringify(caseData)
-                                                                    });
-
-                                                                    if (res.ok) {
-                                                                        toast.success('Case imported successfully!');
-                                                                        // Reload cases
-                                                                        const casesRes = await fetch(apiUrl('/cases'), {
-                                                                            headers: { 'Authorization': `Bearer ${token}` }
-                                                                        });
-                                                                        const data = await casesRes.json();
-                                                                        setCases(data.cases || []);
-                                                                    } else {
-                                                                        throw new Error('Failed to save case');
-                                                                    }
+                                                                    await apiPost('/cases', caseData);
+                                                                    toast.success('Case imported successfully!');
+                                                                    const data = await apiFetch('/cases');
+                                                                    setCases(data.cases || []);
                                                                 } catch (err) {
                                                                     toast.error('Failed to import case: ' + err.message);
                                                                 }
@@ -509,23 +443,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                         <button
                                                             onClick={async () => {
                                                                 try {
-                                                                    const token = AuthService.getToken();
-                                                                    const res = await fetch(apiUrl(`/cases/${c.id}/availability`), {
-                                                                        method: 'PUT',
-                                                                        headers: {
-                                                                            'Content-Type': 'application/json',
-                                                                            'Authorization': `Bearer ${token}`
-                                                                        },
-                                                                        body: JSON.stringify({ is_available: !c.is_available })
-                                                                    });
-                                                                    if (res.ok) {
-                                                                        // Refresh cases
-                                                                        const casesRes = await fetch(apiUrl('/cases'), {
-                                                                            headers: { 'Authorization': `Bearer ${token}` }
-                                                                        });
-                                                                        const data = await casesRes.json();
-                                                                        setCases(data.cases || []);
-                                                                    }
+                                                                    await apiPut(`/cases/${c.id}/availability`, { is_available: !c.is_available });
+                                                                    const data = await apiFetch('/cases');
+                                                                    setCases(data.cases || []);
                                                                 } catch (err) {
                                                                     console.error('Failed to toggle availability:', err);
                                                                 }
@@ -541,23 +461,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                         <button
                                                             onClick={async () => {
                                                                 try {
-                                                                    const token = AuthService.getToken();
-                                                                    const res = await fetch(apiUrl(`/cases/${c.id}/default`), {
-                                                                        method: 'PUT',
-                                                                        headers: {
-                                                                            'Content-Type': 'application/json',
-                                                                            'Authorization': `Bearer ${token}`
-                                                                        },
-                                                                        body: JSON.stringify({ is_default: true })
-                                                                    });
-                                                                    if (res.ok) {
-                                                                        // Refresh cases
-                                                                        const casesRes = await fetch(apiUrl('/cases'), {
-                                                                            headers: { 'Authorization': `Bearer ${token}` }
-                                                                        });
-                                                                        const data = await casesRes.json();
-                                                                        setCases(data.cases || []);
-                                                                    }
+                                                                    await apiPut(`/cases/${c.id}/default`, { is_default: true });
+                                                                    const data = await apiFetch('/cases');
+                                                                    setCases(data.cases || []);
                                                                 } catch (err) {
                                                                     console.error('Failed to set default:', err);
                                                                 }
@@ -855,15 +761,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                     <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
                                                         const file = e.target.files?.[0];
                                                         if (file) {
-                                                            const formData = new FormData();
-                                                            formData.append('image', file);
-                                                            formData.append('type', 'man-front');
-                                                            fetch(apiUrl('/upload-body-image'), {
-                                                                method: 'POST',
-                                                                headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
-                                                                body: formData
-                                                            })
-                                                                .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
+                                                            uploadBodyImage(file, 'man-front')
                                                                 .then(() => toast.success('Image uploaded!'))
                                                                 .catch(err => toast.error('Upload failed: ' + (err.error || err.message)));
                                                         }
@@ -880,15 +778,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                     <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
                                                         const file = e.target.files?.[0];
                                                         if (file) {
-                                                            const formData = new FormData();
-                                                            formData.append('image', file);
-                                                            formData.append('type', 'man-back');
-                                                            fetch(apiUrl('/upload-body-image'), {
-                                                                method: 'POST',
-                                                                headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
-                                                                body: formData
-                                                            })
-                                                                .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
+                                                            uploadBodyImage(file, 'man-back')
                                                                 .then(() => toast.success('Image uploaded!'))
                                                                 .catch(err => toast.error('Upload failed: ' + (err.error || err.message)));
                                                         }
@@ -905,15 +795,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                     <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
                                                         const file = e.target.files?.[0];
                                                         if (file) {
-                                                            const formData = new FormData();
-                                                            formData.append('image', file);
-                                                            formData.append('type', 'woman-front');
-                                                            fetch(apiUrl('/upload-body-image'), {
-                                                                method: 'POST',
-                                                                headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
-                                                                body: formData
-                                                            })
-                                                                .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
+                                                            uploadBodyImage(file, 'woman-front')
                                                                 .then(() => toast.success('Image uploaded!'))
                                                                 .catch(err => toast.error('Upload failed: ' + (err.error || err.message)));
                                                         }
@@ -930,15 +812,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                     <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
                                                         const file = e.target.files?.[0];
                                                         if (file) {
-                                                            const formData = new FormData();
-                                                            formData.append('image', file);
-                                                            formData.append('type', 'woman-back');
-                                                            fetch(apiUrl('/upload-body-image'), {
-                                                                method: 'POST',
-                                                                headers: { 'Authorization': `Bearer ${AuthService.getToken()}` },
-                                                                body: formData
-                                                            })
-                                                                .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
+                                                            uploadBodyImage(file, 'woman-back')
                                                                 .then(() => toast.success('Image uploaded!'))
                                                                 .catch(err => toast.error('Upload failed: ' + (err.error || err.message)));
                                                         }
@@ -1003,23 +877,10 @@ function PlatformSettings({ cases, setCases }) {
     const handleSetDefault = async (caseId) => {
         setLoading(true);
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl(`/cases/${caseId}/default`), {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ is_default: true })
-            });
-            if (res.ok) {
-                const casesRes = await fetch(apiUrl('/cases'), {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await casesRes.json();
-                setCases(data.cases || []);
-                setDefaultCaseId(caseId);
-            }
+            await apiPut(`/cases/${caseId}/default`, { is_default: true });
+            const data = await apiFetch('/cases');
+            setCases(data.cases || []);
+            setDefaultCaseId(caseId);
         } catch (err) {
             console.error('Failed to set default case:', err);
         }
@@ -1030,23 +891,10 @@ function PlatformSettings({ cases, setCases }) {
         if (!defaultCaseId) return;
         setLoading(true);
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl(`/cases/${defaultCaseId}/default`), {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ is_default: false })
-            });
-            if (res.ok) {
-                const casesRes = await fetch(apiUrl('/cases'), {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await casesRes.json();
-                setCases(data.cases || []);
-                setDefaultCaseId(null);
-            }
+            await apiPut(`/cases/${defaultCaseId}/default`, { is_default: false });
+            const data = await apiFetch('/cases');
+            setCases(data.cases || []);
+            setDefaultCaseId(null);
         } catch (err) {
             console.error('Failed to clear default case:', err);
         }
@@ -1161,16 +1009,9 @@ function UserFieldConfiguration() {
 
     const loadFieldConfig = async () => {
         try {
-            const token = AuthService.getToken();
-            const response = await fetch(apiUrl('/platform-settings/user-fields'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.config) {
-                    setFieldConfig(data.config);
-                }
+            const data = await apiFetch('/platform-settings/user-fields');
+            if (data.config) {
+                setFieldConfig(data.config);
             }
         } catch (error) {
             console.error('Failed to load field config:', error);
@@ -1192,24 +1033,10 @@ function UserFieldConfiguration() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const token = AuthService.getToken();
-            const response = await fetch(apiUrl('/platform-settings/user-fields'), {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ config: fieldConfig })
-            });
-
-            if (response.ok) {
-                toast.success('User field configuration saved');
-            } else {
-                const data = await response.json();
-                toast.error(data.error || 'Failed to save configuration');
-            }
+            await apiPut('/platform-settings/user-fields', { config: fieldConfig });
+            toast.success('User field configuration saved');
         } catch (error) {
-            toast.error('Failed to save configuration: ' + error.message);
+            toast.error(error instanceof ApiError ? error.message : 'Failed to save configuration: ' + error.message);
         } finally {
             setSaving(false);
         }
@@ -1427,25 +1254,15 @@ function LLMConfiguration() {
 
     const loadConfig = async () => {
         try {
-            const token = AuthService.getToken();
-            const [llmRes, limitsRes, usageRes] = await Promise.all([
-                fetch(apiUrl('/platform-settings/llm'), { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(apiUrl('/platform-settings/rate-limits'), { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(apiUrl('/llm/usage/platform'), { headers: { 'Authorization': `Bearer ${token}` } })
+            const [llmData, limitsData, usageData] = await Promise.all([
+                apiFetch('/platform-settings/llm'),
+                apiFetch('/platform-settings/rate-limits'),
+                apiFetch('/llm/usage/platform')
             ]);
 
-            if (llmRes.ok) {
-                const data = await llmRes.json();
-                setLlmConfig(data);
-            }
-            if (limitsRes.ok) {
-                const data = await limitsRes.json();
-                setRateLimits(data);
-            }
-            if (usageRes.ok) {
-                const data = await usageRes.json();
-                setPlatformUsage(data);
-            }
+            setLlmConfig(llmData);
+            setRateLimits(limitsData);
+            setPlatformUsage(usageData);
         } catch (err) {
             console.error('Failed to load LLM config:', err);
         } finally {
@@ -1474,19 +1291,10 @@ function LLMConfiguration() {
         }
         setSaving(true);
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/platform-settings/llm'), {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(llmConfig)
-            });
-            if (res.ok) {
-                toast.success('LLM settings saved.');
-            } else {
-                throw new Error('Failed to save');
-            }
+            await apiPut('/platform-settings/llm', llmConfig);
+            toast.success('LLM settings saved.');
         } catch (err) {
-            toast.error('Failed to save LLM settings');
+            toast.error(err instanceof ApiError ? err.message : 'Failed to save LLM settings');
         } finally {
             setSaving(false);
         }
@@ -1495,19 +1303,10 @@ function LLMConfiguration() {
     const handleSaveRateLimits = async () => {
         setSaving(true);
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/platform-settings/rate-limits'), {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(rateLimits)
-            });
-            if (res.ok) {
-                toast.success('Rate limits saved successfully!');
-            } else {
-                throw new Error('Failed to save');
-            }
+            await apiPut('/platform-settings/rate-limits', rateLimits);
+            toast.success('Rate limits saved successfully!');
         } catch (err) {
-            toast.error('Failed to save rate limits');
+            toast.error(err instanceof ApiError ? err.message : 'Failed to save rate limits');
         } finally {
             setSaving(false);
         }
@@ -1517,19 +1316,10 @@ function LLMConfiguration() {
         setTesting(true);
         try {
             // First save the current settings
-            const token = AuthService.getToken();
-            await fetch(apiUrl('/platform-settings/llm'), {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(llmConfig)
-            });
+            await apiPut('/platform-settings/llm', llmConfig);
 
             // Then test
-            const res = await fetch(apiUrl('/platform-settings/llm/test'), {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-            });
-            const data = await res.json();
+            const data = await apiPost('/platform-settings/llm/test', {});
             if (data.success) {
                 toast.success(`Connection successful! Response: "${data.response}"`);
             } else {
@@ -1914,15 +1704,9 @@ function ChatConfiguration() {
 
     const loadSettings = async () => {
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/platform-settings/chat'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setChatSettings(data);
-                setPreviewAvatar(data.doctorAvatar || '');
-            }
+            const data = await apiFetch('/platform-settings/chat');
+            setChatSettings(data);
+            setPreviewAvatar(data.doctorAvatar || '');
         } catch (err) {
             console.error('Failed to load chat settings:', err);
         } finally {
@@ -1933,19 +1717,10 @@ function ChatConfiguration() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/platform-settings/chat'), {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(chatSettings)
-            });
-            if (res.ok) {
-                toast.success('Chat settings saved successfully!');
-            } else {
-                throw new Error('Failed to save');
-            }
+            await apiPut('/platform-settings/chat', chatSettings);
+            toast.success('Chat settings saved successfully!');
         } catch (err) {
-            toast.error('Failed to save chat settings');
+            toast.error(err instanceof ApiError ? err.message : 'Failed to save chat settings');
         } finally {
             setSaving(false);
         }
@@ -2077,14 +1852,8 @@ function MonitorConfiguration() {
 
     const loadMonitorSettings = async () => {
         try {
-            const token = AuthService.getToken();
-            const response = await fetch(apiUrl('/platform-settings/monitor'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setMonitorSettings(prev => ({ ...prev, ...data }));
-            }
+            const data = await apiFetch('/platform-settings/monitor');
+            setMonitorSettings(prev => ({ ...prev, ...data }));
         } catch (error) {
             console.error('Failed to load monitor settings:', error);
         } finally {
@@ -2099,23 +1868,10 @@ function MonitorConfiguration() {
     const saveMonitorSettings = async () => {
         setSaving(true);
         try {
-            const token = AuthService.getToken();
-            const response = await fetch(apiUrl('/platform-settings/monitor'), {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(monitorSettings)
-            });
-
-            if (response.ok) {
-                toast.success('Monitor settings saved');
-            } else {
-                throw new Error('Failed to save');
-            }
+            await apiPut('/platform-settings/monitor', monitorSettings);
+            toast.success('Monitor settings saved');
         } catch (error) {
-            toast.error('Failed to save monitor settings');
+            toast.error(error instanceof ApiError ? error.message : 'Failed to save monitor settings');
         } finally {
             setSaving(false);
         }
@@ -2229,12 +1985,8 @@ function SystemLogs() {
 
     const loadLoginLogs = async () => {
         setLoading(true);
-        const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/analytics/login-logs?limit=200'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
+            const data = await apiFetch('/analytics/login-logs?limit=200');
             setLoginLogs(data.logs || []);
         } catch (err) {
             console.error('Failed to load login logs', err);
@@ -2245,12 +1997,8 @@ function SystemLogs() {
 
     const loadSettingsLogs = async () => {
         setLoading(true);
-        const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/analytics/settings-logs?limit=200'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
+            const data = await apiFetch('/analytics/settings-logs?limit=200');
             setSettingsLogs(data.logs || []);
         } catch (err) {
             console.error('Failed to load settings logs', err);
@@ -2261,13 +2009,10 @@ function SystemLogs() {
 
     const loadSessions = async (showSpinner = true) => {
         if (showSpinner) setLoading(true);
-        const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/analytics/sessions'), {
-                headers: { 'Authorization': `Bearer ${token}` },
+            const data = await apiFetch('/analytics/sessions', {
                 cache: 'no-store',
             });
-            const data = await res.json();
             setSessionsList(data.sessions || []);
         } catch (err) {
             console.error('Failed to load sessions', err);
@@ -2278,12 +2023,8 @@ function SystemLogs() {
 
     const loadQuestionnaireResponses = async () => {
         setLoading(true);
-        const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/questionnaire-responses'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
+            const data = await apiFetch('/questionnaire-responses');
             setQuestionnaireResponses(data.responses || []);
         } catch (err) {
             console.error('Failed to load questionnaire responses', err);
@@ -2293,24 +2034,23 @@ function SystemLogs() {
     };
 
     const downloadCSV = async (logType) => {
-        const token = AuthService.getToken();
-        let url = '';
+        let path = '';
 
         switch (logType) {
             case 'login':
-                url = apiUrl('/export/login-logs');
+                path = '/export/login-logs';
                 break;
             case 'chat':
-                url = apiUrl('/export/chat-logs');
+                path = '/export/chat-logs';
                 break;
             case 'settings':
-                url = apiUrl('/export/settings-logs');
+                path = '/export/settings-logs';
                 break;
             case 'session-settings':
-                url = apiUrl('/export/session-settings');
+                path = '/export/session-settings';
                 break;
             case 'questionnaire':
-                url = apiUrl('/export/questionnaire-responses');
+                path = '/export/questionnaire-responses';
                 break;
         }
 
@@ -2321,19 +2061,7 @@ function SystemLogs() {
         const queryString = params.toString() ? `?${params.toString()}` : '';
 
         try {
-            // Fetch with auth header
-            const response = await fetch(url + queryString, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Export failed');
-            }
-
-            // Get the CSV content
-            const blob = await response.blob();
+            const blob = await apiFetch(path + queryString, { parseAs: 'blob' });
 
             // Create download link
             const downloadUrl = window.URL.createObjectURL(blob);
@@ -2736,12 +2464,8 @@ function UserManagement() {
 
     const loadUsers = async () => {
         setLoading(true);
-        const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/users'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
+            const data = await apiFetch('/users');
             setUsers(data.users || []);
         } catch (err) {
             console.error('Failed to load users', err);
@@ -2752,59 +2476,30 @@ function UserManagement() {
 
     const handleCreateUser = async (e) => {
         e.preventDefault();
-        const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl('/users/create'), {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(formData)
-            });
-
-            const data = await res.json();
-            if (res.ok) {
-                toast.success('User created successfully!');
-                loadUsers();
-                setShowCreateForm(false);
-                setFormData({ username: '', name: '', email: '', password: '', role: 'user' });
-            } else {
-                toast.error(data.error || 'Failed to create user');
-            }
+            await apiPost('/users/create', formData);
+            toast.success('User created successfully!');
+            loadUsers();
+            setShowCreateForm(false);
+            setFormData({ username: '', name: '', email: '', password: '', role: 'user' });
         } catch (err) {
-            toast.error('Error creating user');
+            toast.error(err instanceof ApiError ? err.message : 'Error creating user');
         }
     };
 
     const handleEditUser = async (e) => {
         e.preventDefault();
-        const token = AuthService.getToken();
 
         try {
-            const res = await fetch(apiUrl(`/users/${editingUser.id}`), {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(formData)
-            });
-
-            const data = await res.json();
-
-            if (res.ok) {
-                toast.success('User updated successfully!');
-                loadUsers();
-                setShowEditForm(false);
-                setEditingUser(null);
-                setFormData({ username: '', name: '', email: '', password: '', role: 'user' });
-            } else {
-                toast.error(data.error || 'Failed to update user');
-            }
+            await apiPut(`/users/${editingUser.id}`, formData);
+            toast.success('User updated successfully!');
+            loadUsers();
+            setShowEditForm(false);
+            setEditingUser(null);
+            setFormData({ username: '', name: '', email: '', password: '', role: 'user' });
         } catch (err) {
             console.error('Error updating user:', err);
-            toast.error('Error updating user: ' + err.message);
+            toast.error(err instanceof ApiError ? err.message : 'Error updating user: ' + err.message);
         }
     };
 
@@ -2835,17 +2530,7 @@ function UserManagement() {
                     return;
                 }
 
-                const token = AuthService.getToken();
-                const res = await fetch(apiUrl('/users/batch'), {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ users })
-                });
-
-                const data = await res.json();
+                const data = await apiPost('/users/batch', { users });
                 toast.success(data.message);
                 if (data.results.failed.length > 0) {
                     console.log('Failed users:', data.results.failed);
@@ -2880,45 +2565,27 @@ student1,Student One,student1@school.edu,stud123,user`;
         const confirmed = await toast.confirm('Are you sure you want to delete this user?', { title: 'Delete User', type: 'danger', confirmText: 'Delete' });
         if (!confirmed) return;
 
-        const token = AuthService.getToken();
         try {
-            const res = await fetch(apiUrl(`/users/${userId}`), {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (res.ok) {
-                setUsers(prev => prev.filter(u => u.id !== userId));
-                toast.success('User deleted successfully');
-            }
+            await apiDelete(`/users/${userId}`);
+            setUsers(prev => prev.filter(u => u.id !== userId));
+            toast.success('User deleted successfully');
         } catch (err) {
-            toast.error('Failed to delete user');
+            toast.error(err instanceof ApiError ? err.message : 'Failed to delete user');
         }
     };
 
     const handleToggleRole = async (userId, currentRole) => {
         const newRole = currentRole === 'admin' ? 'user' : 'admin';
-        const token = AuthService.getToken();
 
         try {
             const user = users.find(u => u.id === userId);
-            const res = await fetch(apiUrl(`/users/${userId}`), {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username: user.username, name: user.name, email: user.email, role: newRole })
-            });
-
-            if (res.ok) {
-                setUsers(prev => prev.map(u =>
-                    u.id === userId ? { ...u, role: newRole } : u
-                ));
-                toast.success('User role updated');
-            }
+            await apiPut(`/users/${userId}`, { username: user.username, name: user.name, email: user.email, role: newRole });
+            setUsers(prev => prev.map(u =>
+                u.id === userId ? { ...u, role: newRole } : u
+            ));
+            toast.success('User role updated');
         } catch (err) {
-            toast.error('Failed to update role');
+            toast.error(err instanceof ApiError ? err.message : 'Failed to update role');
         }
     };
 
@@ -3204,11 +2871,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
 
     // Load groups on mount
     useEffect(() => {
-        const token = AuthService.getToken();
-        fetch(apiUrl('/labs/groups'), {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
-            .then(res => res.json())
+        apiFetch('/labs/groups')
             .then(data => setGroups(data.groups || []))
             .catch(err => console.error('Failed to load groups:', err));
     }, []);
@@ -3221,11 +2884,7 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
         }
 
         setIsSearching(true);
-        const token = AuthService.getToken();
-        fetch(apiUrl(`/labs/search?q=${encodeURIComponent(searchQuery)}&limit=20`), {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
-            .then(res => res.json())
+        apiFetch(`/labs/search?q=${encodeURIComponent(searchQuery)}&limit=20`)
             .then(data => {
                 setSearchResults(data.results || []);
                 setIsSearching(false);
@@ -3278,31 +2937,24 @@ function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddBy
 
         setAddingGroup(true);
         try {
-            const token = AuthService.getToken();
-            const response = await fetch(apiUrl(`/labs/group/${encodeURIComponent(selectedGroup)}`), {
-                headers: { 'Authorization': `Bearer ${token}` }
+            const data = await apiFetch(`/labs/group/${encodeURIComponent(selectedGroup)}`);
+            const tests = data.tests || [];
+
+            // Group tests by name
+            const grouped = {};
+            tests.forEach(test => {
+                if (!grouped[test.test_name]) {
+                    grouped[test.test_name] = [];
+                }
+                grouped[test.test_name].push(test);
             });
 
-            if (response.ok) {
-                const data = await response.json();
-                const tests = data.tests || [];
+            // Add each unique test
+            Object.values(grouped).forEach(testGroup => {
+                handleAddLab(testGroup);
+            });
 
-                // Group tests by name
-                const grouped = {};
-                tests.forEach(test => {
-                    if (!grouped[test.test_name]) {
-                        grouped[test.test_name] = [];
-                    }
-                    grouped[test.test_name].push(test);
-                });
-
-                // Add each unique test
-                Object.values(grouped).forEach(testGroup => {
-                    handleAddLab(testGroup);
-                });
-
-                toast.success(`Added ${Object.keys(grouped).length} tests from ${selectedGroup}`);
-            }
+            toast.success(`Added ${Object.keys(grouped).length} tests from ${selectedGroup}`);
         } catch (error) {
             console.error('Failed to add group:', error);
             toast.error('Failed to add tests by group');
@@ -3494,24 +3146,13 @@ function CaseAgentEditor({ caseId, caseData, setCaseData, onOpenPersonaEditor })
         setLoading(true);
         try {
             // Load all templates
-            const token = localStorage.getItem('token');
-            const templatesRes = await fetch(apiUrl('/agents/templates'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (templatesRes.ok) {
-                const data = await templatesRes.json();
-                setTemplates(data.templates || []);
-            }
+            const templatesData = await apiFetch('/agents/templates');
+            setTemplates(templatesData.templates || []);
 
             // Load case agents if case has an ID
             if (caseId) {
-                const agentsRes = await fetch(apiUrl(`/cases/${caseId}/agents`), {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (agentsRes.ok) {
-                    const data = await agentsRes.json();
-                    setCaseAgents(data.agents || []);
-                }
+                const agentsData = await apiFetch(`/cases/${caseId}/agents`);
+                setCaseAgents(agentsData.agents || []);
             }
         } catch (err) {
             console.error('Failed to load agent data:', err);
@@ -3526,18 +3167,11 @@ function CaseAgentEditor({ caseId, caseData, setCaseData, onOpenPersonaEditor })
             return;
         }
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/cases/${caseId}/agents/add-defaults`), {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                toast.success(data.message);
-                loadData();
-            }
+            const data = await apiPost(`/cases/${caseId}/agents/add-defaults`, {});
+            toast.success(data.message);
+            loadData();
         } catch (err) {
-            toast.error('Failed to add default agents');
+            toast.error(err instanceof ApiError ? err.message : 'Failed to add default agents');
         }
     };
 
@@ -3547,78 +3181,42 @@ function CaseAgentEditor({ caseId, caseData, setCaseData, onOpenPersonaEditor })
             return;
         }
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/cases/${caseId}/agents`), {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ agent_template_id: templateId })
-            });
-            if (res.ok) {
-                toast.success('Agent added');
-                loadData();
-            }
+            await apiPost(`/cases/${caseId}/agents`, { agent_template_id: templateId });
+            toast.success('Agent added');
+            loadData();
         } catch (err) {
-            toast.error('Failed to add agent');
+            toast.error(err instanceof ApiError ? err.message : 'Failed to add agent');
         }
     };
 
     const handleRemoveAgent = async (agentId) => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/cases/${caseId}/agents/${agentId}`), {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                toast.success('Agent removed');
-                loadData();
-            }
+            await apiDelete(`/cases/${caseId}/agents/${agentId}`);
+            toast.success('Agent removed');
+            loadData();
         } catch (err) {
-            toast.error('Failed to remove agent');
+            toast.error(err instanceof ApiError ? err.message : 'Failed to remove agent');
         }
     };
 
     const handleToggleEnabled = async (agent) => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/cases/${caseId}/agents/${agent.id}`), {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ enabled: !agent.enabled })
-            });
-            if (res.ok) {
-                loadData();
-            }
+            await apiPut(`/cases/${caseId}/agents/${agent.id}`, { enabled: !agent.enabled });
+            loadData();
         } catch (err) {
-            toast.error('Failed to update agent');
+            toast.error(err instanceof ApiError ? err.message : 'Failed to update agent');
         }
     };
 
     const handleUpdateAgent = async (updates) => {
         if (!editingAgent) return;
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/cases/${caseId}/agents/${editingAgent.id}`), {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(updates)
-            });
-            if (res.ok) {
-                toast.success('Agent updated');
-                setEditingAgent(null);
-                loadData();
-            }
+            await apiPut(`/cases/${caseId}/agents/${editingAgent.id}`, updates);
+            toast.success('Agent updated');
+            setEditingAgent(null);
+            loadData();
         } catch (err) {
-            toast.error('Failed to update agent');
+            toast.error(err instanceof ApiError ? err.message : 'Failed to update agent');
         }
     };
 
@@ -3940,9 +3538,7 @@ function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, has
 
     // Fetch public (custom) scenarios for the Quick Templates dropdown
     useEffect(() => {
-        const token = AuthService.getToken();
-        fetch(apiUrl('/scenarios'), { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(r => r.ok ? r.json() : Promise.reject())
+        apiFetch('/scenarios')
             .then(data => {
                 const rows = Array.isArray(data) ? data : (data.scenarios || []);
                 setPublicScenarios(

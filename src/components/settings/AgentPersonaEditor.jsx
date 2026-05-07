@@ -26,8 +26,8 @@ import { useToast } from '../../contexts/ToastContext';
 import { useVoice } from '../../contexts/VoiceContext';
 import { AgentService } from '../../services/AgentService';
 import { VoiceService } from '../../services/voiceService';
-import { AuthService } from '../../services/authService';
-import { apiUrl, baseUrl } from '../../config/api';
+import { apiFetch } from '../../services/apiClient';
+import { baseUrl } from '../../config/api';
 import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
 import { resolveVoice } from '../../utils/voiceResolver.js';
@@ -140,7 +140,6 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
    // Initial load: template + ancillary platform settings.
    useEffect(() => {
       let cancelled = false;
-      const token = AuthService.getToken();
 
       (async () => {
          setLoading(true);
@@ -151,8 +150,8 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
 
             const ancillary = Promise.allSettled([
                headManifest ? Promise.resolve(null) : fetch(baseUrl('/avatars/heads/manifest.json')).then(r => r.ok ? r.json() : null).catch(() => null),
-               voiceSettings ? Promise.resolve(null) : fetch(apiUrl('/platform-settings/voice'), { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
-               platformAvatars ? Promise.resolve(null) : fetch(apiUrl('/platform-settings/avatars'), { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null)
+               voiceSettings ? Promise.resolve(null) : apiFetch('/platform-settings/voice').catch(() => null),
+               platformAvatars ? Promise.resolve(null) : apiFetch('/platform-settings/avatars').catch(() => null)
             ]);
 
             const [tpl, ancRes] = await Promise.all([tplPromise, ancillary]);
@@ -187,8 +186,7 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
    useEffect(() => {
       const provider = template?.config?.voice?.tts_provider || 'piper';
       let cancelled = false;
-      fetch(apiUrl(`/tts/voices?provider=${provider}`), { headers: AuthService.authHeaders() })
-         .then(r => r.ok ? r.json() : { voices: [] })
+      apiFetch(`/tts/voices?provider=${provider}`)
          .then(d => { if (!cancelled) setTtsVoices(d.voices || []); })
          .catch(() => { if (!cancelled) setTtsVoices([]); });
       return () => { cancelled = true; };

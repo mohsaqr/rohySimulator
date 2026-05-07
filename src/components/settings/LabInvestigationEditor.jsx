@@ -5,9 +5,8 @@ import {
     Layers, FlaskConical, Download, Upload, Eye,
     Zap, Package, Filter, X, Check, Copy, RotateCcw, Timer
 } from 'lucide-react';
-import { AuthService } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
-import { apiUrl } from '../../config/api';
+import { apiFetch } from '../../services/apiClient';
 import { LAB_PANEL_TEMPLATES, getTemplateCategories, getTemplatesByCategory, SEARCH_ALIASES } from '../../data/labPanelTemplates';
 
 /**
@@ -44,11 +43,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
 
     // Load groups on mount
     useEffect(() => {
-        const token = AuthService.getToken();
-        fetch(apiUrl('/labs/groups'), {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
-            .then(res => res.json())
+        apiFetch('/labs/groups')
             .then(data => setGroups(data.groups || []))
             .catch(err => console.error('Failed to load groups:', err));
     }, []);
@@ -71,13 +66,10 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
         });
 
         setIsSearching(true);
-        const token = AuthService.getToken();
 
         // Search with multiple terms
         const searchPromises = expandedTerms.slice(0, 5).map(term =>
-            fetch(apiUrl(`/labs/search?q=${encodeURIComponent(term)}&limit=30`), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            }).then(res => res.json())
+            apiFetch(`/labs/search?q=${encodeURIComponent(term)}&limit=30`)
         );
 
         Promise.all(searchPromises)
@@ -160,62 +152,55 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
     // Add entire group as a panel
     const addGroupAsPanel = async (groupName) => {
         try {
-            const token = AuthService.getToken();
-            const response = await fetch(apiUrl(`/labs/group/${encodeURIComponent(groupName)}`), {
-                headers: { 'Authorization': `Bearer ${token}` }
+            const data = await apiFetch(`/labs/group/${encodeURIComponent(groupName)}`);
+            const tests = data.tests || [];
+
+            // Group by test name
+            const grouped = {};
+            tests.forEach(test => {
+                if (!grouped[test.test_name]) {
+                    grouped[test.test_name] = [];
+                }
+                grouped[test.test_name].push(test);
             });
 
-            if (response.ok) {
-                const data = await response.json();
-                const tests = data.tests || [];
+            // Add all tests from group
+            const newLabs = [];
+            Object.values(grouped).forEach(testGroup => {
+                let selectedTest = testGroup.find(t => t.category === patientGender);
+                if (!selectedTest) selectedTest = testGroup.find(t => t.category === 'Both' || t.category === 'General');
+                if (!selectedTest) selectedTest = testGroup[0];
 
-                // Group by test name
-                const grouped = {};
-                tests.forEach(test => {
-                    if (!grouped[test.test_name]) {
-                        grouped[test.test_name] = [];
-                    }
-                    grouped[test.test_name].push(test);
+                // Skip if already exists
+                if (configuredLabs.some(l => l.test_name === selectedTest.test_name)) return;
+
+                const normalValue = selectedTest.normal_samples?.length > 0
+                    ? selectedTest.normal_samples[Math.floor(Math.random() * selectedTest.normal_samples.length)]
+                    : (selectedTest.min_value + selectedTest.max_value) / 2;
+
+                newLabs.push({
+                    id: `lab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    test_name: selectedTest.test_name,
+                    test_group: selectedTest.group,
+                    gender_category: selectedTest.category,
+                    min_value: selectedTest.min_value,
+                    max_value: selectedTest.max_value,
+                    current_value: normalValue,
+                    unit: selectedTest.unit,
+                    normal_samples: selectedTest.normal_samples,
+                    is_abnormal: false,
+                    turnaround_minutes: 30,
+                    preset: 'normal',
+                    panel_group: groupName // Mark as part of panel
                 });
+            });
 
-                // Add all tests from group
-                const newLabs = [];
-                Object.values(grouped).forEach(testGroup => {
-                    let selectedTest = testGroup.find(t => t.category === patientGender);
-                    if (!selectedTest) selectedTest = testGroup.find(t => t.category === 'Both' || t.category === 'General');
-                    if (!selectedTest) selectedTest = testGroup[0];
-
-                    // Skip if already exists
-                    if (configuredLabs.some(l => l.test_name === selectedTest.test_name)) return;
-
-                    const normalValue = selectedTest.normal_samples?.length > 0
-                        ? selectedTest.normal_samples[Math.floor(Math.random() * selectedTest.normal_samples.length)]
-                        : (selectedTest.min_value + selectedTest.max_value) / 2;
-
-                    newLabs.push({
-                        id: `lab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                        test_name: selectedTest.test_name,
-                        test_group: selectedTest.group,
-                        gender_category: selectedTest.category,
-                        min_value: selectedTest.min_value,
-                        max_value: selectedTest.max_value,
-                        current_value: normalValue,
-                        unit: selectedTest.unit,
-                        normal_samples: selectedTest.normal_samples,
-                        is_abnormal: false,
-                        turnaround_minutes: 30,
-                        preset: 'normal',
-                        panel_group: groupName // Mark as part of panel
-                    });
+            if (newLabs.length > 0) {
+                updateInvestigations({
+                    defaultLabsEnabled,
+                    labs: [...configuredLabs, ...newLabs]
                 });
-
-                if (newLabs.length > 0) {
-                    updateInvestigations({
-                        defaultLabsEnabled,
-                        labs: [...configuredLabs, ...newLabs]
-                    });
-                    return newLabs.length;
-                }
+                return newLabs.length;
             }
         } catch (error) {
             console.error('Failed to add group:', error);
@@ -228,7 +213,6 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
         const template = LAB_PANEL_TEMPLATES[templateKey];
         if (!template) return;
 
-        const token = AuthService.getToken();
         const newLabs = [];
         const failedTests = [];
 
@@ -236,16 +220,10 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
             try {
                 // Search for the test - extract key words for better matching
                 const searchTerms = testConfig.test_name.split(',')[0].trim(); // Use first part before comma
-                const response = await fetch(
-                    apiUrl(`/labs/search?q=${encodeURIComponent(searchTerms)}&limit=20`),
-                    { headers: { 'Authorization': `Bearer ${token}` } }
-                );
+                const data = await apiFetch(`/labs/search?q=${encodeURIComponent(searchTerms)}&limit=20`);
 
-                if (response.ok) {
-                    const data = await response.json();
-
-                    // Try multiple matching strategies
-                    let testGroup = null;
+                // Try multiple matching strategies
+                let testGroup = null;
 
                     // 1. Exact match first
                     testGroup = data.results?.find(group =>
@@ -274,10 +252,10 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                         );
                     }
 
-                    if (testGroup) {
-                        let selectedTest = testGroup.find(t => t.category === patientGender);
-                        if (!selectedTest) selectedTest = testGroup.find(t => t.category === 'Both' || t.category === 'General');
-                        if (!selectedTest) selectedTest = testGroup[0];
+                if (testGroup) {
+                    let selectedTest = testGroup.find(t => t.category === patientGender);
+                    if (!selectedTest) selectedTest = testGroup.find(t => t.category === 'Both' || t.category === 'General');
+                    if (!selectedTest) selectedTest = testGroup[0];
 
                         // Skip if already exists
                         if (configuredLabs.some(l => l.test_name === selectedTest.test_name)) continue;
@@ -309,10 +287,9 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                             preset: testConfig.preset || 'abnormal',
                             template_source: templateKey
                         });
-                    } else {
-                        failedTests.push(testConfig.test_name);
-                        console.warn(`Template test not found in database: ${testConfig.test_name}`);
-                    }
+                } else {
+                    failedTests.push(testConfig.test_name);
+                    console.warn(`Template test not found in database: ${testConfig.test_name}`);
                 }
             } catch (error) {
                 console.error(`Failed to add test ${testConfig.test_name}:`, error);

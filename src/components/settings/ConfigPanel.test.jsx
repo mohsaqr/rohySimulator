@@ -100,7 +100,7 @@ const SAMPLE_CASES = [
 
 // Tracks the most recent payload sent to PUT/POST /api/cases* so save-flow
 // tests can assert the round trip happened.
-const saveTracker = { lastPut: null, putCount: 0 };
+const saveTracker = { lastPut: null, putCount: 0, casesGetHeaders: null, casePutHeaders: null };
 
 function defaultHandlers() {
     return [
@@ -108,9 +108,13 @@ function defaultHandlers() {
         http.get('*/api/auth/verify', () => HttpResponse.json({ user: ADMIN_USER })),
 
         // Cases loader fires on mount.
-        http.get('*/api/cases', () => HttpResponse.json({ cases: SAMPLE_CASES })),
+        http.get('*/api/cases', ({ request }) => {
+            saveTracker.casesGetHeaders = Object.fromEntries(request.headers.entries());
+            return HttpResponse.json({ cases: SAMPLE_CASES });
+        }),
         // Save endpoints (PUT for update, POST for create).
         http.put('*/api/cases/:id', async ({ request }) => {
+            saveTracker.casePutHeaders = Object.fromEntries(request.headers.entries());
             saveTracker.putCount += 1;
             saveTracker.lastPut = await request.json().catch(() => ({}));
             return HttpResponse.json({ id: 7, ...saveTracker.lastPut });
@@ -151,6 +155,8 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => {
     saveTracker.lastPut = null;
     saveTracker.putCount = 0;
+    saveTracker.casesGetHeaders = null;
+    saveTracker.casePutHeaders = null;
     server.resetHandlers(...defaultHandlers());
 });
 afterAll(() => server.close());
@@ -340,6 +346,34 @@ describe('ConfigPanel', () => {
         // Wizard closes: editing-case stash cleared, "New Case" CTA returns.
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /New Case/i })).toBeInTheDocument();
+        });
+    });
+
+    it('loads and saves cases through apiFetch with bearer auth and JSON body', async () => {
+        window.localStorage.setItem('rohy_editing_case', JSON.stringify({
+            id: 7,
+            name: 'Resumed',
+            description: 'd',
+            config: { pages: [] },
+        }));
+        mount({ initialTab: 'cases', initialWizardStep: 1 });
+        await waitForAdmin();
+
+        await waitFor(() => {
+            expect(saveTracker.casesGetHeaders?.authorization).toBe('Bearer admin-token');
+        });
+        expect(saveTracker.casesGetHeaders?.['x-request-id']).toBeTruthy();
+
+        fireEvent.click(await screen.findByRole('button', { name: /^Save$/ }));
+        await waitFor(() => {
+            expect(saveTracker.casePutHeaders?.authorization).toBe('Bearer admin-token');
+        });
+        expect(saveTracker.casePutHeaders?.['content-type']).toContain('application/json');
+        expect(saveTracker.casePutHeaders?.['x-request-id']).toBeTruthy();
+        expect(saveTracker.lastPut).toMatchObject({
+            id: 7,
+            name: 'Resumed',
+            description: 'd',
         });
     });
 
