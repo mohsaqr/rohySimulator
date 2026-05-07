@@ -33,27 +33,68 @@ export const AuthProvider = ({ children }) => {
         verifyUser();
     }, []);
 
-    // Periodic JWT refresh. The server-issued token has a 4h TTL; we
-    // refresh every 3h so an active user never sees a forced logout.
-    // The /auth/refresh endpoint rotates the active_sessions row, so
-    // server-side revocation (logout, admin force-logout, password
-    // change) still applies — the next refresh against a revoked
-    // session simply 401s and we drop the user state.
+    // JWT refresh scheduling.
+    //
+    // Pre-fix this used a hardcoded 3h setInterval, which broke for any
+    // user whose tab was active longer than the 4h JWT TTL: the first
+    // tick fired AFTER the token had already expired, every API call
+    // 403'd with "Invalid or expired token" in between, and the user saw
+    // a "no cases / no users / no analytics" screen until they manually
+    // re-logged-in. Reported 2026-05-07.
+    //
+    // The fix decodes the JWT's `exp` claim and schedules the FIRST
+    // refresh for (exp - now - 5min) — i.e. five minutes before expiry,
+    // regardless of when the user mounted the app. After a successful
+    // refresh, we re-decode the new token's exp and schedule again.
+    // If the exp claim can't be read (legacy token, malformed payload),
+    // we fall back to a conservative 30 minutes.
     useEffect(() => {
         if (!user) return;
-        const REFRESH_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3h
-        const tick = async () => {
-            const result = await AuthService.refreshToken();
-            if (!result) {
-                // Refresh failed — most likely the session was revoked.
-                // Log the user out client-side; they'll re-login or
-                // verifyToken() on next mount will catch the dead session.
-                AuthService.logout();
-                setUser(null);
+        let cancelled = false;
+        let timer = null;
+
+        const decodeJwtExp = (token) => {
+            try {
+                const payload = token.split('.')[1];
+                const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
+                const json = JSON.parse(atob(padded.replace(/-/g, '+').replace(/_/g, '/')));
+                return Number.isFinite(json.exp) ? json.exp * 1000 : null;
+            } catch {
+                return null;
             }
         };
-        const id = setInterval(tick, REFRESH_INTERVAL_MS);
-        return () => clearInterval(id);
+
+        const computeDelay = () => {
+            const token = AuthService.getToken();
+            const FALLBACK_MS = 30 * 60 * 1000; // 30 min
+            const SAFETY_BUFFER_MS = 5 * 60 * 1000; // refresh 5 min before expiry
+            const MIN_DELAY_MS = 5 * 1000; // never schedule sooner than 5s
+            if (!token) return FALLBACK_MS;
+            const expMs = decodeJwtExp(token);
+            if (!expMs) return FALLBACK_MS;
+            const delay = expMs - Date.now() - SAFETY_BUFFER_MS;
+            return Math.max(MIN_DELAY_MS, delay);
+        };
+
+        const tick = async () => {
+            if (cancelled) return;
+            const result = await AuthService.refreshToken();
+            if (cancelled) return;
+            if (!result) {
+                AuthService.logout();
+                setUser(null);
+                return;
+            }
+            // Schedule the next refresh based on the freshly-issued token.
+            timer = setTimeout(tick, computeDelay());
+        };
+
+        // First refresh fires based on the existing token's exp.
+        timer = setTimeout(tick, computeDelay());
+        return () => {
+            cancelled = true;
+            if (timer) clearTimeout(timer);
+        };
     }, [user]);
 
     const login = async (username, password) => {
