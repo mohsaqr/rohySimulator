@@ -24,7 +24,7 @@ const LEVELS = ['debug', 'info', 'warn', 'error'];
 const LEVEL_RANK = Object.fromEntries(LEVELS.map((l, i) => [l, i]));
 
 function currentLevel() {
-    const env = (process.env.LOG_LEVEL || 'info').toLowerCase();
+    const env = (process.env.LOG_LEVEL || process.env.ROHY_LOG_LEVEL || 'info').toLowerCase();
     return LEVEL_RANK[env] ?? LEVEL_RANK.info;
 }
 

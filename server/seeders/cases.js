@@ -2,6 +2,9 @@
  * Cases Seeder
  * Seeds representative clinical cases when database is empty
  */
+import { logger } from '../logger.js';
+
+const seederLog = logger('seeder');
 
 export const defaultCases = [
     {
@@ -510,12 +513,12 @@ export async function seedCases(db) {
             }
 
             if (row.count > 0) {
-                console.log(`[Seeder] Cases table already has ${row.count} cases, skipping case seeding`);
+                seederLog.info('case seeding skipped', { existing_cases: row.count });
                 resolve({ seeded: 0, skipped: row.count });
                 return;
             }
 
-            console.log('[Seeder] No cases found, seeding default cases...');
+            seederLog.info('no cases found, seeding defaults');
 
             let seeded = 0;
             const errors = [];
@@ -549,7 +552,7 @@ export async function seedCases(db) {
                                 if (err) {
                                     rej(err);
                                 } else {
-                                    console.log(`[Seeder] Created case: ${caseData.name}`);
+                                    seederLog.info('default case created', { case_name: caseData.name });
                                     seeded++;
                                     res();
                                 }
@@ -557,7 +560,7 @@ export async function seedCases(db) {
                         );
                     });
                 } catch (e) {
-                    console.error(`[Seeder] Failed to create case "${caseData.name}":`, e.message);
+                    seederLog.error('default case create failed', { case_name: caseData.name, error: e.message });
                     errors.push(e);
                 }
             }

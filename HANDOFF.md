@@ -222,3 +222,107 @@ High-leverage modules:
   so non-HTTPS prod would suppress the cookies entirely.
 - LEARNINGS.md was not updated this session; the per-commit messages
   and this handoff carry the substantive decisions.
+
+---
+
+# Session Handoff — 2026-05-07 (observability Phase 1 start)
+
+## Landed in working tree
+
+Phase 1 primitives and the first bounded console-migration slice are
+implemented, but **not committed** because this Codex sandbox cannot write
+inside `.git`:
+
+```text
+fatal: Unable to create '.git/index.lock': Operation not permitted
+touch: .git/codex-write-test: Operation not permitted
+```
+
+The working tree files themselves are writable; only the git metadata is
+blocked. Commit from a normal shell with the files listed in `git status`.
+
+### Observability primitives
+
+- `requestIdMiddleware` now attaches `req.log = logger('request').child({
+  request_id })`; nested route logs can inherit the correlation ID.
+- `requestLoggerMiddleware` now emits one structured `access` log per
+  request with `request_id`, `method`, `path`, `status`, `duration_ms`,
+  `user_id`, `tenant_id`, `bytes_in`, and `bytes_out`. It does not log
+  request/response bodies.
+- `logger.js` now honors `ROHY_LOG_LEVEL` as a fallback to `LOG_LEVEL`, so
+  the new logger and existing observability tests share one server-wide
+  level knob.
+- `instrumentSqliteDb()` now emits debug `db` logs for `get/all/run/exec`
+  with sanitized `sql_summary`, `duration_ms`, `rows`, `last_id` where
+  available, and `request_id`. Slow-query NDJSON remains intact.
+- `fetchWithTimeout` / `fetchWithRetry` now emit `http-out` logs for
+  outbound start/completion/failure and breaker fast-fail. Targets strip
+  query strings so API keys/tokens do not leak.
+
+### Console migration slice
+
+Migrated these bounded component families from ad hoc `console.*` to
+`logger(component)`:
+
+- Server startup / HTTPS / voice-key migration / uncaught process handlers.
+- DB boot and seed defaults.
+- Migration runner status.
+- Seeders for users/cases, including removal of default-password printing
+  from logs.
+- Kokoro and lab database services.
+- Catalogue audit write failures.
+- Route-level radiology-load and auth active-session warning/error paths.
+- Express error handler.
+
+Remaining `console.*` calls are mostly inside the monolithic
+`server/routes.js` route families (cases/sessions/orders/labs/LLM/TTS/agent
+templates/TNA), plus the deliberate fatal JWT startup messages in
+`server/middleware/auth.js`.
+
+## Tests
+
+Full suite passed after this slice:
+
+```text
+npm test
+74 files passed
+1006 passed, 10 skipped
+```
+
+Focused server tests also passed:
+
+```text
+npm run test:server -- \
+  tests/server/logger.test.js \
+  tests/server/request-logging.test.js \
+  tests/server/db-instrumentation.test.js \
+  tests/server/fetchWithTimeout.test.js \
+  tests/server/fetchWithRetry.test.js \
+  tests/server/observability.test.js \
+  tests/server/observability/slow-query-alerting.test.js \
+  tests/server/sql-injection-guard.test.js \
+  tests/server/auth-refresh.test.js \
+  tests/server/tts-route.test.js \
+  tests/server/catalogue-0007.test.js
+```
+
+## New tests
+
+- `tests/server/request-logging.test.js` locks access-log field shape,
+  request-id echoing, `req.log` propagation, body omission, and skip paths.
+- `tests/server/db-instrumentation.test.js` locks DB debug logging,
+  request-id propagation, row counts, and SQL/parameter sanitization.
+- Existing fetch/logger tests now cover `http-out` logs and
+  `ROHY_LOG_LEVEL` fallback.
+
+## Next
+
+1. From a non-sandbox shell, commit the current working tree as the first
+   Phase 1 commit. Suggested subject:
+   `feat(observability): wire structured request and infrastructure logs`.
+2. Continue Phase 1 with route-family migrations in separate commits:
+   cases/sessions, orders/labs/radiology, LLM/TTS, then agent/TNA/admin.
+3. After route-family migration, run `npm test`, commit, and push
+   `origin main`.
+4. Proceed to Phase 2 hash-chain audit once Phase 1 has no non-fatal
+   `console.*` left outside the intentionally fatal auth startup messages.

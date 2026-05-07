@@ -7,10 +7,12 @@ import { seedCuratedMedications } from '../scripts/seed-curated-medications.js';
 import { seedLabTestsFromJson } from '../scripts/seed-lab-tests-from-json.js';
 import { importLoincMapping } from '../scripts/import-loinc-mapping.js';
 import { seedPediatricRanges } from '../scripts/seed-pediatric-ranges.js';
+import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const sqlite = sqlite3.verbose();
+const dbLog = logger('db');
 
 // Connect to SQLite database
 const dbPath = process.env.ROHY_DB || path.resolve(__dirname, 'database.sqlite');
@@ -22,10 +24,10 @@ export const dbReady = new Promise((resolve, reject) => {
 });
 const db = new sqlite.Database(dbPath, (err) => {
     if (err) {
-        console.error('Error opening database', err.message);
+        dbLog.error('database open failed', { db_path: dbPath, error: err.message });
         rejectDbReady(err);
     } else {
-        console.log('Connected to the SQLite database.');
+        dbLog.info('sqlite database connected', { db_path: dbPath });
         // Audit finding #8: startup runs migrations always, but seeding is
         // gated. Production deploys can set ROHY_NO_AUTO_SEED=1 and run
         // `node scripts/seed.js` from a one-off job — keeps the
@@ -39,7 +41,7 @@ const db = new sqlite.Database(dbPath, (err) => {
 async function bootDb() {
     await runDbMigrations();
     if (process.env.ROHY_NO_AUTO_SEED === '1') {
-        console.log('[db] auto-seed skipped (ROHY_NO_AUTO_SEED=1). Run `node scripts/seed.js` separately.');
+        dbLog.info('auto seed skipped', { reason: 'ROHY_NO_AUTO_SEED=1' });
         return;
     }
     await seedDbDefaults();
@@ -330,11 +332,11 @@ async function seedDefaultAgents() {
                 ]
             );
         } catch (err) {
-            console.warn(`seedDefaultAgents insert (${agent.agent_type}) failed:`, err.message);
+            dbLog.warn('default agent seed failed', { agent_type: agent.agent_type, error: err.message });
         }
     }
 
-    console.log('Default agent personas seeded.');
+    dbLog.info('default agent personas seeded');
 
     // Backfill avatar_url for default rows seeded before each row had a
     // shipped avatar. Idempotent — only updates rows currently NULL or empty.
@@ -448,14 +450,14 @@ export async function seedDbDefaults() {
         await importLoincMapping(db, { log: () => {} });
         await seedPediatricRanges(db, { log: () => {} });
     } catch (err) {
-        console.error(`[db] catalogue seeders failed: ${err.message}`);
+        dbLog.error('catalogue seeders failed', { error: err.message });
     }
 
     await seedDefaultModelPricing();
     await seedDefaultAgents();
     await seedAvatarDefaults();
 
-    console.log('Database seed defaults initialized.');
+    dbLog.info('database seed defaults initialized');
 }
 
 export default db;

@@ -1,12 +1,15 @@
-import { logStructured } from '../observability.js';
+import { logger } from '../logger.js';
+
+const errorLog = logger('error-handler');
 
 export function errorHandler(err, req, res, next) {
     if (!err) return next();
 
     const status = err.status || err.statusCode || 500;
-    logStructured(status >= 500 ? 'error' : 'warn', 'error', {
+    errorLog[status >= 500 ? 'error' : 'warn']('request error', {
         request_id: req.request_id || null,
         route: req.originalUrl || req.url,
+        status,
         user_id: req.user?.id || null,
         tenant_id: req.user?.tenant_id || null,
         error: {

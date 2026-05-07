@@ -9,6 +9,9 @@
 
 import { seedUsers, defaultUsers } from './users.js';
 import { seedCases, defaultCases } from './cases.js';
+import { logger } from '../logger.js';
+
+const seederLog = logger('seeder');
 
 /**
  * Run all seeders
@@ -16,9 +19,7 @@ import { seedCases, defaultCases } from './cases.js';
  * @returns {Promise<Object>} Summary of seeding results
  */
 export async function runSeeders(db) {
-    console.log('\n========================================');
-    console.log('  Database Seeder Starting...');
-    console.log('========================================\n');
+    seederLog.info('database seeding started');
 
     const results = {
         users: { seeded: 0, skipped: 0, error: null },
@@ -29,7 +30,7 @@ export async function runSeeders(db) {
     try {
         results.users = await seedUsers(db);
     } catch (err) {
-        console.error('[Seeder] Error seeding users:', err.message);
+        seederLog.error('user seeding failed', { error: err.message });
         results.users.error = err.message;
     }
 
@@ -37,25 +38,17 @@ export async function runSeeders(db) {
     try {
         results.cases = await seedCases(db);
     } catch (err) {
-        console.error('[Seeder] Error seeding cases:', err.message);
+        seederLog.error('case seeding failed', { error: err.message });
         results.cases.error = err.message;
     }
 
-    // Summary
-    console.log('\n========================================');
-    console.log('  Seeder Summary');
-    console.log('========================================');
-    console.log(`  Users:  ${results.users.seeded} seeded, ${results.users.skipped} skipped`);
-    console.log(`  Cases:  ${results.cases.seeded} seeded, ${results.cases.skipped} skipped`);
-
-    if (results.users.seeded > 0) {
-        console.log('\n  Default Credentials:');
-        defaultUsers.forEach(u => {
-            console.log(`    ${u.role.padEnd(8)} - ${u.username} / ${u.password}`);
-        });
-    }
-
-    console.log('========================================\n');
+    seederLog.info('database seeding completed', {
+        users_seeded: results.users.seeded,
+        users_skipped: results.users.skipped,
+        cases_seeded: results.cases.seeded,
+        cases_skipped: results.cases.skipped,
+        default_users_created: results.users.seeded > 0 ? defaultUsers.map((u) => ({ role: u.role, username: u.username })) : []
+    });
 
     return results;
 }

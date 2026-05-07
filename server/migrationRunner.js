@@ -2,11 +2,13 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 const defaultMigrationsDir = path.join(repoRoot, 'migrations');
+const migrationLog = logger('migration');
 
 const BASELINE_VERSIONS = new Set(['0001']);
 const BASELINE_TABLES = [
@@ -170,9 +172,17 @@ async function applyMigration(db, migration) {
 function printDryRun(migrations, applied, baselineWouldStamp) {
     const baselineVersions = new Set(baselineWouldStamp.map((migration) => migration.version));
     if (baselineWouldStamp.length > 0) {
-        console.log('[migration] baseline stamp would apply:');
+        migrationLog.info('baseline stamp would apply', {
+            migrations: baselineWouldStamp.map((migration) => ({
+                name: migration.name,
+                checksum: migration.checksum
+            }))
+        });
         baselineWouldStamp.forEach((migration) => {
-            console.log(`-- ${migration.name} (${migration.checksum})`);
+            migrationLog.debug('baseline dry-run migration', {
+                name: migration.name,
+                checksum: migration.checksum
+            });
         });
     }
 
@@ -180,14 +190,16 @@ function printDryRun(migrations, applied, baselineWouldStamp) {
         !applied.has(migration.version) && !baselineVersions.has(migration.version)
     ));
     if (pending.length === 0) {
-        console.log('[migration] no pending migrations');
+        migrationLog.info('no pending migrations');
         return;
     }
 
     pending.forEach((migration) => {
-        console.log(`\n-- ${migration.name} (${migration.checksum})`);
-        console.log(migration.sql.trim());
-        console.log('');
+        migrationLog.info('pending migration', {
+            name: migration.name,
+            checksum: migration.checksum,
+            sql: migration.sql.trim()
+        });
     });
 }
 
@@ -226,21 +238,27 @@ export async function runMigrations(db, options = {}) {
         baselineStamped = await stampBaseline(db, migrations);
         effectiveApplied = await getAppliedMigrations(db);
         if (baselineStamped.length > 0) {
-            console.log(`[migration] baseline-stamped ${baselineStamped.map((m) => m.name).join(', ')}`);
+            migrationLog.info('baseline stamped', {
+                migrations: baselineStamped.map((m) => m.name)
+            });
         }
     }
 
     const appliedNow = [];
     for (const migration of migrations) {
         if (effectiveApplied.has(migration.version)) continue;
-        console.log(`[migration] applying ${migration.name}`);
+        migrationLog.info('applying migration', {
+            name: migration.name,
+            version: migration.version,
+            checksum: migration.checksum
+        });
         await applyMigration(db, migration);
         appliedNow.push(migration);
         effectiveApplied.set(migration.version, migration);
     }
 
     if (appliedNow.length === 0) {
-        console.log('[migration] database schema is current');
+        migrationLog.info('database schema is current');
     }
 
     return {

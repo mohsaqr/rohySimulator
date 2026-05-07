@@ -127,8 +127,15 @@ describe('_effectiveLevelForTest', () => {
         expect(_effectiveLevelForTest()).toBe('debug');
     });
 
+    it('accepts ROHY_LOG_LEVEL as the server-wide level fallback', () => {
+        delete process.env.LOG_LEVEL;
+        process.env.ROHY_LOG_LEVEL = 'debug';
+        expect(_effectiveLevelForTest()).toBe('debug');
+    });
+
     it('defaults to info when LOG_LEVEL is unset', () => {
         delete process.env.LOG_LEVEL;
+        delete process.env.ROHY_LOG_LEVEL;
         expect(_effectiveLevelForTest()).toBe('info');
     });
 

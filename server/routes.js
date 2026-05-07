@@ -57,6 +57,11 @@ import {
     redactRow,
     redactRows
 } from './redaction.js';
+import { logger } from './logger.js';
+
+const auditLog = logger('audit');
+const authLog = logger('auth');
+const radiologyLog = logger('radiology');
 
 // Rate limiters for security
 const authLimiter = rateLimit({
@@ -104,10 +109,10 @@ try {
     if (fs.existsSync(radiologyPath)) {
         const data = JSON.parse(fs.readFileSync(radiologyPath, 'utf8'));
         radiologyDatabase = data.studies || [];
-        console.log(`Loaded ${radiologyDatabase.length} radiology studies from database`);
+        radiologyLog.info('radiology database loaded', { count: radiologyDatabase.length });
     }
 } catch (err) {
-    console.error('Failed to load radiology database:', err.message);
+    radiologyLog.error('radiology database load failed', { error: err.message });
 }
 
 const router = express.Router();
@@ -261,7 +266,13 @@ function logAudit(params) {
         ],
         (err) => {
             if (err) {
-                console.warn('[Audit Log] Failed to write audit log:', err.message);
+                auditLog.warn('audit log write failed', {
+                    action,
+                    resource_type: resourceType ?? targetType ?? null,
+                    resource_id: resourceId ?? targetId ?? null,
+                    tenant_id,
+                    error: err.message
+                });
             }
         }
     );
@@ -1134,7 +1145,11 @@ router.post('/auth/login', authLimiter, (req, res) => {
             try {
                 await recordActiveSession(token, user, { ipAddress, userAgent });
             } catch (e) {
-                console.warn('[auth] failed to record active_sessions row:', e.message);
+                (req.log || authLog).warn('active session record failed', {
+                    user_id: user.id,
+                    tenant_id: user.tenant_id || 1,
+                    error: e.message
+                });
             }
 
             // Set HttpOnly cookie alongside the JSON token. Cookie-aware
@@ -1226,7 +1241,11 @@ router.post('/auth/refresh', authenticateToken, async (req, res) => {
         try {
             await recordActiveSession(newToken, fresh, { ipAddress, userAgent });
         } catch (e) {
-            console.warn('[auth] refresh: failed to record new session row:', e.message);
+            (req.log || authLog).warn('refresh active session record failed', {
+                user_id: fresh.id,
+                tenant_id: fresh.tenant_id || 1,
+                error: e.message
+            });
         }
 
         // Revoke the old token AFTER inserting the new row so there's no
@@ -1235,7 +1254,11 @@ router.post('/auth/refresh', authenticateToken, async (req, res) => {
             try {
                 await revokeActiveSessionByHash(req.tokenHash);
             } catch (e) {
-                console.warn('[auth] refresh: failed to revoke old session row:', e.message);
+                (req.log || authLog).warn('refresh old session revoke failed', {
+                    user_id: fresh.id,
+                    tenant_id: fresh.tenant_id || 1,
+                    error: e.message
+                });
             }
         }
 
@@ -1287,7 +1310,11 @@ router.post('/auth/logout', authenticateToken, async (req, res) => {
         try {
             await revokeActiveSessionByHash(req.tokenHash);
         } catch (e) {
-            console.warn('[auth] failed to revoke session row:', e.message);
+            (req.log || authLog).warn('logout session revoke failed', {
+                user_id: req.user.id,
+                tenant_id: tenantId(req),
+                error: e.message
+            });
         }
     }
 
@@ -1302,7 +1329,13 @@ router.post('/auth/logout', authenticateToken, async (req, res) => {
         `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
         [req.user.id, req.user.username, 'logout', ipAddress, userAgent, tenantId(req)],
         (err) => {
-            if (err) console.error('Failed to log logout:', err);
+            if (err) {
+                (req.log || authLog).error('logout log write failed', {
+                    user_id: req.user.id,
+                    tenant_id: tenantId(req),
+                    error: err.message
+                });
+            }
             res.json({ message: 'Logout logged successfully' });
         }
     );

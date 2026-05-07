@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { logger } from '../logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const labLog = logger('lab-database');
 
 // Cache for the loaded lab database
 let labDatabaseCache = null;
@@ -25,9 +27,9 @@ export function loadLabDatabase() {
         const labDbPath = path.resolve(__dirname, '../../Lab_database.json');
         const data = fs.readFileSync(labDbPath, 'utf8');
         allTests = JSON.parse(data);
-        console.log(`Loaded ${allTests.length} lab tests from Lab_database.json`);
+        labLog.info('lab database loaded', { source: 'Lab_database.json', count: allTests.length });
     } catch (error) {
-        console.error('Error loading Lab_database.json:', error);
+        labLog.error('lab database load failed', { source: 'Lab_database.json', error: error.message });
     }
 
     // Load cardiac investigations from heart.txt
@@ -42,16 +44,20 @@ export function loadLabDatabase() {
             const newCardiacTests = cardiacTests.filter(t => !existingKeys.has(`${t.test_name}|${t.category}`));
 
             allTests = [...allTests, ...newCardiacTests];
-            console.log(`Loaded ${cardiacTests.length} cardiac tests from heart.txt (${newCardiacTests.length} new)`);
+            labLog.info('cardiac lab database loaded', {
+                source: 'heart.txt',
+                count: cardiacTests.length,
+                new_count: newCardiacTests.length
+            });
         }
     } catch (error) {
-        console.error('Error loading heart.txt:', error);
+        labLog.error('cardiac lab database load failed', { source: 'heart.txt', error: error.message });
     }
 
     labDatabaseCache = allTests;
     // Clear groups cache so it gets rebuilt with new tests
     groupsCache = null;
-    console.log(`Total lab tests loaded: ${labDatabaseCache.length}`);
+    labLog.info('lab database cache ready', { count: labDatabaseCache.length });
     return labDatabaseCache;
 }
 
@@ -69,8 +75,7 @@ export function searchTests(query, limit = 50) {
     const tests = loadLabDatabase();
     const searchTerm = query.toLowerCase().trim();
 
-    // Debug: Log search
-    console.log(`[Lab Search] Query: "${query}", Total tests in cache: ${tests.length}`);
+    labLog.debug('lab search started', { query, cache_count: tests.length });
 
     // Simple fuzzy search: match partial test names
     const results = tests.filter(test =>
@@ -80,7 +85,7 @@ export function searchTests(query, limit = 50) {
     // Debug: Log matching cardiac tests
     const cardiacMatches = results.filter(t => t.group === 'Cardiology Crisis');
     if (cardiacMatches.length > 0) {
-        console.log(`[Lab Search] Found ${cardiacMatches.length} cardiac matches for "${query}"`);
+        labLog.debug('lab search cardiac matches', { query, count: cardiacMatches.length });
     }
 
     // Group by test name to show gender variations together
@@ -92,7 +97,7 @@ export function searchTests(query, limit = 50) {
         grouped[test.test_name].push(test);
     });
 
-    console.log(`[Lab Search] Results: ${Object.keys(grouped).length} unique tests found`);
+    labLog.debug('lab search completed', { query, result_count: Object.keys(grouped).length });
 
     // Return up to limit unique test names (with all gender variants)
     return Object.values(grouped).slice(0, limit);
@@ -320,7 +325,7 @@ export function saveLabDatabase() {
         fs.writeFileSync(labDbPath, JSON.stringify(labDatabaseCache, null, 2), 'utf8');
         return true;
     } catch (error) {
-        console.error('Error saving Lab_database.json:', error);
+        labLog.error('lab database save failed', { source: 'Lab_database.json', error: error.message });
         return false;
     }
 }

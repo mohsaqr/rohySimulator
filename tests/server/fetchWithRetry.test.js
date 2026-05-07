@@ -8,16 +8,44 @@ import {
 } from '../../server/services/fetchWithTimeout.js';
 
 let originalFetch;
+let originalEnv;
+let stdoutSpy;
+let stderrSpy;
 
 beforeEach(() => {
     originalFetch = globalThis.fetch;
+    originalEnv = { ...process.env };
     _resetBreakerForTest();
 });
 
 afterEach(() => {
     globalThis.fetch = originalFetch;
     _resetBreakerForTest();
+    stdoutSpy?.mockRestore();
+    stderrSpy?.mockRestore();
+    process.env = originalEnv;
 });
+
+function captureLogs() {
+    const writes = [];
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+        writes.push(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
+        return true;
+    });
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+        writes.push(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
+        return true;
+    });
+    return {
+        entries() {
+            return writes
+                .join('')
+                .split('\n')
+                .filter(Boolean)
+                .map((line) => JSON.parse(line));
+        }
+    };
+}
 
 describe('fetchWithRetry — happy path', () => {
     it('returns the response on first success', async () => {
@@ -93,6 +121,39 @@ describe('fetchWithRetry — circuit breaker', () => {
         ).rejects.toBeInstanceOf(CircuitBreakerOpenError);
         // Fast-fail: no fetch was made.
         expect(globalThis.fetch.mock.calls.length).toBe(fetchCallsBefore);
+    });
+
+    it('logs breaker fast-fail with target and breaker state', async () => {
+        process.env.LOG_FORMAT = 'json';
+        process.env.LOG_LEVEL = 'debug';
+        process.env.NODE_ENV = 'test';
+        const cap = captureLogs();
+        globalThis.fetch = vi.fn(() => Promise.resolve(new Response('busy', { status: 503 })));
+        for (let i = 0; i < 5; i++) {
+            await fetchWithRetry('https://example.com/upstream?token=secret', {}, {
+                attempts: 1,
+                breakerKey: 'blocked-svc'
+            });
+        }
+
+        await expect(
+            fetchWithRetry('https://example.com/upstream?token=secret', {}, {
+                attempts: 1,
+                breakerKey: 'blocked-svc'
+            }),
+        ).rejects.toBeInstanceOf(CircuitBreakerOpenError);
+
+        const blocked = cap.entries().find((entry) => entry.msg === 'outbound request blocked by circuit breaker');
+        expect(blocked).toEqual(expect.objectContaining({
+            component: 'http-out',
+            level: 'warn',
+            target: 'https://example.com/upstream',
+            method: 'GET',
+            breaker_key: 'blocked-svc',
+            ms_until_half_open: expect.any(Number),
+        }));
+        expect(blocked.breaker_state).toEqual(expect.objectContaining({ state: 'open' }));
+        expect(JSON.stringify(blocked)).not.toContain('secret');
     });
 
     it('separate breaker keys do not share state', async () => {

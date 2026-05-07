@@ -19,6 +19,7 @@
  *   - Cleans up the timer on success AND on early caller-abort, so we
  *     don't leak setTimeout references in long-lived workers.
  */
+import { logger } from '../logger.js';
 
 export class FetchTimeoutError extends Error {
     constructor(url, timeoutMs) {
@@ -30,6 +31,25 @@ export class FetchTimeoutError extends Error {
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+const httpLog = logger('http-out');
+
+function summarizeTarget(url) {
+    try {
+        const parsed = new URL(String(url));
+        return `${parsed.origin}${parsed.pathname}`;
+    } catch {
+        return String(url).split('?')[0];
+    }
+}
+
+function methodOf(init = {}) {
+    return String(init.method || 'GET').toUpperCase();
+}
+
+function errorMessage(err) {
+    if (!err) return null;
+    return err.message || String(err);
+}
 
 function combineSignals(callerSignal, internalSignal) {
     if (!callerSignal) return internalSignal;
@@ -55,11 +75,35 @@ export async function fetchWithTimeout(url, init = {}, options = {}) {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     const signal = combineSignals(init.signal, controller.signal);
+    const started = process.hrtime.bigint();
+    const baseFields = {
+        target: summarizeTarget(url),
+        method: methodOf(init),
+        timeout_ms: timeoutMs,
+        attempt: options.attempt ?? null,
+        breaker_state: options.breakerState || null
+    };
+    httpLog.debug('outbound request started', baseFields);
 
     try {
         const response = await fetch(url, { ...init, signal });
+        const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
+        httpLog.info('outbound request completed', {
+            ...baseFields,
+            status: response.status,
+            duration_ms: Number(durationMs.toFixed(3))
+        });
         return response;
     } catch (err) {
+        const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
+        const isTimeout = controller.signal.aborted && (!init.signal || !init.signal.aborted);
+        httpLog[isTimeout ? 'warn' : 'error']('outbound request failed', {
+            ...baseFields,
+            status: null,
+            duration_ms: Number(durationMs.toFixed(3)),
+            error_code: isTimeout ? 'timeout' : err?.name || 'fetch_error',
+            error: errorMessage(err)
+        });
         if (controller.signal.aborted && (!init.signal || !init.signal.aborted)) {
             throw new FetchTimeoutError(url, timeoutMs);
         }
@@ -161,6 +205,13 @@ export async function fetchWithRetry(url, init = {}, options = {}) {
     if (breakerKey) {
         const remaining = breakerCheck(breakerKey);
         if (remaining != null) {
+            httpLog.warn('outbound request blocked by circuit breaker', {
+                target: summarizeTarget(url),
+                method: methodOf(init),
+                breaker_key: breakerKey,
+                breaker_state: getBreakerState(breakerKey),
+                ms_until_half_open: remaining
+            });
             throw new CircuitBreakerOpenError(breakerKey, remaining);
         }
     }
@@ -169,7 +220,11 @@ export async function fetchWithRetry(url, init = {}, options = {}) {
     let lastResponse;
     for (let attempt = 0; attempt < attempts; attempt++) {
         try {
-            const response = await fetchWithTimeout(url, init, { timeoutMs });
+            const response = await fetchWithTimeout(url, init, {
+                timeoutMs,
+                attempt: attempt + 1,
+                breakerState: breakerKey ? getBreakerState(breakerKey).state : null
+            });
             if (response.ok || !DEFAULT_RETRYABLE_STATUS.has(response.status)) {
                 if (breakerKey) breakerSuccess(breakerKey);
                 return response;

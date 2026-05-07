@@ -4,6 +4,9 @@
  */
 
 import bcrypt from 'bcrypt';
+import { logger } from '../logger.js';
+
+const seederLog = logger('seeder');
 
 export const defaultUsers = [
     {
@@ -33,7 +36,7 @@ export async function seedUsers(db) {
         // overridden — admin123/student123 is a dev convenience that must
         // never silently land in a real deployment.
         if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEFAULT_USERS !== '1') {
-            console.warn('[Seeder] Skipping default user seeding in production. Set ALLOW_DEFAULT_USERS=1 to override.');
+            seederLog.warn('default user seeding blocked in production');
             resolve({ seeded: 0, skipped: 0, blocked: true });
             return;
         }
@@ -46,12 +49,12 @@ export async function seedUsers(db) {
             }
 
             if (row.count > 0) {
-                console.log(`[Seeder] Users table already has ${row.count} users, skipping user seeding`);
+                seederLog.info('user seeding skipped', { existing_users: row.count });
                 resolve({ seeded: 0, skipped: row.count });
                 return;
             }
 
-            console.log('[Seeder] No users found, seeding default users...');
+            seederLog.info('no users found, seeding defaults');
 
             let seeded = 0;
             const errors = [];
@@ -69,7 +72,10 @@ export async function seedUsers(db) {
                                 if (err) {
                                     rej(err);
                                 } else {
-                                    console.log(`[Seeder] Created ${user.role}: ${user.username} (${user.email})`);
+                                    seederLog.info('default user created', {
+                                        role: user.role,
+                                        username: user.username
+                                    });
                                     seeded++;
                                     res();
                                 }
@@ -77,7 +83,7 @@ export async function seedUsers(db) {
                         );
                     });
                 } catch (e) {
-                    console.error(`[Seeder] Failed to create user ${user.username}:`, e.message);
+                    seederLog.error('default user create failed', { username: user.username, error: e.message });
                     errors.push(e);
                 }
             }

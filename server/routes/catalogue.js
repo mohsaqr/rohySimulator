@@ -32,8 +32,10 @@ import {
 import { searchRxNorm } from '../services/rxnormProxy.js';
 import { searchOpenFda } from '../services/openfdaProxy.js';
 import { searchLoinc } from '../services/loincProxy.js';
+import { logger } from '../logger.js';
 
 const router = express.Router();
+const catalogueLog = logger('catalogue');
 
 // ------------------------------ helpers --------------------------------
 
@@ -83,7 +85,10 @@ async function audit(req, params) {
             ]
         );
     } catch (err) {
-        console.warn(`[catalogue audit] ${params.action} failed: ${err.message}`);
+        (req.log || catalogueLog).warn('catalogue audit write failed', {
+            action: params.action,
+            error: err.message
+        });
     }
 }
 

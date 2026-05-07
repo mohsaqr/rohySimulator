@@ -11,6 +11,9 @@ import os from 'node:os';
 import { env as TRANSFORMERS_ENV } from '@huggingface/transformers';
 import { KokoroTTS, TextSplitterStream } from 'kokoro-js';
 import { buildWavHeader, float32ToInt16Buffer } from './wav.js';
+import { logger } from '../logger.js';
+
+const kokoroLog = logger('kokoro');
 
 // onnxruntime-web (which @huggingface/transformers uses on Node) defaults to
 // single-threaded WASM. Benchmarked at ~20% faster at 4 threads vs 1; past
@@ -20,7 +23,7 @@ const _wasmThreads = Math.min(4, Math.max(1, os.cpus().length));
 try {
     TRANSFORMERS_ENV.backends.onnx.wasm.numThreads = _wasmThreads;
 } catch (err) {
-    console.warn('[kokoro] failed to set wasm numThreads:', err.message);
+    kokoroLog.warn('failed to configure wasm threads', { error: err.message });
 }
 
 const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
@@ -38,7 +41,11 @@ export async function loadKokoro() {
     _loading = (async () => {
         const t0 = Date.now();
         const tts = await KokoroTTS.from_pretrained(MODEL_ID, { dtype: DTYPE });
-        console.log(`[kokoro] model loaded in ${Date.now() - t0}ms (wasm threads=${_wasmThreads}) with ${Object.keys(tts.voices).length} voices`);
+        kokoroLog.info('model loaded', {
+            duration_ms: Date.now() - t0,
+            wasm_threads: _wasmThreads,
+            voice_count: Object.keys(tts.voices).length
+        });
         _instance = tts;
         _loading = null;
         return tts;

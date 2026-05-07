@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import crypto from 'node:crypto';
+import { logger } from './logger.js';
 
 const LOG_LEVELS = Object.freeze({ debug: 10, info: 20, warn: 30, error: 40 });
 const DEFAULT_SKIP_PATHS = ['/api/proxy/llm', '/health'];
@@ -9,6 +10,8 @@ const INSTRUMENTED = Symbol.for('rohy.db.instrumented');
 let platformSlowQueryMs = null;
 
 const requestContext = new AsyncLocalStorage();
+const dbLog = logger('db');
+const observabilityLog = logger('observability');
 
 function configuredLogLevel() {
     const level = String(process.env.ROHY_LOG_LEVEL || 'info').toLowerCase();
@@ -103,7 +106,7 @@ export function logStructured(level, event, fields = {}) {
     try {
         process.stdout.write(`${JSON.stringify(entry)}\n`);
     } catch (err) {
-        console.warn('[observability] failed to write structured log:', err.message);
+        observabilityLog.warn('structured log write failed', { error: err.message });
     }
 }
 
@@ -155,13 +158,33 @@ function wrapDbMethod(db, methodName) {
         const started = process.hrtime.bigint();
         const requestId = getCurrentRequestId();
         const callbackIndex = findCallback(args);
+        const emitQueryLog = (durationMs, callbackArgs = [], contextThis = null) => {
+            if (getRequestContext().suppress_sqlite_wrapper) return;
+            const entry = {
+                sql_summary: sanitizeSql(sql),
+                duration_ms: Number(durationMs.toFixed(3)),
+                operation: methodName,
+                request_id: requestId
+            };
+            if (methodName === 'all' && Array.isArray(callbackArgs[1])) {
+                entry.rows = callbackArgs[1].length;
+            } else if (methodName === 'get') {
+                entry.rows = callbackArgs[1] ? 1 : 0;
+            } else if (methodName === 'run' && contextThis) {
+                if (Number.isFinite(contextThis.changes)) entry.rows = contextThis.changes;
+                if (Number.isFinite(contextThis.lastID)) entry.last_id = contextThis.lastID;
+            }
+            if (callbackArgs[0]) {
+                entry.error = callbackArgs[0] instanceof Error ? callbackArgs[0].message : String(callbackArgs[0]);
+            }
+            dbLog.debug('sqlite query', entry);
+            logSlowQuery({ operation: methodName, sql, durationMs, requestId });
+        };
         if (callbackIndex >= 0) {
             const originalCallback = args[callbackIndex];
             args[callbackIndex] = function timedDbCallback(...callbackArgs) {
                 const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
-                if (!getRequestContext().suppress_sqlite_wrapper) {
-                    logSlowQuery({ operation: methodName, sql, durationMs, requestId });
-                }
+                emitQueryLog(durationMs, callbackArgs, this);
                 return originalCallback.apply(this, callbackArgs);
             };
             return original.call(this, sql, ...args);
@@ -169,9 +192,7 @@ function wrapDbMethod(db, methodName) {
 
         const result = original.call(this, sql, ...args);
         const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
-        if (!getRequestContext().suppress_sqlite_wrapper) {
-            logSlowQuery({ operation: methodName, sql, durationMs, requestId });
-        }
+        emitQueryLog(durationMs);
         return result;
     };
 }

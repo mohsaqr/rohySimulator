@@ -1,12 +1,22 @@
 import {
-    logStructured,
     shouldSkipRequestLog
 } from '../observability.js';
+import { logger } from '../logger.js';
 
-function bytesSent(res) {
+const accessLog = logger('access');
+
+function headerNumber(value) {
+    if (Array.isArray(value)) return Number(value[0]) || 0;
+    return Number(value) || 0;
+}
+
+function bytesIn(req) {
+    return headerNumber(req.headers['content-length']);
+}
+
+function bytesOut(res, measured) {
     const header = res.getHeader('content-length');
-    if (Array.isArray(header)) return Number(header[0]) || 0;
-    return Number(header) || 0;
+    return headerNumber(header) || measured || 0;
 }
 
 function userFields(req) {
@@ -20,6 +30,19 @@ export function requestLoggerMiddleware(options = {}) {
     const skipPaths = options.skipPaths;
     return (req, res, next) => {
         const started = process.hrtime.bigint();
+        let responseBytes = 0;
+        const originalWrite = res.write;
+        const originalEnd = res.end;
+
+        res.write = function countedWrite(chunk, encoding, cb) {
+            if (chunk) responseBytes += Buffer.byteLength(chunk, encoding);
+            return originalWrite.call(this, chunk, encoding, cb);
+        };
+        res.end = function countedEnd(chunk, encoding, cb) {
+            if (chunk) responseBytes += Buffer.byteLength(chunk, encoding);
+            return originalEnd.call(this, chunk, encoding, cb);
+        };
+
         res.on('finish', () => {
             if (shouldSkipRequestLog(req.path, skipPaths)) return;
             const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
@@ -29,16 +52,12 @@ export function requestLoggerMiddleware(options = {}) {
                 path: req.originalUrl || req.url,
                 status: res.statusCode,
                 duration_ms: Number(durationMs.toFixed(3)),
-                bytes_sent: bytesSent(res),
+                bytes_in: bytesIn(req),
+                bytes_out: bytesOut(res, responseBytes),
                 ...userFields(req)
             };
-            logStructured(res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info', 'request', entry);
-            if (res.statusCode >= 400) {
-                logStructured(res.statusCode >= 500 ? 'error' : 'warn', 'http_error', {
-                    ...entry,
-                    route: req.route?.path || req.path
-                });
-            }
+            const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info';
+            accessLog[level]('request completed', entry);
         });
         next();
     };

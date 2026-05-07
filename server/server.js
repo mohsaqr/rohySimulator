@@ -12,10 +12,15 @@ import { configureSlowQueryThresholdFromDb, instrumentSqliteDb } from './observa
 import requestIdMiddleware from './middleware/requestId.js';
 import requestLoggerMiddleware from './middleware/requestLogger.js';
 import errorHandler from './middleware/errorHandler.js';
+import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
+const bootLog = logger('server');
+const httpsLog = logger('https');
+const migrationLog = logger('migration');
+const kokoroLog = logger('kokoro');
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 // Optional HTTPS listener — needed in any deployment that isn't
 // localhost/127.0.0.1, because Chrome blocks getUserMedia and
@@ -62,7 +67,8 @@ app.get('/', (req, res) => {
     if (fs.existsSync(frontendPath)) {
        res.sendFile(path.join(__dirname, "../frontend/index.html"));
     } else {
-    console.error("Frontend folder does NOT exist but server is running", frontendPath);
+        req.log?.error('frontend folder missing', { frontend_path: frontendPath });
+        res.status(404).json({ error: 'Frontend not found' });
     }
 });
 
@@ -73,17 +79,16 @@ app.use(errorHandler);
 // Start server with port fallback — bind to :: with ipv6Only:false for dual-stack (IPv4 + IPv6)
 function startServer(port, maxRetries = 10) {
         const server = app.listen(port, '0.0.0.0', () => {
-        console.log(`Server is running on http://0.0.0.0:${port}`);
-        console.log(`Access from local network using your IP address`);
+        bootLog.info('http server listening', { host: '0.0.0.0', port });
     });
 
     server.on('error', (err) => {
         if (err.code === 'EADDRINUSE' && maxRetries > 0) {
-            console.log(`Port ${port} is in use, trying ${port + 1}...`);
+            bootLog.warn('http port in use, retrying', { port, next_port: port + 1 });
             server.close();
             startServer(port + 1, maxRetries - 1);
         } else {
-            console.error('Server error:', err);
+            bootLog.error('http server error', { error: err.message, code: err.code || null });
             process.exit(1);
         }
     });
@@ -97,7 +102,7 @@ function startServer(port, maxRetries = 10) {
 // makes it obvious why the mic would still be blocked.
 function startHttpsServer(port) {
     if (!TLS_CERT_PATH || !TLS_KEY_PATH) {
-        console.log(`[https] disabled (set TLS_CERT_PATH + TLS_KEY_PATH to enable)`);
+        httpsLog.info('https disabled', { reason: 'missing TLS_CERT_PATH or TLS_KEY_PATH' });
         return null;
     }
     let cert, key;
@@ -105,20 +110,19 @@ function startHttpsServer(port) {
         cert = fs.readFileSync(TLS_CERT_PATH);
         key = fs.readFileSync(TLS_KEY_PATH);
     } catch (err) {
-        console.warn(`[https] could not read TLS files: ${err.message}`);
+        httpsLog.warn('tls files unreadable', { error: err.message });
         return null;
     }
     try {
         const server = https.createServer({ cert, key }, app).listen(port, '0.0.0.0', () => {
-            console.log(`HTTPS server is running on https://0.0.0.0:${port}`);
-            console.log(`Use this origin for any feature that needs the mic (press-to-talk, voice mode).`);
+            httpsLog.info('https server listening', { host: '0.0.0.0', port });
         });
         server.on('error', (err) => {
-            console.warn(`[https] listener error: ${err.message}`);
+            httpsLog.warn('https listener error', { error: err.message, code: err.code || null });
         });
         return server;
     } catch (err) {
-        console.warn(`[https] could not start HTTPS listener: ${err.message}`);
+        httpsLog.warn('https listener start failed', { error: err.message });
         return null;
     }
 }
@@ -134,7 +138,7 @@ function maybeWarmupKokoro() {
         (err, row) => {
             if (err || !row || row.setting_value !== 'kokoro') return;
             loadKokoro().catch((e) => {
-                console.warn('[kokoro] warmup failed:', e?.message || e);
+                kokoroLog.warn('warmup failed', { error: e?.message || String(e) });
             });
         }
     );
@@ -191,11 +195,11 @@ async function runVoiceKeyMigration() {
                 copied++;
             }
         } catch (e) {
-            console.warn(`[migration] failed copying ${oldKey} → ${newKey}:`, e.message);
+            migrationLog.warn('voice key copy failed', { old_key: oldKey, new_key: newKey, error: e.message });
         }
     }
     if (copied > 0) {
-        console.log(`[migration] copied ${copied} legacy voice key${copied === 1 ? '' : 's'} to per-provider keys`);
+        migrationLog.info('legacy voice keys copied', { copied });
     }
 }
 
@@ -205,7 +209,7 @@ async function initializeAndStart() {
         await dbReady;
         configureSlowQueryThresholdFromDb(db);
     } catch (err) {
-        console.error('[Startup] Database migration error:', err.message);
+        bootLog.error('database migration failed', { error: err.message });
         process.exit(1);
     }
 
@@ -216,7 +220,7 @@ async function initializeAndStart() {
             await runSeeders(db);
         }
     } catch (err) {
-        console.error('[Startup] Seeder error (non-fatal):', err.message);
+        bootLog.error('seeder failed', { error: err.message, fatal: false });
     }
 
     // Migrate legacy voice keys before anything reads them. Cheap; logs
@@ -224,7 +228,7 @@ async function initializeAndStart() {
     try {
         await runVoiceKeyMigration();
     } catch (e) {
-        console.warn('[migration] voice key migration failed:', e.message);
+        migrationLog.warn('voice key migration failed', { error: e.message });
     }
 
     // Start the server, then trigger TTS warmup async.
@@ -237,9 +241,13 @@ initializeAndStart();
 
 // Keep process alive and handle errors
 process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err);
+    bootLog.error('uncaught exception', { error: err.message, stack: err.stack || null });
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    bootLog.error('unhandled rejection', {
+        error: reason?.message || String(reason),
+        stack: reason?.stack || null,
+        promise: String(promise)
+    });
 });

@@ -2,14 +2,42 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FetchTimeoutError, fetchWithTimeout } from '../../server/services/fetchWithTimeout.js';
 
 let originalFetch;
+let originalEnv;
+let stdoutSpy;
+let stderrSpy;
 
 beforeEach(() => {
     originalFetch = globalThis.fetch;
+    originalEnv = { ...process.env };
 });
 
 afterEach(() => {
     globalThis.fetch = originalFetch;
+    stdoutSpy?.mockRestore();
+    stderrSpy?.mockRestore();
+    process.env = originalEnv;
 });
+
+function captureLogs() {
+    const stdout = [];
+    const stderr = [];
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+        stdout.push(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
+        return true;
+    });
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+        stderr.push(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
+        return true;
+    });
+    return {
+        entries() {
+            return `${stdout.join('')}${stderr.join('')}`
+                .split('\n')
+                .filter(Boolean)
+                .map((line) => JSON.parse(line));
+        }
+    };
+}
 
 describe('fetchWithTimeout (audit #10)', () => {
     it('passes through a fast fetch unchanged', async () => {
@@ -94,5 +122,38 @@ describe('fetchWithTimeout (audit #10)', () => {
         await fetchWithTimeout('https://x', {}, { timeoutMs: 1000 });
         expect(spy).toHaveBeenCalled();
         spy.mockRestore();
+    });
+
+    it('emits structured outbound HTTP logs without query strings', async () => {
+        process.env.LOG_FORMAT = 'json';
+        process.env.LOG_LEVEL = 'debug';
+        process.env.NODE_ENV = 'test';
+        const cap = captureLogs();
+        globalThis.fetch = vi.fn(() => Promise.resolve(new Response('ok', { status: 202 })));
+
+        await fetchWithTimeout('https://example.com/path?api_key=secret', { method: 'POST' }, {
+            timeoutMs: 1000,
+            attempt: 2,
+            breakerState: 'closed'
+        });
+
+        const logs = cap.entries().filter((entry) => entry.component === 'http-out');
+        expect(logs.map((entry) => entry.msg)).toEqual([
+            'outbound request started',
+            'outbound request completed',
+        ]);
+        expect(logs[0]).toEqual(expect.objectContaining({
+            level: 'debug',
+            target: 'https://example.com/path',
+            method: 'POST',
+            attempt: 2,
+            breaker_state: 'closed',
+        }));
+        expect(logs[1]).toEqual(expect.objectContaining({
+            level: 'info',
+            status: 202,
+            duration_ms: expect.any(Number),
+        }));
+        expect(JSON.stringify(logs)).not.toContain('secret');
     });
 });
