@@ -176,10 +176,14 @@ describe('DiscussionScreen — component contract', () => {
             <DiscussionScreen sessionId="sess-1" activeCase={ACTIVE_CASE} onClose={() => {}} />
         );
 
-        // Wait for the discussant name to appear (loading → ready transition).
+        // Component renders the button immediately (disabled while
+        // `discussant` is null), then enables it once fetchDiscussantForCase
+        // resolves. findByRole returns on first match — which can be the
+        // disabled-placeholder phase — so wait for the enabled transition
+        // before asserting. Pre-fix this test was flaky for that reason.
         const startBtn = await screen.findByRole('button', { name: /start debrief/i });
         expect(startBtn).toBeInTheDocument();
-        expect(startBtn).not.toBeDisabled();
+        await waitFor(() => expect(startBtn).not.toBeDisabled());
         // No VoiceControl yet — we're still pre-start.
         expect(screen.queryByTestId('voice-control')).toBeNull();
     });

@@ -80,11 +80,16 @@ export default defineConfig({
             // adding tests that don't move the needle, that's fine; if
             // you're touching coverage-counted code without tests, this
             // gate should refuse the merge until you add some.
+            //
+            // Ratchet bumped after the observability pass + post-audit
+            // tests landed (2026-05-07 evening): actuals 52.46/46.75/
+            // 46.21/54.07. Floors now at the rounded-down whole percent
+            // so floating-point variance across v8 runs doesn't trip CI.
             thresholds: {
-                statements: 50,
-                branches: 44,
-                functions: 43,
-                lines: 51,
+                statements: 52,
+                branches: 46,
+                functions: 46,
+                lines: 54,
             },
         },
         projects: [

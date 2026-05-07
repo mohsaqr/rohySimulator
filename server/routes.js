@@ -178,7 +178,11 @@ const RETENTION_TABLES = [
     { table: 'interactions', column: 'timestamp', userColumn: null },
     { table: 'system_audit_log', column: 'timestamp', userColumn: 'user_id' },
     { table: 'alarm_events', column: 'triggered_at', userColumn: null },
-    { table: 'llm_request_log', column: 'request_timestamp', userColumn: 'user_id' }
+    { table: 'llm_request_log', column: 'request_timestamp', userColumn: 'user_id' },
+    // client_logs (audit Phase 3): high-volume, useful for incident
+    // triage but not load-bearing for clinical audit. Same anonymise-on-
+    // user-purge contract as the rest. Aged sweep: see scripts/sweep-retention.js.
+    { table: 'client_logs', column: 'received_at', userColumn: 'user_id' }
 ];
 
 function dbGet(sql, params = []) {
