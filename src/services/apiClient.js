@@ -43,6 +43,29 @@ function readToken() {
     }
 }
 
+// Read the rohy_csrf cookie value. Set by the server at login (and on
+// /auth/verify) — see server/middleware/csrf.js. Non-HttpOnly by design;
+// document.cookie is the only reader.
+function readCsrfToken() {
+    try {
+        if (typeof document === 'undefined' || !document.cookie) return null;
+        for (const pair of document.cookie.split(';')) {
+            const eq = pair.indexOf('=');
+            if (eq === -1) continue;
+            const k = pair.slice(0, eq).trim();
+            if (k !== 'rohy_csrf') continue;
+            const v = pair.slice(eq + 1).trim();
+            try { return decodeURIComponent(v); }
+            catch { return v; }
+        }
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 function resolveUrl(path) {
     if (typeof path !== 'string') {
         throw new TypeError('apiFetch path must be a string');
@@ -121,6 +144,17 @@ export async function apiFetch(path, options = {}) {
     if (json !== undefined) {
         headers['Content-Type'] = 'application/json';
         body = JSON.stringify(json);
+    }
+
+    // CSRF: cookie-auth state-changing requests need a matching
+    // X-CSRF-Token header. We always set it when the cookie exists and
+    // the method is state-changing — server-side `csrfRequired` skips
+    // bearer-auth requests, so the header is harmless on those, and
+    // saying "always set when available" keeps the client from having
+    // to know which auth mode it's on.
+    if (auth && STATE_CHANGING_METHODS.has(method.toUpperCase())) {
+        const csrf = readCsrfToken();
+        if (csrf) headers['X-CSRF-Token'] = csrf;
     }
 
     Object.assign(headers, extraHeaders);

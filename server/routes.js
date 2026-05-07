@@ -24,6 +24,11 @@ import {
     hasRoleAtLeast,
     normalizeRole
 } from './middleware/auth.js';
+import {
+    CSRF_COOKIE_NAME,
+    csrfCookieOptions,
+    generateCsrfToken,
+} from './middleware/csrf.js';
 
 // Cookie config for the JWT auth cookie. HttpOnly so scripts can't steal
 // it (the localStorage XSS-blast-radius problem the audit flagged).
@@ -1139,6 +1144,12 @@ router.post('/auth/login', authLimiter, (req, res) => {
             // logout/admin-revoke applies regardless of which the client is on.
             res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
 
+            // Pair the auth cookie with a (non-HttpOnly) CSRF token so
+            // cookie-auth state-changing requests can satisfy the
+            // double-submit check in authenticateToken. Client JS reads
+            // this and echoes it as X-CSRF-Token. See middleware/csrf.js.
+            res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
+
             res.json({
                 message: 'Login successful',
                 user: {
@@ -1156,8 +1167,14 @@ router.post('/auth/login', authLimiter, (req, res) => {
     });
 });
 
-// GET /api/auth/verify - Verify token validity
+// GET /api/auth/verify - Verify token validity AND refresh the CSRF cookie.
+// The client calls this on app mount; using it as the rotation point keeps
+// the CSRF cookie aligned with the auth cookie's lifetime without an
+// extra dedicated endpoint.
 router.get('/auth/verify', authenticateToken, (req, res) => {
+    if (req.tokenSource === 'cookie') {
+        res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
+    }
     res.json({
         valid: true,
         user: {
@@ -1204,6 +1221,9 @@ router.post('/auth/logout', authenticateToken, async (req, res) => {
     // Drop the cookie regardless of how the client authed — cookie-mode
     // clients lose their token, header-mode clients are unaffected.
     res.clearCookie(AUTH_COOKIE_NAME, authCookieOptions(0));
+    // Drop the CSRF half too so a stale token can't sit around in the
+    // browser after logout.
+    res.clearCookie(CSRF_COOKIE_NAME, csrfCookieOptions(0));
 
     db.run(
         `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,

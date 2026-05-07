@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import db from '../db.js';
+import { csrfRequired, verifyCsrf } from './csrf.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -145,6 +146,18 @@ export const authenticateToken = (req, res, next) => {
                         // Stash the hash so /auth/logout can revoke this exact session
                         // without having to recompute it from the auth header.
                         req.tokenHash = tokenHash;
+
+                        // CSRF: cookie-auth state-changing requests must
+                        // present a matching X-CSRF-Token header. Bearer
+                        // requests are exempt (the attacker can't auto-
+                        // attach Authorization headers cross-site). See
+                        // server/middleware/csrf.js for the full rationale.
+                        if (csrfRequired(req)) {
+                            const verdict = verifyCsrf(req);
+                            if (verdict) {
+                                return res.status(verdict.status).json(verdict.body);
+                            }
+                        }
                         next();
                     }
                 );

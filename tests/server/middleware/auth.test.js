@@ -92,8 +92,8 @@ function makeRes() {
     return res;
 }
 
-function makeReq({ headers = {}, user = undefined } = {}) {
-    return { headers, user };
+function makeReq({ headers = {}, user = undefined, method = 'GET' } = {}) {
+    return { headers, user, method };
 }
 
 function makeNext() {
@@ -450,6 +450,103 @@ describe('auth middleware — authenticateToken', () => {
         // through to the cookie path (none) → 401. Locks the parser
         // strictness so future "be lenient" refactors don't accept it.
         expect(res.statusCode).toBe(401);
+    });
+});
+
+describe('auth middleware — CSRF protection on cookie-auth state-changing requests', () => {
+    // Cookie-auth POST/PUT/PATCH/DELETE require a valid double-submit
+    // CSRF token (cookie + matching X-CSRF-Token header). Bearer-auth
+    // requests skip the check — see middleware/csrf.js for rationale.
+
+    function csrfReq({ method = 'POST', token, header, extraCookies = '' } = {}) {
+        const cookies = [`rohy_auth=PLACEHOLDER`, extraCookies].filter(Boolean).join('; ');
+        const headers = {};
+        // We override the cookie line below per scenario.
+        if (token !== undefined) {
+            headers.cookie = `rohy_auth=PLACEHOLDER; rohy_csrf=${token}`;
+        } else {
+            headers.cookie = cookies;
+        }
+        if (header !== undefined) headers['x-csrf-token'] = header;
+        return { method, headers };
+    }
+
+    it('cookie-auth POST without X-CSRF-Token → 403 "CSRF token missing"', async () => {
+        const jwtToken = signToken({ id: 104, role: 'admin' }, { jwtid: 'csrf-missing' });
+        await auth.recordActiveSession(jwtToken, { id: 104, tenant_id: 1 });
+
+        const req = makeReq({
+            method: 'POST',
+            headers: { cookie: `rohy_auth=${jwtToken}; rohy_csrf=any-token` },
+        });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.statusCode).toBe(403);
+        expect(res.body).toEqual({ error: 'CSRF token missing' });
+    });
+
+    it('cookie-auth POST with mismatched cookie/header → 403 "CSRF token invalid"', async () => {
+        const jwtToken = signToken({ id: 104, role: 'admin' }, { jwtid: 'csrf-mismatch' });
+        await auth.recordActiveSession(jwtToken, { id: 104, tenant_id: 1 });
+
+        const req = makeReq({
+            method: 'POST',
+            headers: {
+                cookie: `rohy_auth=${jwtToken}; rohy_csrf=correct-token-x-43-chars-aaaaaaaaaaaaaa`,
+                'x-csrf-token': 'wrong-token-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy',
+            },
+        });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.statusCode).toBe(403);
+        expect(res.body).toEqual({ error: 'CSRF token invalid' });
+    });
+
+    it('cookie-auth POST with matching cookie/header → next() runs', async () => {
+        const jwtToken = signToken({ id: 104, role: 'admin' }, { jwtid: 'csrf-ok' });
+        await auth.recordActiveSession(jwtToken, { id: 104, tenant_id: 1 });
+        const csrf = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg'; // 43 chars
+
+        const req = makeReq({
+            method: 'POST',
+            headers: {
+                cookie: `rohy_auth=${jwtToken}; rohy_csrf=${csrf}`,
+                'x-csrf-token': csrf,
+            },
+        });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.__nextCalled).toBe(true);
+        expect(req.user.id).toBe(104);
+    });
+
+    it('cookie-auth GET skips CSRF entirely (read methods are exempt)', async () => {
+        const jwtToken = signToken({ id: 104, role: 'admin' }, { jwtid: 'csrf-get' });
+        await auth.recordActiveSession(jwtToken, { id: 104, tenant_id: 1 });
+
+        const req = makeReq({
+            method: 'GET',
+            headers: { cookie: `rohy_auth=${jwtToken}` },
+            // No CSRF cookie, no header — irrelevant for GET.
+        });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.__nextCalled).toBe(true);
+    });
+
+    it('bearer-auth POST without CSRF → next() (cross-site cant auto-attach Authorization)', async () => {
+        const jwtToken = signToken({ id: 104, role: 'admin' }, { jwtid: 'csrf-bearer-skip' });
+        await auth.recordActiveSession(jwtToken, { id: 104, tenant_id: 1 });
+
+        const req = makeReq({
+            method: 'POST',
+            headers: { authorization: `Bearer ${jwtToken}` },
+            // Deliberately no rohy_csrf cookie, no X-CSRF-Token header.
+        });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.__nextCalled).toBe(true);
+        expect(req.tokenSource).toBe('header');
     });
 });
 

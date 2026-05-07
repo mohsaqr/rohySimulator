@@ -22,6 +22,11 @@
  *                     toggles it off via UI)
  *       'derived'   — managed entirely by another subsystem (e.g. notifications
  *                     center handles its own scoped keys + retention)
+ *       'cookie'    — NOT a localStorage key — a `rohy_*`-named cookie that
+ *                     the server sets and the client only READS. Listed here
+ *                     so the registry's grep-the-source contract covers
+ *                     cookies too (otherwise apiClient's reference to a CSRF
+ *                     cookie would look like an unregistered key).
  *
  * The companion test (`registry.test.js`) asserts that every literal `rohy_*`
  * key found in `src/` appears in this registry — adding a key without
@@ -91,6 +96,17 @@ export const STORAGE_REGISTRY = Object.freeze({
         owner: 'src/components/debug/DiagnosticBar.jsx',
         purpose: 'Per-user toggle for the dev diagnostic bar.',
         lifetime: 'forever',
+    },
+    // ── Auth cookies (server-set, not localStorage) ────────────────────────
+    rohy_auth: {
+        owner: 'server/middleware/auth.js + server/routes.js (login/logout)',
+        purpose: 'HttpOnly JWT auth cookie (audit #4). Client never reads.',
+        lifetime: 'cookie',
+    },
+    rohy_csrf: {
+        owner: 'server/middleware/csrf.js + src/services/apiClient.js',
+        purpose: 'Double-submit CSRF token (audit #4 / CSRF). Client JS reads, server validates against X-CSRF-Token header.',
+        lifetime: 'cookie',
     },
     // ── Notifications (managed by notifications/persistence.js) ─────────────
     rohy_notification_prefs: {

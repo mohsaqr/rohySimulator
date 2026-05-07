@@ -234,6 +234,76 @@ describe('apiClient', () => {
         });
     });
 
+    describe('CSRF header (X-CSRF-Token)', () => {
+        // The server sets a non-HttpOnly rohy_csrf cookie at login. apiClient
+        // reads it from document.cookie and echoes it as X-CSRF-Token on
+        // state-changing requests so the server's double-submit check
+        // (server/middleware/csrf.js) can validate the pair.
+
+        function setCsrfCookie(value) {
+            document.cookie = `rohy_csrf=${value}; path=/`;
+        }
+        function clearCsrfCookie() {
+            document.cookie = 'rohy_csrf=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        }
+
+        beforeEach(() => {
+            clearCsrfCookie();
+        });
+
+        it('attaches X-CSRF-Token on POST when the rohy_csrf cookie exists', async () => {
+            setCsrfCookie('csrf-abc-123');
+            fetchSpy.mockResolvedValue(jsonResponse({}));
+            await apiPost('/x', { v: 1 });
+            const [, init] = fetchSpy.mock.calls[0];
+            expect(init.headers['X-CSRF-Token']).toBe('csrf-abc-123');
+        });
+
+        it('attaches X-CSRF-Token on PUT/PATCH/DELETE too', async () => {
+            setCsrfCookie('csrf-multi');
+            // Each call needs its own Response — body is single-use.
+            fetchSpy.mockImplementation(() => Promise.resolve(jsonResponse({})));
+            await apiPut('/x', { v: 1 });
+            await apiPatch('/x', { v: 1 });
+            await apiDelete('/x');
+            for (const [, init] of fetchSpy.mock.calls) {
+                expect(init.headers['X-CSRF-Token']).toBe('csrf-multi');
+            }
+        });
+
+        it('does NOT attach X-CSRF-Token on GET (read methods are exempt)', async () => {
+            setCsrfCookie('csrf-get-skip');
+            fetchSpy.mockResolvedValue(jsonResponse({}));
+            await apiGet('/x');
+            const [, init] = fetchSpy.mock.calls[0];
+            expect(init.headers['X-CSRF-Token']).toBeUndefined();
+        });
+
+        it('does NOT attach X-CSRF-Token when the cookie is absent', async () => {
+            // No setCsrfCookie call.
+            fetchSpy.mockResolvedValue(jsonResponse({}));
+            await apiPost('/x', { v: 1 });
+            const [, init] = fetchSpy.mock.calls[0];
+            expect(init.headers['X-CSRF-Token']).toBeUndefined();
+        });
+
+        it('does NOT attach X-CSRF-Token when auth:false (public endpoint)', async () => {
+            setCsrfCookie('csrf-public-skip');
+            fetchSpy.mockResolvedValue(jsonResponse({}));
+            await apiPost('/auth/login', { username: 'u', password: 'p' }, { auth: false });
+            const [, init] = fetchSpy.mock.calls[0];
+            expect(init.headers['X-CSRF-Token']).toBeUndefined();
+        });
+
+        it('decodes URL-encoded cookie values', async () => {
+            setCsrfCookie(encodeURIComponent('weird value/=='));
+            fetchSpy.mockResolvedValue(jsonResponse({}));
+            await apiPost('/x', { v: 1 });
+            const [, init] = fetchSpy.mock.calls[0];
+            expect(init.headers['X-CSRF-Token']).toBe('weird value/==');
+        });
+    });
+
     describe('signal forwarding', () => {
         it('passes AbortSignal through to fetch', async () => {
             fetchSpy.mockResolvedValue(jsonResponse({}));

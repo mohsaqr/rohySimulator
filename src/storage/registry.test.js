@@ -31,7 +31,7 @@ describe('localStorage namespace registry', () => {
             expect(entry.owner, `${key}.owner`).toBeTypeOf('string');
             expect(entry.owner.length, `${key}.owner non-empty`).toBeGreaterThan(0);
             expect(entry.purpose, `${key}.purpose`).toBeTypeOf('string');
-            expect(['session', 'logout', 'forever', 'derived'], `${key}.lifetime`)
+            expect(['session', 'logout', 'forever', 'derived', 'cookie'], `${key}.lifetime`)
                 .toContain(entry.lifetime);
         }
     });
