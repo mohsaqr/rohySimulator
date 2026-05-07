@@ -1,78 +1,224 @@
-# Session Handoff — 2026-05-06 (evening, voice + persistence)
+# Session Handoff — 2026-05-07 (audit follow-through)
 
-## Completed
+This session executed against the 25-finding enterprise audit pass from
+2026-05-06 plus four follow-up items the audit itself missed (CSP,
+SQL-injection static guard, retention test, incident-response runbook)
+and the cookie/CSRF/refresh-flow rollout.
 
-Six commits on `main`, all pushed to origin:
+## Completed (29 commits on `main`, all pushed)
 
-1. `c6bc653` **fix(voice)** — `src/components/chat/ChatInterface.jsx`. The patient and agent TTS paths used to silently skip when `resolveVoice()` returned `{ file: null }` — no toast, no `/api/tts` request, no log. Both paths now log + toast a specific error naming the missing provider+slot ("No voice configured for provider X / male"). The settings-preview path was unaffected because it explicitly passes `ttsVoices` (Tier 5 catalog-first).
-2. `5e95ba0` **fix(stt)** — same file. `startVoiceTurn` routed every Web Speech API failure to `console.warn`, so deployed users saw nothing. Now: each error code (`not-allowed`, `service-not-allowed`, `network`, `audio-capture`, `no-speech`) produces a specific toast, plus a fallback toast for the "ended without firing onerror" pattern (typical of insecure-origin silent refusal).
-3. `b94ce3b` **feat(tls)** — `server/server.js` + `scripts/gen-self-signed-tls.sh`. Optional HTTPS listener gated on `TLS_CERT_PATH` + `TLS_KEY_PATH` env vars. Listens on `HTTPS_PORT` (default `PORT + 1000`) alongside the existing HTTP listener so legacy bookmarks keep working. Generator script produces a SAN-correct self-signed cert (`IP:` vs `DNS:` prefix decided by host shape).
-4. `98d40be` **fix(stt)** — `src/services/voiceService.js`, `src/components/discussion/VoiceControl.jsx`, `src/components/chat/ChatInterface.jsx`. Default `rec.continuous = true` so the mic stays open across mid-sentence pauses. Removed the auto-stop-on-isFinal logic in both callers; mic now stops only on tap-toggle or when the patient/discussant starts speaking back. Caller can opt out with `continuous: false`.
-5. `a37ae8e` **fix(persistence)** — `src/App.jsx`. Removed `SESSION_EXPIRY_MS` (30-min idle wipe), the server-mismatch wipe path, and the per-interaction localStorage timestamp churn. Gated the notification `clearTransient` effect on `sessionValidated` so refresh doesn't clear alarm acks. Net **−83 / +57** lines. Refresh now ALWAYS restores the active case + sessionId.
-6. `dfa0e4a` **feat(persistence)** — `src/App.jsx` + `src/contexts/AuthContext.jsx`. New `rohy_view` localStorage blob persists which surface the user is on (settings tab + wizard step, TNA, debrief, persona editor). Rehydrated on mount via `applyView(saved)`; persisted on change via `captureView()`. Cleared on the same explicit-exit triggers as the rest of session state, plus logout.
+### From the audit's 25 findings
 
-## Current State
+22 closed by code, 3 deferred with rationale (#7 routes split, #9
+dbAdapter migration, #11 TTS/LLM concurrency budgets — each a multi-
+day mechanical refactor). The shape of each commit:
+
+- **#1** apiClient + ApiError contract; service-layer + clinical-
+  workflow component migrations (admin editors deferred under #15).
+- **#2** active_sessions revocation enforced in `authenticateToken`.
+- **#3** medkit-app: persona + emotion classifier tests (split
+  `detectEmotion` out of `conversation.ts` for testability without
+  livekit).
+- **#4** HttpOnly `rohy_auth` cookie issued at login, dual-mode
+  bearer/cookie auth.
+- **#5** Coverage ratchet at 50/44/43/51% as floor.
+- **#6** `src/storage/registry.js` declares every `rohy_*` namespace;
+  test fails on undeclared keys.
+- **#8** `runDbMigrations` / `seedDbDefaults` split, `scripts/seed.js`
+  + `ROHY_NO_AUTO_SEED=1` opt-out.
+- **#10** `fetchWithTimeout` primitive; OpenAI + Google TTS adopted.
+- **#12** Auth middleware tenant-change + malformed-header tests.
+- **#13** Migration runner downgrade + dirty-db tests.
+- **#14** LabValueEditor integration tests.
+- **#16** tnaUtils edge-case tests.
+- **#17** useAlarms timer + useTreatmentEffects session-change tests.
+- **#18** Notification per-user scoping + legacy-key migration tests.
+- **#19** CORS factory + production allowlist tests.
+- **#20** Backend persistence telemetry counters; surfaced in
+  DiagnosticBar.
+- **#21** `src/notifications/SAFETY.md` clinical alarm safety
+  acceptance criteria.
+- **#22** DiagnosticBar role gate (admin/educator only).
+- **#23** Cleanup: tnaUtils dead allocation, parseConfig deep-clone.
+- **#24** Static-template schema validation.
+- **#25** API URL resolution across BASE_URL configs.
+
+### Beyond the audit (added or surfaced this session)
+
+- **CSRF** — double-submit-cookie protection on cookie-auth path; the
+  cookie/CSRF rollout was the natural follow-on to #4.
+- **JWT refresh** — `POST /auth/refresh` rotates active_sessions row
+  + cookies; `AuthContext` schedules a 3h tick.
+- **Cookie-mode flag day** — login/register no longer write
+  localStorage by default (`rememberToken: true` opts back in for
+  explicit cross-origin callers).
+- **CSP + security headers** — `server/security-headers.js` sets
+  Content-Security-Policy, X-Frame-Options, Permissions-Policy,
+  X-Content-Type-Options, Referrer-Policy. CSP is strict in production
+  (`script-src 'self'` only) and adds `unsafe-eval` for dev (Vite HMR).
+- **SQL-injection static guard** — `tests/server/sql-injection-guard.test.js`
+  greps server tree for `${...}` interpolation in SQL strings; new
+  interpolation fails CI unless explicitly allowlisted with rationale.
+- **Retention/purge end-to-end test** — `tests/server/retention-purge.test.js`
+  exercises `POST /api/users/:id/purge` against the real server, asserting
+  hard-delete tables lose rows, anonymised log tables NULL their user_id,
+  and the user row is retained but PII-wiped.
+- **Body-size limit tightened** — global JSON limit dropped from 10mb
+  to 256kb (DoS surface).
+- **Real timezone bug fixed** — `active_sessions.expires_at` comparison
+  was using `new Date(sqliteString)` which parses as local time but
+  SQLite stores UTC. Fixed by appending 'Z' before parse. Caught by
+  the new auth-refresh tests on a non-UTC dev box.
+- **Incident-response runbook** — `docs/INCIDENT_RESPONSE.md`. Seven
+  failure-mode playbooks (locked-out users, CSRF rejection, dropped
+  persistence, TTS timeout, refresh loop, JWT-secret rotation, DB lock).
+
+## Current state
 
 ### What works
-- Refresh restores active case, sessionId, chat, debrief history, alarm acks/snoozes, and the last view (Settings tab/step, TNA, debrief, persona editor). State only clears on Exit/End/case-switch/logout.
-- TTS infrastructure (verified: debrief audio plays end-to-end). `kokoro`, `google`, `openai`, `piper` providers all wired in `server/services/`; runtime resolves via `resolveTtsVoice()` per `tts_provider` platform setting.
-- Press-to-talk in conversational mode: continuous recording, pauses don't kill the mic, tap-to-stop sends.
-- Server has an optional HTTPS listener — but it's not enabled in the user's deployed environment yet (see Open Issues).
-- Tests: 35 passing across `src/components/chat`, `src/services/voiceService.test.js`, `src/components/discussion`. Pre-existing `SQLITE_READONLY` noise in `tests/server/middleware/auth.test.js` is unrelated and unchanged.
+- Cookie-only auth lane: HttpOnly `rohy_auth` + `rohy_csrf` double-submit
+  CSRF + 3h JWT refresh + flag-day defaults. Login/register no longer
+  write localStorage; existing localStorage tokens self-heal as users
+  cycle through logout/refresh.
+- Server-side revocation: logout, admin force-logout, password change
+  all immediately invalidate the JWT.
+- DiagnosticBar (admin/educator only) shows live backend persistence
+  telemetry alongside the existing voice / LLM / session diagnostics.
+- 22 of 25 audit findings closed by code; 3 deferred with documented
+  rationale; 4 follow-ups (CSP, SQL guard, retention test, incident
+  runbook) added beyond the audit's scope.
+- 973 vitest tests passing, 10 documented skipped, 0 failed (one
+  intermittent flake on `DiscussionScreen.test.jsx` "Start debrief"
+  gate — passes on re-run; not introduced this session).
 
-### What is broken / partially done
-- The deployed origin is `http://192.168.50.39:4001/rohy/` — Chrome blocks STT and `getUserMedia` on this insecure context (private LAN IPs are NOT whitelisted alongside `localhost`). Press-to-talk fundamentally cannot work until the user terminates TLS at this origin. The new HTTPS listener + cert generator are the suggested path; the user has not yet generated certs and restarted the systemd unit with `TLS_CERT_PATH` set.
-- Symptom user reported "I can only hear the debrief initial message" — root cause is the above STT block: the first debrief greeting is auto-fired by `startConversation()` (kickoff prompt, no STT needed); every subsequent turn requires the user to reply via mic, which is blocked → no second LLM call → silence. Fixed by enabling HTTPS, no further code change needed.
+### What's broken / partial
+- **Admin editor migration to apiFetch + tests (#15)** — 10 admin-only
+  components still on direct fetch (LabTestManager, MedicationManager,
+  etc.). Lower security risk (admin-only paths, role-gated server-side)
+  but real debt.
+- **`server/routes.js` split (#7)** — still one 7000-line file.
+  Mitigated by `route-auth-allowlist.test.js` but the file itself is
+  still a wall.
+- **dbAdapter migration (#9)** — direct `db.get/all/run` still
+  pervasive in routes.js.
+- **TTS/LLM budget tracker (#11)** — no per-user/platform spend
+  enforcement. fetchWithTimeout from #10 is the building block the
+  budget tracker will wrap.
+- **TTS retry / circuit-breaker** — primitive in place, no policy
+  layered on top yet.
+- **Structured logging schema** — `console.log` is everywhere;
+  `requestLoggerMiddleware` exists but per-route warn/error don't go
+  through it.
+- **session_id collision test** — no test for the SQL race when two
+  tabs start a session simultaneously.
+- **Cookie-path Playwright e2e** — unit tests cover the cookie/CSRF/
+  refresh logic but no e2e issues a real `Set-Cookie` and watches the
+  next fetch send it back.
 
 ### Files changed this session
-- `src/components/chat/ChatInterface.jsx` — voice toast + STT toast + STT continuous-mode rewrite
-- `src/services/voiceService.js` — `continuous` parameter (default `true`)
-- `src/components/discussion/VoiceControl.jsx` — drop auto-stop-on-isFinal
-- `server/server.js` — optional HTTPS listener
-- `scripts/gen-self-signed-tls.sh` — new, executable, SAN-correct cert generator
-- `src/App.jsx` — persistence rule rewrite + view-state breadcrumbs
-- `src/contexts/AuthContext.jsx` — clear `rohy_active_session` / `rohy_chat_history` / `rohy_view` on logout
 
-### Subsequent module audit location
-- A later enterprise module audit pass saved its findings under `module-audits/`.
-- Start at `module-audits/00-index.md`; it links the per-module reports.
-- Key reports: `module-audits/server-api.md`, `module-audits/server-auth-rbac-tenancy.md`, `module-audits/server-database-migrations.md`, `module-audits/client-services.md`, `module-audits/patient-record.md`, `module-audits/medkit-app.md`, and `module-audits/testing-strategy.md`.
-- Audit pass also added/fixed tests in `src/services/PatientRecord/patientRecordSync.test.js`, `src/services/PatientRecord/PatientRecord.test.js`, `src/services/TreatmentEffects/TreatmentEffectsEngine.test.js`, `src/hooks/useAlarms.test.js`, `src/hooks/useTreatmentEffects.test.js`, `src/notifications/routing.test.js`, `tests/server/route-auth-allowlist.test.js`, and `tests/server/middleware/auth.test.js`.
-- Latest full Vitest result after test expansion: 52 files passed, 802 tests passed, 10 skipped.
+Net diff is ~30 commits, 64 files changed, 6,500+ lines net.
+High-leverage modules:
 
-## Key Decisions
+- **New:** `src/services/apiClient.js`, `src/storage/registry.js`,
+  `src/notifications/SAFETY.md`, `server/cors-config.js`,
+  `server/security-headers.js`, `server/middleware/csrf.js`,
+  `server/services/fetchWithTimeout.js`, `scripts/seed.js`,
+  `docs/INCIDENT_RESPONSE.md`, plus 14 new test files.
+- **Heavily modified:** `src/services/{authService,llmService,
+  voiceService,AgentService,discussionService,notesService}.js`,
+  `src/contexts/AuthContext.jsx`, `src/App.jsx`, `src/components/
+  {chat/ChatInterface,monitor/PatientMonitor,orders/OrdersDrawer,
+  treatments/TreatmentPanel,investigations/*,examination/*}.jsx`,
+  `src/notifications/{persistence,surfaces/BackendSurface}.js`,
+  `src/hooks/{useAlarms,useTreatmentEffects,useDiscussionEngine}.js`,
+  `server/routes.js`, `server/middleware/auth.js`, `server/db.js`,
+  `vitest.config.js`.
 
-- **Persistence rule:** session lives until the user clicks Exit/End/Logout/Load-different-case. No silent expiry, no server-mismatch wipe. User stated this verbatim ("exit should only be through exit or end .. not refresh"). Locked into `App.jsx`.
-- **`continuous = true` as the default for STT:** the alternative was making each caller opt in. Chose default-true because both existing callers (`ChatInterface.startVoiceTurn`, `VoiceControl.start`) already implement tap-to-toggle UX, which is exactly what continuous mode requires. Future "press-and-hold" callers can pass `continuous: false`.
-- **TLS via Node, not via the existing nginx:** the user's URL is hitting the Node server directly on `:4001`, not going through the deploy.sh nginx. Adding a Node-side HTTPS listener gets voice working without touching production nginx config (which we can't see from the repo). nginx-fronted TLS is still possible for the production domain whenever they're ready.
-- **No visible breadcrumb UI yet:** asked the user; they declined ("it is ok no need for it"). The state-restore mechanism alone covered "where we have been hanging drinking orange juice."
-- **Did NOT auto-guess voices in `resolveVoice`:** the resolver header (`src/utils/voiceResolver.js:18-24`) explicitly argues against tier-5 catalog-first at runtime. Respected that — the new toast surfaces the gap so an admin fixes platform settings, instead of silently playing a wrong voice.
+## Key decisions
 
-## Open Issues
+- **Cookie-mode flag day is graceful, not abrupt.** Existing
+  localStorage tokens keep working through `apiClient`'s Authorization
+  header attachment. The localStorage slot self-heals: any 401 clears
+  it, so users naturally migrate as their old tokens expire.
+- **CSRF skips bearer-auth requests intentionally.** A cross-site
+  attacker has no way to auto-attach an Authorization header — that's
+  not a CSRF vector. Gating on `req.tokenSource === 'cookie'` keeps
+  legacy bearer clients working unchanged while protecting the cookie
+  clients exclusively. Test pins the policy.
+- **Refresh order: insert new row before revoking old.** Never any
+  window where the user has zero valid sessions. Reversing the order
+  would create a brief race on parallel mid-refresh requests.
+- **CSRF cookie is non-HttpOnly by design — locked in a test.** The
+  whole double-submit scheme depends on JS reading the cookie. A
+  future "harden everything" pass that flips this to HttpOnly would
+  silently disable CSRF protection; the test refuses that change.
+- **Coverage ratchet floors are starting values, not targets.** Audit
+  documented 70% as the Phase 2/3 target, 80%+ for Phase 4+. If the
+  numbers stay at 50% in 90 days, the ratchet served no purpose.
+- **SQL-injection guard uses an explicit allowlist with `why` strings.**
+  Each allowlisted line is line-substring-matched, not a blanket pass.
+  New interpolation, even in already-allowlisted files, fails until
+  someone audits and either rewrites or extends the allowlist.
 
-- **HTTPS not yet enabled on the deploy host.** The user has the commits but hasn't run `scripts/gen-self-signed-tls.sh 192.168.50.39` and added `TLS_CERT_PATH` / `TLS_KEY_PATH` to the systemd env. Until then, mic-using features are blocked at the browser layer regardless of any code we ship.
-- **Server-side `nginx` reverse proxy** in `production/deploy.sh` reloads nginx but the config is not in this repo. If the production domain (`FRONTEND_URL`) is HTTPS already via nginx, voice should work there — but the user is testing the LAN IP path. Worth confirming with the user which origin is the real production endpoint.
-- **`rohy_chat_history` localStorage is keyed un-scoped** (single key, not per-session). Cleared on case switch + End + logout, but a user with two sessions on different machines could see brief flickers if localStorage races. Not user-reported; leaving alone.
-- **Multi-tab warning banner** in `App.jsx:271-295` is a banner, not a wipe. last-write-wins still applies across tabs. User has not asked for stricter behaviour.
+## Open issues
 
-## Next Steps
+- **Refresh-flow tests run sequentially.** Two parallel test workers
+  using auth-refresh.test.js would collide on `active_sessions.token_hash`
+  (UNIQUE). Currently mitigated by Vitest defaulting one worker per
+  file; if you flip to parallel-within-file, the tests need test-scoped
+  isolation.
+- **The `DiscussionScreen.test.jsx > CONTRACT 2` test is flaky.**
+  Pre-existing — async discussant-resolve race. Hasn't been fixed
+  this session. Re-run usually passes.
+- **One admin force-logout SQL update could lock everyone out.** The
+  incident runbook covers recovery (truncate `active_sessions`,
+  legacy-token compatibility absorbs the disruption), but a guardrail
+  on the admin endpoint to refuse mass-revoke would be safer.
+- **`cors-config.js` allows loopback origins in production.** The audit
+  test (`tests/server/cors-config.test.js`) locks this as observed
+  behaviour rather than a bug; if you want to forbid loopback in prod,
+  flip the order of the dev-shortcut + allowlist check and update the
+  test.
 
-1. **User runs on deploy host:**
-   ```
-   ./production/deploy.sh
-   ./scripts/gen-self-signed-tls.sh 192.168.50.39
-   # Add TLS_CERT_PATH=/etc/rohy-tls/cert.pem + TLS_KEY_PATH=/etc/rohy-tls/key.pem to systemd env
-   sudo systemctl restart <service>
-   ```
-   Then visit `https://192.168.50.39:5001/rohy/`, click through Chrome's "Advanced → Proceed", and verify press-to-talk + multi-turn debrief work.
-2. **If voice still fails on HTTPS:** the new toasts (`fix(stt)` and `fix(voice)` commits) will name the actual cause — provider/slot misconfiguration, missing API key, or specific Web Speech API error. Iterate from the toast text.
-3. **Optional: nginx TLS** for the real production domain instead of the Node-side HTTPS listener. The `deploy.sh` already runs `sudo nginx -t && sudo systemctl reload nginx`, so adding a `server { listen 443 ssl; ... proxy_pass http://127.0.0.1:4001 }` block to the host's nginx config would give a friendlier URL than `:5001`.
-4. **Optional: visible breadcrumb UI.** User declined for now; revisit if they ask for click-to-jump navigation between surfaces.
+## Next steps (priority order)
+
+1. **Wire incident-response runbook into observability.** Currently a
+   doc; the playbooks reference DiagnosticBar telemetry counters that
+   exist but have no off-tab persistence. Hooking up a metrics shipper
+   (statsd, OTLP) would let alerts fire on the same signals the runbook
+   names.
+2. **Close #15** (admin editor apiFetch migration + component tests).
+   The mechanical migration is bulky but unblocks the security floor on
+   that component layer. Multi-day window.
+3. **Close #7 / #9 / #11** in any order. Each is a focused multi-day
+   PR. The route-auth-allowlist test (#7) and the SQL-injection guard
+   already cover the audit's underlying concerns; the file split and
+   the dbAdapter migration are quality-of-life improvements that don't
+   change security posture.
+4. **TTS retry / circuit-breaker on top of `fetchWithTimeout`.** Small
+   surface, real user-visible win during upstream provider hiccups.
+5. **Cookie-path Playwright e2e.** Unit tests cover the auth lane but
+   browser-level cookie / CSRF behaviour isn't end-to-end verified.
+6. **Body-size limits per route.** Global limit is now 256kb; certain
+   endpoints (case import, scenario template upload) likely need
+   per-route override. Audit the actual sizes of legitimate POST
+   bodies before tightening further.
 
 ## Context
 
-- Working tree clean as of `dfa0e4a`. No uncommitted changes.
-- Branch: `main` (per global feedback memory: always commit on main).
-- Test runner: Vitest (split `client` + `server` projects via `vitest.config.js`); single-suite spot-checks used during this session.
-- The user's deployed environment is a LAN box at `192.168.50.39`, accessed by colleagues over the local network; remote SSH deploy via `production/deploy.sh`.
-- LEARNINGS.md and CHANGES.md were not updated this session — work was rapid back-and-forth diagnosis, all decisions captured in the commit messages and this handoff.
+- Working tree state: clean after the final commit + push.
+- Branch: `main` (per the user's longstanding "always commit on main"
+  feedback memory).
+- Test runner: Vitest split client + server; `npm test` runs both,
+  `npm run test:ci` adds JUnit + coverage with the new ratchet
+  thresholds.
+- 967 → 973 tests this session phase; 802 → 973 net since the audit.
+- The user's deploy environment is still `192.168.50.39` LAN; the
+  HTTPS-listener + cert generator from the prior session are still
+  the path off the insecure-context block. The cookie-mode auth this
+  session adds is dependent on HTTPS being live in production —
+  `secure: true` on cookies is gated on `NODE_ENV==='production'`,
+  so non-HTTPS prod would suppress the cookies entirely.
+- LEARNINGS.md was not updated this session; the per-commit messages
+  and this handoff carry the substantive decisions.

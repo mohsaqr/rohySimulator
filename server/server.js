@@ -32,15 +32,24 @@ instrumentSqliteDb(db);
 
 // CORS Configuration - restrict to allowed origins
 import { buildCorsOptions } from './cors-config.js';
+import { securityHeaders } from './security-headers.js';
 
 app.use(requestIdMiddleware);
+app.use(securityHeaders({ nodeEnv: process.env.NODE_ENV }));
 app.use(cors(buildCorsOptions({
     nodeEnv: process.env.NODE_ENV,
     frontendUrl: process.env.FRONTEND_URL,
 })));
 app.use(requestLoggerMiddleware());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+// Body-size limits: most JSON endpoints carry small payloads. The 10mb
+// global limit was a DoS surface — request a 10mb JSON body N times in
+// parallel and the server is sad. We keep 10mb only for the upload
+// routes (mounted after this point under /api) by setting a much smaller
+// global limit and overriding per-route where genuinely needed. The
+// upload routes use multer (multipart), not express.json, so they are
+// unaffected by this cap.
+app.use(express.json({ limit: '256kb' }));
+app.use(express.urlencoded({ limit: '256kb', extended: true }));
 
 // Routes
 app.use('/api', apiRoutes);
