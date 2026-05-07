@@ -117,8 +117,17 @@ export const authenticateToken = (req, res, next) => {
                     if (!sessionRow.is_active) {
                         return res.status(401).json({ error: 'Session revoked' });
                     }
-                    if (sessionRow.expires_at && new Date(sessionRow.expires_at) < new Date()) {
-                        return res.status(401).json({ error: 'Session expired' });
+                    if (sessionRow.expires_at) {
+                        // SQLite emits `YYYY-MM-DD HH:MM:SS` without a TZ
+                        // marker — JS parses that as LOCAL time, which is
+                        // wrong because the column is stored in UTC. Force
+                        // UTC interpretation by appending 'Z' (or replacing
+                        // the space with 'T' for older parsers).
+                        const utcStamp = sessionRow.expires_at
+                            .replace(' ', 'T') + 'Z';
+                        if (new Date(utcStamp) < new Date()) {
+                            return res.status(401).json({ error: 'Session expired' });
+                        }
                     }
                     // Best-effort touch — failure is non-fatal.
                     db.run(

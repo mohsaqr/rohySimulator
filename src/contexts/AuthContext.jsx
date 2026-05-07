@@ -33,6 +33,29 @@ export const AuthProvider = ({ children }) => {
         verifyUser();
     }, []);
 
+    // Periodic JWT refresh. The server-issued token has a 4h TTL; we
+    // refresh every 3h so an active user never sees a forced logout.
+    // The /auth/refresh endpoint rotates the active_sessions row, so
+    // server-side revocation (logout, admin force-logout, password
+    // change) still applies — the next refresh against a revoked
+    // session simply 401s and we drop the user state.
+    useEffect(() => {
+        if (!user) return;
+        const REFRESH_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3h
+        const tick = async () => {
+            const result = await AuthService.refreshToken();
+            if (!result) {
+                // Refresh failed — most likely the session was revoked.
+                // Log the user out client-side; they'll re-login or
+                // verifyToken() on next mount will catch the dead session.
+                AuthService.logout();
+                setUser(null);
+            }
+        };
+        const id = setInterval(tick, REFRESH_INTERVAL_MS);
+        return () => clearInterval(id);
+    }, [user]);
+
     const login = async (username, password) => {
         const data = await AuthService.login(username, password);
         setUser(data.user);

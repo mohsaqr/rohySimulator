@@ -49,7 +49,10 @@ afterEach(() => {
 });
 
 describe('AuthService.login', () => {
-    it('POSTs JSON to /api/auth/login with username + password and stores token on success', async () => {
+    it('POSTs JSON to /api/auth/login and does NOT write localStorage by default (cookie-mode flag day)', async () => {
+        // Flag-day contract: cookie auth carries the session, so login no
+        // longer writes localStorage by default. The server still includes
+        // the token in the body for backwards compat / explicit use.
         fetchSpy.mockResolvedValueOnce(makeResponse({
             ok: true,
             body: { token: 'jwt-abc', user: { id: 1, username: 'alice' } },
@@ -64,8 +67,21 @@ describe('AuthService.login', () => {
         expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
         expect(JSON.parse(init.body)).toEqual({ username: 'alice', password: 'hunter2' });
 
-        expect(localStorage.getItem('token')).toBe('jwt-abc');
+        // The localStorage token slot stays empty — auth rides the cookie.
+        expect(localStorage.getItem('token')).toBeNull();
         expect(result).toEqual({ token: 'jwt-abc', user: { id: 1, username: 'alice' } });
+    });
+
+    it('opts back into bearer mode when rememberToken: true is passed', async () => {
+        // Explicit cross-origin callers / tests that need bearer-mode auth
+        // can still get it via the documented opt-in flag.
+        fetchSpy.mockResolvedValueOnce(makeResponse({
+            ok: true,
+            body: { token: 'jwt-bear', user: { id: 1 } },
+        }));
+
+        await AuthService.login('alice', 'pw', { rememberToken: true });
+        expect(localStorage.getItem('token')).toBe('jwt-bear');
     });
 
     it('throws a friendly connection error when fetch rejects (server unreachable)', async () => {
@@ -128,7 +144,7 @@ describe('AuthService.login', () => {
 });
 
 describe('AuthService.register', () => {
-    it('POSTs username/email/password JSON and stores token on success', async () => {
+    it('POSTs username/email/password JSON and does NOT write localStorage by default', async () => {
         fetchSpy.mockResolvedValueOnce(makeResponse({
             ok: true,
             body: { token: 'reg-token', user: { id: 7 } },
@@ -146,7 +162,8 @@ describe('AuthService.register', () => {
             password: 'pw',
         });
 
-        expect(localStorage.getItem('token')).toBe('reg-token');
+        // Flag-day: register no longer writes localStorage by default.
+        expect(localStorage.getItem('token')).toBeNull();
         expect(data.user).toEqual({ id: 7 });
     });
 
@@ -163,10 +180,17 @@ describe('AuthService.register', () => {
 });
 
 describe('AuthService.verifyToken', () => {
-    it('returns null without hitting the network when no token is stored', async () => {
+    it('hits /auth/verify even when no localStorage token is present (cookie-mode)', async () => {
+        // Flag-day: cookie-mode clients have no localStorage token, but
+        // the verify call must still fire so the cookie is exercised.
+        // The server returns null (or 401) when no auth is present;
+        // verifyToken returns null in that case.
+        fetchSpy.mockResolvedValueOnce(makeResponse({
+            ok: false, status: 401, body: { error: 'Access token required' },
+        }));
         const result = await AuthService.verifyToken();
         expect(result).toBeNull();
-        expect(fetchSpy).not.toHaveBeenCalled();
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
 
     it('sends Authorization: Bearer <token> and returns the user from the response', async () => {

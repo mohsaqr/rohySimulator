@@ -26,6 +26,7 @@ import EventLogger from '../../services/eventLogger';
 import { resolveVoice } from '../../utils/voiceResolver';
 import { parseConfig } from '../../utils/parseConfig';
 import { getLastTtsRequest, getRecentTtsRequests, auditionWirePayload } from '../../services/voiceService';
+import { getBackendTelemetry } from '../../notifications/surfaces/BackendSurface';
 
 const KEY_PREFIX = 'rohy_diag_bar_enabled_';
 const storageKey = (uid) => `${KEY_PREFIX}${uid ?? 'anon'}`;
@@ -90,6 +91,23 @@ export default function DiagnosticBar() {
     const [auditionId, setAuditionId] = useState(null);
     const auditionStopRef = React.useRef(null);
     const [auditionError, setAuditionError] = useState(null);
+    // Audit #20: backend persistence failure counters surfaced in the bar.
+    // BackendSurface fires 'rohy:backend-telemetry' on every recordFailure;
+    // we re-read the snapshot on each event so a sudden burst of alarm-log
+    // failures becomes visible without polling.
+    const [backendTelemetry, setBackendTelemetry] = useState(() => getBackendTelemetry());
+
+    // Subscribe to BackendSurface telemetry events so the panel reflects
+    // failures live. Listener is idempotent: re-reads the full snapshot
+    // each time, no incremental state.
+    useEffect(() => {
+        if (!enabled) return;
+        const onTelemetry = () => setBackendTelemetry(getBackendTelemetry());
+        window.addEventListener('rohy:backend-telemetry', onTelemetry);
+        // Also poll once on mount in case events fired before we subscribed.
+        onTelemetry();
+        return () => window.removeEventListener('rohy:backend-telemetry', onTelemetry);
+    }, [enabled]);
 
     // Re-read enabled flag when the user changes (login/logout) so the bar
     // honours the per-user toggle without a full reload.
@@ -406,6 +424,34 @@ export default function DiagnosticBar() {
                             <Row k="tenant_id" v={user?.tenant_id ?? ''} />
                             <Row k="updated" v={new Date(now).toISOString().split('T')[1].slice(0, 8) + 'Z'} />
                         </Section>
+                        <Section title="Backend persistence (audit #20)">
+                            <Row
+                                k="alarm-log fails"
+                                v={backendTelemetry.alarmLogFailures}
+                                warn={backendTelemetry.alarmLogFailures > 0}
+                            />
+                            <Row
+                                k="alarm-ack fails"
+                                v={backendTelemetry.alarmAckFailures}
+                                warn={backendTelemetry.alarmAckFailures > 0}
+                            />
+                            <Row
+                                k="telemetry fails"
+                                v={backendTelemetry.telemetryFailures}
+                                warn={backendTelemetry.telemetryFailures > 0}
+                            />
+                            <Row
+                                k="recent (last 20)"
+                                v={backendTelemetry.recentFailures.length}
+                            />
+                            {backendTelemetry.recentFailures.slice(-3).reverse().map((f, i) => (
+                                <Row
+                                    key={`${f.at}-${i}`}
+                                    k={`  ${f.kind}`}
+                                    v={`${f.reason} (${f.status || 'net'})`}
+                                />
+                            ))}
+                        </Section>
                         <Section title="Platform avatars">
                             <Row k="default_male" v={platformAvatars?.default_avatar_male} />
                             <Row k="default_female" v={platformAvatars?.default_avatar_female} />
@@ -565,7 +611,7 @@ function Section({ title, children }) {
     );
 }
 
-function Row({ k, v }) {
+function Row({ k, v, warn = false }) {
     if (v === undefined || v === null || v === '') {
         return (
             <div className="flex gap-2">
@@ -575,11 +621,12 @@ function Row({ k, v }) {
             </div>
         );
     }
+    const valueClass = warn ? 'text-amber-400 truncate' : 'text-white truncate';
     return (
         <div className="flex gap-2">
             <span className="text-neutral-500">{k}</span>
             <span className="text-neutral-700">·</span>
-            <span className="text-white truncate" title={String(v)}>{String(v)}</span>
+            <span className={valueClass} title={String(v)}>{String(v)}</span>
         </div>
     );
 }

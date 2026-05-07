@@ -1188,6 +1188,79 @@ router.get('/auth/verify', authenticateToken, (req, res) => {
     });
 });
 
+// POST /api/auth/refresh — rotate the JWT inside an active session.
+//
+// The client calls this proactively before the 4h JWT expires (from
+// AuthContext via a setInterval). We:
+//   1. Re-issue a fresh JWT bound to the same user (same role/tenant).
+//   2. Insert a new active_sessions row keyed on the new token's hash.
+//   3. Revoke the OLD active_sessions row (the one used to authenticate
+//      this very request — it's stashed in req.tokenHash).
+//   4. Reset the rohy_auth + rohy_csrf cookies so the next request rides
+//      the new pair.
+//
+// Result: the user's session can extend indefinitely as long as their
+// tab is open and they keep refreshing. The active_sessions audit trail
+// stays accurate (one row per live JWT). Logout / admin force-logout
+// still works because revocation is keyed by token-hash, and the new
+// hash is in the new row.
+router.post('/auth/refresh', authenticateToken, async (req, res) => {
+    try {
+        // Fetch a fresh row in case role/tenant_id changed since this token
+        // was issued — the new JWT must reflect current state.
+        const fresh = await new Promise((resolve, reject) => {
+            db.get(
+                `SELECT id, username, email, role, tenant_id FROM users WHERE id = ?`,
+                [req.user.id],
+                (err, row) => err ? reject(err) : resolve(row)
+            );
+        });
+        if (!fresh) {
+            return res.status(403).json({ error: 'User no longer exists' });
+        }
+
+        const newToken = generateToken(fresh);
+        const ipAddress = req.ip || req.socket?.remoteAddress;
+        const userAgent = req.headers['user-agent'];
+
+        try {
+            await recordActiveSession(newToken, fresh, { ipAddress, userAgent });
+        } catch (e) {
+            console.warn('[auth] refresh: failed to record new session row:', e.message);
+        }
+
+        // Revoke the old token AFTER inserting the new row so there's no
+        // window where the user has zero valid sessions.
+        if (req.tokenHash) {
+            try {
+                await revokeActiveSessionByHash(req.tokenHash);
+            } catch (e) {
+                console.warn('[auth] refresh: failed to revoke old session row:', e.message);
+            }
+        }
+
+        // Refresh both cookies. Cookie-mode clients rotate transparently;
+        // bearer-mode clients also get the new JSON token in the body
+        // and can update their localStorage if they're still on that path.
+        res.cookie(AUTH_COOKIE_NAME, newToken, authCookieOptions());
+        res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
+
+        res.json({
+            message: 'Token refreshed',
+            user: {
+                id: fresh.id,
+                username: fresh.username,
+                email: fresh.email,
+                role: fresh.role,
+                tenant_id: fresh.tenant_id || 1,
+            },
+            token: newToken,
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Refresh failed', details: err.message });
+    }
+});
+
 // GET /api/auth/profile - Get current user profile
 router.get('/auth/profile', authenticateToken, (req, res) => {
     const sql = `SELECT id, username, email, role, tenant_id, created_at FROM users WHERE id = ? AND tenant_id = ?`;
