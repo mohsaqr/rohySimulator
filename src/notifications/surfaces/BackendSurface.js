@@ -120,6 +120,54 @@ export default function BackendSurface({ sessionId, userId, caseId }) {
     return null;
 }
 
+// Audit #20: backend persistence is best-effort; the audit asked for
+// failure-to-log clinical alarms to be observable. We keep a small,
+// bounded telemetry record (counters + last-N failures with vital +
+// reason) that the diagnostic bar / ops dashboards can read. Failures
+// still don't surface in the clinical UI — that would create a second
+// alarm noise channel — but they're now visible in diagnostics so a
+// systematic outage shows up as "alarm log: 247 failures since boot"
+// rather than appearing nowhere.
+
+const _backendTelemetry = {
+    alarmLogFailures: 0,
+    alarmAckFailures: 0,
+    telemetryFailures: 0,
+    recentFailures: [],   // ring buffer of { kind, at, vital, reason }
+};
+const RECENT_FAILURES_CAP = 20;
+
+function recordFailure(kind, detail) {
+    if (kind === 'alarm-log') _backendTelemetry.alarmLogFailures++;
+    else if (kind === 'alarm-ack') _backendTelemetry.alarmAckFailures++;
+    else if (kind === 'telemetry') _backendTelemetry.telemetryFailures++;
+    _backendTelemetry.recentFailures.push({ kind, at: Date.now(), ...detail });
+    if (_backendTelemetry.recentFailures.length > RECENT_FAILURES_CAP) {
+        _backendTelemetry.recentFailures.shift();
+    }
+    if (typeof window !== 'undefined') {
+        try { window.dispatchEvent(new CustomEvent('rohy:backend-telemetry')); }
+        catch { /* CustomEvent may be polyfilled; ignore */ }
+    }
+}
+
+export function getBackendTelemetry() {
+    return {
+        alarmLogFailures: _backendTelemetry.alarmLogFailures,
+        alarmAckFailures: _backendTelemetry.alarmAckFailures,
+        telemetryFailures: _backendTelemetry.telemetryFailures,
+        recentFailures: [..._backendTelemetry.recentFailures],
+    };
+}
+
+// Test-only — drops the in-memory state so a fresh test starts at zero.
+export function _resetBackendTelemetryForTest() {
+    _backendTelemetry.alarmLogFailures = 0;
+    _backendTelemetry.alarmAckFailures = 0;
+    _backendTelemetry.telemetryFailures = 0;
+    _backendTelemetry.recentFailures.length = 0;
+}
+
 async function sendClinical(events, keyToAlarmId, pendingAcks) {
     if (!AuthService.getToken()) return;
     // /api/alarms/log accepts one event per call. Fire them in parallel.
@@ -141,15 +189,25 @@ async function sendClinical(events, keyToAlarmId, pendingAcks) {
                 pendingAcks.delete(n.key);
                 sendAck(id);
             }
-        } catch {
-            // Network error — drop. Do not re-queue (bounded behavior).
+        } catch (err) {
+            recordFailure('alarm-log', {
+                vital: body.vital_sign,
+                reason: err?.message || 'network error',
+                status: err?.status || 0,
+            });
         }
     }));
 }
 
 function sendAck(alarmEventId) {
     if (!AuthService.getToken()) return;
-    apiPut(`/alarms/${alarmEventId}/acknowledge`).catch(() => { /* best-effort */ });
+    apiPut(`/alarms/${alarmEventId}/acknowledge`).catch((err) => {
+        recordFailure('alarm-ack', {
+            alarmEventId,
+            reason: err?.message || 'network error',
+            status: err?.status || 0,
+        });
+    });
 }
 
 // learning_events.severity is constrained to DEBUG/INFO/ACTION/IMPORTANT/CRITICAL.
@@ -204,5 +262,11 @@ function sendTelemetry(events, immediate) {
         return;
     }
 
-    apiPost('/learning-events/batch', payload).catch(() => { /* drop; loss is acceptable for telemetry */ });
+    apiPost('/learning-events/batch', payload).catch((err) => {
+        recordFailure('telemetry', {
+            count: events.length,
+            reason: err?.message || 'network error',
+            status: err?.status || 0,
+        });
+    });
 }
