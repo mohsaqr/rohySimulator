@@ -1,0 +1,113 @@
+# /etc/nginx/conf.d/rohy.conf — nginx vhost for rohy.
+#
+# Install with:
+#   sudo cp deploy/nginx/rohy.conf.example /etc/nginx/conf.d/rohy.conf
+#   sudo nano /etc/nginx/conf.d/rohy.conf        # edit server_name + cert paths
+#   sudo nginx -t                                 # syntax check before reload
+#   sudo systemctl reload nginx
+#
+# Two listener blocks: HTTP→HTTPS redirect, and the TLS server proxying
+# rohy. Adjust to match your deploy:
+#   - Public URL → use Let's Encrypt cert + your domain
+#   - LAN URL    → use mkcert / self-signed cert + your IP
+#
+# Streaming TTS (/api/tts?stream=1) requires the proxy_buffering off block
+# below — without it, audio chunks pile up in nginx and the browser hears
+# silence followed by a single late burst, which the AudioContext drops.
+# See AGENT-NOTE-DEPLOY-2026-05-07.md §6 for the full incident.
+
+# === HTTP → HTTPS redirect ===
+# Skip this block if you intentionally serve plain HTTP (e.g. localhost
+# bind, nothing public). For any non-localhost deploy, HTTPS is required
+# for getUserMedia (mic).
+server {
+    listen 80;
+    listen [::]:80;
+    # CHANGE — your hostname or IP.
+    server_name your-deploy-host.example.com;
+
+    # ACME challenge passthrough so certbot can renew without downtime.
+    location /.well-known/acme-challenge/ {
+        root /var/www/letsencrypt;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# === HTTPS server — proxy to rohy ===
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+
+    # CHANGE — your hostname or IP.
+    server_name your-deploy-host.example.com;
+
+    # CHANGE — cert paths.
+    ssl_certificate     /etc/letsencrypt/live/your-deploy-host/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-deploy-host/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # Security headers — rohy's express layer also sets some of these, but
+    # nginx-side defense is cheap.
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # Body size — clinical record uploads can include images. 50m matches
+    # the multer cap inside rohy.
+    client_max_body_size 50m;
+
+    # CHANGE the location prefix if you serve rohy at the URL root rather
+    # than a /rohy/ subpath. The trailing slash on `proxy_pass` is
+    # load-bearing — it strips the matched prefix before forwarding.
+    location /rohy/ {
+        # CHANGE — match your rohy.service PORT= env var.
+        proxy_pass http://127.0.0.1:4000/;
+        proxy_http_version 1.1;
+
+        # === Streaming TTS knobs — DO NOT REMOVE ===
+        # Without these, /api/tts?stream=1 audio is buffered server-side
+        # and the AudioContext drops early frames as silent.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_request_buffering off;
+        chunked_transfer_encoding on;
+        # Empty Accept-Encoding stops nginx from re-gzipping audio on the fly.
+        proxy_set_header Accept-Encoding "";
+
+        # Standard proxy headers — Express trusts X-Forwarded-* because of
+        # `app.set('trust proxy', 'loopback')` in server.js.
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # Rohy's TTS synth + LLM proxy can take ~1 minute for long passages.
+        # Keep these high; the per-route timeout in rohy is the cap that
+        # actually matters for clean error reporting.
+        proxy_read_timeout    300s;
+        proxy_send_timeout    300s;
+        proxy_connect_timeout 10s;
+    }
+
+    # Health probes — keep this above any auth/rate-limit blocks so external
+    # uptime checks always reach rohy directly.
+    location = /rohy/api/health {
+        proxy_pass http://127.0.0.1:4000/api/health;
+        proxy_set_header Host $host;
+        access_log off;
+    }
+    location = /rohy/api/ready {
+        proxy_pass http://127.0.0.1:4000/api/ready;
+        proxy_set_header Host $host;
+        access_log off;
+    }
+}

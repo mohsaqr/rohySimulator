@@ -1,0 +1,76 @@
+# /etc/systemd/system/rohy.service — rohy backend unit file.
+#
+# Install with:
+#   sudo cp deploy/systemd/rohy.service.example /etc/systemd/system/rohy.service
+#   sudo nano /etc/systemd/system/rohy.service        # edit User= and paths
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now rohy
+#
+# All env vars come from /etc/rohy/env (use deploy/env.example as the
+# canonical reference). Don't put secrets in this file — it lives in
+# /etc/systemd/ which is world-readable.
+
+[Unit]
+Description=rohy — Virtual Patient Simulation Platform
+Documentation=https://github.com/mohsaqr/rohySimulator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# CHANGE — the local user that owns /opt/repos/rohy and /opt/data/rohy.
+# Don't run as root.
+User=saqr
+Group=saqr
+
+# CHANGE — where you cloned the rohy repo on this server.
+WorkingDirectory=/opt/repos/rohy
+
+# Loads JWT_SECRET, NODE_ENV, FRONTEND_URL, ROHY_DB, etc. (see env.example).
+# 0600 root:root, so only root and the rohy user can read it.
+EnvironmentFile=/etc/rohy/env
+
+# Belt-and-braces — these are also documented in /etc/rohy/env, but
+# duplicating them here means a missing /etc/rohy/env doesn't silently
+# fall back to NODE_ENV=development with a relative ROHY_DB.
+Environment=NODE_ENV=production
+Environment=PORT=4000
+
+# CRITICAL — keep the Hugging Face Kokoro cache OUTSIDE node_modules so
+# `npm ci` during deploy doesn't wipe the model. Pre-create this dir with
+# the User= owner, then forget about it.
+# `mkdir -p /var/cache/rohy-hf && chown saqr:saqr /var/cache/rohy-hf`
+Environment=TRANSFORMERS_CACHE=/var/cache/rohy-hf
+
+# Use Node's official binary, not a snap/apt symlink that can change paths
+# during system upgrades.
+ExecStart=/usr/bin/node server/server.js
+
+# Graceful shutdown — server.js's installGracefulShutdown drains in-flight
+# requests within ROHY_SHUTDOWN_GRACE_MS (default 15s). systemd's default
+# TimeoutStopSec is 90s, plenty of headroom.
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=30
+
+# Auto-restart on crash. RestartSec is short enough that a transient error
+# clears quickly; crash-loops still exit faster than RestartSec * StartLimitBurst.
+Restart=on-failure
+RestartSec=5
+StartLimitInterval=300
+StartLimitBurst=10
+
+# File descriptors — sqlite + concurrent HTTP can exceed the default 1024.
+LimitNOFILE=65536
+
+# Hardening — these are conservative defaults that don't break rohy.
+# Tighten further (e.g. ProtectHome=yes) once you've tested your deploy.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+# Allow writes only where rohy actually needs them.
+ReadWritePaths=/opt/data/rohy /var/cache/rohy-hf /opt/repos/rohy
+
+[Install]
+WantedBy=multi-user.target
