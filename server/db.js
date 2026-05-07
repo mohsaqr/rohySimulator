@@ -26,9 +26,24 @@ const db = new sqlite.Database(dbPath, (err) => {
         rejectDbReady(err);
     } else {
         console.log('Connected to the SQLite database.');
-        initDb().then(resolveDbReady).catch(rejectDbReady);
+        // Audit finding #8: startup runs migrations always, but seeding is
+        // gated. Production deploys can set ROHY_NO_AUTO_SEED=1 and run
+        // `node scripts/seed.js` from a one-off job — keeps the
+        // request-serving process from doing first-boot work in the same
+        // process. Default behaviour (seed-on-boot) is preserved so dev
+        // ergonomics don't regress.
+        bootDb().then(resolveDbReady).catch(rejectDbReady);
     }
 });
+
+async function bootDb() {
+    await runDbMigrations();
+    if (process.env.ROHY_NO_AUTO_SEED === '1') {
+        console.log('[db] auto-seed skipped (ROHY_NO_AUTO_SEED=1). Run `node scripts/seed.js` separately.');
+        return;
+    }
+    await seedDbDefaults();
+}
 
 function runDb(sql, params = []) {
     return new Promise((resolve, reject) => {
@@ -417,12 +432,15 @@ async function seedAvatarDefaults() {
     }
 }
 
-async function initDb() {
+// Migrations only — safe to run on every boot. Idempotent.
+export async function runDbMigrations() {
     await runMigrations(db);
+}
 
-    // Tiered catalogue Session 1 — curated drug + lab content. Each step
-    // is non-fatal (logged + continue) so a transient I/O issue with one
-    // JSON file never bricks the boot.
+// First-boot seeders. Idempotent (each seeder is INSERT OR IGNORE / NOT
+// EXISTS-guarded). Exported so a one-off job (`node scripts/seed.js`) can
+// invoke it without booting the request-serving process.
+export async function seedDbDefaults() {
     try {
         await seedTreatmentEffects(db, { log: () => {} });
         await seedCuratedMedications(db, { log: () => {} });
@@ -437,7 +455,7 @@ async function initDb() {
     await seedDefaultAgents();
     await seedAvatarDefaults();
 
-    console.log('Database migrations and seed defaults initialized.');
+    console.log('Database seed defaults initialized.');
 }
 
 export default db;
