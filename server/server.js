@@ -31,37 +31,13 @@ const TLS_KEY_PATH = process.env.TLS_KEY_PATH || '';
 instrumentSqliteDb(db);
 
 // CORS Configuration - restrict to allowed origins
-const allowedOrigins = [
-    'http://localhost:5173',      // Vite dev server
-    'http://localhost:3000',      // Local production
-    'http://localhost:4000',      // Alternative port
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:3000',
-    'http://[::1]:5173',          // IPv6 loopback - Vite dev server
-    'http://[::1]:3000',          // IPv6 loopback - local production
-    process.env.FRONTEND_URL      // Production URL from env
-].filter(Boolean);
-
-const isDev = process.env.NODE_ENV !== 'production';
+import { buildCorsOptions } from './cors-config.js';
 
 app.use(requestIdMiddleware);
-
-app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
-        if (isDev) return callback(null, true);
-        if (allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            console.warn(`[CORS] Blocked request from origin: ${origin}`);
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
-    exposedHeaders: ['X-Request-Id']
-}));
+app.use(cors(buildCorsOptions({
+    nodeEnv: process.env.NODE_ENV,
+    frontendUrl: process.env.FRONTEND_URL,
+})));
 app.use(requestLoggerMiddleware());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
