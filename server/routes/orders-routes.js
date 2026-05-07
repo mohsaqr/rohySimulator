@@ -178,7 +178,7 @@ router.post('/sessions/:id/order', authenticateToken, async (req, res) => {
     }
 
     investigation_ids.forEach(invId => {
-        stmt.run(sessionId, invId, invId, tenantId(req), tenantId(req), function(err) {
+        stmt.run([sessionId, invId, invId, tenantId(req), tenantId(req)], function(err) {
             if (err && !runError) {
                 runError = err;
             } else if (!err) {

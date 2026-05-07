@@ -280,6 +280,24 @@ describe('server/dbAdapter.js — Stage E8 Promise wrappers', () => {
         expect(typeof r1.lastID).toBe('number');
         await ins.finalize();
 
+        // Regression lock: 2026-05-08 incident. Calling prepare(sql).run(a, b)
+        // (variadic, sqlite3-style) instead of .run([a, b]) used to silently
+        // mangle params, then crash the WHOLE process with `TypeError:
+        // args.callback.call is not a function` because b was treated as
+        // the callback. Now: throws a clear TypeError synchronously, kept
+        // as a route-scope error rather than an uncaught exception.
+        const ins2 = prepare('INSERT INTO adapter_probe (name, value) VALUES (?, ?)');
+        try {
+            expect(() => ins2.run('p3', 300)).toThrow(/dbAdapter callback must be a function/);
+            // And the same misuse via top-level run() also throws — same
+            // splitParamsAndCallback gate.
+            expect(() => run('INSERT INTO adapter_probe (name, value) VALUES (?, ?)', 'p4', 400)).toThrow(
+                /dbAdapter callback must be a function/
+            );
+        } finally {
+            await ins2.finalize();
+        }
+
         const sel = prepare('SELECT name, value FROM adapter_probe WHERE name = ?');
         const row = await sel.get(['p1']);
         expect(row).toMatchObject({ name: 'p1', value: 100 });

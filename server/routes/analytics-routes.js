@@ -636,14 +636,16 @@ router.post('/events/batch', authenticateToken, async (req, res) => {
 
     events.forEach(event => {
         stmt.run(
-            session_id,
-            user_id,
-            event.event_type,
-            event.description,
-            event.vital_sign || null,
-            event.old_value || null,
-            event.new_value || null,
-            event.timestamp,
+            [
+                session_id,
+                user_id,
+                event.event_type,
+                event.description,
+                event.vital_sign || null,
+                event.old_value || null,
+                event.new_value || null,
+                event.timestamp
+            ],
             function(err) {
                 if (err && !runError) {
                     runError = err;

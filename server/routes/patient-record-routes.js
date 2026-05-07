@@ -144,7 +144,7 @@ router.post('/patient-record/sync', authenticateToken, async (req, res) => {
             `);
 
             for (const event of events) {
-                insertEvent.run(
+                insertEvent.run([
                     session_id,
                     record_id,
                     event.id,
@@ -160,7 +160,7 @@ router.post('/patient-record/sync', authenticateToken, async (req, res) => {
                     event.unit || null,
                     event.abnormal ? 1 : 0,
                     JSON.stringify(event)
-                );
+                ]);
             }
             insertEvent.finalize();
         }

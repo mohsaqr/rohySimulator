@@ -636,10 +636,12 @@ router.post('/master/medications/bulk', authenticateToken, requireEducator, (req
             }
 
             stmt.run(
-                name.trim(),
-                JSON.stringify(med.uses || []),
-                JSON.stringify(med.side_effects || []),
-                'General',
+                [
+                    name.trim(),
+                    JSON.stringify(med.uses || []),
+                    JSON.stringify(med.side_effects || []),
+                    'General'
+                ],
                 function(err) {
                     if (!err && this.changes > 0) inserted++;
                     else skipped++;
