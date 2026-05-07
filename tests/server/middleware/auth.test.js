@@ -422,34 +422,42 @@ describe('auth middleware — authenticateToken', () => {
         expect(req2.user.tenant_id).toBe(2);
     });
 
-    it('rejects malformed Authorization header lacking the Bearer prefix', async () => {
-        // Audit #12: protect against `Authorization: <raw-token>` (no scheme).
-        // extractToken's split-on-space requires `Bearer <jwt>`; anything
-        // else means no token, which becomes 401.
+    it('rejects malformed Authorization header lacking the Bearer prefix with 400', async () => {
+        // Stricter parser (post-audit follow-up): a present-but-malformed
+        // Authorization header is a client bug, not "no auth attempted".
+        // Returning 400 instead of falling through to 401 gives the
+        // operator a clearer signal in the logs.
         const token = signToken({ id: 104, role: 'admin' });
         const req = makeReq({ headers: { authorization: token } }); // missing "Bearer "
         const res = makeRes();
         await runMiddleware(auth.authenticateToken, req, res);
-        expect(res.statusCode).toBe(401);
-        expect(res.body).toEqual({ error: 'Access token required' });
+        expect(res.statusCode).toBe(400);
+        expect(res.body.error).toBe('Malformed Authorization header');
+        expect(res.body.code).toBe('no-scheme-separator');
     });
 
-    it('rejects "Bearer" with empty token after the space', async () => {
+    it('rejects "Bearer" with empty token after the space with 400', async () => {
         const req = makeReq({ headers: { authorization: 'Bearer ' } });
         const res = makeRes();
         await runMiddleware(auth.authenticateToken, req, res);
-        expect(res.statusCode).toBe(401);
-        expect(res.body).toEqual({ error: 'Access token required' });
+        expect(res.statusCode).toBe(400);
+        expect(res.body.code).toBe('empty-token');
     });
 
-    it('rejects three-part Authorization header (Basic-style scheme abuse)', async () => {
+    it('rejects three-part Authorization header with 400 (whitespace-in-token)', async () => {
         const req = makeReq({ headers: { authorization: 'Bearer foo bar' } });
         const res = makeRes();
         await runMiddleware(auth.authenticateToken, req, res);
-        // extractToken's `split(' ')` returns 3 parts here, so it falls
-        // through to the cookie path (none) → 401. Locks the parser
-        // strictness so future "be lenient" refactors don't accept it.
-        expect(res.statusCode).toBe(401);
+        expect(res.statusCode).toBe(400);
+        expect(res.body.code).toBe('whitespace-in-token');
+    });
+
+    it('rejects unsupported scheme like Basic with 400', async () => {
+        const req = makeReq({ headers: { authorization: 'Basic dXNlcjpwYXNz' } });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.statusCode).toBe(400);
+        expect(res.body.code).toBe('unsupported-scheme');
     });
 });
 
@@ -564,22 +572,23 @@ describe('auth middleware — HttpOnly cookie auth (rohy_auth)', () => {
                 cookie: `rohy_auth=cookie-token`,
             },
         });
-        expect(auth.extractToken(req)).toEqual({ token: 'header-token', source: 'header' });
+        expect(auth.extractToken(req)).toEqual({ token: 'header-token', source: 'header', malformed: false });
     });
 
     it('extractToken: falls back to cookie when no header is present', () => {
         const req = makeReq({ headers: { cookie: 'foo=bar; rohy_auth=cookie-only; baz=qux' } });
-        expect(auth.extractToken(req)).toEqual({ token: 'cookie-only', source: 'cookie' });
+        expect(auth.extractToken(req)).toEqual({ token: 'cookie-only', source: 'cookie', malformed: false });
     });
 
     it('extractToken: returns {token:null} when neither header nor cookie carries one', () => {
         const req = makeReq({ headers: { cookie: 'foo=bar; baz=qux' } });
-        expect(auth.extractToken(req)).toEqual({ token: null, source: null });
+        expect(auth.extractToken(req)).toEqual({ token: null, source: null, malformed: false });
     });
 
     it('extractToken: tolerates URL-encoded cookie values', () => {
         const req = makeReq({ headers: { cookie: 'rohy_auth=ab%20cd' } });
         expect(auth.extractToken(req).token).toBe('ab cd');
+        expect(auth.extractToken(req).malformed).toBe(false);
     });
 
     it('authenticateToken accepts a valid JWT delivered via the cookie', async () => {

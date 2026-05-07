@@ -58,17 +58,44 @@ function readCookie(req, name) {
     return null;
 }
 
+// Stricter parser: a present-but-malformed Authorization header is a
+// client bug, not "no auth attempted". `malformed` carries a code so
+// authenticateToken can return 400 (signal to the operator) instead of
+// silently falling through to 401 (looks like an unauth request).
 export function extractToken(req) {
     const authHeader = req.headers?.['authorization'];
     if (authHeader) {
-        const parts = authHeader.split(' ');
-        if (parts.length === 2 && parts[0] === 'Bearer' && parts[1]) {
-            return { token: parts[1], source: 'header' };
+        const raw = String(authHeader);
+        // Don't trim the whole string — that would erase a trailing space
+        // after `Bearer `, which is itself a malformed-empty-token signal.
+        // We trim only the leading whitespace before the scheme.
+        const lead = raw.match(/^\s*/)[0].length;
+        const fromScheme = raw.slice(lead);
+        const firstSpace = fromScheme.indexOf(' ');
+        if (firstSpace === -1) {
+            return { token: null, source: null, malformed: 'no-scheme-separator' };
         }
+        const scheme = fromScheme.slice(0, firstSpace);
+        // Don't trim the value either — internal whitespace is itself a
+        // malformed-token signal, and an empty value (Bearer with only
+        // trailing whitespace) trims down to '' here, which the empty
+        // check below catches.
+        const value = fromScheme.slice(firstSpace + 1);
+        if (scheme !== 'Bearer') {
+            return { token: null, source: null, malformed: 'unsupported-scheme' };
+        }
+        if (!value.trim()) {
+            return { token: null, source: null, malformed: 'empty-token' };
+        }
+        if (/\s/.test(value.trim())) {
+            // `Bearer a b` — a JWT cannot legitimately contain whitespace.
+            return { token: null, source: null, malformed: 'whitespace-in-token' };
+        }
+        return { token: value.trim(), source: 'header', malformed: false };
     }
     const cookie = readCookie(req, AUTH_COOKIE_NAME);
-    if (cookie) return { token: cookie, source: 'cookie' };
-    return { token: null, source: null };
+    if (cookie) return { token: cookie, source: 'cookie', malformed: false };
+    return { token: null, source: null, malformed: false };
 }
 
 // Middleware to authenticate JWT token.
@@ -87,14 +114,17 @@ export function extractToken(req) {
 // signed-in user to re-login on the deploy. Once they expire (4h default),
 // the next login goes through the new path.
 export const authenticateToken = (req, res, next) => {
-    const { token, source } = extractToken(req);
+    const { token, source, malformed } = extractToken(req);
 
     if (!token) {
+        if (malformed) {
+            return res.status(400).json({
+                error: 'Malformed Authorization header',
+                code: malformed,
+            });
+        }
         return res.status(401).json({ error: 'Access token required' });
     }
-    // Stash so route handlers can tell whether this request was authed via
-    // the legacy bearer path or the cookie path (useful for /auth/logout
-    // to know whether to clear the cookie).
     req.tokenSource = source;
 
     jwt.verify(token, JWT_SECRET, (err, user) => {

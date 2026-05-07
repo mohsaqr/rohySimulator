@@ -68,3 +68,131 @@ export async function fetchWithTimeout(url, init = {}, options = {}) {
         clearTimeout(timer);
     }
 }
+
+// ─── Retry + circuit-breaker ─────────────────────────────────────────────
+//
+// fetchWithRetry wraps fetchWithTimeout with bounded retries on 5xx + transport
+// errors, plus a per-target circuit breaker. When a target fails N times in a
+// row, the breaker opens and subsequent calls fail fast (no wasted retries) for
+// a cooldown window. After the window, one trial request gets through; success
+// closes the breaker, failure re-opens it.
+//
+// Retry policy:
+//   - attempts: 3 by default (initial + 2 retries).
+//   - retry on FetchTimeoutError, network errors, and HTTP 5xx.
+//   - exponential backoff with jitter: 100ms, 200ms, 400ms (× ~ random 0.5-1.5).
+//
+// The breaker is per-target, keyed by a caller-supplied `breakerKey` (e.g.
+// 'openai-tts', 'google-tts'). Different providers don't share state.
+
+const BREAKER_OPEN_MS = 30_000;     // 30s cooldown after breaker trips
+const BREAKER_FAILURE_THRESHOLD = 5; // consecutive failures before open
+
+const breakerState = new Map(); // key → { failures, openedAt }
+
+export class CircuitBreakerOpenError extends Error {
+    constructor(key, msUntilHalfOpen) {
+        super(`Circuit breaker open for ${key} (retry in ${msUntilHalfOpen}ms)`);
+        this.name = 'CircuitBreakerOpenError';
+        this.key = key;
+        this.msUntilHalfOpen = msUntilHalfOpen;
+    }
+}
+
+function breakerCheck(key) {
+    const state = breakerState.get(key);
+    if (!state || state.openedAt == null) return null; // closed
+    const elapsed = Date.now() - state.openedAt;
+    if (elapsed >= BREAKER_OPEN_MS) return null; // half-open: allow trial
+    return BREAKER_OPEN_MS - elapsed;
+}
+
+function breakerSuccess(key) {
+    breakerState.set(key, { failures: 0, openedAt: null });
+}
+
+function breakerFailure(key) {
+    const state = breakerState.get(key) || { failures: 0, openedAt: null };
+    state.failures += 1;
+    if (state.failures >= BREAKER_FAILURE_THRESHOLD) {
+        state.openedAt = Date.now();
+    }
+    breakerState.set(key, state);
+}
+
+export function _resetBreakerForTest(key) {
+    if (key) breakerState.delete(key);
+    else breakerState.clear();
+}
+
+export function getBreakerState(key) {
+    const s = breakerState.get(key);
+    if (!s) return { state: 'closed', failures: 0 };
+    if (s.openedAt == null) return { state: 'closed', failures: s.failures };
+    const elapsed = Date.now() - s.openedAt;
+    if (elapsed >= BREAKER_OPEN_MS) return { state: 'half-open', failures: s.failures };
+    return { state: 'open', failures: s.failures, msUntilHalfOpen: BREAKER_OPEN_MS - elapsed };
+}
+
+const DEFAULT_RETRYABLE_STATUS = new Set([500, 502, 503, 504]);
+
+function isRetryable(err, response) {
+    if (response && DEFAULT_RETRYABLE_STATUS.has(response.status)) return true;
+    if (err instanceof FetchTimeoutError) return true;
+    if (err && err.name === 'TypeError') return true; // network error
+    return false;
+}
+
+function backoffMs(attempt) {
+    // 100, 200, 400, 800… with 0.5-1.5x jitter.
+    const base = 100 * Math.pow(2, attempt);
+    return Math.floor(base * (0.5 + Math.random()));
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export async function fetchWithRetry(url, init = {}, options = {}) {
+    const {
+        timeoutMs = DEFAULT_TIMEOUT_MS,
+        attempts = 3,
+        breakerKey = null,
+    } = options;
+
+    if (breakerKey) {
+        const remaining = breakerCheck(breakerKey);
+        if (remaining != null) {
+            throw new CircuitBreakerOpenError(breakerKey, remaining);
+        }
+    }
+
+    let lastErr;
+    let lastResponse;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+        try {
+            const response = await fetchWithTimeout(url, init, { timeoutMs });
+            if (response.ok || !DEFAULT_RETRYABLE_STATUS.has(response.status)) {
+                if (breakerKey) breakerSuccess(breakerKey);
+                return response;
+            }
+            // 5xx — retry.
+            lastResponse = response;
+            lastErr = null;
+        } catch (err) {
+            // Caller-aborted → never retry.
+            if (err && err.name === 'AbortError') throw err;
+            if (!isRetryable(err)) {
+                if (breakerKey) breakerFailure(breakerKey);
+                throw err;
+            }
+            lastErr = err;
+            lastResponse = null;
+        }
+        if (attempt < attempts - 1) {
+            await sleep(backoffMs(attempt));
+        }
+    }
+
+    if (breakerKey) breakerFailure(breakerKey);
+    if (lastErr) throw lastErr;
+    return lastResponse; // exhausted retries with a 5xx — return it for the caller
+}
