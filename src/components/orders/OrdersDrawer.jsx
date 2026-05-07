@@ -10,7 +10,7 @@ import { usePatientRecord } from '../../services/PatientRecord';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import ClinicalRecordsPanel from '../investigations/ClinicalRecordsPanel';
 import { TreatmentPanel } from '../treatments';
-import { apiUrl } from '../../config/api';
+import { ApiError, apiFetch, apiPost } from '../../services/apiClient';
 
 /**
  * Bottom Orders Drawer
@@ -99,17 +99,11 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
 
         const fetchLabs = async () => {
             try {
-                const token = localStorage.getItem('token');
-                const response = await fetch(apiUrl(`/sessions/${sessionId}/available-labs`), {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    setAvailableLabs(data.labs || []);
-                    const groups = [...new Set(data.labs.map(lab => lab.test_group))].sort();
-                    setLabGroups(groups);
-                }
+                const data = await apiFetch(`/sessions/${sessionId}/available-labs`);
+                const labs = data?.labs || [];
+                setAvailableLabs(labs);
+                const groups = [...new Set(labs.map(lab => lab.test_group))].sort();
+                setLabGroups(groups);
             } catch (error) {
                 console.error('Failed to fetch labs:', error);
             }
@@ -129,33 +123,27 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         }
 
         try {
-            const token = localStorage.getItem('token');
             console.log(`[Orders] Fetching orders for session ${sessionId}...`);
-            const response = await fetch(apiUrl(`/sessions/${sessionId}/orders`), {
-                headers: { 'Authorization': `Bearer ${token}` }
+            const data = await apiFetch(`/sessions/${sessionId}/orders`);
+            const orders = data?.orders || [];
+            const now = new Date();
+            setLastRefresh(now);
+
+            console.log(`[Orders] Session ${sessionId} @ ${now.toISOString()}: ${orders.length} total orders`);
+            orders.forEach(o => {
+                const status = o.viewed_at ? 'VIEWED' : o.is_ready ? 'READY' : 'PENDING';
+                console.log(`  - ${o.test_name}: ${status}, is_ready=${o.is_ready}, mins_remaining=${o.minutes_remaining}, available_at=${o.available_at}`);
             });
-
-            if (response.ok) {
-                const data = await response.json();
-                const orders = data.orders || [];
-                const now = new Date();
-                setLastRefresh(now);
-
-                console.log(`[Orders] Session ${sessionId} @ ${now.toISOString()}: ${orders.length} total orders`);
-                orders.forEach(o => {
-                    const status = o.viewed_at ? 'VIEWED' : o.is_ready ? 'READY' : 'PENDING';
-                    console.log(`  - ${o.test_name}: ${status}, is_ready=${o.is_ready}, mins_remaining=${o.minutes_remaining}, available_at=${o.available_at}`);
-                });
-                setLabOrders(orders);
-                setOrderError(null);
-            } else {
-                const errText = await response.text();
-                console.error('[Orders] Fetch failed:', response.status, errText);
-                setOrderError(`Failed to fetch orders: ${response.status}`);
-            }
+            setLabOrders(orders);
+            setOrderError(null);
         } catch (error) {
-            console.error('[Orders] Fetch error:', error);
-            setOrderError(error.message);
+            if (error instanceof ApiError) {
+                console.error('[Orders] Fetch failed:', error.status, error.message);
+                setOrderError(`Failed to fetch orders: ${error.status}`);
+            } else {
+                console.error('[Orders] Fetch error:', error);
+                setOrderError(error.message);
+            }
         }
     };
 
@@ -172,25 +160,17 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
 
         const fetchRadiology = async () => {
             try {
-                const token = localStorage.getItem('token');
-                const response = await fetch(apiUrl(`/sessions/${sessionId}/available-radiology`), {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    // Map to expected format
-                    const studies = (data.studies || []).map(study => ({
-                        id: study.id,
-                        test_name: study.name,
-                        test_group: study.modality,
-                        turnaround_minutes: study.turnaround_minutes,
-                        body_region: study.body_region,
-                        common_indications: study.common_indications
-                    }));
-                    setAvailableRadiology(studies);
-                    setRadiologyGroups(data.groups || []);
-                }
+                const data = await apiFetch(`/sessions/${sessionId}/available-radiology`);
+                const studies = (data?.studies || []).map(study => ({
+                    id: study.id,
+                    test_name: study.name,
+                    test_group: study.modality,
+                    turnaround_minutes: study.turnaround_minutes,
+                    body_region: study.body_region,
+                    common_indications: study.common_indications
+                }));
+                setAvailableRadiology(studies);
+                setRadiologyGroups(data?.groups || []);
             } catch (error) {
                 console.error('Failed to fetch radiology:', error);
             }
@@ -203,14 +183,8 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     const fetchRadiologyOrders = async () => {
         if (!sessionId) return;
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/sessions/${sessionId}/radiology-orders`), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setRadiologyOrders(data.orders || []);
-            }
+            const data = await apiFetch(`/sessions/${sessionId}/radiology-orders`);
+            setRadiologyOrders(data?.orders || []);
         } catch (error) {
             console.error('Failed to fetch radiology orders:', error);
         }
@@ -228,33 +202,19 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
 
         setLoadingRadiology(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/sessions/${sessionId}/order-radiology`), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    radiology_ids: selectedRadiology,
-                    instant: labSettings.instantResults
-                })
+            await apiPost(`/sessions/${sessionId}/order-radiology`, {
+                radiology_ids: selectedRadiology,
+                instant: labSettings.instantResults
             });
-
-            if (response.ok) {
-                toast.success(`Ordered ${selectedRadiology.length} radiology study(s)`);
-                selectedRadiology.forEach(radId => {
-                    const study = availableRadiology.find(r => r.id === radId);
-                    ordered('radiology', study?.test_name || radId, { urgency: labSettings.instantResults ? 'stat' : 'routine' });
-                });
-                setSelectedRadiology([]);
-                await fetchRadiologyOrders();
-            } else {
-                const errData = await response.json();
-                toast.error(errData.error || 'Failed to order radiology');
-            }
+            toast.success(`Ordered ${selectedRadiology.length} radiology study(s)`);
+            selectedRadiology.forEach(radId => {
+                const study = availableRadiology.find(r => r.id === radId);
+                ordered('radiology', study?.test_name || radId, { urgency: labSettings.instantResults ? 'stat' : 'routine' });
+            });
+            setSelectedRadiology([]);
+            await fetchRadiologyOrders();
         } catch (error) {
-            toast.error('Failed to order radiology: ' + error.message);
+            toast.error('Failed to order radiology: ' + (error.message || 'Failed to order radiology'));
         } finally {
             setLoadingRadiology(false);
         }
@@ -297,40 +257,23 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                     globalTurnaround: labSettings.globalTurnaround
                 }
             });
-            const response = await fetch(apiUrl(`/sessions/${sessionId}/order-labs`), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(body)
+            await apiPost(`/sessions/${sessionId}/order-labs`, body);
+            toast.success(`Ordered ${selectedLabs.length} lab test(s)`);
+
+            selectedLabs.forEach(labId => {
+                const lab = availableLabs.find(l => l.id === labId);
+                EventLogger.labOrdered(labId, lab?.test_name || labId, COMPONENTS.ORDERS_DRAWER);
+                ordered('lab', lab?.test_name || labId, {
+                    urgency: labSettings.instantResults ? 'stat' : 'routine'
+                });
             });
 
-            if (response.ok) {
-                const data = await response.json();
-                toast.success(`Ordered ${selectedLabs.length} lab test(s)`);
-
-                // Log each lab ordered
-                selectedLabs.forEach(labId => {
-                    const lab = availableLabs.find(l => l.id === labId);
-                    EventLogger.labOrdered(labId, lab?.test_name || labId, COMPONENTS.ORDERS_DRAWER);
-                    // Record to PatientRecord
-                    ordered('lab', lab?.test_name || labId, {
-                        urgency: labSettings.instantResults ? 'stat' : 'routine'
-                    });
-                });
-
-                setSelectedLabs([]);
-                // Immediate refresh to show new orders
-                await fetchLabOrders();
-            } else {
-                const errData = await response.json();
-                toast.error(errData.error || 'Failed to order labs');
-                setOrderError(errData.error);
-            }
+            setSelectedLabs([]);
+            await fetchLabOrders();
         } catch (error) {
-            toast.error('Failed to order labs: ' + error.message);
-            setOrderError(error.message);
+            const msg = error.message || 'Failed to order labs';
+            toast.error('Failed to order labs: ' + msg);
+            setOrderError(msg);
         } finally {
             setLoadingLabs(false);
         }
@@ -408,14 +351,8 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         if (!sessionId) return;
         const fetchTreatmentCount = async () => {
             try {
-                const token = localStorage.getItem('token');
-                const response = await fetch(apiUrl(`/sessions/${sessionId}/treatment-orders?status=ordered`), {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    setTreatmentOrdersCount(data.orders?.length || 0);
-                }
+                const data = await apiFetch(`/sessions/${sessionId}/treatment-orders?status=ordered`);
+                setTreatmentOrdersCount(data?.orders?.length || 0);
             } catch (error) {
                 console.error('Failed to fetch treatment orders count:', error);
             }

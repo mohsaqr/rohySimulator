@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Play, Square, Loader2 } from 'lucide-react';
-import { apiUrl } from '../../config/api.js';
-import { AuthService } from '../../services/authService.js';
+import { ApiError, apiFetch } from '../../services/apiClient.js';
 
 // Click-to-preview a voice. Hits /api/tts with a fixed phrase, decodes the
 // returned audio/wav, plays it once. Provider is sent as a query override so
@@ -71,18 +70,24 @@ export default function TestVoiceButton({
             const body = { text, voice };
             if (rate != null) body.rate = rate;
             if (pitch != null) body.pitch = pitch;
-            const res = await fetch(apiUrl(`/tts?provider=${encodeURIComponent(provider)}`), {
-                method: 'POST',
-                headers: { ...AuthService.authHeaders(), 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-                signal: abort.signal
-            });
-            if (!res.ok) {
-                let msg = `TTS preview failed (${res.status})`;
-                try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* not json */ }
-                throw new Error(msg);
+            let blob;
+            try {
+                blob = await apiFetch(`/tts?provider=${encodeURIComponent(provider)}`, {
+                    method: 'POST',
+                    json: body,
+                    signal: abort.signal,
+                    parseAs: 'blob',
+                });
+            } catch (err) {
+                if (err instanceof ApiError) {
+                    // If the server gave us an explicit error string in the
+                    // body, surface it; otherwise fall back to a stable
+                    // "(status)" form so users see the failure cause.
+                    const serverMsg = err.body?.error || err.body?.message;
+                    throw new Error(serverMsg || `TTS preview failed (${err.status})`);
+                }
+                throw err;
             }
-            const blob = await res.blob();
             if (abort.signal.aborted) return;
             const url = URL.createObjectURL(blob);
             const audio = new Audio(url);

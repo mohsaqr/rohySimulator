@@ -12,7 +12,7 @@ import { useAuth } from '../../contexts/AuthContext';
 // here. Imports and audio init click-handler removed below.
 import LabValueEditor from '../investigations/LabValueEditor';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
-import { apiUrl } from '../../config/api';
+import { apiFetch, apiPost } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
 
 /**
@@ -433,14 +433,9 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
    useEffect(() => {
       const loadPlatformSettings = async () => {
          try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/platform-settings/monitor'), {
-               headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
-            if (response.ok) {
-               const data = await response.json();
-               setMonitorSettings(prev => ({ ...prev, ...data }));
-            }
+            // /platform-settings/monitor is intentionally public.
+            const data = await apiFetch('/platform-settings/monitor', { auth: false });
+            setMonitorSettings(prev => ({ ...prev, ...data }));
          } catch (err) {
             console.error('[Monitor] Failed to load platform settings:', err);
          }
@@ -489,25 +484,17 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       }
       if (!crossed) return;
       lastPersistedVitalsRef.current = current;
-      const token = localStorage.getItem('token');
-      fetch(apiUrl(`/sessions/${sessionId}/vitals`), {
-         method: 'POST',
-         headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-         },
-         body: JSON.stringify({
-            elapsed_ms: elapsedTime * 1000,
-            hr: current.hr,
-            rhythm,
-            spo2: current.spo2,
-            bp_sys: current.bpSys,
-            bp_dia: current.bpDia,
-            rr: current.rr,
-            temp: current.temp,
-            etco2: current.etco2,
-            source: activeScenario ? 'scenario' : 'monitor'
-         })
+      apiPost(`/sessions/${sessionId}/vitals`, {
+         elapsed_ms: elapsedTime * 1000,
+         hr: current.hr,
+         rhythm,
+         spo2: current.spo2,
+         bp_sys: current.bpSys,
+         bp_dia: current.bpDia,
+         rr: current.rr,
+         temp: current.temp,
+         etco2: current.etco2,
+         source: activeScenario ? 'scenario' : 'monitor',
       }).catch(err => console.warn('[Vitals] persist failed:', err.message));
    }, [displayVitals, sessionId, rhythm, activeScenario, elapsedTime]);
 
@@ -519,13 +506,8 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       let cancelled = false;
       (async () => {
          try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/sessions/${sessionId}/vitals`), {
-               headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
-            if (!res.ok) return;
-            const data = await res.json();
-            const last = Array.isArray(data.vitals) && data.vitals.length > 0
+            const data = await apiFetch(`/sessions/${sessionId}/vitals`);
+            const last = Array.isArray(data?.vitals) && data.vitals.length > 0
                ? data.vitals[data.vitals.length - 1]
                : null;
             if (!last || cancelled) return;
@@ -559,12 +541,8 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       let cancelled = false;
       (async () => {
          try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl(`/sessions/${sessionId}`), {
-               headers: token ? { Authorization: `Bearer ${token}` } : {}
-            });
-            if (!res.ok || cancelled) return;
-            const data = await res.json();
+            const data = await apiFetch(`/sessions/${sessionId}`);
+            if (cancelled) return;
             const raw = data?.session?.case_snapshot;
             if (!raw) return;
             const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;

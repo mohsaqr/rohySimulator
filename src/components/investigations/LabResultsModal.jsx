@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, FileText, AlertTriangle, TrendingUp, TrendingDown, Minus, Printer, Building2, FlaskConical } from 'lucide-react';
-import { AuthService } from '../../services/authService';
-import { apiUrl } from '../../config/api';
+import { apiPut } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
 
 const LabResultsModal = ({ result, sessionId, patientInfo, onClose }) => {
@@ -36,11 +35,7 @@ const LabResultsModal = ({ result, sessionId, patientInfo, onClose }) => {
 
   const markAsViewed = async () => {
     try {
-      const token = AuthService.getToken();
-      await fetch(apiUrl(`/orders/${result.order_id}/view`), {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      await apiPut(`/orders/${result.order_id}/view`);
     } catch (error) {
       console.error('Failed to mark as viewed:', error);
     }

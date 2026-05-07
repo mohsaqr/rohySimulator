@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, ZoomIn, ZoomOut, Download, FileText } from 'lucide-react';
-import { apiUrl } from '../../config/api';
+import { apiPut } from '../../services/apiClient';
 
 const ResultsModal = ({ order, onClose }) => {
   const [zoom, setZoom] = useState(1);
@@ -14,11 +14,7 @@ const ResultsModal = ({ order, onClose }) => {
 
   const markAsViewed = async () => {
     try {
-      const token = localStorage.getItem('token');
-      await fetch(apiUrl(`/orders/${order.id}/view`), {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      await apiPut(`/orders/${order.id}/view`);
     } catch (error) {
       console.error('Failed to mark as viewed:', error);
     }

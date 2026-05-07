@@ -93,12 +93,11 @@ function makeBlobResponse() {
 }
 
 function makeErrorResponse(status, errMsg) {
-    return {
-        ok: false,
+    // Real Response so apiFetch's .text()/.headers.get() work as expected.
+    return new Response(JSON.stringify({ error: errMsg }), {
         status,
-        blob: () => Promise.resolve(new Blob([])),
-        json: () => Promise.resolve({ error: errMsg }),
-    };
+        headers: { 'Content-Type': 'application/json' },
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -302,16 +301,14 @@ describe('TestVoiceButton', () => {
     });
 
     it('falls back to a generic error message when the body is not JSON', async () => {
-        globalThis.fetch.mockResolvedValueOnce({
-            ok: false,
-            status: 503,
-            blob: () => Promise.resolve(new Blob([])),
-            json: () => Promise.reject(new Error('not json')),
-        });
+        // No body at all → apiFetch falls back to the HTTP status line.
+        globalThis.fetch.mockResolvedValueOnce(new Response(null, { status: 503 }));
         render(<TestVoiceButton voice="v" provider="piper" />);
         const btn = screen.getByRole('button');
         await clickAndSettle(btn);
         await waitFor(() => expect(btn.className).toContain('bg-red-900/40'));
+        // Component falls back to "TTS preview failed (status)" via the
+        // ApiError → caught-error path in TestVoiceButton.play().
         expect(btn.getAttribute('title')).toBe('TTS preview failed (503)');
     });
 

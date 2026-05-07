@@ -8,7 +8,7 @@ import {
 import { useToast } from '../../contexts/ToastContext';
 import { usePatientRecord } from '../../services/PatientRecord';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
-import { apiUrl } from '../../config/api';
+import { ApiError, apiFetch, apiPost, apiPut } from '../../services/apiClient';
 
 /**
  * TreatmentPanel - Main component for ordering treatments
@@ -58,20 +58,8 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
 
     const fetchTreatments = async () => {
         try {
-            const token = localStorage.getItem('token');
-            console.log('[TreatmentPanel] Fetching treatments for session:', sessionId);
-            const response = await fetch(apiUrl(`/sessions/${sessionId}/available-treatments`), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                console.log('[TreatmentPanel] Received treatments:', data.treatments);
-                setTreatments(data.treatments);
-            } else {
-                const errorData = await response.json();
-                console.error('[TreatmentPanel] Failed to fetch treatments:', response.status, errorData);
-                toast.error(errorData.error || 'Failed to load treatments');
-            }
+            const data = await apiFetch(`/sessions/${sessionId}/available-treatments`);
+            setTreatments(data?.treatments || []);
         } catch (error) {
             console.error('[TreatmentPanel] Error fetching treatments:', error);
             toast.error('Failed to load treatments: ' + error.message);
@@ -82,14 +70,8 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
 
     const fetchOrders = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/sessions/${sessionId}/treatment-orders`), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setOrders(data.orders || []);
-            }
+            const data = await apiFetch(`/sessions/${sessionId}/treatment-orders`);
+            setOrders(data?.orders || []);
         } catch (error) {
             console.error('Failed to fetch treatment orders:', error);
         }
@@ -128,62 +110,54 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
                 notes: orderForm.notes || null
             };
 
-            const response = await fetch(apiUrl(`/sessions/${sessionId}/order-treatment`), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(orderData)
+            let result;
+            try {
+                result = await apiPost(`/sessions/${sessionId}/order-treatment`, orderData);
+            } catch (err) {
+                if (err instanceof ApiError) {
+                    toast.error(err.message || 'Failed to order treatment');
+                    return;
+                }
+                throw err;
+            }
+
+            EventLogger.treatmentOrdered(
+                result.order_id,
+                selectedTreatment.treatment_name,
+                COMPONENTS.TREATMENT_PANEL,
+                { type: selectedTreatment.treatment_type, dose: orderData.dose, route: orderData.route }
+            );
+
+            ordered(selectedTreatment.treatment_type, selectedTreatment.treatment_name, {
+                dose: orderData.dose,
+                route: orderData.route,
+                urgency: orderData.urgency
             });
 
-            const result = await response.json();
-
-            if (response.ok) {
-                // Log to EventLogger
-                EventLogger.treatmentOrdered(
-                    result.order_id,
-                    selectedTreatment.treatment_name,
-                    COMPONENTS.TREATMENT_PANEL,
-                    { type: selectedTreatment.treatment_type, dose: orderData.dose, route: orderData.route }
-                );
-
-                // Record to PatientRecord
-                ordered(selectedTreatment.treatment_type, selectedTreatment.treatment_name, {
-                    dose: orderData.dose,
-                    route: orderData.route,
-                    urgency: orderData.urgency
-                });
-
-                // Show appropriate feedback
-                if (result.is_contraindicated) {
-                    toast.warning(`Warning: ${result.contraindication_feedback || 'This treatment may be contraindicated for this patient.'}`);
-                } else if (result.is_expected) {
-                    toast.success(`Ordered ${selectedTreatment.treatment_name} (+${result.points_awarded} points)`);
-                } else {
-                    toast.success(`Ordered ${selectedTreatment.treatment_name}`);
-                }
-
-                if (result.is_high_alert) {
-                    toast.info('High-alert medication - verify dose and route');
-                }
-
-                // Reset form and refresh orders
-                setSelectedTreatment(null);
-                setOrderForm({
-                    dose_value: '',
-                    dose_unit: '',
-                    route: '',
-                    frequency: 'once',
-                    rate_value: '',
-                    rate_unit: 'ml/hr',
-                    urgency: 'routine',
-                    notes: ''
-                });
-                fetchOrders();
+            if (result.is_contraindicated) {
+                toast.warning(`Warning: ${result.contraindication_feedback || 'This treatment may be contraindicated for this patient.'}`);
+            } else if (result.is_expected) {
+                toast.success(`Ordered ${selectedTreatment.treatment_name} (+${result.points_awarded} points)`);
             } else {
-                toast.error(result.error || 'Failed to order treatment');
+                toast.success(`Ordered ${selectedTreatment.treatment_name}`);
             }
+
+            if (result.is_high_alert) {
+                toast.info('High-alert medication - verify dose and route');
+            }
+
+            setSelectedTreatment(null);
+            setOrderForm({
+                dose_value: '',
+                dose_unit: '',
+                route: '',
+                frequency: 'once',
+                rate_value: '',
+                rate_unit: 'ml/hr',
+                urgency: 'routine',
+                notes: ''
+            });
+            fetchOrders();
         } catch (error) {
             toast.error('Failed to order treatment: ' + error.message);
         } finally {
@@ -194,41 +168,24 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
     // Administer a treatment
     const handleAdminister = async (orderId) => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/sessions/${sessionId}/administer/${orderId}`), {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
+            const result = await apiPost(`/sessions/${sessionId}/administer/${orderId}`);
+            const order = orders.find(o => o.id === orderId);
+            toast.success(`Administered ${order?.treatment_item || 'treatment'}`);
+
+            administered(order?.treatment_type || 'treatment', order?.treatment_item, {
+                dose: order?.dose,
+                route: order?.route
             });
 
-            const result = await response.json();
+            EventLogger.log('ADMINISTERED_MEDICATION', 'treatment', {
+                objectId: orderId,
+                objectName: order?.treatment_item,
+                component: COMPONENTS.TREATMENT_PANEL,
+                context: result?.effect_details
+            });
 
-            if (response.ok) {
-                const order = orders.find(o => o.id === orderId);
-                toast.success(`Administered ${order?.treatment_item || 'treatment'}`);
-
-                // Record to PatientRecord
-                administered(order?.treatment_type || 'treatment', order?.treatment_item, {
-                    dose: order?.dose,
-                    route: order?.route
-                });
-
-                // Log to EventLogger
-                EventLogger.log('ADMINISTERED_MEDICATION', 'treatment', {
-                    objectId: orderId,
-                    objectName: order?.treatment_item,
-                    component: COMPONENTS.TREATMENT_PANEL,
-                    context: result.effect_details
-                });
-
-                fetchOrders();
-
-                // Notify parent of effects update
-                if (onEffectsUpdate) {
-                    onEffectsUpdate();
-                }
-            } else {
-                toast.error(result.error || 'Failed to administer');
-            }
+            fetchOrders();
+            onEffectsUpdate?.();
         } catch (error) {
             toast.error('Failed to administer: ' + error.message);
         }
@@ -237,22 +194,10 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
     // Discontinue a treatment
     const handleDiscontinue = async (orderId) => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/sessions/${sessionId}/discontinue/${orderId}`), {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                toast.info('Treatment discontinued');
-                fetchOrders();
-                if (onEffectsUpdate) {
-                    onEffectsUpdate();
-                }
-            } else {
-                const result = await response.json();
-                toast.error(result.error || 'Failed to discontinue');
-            }
+            await apiPut(`/sessions/${sessionId}/discontinue/${orderId}`);
+            toast.info('Treatment discontinued');
+            fetchOrders();
+            onEffectsUpdate?.();
         } catch (error) {
             toast.error('Failed to discontinue: ' + error.message);
         }

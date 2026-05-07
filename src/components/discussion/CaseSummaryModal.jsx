@@ -1,17 +1,10 @@
 import { useEffect, useState } from 'react';
 import { X, Activity, FlaskConical, Pill, Stethoscope, Image as ImageIcon } from 'lucide-react';
-import { apiUrl } from '../../config/api';
-
-function authHeaders() {
-    const token = localStorage.getItem('token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
-}
+import { apiFetch } from '../../services/apiClient';
 
 async function safeFetch(path) {
     try {
-        const res = await fetch(apiUrl(path), { headers: authHeaders() });
-        if (!res.ok) return null;
-        return await res.json();
+        return await apiFetch(path);
     } catch { return null; }
 }
 

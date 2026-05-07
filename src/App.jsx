@@ -18,9 +18,8 @@ import { setExternalApi } from './notifications/externalApi';
 import { ToastSurface, BannerSurface, AudioSurface, BackendSurface, ConsoleSurface } from './notifications/surfaces';
 import DiagnosticBar from './components/debug/DiagnosticBar';
 import { PatientRecordProvider, usePatientRecord } from './services/PatientRecord';
-import { AuthService } from './services/authService';
 import EventLogger, { COMPONENTS } from './services/eventLogger';
-import { apiUrl } from './config/api';
+import { ApiError, apiFetch, apiPut } from './services/apiClient';
 import { Settings, X, LogOut, User, RotateCcw, ChevronDown, Activity } from 'lucide-react';
 import ManikinPanel from './components/examination/ManikinPanel';
 import BodyMapDebug from './components/examination/BodyMapDebug';
@@ -102,12 +101,8 @@ function MainApp() {
       let cancelled = false;
       (async () => {
          try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl(`/sessions/${sessionId}`), {
-               headers: token ? { Authorization: `Bearer ${token}` } : {}
-            });
-            if (!res.ok || cancelled) return;
-            const data = await res.json();
+            const data = await apiFetch(`/sessions/${sessionId}`);
+            if (cancelled) return;
             const raw = data?.session?.case_snapshot;
             if (!raw) return;
             const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -122,18 +117,12 @@ function MainApp() {
    // Fetch and load default case if no session exists
    const loadDefaultCase = async () => {
       try {
-         const token = AuthService.getToken();
-         const res = await fetch(apiUrl('/cases'), {
-            headers: { 'Authorization': `Bearer ${token}` }
-         });
-         if (res.ok) {
-            const data = await res.json();
-            const defaultCase = data.cases?.find(c => c.is_default);
-            if (defaultCase) {
-               console.log('Auto-loading default case:', defaultCase.name);
-               setActiveCase(defaultCase);
-               EventLogger.caseLoaded(defaultCase.id, defaultCase.name);
-            }
+         const data = await apiFetch('/cases');
+         const defaultCase = data?.cases?.find(c => c.is_default);
+         if (defaultCase) {
+            console.log('Auto-loading default case:', defaultCase.name);
+            setActiveCase(defaultCase);
+            EventLogger.caseLoaded(defaultCase.id, defaultCase.name);
          }
       } catch (err) {
          console.error('Failed to load default case:', err);
@@ -148,11 +137,7 @@ function MainApp() {
    const endSessionOnServer = async (sid) => {
       if (!sid) return;
       try {
-         const token = AuthService.getToken();
-         await fetch(apiUrl(`/sessions/${sid}/end`), {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-         });
+         await apiPut(`/sessions/${sid}/end`);
       } catch (err) {
          console.error('[Session] Failed to end session on server:', err);
       }
@@ -229,22 +214,18 @@ function MainApp() {
                   // Best-effort server check — purely diagnostic. Never
                   // mutates state on mismatch; that's what Exit/End is for.
                   try {
-                     const token = AuthService.getToken();
-                     const res = await fetch(apiUrl(`/sessions/${savedSessionId}`), {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                     });
-                     if (res.ok) {
-                        const data = await res.json();
-                        if (data?.session?.end_time) {
-                           console.log('[Session] restored a server-ended session; user will exit through End');
-                        } else {
-                           EventLogger.sessionResumed(savedSessionId, savedCase?.id, savedCase?.name);
-                        }
+                     const data = await apiFetch(`/sessions/${savedSessionId}`);
+                     if (data?.session?.end_time) {
+                        console.log('[Session] restored a server-ended session; user will exit through End');
                      } else {
-                        console.warn('[Session] backend non-OK validating saved session; keeping local state');
+                        EventLogger.sessionResumed(savedSessionId, savedCase?.id, savedCase?.name);
                      }
                   } catch (err) {
-                     console.warn('[Session] validation network error; keeping local state:', err.message);
+                     if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+                        console.warn('[Session] backend non-OK validating saved session; keeping local state');
+                     } else {
+                        console.warn('[Session] validation network error; keeping local state:', err.message);
+                     }
                   }
                }
             }

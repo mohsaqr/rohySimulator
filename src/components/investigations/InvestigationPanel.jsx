@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ClipboardList, Clock, CheckCircle, Search, Filter, List, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import EventLogger, { VERBS, OBJECT_TYPES, COMPONENTS } from '../../services/eventLogger';
-import { apiUrl } from '../../config/api';
+import { ApiError, apiFetch, apiPost } from '../../services/apiClient';
 
 const InvestigationPanel = ({ caseId, sessionId, onViewResult }) => {
   // Track when panel was opened for timing
@@ -25,19 +25,11 @@ const InvestigationPanel = ({ caseId, sessionId, onViewResult }) => {
 
     const fetchLabs = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(apiUrl(`/sessions/${sessionId}/available-labs`), {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setAvailableLabs(data.labs || []);
-          
-          // Extract unique groups
-          const groups = [...new Set(data.labs.map(lab => lab.test_group))].sort();
-          setAllGroups(groups);
-        }
+        const data = await apiFetch(`/sessions/${sessionId}/available-labs`);
+        const labs = data?.labs || [];
+        setAvailableLabs(labs);
+        const groups = [...new Set(labs.map(lab => lab.test_group))].sort();
+        setAllGroups(groups);
       } catch (error) {
         console.error('Failed to fetch labs:', error);
       }
@@ -51,15 +43,8 @@ const InvestigationPanel = ({ caseId, sessionId, onViewResult }) => {
     if (!sessionId) return;
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(apiUrl(`/sessions/${sessionId}/orders`), {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setOrders(data.orders || []);
-      }
+      const data = await apiFetch(`/sessions/${sessionId}/orders`);
+      setOrders(data?.orders || []);
     } catch (error) {
       console.error('Failed to fetch orders:', error);
     }
@@ -80,33 +65,23 @@ const InvestigationPanel = ({ caseId, sessionId, onViewResult }) => {
     EventLogger.startTiming('orderLabs');
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(apiUrl(`/sessions/${sessionId}/order-labs`), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          lab_ids: selectedTests
-        })
+      await apiPost(`/sessions/${sessionId}/order-labs`, { lab_ids: selectedTests });
+
+      // Log each ordered lab
+      selectedTests.forEach(labId => {
+        const lab = availableLabs.find(l => l.id === labId);
+        EventLogger.labOrdered(labId, lab?.test_name || `Lab ${labId}`, COMPONENTS.INVESTIGATION_PANEL);
       });
 
-      if (response.ok) {
-        // Log each ordered lab
-        selectedTests.forEach(labId => {
-          const lab = availableLabs.find(l => l.id === labId);
-          EventLogger.labOrdered(labId, lab?.test_name || `Lab ${labId}`, COMPONENTS.INVESTIGATION_PANEL);
-        });
-
-        setSelectedTests([]);
-        await fetchOrders();
-      } else {
-        EventLogger.apiError(apiUrl('/sessions/order-labs'), response.status, 'Failed to order labs', COMPONENTS.INVESTIGATION_PANEL);
-      }
+      setSelectedTests([]);
+      await fetchOrders();
     } catch (error) {
-      console.error('Failed to order tests:', error);
-      EventLogger.errorOccurred('OrderLabsError', error.message, COMPONENTS.INVESTIGATION_PANEL);
+      if (error instanceof ApiError) {
+        EventLogger.apiError(`/api/sessions/${sessionId}/order-labs`, error.status, error.message, COMPONENTS.INVESTIGATION_PANEL);
+      } else {
+        console.error('Failed to order tests:', error);
+        EventLogger.errorOccurred('OrderLabsError', error.message, COMPONENTS.INVESTIGATION_PANEL);
+      }
     } finally {
       setLoading(false);
     }

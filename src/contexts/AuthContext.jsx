@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AuthService } from '../services/authService';
-import { apiUrl } from '../config/api';
+import { apiPost } from '../services/apiClient';
 
 const AuthContext = createContext(null);
 
@@ -47,18 +47,12 @@ export const AuthProvider = ({ children }) => {
 
     const logout = async () => {
         // Log logout event to backend
-        try {
-            const token = AuthService.getToken();
-            if (token) {
-                await fetch(apiUrl('/auth/logout'), {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
+        if (AuthService.getToken()) {
+            try {
+                await apiPost('/auth/logout');
+            } catch (error) {
+                console.error('Failed to log logout:', error);
             }
-        } catch (error) {
-            console.error('Failed to log logout:', error);
         }
 
         // Logout is an explicit exit (per the persistence rule), so we

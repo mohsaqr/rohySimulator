@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Clock, Activity, AlertTriangle, Settings, FileText, Zap } from 'lucide-react';
-import { apiUrl } from '../../config/api';
+import { apiFetch } from '../../services/apiClient';
 
 const EventLog = ({ sessionId }) => {
   const [events, setEvents] = useState([]);
@@ -14,17 +14,8 @@ const EventLog = ({ sessionId }) => {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(apiUrl(`/sessions/${sessionId}/events`), {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setEvents(data.events || []);
-      }
+      const data = await apiFetch(`/sessions/${sessionId}/events`);
+      setEvents(data?.events || []);
     } catch (error) {
       console.error('Failed to fetch events:', error);
     } finally {

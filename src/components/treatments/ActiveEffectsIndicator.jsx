@@ -4,7 +4,7 @@ import {
     Heart, Droplets, Wind, Thermometer,
     ChevronDown, ChevronUp, Clock, Pill
 } from 'lucide-react';
-import { apiUrl } from '../../config/api';
+import { apiFetch } from '../../services/apiClient';
 
 /**
  * ActiveEffectsIndicator - Visual indicator of active treatment effects
@@ -25,14 +25,8 @@ export default function ActiveEffectsIndicator({ sessionId, refreshTrigger, comp
 
     const fetchEffects = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/sessions/${sessionId}/active-effects`), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setEffects(data);
-            }
+            const data = await apiFetch(`/sessions/${sessionId}/active-effects`);
+            setEffects(data);
         } catch (error) {
             console.error('Failed to fetch active effects:', error);
         } finally {

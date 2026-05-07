@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import defaultRegions from '../../utils/defaultRegions';
-import { apiUrl, baseUrl } from '../../config/api';
+import { baseUrl } from '../../config/api';
+import { apiFetch } from '../../services/apiClient';
 // Storage key - must match BodyMapDebug
 const STORAGE_KEY = 'rohy_bodymap_regions';
 
@@ -35,13 +36,11 @@ export default function BodyMap({
             console.warn('Failed to load regions from localStorage:', e);
         }
 
-        // Try loading from server
-        fetch(apiUrl('/bodymap-regions'))
-            .then(r => r.json())
+        // /bodymap-regions is a public endpoint by design.
+        apiFetch('/bodymap-regions', { auth: false })
             .then(data => {
-                if (data.regions) {
+                if (data?.regions) {
                     setSavedRegions(data.regions);
-                    // Cache in localStorage
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(data.regions));
                 }
             })

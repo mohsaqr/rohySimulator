@@ -6,7 +6,8 @@ import { buildPersonaBlocks } from '../../utils/personaBlocks';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthService } from '../../services/authService';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
-import { apiUrl, baseUrl } from '../../config/api';
+import { baseUrl } from '../../config/api';
+import { apiFetch, apiPost } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
 import { VoiceService } from '../../services/voiceService';
 import { useVoice } from '../../contexts/VoiceContext';
@@ -156,12 +157,8 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         let cancelled = false;
         (async () => {
             try {
-                const token = localStorage.getItem('token');
-                const res = await fetch(apiUrl(`/sessions/${sid}`), {
-                    headers: token ? { Authorization: `Bearer ${token}` } : {}
-                });
-                if (!res.ok || cancelled) return;
-                const data = await res.json();
+                const data = await apiFetch(`/sessions/${sid}`);
+                if (cancelled) return;
                 const raw = data?.session?.case_snapshot;
                 if (!raw) return;
                 const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -181,14 +178,8 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     useEffect(() => {
         const loadChatSettings = async () => {
             try {
-                const token = AuthService.getToken();
-                const res = await fetch(apiUrl('/platform-settings/chat'), {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    setChatSettings(data);
-                }
+                const data = await apiFetch('/platform-settings/chat');
+                setChatSettings(data);
             } catch (err) {
                 console.error('Failed to load chat settings:', err);
             }
@@ -198,28 +189,17 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
     // Load voice settings + avatar manifest + platform default avatars in parallel.
     useEffect(() => {
-        const token = AuthService.getToken();
         let cancelled = false;
         (async () => {
-            try {
-                const [voiceRes, manifestRes, avatarsRes] = await Promise.allSettled([
-                    fetch(apiUrl('/platform-settings/voice'),   { headers: { 'Authorization': `Bearer ${token}` } }),
-                    fetch(baseUrl('/avatars/heads/manifest.json')),
-                    fetch(apiUrl('/platform-settings/avatars'), { headers: { 'Authorization': `Bearer ${token}` } })
-                ]);
-                if (cancelled) return;
-                if (voiceRes.status === 'fulfilled' && voiceRes.value.ok) {
-                    setGlobalVoiceSettings(await voiceRes.value.json());
-                }
-                if (manifestRes.status === 'fulfilled' && manifestRes.value.ok) {
-                    setHeadManifest(await manifestRes.value.json());
-                }
-                if (avatarsRes.status === 'fulfilled' && avatarsRes.value.ok) {
-                    setPlatformAvatars(await avatarsRes.value.json());
-                }
-            } catch (err) {
-                console.warn('Voice/avatar config load failed:', err);
-            }
+            const [voiceRes, manifestRes, avatarsRes] = await Promise.allSettled([
+                apiFetch('/platform-settings/voice'),
+                fetch(baseUrl('/avatars/heads/manifest.json')).then(r => r.ok ? r.json() : Promise.reject(new Error('manifest fetch'))),
+                apiFetch('/platform-settings/avatars'),
+            ]);
+            if (cancelled) return;
+            if (voiceRes.status === 'fulfilled') setGlobalVoiceSettings(voiceRes.value);
+            if (manifestRes.status === 'fulfilled') setHeadManifest(manifestRes.value);
+            if (avatarsRes.status === 'fulfilled') setPlatformAvatars(avatarsRes.value);
         })();
         return () => { cancelled = true; };
     }, []);
@@ -410,27 +390,20 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             // If restoring a session, fetch from database
             if (restoredSessionId) {
                 try {
-                    const token = AuthService.getToken();
-                    const res = await fetch(apiUrl(`/interactions/${restoredSessionId}`), {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.interactions?.length > 0) {
-                            const chatMessages = data.interactions.map(i => ({
-                                role: i.role,
-                                content: i.content
-                            }));
-                            console.log('Restored chat from database:', chatMessages.length, 'messages');
-                            setMessages(chatMessages);
-                            // Also save to localStorage for faster next load
-                            localStorage.setItem('rohy_chat_history', JSON.stringify({
-                                caseId: activeCase.id,
-                                sessionId: restoredSessionId,
-                                messages: chatMessages,
-                                timestamp: Date.now()
-                            }));
-                        }
+                    const data = await apiFetch(`/interactions/${restoredSessionId}`);
+                    if (data?.interactions?.length > 0) {
+                        const chatMessages = data.interactions.map(i => ({
+                            role: i.role,
+                            content: i.content
+                        }));
+                        console.log('Restored chat from database:', chatMessages.length, 'messages');
+                        setMessages(chatMessages);
+                        localStorage.setItem('rohy_chat_history', JSON.stringify({
+                            caseId: activeCase.id,
+                            sessionId: restoredSessionId,
+                            messages: chatMessages,
+                            timestamp: Date.now()
+                        }));
                     }
                 } catch (e) {
                     console.error('Failed to fetch chat history from database:', e);
@@ -668,36 +641,23 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         setShowQuestionnaire(false);
         startQuestionnaireTimer();
         EventLogger.emotionExpressed(emotion, COMPONENTS.CHAT_INTERFACE);
-        const token = AuthService.getToken();
-        const headers = {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        };
         try {
-            await fetch(apiUrl('/emotion-logs'), {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    session_id: sessionId,
-                    case_id: activeCase?.id,
-                    emotion
-                })
+            await apiPost('/emotion-logs', {
+                session_id: sessionId,
+                case_id: activeCase?.id,
+                emotion,
             });
         } catch (err) {
             console.error('Failed to log emotion:', err);
         }
         try {
-            await fetch(apiUrl('/events/batch'), {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    session_id: sessionId,
-                    events: [{
-                        event_type: 'emotion_selected',
-                        description: `Emotion: ${emotion}`,
-                        timestamp: new Date().toISOString()
-                    }]
-                })
+            await apiPost('/events/batch', {
+                session_id: sessionId,
+                events: [{
+                    event_type: 'emotion_selected',
+                    description: `Emotion: ${emotion}`,
+                    timestamp: new Date().toISOString(),
+                }],
             });
         } catch (err) {
             console.error('Failed to log emotion to event log:', err);

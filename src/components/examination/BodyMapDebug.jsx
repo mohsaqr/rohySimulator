@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AuthService } from '../../services/authService';
 import DEFAULT_REGIONS from '../../utils/defaultRegions';
-import { apiUrl, baseUrl } from '../../config/api';
+import { baseUrl } from '../../config/api';
+import { apiFetch, apiPost } from '../../services/apiClient';
 import { useToast } from '../../contexts/ToastContext';
  
 // Storage key for localStorage
@@ -40,10 +41,9 @@ export default function BodyMapDebug({ gender = 'male', view = 'anterior' }) {
     useEffect(() => {
         const hasLocalData = localStorage.getItem(STORAGE_KEY);
         if (!hasLocalData) {
-            fetch(apiUrl('/bodymap-regions'))
-                .then(r => r.json())
+            apiFetch('/bodymap-regions', { auth: false })
                 .then(data => {
-                    if (data.regions) {
+                    if (data?.regions) {
                         setRegions(data.regions);
                         localStorage.setItem(STORAGE_KEY, JSON.stringify(data.regions));
                     }
@@ -118,16 +118,8 @@ export default function BodyMapDebug({ gender = 'male', view = 'anterior' }) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(regions));
 
             // Also save to server for persistence
-            const token = AuthService.getToken();
-            if (token) {
-                await fetch(apiUrl('/bodymap-regions'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ regions })
-                });
+            if (AuthService.getToken()) {
+                await apiPost('/bodymap-regions', { regions });
             }
 
             setSaveStatus('saved');

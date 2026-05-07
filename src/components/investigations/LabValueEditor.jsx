@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Edit3, Save, RefreshCw, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
-import { AuthService } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
-import { apiUrl } from '../../config/api';
+import { apiFetch, apiPut } from '../../services/apiClient';
 
 const LabValueEditor = ({ sessionId, caseId, onUpdate }) => {
   const toast = useToast();
@@ -21,22 +20,13 @@ const LabValueEditor = ({ sessionId, caseId, onUpdate }) => {
   const fetchLabs = async () => {
     setLoading(true);
     try {
-      const token = AuthService.getToken();
-      const response = await fetch(apiUrl(`/sessions/${sessionId}/available-labs`), {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const data = await apiFetch(`/sessions/${sessionId}/available-labs`);
+      const labs = data?.labs || [];
+      setAvailableLabs(labs);
 
-      if (response.ok) {
-        const data = await response.json();
-        setAvailableLabs(data.labs || []);
-        
-        // Initialize editing values
-        const initialValues = {};
-        data.labs.forEach(lab => {
-          initialValues[lab.id] = lab.current_value;
-        });
-        setEditingValues(initialValues);
-      }
+      const initialValues = {};
+      labs.forEach(lab => { initialValues[lab.id] = lab.current_value; });
+      setEditingValues(initialValues);
     } catch (error) {
       console.error('Failed to fetch labs:', error);
     } finally {
@@ -74,32 +64,15 @@ const LabValueEditor = ({ sessionId, caseId, onUpdate }) => {
 
     setSaving(prev => ({ ...prev, [lab.id]: true }));
     try {
-      const token = AuthService.getToken();
-      const response = await fetch(apiUrl(`/sessions/${sessionId}/labs/${lab.id}`), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          current_value: parseFloat(newValue)
-        })
+      await apiPut(`/sessions/${sessionId}/labs/${lab.id}`, {
+        current_value: parseFloat(newValue),
       });
-
-      if (response.ok) {
-        // Update local state
-        setAvailableLabs(prev => prev.map(l =>
-          l.id === lab.id
-            ? { ...l, current_value: parseFloat(newValue), is_abnormal: true }
-            : l
-        ));
-
-        if (onUpdate) {
-          onUpdate(lab.id, parseFloat(newValue));
-        }
-      } else {
-        toast.error('Failed to update lab value');
-      }
+      setAvailableLabs(prev => prev.map(l =>
+        l.id === lab.id
+          ? { ...l, current_value: parseFloat(newValue), is_abnormal: true }
+          : l
+      ));
+      onUpdate?.(lab.id, parseFloat(newValue));
     } catch (error) {
       console.error('Failed to save lab value:', error);
       toast.error('Failed to update lab value');
