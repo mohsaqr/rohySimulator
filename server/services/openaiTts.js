@@ -20,6 +20,7 @@
 
 import { Buffer } from 'node:buffer';
 import { EvenByteAligner } from '../lib/pcmAlign.js';
+import { fetchWithTimeout } from './fetchWithTimeout.js';
 
 const OPENAI_TTS_URL = 'https://api.openai.com/v1/audio/speech';
 const SAMPLE_RATE = 24000;   // OpenAI returns s16le mono at 24 kHz when response_format='pcm'
@@ -70,7 +71,10 @@ export async function* synthesizeOpenaiStream({ text, voice, speed, apiKey, mode
         throw err;
     }
 
-    const res = await fetch(OPENAI_TTS_URL, {
+    // 30s upper bound: clinical sim lines are short (1-2 sentences), so a
+    // round-trip > 30s is a stuck request. Audit #10: uniform timeout via
+    // fetchWithTimeout so all providers share the same policy.
+    const res = await fetchWithTimeout(OPENAI_TTS_URL, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -83,7 +87,7 @@ export async function* synthesizeOpenaiStream({ text, voice, speed, apiKey, mode
             response_format: 'pcm',
             speed: typeof speed === 'number' ? speed : 1
         })
-    });
+    }, { timeoutMs: 30_000 });
 
     if (!res.ok) {
         let msg = `OpenAI TTS HTTP ${res.status}`;

@@ -19,6 +19,7 @@
 //   - Auth uses an API key on the URL — same pattern as Cloud Speech-to-Text.
 
 import { Buffer } from 'node:buffer';
+import { fetchWithTimeout } from './fetchWithTimeout.js';
 
 const GOOGLE_TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize';
 const SAMPLE_RATE = 24000;
@@ -125,7 +126,10 @@ export async function* synthesizeGoogleStream({ text, voice, speed, pitch, apiKe
         audioConfig.pitch = pitchSemitones;
     }
 
-    const res = await fetch(`${GOOGLE_TTS_URL}?key=${encodeURIComponent(key)}`, {
+    // Audit #10: 30s timeout via fetchWithTimeout matches the OpenAI path
+    // and the catalogue proxies — uniform policy across server-side
+    // outbound calls.
+    const res = await fetchWithTimeout(`${GOOGLE_TTS_URL}?key=${encodeURIComponent(key)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -133,7 +137,7 @@ export async function* synthesizeGoogleStream({ text, voice, speed, pitch, apiKe
             voice: { languageCode, name: voice },
             audioConfig
         })
-    });
+    }, { timeoutMs: 30_000 });
 
     if (!res.ok) {
         let msg = `Google TTS HTTP ${res.status}`;
