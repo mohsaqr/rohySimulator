@@ -119,6 +119,14 @@ export default defineConfig({
                     // adds them. Without this, `npm run test:server`
                     // would fail CI just because the directory is empty.
                     passWithNoTests: true,
+                    // Several server tests spawn a real Express via
+                    // startTestServer() in beforeAll. With the suite growing
+                    // (administer-route, auth-refresh, auth-lockout, tts,
+                    // analytics, …) parallel server boots contend for ports
+                    // + sqlite migrations, occasionally pushing a beforeAll
+                    // past the 10s default. 30s gives slow CI runs headroom
+                    // without masking a genuinely-stuck hook.
+                    hookTimeout: 30_000,
                     // Phase 7 benchmarks: bench files run in this (node)
                     // project so kokoro-js / child_process / fs imports
                     // resolve correctly. `vitest bench` reads benchmark.*

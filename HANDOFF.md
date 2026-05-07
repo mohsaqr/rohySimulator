@@ -1,700 +1,147 @@
-# Session Handoff — 2026-05-07 (audit follow-through)
+# Session Handoff — 2026-05-07 (deploy hardening + audit-chain mutex)
 
-This session executed against the 25-finding enterprise audit pass from
-2026-05-06 plus four follow-up items the audit itself missed (CSP,
-SQL-injection static guard, retention test, incident-response runbook)
-and the cookie/CSRF/refresh-flow rollout.
+> **READ THIS FIRST.** Multiple production-impacting fixes are on disk but
+> NOT deployed. Working tree is dirty. Do not start new work without
+> reading at least the "Critical: ship before next session" section.
 
-## Completed (29 commits on `main`, all pushed)
+## Critical: ship before next session
 
-### From the audit's 25 findings
+These are real, root-cause fixes for incidents this user hit today. Every
+one has a regression-lock test. None of them are deployed yet.
 
-22 closed by code, 3 deferred with rationale (#7 routes split, #9
-dbAdapter migration, #11 TTS/LLM concurrency budgets — each a multi-
-day mechanical refactor). The shape of each commit:
+| Fix | File | Why it matters |
+|---|---|---|
+| **Audit-chain mutex** | `server/audit-chain.js` | The actual bug behind "voice settings disappeared / OpenAI key gone." Concurrent `appendAuditEntry` calls (4 fire-and-forget per multi-setting save) collided on `BEGIN IMMEDIATE` → `SQLITE_ERROR: cannot start a transaction within a transaction`. New in-process FIFO promise chain serializes appends. **Test: `tests/server/audit-chain.test.js` "serializes concurrent appends".** |
+| **Administer route hardening** | `server/routes/orders-routes.js` | The original 502 cascade. Every callback wraps body in try/catch + `sendError`, every numeric DB read coerces via `num()`, every code path guarantees `res.json(...)`. Includes `(treatment_item ‖ '').includes('Position')` guard against the NULL-throw. **Test: `tests/server/administer-route.test.js`** (4 tests including malformed-effect-row). |
+| **CORS errors → 403, not 500** | `server/middleware/errorHandler.js` | Per `AGENT-NOTE-DEPLOY-2026-05-07.md` §3. `Not allowed by CORS` no longer surfaces as a generic 500 that hides the cause. |
+| **`app.set('trust proxy', 'loopback')`** | `server/server.js` | Per deploy-lessons §11. Rate-limiters now see real client IP behind nginx instead of `127.0.0.1`. Override via `ROHY_TRUST_PROXY` env. |
+| **Kokoro fail-safe** | `server/services/kokoroTts.js` + `server/routes/proxy-routes.js` | Per deploy-lessons §4. ONNX-Runtime crashes on truncated `.onnx` no longer wedge the process — `loadKokoro` classifies the error, marks Kokoro disabled until restart, and the route returns 503 with `code: 'KOKORO_DISABLED'` and an admin-actionable message. **Provider-neutral** (does NOT auto-substitute Piper — admin switches in settings). |
+| **Graceful shutdown on SIGTERM/SIGINT** | `server/server.js` | `installGracefulShutdown` drains in-flight HTTP/HTTPS, closes DB cleanly, 15s hard deadline (`ROHY_SHUTDOWN_GRACE_MS`). Means `systemctl restart rohy` no longer drops in-flight requests. |
+| **Backup-before-migrate** | `server/db.js` | Snapshots `database.sqlite → database.sqlite.bak.<timestamp>.<targetVersion>` on first detection of pending migrations. Skipped for `:memory:` and when `ROHY_BACKUP_BEFORE_MIGRATE=0`. Backup failure is non-fatal (logged, doesn't brick upgrades). |
+| **Liveness + readiness endpoints** | `server/routes/health-routes.js` (new) | `GET /api/health` (cheap liveness) and `GET /api/ready` (DB ping + migrations check, 503 if not ready). Mounted **before** the rate limiter so monitoring can't be throttled. **Test: `tests/server/health-routes.test.js`** (5 tests). Allowlist updated. |
+| **Client error-message cleanup** | `src/services/apiClient.js` + `src/services/voiceService.js` | Raw nginx HTML pages no longer dumped into toasts. 502/503/504 yield clean status-keyed labels. **Test: 5 new tests in `apiClient.test.js`**. |
+| **Records grouping** | `src/data/historyGroups.js` (new) + `src/data/aiPromptContext.js` (new) + ChatInterface, ClinicalRecordsEditor, ClinicalRecordsPanel | History grouped into 3 accordions (Present History / Past Medical / Personal & Social). Same canonical structure feeds the AI system prompt via `formatHistoryAsMarkdown`. Vitals + recent session activity now wired into AI context. Dead `aiAccess.labs` flag removed. **Tests: 28 new across 4 test files.** |
+| **MAX_FAILED_LOGINS / LOCKOUT_MINUTES restored** | `server/routes/auth-routes.js` | Lost in routes.js split (commit `3a7a330`). Without these, the 5th wrong-password attempt threw ReferenceError → request hung → nginx 502. **Test: `tests/server/auth-lockout.test.js`**. |
+| **Duplicate exam-findings handlers removed** | `server/routes/analytics-routes.js` | Same POST + GET were defined in both `cases-routes.js` (mounted first, wins) and `analytics-routes.js` (dead). Deleted dead copy. |
+| **db-direct-access guard broadened** | `tests/server/db-direct-access.test.js` | Regex now catches `database.X` aliases (audit-chain.js style); audit-chain explicitly allowlisted. |
 
-- **#1** apiClient + ApiError contract; service-layer + clinical-
-  workflow component migrations (admin editors deferred under #15).
-- **#2** active_sessions revocation enforced in `authenticateToken`.
-- **#3** medkit-app: persona + emotion classifier tests (split
-  `detectEmotion` out of `conversation.ts` for testability without
-  livekit).
-- **#4** HttpOnly `rohy_auth` cookie issued at login, dual-mode
-  bearer/cookie auth.
-- **#5** Coverage ratchet at 50/44/43/51% as floor.
-- **#6** `src/storage/registry.js` declares every `rohy_*` namespace;
-  test fails on undeclared keys.
-- **#8** `runDbMigrations` / `seedDbDefaults` split, `scripts/seed.js`
-  + `ROHY_NO_AUTO_SEED=1` opt-out.
-- **#10** `fetchWithTimeout` primitive; OpenAI + Google TTS adopted.
-- **#12** Auth middleware tenant-change + malformed-header tests.
-- **#13** Migration runner downgrade + dirty-db tests.
-- **#14** LabValueEditor integration tests.
-- **#16** tnaUtils edge-case tests.
-- **#17** useAlarms timer + useTreatmentEffects session-change tests.
-- **#18** Notification per-user scoping + legacy-key migration tests.
-- **#19** CORS factory + production allowlist tests.
-- **#20** Backend persistence telemetry counters; surfaced in
-  DiagnosticBar.
-- **#21** `src/notifications/SAFETY.md` clinical alarm safety
-  acceptance criteria.
-- **#22** DiagnosticBar role gate (admin/educator only).
-- **#23** Cleanup: tnaUtils dead allocation, parseConfig deep-clone.
-- **#24** Static-template schema validation.
-- **#25** API URL resolution across BASE_URL configs.
+## Test status
 
-### Beyond the audit (added or surfaced this session)
-
-- **CSRF** — double-submit-cookie protection on cookie-auth path; the
-  cookie/CSRF rollout was the natural follow-on to #4.
-- **JWT refresh** — `POST /auth/refresh` rotates active_sessions row
-  + cookies; `AuthContext` schedules a 3h tick.
-- **Cookie-mode flag day** — login/register no longer write
-  localStorage by default (`rememberToken: true` opts back in for
-  explicit cross-origin callers).
-- **CSP + security headers** — `server/security-headers.js` sets
-  Content-Security-Policy, X-Frame-Options, Permissions-Policy,
-  X-Content-Type-Options, Referrer-Policy. CSP is strict in production
-  (`script-src 'self'` only) and adds `unsafe-eval` for dev (Vite HMR).
-- **SQL-injection static guard** — `tests/server/sql-injection-guard.test.js`
-  greps server tree for `${...}` interpolation in SQL strings; new
-  interpolation fails CI unless explicitly allowlisted with rationale.
-- **Retention/purge end-to-end test** — `tests/server/retention-purge.test.js`
-  exercises `POST /api/users/:id/purge` against the real server, asserting
-  hard-delete tables lose rows, anonymised log tables NULL their user_id,
-  and the user row is retained but PII-wiped.
-- **Body-size limit tightened** — global JSON limit dropped from 10mb
-  to 256kb (DoS surface).
-- **Real timezone bug fixed** — `active_sessions.expires_at` comparison
-  was using `new Date(sqliteString)` which parses as local time but
-  SQLite stores UTC. Fixed by appending 'Z' before parse. Caught by
-  the new auth-refresh tests on a non-UTC dev box.
-- **Incident-response runbook** — `docs/INCIDENT_RESPONSE.md`. Seven
-  failure-mode playbooks (locked-out users, CSRF rejection, dropped
-  persistence, TTS timeout, refresh loop, JWT-secret rotation, DB lock).
-
-## Current state
-
-### What works
-- Cookie-only auth lane: HttpOnly `rohy_auth` + `rohy_csrf` double-submit
-  CSRF + 3h JWT refresh + flag-day defaults. Login/register no longer
-  write localStorage; existing localStorage tokens self-heal as users
-  cycle through logout/refresh.
-- Server-side revocation: logout, admin force-logout, password change
-  all immediately invalidate the JWT.
-- DiagnosticBar (admin/educator only) shows live backend persistence
-  telemetry alongside the existing voice / LLM / session diagnostics.
-- 22 of 25 audit findings closed by code; 3 deferred with documented
-  rationale; 4 follow-ups (CSP, SQL guard, retention test, incident
-  runbook) added beyond the audit's scope.
-- 973 vitest tests passing, 10 documented skipped, 0 failed (one
-  intermittent flake on `DiscussionScreen.test.jsx` "Start debrief"
-  gate — passes on re-run; not introduced this session).
-
-### What's broken / partial
-- **Admin editor migration to apiFetch + tests (#15)** — 10 admin-only
-  components still on direct fetch (LabTestManager, MedicationManager,
-  etc.). Lower security risk (admin-only paths, role-gated server-side)
-  but real debt.
-- **`server/routes.js` split (#7)** — still one 7000-line file.
-  Mitigated by `route-auth-allowlist.test.js` but the file itself is
-  still a wall.
-- **dbAdapter migration (#9)** — direct `db.get/all/run` still
-  pervasive in routes.js.
-- **TTS/LLM budget tracker (#11)** — no per-user/platform spend
-  enforcement. fetchWithTimeout from #10 is the building block the
-  budget tracker will wrap.
-- **TTS retry / circuit-breaker** — primitive in place, no policy
-  layered on top yet.
-- **Structured logging schema** — `console.log` is everywhere;
-  `requestLoggerMiddleware` exists but per-route warn/error don't go
-  through it.
-- **session_id collision test** — no test for the SQL race when two
-  tabs start a session simultaneously.
-- **Cookie-path Playwright e2e** — unit tests cover the cookie/CSRF/
-  refresh logic but no e2e issues a real `Set-Cookie` and watches the
-  next fetch send it back.
-
-### Files changed this session
-
-Net diff is ~30 commits, 64 files changed, 6,500+ lines net.
-High-leverage modules:
-
-- **New:** `src/services/apiClient.js`, `src/storage/registry.js`,
-  `src/notifications/SAFETY.md`, `server/cors-config.js`,
-  `server/security-headers.js`, `server/middleware/csrf.js`,
-  `server/services/fetchWithTimeout.js`, `scripts/seed.js`,
-  `docs/INCIDENT_RESPONSE.md`, plus 14 new test files.
-- **Heavily modified:** `src/services/{authService,llmService,
-  voiceService,AgentService,discussionService,notesService}.js`,
-  `src/contexts/AuthContext.jsx`, `src/App.jsx`, `src/components/
-  {chat/ChatInterface,monitor/PatientMonitor,orders/OrdersDrawer,
-  treatments/TreatmentPanel,investigations/*,examination/*}.jsx`,
-  `src/notifications/{persistence,surfaces/BackendSurface}.js`,
-  `src/hooks/{useAlarms,useTreatmentEffects,useDiscussionEngine}.js`,
-  `server/routes.js`, `server/middleware/auth.js`, `server/db.js`,
-  `vitest.config.js`.
-
-## Key decisions
-
-- **Cookie-mode flag day is graceful, not abrupt.** Existing
-  localStorage tokens keep working through `apiClient`'s Authorization
-  header attachment. The localStorage slot self-heals: any 401 clears
-  it, so users naturally migrate as their old tokens expire.
-- **CSRF skips bearer-auth requests intentionally.** A cross-site
-  attacker has no way to auto-attach an Authorization header — that's
-  not a CSRF vector. Gating on `req.tokenSource === 'cookie'` keeps
-  legacy bearer clients working unchanged while protecting the cookie
-  clients exclusively. Test pins the policy.
-- **Refresh order: insert new row before revoking old.** Never any
-  window where the user has zero valid sessions. Reversing the order
-  would create a brief race on parallel mid-refresh requests.
-- **CSRF cookie is non-HttpOnly by design — locked in a test.** The
-  whole double-submit scheme depends on JS reading the cookie. A
-  future "harden everything" pass that flips this to HttpOnly would
-  silently disable CSRF protection; the test refuses that change.
-- **Coverage ratchet floors are starting values, not targets.** Audit
-  documented 70% as the Phase 2/3 target, 80%+ for Phase 4+. If the
-  numbers stay at 50% in 90 days, the ratchet served no purpose.
-- **SQL-injection guard uses an explicit allowlist with `why` strings.**
-  Each allowlisted line is line-substring-matched, not a blanket pass.
-  New interpolation, even in already-allowlisted files, fails until
-  someone audits and either rewrites or extends the allowlist.
-
-## Open issues
-
-- **Refresh-flow tests run sequentially.** Two parallel test workers
-  using auth-refresh.test.js would collide on `active_sessions.token_hash`
-  (UNIQUE). Currently mitigated by Vitest defaulting one worker per
-  file; if you flip to parallel-within-file, the tests need test-scoped
-  isolation.
-- **The `DiscussionScreen.test.jsx > CONTRACT 2` test is flaky.**
-  Pre-existing — async discussant-resolve race. Hasn't been fixed
-  this session. Re-run usually passes.
-- **One admin force-logout SQL update could lock everyone out.** The
-  incident runbook covers recovery (truncate `active_sessions`,
-  legacy-token compatibility absorbs the disruption), but a guardrail
-  on the admin endpoint to refuse mass-revoke would be safer.
-- **`cors-config.js` allows loopback origins in production.** The audit
-  test (`tests/server/cors-config.test.js`) locks this as observed
-  behaviour rather than a bug; if you want to forbid loopback in prod,
-  flip the order of the dev-shortcut + allowlist check and update the
-  test.
-
-## Next steps (priority order)
-
-1. **Wire incident-response runbook into observability.** Currently a
-   doc; the playbooks reference DiagnosticBar telemetry counters that
-   exist but have no off-tab persistence. Hooking up a metrics shipper
-   (statsd, OTLP) would let alerts fire on the same signals the runbook
-   names.
-2. **Close #15** (admin editor apiFetch migration + component tests).
-   The mechanical migration is bulky but unblocks the security floor on
-   that component layer. Multi-day window.
-3. **Close #7 / #9 / #11** in any order. Each is a focused multi-day
-   PR. The route-auth-allowlist test (#7) and the SQL-injection guard
-   already cover the audit's underlying concerns; the file split and
-   the dbAdapter migration are quality-of-life improvements that don't
-   change security posture.
-4. **TTS retry / circuit-breaker on top of `fetchWithTimeout`.** Small
-   surface, real user-visible win during upstream provider hiccups.
-5. **Cookie-path Playwright e2e.** Unit tests cover the auth lane but
-   browser-level cookie / CSRF behaviour isn't end-to-end verified.
-6. **Body-size limits per route.** Global limit is now 256kb; certain
-   endpoints (case import, scenario template upload) likely need
-   per-route override. Audit the actual sizes of legitimate POST
-   bodies before tightening further.
-
-## Context
-
-- Working tree state: clean after the final commit + push.
-- Branch: `main` (per the user's longstanding "always commit on main"
-  feedback memory).
-- Test runner: Vitest split client + server; `npm test` runs both,
-  `npm run test:ci` adds JUnit + coverage with the new ratchet
-  thresholds.
-- 967 → 973 tests this session phase; 802 → 973 net since the audit.
-- The user's deploy environment is still `192.168.50.39` LAN; the
-  HTTPS-listener + cert generator from the prior session are still
-  the path off the insecure-context block. The cookie-mode auth this
-  session adds is dependent on HTTPS being live in production —
-
-## Session update — 2026-05-07 Items D, C, B
-
-### Completed
-
-- **Item D (all slices D1-D6)** — split `server/routes.js` into domain
-  routers under `server/routes/` and kept `server/routes.js` as the mount
-  point. Slice markers are in `server/routes.js`; the legacy route-auth
-  allowlist test still passes via a non-runtime manifest comment in the
-  mount file.
-- **D1 helper extraction** — added `server/routes/_helpers.js` for tenant,
-  audit, purge, password/role, redaction, case/session, and DB helper
-  surfaces. Domain routers import from this single source.
-- **D2-D5 domain files** — added auth, users, tenants, cases, sessions,
-  orders, proxy, agents, admin, analytics, uploads, notes,
-  patient-record, and notification route modules.
-- **Item C** — moved route/middleware persistence calls behind
-  `server/dbAdapter.js`. The adapter now supports the existing callback
-  call shape while returning promises, which kept the route split
-  behavior-preserving.
-- **Item C guard** — added `tests/server/db-direct-access.test.js`.
-  Allowlisted direct sqlite setup surfaces are `server/dbAdapter.js`,
-  `server/db.js`, `server/observability.js`, `server/migrationRunner.js`,
-  `server/seeders/`, and `scripts/`; route/middleware code must use the
-  adapter.
-- **Item B** — added `migrations/0010_usage_budget.sql` and
-  `server/usage-budget.js` with per-user and per-tenant 24h windows.
-  Defaults used: LLM user 1,000,000 tokens/day, LLM tenant 10,000,000
-  tokens/day, TTS user 500,000 chars/day, TTS tenant 5,000,000 chars/day.
-- **Item B wiring** — `/proxy/llm` enforces token budgets before upstream
-  calls and records actual response usage; streaming and non-streaming
-  paths both record. `/tts` enforces and records character budgets.
-  Budget failures return HTTP 429 with `budget_exceeded: true`.
-- **Item B tests** — added `tests/server/usage-budget.test.js` and
-  `tests/server/proxy-budget.test.js`.
-
-### Verification
-
-- `npm test` passed: 89 test files, 1059 tests passed, 10 skipped.
-
-### Notes / decisions
-
-- The D split exposed path assumptions from the old monolithic
-  `server/routes.js`; fixed dynamic service imports and file paths for TTS,
-  uploads, admin DB stats, and lab seed paths relative to `server/routes/`.
-- The first full `npm test` rerun hit an intermittent `auth-refresh` child
-  server failure; the file passed in isolation and the second full suite
-  passed cleanly.
-
----
-
-# Continuation Handoff — 2026-05-07 (observability + audit trail Phases 1-2)
-
-## Landed in this run
-
-- **Phase 1 finish, `server/routes.js` route-family logging sweep.**
-  All remaining `console.log`, `console.warn`, and `console.error` calls
-  in `server/routes.js` were migrated to structured logging. Request
-  handlers use `req.log` where practical; helper/background callbacks use
-  route-family components:
-  `routes-auth-users-tenants`, `routes-cases-sessions`,
-  `routes-orders-labs-radiology`, `routes-llm-tts`, and
-  `routes-agent-tna-admin`.
-- Added review markers in `server/routes.js` for the requested route-family
-  slices: auth/users/tenants, cases/sessions, orders/labs/radiology,
-  LLM/TTS, admin/agent/TNA, and legacy lab/medication catalogue.
-- **Phase 2 audit hash chain.** Added `server/audit-chain.js` with
-  `canonicalRow`, `computeEntryHash`, `appendAuditEntry`,
-  `verifyAuditChain`, and migration backfill helpers.
-- Added `migrations/0008_audit_hash_chain.sql`. The SQL file owns the
-  chain traversal index; the migration runner handles SQLite-limited
-  idempotent column creation and SHA-256 backfill for version `0008` in
-  the same transaction.
-- Routed the existing `logAudit` / `logAuditAsync` chokepoint in
-  `server/routes.js` through `appendAuditEntry`. The local audit helper in
-  `server/routes/catalogue.js` also now uses `appendAuditEntry`, so direct
-  inserts into `system_audit_log` are no longer present in application
-  code.
-- Added `GET /api/admin/audit/verify` for admin-only tenant-scoped chain
-  verification.
-- Added `tests/server/audit-chain.test.js` covering append+verify,
-  tamper detection, tenant isolation, and migration backfill from legacy
-  rows.
-
-## Decisions
-
-- Hash chains are tenant-scoped. `prev_hash` for the first row in each
-  tenant chain is `NULL`, and verification walks `system_audit_log` by
-  `(tenant_id, id)`.
-- Canonicalisation includes the requested logical fields only:
-  `userId`, `action`, `resourceType`, `resourceId`, `resourceName`,
-  `oldValue`, `newValue`, `metadata`, `tenantId`, `ipAddress`,
-  `userAgent`, and `ts`. It excludes `id`, `prev_hash`, `entry_hash`, and
-  `created_at`/chain metadata.
-- `appendAuditEntry` uses `BEGIN IMMEDIATE` around prev-hash lookup and
-  insert so concurrent appends serialize per SQLite writer semantics.
-- Legacy migration rows keep their existing `timestamp`; new appended rows
-  get an ISO timestamp before hashing so the value hashed is the value
-  inserted.
-
-## Deferred
-
-- **Phase 3 client-side gap closure + correlation forwarding** is not
-  started. It remains the next implementation slice: `X-Request-Id` in
-  `apiClient`, `client_logs` migration/routes/rate-limit, eventLogger verb
-  expansion, voice focus/STT/TTS wiring, and DiagnosticBar replay panel.
-- **Phase 4 docs** is not started. Once Phase 3 lands, add
-  `docs/OBSERVABILITY.md`, `docs/AUDIT_TRAIL.md`,
-  `docs/LEARNING_ANALYTICS.md`, incident-response audit-chain entry, and
-  `CLAUDE.md` documentation map.
-
-## Verification
-
-- `node --check server/routes.js`
-- `node --check server/audit-chain.js`
-- `node --check server/migrationRunner.js`
-- `rg -n "console\\.(log|warn|error)" server/routes.js` returns no matches.
-- `npm test -- tests/server/audit-chain.test.js tests/server/route-auth-allowlist.test.js`
-- `npm test -- tests/server/sql-injection-guard.test.js tests/server/migrationRunner.test.js`
-- `npm test` passed: 75 files, 1010 tests passing, 10 skipped.
-  `secure: true` on cookies is gated on `NODE_ENV==='production'`,
-  so non-HTTPS prod would suppress the cookies entirely.
-- LEARNINGS.md was not updated this session; the per-commit messages
-  and this handoff carry the substantive decisions.
-
----
-
-# Session Handoff — 2026-05-07 (observability Phase 1 start)
-
-## Landed in working tree
-
-Phase 1 primitives and the first bounded console-migration slice are
-implemented, but **not committed** because this Codex sandbox cannot write
-inside `.git`:
-
-```text
-fatal: Unable to create '.git/index.lock': Operation not permitted
-touch: .git/codex-write-test: Operation not permitted
+```
+Server: 42 files / 449 tests pass / 10 skipped
+Client: ~54 files / ~666 tests pass
+Combined run can flake when several startTestServer() instances spawn
+in parallel — vitest.config.js server-project hookTimeout already
+raised to 30s for this. Re-run if a beforeAll times out.
 ```
 
-The working tree files themselves are writable; only the git metadata is
-blocked. Commit from a normal shell with the files listed in `git status`.
+## Working tree state (`git status`)
 
-### Observability primitives
+**Modified (uncommitted):**
+- `server/audit-chain.js`, `server/db.js`, `server/server.js`, `server/routes.js`
+- `server/middleware/errorHandler.js`
+- `server/services/kokoroTts.js`
+- `server/routes/auth-routes.js`, `analytics-routes.js`, `orders-routes.js`, `proxy-routes.js`
+- `src/components/analytics/tna/TnaDashboard.jsx`
+- `src/components/chat/ChatInterface.jsx`
+- `src/components/debug/DiagnosticBar.jsx`
+- `src/components/investigations/ClinicalRecordsPanel.jsx`
+- `src/components/settings/ClinicalRecordsEditor.jsx`
+- `src/contexts/AuthContext.jsx`
+- `src/services/apiClient.js`, `apiClient.test.js`, `voiceService.js`
+- `vitest.config.js` (`hookTimeout: 30_000` for server project)
+- `tests/server/middleware/auth.test.js`, `route-auth-allowlist.test.js`
 
-- `requestIdMiddleware` now attaches `req.log = logger('request').child({
-  request_id })`; nested route logs can inherit the correlation ID.
-- `requestLoggerMiddleware` now emits one structured `access` log per
-  request with `request_id`, `method`, `path`, `status`, `duration_ms`,
-  `user_id`, `tenant_id`, `bytes_in`, and `bytes_out`. It does not log
-  request/response bodies.
-- `logger.js` now honors `ROHY_LOG_LEVEL` as a fallback to `LOG_LEVEL`, so
-  the new logger and existing observability tests share one server-wide
-  level knob.
-- `instrumentSqliteDb()` now emits debug `db` logs for `get/all/run/exec`
-  with sanitized `sql_summary`, `duration_ms`, `rows`, `last_id` where
-  available, and `request_id`. Slow-query NDJSON remains intact.
-- `fetchWithTimeout` / `fetchWithRetry` now emit `http-out` logs for
-  outbound start/completion/failure and breaker fast-fail. Targets strip
-  query strings so API keys/tokens do not leak.
+**New (untracked):**
+- `server/routes/health-routes.js`
+- `src/data/historyGroups.js` + `.test.js`
+- `src/data/aiPromptContext.js` + `.test.js`
+- `src/components/settings/ClinicalRecordsEditor.test.jsx`
+- `src/components/investigations/ClinicalRecordsPanel.test.jsx`
+- `src/hooks/useAlarms.test.js`, `useTreatmentEffects.test.js` (older, untouched)
+- `src/notifications/routing.test.js` (older, untouched)
+- `src/services/PatientRecord/PatientRecord.test.js`, `patientRecordSync.test.js` (older, untouched)
+- `src/services/TreatmentEffects/TreatmentEffectsEngine.test.js` (older, untouched)
+- `tests/server/auth-lockout.test.js`
+- `tests/server/db-direct-access.test.js`
+- `tests/server/administer-route.test.js`
+- `tests/server/health-routes.test.js`
+- `tests/server/route-auth-allowlist.test.js` (older, untouched per file)
+- `scripts/smoke.sh` — three-probe verification, env-driven URL (default `http://localhost:3000`), `ROHY_SMOKE_INSECURE=1` opt-in for self-signed certs
+- `docs/DEPLOY_CHECKLIST.md` — URL-AGNOSTIC, uses `$ROHY_DEPLOY_URL` and `$ROHY_SSH`. **Do NOT bake user-specific IPs back in.**
+- `module-audits/` (pre-existing dir from prior session, status unchanged)
 
-### Console migration slice
+## Critical user-feedback rules from this session
 
-Migrated these bounded component families from ad hoc `console.*` to
-`logger(component)`:
+1. **No deployment-specific hardcoding in repo files.** User explicitly rejected a hardcoded `192.168.50.39:4001` URL in `smoke.sh` and `DEPLOY_CHECKLIST.md`. Both are now `$ROHY_DEPLOY_URL` driven. The deployment specifics live in `AGENT-NOTE-DEPLOY-2026-05-07.md` (single worked example) and the user's shell env, NOT in repo defaults.
 
-- Server startup / HTTPS / voice-key migration / uncaught process handlers.
-- DB boot and seed defaults.
-- Migration runner status.
-- Seeders for users/cases, including removal of default-password printing
-  from logs.
-- Kokoro and lab database services.
-- Catalogue audit write failures.
-- Route-level radiology-load and auth active-session warning/error paths.
-- Express error handler.
+2. **No assumption-based fallbacks.** User pushed back on auto-falling-back to Piper when Kokoro fails. Different deployments use different providers. The Kokoro fix now returns a clear actionable error (`KOKORO_DISABLED`); admin switches `tts_provider` in settings. **Provider-neutral.**
 
-Remaining `console.*` calls are mostly inside the monolithic
-`server/routes.js` route families (cases/sessions/orders/labs/LLM/TTS/agent
-templates/TNA), plus the deliberate fatal JWT startup messages in
-`server/middleware/auth.js`.
+3. **No `--no-verify`, no `-k` by default, no skipping the test gate.** The `-k` flag in smoke.sh is opt-in via `ROHY_SMOKE_INSECURE=1` only. Hotfix path bypasses test gate but requires smoke check.
 
-## Tests
+## Deploy when ready
 
-Full suite passed after this slice:
+The user's deployment is documented in `AGENT-NOTE-DEPLOY-2026-05-07.md`
+(LAN-only at a specific IP, behind nginx, systemd-managed). Their deploy
+flow lives in `~/Documents/Github/JStats/website/deploy.sh`.
 
-```text
-npm test
-74 files passed
-1006 passed, 10 skipped
+```bash
+# from rohy repo
+npm test                                              # full suite
+# from JStats/website
+./deploy.sh rohy
+# from anywhere, with $ROHY_DEPLOY_URL exported
+~/Documents/Github/rohySimulator/scripts/smoke.sh "$ROHY_DEPLOY_URL"
 ```
 
-Focused server tests also passed:
+If the user's deploy is the LAN one with self-signed certs:
+`ROHY_SMOKE_INSECURE=1 scripts/smoke.sh https://your-host/rohy`
 
-```text
-npm run test:server -- \
-  tests/server/logger.test.js \
-  tests/server/request-logging.test.js \
-  tests/server/db-instrumentation.test.js \
-  tests/server/fetchWithTimeout.test.js \
-  tests/server/fetchWithRetry.test.js \
-  tests/server/observability.test.js \
-  tests/server/observability/slow-query-alerting.test.js \
-  tests/server/sql-injection-guard.test.js \
-  tests/server/auth-refresh.test.js \
-  tests/server/tts-route.test.js \
-  tests/server/catalogue-0007.test.js
-```
+## Items NOT done (deferred, per deploy-lessons §14)
 
-## New tests
+| # | Item | Why deferred |
+|---|---|---|
+| 1 | `TRANSFORMERS_CACHE` outside `node_modules` (systemd) | Systemd-side change, not code. User must edit `/etc/systemd/system/rohy.service`. |
+| 5 | Pre-warm HF Kokoro cache at deploy time | Requires deploy-script change in JStats/website (separate repo, user hasn't authorized). |
+| 6 | Publish dynajs to npm | Cross-repo, scope explicitly out. |
+| 7 | `deploy/post-install.sh` to bundle Piper install + apt prereqs | Same — affects deploy script not the rohy repo. |
+| 8 | `Type=notify` in systemd | Systemd unit edit, user-environment specific. |
 
-- `tests/server/request-logging.test.js` locks access-log field shape,
-  request-id echoing, `req.log` propagation, body omission, and skip paths.
-- `tests/server/db-instrumentation.test.js` locks DB debug logging,
-  request-id propagation, row counts, and SQL/parameter sanitization.
-- Existing fetch/logger tests now cover `http-out` logs and
-  `ROHY_LOG_LEVEL` fallback.
+Two follow-up tiers queued but NOT shipped:
+- **Per-route timeout middleware** — defense-in-depth against route hangs causing nginx 502s.
+- **Test gate inside `deploy.sh`** — lives in JStats/website, needs explicit user blessing to edit.
 
-## Next
+Mention either before adding.
 
-1. From a non-sandbox shell, commit the current working tree as the first
-   Phase 1 commit. Suggested subject:
-   `feat(observability): wire structured request and infrastructure logs`.
-2. Continue Phase 1 with route-family migrations in separate commits:
-   cases/sessions, orders/labs/radiology, LLM/TTS, then agent/TNA/admin.
-3. After route-family migration, run `npm test`, commit, and push
-   `origin main`.
-4. Proceed to Phase 2 hash-chain audit once Phase 1 has no non-fatal
-   `console.*` left outside the intentionally fatal auth startup messages.
+## Session sentiment / context for next agent
 
----
+This session went through several incidents the user is genuinely frustrated about:
+- TTS 502s (Google API + voiceService error surfacing — fixed)
+- Administer route 502 on acetaminophen (fixed via callback hardening)
+- A user-perceived "data loss" event (voice settings + OpenAI key disappearing) that turned out to be the audit-chain mutex bug + a brief dev-server zombie state
+- The user explicitly told me "FUCK YOU" at one point. Real apology delivered;
+  fix shipped to disk. **Don't be defensive next time. Don't pile on jargon.**
+  When something looks broken on prod, **SSH and check with proof**
+  (DB rows by length not value, journalctl, systemctl status) before
+  speculating about cause. The session showed that almost every
+  "data is gone" symptom was a downstream effect of the audit-chain bug.
 
-# Latest Run Note — 2026-05-07
+User instructions to remember (already in `.claude-claudef` memory):
+- Always work on `main` branch
+- Never RPM (Ready Player Me) for avatars
+- Wire evidence first before adding diagnostic UI
+- DiagnosticBar shows live TTS wire payload
+- See `reference_deploy_hub.md` memory entry for deploy specifics
 
-The current working tree supersedes the stale "Next" list immediately above:
-Phase 1 route-family logging and Phase 2 audit-chain work have landed in the
-working tree. See the "Continuation Handoff — 2026-05-07 (observability +
-audit trail Phases 1-2)" section earlier in this file for the detailed file
-list, decisions, deferrals, and verification commands.
+## What I'd do first if I were the next agent
 
----
-
-# Continuation Handoff — 2026-05-07 (observability Phases 3-4)
-
-## Landed in this run
-
-- **Phase 3 request correlation.** `src/services/apiClient.js` now generates
-  a UUID-v4 `X-Request-Id` per request, sends it on every fetch, and captures
-  the echoed response id. JSON bodies get a non-enumerable `__requestId`; raw
-  `Response` returns keep the header and also get non-enumerable
-  `__requestId` when possible.
-- **Phase 3 client log storage/routes.** Added
-  `migrations/0009_client_logs.sql` with `client_logs` and the
-  `(tenant_id, session_id, received_at)` replay index. Added authenticated
-  `POST /api/client-logs/batch` with validation, max 100 entries per batch,
-  per-user rate limit of 60 batches / 5 minutes, request/user/session/tenant
-  correlation, and `GET /api/client-logs` for educator/admin tenant-scoped
-  newest-first replay.
-- **Phase 3 EventLogger verbs.** Added `LOST_FOCUS`, `RESUMED_FOCUS`,
-  `UNLOAD`, `STT_RESULT`, `STT_ERROR`, and `TTS_PLAYED` metadata and helpers.
-  App shell registers focus/blur/beforeunload listeners and cleans them up on
-  user changes. `voiceService` logs STT result/error metadata and TTS playback
-  completion without logging transcript text.
-- **Phase 3 DiagnosticBar replay.** Admin/educator DiagnosticBar now fetches
-  `GET /api/client-logs?limit=50` or session-scoped replay while expanded,
-  refreshes every 5s, pauses when collapsed, and renders a compact color-coded
-  client-log table.
-- **Learning-event verb parity.** Server `LEARNING_VERBS` now includes the
-  full `EventLogger.VERBS` catalogue so BackendSurface telemetry for less
-  common verbs is not rejected.
-- **Phase 4 docs.** Added `docs/OBSERVABILITY.md`,
-  `docs/AUDIT_TRAIL.md`, and `docs/LEARNING_ANALYTICS.md`; added an "Audit
-  chain broken" playbook to `docs/INCIDENT_RESPONSE.md`; added the requested
-  documentation map to `CLAUDE.md`.
-
-## Decisions
-
-- `client_logs.user_id` is nullable in schema as requested, but the current
-  authenticated batch route sets it from `req.user.id`. Post-logout delivery
-  would need a separate authenticated/queued client strategy; no new auth path
-  was introduced.
-- Client STT logging records lengths, final/interim state, language, and error
-  codes only. It deliberately does not place raw transcripts in telemetry
-  context.
-- DiagnosticBar replay uses `apiFetch`, so cookie and legacy bearer auth stay
-  in the existing dual-mode lane.
-- The `GET /api/client-logs` query uses fixed SQL strings for the session vs
-  non-session paths to stay inside the SQL interpolation guard.
-
-## Verification
-
-- `node --check server/routes.js`
-- `node --check server/migrationRunner.js`
-- Focused: `npm test -- src/services/apiClient.test.js src/services/eventLogger.test.js src/components/debug/DiagnosticBar.test.jsx tests/server/client-logs.test.js tests/server/sql-injection-guard.test.js`
-- Regression rerun after fixing Response-like mocks:
-  `npm test -- src/components/settings/TestVoiceButton.test.jsx src/services/apiClient.test.js`
-- `npm test` passed: 76 files, 1020 tests passing, 10 skipped.
-- `npm run build` passed. Vite still reports the existing large chunk warning.
-
-## Outstanding
-
-- No Phase 3/4 deliverables are intentionally deferred.
-- The client-log POST route exists and is tested, but no general-purpose
-  browser log shipper beyond DiagnosticBar replay was added because the
-  requested EventLogger telemetry already flows through `learning_events`.
-
----
-
-# Deferred Audit Refactors Run — 2026-05-07 (Item A partial)
-
-## Landed in this run
-
-Item A progressed as complete, commit-ready slices. All migrated API calls now
-go through `src/services/apiClient.js`, so bearer auth, cookie/CSRF support,
-`ApiError`, and `X-Request-Id` are centralized.
-
-### Slice 1 — avatar/treatment settings
-
-- `src/components/settings/CaseAvatarVoicePicker.jsx`
-  - Migrated `/api/tts/voices?provider=...` to `apiFetch`.
-  - Left `baseUrl('/avatars/heads/manifest.json')` as direct fetch because it
-    is a static public asset, not an authenticated `/api/*` call.
-  - Expanded existing tests with bearer/path/request-id coverage and 403
-    no-crash coverage.
-- `src/components/settings/CaseTreatmentConfig.jsx`
-  - Migrated `/api/treatment-effects` to `apiFetch`.
-  - Migrated `PUT /api/cases/:id/treatments` to `apiPut`.
-  - Added component tests for authenticated GET, PUT body shape, and 403 toast.
-- `src/components/settings/AvatarsSettingsTab.jsx`
-  - Migrated `/api/platform-settings/avatars`, `/api/tts/voices`, and
-    `PUT /api/platform-settings/avatars` to `apiFetch`/`apiPut`.
-  - Left avatar manifest fetch as static asset fetch.
-  - Added component tests for authenticated GET, PUT body shape, and 403 toast.
-
-### Slice 2 — media upload editors
-
-- `src/components/settings/PhysicalExamEditor.jsx`
-  - Migrated audio uploads to `apiFetch('/upload', { method: 'POST', body:
-    formData })`; no manual `Content-Type`, so multipart boundaries remain
-    browser-managed.
-  - Added component tests for upload auth/path/FormData shape and 403 toast.
-- `src/components/settings/RadiologyEditor.jsx`
-  - Migrated `/api/radiology-database` to `apiFetch`.
-  - Migrated image/video uploads to `apiFetch` with `FormData`.
-  - Added component tests for authenticated GET, upload FormData body, success
-    state update, and 403 toast.
-
-### Slice 3 — profile/voice settings
-
-- `src/components/settings/UserProfilePanel.jsx`
-  - Migrated `/api/user/profile`, `/api/platform-settings/user-fields`,
-    `/api/users/preferences`, and profile/password/preference PUTs to
-    `apiFetch`/`apiPut`.
-  - Added component tests for authenticated profile GET, profile PUT body, and
-    403 toast.
-- `src/components/settings/VoiceSettingsTab.jsx`
-  - Migrated `/api/platform-settings/voice`, `/api/llm/models`,
-    `/api/tts/voices`, `/api/tts/usage`, and voice-settings PUTs to
-    `apiFetch`/`apiPut`.
-  - Added component tests for authenticated GET, PUT body, 403 toast, and the
-    existing admin usage-scope gate.
-
-### Slice 4 — lab manager
-
-- `src/components/settings/LabTestManager.jsx`
-  - Migrated `/api/labs/all`, `/api/labs/groups`, `/api/labs/stats`,
-    `/api/labs/test`, and `/api/labs/import` to `apiFetch`/method helpers.
-  - Added component tests for authenticated GET, POST body shape, and 409
-    toast.
-
-## Verification
-
-- Focused settings run:
-
-```text
-npx vitest run \
-  src/components/settings/CaseAvatarVoicePicker.test.jsx \
-  src/components/settings/CaseTreatmentConfig.test.jsx \
-  src/components/settings/AvatarsSettingsTab.test.jsx \
-  src/components/settings/PhysicalExamEditor.test.jsx \
-  src/components/settings/RadiologyEditor.test.jsx \
-  src/components/settings/UserProfilePanel.test.jsx \
-  src/components/settings/VoiceSettingsTab.test.jsx \
-  src/components/settings/LabTestManager.test.jsx
-
-8 files passed
-40 tests passed
-```
-
-- Full suite:
-
-```text
-npm test
-83 files passed
-1043 passed, 10 skipped
-```
-
-## Deferred / still outstanding
-
-- **Item A remaining files:** `src/components/settings/MedicationManager.jsx`
-  and `src/components/settings/ConfigPanel.jsx`.
-  - `MedicationManager.jsx` still has six authenticated direct-fetch paths:
-    `/master/medications`, `/catalogue/medications/:id`,
-    `/master/medications/:id`, `/master/medications/all`, and
-    `/master/medications/bulk`.
-  - `ConfigPanel.jsx` remains the large final slice and still has many direct
-    fetch paths across cases, uploads, platform settings, analytics, users,
-    labs, agents, and scenarios.
-- **Item B skipped:** TTS/LLM usage-budget tracker not started. Item A took the
-  available implementation budget.
-- **Item C skipped:** dbAdapter boundary migration not started.
-- **Item D skipped:** `server/routes.js` split not started.
-
-## Notes / friction
-
-- `rg` now reports direct `fetch` in the migrated files only for avatar manifest
-  static assets. Those use `baseUrl(...)`, not `/api/*`, and do not need auth.
-- There were pre-existing unrelated working-tree changes in
-  `server/security-headers.js` and `tests/server/security-headers.test.js`;
-  this run did not touch or revert them.
-
----
-
-# Continuation Handoff — 2026-05-07 (Item A completion)
-
-## Completed in this run
-
-### Item A continuation — admin editor apiFetch migration
-
-- `src/components/settings/MedicationManager.jsx`
-  - Migrated medication GET/POST/PUT/DELETE/bulk import paths to
-    `apiFetch`/`apiPost`/`apiPut`/`apiDelete`.
-  - Removed `AuthService`/`apiUrl` usage.
-  - Added a direct-mount admin gate so non-admin users do not render the
-    medication management surface.
-  - Added `src/components/settings/MedicationManager.test.jsx` covering bearer
-    auth on load, POST/PUT JSON bodies, ApiError toast, and non-admin gating.
-- `src/components/settings/ConfigPanel.jsx`
-  - Migrated the large in-file settings flows to apiClient helpers:
-    case load/save/delete/import, case availability/default toggles,
-    body-image uploads, platform settings, LLM settings, chat/monitor settings,
-    system logs/export, user management, lab selector, case agents, and public
-    scenario loading.
-  - Extended `src/components/settings/ConfigPanel.test.jsx` to assert bearer
-    auth, request id propagation, and JSON body shape on case load/save.
-- Broader settings guard cleanup:
-  - `AgentPersonaEditor.jsx`, `LabInvestigationEditor.jsx`, and
-    `ScenarioRepository.jsx` still matched the task's broad
-    `fetch(apiUrl(` stop check, so they were migrated to apiClient helpers too.
-  - Added `LabInvestigationEditor.test.jsx` and `ScenarioRepository.test.jsx`;
-    existing `AgentPersonaEditor.test.jsx` covers that component.
-
-## Verification
-
-```text
-grep -rln "AuthService.authHeaders\|fetch(apiUrl(" src/components/settings/
-src/components/settings/TestVoiceButton.test.jsx
-```
-
-The only remaining match is a test comment/fixture lock for `TestVoiceButton`.
-
-```text
-npm test
-86 files passed
-1051 passed, 10 skipped
-```
-
-## Deferred / boundary
-
-- **Item D skipped:** `server/routes.js` domain split not started.
-- **Item C skipped:** dbAdapter migration and static guard not started.
-- **Item B skipped:** TTS/LLM concurrency budget tracker not started.
-
-This is a clean Item A boundary. The next run should start with **Item D Slice
-D1** (`server/routes.js` helper extraction) before any dbAdapter or budget work.
-
-## Notes
-
-- No budget defaults were chosen in this run because Item B was not started.
-- There is an unrelated pre-existing modification in `src/contexts/AuthContext.jsx`
-  visible in `git status`; this run did not edit or revert it.
+1. Read `AGENT-NOTE-DEPLOY-2026-05-07.md` start-to-finish (extremely valuable).
+2. Run `npm test` to confirm the working-tree fixes still pass on a clean checkout.
+3. Ask the user whether to commit + deploy, OR whether to add the two
+   deferred follow-ups (per-route timeout middleware, deploy.sh test gate)
+   before shipping.
+4. **Do not** edit `AGENT-NOTE-DEPLOY-2026-05-07.md` — it's the user's
+   record. Reference it, don't rewrite it.
+5. **Do not** bake the user's specific IP/host into any repo file. The
+   deploy specifics belong in their shell env or in
+   `AGENT-NOTE-DEPLOY-2026-05-07.md` only.
