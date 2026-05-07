@@ -1,135 +1,78 @@
-# Session Handoff — 2026-05-06 (Analytics theme + Settings header + tests green)
+# Session Handoff — 2026-05-06 (evening, voice + persistence)
 
-## What shipped this session
+## Completed
 
-Picks up from the morning's TNA rebuild on dynajs. Tonight closed three
-loops: the dashboard actually rendering against real data, the visual
-theme moving from "horrible black" to a calm light grey, and the test
-suite catching up with the new endpoint shapes. Plus a small header
-reshuffle the operator asked for.
+Six commits on `main`, all pushed to origin:
 
-Four commits pushed to `origin/main`:
-
-| Commit | Subject |
-|---|---|
-| `94febe0` | Catalogue Session 1 — schema + JSON-driven seeders |
-| `419ae47` | Catalogue Session 2 — search proxies + scope-aware /api/catalogue routes |
-| `a2c0611` | Clickable + editable medication rows in MedicationManager |
-| `7c00c0d` | TNA rebuild on dynajs — LAILA replication + process map |
-| `6623435` | Make TNA dashboard render correctly + embed in Settings |
-| `89d6cc7` | Light-grey theme + Settings header + test for new shape |
+1. `c6bc653` **fix(voice)** — `src/components/chat/ChatInterface.jsx`. The patient and agent TTS paths used to silently skip when `resolveVoice()` returned `{ file: null }` — no toast, no `/api/tts` request, no log. Both paths now log + toast a specific error naming the missing provider+slot ("No voice configured for provider X / male"). The settings-preview path was unaffected because it explicitly passes `ttsVoices` (Tier 5 catalog-first).
+2. `5e95ba0` **fix(stt)** — same file. `startVoiceTurn` routed every Web Speech API failure to `console.warn`, so deployed users saw nothing. Now: each error code (`not-allowed`, `service-not-allowed`, `network`, `audio-capture`, `no-speech`) produces a specific toast, plus a fallback toast for the "ended without firing onerror" pattern (typical of insecure-origin silent refusal).
+3. `b94ce3b` **feat(tls)** — `server/server.js` + `scripts/gen-self-signed-tls.sh`. Optional HTTPS listener gated on `TLS_CERT_PATH` + `TLS_KEY_PATH` env vars. Listens on `HTTPS_PORT` (default `PORT + 1000`) alongside the existing HTTP listener so legacy bookmarks keep working. Generator script produces a SAN-correct self-signed cert (`IP:` vs `DNS:` prefix decided by host shape).
+4. `98d40be` **fix(stt)** — `src/services/voiceService.js`, `src/components/discussion/VoiceControl.jsx`, `src/components/chat/ChatInterface.jsx`. Default `rec.continuous = true` so the mic stays open across mid-sentence pauses. Removed the auto-stop-on-isFinal logic in both callers; mic now stops only on tap-toggle or when the patient/discussant starts speaking back. Caller can opt out with `continuous: false`.
+5. `a37ae8e` **fix(persistence)** — `src/App.jsx`. Removed `SESSION_EXPIRY_MS` (30-min idle wipe), the server-mismatch wipe path, and the per-interaction localStorage timestamp churn. Gated the notification `clearTransient` effect on `sessionValidated` so refresh doesn't clear alarm acks. Net **−83 / +57** lines. Refresh now ALWAYS restores the active case + sessionId.
+6. `dfa0e4a` **feat(persistence)** — `src/App.jsx` + `src/contexts/AuthContext.jsx`. New `rohy_view` localStorage blob persists which surface the user is on (settings tab + wizard step, TNA, debrief, persona editor). Rehydrated on mount via `applyView(saved)`; persisted on change via `captureView()`. Cleared on the same explicit-exit triggers as the rest of session state, plus logout.
 
 ## Current State
 
-**Where the user lands now:**
-- Top-left of every page: a single **"Settings"** pill (cog icon). Click
-  → dropdown with `My Profile` / `Open Settings` / `Analytics` / `Logout`.
-- Case-name pill (`Case: Acute Chest Pain - STEMI`) hidden — no more
-  diagnosis spoiler in the header.
-- `End & Debrief` moved to the bottom-left of the avatar tile (was at
-  the top with the case banner).
-- Settings → first sidebar item: **Analytics**. Six tabs across the top:
-  Activity / Network / Clusters / Patterns / Process Map / Settings.
-- Analytics surface is **light grey** (`bg-gray-200`) with white cards.
-  This is deliberately different from the rest of the simulator (which
-  stays dark) because the user asked for it — and because LAILA's
-  components are designed for light backgrounds.
+### What works
+- Refresh restores active case, sessionId, chat, debrief history, alarm acks/snoozes, and the last view (Settings tab/step, TNA, debrief, persona editor). State only clears on Exit/End/case-switch/logout.
+- TTS infrastructure (verified: debrief audio plays end-to-end). `kokoro`, `google`, `openai`, `piper` providers all wired in `server/services/`; runtime resolves via `resolveTtsVoice()` per `tts_provider` platform setting.
+- Press-to-talk in conversational mode: continuous recording, pauses don't kill the mic, tap-to-stop sends.
+- Server has an optional HTTPS listener — but it's not enabled in the user's deployed environment yet (see Open Issues).
+- Tests: 35 passing across `src/components/chat`, `src/services/voiceService.test.js`, `src/components/discussion`. Pre-existing `SQLITE_READONLY` noise in `tests/server/middleware/auth.test.js` is unrelated and unchanged.
 
-**Tests:**
-- 45/45 test files pass.
-- 775 tests green, 10 skipped.
-- The macOS `auth.test.js` parallel-flake didn't fire this run (passes
-  100% in isolation either way).
-- Catalogue tests (Sessions 1+2): 57/57 still green.
-- Analytics tests: 13 server-integration + 10 unit = 23 green.
+### What is broken / partially done
+- The deployed origin is `http://192.168.50.39:4001/rohy/` — Chrome blocks STT and `getUserMedia` on this insecure context (private LAN IPs are NOT whitelisted alongside `localhost`). Press-to-talk fundamentally cannot work until the user terminates TLS at this origin. The new HTTPS listener + cert generator are the suggested path; the user has not yet generated certs and restarted the systemd unit with `TLS_CERT_PATH` set.
+- Symptom user reported "I can only hear the debrief initial message" — root cause is the above STT block: the first debrief greeting is auto-fired by `startConversation()` (kickoff prompt, no STT needed); every subsequent turn requires the user to reply via mic, which is blocked → no second LLM call → silence. Fixed by enabling HTTPS, no further code change needed.
 
-**Build:** clean. ~6s for client, ~10ms for server reload via watch.
+### Files changed this session
+- `src/components/chat/ChatInterface.jsx` — voice toast + STT toast + STT continuous-mode rewrite
+- `src/services/voiceService.js` — `continuous` parameter (default `true`)
+- `src/components/discussion/VoiceControl.jsx` — drop auto-stop-on-isFinal
+- `server/server.js` — optional HTTPS listener
+- `scripts/gen-self-signed-tls.sh` — new, executable, SAN-correct cert generator
+- `src/App.jsx` — persistence rule rewrite + view-state breadcrumbs
+- `src/contexts/AuthContext.jsx` — clear `rohy_active_session` / `rohy_chat_history` / `rohy_view` on logout
+
+### Subsequent module audit location
+- A later enterprise module audit pass saved its findings under `module-audits/`.
+- Start at `module-audits/00-index.md`; it links the per-module reports.
+- Key reports: `module-audits/server-api.md`, `module-audits/server-auth-rbac-tenancy.md`, `module-audits/server-database-migrations.md`, `module-audits/client-services.md`, `module-audits/patient-record.md`, `module-audits/medkit-app.md`, and `module-audits/testing-strategy.md`.
+- Audit pass also added/fixed tests in `src/services/PatientRecord/patientRecordSync.test.js`, `src/services/PatientRecord/PatientRecord.test.js`, `src/services/TreatmentEffects/TreatmentEffectsEngine.test.js`, `src/hooks/useAlarms.test.js`, `src/hooks/useTreatmentEffects.test.js`, `src/notifications/routing.test.js`, `tests/server/route-auth-allowlist.test.js`, and `tests/server/middleware/auth.test.js`.
+- Latest full Vitest result after test expansion: 52 files passed, 802 tests passed, 10 skipped.
 
 ## Key Decisions
 
-- **Tailwind dark mode rebound to class**, not `prefers-color-scheme`.
-  Rohy itself has zero `dark:` usage (its dark UI is hard-coded with
-  `bg-neutral-*`), so flipping the variant binding is safe everywhere.
-  The LAILA components carry `dark:bg-gray-800` everywhere; without
-  this fix they all fired automatically on macOS dark-mode systems and
-  the analytics page rendered as a dark mess. Single line in
-  `src/index.css`:
-  ```css
-  @custom-variant dark (&:where(.dark, .dark *));
-  ```
-- **Light grey for analytics, not light white.** `bg-gray-100` was too
-  bright; `bg-gray-200` reads as "calm work surface" and gives white
-  cards visible edges.
-- **ProcessMap SVG nodes are `#ffffff` with `#cbd5e1` borders and dark
-  text**. The earlier `#1e293b` slate worked on dark themes only;
-  hardcoded SVG colours need to flip with the theme.
-- **"Settings" replaces the username+Admin pill** at the operator's
-  request. The state name (`showTnaAnalytics`) stays — that's not user-
-  visible.
-- **Two coexisting analytics entry points**: the old user-menu launcher
-  → modal, plus the new Settings sidebar tab → embedded. `embedded` prop
-  on `TnaDashboardV2` toggles between the two layouts.
-- **Verbatim copy from LAILA + esbuild type-strip + i18n shim** is the
-  scaling pattern. All sixteen LAILA TNA components were lifted exactly
-  as written; only foreign imports (i18n, useTheme, Loading) were
-  patched. The light/dark Tailwind classes were left untouched, with
-  the variant fix doing the work globally.
+- **Persistence rule:** session lives until the user clicks Exit/End/Logout/Load-different-case. No silent expiry, no server-mismatch wipe. User stated this verbatim ("exit should only be through exit or end .. not refresh"). Locked into `App.jsx`.
+- **`continuous = true` as the default for STT:** the alternative was making each caller opt in. Chose default-true because both existing callers (`ChatInterface.startVoiceTurn`, `VoiceControl.start`) already implement tap-to-toggle UX, which is exactly what continuous mode requires. Future "press-and-hold" callers can pass `continuous: false`.
+- **TLS via Node, not via the existing nginx:** the user's URL is hitting the Node server directly on `:4001`, not going through the deploy.sh nginx. Adding a Node-side HTTPS listener gets voice working without touching production nginx config (which we can't see from the repo). nginx-fronted TLS is still possible for the production domain whenever they're ready.
+- **No visible breadcrumb UI yet:** asked the user; they declined ("it is ok no need for it"). The state-restore mechanism alone covered "where we have been hanging drinking orange juice."
+- **Did NOT auto-guess voices in `resolveVoice`:** the resolver header (`src/utils/voiceResolver.js:18-24`) explicitly argues against tier-5 catalog-first at runtime. Respected that — the new toast surfaces the gap so an admin fixes platform settings, instead of silently playing a wrong voice.
 
 ## Open Issues
 
-- **macOS parallel-test SQLITE_READONLY flake** — not deterministic.
-  Sometimes hits `auth.test.js`, sometimes `discussion-screen.test.jsx`,
-  sometimes none. Per-worker DB isolation in `tests/utils/seedDb.js`
-  would fix it; not blocking.
-- **Legacy V1 analytics tree on disk but unused** —
-  `src/components/analytics/tna/TnaDashboard.jsx` (V1) + 9 sibling
-  charts + `tnaUtils.js`. App.jsx imports V2 only. Delete after one
-  more cycle in production. ~1500 LOC.
-- **Catalogue Session 3 still parked** — settings UI lift to 3-tab
-  Curated/My/Search, group builder modal, OrdersDrawer surface. Plan
-  in `project_drug_lab_catalogue_plan.md` (memory).
-- **Bundle size grew ~600 KB** from the LAILA + dynajs imports (~1.3 MB
-  total minified, ~340 KB gzipped). Acceptable for the admin-only
-  analytics page; if students get exposed to the dashboard at scale,
-  dynamic-import it.
-- **`ActivityTimelineChart` series sort by total** can produce a flicker
-  when the user scrubs the date range — minor.
+- **HTTPS not yet enabled on the deploy host.** The user has the commits but hasn't run `scripts/gen-self-signed-tls.sh 192.168.50.39` and added `TLS_CERT_PATH` / `TLS_KEY_PATH` to the systemd env. Until then, mic-using features are blocked at the browser layer regardless of any code we ship.
+- **Server-side `nginx` reverse proxy** in `production/deploy.sh` reloads nginx but the config is not in this repo. If the production domain (`FRONTEND_URL`) is HTTPS already via nginx, voice should work there — but the user is testing the LAN IP path. Worth confirming with the user which origin is the real production endpoint.
+- **`rohy_chat_history` localStorage is keyed un-scoped** (single key, not per-session). Cleared on case switch + End + logout, but a user with two sessions on different machines could see brief flickers if localStorage races. Not user-reported; leaving alone.
+- **Multi-tab warning banner** in `App.jsx:271-295` is a banner, not a wipe. last-write-wins still applies across tabs. User has not asked for stricter behaviour.
 
 ## Next Steps
 
-1. **Smoke the production build path.** `npm run build` writes the
-   `--base=/rohy/` static bundle into `frontend/`. Locally hitting
-   `localhost:3000/` is broken until that base is `/`. Either fix the
-   build script or document that prod runs at `/rohy/`. Bothered users
-   in the past — would bother future ones.
-2. **Delete legacy V1 analytics tree.** `git rm` the ten files listed
-   above. ~1500 LOC.
-3. **Catalogue Session 3** — UI lift to 3-tab layout. Plan in memory.
-4. **Per-worker DB isolation** in `tests/utils/seedDb.js` — kills the
-   parallel-test flake permanently.
-5. **Cohort comparison view** for the analytics Activity tab — overlay a
-   single student against case mean. Needs more than one student in the
-   seed DB to be meaningful.
+1. **User runs on deploy host:**
+   ```
+   ./production/deploy.sh
+   ./scripts/gen-self-signed-tls.sh 192.168.50.39
+   # Add TLS_CERT_PATH=/etc/rohy-tls/cert.pem + TLS_KEY_PATH=/etc/rohy-tls/key.pem to systemd env
+   sudo systemctl restart <service>
+   ```
+   Then visit `https://192.168.50.39:5001/rohy/`, click through Chrome's "Advanced → Proceed", and verify press-to-talk + multi-turn debrief work.
+2. **If voice still fails on HTTPS:** the new toasts (`fix(stt)` and `fix(voice)` commits) will name the actual cause — provider/slot misconfiguration, missing API key, or specific Web Speech API error. Iterate from the toast text.
+3. **Optional: nginx TLS** for the real production domain instead of the Node-side HTTPS listener. The `deploy.sh` already runs `sudo nginx -t && sudo systemctl reload nginx`, so adding a `server { listen 443 ssl; ... proxy_pass http://127.0.0.1:4001 }` block to the host's nginx config would give a friendlier URL than `:5001`.
+4. **Optional: visible breadcrumb UI.** User declined for now; revisit if they ask for click-to-jump navigation between surfaces.
 
 ## Context
 
-- Dev runner: `npm run dev` (concurrent vite at :5173 + node --watch
-  server at :3000).
-- After dependency changes (e.g. swapping `dynajs` versions), wipe
-  `node_modules/.vite` cache and restart vite — it pre-bundles deps once
-  and never refreshes them on its own. Same gotcha LAILA's LEARNINGS
-  flags.
-- Test runners:
-  - Server analytics: `npx vitest run tests/server/analytics-tna.test.js`
-  - Catalogue (all 3 files): `npx vitest run tests/server/catalogue-*.test.js`
-  - Resolver unit: `npx vitest run src/components/analytics/tna/clinicalStates.test.js`
-  - Full suite: `npx vitest run --reporter=dot`
-- Dynajs lives at `~/Documents/Github/dynajs` as a sibling. `npm i
-  file:../dynajs` rebinds.
-- `src/index.css` carries the `@custom-variant dark` line that disables
-  system-pref dark mode across the whole app; do not "tidy it away" —
-  the LAILA components depend on it being there.
-- Analytics filter dropdowns surface every user that has at least one
-  `learning_events` row. If a freshly-seeded DB has none, the
-  dropdowns will be empty and the dashboard renders no data — drive a
-  case briefly to populate.
+- Working tree clean as of `dfa0e4a`. No uncommitted changes.
+- Branch: `main` (per global feedback memory: always commit on main).
+- Test runner: Vitest (split `client` + `server` projects via `vitest.config.js`); single-suite spot-checks used during this session.
+- The user's deployed environment is a LAN box at `192.168.50.39`, accessed by colleagues over the local network; remote SSH deploy via `production/deploy.sh`.
+- LEARNINGS.md and CHANGES.md were not updated this session — work was rapid back-and-forth diagnosis, all decisions captured in the commit messages and this handoff.

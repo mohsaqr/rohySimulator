@@ -175,6 +175,8 @@ beforeAll(async () => {
     process.env.JWT_SECRET = JWT_SECRET;
 
     auth = await import('../../../server/middleware/auth.js');
+    const { dbReady } = await import('../../../server/db.js');
+    await dbReady;
 
     // Open a separate connection for our own seed/mutate ops so that we
     // don't collide with auth.js's singleton inside the same process.

@@ -83,9 +83,7 @@ export async function loadPatientRecord(sessionId) {
   try {
     const response = await fetch(apiUrl(`/patient-record/${sessionId}`), {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      headers: authHeaders()
     });
 
     if (response.status === 404) {
@@ -119,9 +117,7 @@ export async function getPatientRecordEvents(sessionId) {
   try {
     const response = await fetch(apiUrl(`/patient-record/${sessionId}/events`), {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      headers: authHeaders()
     });
 
     if (!response.ok) {
@@ -151,9 +147,7 @@ export async function getPatientRecordEventsByVerb(sessionId, verb) {
   try {
     const response = await fetch(apiUrl(`/patient-record/${sessionId}/events?verb=${verb}`), {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      headers: authHeaders()
     });
 
     if (!response.ok) {
@@ -181,9 +175,7 @@ export async function deletePatientRecord(sessionId) {
   try {
     const response = await fetch(apiUrl(`/patient-record/${sessionId}`), {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      headers: authHeaders()
     });
 
     return response.ok;

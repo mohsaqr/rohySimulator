@@ -86,6 +86,7 @@ class TreatmentEffectsEngine {
             id: treatment.id,
             treatment_order_id: treatment.treatment_order_id,
             treatment_name: treatment.treatment_item || treatment.treatment_name,
+            treatment_type: treatment.treatment_type,
             phase,
             strength,
             elapsed_minutes: elapsedMinutes,

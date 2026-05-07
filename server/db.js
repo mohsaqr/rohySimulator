@@ -30,6 +30,14 @@ const db = new sqlite.Database(dbPath, (err) => {
     }
 });
 
+function runDb(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.run(sql, params, function onRun(err) {
+            err ? reject(err) : resolve(this);
+        });
+    });
+}
+
 // Shipped default agent personas. Lifted to module-level so the same array
 // powers both first-boot seeding and the admin-triggered "Reset to defaults"
 // endpoint. Treat this as the single source of truth for what a freshly-
@@ -277,49 +285,41 @@ export function findDefaultAgent(agentType, name) {
 }
 
 // Seed default agent personas
-function seedDefaultAgents() {
+async function seedDefaultAgents() {
     // Insert a shipped standard ONLY if no is_default=1 row exists for its
     // agent_type yet. Standards are now admin-editable (including renamable),
     // so we can't dedupe on (agent_type, name) — that would re-insert the
     // shipped baseline next boot under its original name and collide with
     // the renamed admin row at reset time. agent_type IS the immutable
     // identity for shipped rows; PUT also locks it for is_default=1 rows.
-    DEFAULT_AGENTS.forEach(agent => {
-        db.get(
-            'SELECT id FROM agent_templates WHERE is_default = 1 AND agent_type = ? LIMIT 1',
-            [agent.agent_type],
-            (err, row) => {
-                if (err) {
-                    console.warn('seedDefaultAgents existence check failed:', err.message);
-                    return;
-                }
-                if (row) return; // standard for this type already exists (possibly renamed/edited)
-                db.run(
-                    `INSERT INTO agent_templates
-                     (agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style, is_default, config)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [
-                        agent.agent_type,
-                        agent.name,
-                        agent.role_title,
-                        agent.avatar_url || null,
-                        agent.system_prompt,
-                        agent.context_filter,
-                        agent.communication_style,
-                        agent.is_default,
-                        agent.config
-                    ],
-                    (insertErr) => {
-                        if (insertErr) {
-                            console.warn(`seedDefaultAgents insert (${agent.agent_type}) failed:`, insertErr.message);
-                        }
-                    }
-                );
-            }
-        );
-    });
+    for (const agent of DEFAULT_AGENTS) {
+        try {
+            await runDb(
+                `INSERT INTO agent_templates
+                 (agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style, is_default, config)
+                 SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+                 WHERE NOT EXISTS (
+                   SELECT 1 FROM agent_templates WHERE is_default = 1 AND agent_type = ? LIMIT 1
+                 )`,
+                [
+                    agent.agent_type,
+                    agent.name,
+                    agent.role_title,
+                    agent.avatar_url || null,
+                    agent.system_prompt,
+                    agent.context_filter,
+                    agent.communication_style,
+                    agent.is_default,
+                    agent.config,
+                    agent.agent_type
+                ]
+            );
+        } catch (err) {
+            console.warn(`seedDefaultAgents insert (${agent.agent_type}) failed:`, err.message);
+        }
+    }
 
-    console.log('Default agent personas seed dispatched.');
+    console.log('Default agent personas seeded.');
 
     // Backfill avatar_url for default rows seeded before each row had a
     // shipped avatar. Idempotent — only updates rows currently NULL or empty.
@@ -330,14 +330,14 @@ function seedDefaultAgents() {
         { type: 'discussant', name: 'Default Discussant', avatar: 'rb_medical_male_03.glb' },
         { type: 'patient', name: 'Default Patient', avatar: 'rb_male_adult_03.glb' },
     ];
-    avatarPatches.forEach(p => {
-        db.run(
+    for (const p of avatarPatches) {
+        await runDb(
             `UPDATE agent_templates SET avatar_url = ?
              WHERE agent_type = ? AND name = ? AND is_default = 1
                AND (avatar_url IS NULL OR avatar_url = '')`,
             [p.avatar, p.type, p.name]
         );
-    });
+    }
 
     // Backfill config.dos / config.donts / voice slot for default rows seeded
     // before this feature landed. Uses SQLite JSON1 json_patch so existing
@@ -349,9 +349,9 @@ function seedDefaultAgents() {
         { type: 'discussant', name: 'Default Discussant', voice: { gender: 'male' }, dos: ['Ask before you tell — favour open-ended questions', 'Anchor questions in the specific decisions the learner made', 'Validate effort, then surface gaps clearly', 'Keep replies conversational and concise'], donts: ['Lecture when a question would teach more', 'Paper over real errors with reassurance', 'Run past the learner\'s pace — pause and listen', 'Treat the debrief as assessment'] },
         { type: 'patient', name: 'Default Patient', voice: { gender: 'male' }, dos: ['Stay in character throughout', 'Use lay terms unless asked otherwise', 'Answer truthfully when asked directly', 'Express emotion alongside symptoms'], donts: ['Volunteer differential diagnoses', 'Use medical jargon unprompted', 'Break character even if the learner asks meta questions', 'Reveal information the patient wouldn\'t actually know'] },
     ];
-    configPatches.forEach(p => {
+    for (const p of configPatches) {
         // Patch dos/donts if missing
-        db.run(
+        await runDb(
             `UPDATE agent_templates
              SET config = json_patch(COALESCE(config, '{}'), ?)
              WHERE agent_type = ? AND name = ? AND is_default = 1
@@ -359,18 +359,18 @@ function seedDefaultAgents() {
             [JSON.stringify({ dos: p.dos, donts: p.donts }), p.type, p.name]
         );
         // Patch voice slot if missing
-        db.run(
+        await runDb(
             `UPDATE agent_templates
              SET config = json_patch(COALESCE(config, '{}'), ?)
              WHERE agent_type = ? AND name = ? AND is_default = 1
                AND json_extract(COALESCE(config, '{}'), '$.voice') IS NULL`,
             [JSON.stringify({ voice: p.voice }), p.type, p.name]
         );
-    });
+    }
 }
 
 
-function seedDefaultModelPricing() {
+async function seedDefaultModelPricing() {
     const defaultPricing = [
         ['openai', 'gpt-3.5-turbo', 0.0005, 0.0015],
         ['openai', 'gpt-4', 0.03, 0.06],
@@ -381,39 +381,40 @@ function seedDefaultModelPricing() {
         ['lmstudio', 'default', 0, 0]
     ];
 
-    const pricingStmt = db.prepare(
-        `INSERT OR IGNORE INTO llm_model_pricing
-         (provider, model, input_cost_per_1k, output_cost_per_1k)
-         VALUES (?, ?, ?, ?)`
-    );
-    defaultPricing.forEach(([provider, model, input, output]) => {
-        pricingStmt.run(provider, model, input, output);
-    });
-    pricingStmt.finalize();
+    for (const [provider, model, input, output] of defaultPricing) {
+        await runDb(
+            `INSERT OR IGNORE INTO llm_model_pricing
+             (provider, model, input_cost_per_1k, output_cost_per_1k)
+             VALUES (?, ?, ?, ?)`,
+            [provider, model, input, output]
+        );
+    }
 }
 
-function seedAvatarDefaults() {
+async function seedAvatarDefaults() {
     const avatarSettings = [
         ['default_avatar_male', 'rb_male_adult_03.glb'],
         ['default_avatar_female', 'rb_female_adult_07.glb']
     ];
-    const psStmt = db.prepare(
-        `INSERT OR IGNORE INTO platform_settings (setting_key, setting_value) VALUES (?, ?)`
-    );
-    avatarSettings.forEach(([key, value]) => psStmt.run(key, value));
-    psStmt.finalize();
+    for (const [key, value] of avatarSettings) {
+        await runDb(
+            `INSERT OR IGNORE INTO platform_settings (setting_key, setting_value) VALUES (?, ?)`,
+            [key, value]
+        );
+    }
 
     const defaultAgentAvatars = [
         ['Sarah Mitchell', 'rb_medical_female_01.glb'],
         ['Dr. James Chen', 'rb_medical_male_03.glb'],
         ['Family Member', 'rb_female_adult_07.glb']
     ];
-    const aaStmt = db.prepare(
-        `UPDATE agent_templates SET avatar_url = ?
-         WHERE name = ? AND (avatar_url IS NULL OR avatar_url = '')`
-    );
-    defaultAgentAvatars.forEach(([name, file]) => aaStmt.run(file, name));
-    aaStmt.finalize();
+    for (const [name, file] of defaultAgentAvatars) {
+        await runDb(
+            `UPDATE agent_templates SET avatar_url = ?
+             WHERE name = ? AND (avatar_url IS NULL OR avatar_url = '')`,
+            [file, name]
+        );
+    }
 }
 
 async function initDb() {
@@ -432,9 +433,9 @@ async function initDb() {
         console.error(`[db] catalogue seeders failed: ${err.message}`);
     }
 
-    seedDefaultModelPricing();
-    seedDefaultAgents();
-    seedAvatarDefaults();
+    await seedDefaultModelPricing();
+    await seedDefaultAgents();
+    await seedAvatarDefaults();
 
     console.log('Database migrations and seed defaults initialized.');
 }
