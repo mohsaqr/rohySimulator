@@ -400,6 +400,57 @@ describe('auth middleware — authenticateToken', () => {
         expect(res.statusCode).toBe(403);
         expect(res.body).toEqual({ error: 'Invalid or inactive user' });
     });
+
+    it('CONTRACT: DB tenant_id refresh — tenant changes between requests are picked up', async () => {
+        // Audit #12: a tenant migration must be reflected on the very next
+        // request without forcing a token refresh. Locks that req.user.tenant_id
+        // is read from the DB row, NOT from the JWT payload.
+        await seedUser({ id: 120, username: 'tenant_migrating_u', role: 'admin', tenant_id: 1 });
+        const token = signToken({ id: 120, role: 'admin', tenant_id: 1 });
+
+        const req1 = makeReq({ headers: { authorization: `Bearer ${token}` } });
+        const res1 = makeRes();
+        await runMiddleware(auth.authenticateToken, req1, res1);
+        expect(req1.user.tenant_id).toBe(1);
+
+        await pRun(testDb, `UPDATE users SET tenant_id = 2 WHERE id = ?`, [120]);
+
+        const req2 = makeReq({ headers: { authorization: `Bearer ${token}` } });
+        const res2 = makeRes();
+        await runMiddleware(auth.authenticateToken, req2, res2);
+        // Same token, new request — tenant_id reflects the DB, not the JWT.
+        expect(req2.user.tenant_id).toBe(2);
+    });
+
+    it('rejects malformed Authorization header lacking the Bearer prefix', async () => {
+        // Audit #12: protect against `Authorization: <raw-token>` (no scheme).
+        // extractToken's split-on-space requires `Bearer <jwt>`; anything
+        // else means no token, which becomes 401.
+        const token = signToken({ id: 104, role: 'admin' });
+        const req = makeReq({ headers: { authorization: token } }); // missing "Bearer "
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.statusCode).toBe(401);
+        expect(res.body).toEqual({ error: 'Access token required' });
+    });
+
+    it('rejects "Bearer" with empty token after the space', async () => {
+        const req = makeReq({ headers: { authorization: 'Bearer ' } });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.statusCode).toBe(401);
+        expect(res.body).toEqual({ error: 'Access token required' });
+    });
+
+    it('rejects three-part Authorization header (Basic-style scheme abuse)', async () => {
+        const req = makeReq({ headers: { authorization: 'Bearer foo bar' } });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        // extractToken's `split(' ')` returns 3 parts here, so it falls
+        // through to the cookie path (none) → 401. Locks the parser
+        // strictness so future "be lenient" refactors don't accept it.
+        expect(res.statusCode).toBe(401);
+    });
 });
 
 describe('auth middleware — HttpOnly cookie auth (rohy_auth)', () => {
