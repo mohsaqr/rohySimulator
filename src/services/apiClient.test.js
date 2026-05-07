@@ -220,6 +220,65 @@ describe('apiClient', () => {
             fetchSpy.mockRejectedValue(abortErr);
             await expect(apiGet('/x')).rejects.toBe(abortErr);
         });
+
+        // Regression lock: production hit a route that nginx 502'd before
+        // it reached the rohy node app. The HTML error page leaked into the
+        // toast verbatim ("<html><head><title>502 Bad Gateway..."). The
+        // error message must now be a clean status-keyed label, not raw HTML.
+        it('replaces nginx-style HTML 502 page with a clean status label', async () => {
+            const html = '<html>\n<head><title>502 Bad Gateway</title></head>\n<body>\n<center><h1>502 Bad Gateway</h1></center>\n<hr><center>nginx/1.24.0 (Ubuntu)</center>\n</body>\n</html>';
+            fetchSpy.mockResolvedValue(new Response(html, {
+                status: 502,
+                headers: { 'Content-Type': 'text/html' },
+            }));
+            try {
+                await apiGet('/x');
+                throw new Error('expected ApiError');
+            } catch (err) {
+                expect(err).toBeInstanceOf(ApiError);
+                expect(err.status).toBe(502);
+                expect(err.message).not.toContain('<');
+                expect(err.message).not.toContain('html');
+                expect(err.message).toContain('Server unavailable');
+                // Body still preserved for debugging — only the surfaced
+                // message gets cleaned. Devs can inspect err.body manually.
+                expect(err.body).toContain('502 Bad Gateway');
+            }
+        });
+
+        it('uses status-keyed labels for 503 and 504 too', async () => {
+            for (const [status, expected] of [[503, 'overloaded or restarting'], [504, 'timed out']]) {
+                fetchSpy.mockResolvedValue(new Response('<html><body>error</body></html>', {
+                    status, headers: { 'Content-Type': 'text/html' },
+                }));
+                await expect(apiGet('/x')).rejects.toMatchObject({
+                    status,
+                    message: expect.stringContaining(expected),
+                });
+            }
+        });
+
+        it('detects HTML even when content-type is missing (sniffs the body)', async () => {
+            fetchSpy.mockResolvedValue(new Response('<!DOCTYPE html><html><body>err</body></html>', {
+                status: 502,
+                // no Content-Type header
+            }));
+            await expect(apiGet('/x')).rejects.toMatchObject({
+                status: 502,
+                message: expect.stringContaining('Server unavailable'),
+            });
+        });
+
+        it('still surfaces plain-text errors unchanged (no HTML detected)', async () => {
+            fetchSpy.mockResolvedValue(new Response('upstream gave up', {
+                status: 500,
+                headers: { 'Content-Type': 'text/plain' },
+            }));
+            await expect(apiGet('/x')).rejects.toMatchObject({
+                status: 500,
+                message: 'upstream gave up',
+            });
+        });
     });
 
     describe('method shortcuts', () => {

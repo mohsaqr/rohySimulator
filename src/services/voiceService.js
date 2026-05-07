@@ -268,8 +268,20 @@ async function ttsFetch(streaming, body, signal) {
             parseAs: 'response',
         });
         if (!res.ok) {
-            let msg = `TTS request failed (${res.status})`;
-            try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* not json */ }
+            // Surface the upstream cause (Google/OpenAI/Piper error message)
+            // instead of just "(502)" — that opaque fallback was masking
+            // quota/region/voice failures and leaving users with nothing
+            // actionable. Keep the status code in parens for telemetry.
+            let detail = '';
+            try {
+                const j = await res.json();
+                if (j?.error) detail = typeof j.error === 'string' ? j.error : (j.error?.message || JSON.stringify(j.error));
+            } catch {
+                try { detail = (await res.text()).slice(0, 200); } catch { /* nothing usable */ }
+            }
+            const msg = detail
+                ? `TTS failed (${res.status}): ${detail}`
+                : `TTS request failed (${res.status})`;
             emitTtsRequest({ ...wire, id, status: 'error', httpStatus: res.status, error: msg, durationMs: Date.now() - sentAt });
             throw new Error(msg);
         }

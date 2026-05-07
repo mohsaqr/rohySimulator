@@ -219,11 +219,22 @@ export default function DiagnosticBar() {
             try {
                 const data = await apiFetch(`/client-logs?${qs.toString()}`);
                 if (cancelled) return;
-                setClientLogs(Array.isArray(data?.logs) ? data.logs : []);
-                setClientLogsError(null);
+                const next = Array.isArray(data?.logs) ? data.logs : [];
+                // 5s poll: skip the setState (and downstream re-render) when
+                // the log set hasn't changed. Length + first/last id is a
+                // cheap fingerprint — log rows have stable autoincrement ids.
+                setClientLogs(prev => {
+                    if (prev.length !== next.length) return next;
+                    if (prev.length === 0) return prev;
+                    if (prev[0]?.id !== next[0]?.id) return next;
+                    if (prev[prev.length - 1]?.id !== next[next.length - 1]?.id) return next;
+                    return prev;
+                });
+                setClientLogsError(prev => (prev === null ? prev : null));
             } catch (err) {
                 if (cancelled) return;
-                setClientLogsError(err?.message || 'failed to load client logs');
+                const msg = err?.message || 'failed to load client logs';
+                setClientLogsError(prev => (prev === msg ? prev : msg));
             }
         };
         load();

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, FileText, Stethoscope, Pill, Syringe, ClipboardList, Brain, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, FileText, Stethoscope, Pill, Syringe, ClipboardList, Brain, Eye, EyeOff, ChevronDown, ChevronRight } from 'lucide-react';
 import MedicationSearch from './MedicationSearch';
+import { HISTORY_GROUPS as CANONICAL_HISTORY_GROUPS } from '../../data/historyGroups';
 
 const RECORD_TABS = [
     { id: 'history', label: 'History', icon: FileText },
@@ -11,18 +12,47 @@ const RECORD_TABS = [
 ];
 
 
+// Note: `labs` was removed in 2026-05 — there is no `clinicalRecords.labs`
+// data field, so the flag was dead UI. Lab results during a session live in
+// the lab_results table and are exposed through a different surface.
 const DEFAULT_AI_ACCESS = {
     history: true,
     physicalExam: true,
     medications: true,
-    labs: false,
     radiology: false,
     procedures: true,
     notes: false
 };
 
+// Editor-specific UI metadata layered on top of the canonical groups
+// (label/key/order are owned by src/data/historyGroups.js — same source the
+// student viewer and AI prompt builder use). Default all groups expanded:
+// it's an editor, hiding fields slows authoring.
+const EDITOR_FIELD_META = {
+    chiefComplaint: { type: 'input',    label: 'Chief Complaint',                 placeholder: 'e.g., Chest pain for 2 hours' },
+    hpi:            { type: 'textarea', label: 'History of Present Illness (HPI)', rows: 4, placeholder: 'Detailed description of the presenting complaint...' },
+    pastMedical:    { type: 'textarea', label: 'Past Medical History',            rows: 3, placeholder: 'HTN, DM, CAD...' },
+    pastSurgical:   { type: 'textarea', label: 'Past Surgical History',           rows: 3, placeholder: 'Appendectomy 2010...' },
+    allergies:      { type: 'input',    label: 'Allergies',                       placeholder: 'Penicillin (rash), NKDA...' },
+    social:         { type: 'textarea', label: 'Social History',                  rows: 3, placeholder: 'Smoking, alcohol, occupation...' },
+    family:         { type: 'textarea', label: 'Family History',                  rows: 3, placeholder: 'Father MI at 55, Mother DM...' },
+};
+
+const HISTORY_GROUPS = CANONICAL_HISTORY_GROUPS.map(group => ({
+    ...group,
+    fields: group.fields.map(f => ({ ...f, ...EDITOR_FIELD_META[f.key] })),
+}));
+
 export default function ClinicalRecordsEditor({ caseData, setCaseData, updateConfig }) {
     const [activeTab, setActiveTab] = useState('history');
+    const [openHistoryGroups, setOpenHistoryGroups] = useState({
+        presentHistory: true,
+        pastMedical: true,
+        personalSocial: true,
+    });
+    const toggleHistoryGroup = (key) => {
+        setOpenHistoryGroups(prev => ({ ...prev, [key]: !prev[key] }));
+    };
 
     // Helper to get/set clinical records
     const records = caseData.config?.clinicalRecords || {};
@@ -149,7 +179,6 @@ export default function ClinicalRecordsEditor({ caseData, setCaseData, updateCon
                         { key: 'history', label: 'History & HPI' },
                         { key: 'physicalExam', label: 'Physical Exam' },
                         { key: 'medications', label: 'Medications' },
-                        { key: 'labs', label: 'Lab Results' },
                         { key: 'radiology', label: 'Radiology' },
                         { key: 'procedures', label: 'Procedures' },
                         { key: 'notes', label: 'Clinical Notes' }
@@ -198,81 +227,66 @@ export default function ClinicalRecordsEditor({ caseData, setCaseData, updateCon
 
                 {/* HISTORY TAB */}
                 {activeTab === 'history' && (
-                    <div className="space-y-4">
-                        <div>
-                            <label className="label-xs">Chief Complaint</label>
-                            <input
-                                type="text"
-                                value={history.chiefComplaint || ''}
-                                onChange={e => updateHistory('chiefComplaint', e.target.value)}
-                                className="input-dark"
-                                placeholder="e.g., Chest pain for 2 hours"
-                            />
-                        </div>
-                        <div>
-                            <label className="label-xs">History of Present Illness (HPI)</label>
-                            <textarea
-                                rows={4}
-                                value={history.hpi || ''}
-                                onChange={e => updateHistory('hpi', e.target.value)}
-                                className="input-dark text-sm"
-                                placeholder="Detailed description of the presenting complaint..."
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="label-xs">Past Medical History</label>
-                                <textarea
-                                    rows={3}
-                                    value={history.pastMedical || ''}
-                                    onChange={e => updateHistory('pastMedical', e.target.value)}
-                                    className="input-dark text-sm"
-                                    placeholder="HTN, DM, CAD..."
-                                />
-                            </div>
-                            <div>
-                                <label className="label-xs">Past Surgical History</label>
-                                <textarea
-                                    rows={3}
-                                    value={history.pastSurgical || ''}
-                                    onChange={e => updateHistory('pastSurgical', e.target.value)}
-                                    className="input-dark text-sm"
-                                    placeholder="Appendectomy 2010..."
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="label-xs">Allergies</label>
-                            <input
-                                type="text"
-                                value={history.allergies || ''}
-                                onChange={e => updateHistory('allergies', e.target.value)}
-                                className="input-dark"
-                                placeholder="Penicillin (rash), NKDA..."
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="label-xs">Social History</label>
-                                <textarea
-                                    rows={3}
-                                    value={history.social || ''}
-                                    onChange={e => updateHistory('social', e.target.value)}
-                                    className="input-dark text-sm"
-                                    placeholder="Smoking, alcohol, occupation..."
-                                />
-                            </div>
-                            <div>
-                                <label className="label-xs">Family History</label>
-                                <textarea
-                                    rows={3}
-                                    value={history.family || ''}
-                                    onChange={e => updateHistory('family', e.target.value)}
-                                    className="input-dark text-sm"
-                                    placeholder="Father MI at 55, Mother DM..."
-                                />
-                            </div>
-                        </div>
+                    <div className="space-y-3">
+                        {HISTORY_GROUPS.map(group => {
+                            const isOpen = openHistoryGroups[group.key];
+                            const filled = group.fields.filter(f => (history[f.key] || '').trim()).length;
+                            return (
+                                <div key={group.key} className="border border-neutral-700 rounded-lg overflow-hidden">
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleHistoryGroup(group.key)}
+                                        className="w-full flex items-center justify-between px-3 py-2 bg-neutral-800 hover:bg-neutral-700/70 text-left transition-colors"
+                                        aria-expanded={isOpen}
+                                        aria-controls={`history-group-${group.key}`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            {isOpen
+                                                ? <ChevronDown className="w-4 h-4 text-neutral-400" />
+                                                : <ChevronRight className="w-4 h-4 text-neutral-400" />
+                                            }
+                                            <span className="text-xs font-bold text-neutral-100 uppercase tracking-wide">
+                                                {group.label}
+                                            </span>
+                                        </div>
+                                        <span className="text-[10px] text-neutral-500 font-mono">
+                                            {filled} of {group.fields.length}
+                                        </span>
+                                    </button>
+                                    {isOpen && (
+                                        <div id={`history-group-${group.key}`} className="p-3 space-y-3 bg-neutral-900/40">
+                                            {group.fields.map(field => (
+                                                <div key={field.key}>
+                                                    <label className="label-xs flex items-center gap-1.5">
+                                                        {field.label}
+                                                        {(history[field.key] || '').trim() && (
+                                                            <span className="text-green-400 text-[10px]" title="Has content">●</span>
+                                                        )}
+                                                    </label>
+                                                    {field.type === 'textarea' ? (
+                                                        <textarea
+                                                            rows={field.rows || 3}
+                                                            value={history[field.key] || ''}
+                                                            onChange={e => updateHistory(field.key, e.target.value)}
+                                                            className="input-dark text-sm"
+                                                            placeholder={field.placeholder}
+                                                        />
+                                                    ) : (
+                                                        <input
+                                                            type="text"
+                                                            value={history[field.key] || ''}
+                                                            onChange={e => updateHistory(field.key, e.target.value)}
+                                                            className="input-dark"
+                                                            placeholder={field.placeholder}
+                                                        />
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
 

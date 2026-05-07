@@ -56,7 +56,9 @@ export default function TnaDashboard({ onClose }) {
         // literal "Bearer null" for cookie-mode users → 403 → empty
         // analytics. apiFetch handles the no-token case by falling
         // through to the rohy_auth cookie.
-        const msg = err instanceof ApiError ? (err.message || `HTTP ${err.status}`) : err.message;
+        const msg = err instanceof ApiError
+          ? (err.message || `HTTP ${err.status}`)
+          : (err?.message || 'Failed to load analytics');
         setError(msg);
         setLoading(false);
       });

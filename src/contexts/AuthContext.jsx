@@ -59,7 +59,8 @@ export const AuthProvider = ({ children }) => {
                 const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
                 const json = JSON.parse(atob(padded.replace(/-/g, '+').replace(/_/g, '/')));
                 return Number.isFinite(json.exp) ? json.exp * 1000 : null;
-            } catch {
+            } catch (err) {
+                console.warn('[auth] failed to decode JWT exp claim, using fallback refresh interval', err);
                 return null;
             }
         };

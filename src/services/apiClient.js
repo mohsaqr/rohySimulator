@@ -112,16 +112,40 @@ function resolveUrl(path) {
     return apiUrl(path);
 }
 
+// Common HTTP-shorthand for nginx/Cloudflare/origin failures so we can
+// surface a single clean line instead of dumping the upstream HTML page
+// into a toast (the previous behaviour pasted the entire `<html>…</html>`
+// 502 body — unreadable in production).
+const GATEWAY_STATUS_LABELS = {
+    502: 'Server unavailable (bad gateway)',
+    503: 'Server unavailable (overloaded or restarting)',
+    504: 'Server timed out',
+};
+
 async function readErrorBody(response) {
     try {
         const text = await response.text();
         if (!text) return { body: null, message: response.statusText || 'Request failed' };
+
+        // JSON path — preferred; the route layer is JSON-shaped on every
+        // 4xx/5xx it generates itself.
         try {
             const parsed = JSON.parse(text);
             const msg = parsed?.error || parsed?.message || response.statusText || 'Request failed';
             return { body: parsed, message: msg };
         } catch {
-            return { body: text, message: text.slice(0, 200) };
+            // Non-JSON response (typically nginx error pages on 502/503/504,
+            // or upstream HTML when the node app didn't respond). Strip tags,
+            // collapse whitespace, and surface a status-keyed label so the
+            // user sees "Server unavailable (502)" rather than a wall of HTML.
+            const ct = response.headers.get('content-type') || '';
+            if (ct.includes('text/html') || /^\s*<(?:!doctype|html|head|body)/i.test(text)) {
+                const label = GATEWAY_STATUS_LABELS[response.status] || `Request failed (${response.status})`;
+                return { body: text, message: `${label} (${response.status})` };
+            }
+            // Plain text — surface a trimmed snippet, but cap aggressively.
+            const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 160);
+            return { body: text, message: snippet || `Request failed (${response.status})` };
         }
     } catch {
         return { body: null, message: response.statusText || 'Request failed' };

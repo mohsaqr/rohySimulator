@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { FileText, Stethoscope, Pill, Image, Syringe, ClipboardList, ChevronDown, ChevronUp, X, ZoomIn } from 'lucide-react';
+import { FileText, Stethoscope, Pill, Image, Syringe, ClipboardList, ChevronDown, ChevronUp, ChevronRight, X, ZoomIn } from 'lucide-react';
+import { HISTORY_GROUPS as CANONICAL_HISTORY_GROUPS } from '../../data/historyGroups';
 
 const RECORD_TABS = [
     { id: 'history', label: 'History', icon: FileText },
@@ -10,9 +11,30 @@ const RECORD_TABS = [
     { id: 'notes', label: 'Notes', icon: ClipboardList }
 ];
 
+// Viewer-specific overlays: only Chief Complaint gets a red highlight band
+// (it's the case's headline finding). Everything else uses the canonical
+// HISTORY_GROUPS labels from src/data/historyGroups.js — same source the
+// editor and AI prompt builder use, so renaming a field updates all three.
+const VIEWER_FIELD_META = {
+    chiefComplaint: { highlight: 'red' },
+};
+
+const HISTORY_GROUPS = CANONICAL_HISTORY_GROUPS.map(group => ({
+    ...group,
+    fields: group.fields.map(f => ({ ...f, ...(VIEWER_FIELD_META[f.key] || {}) })),
+}));
+
 export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history' }) {
     const [activeTab, setActiveTab] = useState(initialTab);
     const [expandedSection, setExpandedSection] = useState(null);
+    const [openHistoryGroups, setOpenHistoryGroups] = useState({
+        presentHistory: true,
+        pastMedical: true,
+        personalSocial: true,
+    });
+    const toggleHistoryGroup = (key) => {
+        setOpenHistoryGroups(prev => ({ ...prev, [key]: !prev[key] }));
+    };
     const [viewingImage, setViewingImage] = useState(null);
 
     const records = caseConfig?.clinicalRecords || {};
@@ -108,23 +130,61 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                 {/* HISTORY TAB */}
                 {activeTab === 'history' && (
                     <div className="space-y-2">
-                        {history.chiefComplaint && (
-                            <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-3">
-                                <h4 className="text-xs font-bold text-red-400 uppercase mb-1">Chief Complaint</h4>
-                                <p className="text-sm text-white">{history.chiefComplaint}</p>
-                            </div>
-                        )}
-                        <Section title="History of Present Illness" content={history.hpi} sectionKey="hpi" />
-                        <Section title="Past Medical History" content={history.pastMedical} sectionKey="pmh" />
-                        <Section title="Past Surgical History" content={history.pastSurgical} sectionKey="psh" />
-                        <Section title="Allergies" content={history.allergies} sectionKey="allergies" />
-                        <Section title="Social History" content={history.social} sectionKey="social" />
-                        <Section title="Family History" content={history.family} sectionKey="family" />
                         {!hasContent('history') && (
                             <div className="text-center py-8 text-neutral-500">
                                 No history information available
                             </div>
                         )}
+                        {hasContent('history') && HISTORY_GROUPS.map(group => {
+                            const populatedFields = group.fields.filter(f => (history[f.key] || '').trim());
+                            if (populatedFields.length === 0) return null;
+                            const isOpen = openHistoryGroups[group.key];
+                            return (
+                                <div key={group.key} className="border border-neutral-700 rounded-lg overflow-hidden">
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleHistoryGroup(group.key)}
+                                        className="w-full flex items-center justify-between px-3 py-2 bg-neutral-800 hover:bg-neutral-700/70 text-left transition-colors"
+                                        aria-expanded={isOpen}
+                                        aria-controls={`history-group-${group.key}`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            {isOpen
+                                                ? <ChevronDown className="w-4 h-4 text-neutral-400" />
+                                                : <ChevronRight className="w-4 h-4 text-neutral-400" />
+                                            }
+                                            <span className="text-xs font-bold text-neutral-100 uppercase tracking-wide">
+                                                {group.label}
+                                            </span>
+                                        </div>
+                                        <span className="text-[10px] text-neutral-500 font-mono">
+                                            {populatedFields.length} {populatedFields.length === 1 ? 'item' : 'items'}
+                                        </span>
+                                    </button>
+                                    {isOpen && (
+                                        <div id={`history-group-${group.key}`} className="p-2 space-y-2 bg-neutral-900/40">
+                                            {populatedFields.map(field => {
+                                                const content = history[field.key];
+                                                if (field.highlight === 'red') {
+                                                    return (
+                                                        <div key={field.key} className="bg-red-900/20 border border-red-700/50 rounded-lg p-3">
+                                                            <h4 className="text-xs font-bold text-red-400 uppercase mb-1">{field.label}</h4>
+                                                            <p className="text-sm text-white whitespace-pre-wrap">{content}</p>
+                                                        </div>
+                                                    );
+                                                }
+                                                return (
+                                                    <div key={field.key} className="bg-neutral-800/70 border border-neutral-700 rounded-lg p-3">
+                                                        <h4 className="text-xs font-bold text-neutral-400 uppercase mb-1">{field.label}</h4>
+                                                        <p className="text-sm text-neutral-200 whitespace-pre-wrap">{content}</p>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
 

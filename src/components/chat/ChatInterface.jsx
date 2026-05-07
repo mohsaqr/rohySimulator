@@ -16,6 +16,12 @@ import { parseConfig } from '../../utils/parseConfig';
 import { extractCompleteSentences } from '../../utils/sentenceSplit';
 import { resolveVoice } from '../../utils/voiceResolver';
 import { useToast } from '../../contexts/ToastContext';
+import { formatHistoryAsMarkdown } from '../../data/historyGroups';
+import {
+    formatRadiologyAsMarkdown,
+    formatVitalsAsMarkdown,
+    formatRecentActivityAsMarkdown,
+} from '../../data/aiPromptContext';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
 // only when a user actually toggles voice mode on for the first time.
@@ -526,7 +532,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             history: true,
             physicalExam: true,
             medications: true,
-            labs: false,
             radiology: false,
             procedures: true,
             notes: false
@@ -534,24 +539,19 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
         let hasAnyRecords = false;
 
-        // History & HPI
+        // History & HPI — formatted by the canonical group structure so the
+        // LLM sees the same Present-History / Past-Medical / Personal-&-Social
+        // shape the human authors and views. Single source of truth lives in
+        // src/data/historyGroups.js; consumers must NOT re-implement the flat
+        // → grouped mapping here.
         if (aiAccess.history && clinicalRecords.history) {
-            const h = clinicalRecords.history;
-            const historyParts = [];
-            if (h.chiefComplaint) historyParts.push(`Chief Complaint: ${h.chiefComplaint}`);
-            if (h.hpi) historyParts.push(`History of Present Illness: ${h.hpi}`);
-            if (h.pastMedical) historyParts.push(`Past Medical History: ${h.pastMedical}`);
-            if (h.pastSurgical) historyParts.push(`Past Surgical History: ${h.pastSurgical}`);
-            if (h.allergies) historyParts.push(`Allergies: ${h.allergies}`);
-            if (h.social) historyParts.push(`Social History: ${h.social}`);
-            if (h.family) historyParts.push(`Family History: ${h.family}`);
-
-            if (historyParts.length > 0) {
+            const historyMarkdown = formatHistoryAsMarkdown(clinicalRecords.history);
+            if (historyMarkdown) {
                 if (!hasAnyRecords) {
                     richSystemPrompt += "\n---\n## CLINICAL RECORDS (Accessible to AI)\n";
                     hasAnyRecords = true;
                 }
-                richSystemPrompt += `\n### Medical History\n${historyParts.join('\n')}\n`;
+                richSystemPrompt += `\n### Medical History\n${historyMarkdown}\n`;
             }
         }
 
@@ -588,6 +588,20 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             richSystemPrompt += `\n### Current Medications\n${medList}\n`;
         }
 
+        // Radiology — formatted by the shared helper so the LLM sees a stable
+        // text shape (image URLs intentionally omitted; binary assets aren't
+        // useful context for a text model).
+        if (aiAccess.radiology && clinicalRecords.radiology?.length > 0) {
+            const radiologyMarkdown = formatRadiologyAsMarkdown(clinicalRecords.radiology);
+            if (radiologyMarkdown) {
+                if (!hasAnyRecords) {
+                    richSystemPrompt += "\n---\n## CLINICAL RECORDS (Accessible to AI)\n";
+                    hasAnyRecords = true;
+                }
+                richSystemPrompt += `\n### Radiology Studies\n${radiologyMarkdown}\n`;
+            }
+        }
+
         // Procedures
         if (aiAccess.procedures && clinicalRecords.procedures?.length > 0) {
             if (!hasAnyRecords) {
@@ -609,6 +623,26 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 `#### ${n.type}${n.title ? `: ${n.title}` : ''} (${n.date || 'No date'}${n.author ? `, ${n.author}` : ''})\n${n.content || 'No content'}`
             ).join('\n\n');
             richSystemPrompt += `\n### Clinical Notes\n${noteList}\n`;
+        }
+
+        // Live patient state — current vitals from PatientRecord. Without this
+        // the AI guesses when asked "how do you feel" / "what's your heart
+        // rate"; with it, the model can answer consistent with the monitor.
+        const vitalsMarkdown = formatVitalsAsMarkdown(patientRecord?.record?.current_state?.vitals);
+        if (vitalsMarkdown) {
+            richSystemPrompt += `\n---\n## CURRENT PATIENT STATE\n${vitalsMarkdown}\n`;
+            richSystemPrompt += `\nAnswer questions about how you currently feel in a way consistent with these vitals.\n`;
+        }
+
+        // Session activity feedback — tells the AI what the student has
+        // already done so far in THIS session. Without it, the AI has no
+        // memory of prior actions (the chat history is the assistant's only
+        // proxy for that, and it doesn't capture non-verbal events like exams
+        // or treatments). Capped at the last 10 events to bound prompt size.
+        const recentActivity = formatRecentActivityAsMarkdown(patientRecord?.record?.events, 10);
+        if (recentActivity) {
+            richSystemPrompt += `\n---\n## SESSION ACTIVITY SO FAR (clinician's actions this encounter)\n${recentActivity}\n`;
+            richSystemPrompt += `\nDo not repeat answers to questions that were already obtained above. Acknowledge prior actions when relevant.\n`;
         }
 
         return richSystemPrompt;
