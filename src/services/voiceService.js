@@ -30,8 +30,7 @@
 // and speed do not couple in the browser.
 
 import { Lipsync } from 'wawa-lipsync';
-import { apiUrl } from '../config/api.js';
-import { AuthService } from './authService.js';
+import { apiFetch } from './apiClient.js';
 
 const SR = (typeof window !== 'undefined')
     ? (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -260,15 +259,12 @@ async function ttsFetch(streaming, body, signal) {
     emitTtsRequest(wire);
 
     try {
-        const res = await fetch(apiUrl(streaming ? '/tts?stream=1' : '/tts'), {
+        const res = await apiFetch(streaming ? '/tts?stream=1' : '/tts', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${AuthService.getToken()}`,
-                ...(streaming && { 'Accept': 'application/x-rohy-pcm-stream' })
-            },
-            body: JSON.stringify(body),
-            signal
+            json: body,
+            headers: streaming ? { Accept: 'application/x-rohy-pcm-stream' } : {},
+            signal,
+            parseAs: 'response',
         });
         if (!res.ok) {
             let msg = `TTS request failed (${res.status})`;

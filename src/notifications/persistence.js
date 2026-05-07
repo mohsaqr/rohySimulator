@@ -1,6 +1,6 @@
 import { DEFAULT_PREFS } from './defaults';
 import { AuthService } from '../services/authService';
-import { apiUrl } from '../config/api';
+import { apiFetch, apiPut } from '../services/apiClient';
 
 // Per-user localStorage scoping. On a shared workstation, user A's acks /
 // snoozes / DND must not silence alarms for user B. Storage keys are
@@ -105,14 +105,9 @@ export function saveAckedSync(acked, userId) {
 // the user's settings follow them between machines. Failure is non-fatal —
 // we keep the localStorage copy.
 export async function loadPrefsRemote() {
+    if (!AuthService.getToken()) return null;
     try {
-        const token = AuthService.getToken();
-        if (!token) return null;
-        const res = await fetch(apiUrl('/notification-prefs'), {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
+        const data = await apiFetch('/notification-prefs');
         return data?.prefs || null;
     } catch {
         return null;
@@ -120,18 +115,10 @@ export async function loadPrefsRemote() {
 }
 
 export async function savePrefsRemote(prefs) {
+    if (!AuthService.getToken()) return false;
     try {
-        const token = AuthService.getToken();
-        if (!token) return false;
-        const res = await fetch(apiUrl('/notification-prefs'), {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ prefs }),
-        });
-        return res.ok;
+        await apiPut('/notification-prefs', { prefs });
+        return true;
     } catch {
         return false;
     }

@@ -407,7 +407,9 @@ describe('LLMService.streamMessage', () => {
             SESSION_ID, MESSAGES, SYSTEM_PROMPT, null,
             { onDelta: () => {} }
         );
-        expect(result).toBe('Error: network down');
+        // apiFetch wraps transport failures with a "Network error:" prefix so
+        // they're distinguishable from server-returned errors at a glance.
+        expect(result).toBe('Error: Network error: network down');
     });
 
     // --- 6. Empty stream -----------------------------------------------

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LLMService } from '../services/llmService';
 import { VoiceService } from '../services/voiceService';
-import { apiUrl } from '../config/api';
+import { apiPost } from '../services/apiClient';
 import { buildCaseContext } from '../services/discussionService';
 import { resolveVoice } from '../utils/voiceResolver';
 import { buildPersonaBlocks } from '../utils/personaBlocks';
@@ -30,18 +30,9 @@ function resolveDiscussantVoice(discussant, voiceSettings, platformAvatars) {
 
 const STORAGE_KEY = (sid) => `rohy_discussion_history_${sid}`;
 
-function authHeaders() {
-    const token = localStorage.getItem('token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 async function logTurn(sessionId, role, content) {
     try {
-        await fetch(apiUrl(`/sessions/${sessionId}/agents/discussant/conversation`), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...authHeaders() },
-            body: JSON.stringify({ role, content }),
-        });
+        await apiPost(`/sessions/${sessionId}/agents/discussant/conversation`, { role, content });
     } catch (err) {
         console.warn('[useDiscussionEngine] failed to log turn:', err.message);
     }

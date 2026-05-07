@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import treatmentEffectsEngine from '../services/TreatmentEffects/TreatmentEffectsEngine';
-import { apiUrl } from '../config/api';
+import { ApiError, apiFetch } from '../services/apiClient';
 
 /**
  * useTreatmentEffects Hook
@@ -46,22 +46,16 @@ export function useTreatmentEffects(sessionId, options = {}) {
         if (!sessionId || !enabled) return;
 
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/sessions/${sessionId}/active-effects`), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                treatmentEffectsEngine.setActiveTreatments(data.active_treatments || []);
-                lastFetchRef.current = new Date();
-                setError(null);
-            } else {
-                const errData = await response.json();
-                setError(errData.error || 'Failed to fetch treatment effects');
-            }
+            const data = await apiFetch(`/sessions/${sessionId}/active-effects`);
+            treatmentEffectsEngine.setActiveTreatments(data?.active_treatments || []);
+            lastFetchRef.current = new Date();
+            setError(null);
         } catch (err) {
-            setError(err.message);
+            if (err instanceof ApiError) {
+                setError(err.message || 'Failed to fetch treatment effects');
+            } else {
+                setError(err.message);
+            }
         } finally {
             setLoading(false);
         }

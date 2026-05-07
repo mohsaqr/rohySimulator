@@ -248,8 +248,9 @@ describe('AgentService — module shape', () => {
     });
 
     it('exposes every documented public method', () => {
+        // getAuthHeaders was removed when AgentService migrated to apiFetch
+        // (auth headers now come from the central client, not per-service).
         const expected = [
-            'getAuthHeaders',
             'getTemplates', 'getTemplate', 'createTemplate', 'updateTemplate',
             'deleteTemplate', 'duplicateTemplate', 'resetTemplateToDefault', 'testLLM',
             'getCaseAgents', 'addAgentToCase', 'updateCaseAgent',
@@ -268,25 +269,6 @@ describe('AgentService — module shape', () => {
 });
 
 // ---------------------------------------------------------------------------
-// getAuthHeaders — direct unit
-// ---------------------------------------------------------------------------
-
-describe('AgentService.getAuthHeaders', () => {
-    it('returns Bearer header when localStorage has a token', () => {
-        const h = AgentService.getAuthHeaders();
-        expect(h['Content-Type']).toBe('application/json');
-        expect(h['Authorization']).toBe(`Bearer ${BEARER}`);
-    });
-
-    it('omits Authorization when no token is present', () => {
-        window.localStorage.removeItem('token');
-        const h = AgentService.getAuthHeaders();
-        expect(h['Content-Type']).toBe('application/json');
-        expect(h['Authorization']).toBeUndefined();
-    });
-});
-
-// ---------------------------------------------------------------------------
 // Templates: getTemplates / getTemplate / createTemplate / updateTemplate /
 // deleteTemplate / duplicateTemplate / resetTemplateToDefault / testLLM
 // ---------------------------------------------------------------------------
@@ -299,9 +281,8 @@ describe('AgentService templates — happy paths', () => {
         const req = lastRequest({ method: 'GET', pathEndsWith: '/api/agents/templates' });
         expect(req).toBeTruthy();
         expect(req.headers.authorization).toBe(`Bearer ${BEARER}`);
-        // Content-Type may be omitted by the browser on bodyless GETs in some
-        // runtimes, but AgentService sets it explicitly — assert.
-        expect(req.headers['content-type']).toBe('application/json');
+        // apiFetch only sets Content-Type when a JSON body is sent; bodyless
+        // GETs intentionally omit it to avoid lying about the request shape.
     });
 
     it('getTemplate: GET /api/agents/templates/:id returns the parsed body', async () => {
@@ -522,9 +503,10 @@ describe('AgentService session agents', () => {
         expect(req.body).toBeNull();
     });
 
-    it('pageAgent: throws on non-200', async () => {
+    it('pageAgent: throws ApiError surfacing the server error on non-200', async () => {
         nextResponse = () => errJson('unavailable', 503);
-        await expect(AgentService.pageAgent('sess-1', 'nurse')).rejects.toThrow('Failed to page agent');
+        // apiFetch surfaces the real server message instead of a generic wrapper.
+        await expect(AgentService.pageAgent('sess-1', 'nurse')).rejects.toThrow(/unavailable/);
     });
 
     it('arriveAgent: POST /api/sessions/:id/agents/:type/arrive', async () => {

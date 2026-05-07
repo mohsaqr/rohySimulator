@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { apiUrl } from '../config/api';
+import { ApiError, apiFetch, apiPost } from '../services/apiClient';
 import { useNotifications } from '../notifications/useNotifications';
 import { SOURCES, SEVERITY, AUDIO_PATTERNS } from '../notifications/types';
 
@@ -45,15 +45,7 @@ export const useAlarms = (vitals, sessionId) => {
         let cancelled = false;
         const load = async () => {
             try {
-                const token = localStorage.getItem('token');
-                const res = await fetch(apiUrl('/alarms/config'), {
-                    headers: token ? { Authorization: `Bearer ${token}` } : {},
-                });
-                if (!res.ok) {
-                    if (!cancelled) setThresholdsLoaded(true);
-                    return;
-                }
-                const data = await res.json();
+                const data = await apiFetch('/alarms/config');
                 if (cancelled) return;
                 if (Array.isArray(data?.config) && data.config.length > 0) {
                     const next = { ...DEFAULT_THRESHOLDS };
@@ -67,8 +59,12 @@ export const useAlarms = (vitals, sessionId) => {
                     setThresholds(next);
                 }
                 setThresholdsLoaded(true);
-            } catch {
-                if (!cancelled) setThresholdsLoaded(true);
+            } catch (err) {
+                if (cancelled) return;
+                if (!(err instanceof ApiError)) {
+                    console.warn('[useAlarms] threshold load failed:', err.message);
+                }
+                setThresholdsLoaded(true);
             }
         };
         load();
@@ -224,21 +220,13 @@ export const useAlarms = (vitals, sessionId) => {
     // Save thresholds to backend (per-vital).
     const saveConfig = useCallback(async (userId = null) => {
         try {
-            const token = localStorage.getItem('token');
             await Promise.all(Object.entries(thresholds).map(([vital, cfg]) =>
-                fetch(apiUrl('/alarms/config'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                    body: JSON.stringify({
-                        user_id: userId,
-                        vital_sign: vital,
-                        high_threshold: cfg.high,
-                        low_threshold: cfg.low,
-                        enabled: cfg.enabled,
-                    }),
+                apiPost('/alarms/config', {
+                    user_id: userId,
+                    vital_sign: vital,
+                    high_threshold: cfg.high,
+                    low_threshold: cfg.low,
+                    enabled: cfg.enabled,
                 })
             ));
         } catch (e) {

@@ -5,20 +5,13 @@
  * - Batch syncs events every 1 minute
  * - Saves full document for persistence
  * - Loads existing record on session resume
+ *
+ * All endpoints are routed through apiFetch so the bearer token, JSON
+ * encoding, and ApiError contract are handled centrally — the missing-auth
+ * regression that the 2026-05-06 audit fixed cannot recur here.
  */
 
-import { apiUrl } from '../../config/api';
-import { AuthService } from '../authService';
-
-// All /patient-record/* endpoints require auth + session ownership on the
-// server. AuthService.authHeaders() returns {} when not logged in so unauth
-// callers fail at the network layer with 401 rather than silently writing.
-function authHeaders() {
-    return {
-        'Content-Type': 'application/json',
-        ...AuthService.authHeaders(),
-    };
-}
+import { ApiError, apiDelete, apiFetch, apiPost } from '../apiClient.js';
 
 /**
  * Sync patient record to database
@@ -36,37 +29,22 @@ export async function syncPatientRecord(patientRecord) {
   const sessionId = patientRecord.getSessionId();
   const recordId = patientRecord.getRecordId();
 
-  // Skip sync if no valid session
   if (!sessionId) {
     console.warn('PatientRecord sync skipped: No session ID');
     return { success: false, reason: 'no_session' };
   }
 
-  const pendingEvents = patientRecord.getPendingSync();
-  const fullRecord = patientRecord.getRecord();
-
   const payload = {
     session_id: sessionId,
     record_id: recordId,
-    events: pendingEvents,
-    document: fullRecord,
+    events: patientRecord.getPendingSync(),
+    document: patientRecord.getRecord(),
     patient_info: patientRecord.getPatientInfo(),
     current_state: patientRecord.getCurrentState(),
     events_count: patientRecord.getEventCount()
   };
 
-  const response = await fetch(apiUrl('/patient-record/sync'), {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Sync failed: ${error}`);
-  }
-
-  return await response.json();
+  return apiPost('/patient-record/sync', payload);
 }
 
 /**
@@ -76,28 +54,13 @@ export async function syncPatientRecord(patientRecord) {
  * @returns {object|null} - Record data or null if not found
  */
 export async function loadPatientRecord(sessionId) {
-  if (!sessionId) {
-    return null;
-  }
+  if (!sessionId) return null;
 
   try {
-    const response = await fetch(apiUrl(`/patient-record/${sessionId}`), {
-      method: 'GET',
-      headers: authHeaders()
-    });
-
-    if (response.status === 404) {
-      return null;
-    }
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Load failed: ${error}`);
-    }
-
-    const data = await response.json();
-    return data.document || null;
+    const data = await apiFetch(`/patient-record/${sessionId}`);
+    return data?.document || null;
   } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
     console.error('Error loading PatientRecord:', error);
     return null;
   }
@@ -110,22 +73,11 @@ export async function loadPatientRecord(sessionId) {
  * @returns {array} - Array of events
  */
 export async function getPatientRecordEvents(sessionId) {
-  if (!sessionId) {
-    return [];
-  }
+  if (!sessionId) return [];
 
   try {
-    const response = await fetch(apiUrl(`/patient-record/${sessionId}/events`), {
-      method: 'GET',
-      headers: authHeaders()
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    const data = await response.json();
-    return data.events || [];
+    const data = await apiFetch(`/patient-record/${sessionId}/events`);
+    return data?.events || [];
   } catch (error) {
     console.error('Error loading PatientRecord events:', error);
     return [];
@@ -140,22 +92,11 @@ export async function getPatientRecordEvents(sessionId) {
  * @returns {array} - Array of events
  */
 export async function getPatientRecordEventsByVerb(sessionId, verb) {
-  if (!sessionId || !verb) {
-    return [];
-  }
+  if (!sessionId || !verb) return [];
 
   try {
-    const response = await fetch(apiUrl(`/patient-record/${sessionId}/events?verb=${verb}`), {
-      method: 'GET',
-      headers: authHeaders()
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    const data = await response.json();
-    return data.events || [];
+    const data = await apiFetch(`/patient-record/${sessionId}/events?verb=${encodeURIComponent(verb)}`);
+    return data?.events || [];
   } catch (error) {
     console.error('Error loading PatientRecord events by verb:', error);
     return [];
@@ -168,17 +109,11 @@ export async function getPatientRecordEventsByVerb(sessionId, verb) {
  * @param {number} sessionId - Session ID
  */
 export async function deletePatientRecord(sessionId) {
-  if (!sessionId) {
-    return false;
-  }
+  if (!sessionId) return false;
 
   try {
-    const response = await fetch(apiUrl(`/patient-record/${sessionId}`), {
-      method: 'DELETE',
-      headers: authHeaders()
-    });
-
-    return response.ok;
+    await apiDelete(`/patient-record/${sessionId}`);
+    return true;
   } catch (error) {
     console.error('Error deleting PatientRecord:', error);
     return false;

@@ -12,24 +12,22 @@ import {
   syncPatientRecord,
 } from './patientRecordSync';
 
+function jsonResponse(payload, init = {}) {
+  return new Response(JSON.stringify(payload), {
+    status: init.status ?? 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 describe('patientRecordSync', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
   });
 
-  function mockJsonResponse(payload, ok = true, status = 200) {
-    return {
-      ok,
-      status,
-      json: vi.fn().mockResolvedValue(payload),
-      text: vi.fn().mockResolvedValue(JSON.stringify(payload)),
-    };
-  }
-
   it('sends bearer auth on all protected patient-record endpoints', async () => {
     localStorage.setItem('token', 'record-token');
-    global.fetch = vi.fn().mockResolvedValue(mockJsonResponse({ document: { ok: true }, events: [] }));
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({ document: { ok: true }, events: [] }));
 
     await loadPatientRecord(42);
     await getPatientRecordEvents(42);
@@ -38,16 +36,13 @@ describe('patientRecordSync', () => {
 
     expect(global.fetch).toHaveBeenCalledTimes(4);
     for (const [, init] of global.fetch.mock.calls) {
-      expect(init.headers).toMatchObject({
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer record-token',
-      });
+      expect(init.headers.Authorization).toBe('Bearer record-token');
     }
   });
 
   it('syncs pending events with auth and the full record payload', async () => {
     localStorage.setItem('token', 'record-token');
-    global.fetch = vi.fn().mockResolvedValue(mockJsonResponse({ success: true }));
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({ success: true }));
 
     const patientRecord = {
       getSessionId: () => 7,
@@ -64,6 +59,7 @@ describe('patientRecordSync', () => {
     const [url, init] = global.fetch.mock.calls[0];
     expect(url).toBe('http://api.test/patient-record/sync');
     expect(init.headers.Authorization).toBe('Bearer record-token');
+    expect(init.headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(init.body)).toMatchObject({
       session_id: 7,
       record_id: 'rec-1',

@@ -1,4 +1,4 @@
-import { apiUrl } from '../config/api';
+import { apiFetch } from './apiClient.js';
 import { AgentService } from './AgentService';
 
 // The discussant resolution order:
@@ -10,20 +10,12 @@ import { AgentService } from './AgentService';
 // the admin attaches a discussant via case_agents (which already works through
 // the existing /cases/:id/agents endpoint — no new wiring needed).
 
-function authHeaders() {
-    const token = localStorage.getItem('token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 export async function fetchDiscussantForCase(caseId) {
     if (caseId) {
         try {
-            const res = await fetch(apiUrl(`/cases/${caseId}/agents`), { headers: authHeaders() });
-            if (res.ok) {
-                const data = await res.json();
-                const attached = (data.agents || []).find(a => a.agent_type === 'discussant' && a.enabled !== 0);
-                if (attached) return normalizeAgent(attached);
-            }
+            const data = await apiFetch(`/cases/${caseId}/agents`);
+            const attached = (data?.agents || []).find(a => a.agent_type === 'discussant' && a.enabled !== 0);
+            if (attached) return normalizeAgent(attached);
         } catch (err) {
             console.warn('[discussionService] failed to load case agents:', err.message);
         }

@@ -27,10 +27,10 @@ import { useAlarms } from './useAlarms';
 import { SEVERITY } from '../notifications/types';
 
 function okConfig(config = []) {
-  return Promise.resolve({
-    ok: true,
-    json: async () => ({ config }),
-  });
+  return Promise.resolve(new Response(JSON.stringify({ config }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  }));
 }
 
 beforeEach(() => {
@@ -79,7 +79,8 @@ describe('useAlarms', () => {
 
     renderHook(() => useAlarms({ hr: 130, spo2: 82 }, 'session-1'));
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/alarms/config', { headers: {} }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(global.fetch.mock.calls[0][0]).toBe('/api/alarms/config');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(notificationState.notify).not.toHaveBeenCalled();
   });
@@ -138,9 +139,9 @@ describe('useAlarms', () => {
     window.localStorage.setItem('token', 'alarm-token');
     const { result } = renderHook(() => useAlarms({ hr: 80 }, 'session-1'));
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/alarms/config', {
-      headers: { Authorization: 'Bearer alarm-token' },
-    }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(global.fetch.mock.calls[0][0]).toBe('/api/alarms/config');
+    expect(global.fetch.mock.calls[0][1].headers.Authorization).toBe('Bearer alarm-token');
 
     global.fetch.mockClear();
     await act(async () => {

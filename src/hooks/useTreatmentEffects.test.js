@@ -7,9 +7,16 @@ vi.mock('../config/api', () => ({
 }));
 
 function okActiveTreatments(active_treatments = []) {
-  return Promise.resolve({
-    ok: true,
-    json: async () => ({ active_treatments }),
+  return new Response(JSON.stringify({ active_treatments }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function errorResponse(payload, status = 403) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -42,9 +49,10 @@ describe('useTreatmentEffects', () => {
     }));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(global.fetch).toHaveBeenCalledWith('/api/sessions/session-1/active-effects', {
-      headers: { Authorization: 'Bearer effects-token' },
-    });
+
+    const [url, init] = global.fetch.mock.calls[0];
+    expect(url).toBe('/api/sessions/session-1/active-effects');
+    expect(init.headers.Authorization).toBe('Bearer effects-token');
 
     await waitFor(() => expect(result.current.count).toBe(1));
     expect(result.current.aggregate.spo2).toBeGreaterThan(0);
@@ -77,10 +85,7 @@ describe('useTreatmentEffects', () => {
   });
 
   it('surfaces backend errors without throwing', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      json: async () => ({ error: 'No access' }),
-    });
+    global.fetch = vi.fn().mockResolvedValue(errorResponse({ error: 'No access' }, 403));
 
     const { result } = renderHook(() => useTreatmentEffects('session-1'));
 

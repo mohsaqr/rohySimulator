@@ -1,43 +1,24 @@
 /**
- * Service to handle LLM communication and Backend persistence.
- * LLM configuration is now managed server-side by administrators.
+ * LLM service. Routes JSON sites through apiFetch; the streaming SSE path
+ * still uses parseAs:'response' so it can read the body reader directly while
+ * still benefiting from centralised auth header injection.
  */
 
-import { apiUrl } from "../config/api";
+import { ApiError, apiFetch, apiPost, apiPut } from './apiClient.js';
 
 export const LLMService = {
-
-    /**
-     * Get authentication headers
-     */
-    getAuthHeaders() {
-        const token = localStorage.getItem('token');
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-        return headers;
-    },
 
     /**
      * Start a new Session for a Case
      */
     async startSession(caseId, studentName = 'Student', monitorSettings = {}) {
         try {
-            const res = await fetch(apiUrl(`/sessions`), {
-                method: 'POST',
-                headers: this.getAuthHeaders(),
-                body: JSON.stringify({
-                    case_id: caseId,
-                    student_name: studentName,
-                    monitor_settings: monitorSettings
-                })
+            const data = await apiPost('/sessions', {
+                case_id: caseId,
+                student_name: studentName,
+                monitor_settings: monitorSettings
             });
-            const data = await res.json();
-            if (!res.ok) {
-                throw new Error(data.error || 'Failed to start session');
-            }
-            return data.id; // Session ID
+            return data?.id ?? null;
         } catch (err) {
             console.error('Failed to start session', err);
             return null;
@@ -49,14 +30,7 @@ export const LLMService = {
      */
     async endSession(sessionId) {
         try {
-            const res = await fetch(apiUrl(`/sessions/${sessionId}/end`), {
-                method: 'PUT',
-                headers: this.getAuthHeaders()
-            });
-            if (!res.ok) {
-                throw new Error('Failed to end session');
-            }
-            return await res.json();
+            return await apiPut(`/sessions/${sessionId}/end`);
         } catch (err) {
             console.error('Failed to end session', err);
             return null;
@@ -68,64 +42,39 @@ export const LLMService = {
      * Server handles LLM configuration and rate limiting
      */
     async sendMessage(sessionId, messages, systemPrompt, sessionMode) {
-        // 1. Log User Message
         const lastMsg = messages[messages.length - 1];
-        if (lastMsg.role === 'user') {
+        if (lastMsg?.role === 'user') {
             await this.logInteraction(sessionId, 'user', lastMsg.content);
         }
 
         try {
-            // 2. Call LLM via authenticated proxy
-            // Server handles: LLM config, rate limiting, usage tracking
             const body = {
                 session_id: sessionId,
-                messages: messages,
+                messages,
                 system_prompt: systemPrompt || 'You are a patient.'
             };
             if (sessionMode) body.session_mode = sessionMode;
 
-            const response = await fetch(apiUrl(`/proxy/llm`), {
-                method: 'POST',
-                headers: this.getAuthHeaders(),
-                body: JSON.stringify(body)
-            });
-
-            // Handle rate limiting
-            if (response.status === 429) {
-                const errorData = await response.json();
-                console.warn('[LLMService] Rate limit exceeded:', errorData);
-                return `Rate limit exceeded: ${errorData.error}. ${errorData.resetsAt ? `Resets at ${errorData.resetsAt}.` : ''}`;
-            }
-
-            // Handle service disabled / config error
-            if (response.status === 503) {
-                const errorData = await response.json().catch(() => ({}));
-                return `AI service unavailable: ${errorData.error || 'unknown'}`;
-            }
-
-            if (!response.ok) {
-                const errText = await response.text();
-                console.error(`[LLMService] ${response.status} from /proxy/llm:`, errText);
-                // Return the actual server error so admins can see what's wrong.
-                let detail = errText;
-                try {
-                    const j = JSON.parse(errText);
-                    detail = j.error || j.message || errText;
-                } catch { /* errText was not json */ }
-                return `Error: ${detail}`;
-            }
-
-            const data = await response.json();
-            const aiContent = data.choices?.[0]?.message?.content || '...';
-
-            // 3. Log Assistant Response
+            const data = await apiPost('/proxy/llm', body);
+            const aiContent = data?.choices?.[0]?.message?.content || '...';
             await this.logInteraction(sessionId, 'assistant', aiContent);
-
             return aiContent;
 
         } catch (err) {
+            if (err instanceof ApiError) {
+                if (err.status === 429) {
+                    console.warn('[LLMService] Rate limit exceeded:', err.body);
+                    const resetsAt = err.body?.resetsAt;
+                    return `Rate limit exceeded: ${err.message}. ${resetsAt ? `Resets at ${resetsAt}.` : ''}`;
+                }
+                if (err.status === 503) {
+                    return `AI service unavailable: ${err.message || 'unknown'}`;
+                }
+                console.error(`[LLMService] ${err.status} from /proxy/llm:`, err.message);
+                return `Error: ${err.message}`;
+            }
             console.error('LLM Error', err);
-            return "Error: Could not connect to AI patient. Please check with your administrator.";
+            return 'Error: Could not connect to AI patient. Please check with your administrator.';
         }
     },
 
@@ -156,7 +105,6 @@ export const LLMService = {
             watchdogTimer = null;
         };
 
-        // Combine the caller's signal (if any) with the watchdog so either can abort.
         const combined = signal
             ? AbortSignal.any?.([signal, watchdog.signal]) || watchdog.signal
             : watchdog.signal;
@@ -173,11 +121,12 @@ export const LLMService = {
             if (sessionMode) body.session_mode = sessionMode;
 
             armWatchdog();
-            const response = await fetch(apiUrl('/proxy/llm?stream=1'), {
+            const response = await apiFetch('/proxy/llm?stream=1', {
                 method: 'POST',
-                headers: { ...this.getAuthHeaders(), 'Accept': 'text/event-stream' },
-                body: JSON.stringify(body),
-                signal: combined
+                json: body,
+                headers: { Accept: 'text/event-stream' },
+                signal: combined,
+                parseAs: 'response',
             });
 
             if (!response.ok) {
@@ -190,10 +139,9 @@ export const LLMService = {
             }
             const ctype = response.headers.get('Content-Type') || '';
             if (!ctype.includes('text/event-stream')) {
-                // Server didn't actually stream — fall back.
                 disarmWatchdog();
                 const data = await response.json().catch(() => ({}));
-                const text = data.choices?.[0]?.message?.content || '';
+                const text = data?.choices?.[0]?.message?.content || '';
                 if (text) onDelta?.(text);
                 return text;
             }
@@ -207,7 +155,7 @@ export const LLMService = {
                 while (true) {
                     const { value, done } = await reader.read();
                     if (done) break;
-                    armWatchdog();   // reset idle timer on every chunk
+                    armWatchdog();
                     buffered += decoder.decode(value, { stream: true });
                     let sep;
                     while ((sep = buffered.indexOf('\n\n')) >= 0) {
@@ -227,7 +175,6 @@ export const LLMService = {
                                 acc += evt.delta;
                                 onDelta?.(evt.delta);
                             }
-                            // evt.done arrives just before [DONE] — nothing to do
                         }
                     }
                 }
@@ -249,7 +196,7 @@ export const LLMService = {
                 if (watchdog.signal.aborted) {
                     return `Error: LLM did not respond within ${STREAM_IDLE_TIMEOUT_MS / 1000}s. Check the server console for the actual upstream error (look for "[LLM Proxy]" lines).`;
                 }
-                return '';   // caller-initiated abort
+                return '';
             }
             console.error('[LLMService] streamMessage error', err);
             return `Error: ${err.message}`;
@@ -261,13 +208,7 @@ export const LLMService = {
      */
     async getUsage() {
         try {
-            const response = await fetch(apiUrl(`/llm/usage`), {
-                headers: this.getAuthHeaders()
-            });
-            if (!response.ok) {
-                throw new Error('Failed to get usage');
-            }
-            return await response.json();
+            return await apiFetch('/llm/usage');
         } catch (err) {
             console.error('Failed to get LLM usage:', err);
             return null;
@@ -277,11 +218,7 @@ export const LLMService = {
     async logInteraction(sessionId, role, content) {
         if (!sessionId) return;
         try {
-            await fetch(apiUrl(`/interactions`), {
-                method: 'POST',
-                headers: this.getAuthHeaders(),
-                body: JSON.stringify({ session_id: sessionId, role, content })
-            });
+            await apiPost('/interactions', { session_id: sessionId, role, content });
         } catch (e) {
             console.error('Logging failed', e);
         }

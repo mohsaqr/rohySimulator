@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useNotifications } from '../useNotifications';
 import { SURFACES, SOURCES } from '../types';
 import { AuthService } from '../../services/authService';
+import { apiPost, apiPut } from '../../services/apiClient';
 import { apiUrl } from '../../config/api';
 
 // Backend surface batches notifications and POSTs them. Two endpoints today:
@@ -120,8 +121,7 @@ export default function BackendSurface({ sessionId, userId, caseId }) {
 }
 
 async function sendClinical(events, keyToAlarmId, pendingAcks) {
-    const token = AuthService.getToken();
-    if (!token) return;
+    if (!AuthService.getToken()) return;
     // /api/alarms/log accepts one event per call. Fire them in parallel.
     await Promise.all(events.map(async (n) => {
         const body = {
@@ -132,16 +132,7 @@ async function sendClinical(events, keyToAlarmId, pendingAcks) {
             actual_value: n.data?.actualValue ?? null,
         };
         try {
-            const res = await fetch(apiUrl('/alarms/log'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify(body),
-            });
-            if (!res.ok) return;
-            const data = await res.json().catch(() => null);
+            const data = await apiPost('/alarms/log', body);
             const id = data?.id;
             if (id == null) return;
             keyToAlarmId.set(n.key, id);
@@ -157,12 +148,8 @@ async function sendClinical(events, keyToAlarmId, pendingAcks) {
 }
 
 function sendAck(alarmEventId) {
-    const token = AuthService.getToken();
-    if (!token) return;
-    fetch(apiUrl(`/alarms/${alarmEventId}/acknowledge`), {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => { /* drop; ack stamp is best-effort audit */ });
+    if (!AuthService.getToken()) return;
+    apiPut(`/alarms/${alarmEventId}/acknowledge`).catch(() => { /* best-effort */ });
 }
 
 // learning_events.severity is constrained to DEBUG/INFO/ACTION/IMPORTANT/CRITICAL.
@@ -187,10 +174,6 @@ function defaultVerbFor(n) {
 }
 
 function sendTelemetry(events, immediate) {
-    const token = AuthService.getToken();
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
-
     const payload = {
         events: events.map(n => ({
             timestamp: new Date(n.createdAt).toISOString(),
@@ -214,14 +197,12 @@ function sendTelemetry(events, immediate) {
     };
 
     if (immediate && navigator.sendBeacon) {
+        // sendBeacon doesn't carry custom headers reliably; the route
+        // accepts beacon traffic without auth specifically for unload paths.
         const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
         navigator.sendBeacon(apiUrl('/learning-events/batch'), blob);
         return;
     }
 
-    fetch(apiUrl('/learning-events/batch'), {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-    }).catch(() => { /* drop; loss is acceptable for telemetry */ });
+    apiPost('/learning-events/batch', payload).catch(() => { /* drop; loss is acceptable for telemetry */ });
 }
