@@ -402,6 +402,67 @@ describe('auth middleware — authenticateToken', () => {
     });
 });
 
+describe('auth middleware — HttpOnly cookie auth (rohy_auth)', () => {
+    // The cookie path runs alongside the legacy bearer path: clients that
+    // already use localStorage tokens keep working unchanged, clients that
+    // use credentials:'include' get the HttpOnly protection. Login sets
+    // BOTH (cookie + JSON token), logout clears the cookie and revokes
+    // the active_sessions row.
+
+    it('extractToken: prefers Authorization: Bearer when both header and cookie are present', () => {
+        const req = makeReq({
+            headers: {
+                authorization: 'Bearer header-token',
+                cookie: `rohy_auth=cookie-token`,
+            },
+        });
+        expect(auth.extractToken(req)).toEqual({ token: 'header-token', source: 'header' });
+    });
+
+    it('extractToken: falls back to cookie when no header is present', () => {
+        const req = makeReq({ headers: { cookie: 'foo=bar; rohy_auth=cookie-only; baz=qux' } });
+        expect(auth.extractToken(req)).toEqual({ token: 'cookie-only', source: 'cookie' });
+    });
+
+    it('extractToken: returns {token:null} when neither header nor cookie carries one', () => {
+        const req = makeReq({ headers: { cookie: 'foo=bar; baz=qux' } });
+        expect(auth.extractToken(req)).toEqual({ token: null, source: null });
+    });
+
+    it('extractToken: tolerates URL-encoded cookie values', () => {
+        const req = makeReq({ headers: { cookie: 'rohy_auth=ab%20cd' } });
+        expect(auth.extractToken(req).token).toBe('ab cd');
+    });
+
+    it('authenticateToken accepts a valid JWT delivered via the cookie', async () => {
+        const token = signToken({ id: 104, role: 'admin' }, { jwtid: 'cookie-accept' });
+        await auth.recordActiveSession(token, { id: 104, tenant_id: 1 });
+
+        const req = makeReq({ headers: { cookie: `rohy_auth=${token}` } });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        expect(res.__nextCalled).toBe(true);
+        expect(req.user.id).toBe(104);
+        // tokenSource is stashed so handlers like /auth/logout can decide
+        // whether to clear the cookie.
+        expect(req.tokenSource).toBe('cookie');
+    });
+
+    it('authenticateToken: cookie-mode tokens still go through active_sessions revocation', async () => {
+        const token = signToken({ id: 104, role: 'admin' }, { jwtid: 'cookie-revoke' });
+        await auth.recordActiveSession(token, { id: 104, tenant_id: 1 });
+        await auth.revokeActiveSessionByToken(token);
+
+        const req = makeReq({ headers: { cookie: `rohy_auth=${token}` } });
+        const res = makeRes();
+        await runMiddleware(auth.authenticateToken, req, res);
+        // The revoke-via-cookie path returns the same 401 as the bearer
+        // path so the audit's revocation contract holds across both.
+        expect(res.statusCode).toBe(401);
+        expect(res.body).toEqual({ error: 'Session revoked' });
+    });
+});
+
 describe('auth middleware — server-side token revocation via active_sessions', () => {
     // Each test uses a unique jwtid so payload-derived JWTs don't collide on
     // active_sessions.token_hash (UNIQUE) — a deterministic-payload artefact,

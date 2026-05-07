@@ -125,9 +125,20 @@ export async function apiFetch(path, options = {}) {
 
     Object.assign(headers, extraHeaders);
 
+    // credentials:'same-origin' is fetch's default for same-origin URLs but
+    // we set it explicitly so the rohy_auth HttpOnly cookie travels — this
+    // is the client side of the audit's "JWT in localStorage → cookies"
+    // migration. Cross-origin callers can still override via `rest`.
     let response;
     try {
-        response = await fetch(url, { method, headers, body, signal, ...rest });
+        response = await fetch(url, {
+            method,
+            headers,
+            body,
+            signal,
+            credentials: 'same-origin',
+            ...rest,
+        });
     } catch (err) {
         if (err?.name === 'AbortError') throw err;
         throw new ApiError(`Network error: ${err?.message || 'request failed'}`, {

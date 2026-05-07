@@ -19,10 +19,26 @@ import {
     resolveTenant,
     ROLE_RANKS,
     VALID_ROLES,
+    AUTH_COOKIE_NAME,
     getRoleRank,
     hasRoleAtLeast,
     normalizeRole
 } from './middleware/auth.js';
+
+// Cookie config for the JWT auth cookie. HttpOnly so scripts can't steal
+// it (the localStorage XSS-blast-radius problem the audit flagged).
+// SameSite=Lax keeps cross-site form-POSTs from auto-attaching it.
+// secure:true requires HTTPS — gated on NODE_ENV so localhost dev still
+// works without TLS but production gets the protection.
+function authCookieOptions(maxAgeSeconds = 4 * 60 * 60) {
+    return {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: maxAgeSeconds * 1000,
+    };
+}
 import * as labDb from './services/labDatabase.js';
 import catalogueRouter from './routes/catalogue.js';
 import { spawn } from 'node:child_process';
@@ -1116,6 +1132,13 @@ router.post('/auth/login', authLimiter, (req, res) => {
                 console.warn('[auth] failed to record active_sessions row:', e.message);
             }
 
+            // Set HttpOnly cookie alongside the JSON token. Cookie-aware
+            // clients (apiFetch with credentials:'include') get the
+            // protection; legacy clients keep using the JSON token.
+            // Both paths verify against the SAME active_sessions row, so
+            // logout/admin-revoke applies regardless of which the client is on.
+            res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
+
             res.json({
                 message: 'Login successful',
                 user: {
@@ -1177,6 +1200,10 @@ router.post('/auth/logout', authenticateToken, async (req, res) => {
             console.warn('[auth] failed to revoke session row:', e.message);
         }
     }
+
+    // Drop the cookie regardless of how the client authed — cookie-mode
+    // clients lose their token, header-mode clients are unaffected.
+    res.clearCookie(AUTH_COOKIE_NAME, authCookieOptions(0));
 
     db.run(
         `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,

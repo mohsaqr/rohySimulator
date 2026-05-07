@@ -27,6 +27,49 @@ export function hashToken(token) {
     return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+// Cookie name carrying the JWT for HttpOnly-cookie clients. The legacy
+// bearer-header path still works in parallel; this is rolled out additively
+// so existing localStorage-token clients keep working unchanged.
+export const AUTH_COOKIE_NAME = 'rohy_auth';
+
+// Pull the JWT from EITHER the Authorization header (legacy) OR a cookie
+// (preferred, HttpOnly). Header wins when both are present — useful in
+// migration windows where a tab might briefly hold a localStorage token
+// while the cookie hasn't been set yet.
+//
+// We do not depend on `cookie-parser` (not currently a project dep). The
+// parser inlined here handles a single named cookie correctly under the
+// usual `name=value; Other=Foo` syntax. Quoted-string and Path-attribute
+// edge cases are out of scope — Express's `Cookie:` header only carries
+// name/value pairs, not attributes (those are server-to-client only).
+function readCookie(req, name) {
+    const raw = req.headers?.cookie;
+    if (!raw) return null;
+    for (const pair of raw.split(';')) {
+        const eq = pair.indexOf('=');
+        if (eq === -1) continue;
+        const k = pair.slice(0, eq).trim();
+        if (k !== name) continue;
+        const v = pair.slice(eq + 1).trim();
+        try { return decodeURIComponent(v); }
+        catch { return v; }
+    }
+    return null;
+}
+
+export function extractToken(req) {
+    const authHeader = req.headers?.['authorization'];
+    if (authHeader) {
+        const parts = authHeader.split(' ');
+        if (parts.length === 2 && parts[0] === 'Bearer' && parts[1]) {
+            return { token: parts[1], source: 'header' };
+        }
+    }
+    const cookie = readCookie(req, AUTH_COOKIE_NAME);
+    if (cookie) return { token: cookie, source: 'cookie' };
+    return { token: null, source: null };
+}
+
 // Middleware to authenticate JWT token.
 //
 // Two-stage check:
@@ -43,12 +86,15 @@ export function hashToken(token) {
 // signed-in user to re-login on the deploy. Once they expire (4h default),
 // the next login goes through the new path.
 export const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    const { token, source } = extractToken(req);
 
     if (!token) {
         return res.status(401).json({ error: 'Access token required' });
     }
+    // Stash so route handlers can tell whether this request was authed via
+    // the legacy bearer path or the cookie path (useful for /auth/logout
+    // to know whether to clear the cookie).
+    req.tokenSource = source;
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) {
