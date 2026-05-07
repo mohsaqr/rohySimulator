@@ -6,9 +6,8 @@ import {
     Calendar, Activity, MousePointer, ToggleLeft, BarChart3, AlertTriangle,
     Info, Bug, Zap, TrendingUp, PieChart, SmilePlus
 } from 'lucide-react';
-import { AuthService } from '../../services/authService';
 import { SEVERITY, CATEGORIES } from '../../services/eventLogger';
-import { apiUrl } from '../../config/api';
+import { ApiError, apiFetch } from '../../services/apiClient';
 
 // Icon mapping for different verbs
 const VERB_ICONS = {
@@ -392,26 +391,23 @@ export default function SessionLogViewer({ sessionId, userId, onClose, showAllSe
     // Fetch events
     const fetchEvents = async () => {
         try {
-            const token = AuthService.getToken();
-            // Always fetch all recent events, or filter by session if specified
-            let url = sessionId
-                ? apiUrl(`/learning-events/session/${sessionId}`)
-                : apiUrl(`/learning-events/all?limit=500`);
-
-            const res = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                setEvents(data.events || []);
-                setError(null);
-            } else {
-                const errData = await res.json().catch(() => ({}));
-                setError(errData.error || 'Failed to fetch events');
-            }
+            // Path-only — apiFetch handles auth (cookie or bearer) and the
+            // /api prefix. The pre-fix raw fetch + Bearer ${getToken()}
+            // sent literal "Bearer null" for cookie-mode users (no
+            // localStorage token after the flag day) — server then 403'd
+            // and the analytics view appeared empty / broken.
+            const path = sessionId
+                ? `/learning-events/session/${sessionId}`
+                : `/learning-events/all?limit=500`;
+            const data = await apiFetch(path);
+            setEvents(data?.events || []);
+            setError(null);
         } catch (err) {
-            setError(err.message);
+            if (err instanceof ApiError) {
+                setError(err.message || 'Failed to fetch events');
+            } else {
+                setError(err.message);
+            }
         } finally {
             setLoading(false);
         }

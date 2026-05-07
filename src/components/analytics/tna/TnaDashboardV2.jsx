@@ -31,8 +31,7 @@ import {
     tna, ftna, ctna, atna,
     centralities, prune, summary, layout as dynaLayout,
 } from 'dynajs';
-import { apiUrl } from '../../../config/api';
-import { AuthService } from '../../../services/authService';
+import { apiFetch } from '../../../services/apiClient';
 
 import { TnaNetworkGraph } from './laila/TnaNetworkGraph';
 import { TnaDistributionPlot } from './laila/TnaDistributionPlot';
@@ -150,17 +149,18 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
 
     // --- Load filter options once ---
     useEffect(() => {
-        const token = AuthService.getToken();
-        fetch(apiUrl('/analytics/filter-options'), { headers: { Authorization: `Bearer ${token}` } })
-            .then((r) => r.json())
-            .then((d) => setFilterOptions({ cases: d.cases || [], users: d.users || [] }))
+        // Pre-fix this used raw fetch + Bearer ${getToken()} which sent
+        // literal "Bearer null" for cookie-mode users → 403 → empty
+        // analytics. apiFetch handles the no-token case by falling
+        // through to the rohy_auth cookie.
+        apiFetch('/analytics/filter-options')
+            .then((d) => setFilterOptions({ cases: d?.cases || [], users: d?.users || [] }))
             .catch(() => {});
     }, []);
 
     // --- Fetch TNA sequences when filters change and we're on an analytics-style tab ---
     useEffect(() => {
         if (!isAnalyticsRelated) return;
-        const token = AuthService.getToken();
         const params = new URLSearchParams();
         if (caseId) params.set('case_id', caseId);
         if (userId) params.set('user_id', userId);
@@ -171,10 +171,7 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
 
         setLoading(true);
         setError(null);
-        fetch(apiUrl(`/analytics/tna-sequences?${params}`), {
-            headers: { Authorization: `Bearer ${token}` },
-        })
-            .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+        apiFetch(`/analytics/tna-sequences?${params}`)
             .then((d) => { setTnaData(d); setLastUpdated(Date.now()); })
             .catch((err) => setError(err.message))
             .finally(() => setLoading(false));
@@ -183,20 +180,18 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
     // --- Fetch activity bundle for the Activity tab ---
     useEffect(() => {
         if (!isActivityTab) return;
-        const token = AuthService.getToken();
         const params = new URLSearchParams();
         if (caseId) params.set('case_id', caseId);
         if (userId) params.set('user_id', userId);
         if (startDate) params.set('start_date', startDate);
         if (endDate) params.set('end_date', endDate);
-        const headers = { Authorization: `Bearer ${token}` };
 
         Promise.all([
-            fetch(apiUrl(`/analytics/summary?${params}`), { headers }).then((r) => r.json()),
-            fetch(apiUrl(`/analytics/timeline-series?${params}`), { headers }).then((r) => r.json()),
-            fetch(apiUrl(`/analytics/hourly-counts?${params}`), { headers }).then((r) => r.json()),
-            fetch(apiUrl(`/analytics/stats?${params}`), { headers }).then((r) => r.json()),
-            fetch(apiUrl(`/analytics/top-resources?${params}`), { headers }).then((r) => r.json()),
+            apiFetch(`/analytics/summary?${params}`),
+            apiFetch(`/analytics/timeline-series?${params}`),
+            apiFetch(`/analytics/hourly-counts?${params}`),
+            apiFetch(`/analytics/stats?${params}`),
+            apiFetch(`/analytics/top-resources?${params}`),
         ]).then(([summaryD, timelineD, hourlyD, statsD, resourcesD]) => {
             setActivityBundle({
                 summary: summaryD,

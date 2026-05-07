@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AlertCircle, Loader2, Users, BarChart3, Activity, ArrowLeft, Layers, ChevronLeft, ChevronRight, ToggleLeft, ToggleRight, Sun, Moon } from 'lucide-react';
-import { apiUrl } from '../../../config/api';
-import { AuthService } from '../../../services/authService';
+import { ApiError, apiFetch } from '../../../services/apiClient';
 import { tna, prune, clusterSequences } from './tnaUtils';
 import NetworkGraph from './NetworkGraph';
 import DistributionPlot from './DistributionPlot';
@@ -37,33 +36,30 @@ export default function TnaDashboard({ onClose }) {
   };
 
   useEffect(() => {
-    const token = AuthService.getToken();
-    fetch(apiUrl('/cases'), {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(d => setCases(d.cases || []))
+    apiFetch('/cases')
+      .then(d => setCases(d?.cases || []))
       .catch(() => {});
   }, []);
 
   const fetchSequences = useCallback(() => {
     setLoading(true);
     setError(null);
-    const token = AuthService.getToken();
     const params = new URLSearchParams();
     if (caseId) params.set('case_id', caseId);
     if (startDate) params.set('start_date', startDate);
     if (endDate) params.set('end_date', endDate);
 
-    fetch(apiUrl(`/analytics/tna-sequences?${params.toString()}`), {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+    apiFetch(`/analytics/tna-sequences?${params.toString()}`)
       .then(d => { setData(d); setLoading(false); })
-      .catch(err => { setError(err.message); setLoading(false); });
+      .catch(err => {
+        // Pre-fix this used raw fetch + Bearer ${getToken()} which sent
+        // literal "Bearer null" for cookie-mode users → 403 → empty
+        // analytics. apiFetch handles the no-token case by falling
+        // through to the rohy_auth cookie.
+        const msg = err instanceof ApiError ? (err.message || `HTTP ${err.status}`) : err.message;
+        setError(msg);
+        setLoading(false);
+      });
   }, [caseId, startDate, endDate]);
 
   useEffect(() => { fetchSequences(); }, [fetchSequences]);
