@@ -140,4 +140,54 @@ describe('useTreatmentEffects', () => {
     expect(adjusted.spo2).toBe(96);
     expect(result.current.hasSignificantEffects(5)).toBe(true);
   });
+
+  // Audit #17: the singleton TreatmentEffectsEngine is shared across all
+  // useTreatmentEffects mounts. Without re-fetching on session change,
+  // session B would inherit session A's active treatments — exactly the
+  // leak the client-hooks audit flagged. Lock the cross-session reload.
+  it('refetches when sessionId changes between two non-null sessions', async () => {
+    const aResponse = okActiveTreatments([{
+      id: 1,
+      treatment_order_id: 11,
+      treatment_name: 'Oxygen (session A)',
+      treatment_type: 'oxygen',
+      started_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+      onset_minutes: 1,
+      peak_minutes: 2,
+      duration_minutes: 20,
+      peak_spo2_effect: 5,
+    }]);
+    const bResponse = okActiveTreatments([{
+      id: 2,
+      treatment_order_id: 22,
+      treatment_name: 'Beta blocker (session B)',
+      treatment_type: 'medication',
+      started_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+      onset_minutes: 1,
+      peak_minutes: 2,
+      duration_minutes: 20,
+      peak_hr_effect: -20,
+    }]);
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(aResponse)
+      .mockResolvedValueOnce(bResponse);
+
+    const { result, rerender } = renderHook(
+      ({ sessionId }) => useTreatmentEffects(sessionId, { pollInterval: 60_000, updateInterval: 10 }),
+      { initialProps: { sessionId: 'session-A' } }
+    );
+
+    await waitFor(() => expect(result.current.count).toBe(1));
+    expect(result.current.effects[0]).toMatchObject({ treatment_order_id: 11 });
+
+    rerender({ sessionId: 'session-B' });
+    await waitFor(() => expect(result.current.effects[0]?.treatment_order_id).toBe(22));
+    // Two distinct fetches: one per session id.
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    const urls = global.fetch.mock.calls.map(([url]) => url);
+    expect(urls).toEqual([
+      '/api/sessions/session-A/active-effects',
+      '/api/sessions/session-B/active-effects',
+    ]);
+  });
 });

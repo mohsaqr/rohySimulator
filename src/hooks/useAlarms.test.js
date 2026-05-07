@@ -165,4 +165,34 @@ describe('useAlarms', () => {
       enabled: true,
     });
   });
+
+  // Audit #17: the 2s scheduled re-check tick is what catches a vital that
+  // was normal at first render but breaches later. Without timer-based
+  // tests, a refactor that drops the setInterval would silently break alarm
+  // detection on slow-developing breaches.
+  it('re-evaluates breaches on the periodic 2s tick (timer contract)', async () => {
+    // Start with hr=80 (normal) — no breach, no notify expected. Wait for
+    // the threshold-load fetch to settle (real timers) before swapping to
+    // fake timers and exercising the periodic tick.
+    const { rerender } = renderHook(({ vitals }) => useAlarms(vitals, 'session-1'), {
+      initialProps: { vitals: { hr: 80 } },
+    });
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    // Drain any pending microtasks so threshold-load resolves and
+    // `thresholdsLoaded` flips to true before we freeze the clock.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(notificationState.notify).not.toHaveBeenCalled();
+
+    vi.useFakeTimers();
+    try {
+      // Move the vital into breach and let the 2s tick detect it.
+      rerender({ vitals: { hr: 130 } });
+      await vi.advanceTimersByTimeAsync(2100);
+      expect(notificationState.notify).toHaveBeenCalled();
+      const firstCall = notificationState.notify.mock.calls[0][0];
+      expect(firstCall.key).toBe('alarm:hr_high');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
