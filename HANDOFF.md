@@ -219,6 +219,54 @@ High-leverage modules:
   the path off the insecure-context block. The cookie-mode auth this
   session adds is dependent on HTTPS being live in production —
 
+## Session update — 2026-05-07 Items D, C, B
+
+### Completed
+
+- **Item D (all slices D1-D6)** — split `server/routes.js` into domain
+  routers under `server/routes/` and kept `server/routes.js` as the mount
+  point. Slice markers are in `server/routes.js`; the legacy route-auth
+  allowlist test still passes via a non-runtime manifest comment in the
+  mount file.
+- **D1 helper extraction** — added `server/routes/_helpers.js` for tenant,
+  audit, purge, password/role, redaction, case/session, and DB helper
+  surfaces. Domain routers import from this single source.
+- **D2-D5 domain files** — added auth, users, tenants, cases, sessions,
+  orders, proxy, agents, admin, analytics, uploads, notes,
+  patient-record, and notification route modules.
+- **Item C** — moved route/middleware persistence calls behind
+  `server/dbAdapter.js`. The adapter now supports the existing callback
+  call shape while returning promises, which kept the route split
+  behavior-preserving.
+- **Item C guard** — added `tests/server/db-direct-access.test.js`.
+  Allowlisted direct sqlite setup surfaces are `server/dbAdapter.js`,
+  `server/db.js`, `server/observability.js`, `server/migrationRunner.js`,
+  `server/seeders/`, and `scripts/`; route/middleware code must use the
+  adapter.
+- **Item B** — added `migrations/0010_usage_budget.sql` and
+  `server/usage-budget.js` with per-user and per-tenant 24h windows.
+  Defaults used: LLM user 1,000,000 tokens/day, LLM tenant 10,000,000
+  tokens/day, TTS user 500,000 chars/day, TTS tenant 5,000,000 chars/day.
+- **Item B wiring** — `/proxy/llm` enforces token budgets before upstream
+  calls and records actual response usage; streaming and non-streaming
+  paths both record. `/tts` enforces and records character budgets.
+  Budget failures return HTTP 429 with `budget_exceeded: true`.
+- **Item B tests** — added `tests/server/usage-budget.test.js` and
+  `tests/server/proxy-budget.test.js`.
+
+### Verification
+
+- `npm test` passed: 89 test files, 1059 tests passed, 10 skipped.
+
+### Notes / decisions
+
+- The D split exposed path assumptions from the old monolithic
+  `server/routes.js`; fixed dynamic service imports and file paths for TTS,
+  uploads, admin DB stats, and lab seed paths relative to `server/routes/`.
+- The first full `npm test` rerun hit an intermittent `auth-refresh` child
+  server failure; the file passed in isolation and the second full suite
+  passed cleanly.
+
 ---
 
 # Continuation Handoff — 2026-05-07 (observability + audit trail Phases 1-2)

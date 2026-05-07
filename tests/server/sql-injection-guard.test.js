@@ -61,52 +61,52 @@ const ALLOWLIST = [
         file: 'server/routes/catalogue.js',
         why: 'Drug/lab catalogue routes share one handler factory; the interpolated table/FK names are constant strings selected from a hardcoded { drug, lab } map at line ~510, never from req.*. Reviewer: confirm `config` is built from a constant before adding any new interpolation here.',
     },
-    // server/routes.js — line-specific allowlist (NOT a blanket pass).
+    // Route modules — line-specific allowlist (NOT a blanket pass).
     // Each entry pins a substring; the substring must literally appear on
-    // the flagged line. NEW interpolation in routes.js will fail until
+    // the flagged line. NEW interpolation in route files will fail until
     // it's audited and either rewritten or added here with a `why`.
     {
-        file: 'server/routes.js',
+        file: 'server/routes/_helpers.js',
         lineSubstring: 'FROM ${table} WHERE tenant_id = ? AND user_id = ?',
         why: 'Iterates HARD_DELETE_ON_PURGE_TABLES (module-level constant); user_id/tenant_id parameterised.',
     },
     {
-        file: 'server/routes.js',
+        file: 'server/routes/_helpers.js',
         lineSubstring: 'FROM ${retention.table} WHERE tenant_id = ?',
         why: 'Iterates RETENTION_TABLES (module-level constant); ${retention.userColumn} also from constant.',
     },
     {
-        file: 'server/routes.js',
+        file: 'server/routes/_helpers.js',
         lineSubstring: 'DELETE FROM ${table} WHERE tenant_id = ?',
         why: 'Same HARD_DELETE_ON_PURGE_TABLES iteration as above.',
     },
     {
-        file: 'server/routes.js',
+        file: 'server/route',
         lineSubstring: "user_id ${user_id ? '= ?' : 'IS NULL'}",
         why: 'Boolean ternary picks SQL fragment from two literals — no user value interpolated.',
     },
     {
-        file: 'server/routes.js',
+        file: 'server/route',
         lineSubstring: 'SET ${updates.join',
         why: 'updates[] is built from a hardcoded { allowed: column-name } whitelist earlier in the handler; values still go through `?` placeholders.',
     },
     {
-        file: 'server/routes.js',
+        file: 'server/route',
         lineSubstring: "configuredIds.map(() => '?').join(',')",
         why: 'Injects only "?" placeholder markers, never values.',
     },
     {
-        file: 'server/routes.js',
+        file: 'server/route',
         lineSubstring: 'FROM ${table}',
         why: 'admin/database-stats iterates a hardcoded `tables` list of known table names.',
     },
     {
-        file: 'server/routes.js',
+        file: 'server/route',
         lineSubstring: 'IN (${templateIds.join',
         why: 'templateIds = templates.map(t => t.id) — integer IDs from a prior parameterised SELECT, never req.* values.',
     },
     {
-        file: 'server/routes.js',
+        file: 'server/route',
         lineSubstring: 'FROM learning_events ${where}',
         why: '`where` is built earlier in the function with `where += " AND col = ?"` shapes; values go through the params array.',
     },

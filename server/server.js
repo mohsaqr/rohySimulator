@@ -6,6 +6,7 @@ import path from 'path';
 import fs from "fs";
 import { fileURLToPath } from 'url';
 import db, { dbReady } from './db.js';
+import dbAdapter from './dbAdapter.js';
 import { runSeeders, needsSeeding } from './seeders/index.js';
 import { loadKokoro } from './services/kokoroTts.js';
 import { configureSlowQueryThresholdFromDb, instrumentSqliteDb } from './observability.js';
@@ -133,7 +134,7 @@ function startHttpsServer(port) {
 // tts_provider is set to 'kokoro' — eliminates that delay for the first
 // real request without blocking startup.
 function maybeWarmupKokoro() {
-    db.get(
+    dbAdapter.get(
         "SELECT setting_value FROM platform_settings WHERE setting_key = 'tts_provider'",
         (err, row) => {
             if (err || !row || row.setting_value !== 'kokoro') return;
@@ -165,7 +166,7 @@ const LEGACY_VOICE_MIGRATIONS = [
 
 function getSetting(key) {
     return new Promise((resolve, reject) => {
-        db.get(
+        dbAdapter.get(
             'SELECT setting_value FROM platform_settings WHERE setting_key = ?',
             [key],
             (err, row) => err ? reject(err) : resolve(row?.setting_value || null)
@@ -175,7 +176,7 @@ function getSetting(key) {
 
 function setSettingIfEmpty(key, value) {
     return new Promise((resolve, reject) => {
-        db.run(
+        dbAdapter.run(
             `INSERT INTO platform_settings (setting_key, setting_value, updated_at)
              VALUES (?, ?, CURRENT_TIMESTAMP)
              ON CONFLICT(setting_key) DO NOTHING`,

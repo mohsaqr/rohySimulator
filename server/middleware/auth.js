@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import db from '../db.js';
+import dbAdapter from '../dbAdapter.js';
 import { csrfRequired, verifyCsrf } from './csrf.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -133,7 +133,7 @@ export const authenticateToken = (req, res, next) => {
         }
 
         const tokenHash = hashToken(token);
-        db.get(
+        dbAdapter.get(
             `SELECT is_active, expires_at FROM active_sessions WHERE token_hash = ? LIMIT 1`,
             [tokenHash],
             (sessionErr, sessionRow) => {
@@ -160,14 +160,14 @@ export const authenticateToken = (req, res, next) => {
                         }
                     }
                     // Best-effort touch — failure is non-fatal.
-                    db.run(
+                    dbAdapter.run(
                         `UPDATE active_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE token_hash = ?`,
                         [tokenHash],
                         () => { /* ignore */ }
                     );
                 }
 
-                db.get(
+                dbAdapter.get(
                     `SELECT tenant_id, role, status, deleted_at FROM users WHERE id = ?`,
                     [user.id],
                     (lookupErr, row) => {
@@ -210,7 +210,7 @@ export const authenticateToken = (req, res, next) => {
 export function recordActiveSession(token, user, { ipAddress = null, userAgent = null, expiresIn = '+4 hours' } = {}) {
     const tokenHash = hashToken(token);
     return new Promise((resolve, reject) => {
-        db.run(
+        dbAdapter.run(
             `INSERT INTO active_sessions (user_id, token_hash, ip_address, user_agent, expires_at, tenant_id)
              VALUES (?, ?, ?, ?, datetime('now', ?), ?)`,
             [user.id, tokenHash, ipAddress, userAgent, expiresIn, user.tenant_id || 1],
@@ -225,7 +225,7 @@ export function revokeActiveSessionByToken(token) {
 
 export function revokeActiveSessionByHash(tokenHash) {
     return new Promise((resolve, reject) => {
-        db.run(
+        dbAdapter.run(
             `UPDATE active_sessions SET is_active = 0 WHERE token_hash = ?`,
             [tokenHash],
             function (err) { err ? reject(err) : resolve(this.changes); }

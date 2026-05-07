@@ -24,25 +24,39 @@ function normalizeParams(params) {
     return Array.isArray(params) ? params : [params];
 }
 
-export function get(sql, params = []) {
-    return timeDbAdapterQuery('adapter.get', sql, () => new Promise((resolve, reject) => {
-        db.get(sql, normalizeParams(params), (err, row) => {
+function splitParamsAndCallback(params, callback) {
+    if (typeof params === 'function') {
+        return { params: [], callback: params };
+    }
+    return { params: params ?? [], callback };
+}
+
+export function get(sql, params = [], callback) {
+    const args = splitParamsAndCallback(params, callback);
+    const promise = timeDbAdapterQuery('adapter.get', sql, () => new Promise((resolve, reject) => {
+        db.get(sql, normalizeParams(args.params), (err, row) => {
             err ? reject(err) : resolve(row || null);
         });
     }));
+    if (args.callback) promise.then((row) => args.callback(null, row), args.callback);
+    return promise;
 }
 
-export function all(sql, params = []) {
-    return timeDbAdapterQuery('adapter.all', sql, () => new Promise((resolve, reject) => {
-        db.all(sql, normalizeParams(params), (err, rows) => {
+export function all(sql, params = [], callback) {
+    const args = splitParamsAndCallback(params, callback);
+    const promise = timeDbAdapterQuery('adapter.all', sql, () => new Promise((resolve, reject) => {
+        db.all(sql, normalizeParams(args.params), (err, rows) => {
             err ? reject(err) : resolve(rows || []);
         });
     }));
+    if (args.callback) promise.then((rows) => args.callback(null, rows), args.callback);
+    return promise;
 }
 
-export function run(sql, params = []) {
-    return timeDbAdapterQuery('adapter.run', sql, () => new Promise((resolve, reject) => {
-        db.run(sql, normalizeParams(params), function onRun(err) {
+export function run(sql, params = [], callback) {
+    const args = splitParamsAndCallback(params, callback);
+    const promise = timeDbAdapterQuery('adapter.run', sql, () => new Promise((resolve, reject) => {
+        db.run(sql, normalizeParams(args.params), function onRun(err) {
             err ? reject(err) : resolve({
                 lastID: this.lastID,
                 changes: this.changes,
@@ -50,6 +64,8 @@ export function run(sql, params = []) {
             });
         });
     }));
+    if (args.callback) promise.then((result) => args.callback.call(result.statement, null), (err) => args.callback(err));
+    return promise;
 }
 
 export function serialize(work) {
@@ -79,35 +95,61 @@ export async function transaction(work) {
 export function prepare(sql) {
     const stmt = db.prepare(sql);
     return {
-        run(params = []) {
+        run(params = [], callback) {
+            const args = splitParamsAndCallback(params, callback);
             return timeDbAdapterQuery('adapter.prepare.run', sql, () => new Promise((resolve, reject) => {
-                stmt.run(normalizeParams(params), function onPreparedRun(err) {
+                stmt.run(normalizeParams(args.params), function onPreparedRun(err) {
                     err ? reject(err) : resolve({
                         lastID: this.lastID,
                         changes: this.changes,
                         statement: this
                     });
                 });
-            }));
+            })).then((result) => {
+                if (args.callback) args.callback.call(result.statement, null);
+                return result;
+            }, (err) => {
+                if (args.callback) args.callback(err);
+                if (!args.callback) throw err;
+                return undefined;
+            });
         },
-        get(params = []) {
+        get(params = [], callback) {
+            const args = splitParamsAndCallback(params, callback);
             return timeDbAdapterQuery('adapter.prepare.get', sql, () => new Promise((resolve, reject) => {
-                stmt.get(normalizeParams(params), (err, row) => {
+                stmt.get(normalizeParams(args.params), (err, row) => {
                     err ? reject(err) : resolve(row || null);
                 });
-            }));
+            })).then((row) => {
+                if (args.callback) args.callback(null, row);
+                return row;
+            }, (err) => {
+                if (args.callback) args.callback(err);
+                if (!args.callback) throw err;
+                return undefined;
+            });
         },
-        all(params = []) {
+        all(params = [], callback) {
+            const args = splitParamsAndCallback(params, callback);
             return timeDbAdapterQuery('adapter.prepare.all', sql, () => new Promise((resolve, reject) => {
-                stmt.all(normalizeParams(params), (err, rows) => {
+                stmt.all(normalizeParams(args.params), (err, rows) => {
                     err ? reject(err) : resolve(rows || []);
                 });
-            }));
+            })).then((rows) => {
+                if (args.callback) args.callback(null, rows);
+                return rows;
+            }, (err) => {
+                if (args.callback) args.callback(err);
+                if (!args.callback) throw err;
+                return undefined;
+            });
         },
-        finalize() {
-            return new Promise((resolve, reject) => {
+        finalize(callback) {
+            const promise = new Promise((resolve, reject) => {
                 stmt.finalize((err) => err ? reject(err) : resolve());
             });
+            if (callback) promise.then(() => callback(null), callback);
+            return promise;
         },
         raw: stmt
     };

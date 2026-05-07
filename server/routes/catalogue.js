@@ -21,7 +21,7 @@
 // (row.scope === 'platform' AND user is admin). Enforced in canMutate().
 
 import express from 'express';
-import db from '../db.js';
+import dbAdapter from '../dbAdapter.js';
 import {
     authenticateToken,
     requireAdmin,
@@ -44,17 +44,17 @@ const VALID_SCOPES = new Set(['platform', 'tenant', 'user', 'session']);
 
 function dbGet(sql, params = []) {
     return new Promise((resolve, reject) =>
-        db.get(sql, params, (err, row) => err ? reject(err) : resolve(row || null))
+        dbAdapter.get(sql, params, (err, row) => err ? reject(err) : resolve(row || null))
     );
 }
 function dbAll(sql, params = []) {
     return new Promise((resolve, reject) =>
-        db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+        dbAdapter.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
     );
 }
 function dbRun(sql, params = []) {
     return new Promise((resolve, reject) =>
-        db.run(sql, params, function done(err) { err ? reject(err) : resolve(this); })
+        dbAdapter.run(sql, params, function done(err) { err ? reject(err) : resolve(this); })
     );
 }
 
