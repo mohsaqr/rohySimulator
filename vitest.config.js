@@ -69,17 +69,23 @@ export default defineConfig({
                 'public/**',
                 'docs/**',
             ],
-            // Phase 0: coverage thresholds are NOT enforced. Documented
-            // targets for Phase 2/3 (server units + client units):
+            // Coverage ratchet (audit finding #5). Floors set just below
+            // currently-achieved values as of 2026-05-07 so the suite
+            // catches regressions but doesn't refuse to start. Raise these
+            // numbers (never lower them) as new tests land — the audit's
+            // documented Phase 2/3 target is 70%, Phase 4+ is 80%+.
             //
-            //   thresholds: {
-            //     lines: 70,
-            //     branches: 65,
-            //     functions: 70,
-            //     statements: 70,
-            //   },
-            //
-            // Phase 4 raises these to 80%. Phase 5+ raise to 85%.
+            // To check current actuals: `npm run test:ci` and read the
+            // "All files" row in the v8 coverage table. If you're
+            // adding tests that don't move the needle, that's fine; if
+            // you're touching coverage-counted code without tests, this
+            // gate should refuse the merge until you add some.
+            thresholds: {
+                statements: 50,
+                branches: 44,
+                functions: 43,
+                lines: 51,
+            },
         },
         projects: [
             {
