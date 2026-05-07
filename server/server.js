@@ -34,6 +34,13 @@ const HTTPS_PORT = parseInt(process.env.HTTPS_PORT, 10) || (PORT + 1000);
 const TLS_CERT_PATH = process.env.TLS_CERT_PATH || '';
 const TLS_KEY_PATH = process.env.TLS_KEY_PATH || '';
 
+// Trust the loopback proxy (nginx terminates TLS at :4001 → forwards to
+// :4000). Without this, Express ignores X-Forwarded-For and every request
+// looks like 127.0.0.1 — rate-limiters then collapse all users into one
+// bucket. Restricted to loopback so we don't trust spoofed XFFs from the
+// public internet. Override via env if the proxy chain ever changes.
+app.set('trust proxy', process.env.ROHY_TRUST_PROXY || 'loopback');
+
 instrumentSqliteDb(db);
 
 // CORS Configuration - restrict to allowed origins
@@ -233,9 +240,54 @@ async function initializeAndStart() {
     }
 
     // Start the server, then trigger TTS warmup async.
-    startServer(PORT);
-    startHttpsServer(HTTPS_PORT);
+    const httpServer = startServer(PORT);
+    const httpsServer = startHttpsServer(HTTPS_PORT);
+    installGracefulShutdown([httpServer, httpsServer].filter(Boolean));
     maybeWarmupKokoro();
+}
+
+// Graceful shutdown.
+// systemd sends SIGTERM on `systemctl restart rohy` (and again on stop).
+// Without draining: in-flight requests get TCP RST, in-flight DB writes
+// abort, the client sees nginx 502 (the very symptom that started this
+// hardening pass). With draining: the listener stops accepting new
+// connections, in-flight requests finish, the DB closes cleanly, then
+// process.exit. Capped at SHUTDOWN_GRACE_MS so a runaway request can't
+// block forever — systemd's TimeoutStopSec defaults to 90s, well above
+// our 15s grace window.
+const SHUTDOWN_GRACE_MS = parseInt(process.env.ROHY_SHUTDOWN_GRACE_MS, 10) || 15_000;
+let shuttingDown = false;
+function installGracefulShutdown(servers) {
+    const handleSignal = (signal) => {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        bootLog.info('graceful shutdown initiated', { signal, grace_ms: SHUTDOWN_GRACE_MS });
+
+        // Hard deadline — if anything wedges, exit anyway.
+        const hardKill = setTimeout(() => {
+            bootLog.warn('graceful shutdown timed out, forcing exit', { grace_ms: SHUTDOWN_GRACE_MS });
+            process.exit(1);
+        }, SHUTDOWN_GRACE_MS).unref();
+
+        // Stop accepting new HTTP/HTTPS connections; in-flight requests
+        // continue. server.close fires its callback only after the last
+        // active socket finishes.
+        Promise.all(servers.map(s => new Promise(resolve => s.close(resolve)))).then(() => {
+            bootLog.info('http listeners closed');
+            // Now close the database. Any pending callbacks finish first.
+            db.close((err) => {
+                clearTimeout(hardKill);
+                if (err) bootLog.warn('db close error during shutdown', { error: err.message });
+                else bootLog.info('database closed cleanly');
+                process.exit(0);
+            });
+        }).catch((err) => {
+            bootLog.warn('listener close error', { error: err?.message || String(err) });
+        });
+    };
+
+    process.on('SIGTERM', () => handleSignal('SIGTERM'));
+    process.on('SIGINT', () => handleSignal('SIGINT'));
 }
 
 initializeAndStart();

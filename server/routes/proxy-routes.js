@@ -897,8 +897,17 @@ router.get('/tts/voices', authenticateToken, async (req, res) => {
                 piperInstalled: fs.existsSync(PIPER_BIN)
             });
         } catch (err) {
-            (req.log || routesLlmLog).error('kokoro voice listing load failed', { error: err.message });
-            return res.status(503).json({ error: 'Kokoro TTS failed to load' });
+            (req.log || routesLlmLog).error('kokoro voice listing load failed', {
+                error: err.message,
+                code: err.code || null,
+            });
+            const disabled = err.code === 'KOKORO_DISABLED';
+            return res.status(503).json({
+                error: disabled
+                    ? 'Kokoro is disabled until the next server restart (model load failed). Switch tts_provider in admin settings to recover.'
+                    : 'Kokoro TTS failed to load',
+                code: err.code || null,
+            });
         }
     }
 
@@ -1275,13 +1284,21 @@ router.post('/tts', authenticateToken, async (req, res) => {
                 res.write(eof);
                 return res.end();
             } catch (err) {
-                (req.log || routesLlmLog).error('kokoro streaming synthesis failed', { error: err.message });
+                (req.log || routesLlmLog).error('kokoro streaming synthesis failed', {
+                    error: err.message,
+                    code: err.code || null,
+                });
                 if (!res.headersSent && !clientGone) {
-                    // UNKNOWN_VOICE is safe to surface (just names the bad voice).
-                    // Anything else gets a generic message; details stay in the log.
-                    const status = err.code === 'UNKNOWN_VOICE' ? 400 : 500;
-                    const msg = err.code === 'UNKNOWN_VOICE' ? err.message : 'Kokoro synthesis failed';
-                    return res.status(status).json({ error: msg });
+                    // UNKNOWN_VOICE — name the bad voice. KOKORO_DISABLED —
+                    // tell admin to switch providers. Anything else gets a
+                    // generic message; details stay in the log.
+                    let status = 500, msg = 'Kokoro synthesis failed';
+                    if (err.code === 'UNKNOWN_VOICE') { status = 400; msg = err.message; }
+                    else if (err.code === 'KOKORO_DISABLED') {
+                        status = 503;
+                        msg = 'Kokoro is disabled until the next server restart. Switch tts_provider in admin settings to recover.';
+                    }
+                    return res.status(status).json({ error: msg, code: err.code || null });
                 }
                 if (!res.writableEnded) return res.end();
                 return;
@@ -1297,9 +1314,17 @@ router.post('/tts', authenticateToken, async (req, res) => {
             res.set('Content-Length', String(wav.length));
             return res.end(wav);
         } catch (err) {
-            (req.log || routesLlmLog).error('kokoro synthesis failed', { error: err.message });
-            const msg = err.code === 'UNKNOWN_VOICE' ? err.message : 'Kokoro synthesis failed';
-            return res.status(err.code === 'UNKNOWN_VOICE' ? 400 : 500).json({ error: msg });
+            (req.log || routesLlmLog).error('kokoro synthesis failed', {
+                error: err.message,
+                code: err.code || null,
+            });
+            let status = 500, msg = 'Kokoro synthesis failed';
+            if (err.code === 'UNKNOWN_VOICE') { status = 400; msg = err.message; }
+            else if (err.code === 'KOKORO_DISABLED') {
+                status = 503;
+                msg = 'Kokoro is disabled until the next server restart. Switch tts_provider in admin settings to recover.';
+            }
+            return res.status(status).json({ error: msg, code: err.code || null });
         }
     }
 

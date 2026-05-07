@@ -189,7 +189,32 @@ export async function verifyAuditChain({ tenant_id, database } = {}) {
     return { ok: true, lastVerifiedId };
 }
 
-export async function appendAuditEntry(row, { database } = {}) {
+// In-process append mutex.
+//
+// Each audit append wraps a BEGIN IMMEDIATE / INSERT / COMMIT cycle. The
+// sqlite3 npm driver is serialized at the statement level, BUT awaiting a
+// dbGet() in the middle of our transaction yields the event loop, which
+// lets a concurrent appendAuditEntry start its own BEGIN — sqlite then
+// throws "cannot start a transaction within a transaction" on the second
+// caller. Voice-settings saves hit this hard: 4 settings × fire-and-forget
+// `void appendAuditEntry()` from logAudit → 3 collisions guaranteed.
+//
+// The fix: a tiny FIFO promise-chain so only one append runs at a time.
+// Inserts are cheap (microseconds) so the queue never grows; the chain
+// just gives the event loop a single owner of the BEGIN/COMMIT pair.
+let appendChain = Promise.resolve();
+function withAppendLock(fn) {
+    const next = appendChain.then(() => fn(), () => fn());
+    // Don't propagate the previous tick's failure to the next caller.
+    appendChain = next.catch(() => {});
+    return next;
+}
+
+export async function appendAuditEntry(row, options = {}) {
+    return withAppendLock(() => _appendAuditEntryUnlocked(row, options));
+}
+
+async function _appendAuditEntryUnlocked(row, { database } = {}) {
     const db = database || await defaultDb();
     await ensureAuditChainColumns(db);
     await dbRun(db, 'BEGIN IMMEDIATE');

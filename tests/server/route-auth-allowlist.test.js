@@ -7,6 +7,7 @@ const repoRoot = path.resolve(import.meta.dirname, '../..');
 const ROUTE_FILES = [
     'server/routes.js',
     'server/routes/catalogue.js',
+    'server/routes/health-routes.js',
 ];
 
 const AUTH_MIDDLEWARE = [
@@ -36,6 +37,10 @@ const PUBLIC_ROUTE_ALLOWLIST = new Set([
     'server/routes.js GET /platform-settings/monitor',
     'server/routes.js POST /auth/register',
     'server/routes.js POST /auth/login',
+    // Liveness + readiness probes — public by design so external monitoring
+    // (nginx, systemd, uptime checks) can probe without credentials.
+    'server/routes/health-routes.js GET /health',
+    'server/routes/health-routes.js GET /ready',
 ]);
 
 function routeDeclarations(file) {

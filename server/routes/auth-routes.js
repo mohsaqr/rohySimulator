@@ -28,6 +28,14 @@ import {
     generateCsrfToken,
 } from '../middleware/csrf.js';
 import * as labDb from '../services/labDatabase.js';
+
+// Account lockout: after MAX_FAILED_LOGINS consecutive failed attempts the
+// account is locked for LOCKOUT_MINUTES. Restored after the routes.js split
+// (commit 3a7a330) dropped these module-locals — without them the failed-login
+// threshold branch ReferenceError'd in production.
+const MAX_FAILED_LOGINS = 5;
+const LOCKOUT_MINUTES = 15;
+
 import { spawn } from 'node:child_process';
 import { buildWavHeader } from '../services/wav.js';
 import { EvenByteAligner } from '../lib/pcmAlign.js';

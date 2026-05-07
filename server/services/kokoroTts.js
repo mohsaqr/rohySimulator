@@ -33,25 +33,95 @@ const DTYPE = 'q4';
 
 let _instance = null;
 let _loading = null;
+// "Permanently disabled until restart" flag. Set when load fails AND the
+// failure is the unrecoverable kind (truncated/corrupt ONNX, missing
+// model files). Once set, every subsequent loadKokoro() call rejects
+// fast — the route layer can then catch and switch to Piper instead of
+// each request triggering another 80MB re-download attempt.
+//
+// Per AGENT-NOTE-DEPLOY-2026-05-07.md §4: an ORT-WASM crash on a
+// truncated .onnx file used to take the entire Node process with it.
+// Now we contain the failure inside this module, log loudly, and let
+// callers recover. The deploy-side fix (TRANSFORMERS_CACHE outside
+// node_modules) is still recommended to prevent the bad-cache state
+// in the first place — this guard is defense-in-depth.
+let _disabled = null;
+
+const KOKORO_FATAL_PATTERNS = [
+    /protobuf parsing/i,         // truncated .onnx file — most common
+    /failed to allocate/i,       // OOM / WASM heap exhaustion
+    /onnxruntime/i,              // ORT-internal failures
+    /onnx model/i,               // generic ORT model errors
+    /no such file/i,             // missing model files post-cache-wipe
+    /cannot find module/i,
+];
+
+function classifyLoadError(err) {
+    const msg = (err?.message || String(err)).slice(0, 500);
+    return KOKORO_FATAL_PATTERNS.some(rx => rx.test(msg)) ? 'fatal' : 'transient';
+}
 
 export async function loadKokoro() {
+    if (_disabled) {
+        const err = new Error(`Kokoro disabled until restart: ${_disabled}`);
+        err.code = 'KOKORO_DISABLED';
+        throw err;
+    }
     if (_instance) return _instance;
     if (_loading) return _loading;
 
     _loading = (async () => {
         const t0 = Date.now();
-        const tts = await KokoroTTS.from_pretrained(MODEL_ID, { dtype: DTYPE });
-        kokoroLog.info('model loaded', {
-            duration_ms: Date.now() - t0,
-            wasm_threads: _wasmThreads,
-            voice_count: Object.keys(tts.voices).length
-        });
-        _instance = tts;
-        _loading = null;
-        return tts;
+        try {
+            const tts = await KokoroTTS.from_pretrained(MODEL_ID, { dtype: DTYPE });
+            kokoroLog.info('model loaded', {
+                duration_ms: Date.now() - t0,
+                wasm_threads: _wasmThreads,
+                voice_count: Object.keys(tts.voices).length
+            });
+            _instance = tts;
+            _loading = null;
+            return tts;
+        } catch (err) {
+            _loading = null;
+            const kind = classifyLoadError(err);
+            kokoroLog.error('model load failed', {
+                duration_ms: Date.now() - t0,
+                kind,
+                error: err.message,
+                stack: err.stack || null,
+            });
+            if (kind === 'fatal') {
+                // Don't re-attempt on every request — that just re-runs the
+                // 80MB download/load that already failed. Mark disabled
+                // until process restart so the route layer can fall back
+                // cleanly. systemd-restart-on-deploy will clear it.
+                _disabled = err.message;
+                const fatal = new Error(`Kokoro permanently failed this process: ${err.message}`);
+                fatal.code = 'KOKORO_DISABLED';
+                throw fatal;
+            }
+            // Transient — re-throw so the caller sees the original error.
+            // Subsequent calls will retry (no _disabled set).
+            throw err;
+        }
     })();
 
     return _loading;
+}
+
+// Test/diagnostic hook: lets a route or healthcheck see whether Kokoro
+// has been permanently disabled this process and surface that to admins.
+export function kokoroDisabledReason() {
+    return _disabled;
+}
+
+// Test-only — clears the disabled flag and instance so each test can
+// exercise its own load scenario. Not exported from the package barrel.
+export function _resetForTest() {
+    _instance = null;
+    _loading = null;
+    _disabled = null;
 }
 
 export function isKokoroLoaded() {

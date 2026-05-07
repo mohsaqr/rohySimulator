@@ -1853,109 +1853,192 @@ router.post('/sessions/:sessionId/order-treatment', authenticateToken, (req, res
 });
 
 // POST /api/sessions/:sessionId/administer/:orderId - Administer an ordered treatment
+//
+// Hardened 2026-05-07 after a production nginx-502 incident. The route is
+// callback-shaped (legacy sqlite3 style); previously, ANY synchronous throw
+// inside a callback (e.g. `.includes` on a NULL field, NaN arithmetic on a
+// missing effect column) would land in the global uncaughtException handler
+// without ever firing res.json — leaving the request hanging until nginx's
+// proxy_read_timeout fired a 502 to the client.
+//
+// Defensive contract: every callback wraps its body in try/catch + sendError,
+// every numeric read is coerced via num(), every string membership check is
+// guarded with optional chaining. Even a malformed treatment_effects row
+// must produce a JSON response, never a hang.
 router.post('/sessions/:sessionId/administer/:orderId', authenticateToken, (req, res) => {
     const { sessionId, orderId } = req.params;
+
+    // Coerce arbitrary DB values (strings, nulls, bools, NaN) to a finite
+    // number; fall back to `fb` otherwise. Used everywhere we multiply or
+    // compare a treatment_effects column.
+    const num = (v, fb = 0) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : fb;
+    };
+
+    // Last-ditch error responder. If we've already started writing the
+    // response, just end the connection — JSON would be invalid mid-stream.
+    const sendError = (status, error, ctx = {}) => {
+        routesOrdersLog.warn('administer route error', { status, error, sessionId, orderId, ...ctx });
+        if (res.headersSent) {
+            try { res.end(); } catch { /* noop */ }
+            return;
+        }
+        try {
+            res.status(status).json({ error: typeof error === 'string' ? error : (error?.message || 'request failed') });
+        } catch { /* noop */ }
+    };
 
     // Verify session and order
     dbAdapter.get(`SELECT t.*, s.user_id, s.case_id FROM treatment_orders t
             JOIN sessions s ON t.session_id = s.id
             WHERE t.id = ? AND t.session_id = ?`, [orderId, sessionId], (err, order) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!order) return res.status(404).json({ error: 'Order not found' });
-        if (order.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-        if (order.status !== 'ordered') {
-            return res.status(400).json({ error: `Cannot administer order with status: ${order.status}` });
+        try {
+            if (err) return sendError(500, err);
+            if (!order) return sendError(404, 'Order not found');
+            if (order.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
+                return sendError(403, 'Access denied');
+            }
+            if (order.status !== 'ordered') {
+                return sendError(400, `Cannot administer order with status: ${order.status}`);
+            }
+        } catch (e) {
+            return sendError(500, e, { phase: 'order-validate' });
         }
 
         // Get treatment effect
         dbAdapter.get(`SELECT * FROM treatment_effects WHERE treatment_type = ? AND treatment_name = ? AND is_active = 1`,
             [order.treatment_type, order.treatment_item], (err, effect) => {
-            if (err) return res.status(500).json({ error: err.message });
+            let isContinuous, now;
+            try {
+                if (err) return sendError(500, err, { phase: 'effect-lookup' });
 
-            const now = new Date().toISOString();
-            const isContinuous = order.treatment_type === 'oxygen' ||
-                               (order.treatment_type === 'nursing' && order.treatment_item.includes('Position')) ||
-                               (effect?.duration_minutes === -1);
+                now = new Date().toISOString();
+                // Optional-chained `.includes` guards against treatment_item
+                // being NULL — that was an unguarded throw in the old code.
+                isContinuous = order.treatment_type === 'oxygen'
+                    || (order.treatment_type === 'nursing' && (order.treatment_item || '').includes('Position'))
+                    || (num(effect?.duration_minutes, 0) === -1);
+            } catch (e) {
+                return sendError(500, e, { phase: 'effect-classify' });
+            }
 
             // Update order status
             dbAdapter.run(`UPDATE treatment_orders SET status = ?, administered_at = ? WHERE id = ?`,
                 [isContinuous ? 'in_progress' : 'administered', now, orderId], (err) => {
-                if (err) return res.status(500).json({ error: err.message });
+                if (err) return sendError(500, err, { phase: 'order-update' });
 
-                // Create active treatment effect if effect data exists
-                if (effect) {
-                    // Calculate dose multiplier for dose-dependent medications
-                    let doseMultiplier = 1.0;
-                    if (effect.dose_dependent && effect.base_dose && order.dose_value) {
-                        doseMultiplier = Math.min(order.dose_value / effect.base_dose, effect.max_effect_multiplier || 2.0);
+                // No effect row → respond without active_treatments insert.
+                if (!effect) {
+                    try {
+                        return res.json({
+                            message: 'Treatment administered (no effect data)',
+                            order_id: parseInt(orderId),
+                            treatment_name: order.treatment_item,
+                            status: isContinuous ? 'in_progress' : 'administered',
+                            administered_at: now,
+                            effect_active: false
+                        });
+                    } catch (e) {
+                        return sendError(500, e, { phase: 'respond-no-effect' });
                     }
+                }
 
-                    // Calculate expiration time
+                // Build active_treatment payload — every numeric field is
+                // coerced via num() so a NULL/string/NaN column can't crash
+                // the route. Matches the old maths exactly when columns are
+                // already numeric.
+                let payload;
+                try {
+                    let doseMultiplier = 1.0;
+                    const baseDose = num(effect.base_dose, 0);
+                    const doseValue = num(order.dose_value, 0);
+                    if (effect.dose_dependent && baseDose > 0 && doseValue > 0) {
+                        doseMultiplier = Math.min(doseValue / baseDose, num(effect.max_effect_multiplier, 2.0));
+                    }
+                    if (!Number.isFinite(doseMultiplier)) doseMultiplier = 1.0;
+
                     let expiresAt = null;
-                    if (!isContinuous && effect.duration_minutes > 0) {
+                    const durationMin = num(effect.duration_minutes, 0);
+                    if (!isContinuous && durationMin > 0) {
                         const expireDate = new Date();
-                        expireDate.setMinutes(expireDate.getMinutes() + effect.duration_minutes);
+                        expireDate.setMinutes(expireDate.getMinutes() + durationMin);
                         expiresAt = expireDate.toISOString();
                     }
 
-                    const insertEffectSql = `
-                        INSERT INTO active_treatments (
-                            session_id, treatment_order_id, effect_id, started_at,
-                            phase, current_effect_strength, dose_multiplier,
-                            peak_hr_effect, peak_bp_sys_effect, peak_bp_dia_effect,
-                            peak_rr_effect, peak_spo2_effect, peak_temp_effect,
-                            expires_at, is_continuous
-                        ) VALUES (?, ?, ?, ?, 'onset', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    `;
+                    const peak = (key) => Math.round(num(effect[key], 0) * doseMultiplier);
 
-                    dbAdapter.run(insertEffectSql, [
-                        sessionId, orderId, effect.id, now,
+                    payload = {
+                        sessionId,
+                        orderId,
+                        effectId: effect.id,
+                        now,
                         doseMultiplier,
-                        Math.round(effect.hr_effect * doseMultiplier),
-                        Math.round(effect.bp_sys_effect * doseMultiplier),
-                        Math.round(effect.bp_dia_effect * doseMultiplier),
-                        Math.round(effect.rr_effect * doseMultiplier),
-                        Math.round(effect.spo2_effect * doseMultiplier),
-                        effect.temp_effect * doseMultiplier,
-                        expiresAt, isContinuous ? 1 : 0
-                    ], function(err) {
-                        if (err) {
-                            routesOrdersLog.warn('active treatment effect create failed', { error: err.message });
-                        }
+                        peak_hr: peak('hr_effect'),
+                        peak_bp_sys: peak('bp_sys_effect'),
+                        peak_bp_dia: peak('bp_dia_effect'),
+                        peak_rr: peak('rr_effect'),
+                        peak_spo2: peak('spo2_effect'),
+                        peak_temp: num(effect.temp_effect, 0) * doseMultiplier,
+                        expiresAt,
+                        isContinuous: isContinuous ? 1 : 0,
+                    };
+                } catch (e) {
+                    return sendError(500, e, { phase: 'effect-compute' });
+                }
 
+                const insertEffectSql = `
+                    INSERT INTO active_treatments (
+                        session_id, treatment_order_id, effect_id, started_at,
+                        phase, current_effect_strength, dose_multiplier,
+                        peak_hr_effect, peak_bp_sys_effect, peak_bp_dia_effect,
+                        peak_rr_effect, peak_spo2_effect, peak_temp_effect,
+                        expires_at, is_continuous
+                    ) VALUES (?, ?, ?, ?, 'onset', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `;
+
+                dbAdapter.run(insertEffectSql, [
+                    payload.sessionId, payload.orderId, payload.effectId, payload.now,
+                    payload.doseMultiplier,
+                    payload.peak_hr, payload.peak_bp_sys, payload.peak_bp_dia,
+                    payload.peak_rr, payload.peak_spo2, payload.peak_temp,
+                    payload.expiresAt, payload.isContinuous,
+                ], function(err) {
+                    // active_treatments insert failure is non-fatal — the
+                    // order is already marked administered. Log and respond
+                    // 200 with effect_active: true; the engine will skip
+                    // this order on its next tick because no row exists.
+                    if (err) {
+                        routesOrdersLog.warn('active treatment effect create failed', {
+                            error: err.message, sessionId, orderId,
+                        });
+                    }
+
+                    try {
                         res.json({
                             message: 'Treatment administered',
                             order_id: parseInt(orderId),
                             treatment_name: order.treatment_item,
                             status: isContinuous ? 'in_progress' : 'administered',
                             administered_at: now,
-                            effect_active: true,
+                            effect_active: !err,
                             active_treatment_id: this?.lastID,
                             effect_details: {
-                                onset_minutes: effect.onset_minutes,
-                                peak_minutes: effect.peak_minutes,
-                                duration_minutes: effect.duration_minutes,
+                                onset_minutes: num(effect.onset_minutes, 0),
+                                peak_minutes: num(effect.peak_minutes, 0),
+                                duration_minutes: num(effect.duration_minutes, 0),
                                 is_continuous: isContinuous,
-                                hr_effect: Math.round(effect.hr_effect * doseMultiplier),
-                                bp_sys_effect: Math.round(effect.bp_sys_effect * doseMultiplier),
-                                bp_dia_effect: Math.round(effect.bp_dia_effect * doseMultiplier),
-                                rr_effect: Math.round(effect.rr_effect * doseMultiplier),
-                                spo2_effect: Math.round(effect.spo2_effect * doseMultiplier)
+                                hr_effect: payload.peak_hr,
+                                bp_sys_effect: payload.peak_bp_sys,
+                                bp_dia_effect: payload.peak_bp_dia,
+                                rr_effect: payload.peak_rr,
+                                spo2_effect: payload.peak_spo2,
                             }
                         });
-                    });
-                } else {
-                    res.json({
-                        message: 'Treatment administered (no effect data)',
-                        order_id: parseInt(orderId),
-                        treatment_name: order.treatment_item,
-                        status: isContinuous ? 'in_progress' : 'administered',
-                        administered_at: now,
-                        effect_active: false
-                    });
-                }
+                    } catch (e) {
+                        return sendError(500, e, { phase: 'respond-with-effect' });
+                    }
+                });
             });
         });
     });

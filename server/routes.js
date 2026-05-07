@@ -15,6 +15,7 @@ import adminRoutes from './routes/admin-routes.js';
 import patientRecordRoutes from './routes/patient-record-routes.js';
 import agentsRoutes from './routes/agents-routes.js';
 import notesRoutes from './routes/notes-routes.js';
+import healthRoutes from './routes/health-routes.js';
 
 // Item D slice marker: D6 final mount point after D1-D5 extracted route domains.
 const router = express.Router();
@@ -27,6 +28,11 @@ const generalLimiter = rateLimit({
     legacyHeaders: false,
     skip: (req) => req.path.startsWith('/tts') || req.path.startsWith('/proxy/llm')
 });
+
+// Health + readiness mounted BEFORE the rate limiter so monitoring probes
+// (k8s, systemd watchdog, external uptime checks) can't be rate-limited by
+// a hostile request storm. They're also public — no auth needed.
+router.use(healthRoutes);
 
 router.use(generalLimiter);
 router.use('/catalogue', catalogueRouter);

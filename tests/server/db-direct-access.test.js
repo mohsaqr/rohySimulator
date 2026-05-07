@@ -12,6 +12,10 @@ const ALLOWLIST = [
     'server/migrationRunner.js',
     'server/seeders/',
     'scripts/',
+    // audit-chain takes a generic `database` handle so verification can run
+    // against arbitrary sqlite files (recovery + test fixtures), not the
+    // instrumented adapter. Intentional carve-out, not a refactor target.
+    'server/audit-chain.js',
 ];
 
 function isAllowlisted(filePath) {
@@ -23,7 +27,7 @@ function findDirectDbAccess() {
     let raw = '';
     try {
         raw = execSync(
-            `grep -rn --include='*.js' -E "\\\\bdb\\\\.(run|get|all|exec)\\\\b" ${path.join(REPO_ROOT, 'server')} ${path.join(REPO_ROOT, 'scripts')} 2>/dev/null || true`,
+            `grep -rn --include='*.js' -E "\\\\b(db|database)\\\\.(run|get|all|exec)\\\\b" ${path.join(REPO_ROOT, 'server')} ${path.join(REPO_ROOT, 'scripts')} 2>/dev/null || true`,
             { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }
         );
     } catch {

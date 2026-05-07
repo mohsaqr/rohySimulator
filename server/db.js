@@ -435,9 +435,49 @@ async function seedAvatarDefaults() {
 }
 
 // Migrations only — safe to run on every boot. Idempotent.
+//
+// Before running any migration that hasn't been applied yet, snapshot the
+// sqlite file to a sibling .bak.<timestamp>.<version> file. Cheap insurance:
+// if the migration corrupts data we can roll back by copying the snapshot
+// back over database.sqlite. Snapshot is skipped for in-memory DBs and when
+// ROHY_BACKUP_BEFORE_MIGRATE=0 (CI/test where DBs are throwaway anyway).
 export async function runDbMigrations() {
+    if (process.env.ROHY_BACKUP_BEFORE_MIGRATE !== '0' && dbPath !== ':memory:') {
+        try {
+            // Compare on-disk migration files vs schema_migrations to decide
+            // if we'd apply anything. If yes, snapshot the DB first.
+            const { discoverMigrations } = await import('./migrationRunner.js');
+            const all = discoverMigrations();
+            const applied = await new Promise((resolve) => {
+                db.all('SELECT version FROM schema_migrations', [], (err, rows) => {
+                    if (err) return resolve(new Set());  // table not yet created → first boot
+                    resolve(new Set((rows || []).map(r => r.version)));
+                });
+            });
+            const willApply = all.filter(m => !applied.has(m.version));
+            if (willApply.length > 0) {
+                const ts = new Date().toISOString().replace(/[:.]/g, '-');
+                const targetVersion = willApply[willApply.length - 1].version;
+                const backupPath = `${dbPath}.bak.${ts}.${targetVersion}`;
+                const fs = await import('node:fs/promises');
+                await fs.copyFile(dbPath, backupPath);
+                dbLog.info('pre-migration backup created', {
+                    backup_path: backupPath,
+                    pending_migrations: willApply.length,
+                    target_version: targetVersion,
+                });
+            }
+        } catch (err) {
+            // Backup failure is non-fatal — we still attempt migrations
+            // (the existing checksum guard catches mid-run corruption,
+            // and refusing to migrate when backup fails would brick
+            // upgrades on read-only filesystems / disk-full scenarios).
+            dbLog.warn('pre-migration backup failed', { error: err.message });
+        }
+    }
     await runMigrations(db);
 }
+
 
 // First-boot seeders. Idempotent (each seeder is INSERT OR IGNORE / NOT
 // EXISTS-guarded). Exported so a one-off job (`node scripts/seed.js`) can

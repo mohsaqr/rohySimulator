@@ -93,6 +93,39 @@ describe('audit hash chain', () => {
         expect(result.expected).not.toBe(result.actual);
     });
 
+    // Regression lock: production hit "SQLITE_ERROR: cannot start a
+    // transaction within a transaction" when 4 fire-and-forget audit
+    // appends (one per voice setting saved) collided on BEGIN IMMEDIATE.
+    // The mutex in audit-chain.js serializes appends so concurrent callers
+    // queue cleanly; this test fires 8 in parallel and asserts every one
+    // succeeds AND the resulting chain verifies end-to-end.
+    it('serializes concurrent appends without nested-transaction errors', async () => {
+        const ctx = await freshCtx('audit-chain-concurrent');
+        const N = 8;
+        const results = await Promise.all(
+            Array.from({ length: N }, (_, i) =>
+                appendAuditEntry({
+                    tenantId: 1,
+                    action: `CONCURRENT_${i}`,
+                    resourceType: 'platform_setting',
+                    resourceId: `key_${i}`,
+                    newValue: { value: `v${i}` },
+                }, { database: ctx.db })
+            )
+        );
+        expect(results).toHaveLength(N);
+        // Every append got a real id — no swallowed errors, no rollbacks.
+        results.forEach(r => {
+            expect(r.id).toBeGreaterThan(0);
+            expect(typeof r.entryHash).toBe('string');
+            expect(r.entryHash.length).toBeGreaterThan(0);
+        });
+        // The resulting chain still verifies — appends were properly
+        // ordered and each row's prev_hash points at a real predecessor.
+        await expect(verifyAuditChain({ tenant_id: 1, database: ctx.db }))
+            .resolves.toEqual(expect.objectContaining({ ok: true }));
+    });
+
     it('keeps tenant chains isolated', async () => {
         const ctx = await freshCtx('audit-chain-tenants');
         const tenantOne = await appendAuditEntry({
