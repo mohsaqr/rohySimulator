@@ -55,10 +55,18 @@ describe('buildCsp', () => {
         expect(imgSrc).toContain('blob:');
     });
 
-    it('connect-src is self only (cookie-mode auth + CSRF assume same-origin)', () => {
+    it('connect-src is self + blob: + data: (Three.js GLB textures need blob: read-back)', () => {
+        // CONTRACT: Three.js / @react-three/drei's useGLTF reads embedded
+        // GLB textures by URL.createObjectURL() then either assigns to
+        // an Image (img-src) OR fetches the blob bytes back via
+        // fetch(blob_url) — that fetch is gated by connect-src. Removing
+        // blob: from connect-src reproduces the all-avatars-render-white
+        // regression seen on 2026-05-07. data: is allowed for the same
+        // reason: GLBs sometimes embed textures as data: URIs in the
+        // JSON manifest.
         const csp = buildCsp({ nodeEnv: 'production' });
         const connect = csp.split(';').find(d => d.trim().startsWith('connect-src'));
-        expect(connect.trim()).toBe("connect-src 'self'");
+        expect(connect.trim()).toBe("connect-src 'self' blob: data:");
     });
 });
 

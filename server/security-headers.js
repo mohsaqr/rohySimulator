@@ -41,10 +41,18 @@ export function buildCsp({ nodeEnv } = {}) {
         `default-src 'self'`,
         `script-src ${scriptSrc}`,
         `style-src 'self' 'unsafe-inline'`,
+        // img-src AND connect-src must both allow blob: + data: because
+        // Three.js / @react-three/drei's useGLTF unpacks embedded GLB
+        // textures by extracting the binary chunk → Blob →
+        // URL.createObjectURL() → either an Image element (img-src) OR a
+        // fetch() to read the blob bytes back (connect-src). Without
+        // blob: on connect-src, every embedded-texture avatar renders as
+        // a flat-shaded white model — symptom seen 2026-05-07. Reverting
+        // these allowances will reproduce.
         `img-src 'self' data: blob:`,
         `media-src 'self' blob:`,
         `font-src 'self' data:`,
-        `connect-src 'self'`,
+        `connect-src 'self' blob: data:`,
         `worker-src 'self' blob:`,
         `frame-ancestors 'none'`,
         `form-action 'self'`,
