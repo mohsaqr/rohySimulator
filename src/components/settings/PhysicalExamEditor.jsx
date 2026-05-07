@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { User, Users, RotateCcw, CheckCircle, AlertCircle, Upload, Volume2, Trash2 } from 'lucide-react';
 import BodyMap from '../examination/BodyMap';
 import { BODY_REGIONS, EXAM_TECHNIQUES, getDefaultFinding } from '../../data/examRegions';
-import { AuthService } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
-import { apiUrl } from '../../config/api';
+import { apiFetch } from '../../services/apiClient';
 
 /**
  * Physical Examination Editor for Case Design
@@ -65,15 +64,10 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
         formData.append('photo', file);
 
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/upload'), {
+            const data = await apiFetch('/upload', {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
                 body: formData
             });
-            const data = await res.json();
             if (data.imageUrl) { // Server returns imageUrl for all uploads
                 const existingExam = physicalExam[regionId]?.[examType] || {};
                 updatePhysicalExam(
@@ -143,15 +137,10 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
         formData.append('photo', file);
 
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/upload'), {
+            const data = await apiFetch('/upload', {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
                 body: formData
             });
-            const data = await res.json();
             if (data.imageUrl) {
                 updateAuscultationAudio(regionId, examType, audioType, data.imageUrl);
             }

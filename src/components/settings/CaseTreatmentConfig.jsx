@@ -5,7 +5,7 @@ import {
     Check, ChevronDown, ChevronUp, Loader2
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
-import { apiUrl } from '../../config/api';
+import { ApiError, apiFetch, apiPut } from '../../services/apiClient';
 
 /**
  * CaseTreatmentConfig - Configure treatments for a case in the admin panel
@@ -41,14 +41,8 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
 
     const fetchTreatments = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/treatment-effects'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setTreatments(data.effects || []);
-            }
+            const data = await apiFetch('/treatment-effects');
+            setTreatments(data.effects || []);
         } catch (error) {
             console.error('Failed to fetch treatments:', error);
         } finally {
@@ -119,27 +113,17 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
 
         setSaving(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl(`/cases/${caseId}/treatments`), {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ treatments: configuredTreatments })
-            });
-
-            if (response.ok) {
-                toast.success('Treatment configurations saved');
-                if (onUpdate) {
-                    onUpdate(configuredTreatments);
-                }
-            } else {
-                const error = await response.json();
-                toast.error(error.error || 'Failed to save');
+            await apiPut(`/cases/${caseId}/treatments`, { treatments: configuredTreatments });
+            toast.success('Treatment configurations saved');
+            if (onUpdate) {
+                onUpdate(configuredTreatments);
             }
         } catch (error) {
-            toast.error('Failed to save: ' + error.message);
+            if (error instanceof ApiError) {
+                toast.error(error.body?.error || 'Failed to save');
+            } else {
+                toast.error('Failed to save: ' + error.message);
+            }
         } finally {
             setSaving(false);
         }

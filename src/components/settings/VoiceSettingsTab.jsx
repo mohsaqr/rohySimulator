@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Mic, Save, RefreshCw, AlertTriangle } from 'lucide-react';
-import { apiUrl } from '../../config/api.js';
-import { AuthService } from '../../services/authService.js';
+import { ApiError, apiFetch, apiPut } from '../../services/apiClient.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import TestVoiceButton from './TestVoiceButton.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
@@ -66,17 +65,15 @@ export default function VoiceSettingsTab() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    const auth = () => AuthService.authHeaders();
-
     const loadAll = async () => {
         setLoading(true);
         try {
             const [s, m] = await Promise.all([
-                fetch(apiUrl('/platform-settings/voice'), { headers: auth() }).then(r => r.json()),
-                fetch(apiUrl('/llm/models'), { headers: auth() }).then(r => r.json())
+                apiFetch('/platform-settings/voice'),
+                apiFetch('/llm/models')
             ]);
             const provider = s.tts_provider || 'piper';
-            const v = await fetch(apiUrl(`/tts/voices?provider=${provider}`), { headers: auth() }).then(r => r.json());
+            const v = await apiFetch(`/tts/voices?provider=${provider}`);
 
             // Hydrate voice slots from the new per-provider keys.
             const voiceSlots = emptyVoiceSlots();
@@ -118,7 +115,7 @@ export default function VoiceSettingsTab() {
 
     const refetchVoices = async (provider) => {
         try {
-            const v = await fetch(apiUrl(`/tts/voices?provider=${provider}`), { headers: auth() }).then(r => r.json());
+            const v = await apiFetch(`/tts/voices?provider=${provider}`);
             setVoices(v.voices || []);
             setPiperInstalled(v.piperInstalled !== false);
         } catch (err) {
@@ -172,18 +169,16 @@ export default function VoiceSettingsTab() {
             // something — empty input means "leave the existing key alone".
             if (settings.google_tts_api_key.trim()) payload.google_tts_api_key = settings.google_tts_api_key.trim();
             if (settings.openai_tts_api_key.trim()) payload.openai_tts_api_key = settings.openai_tts_api_key.trim();
-            const res = await fetch(apiUrl('/platform-settings/voice'), {
-                method: 'PUT',
-                headers: { ...auth(), 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Save failed');
+            await apiPut('/platform-settings/voice', payload);
             toast.success?.('Voice settings saved');
             // After save, reload to pick up the *_set flags and clear the input.
             await loadAll();
         } catch (err) {
-            toast.error?.(err.message);
+            if (err instanceof ApiError) {
+                toast.error?.(err.body?.error || 'Save failed');
+            } else {
+                toast.error?.(err.message);
+            }
         } finally {
             setSaving(false);
         }
@@ -191,17 +186,15 @@ export default function VoiceSettingsTab() {
 
     const clearKey = async (field) => {
         try {
-            const res = await fetch(apiUrl('/platform-settings/voice'), {
-                method: 'PUT',
-                headers: { ...auth(), 'Content-Type': 'application/json' },
-                body: JSON.stringify({ [field]: '' })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Clear failed');
+            await apiPut('/platform-settings/voice', { [field]: '' });
             toast.success?.('Key cleared');
             await loadAll();
         } catch (err) {
-            toast.error?.(err.message);
+            if (err instanceof ApiError) {
+                toast.error?.(err.body?.error || 'Clear failed');
+            } else {
+                toast.error?.(err.message);
+            }
         }
     };
 
@@ -488,10 +481,8 @@ function UsagePanel() {
     const load = async (s = scope) => {
         setLoading(true);
         try {
-            const url = apiUrl(`/tts/usage${s === 'all' ? '?scope=all' : ''}`);
-            const res = await fetch(url, { headers: AuthService.authHeaders() });
-            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
-            setUsage(await res.json());
+            const data = await apiFetch(`/tts/usage${s === 'all' ? '?scope=all' : ''}`);
+            setUsage(data);
             setError(null);
         } catch (err) {
             setError(err.message);

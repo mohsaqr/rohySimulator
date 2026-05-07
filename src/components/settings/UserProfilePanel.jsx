@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { apiUrl } from '../../config/api';
+import { ApiError, apiFetch, apiPut } from '../../services/apiClient';
 
 /**
  * User Profile Panel
@@ -65,29 +65,24 @@ export default function UserProfilePanel({ onClose }) {
 
     const loadProfile = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/user/profile'), {
-                headers: { 'Authorization': `Bearer ${token}` }
+            const data = await apiFetch('/user/profile');
+            setProfile({
+                username: data.user.username || '',
+                name: data.user.name || '',
+                email: data.user.email || '',
+                institution: data.user.institution || '',
+                address: data.user.address || '',
+                phone: data.user.phone || '',
+                alternative_email: data.user.alternative_email || '',
+                education: data.user.education || '',
+                grade: data.user.grade || ''
             });
-
-            if (response.ok) {
-                const data = await response.json();
-                setProfile({
-                    username: data.user.username || '',
-                    name: data.user.name || '',
-                    email: data.user.email || '',
-                    institution: data.user.institution || '',
-                    address: data.user.address || '',
-                    phone: data.user.phone || '',
-                    alternative_email: data.user.alternative_email || '',
-                    education: data.user.education || '',
-                    grade: data.user.grade || ''
-                });
-            } else {
-                toast.error('Failed to load profile');
-            }
         } catch (error) {
-            toast.error('Failed to load profile: ' + error.message);
+            if (error instanceof ApiError) {
+                toast.error('Failed to load profile');
+            } else {
+                toast.error('Failed to load profile: ' + error.message);
+            }
         } finally {
             setLoading(false);
         }
@@ -95,15 +90,8 @@ export default function UserProfilePanel({ onClose }) {
 
     const loadFieldConfig = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/platform-settings/user-fields'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setFieldConfig(data.config || {});
-            }
+            const data = await apiFetch('/platform-settings/user-fields');
+            setFieldConfig(data.config || {});
         } catch (error) {
             console.error('Failed to load field config:', error);
         }
@@ -111,28 +99,21 @@ export default function UserProfilePanel({ onClose }) {
 
     const loadAiSettings = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/users/preferences'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                // Parse default_llm_settings if it's a string (from DB)
-                let llmSettings = data.default_llm_settings;
-                if (typeof llmSettings === 'string') {
-                    try {
-                        llmSettings = JSON.parse(llmSettings);
-                    } catch (e) {
-                        llmSettings = null;
-                    }
+            const data = await apiFetch('/users/preferences');
+            // Parse default_llm_settings if it's a string (from DB)
+            let llmSettings = data.default_llm_settings;
+            if (typeof llmSettings === 'string') {
+                try {
+                    llmSettings = JSON.parse(llmSettings);
+                } catch (e) {
+                    llmSettings = null;
                 }
-                if (llmSettings) {
-                    setAiSettings(prev => ({
-                        ...prev,
-                        ...llmSettings
-                    }));
-                }
+            }
+            if (llmSettings) {
+                setAiSettings(prev => ({
+                    ...prev,
+                    ...llmSettings
+                }));
             }
         } catch (error) {
             console.error('Failed to load AI settings:', error);
@@ -142,33 +123,23 @@ export default function UserProfilePanel({ onClose }) {
     const handleSaveAiSettings = async () => {
         setSaving(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/users/preferences'), {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    default_llm_settings: {
-                        provider: aiSettings.provider || undefined,
-                        model: aiSettings.model || undefined,
-                        baseUrl: aiSettings.baseUrl || undefined,
-                        apiKey: aiSettings.apiKey || undefined,
-                        maxOutputTokens: aiSettings.maxOutputTokens || undefined,
-                        temperature: aiSettings.temperature || undefined
-                    }
-                })
+            await apiPut('/users/preferences', {
+                default_llm_settings: {
+                    provider: aiSettings.provider || undefined,
+                    model: aiSettings.model || undefined,
+                    baseUrl: aiSettings.baseUrl || undefined,
+                    apiKey: aiSettings.apiKey || undefined,
+                    maxOutputTokens: aiSettings.maxOutputTokens || undefined,
+                    temperature: aiSettings.temperature || undefined
+                }
             });
-
-            if (response.ok) {
-                toast.success('AI settings saved successfully');
-            } else {
-                const data = await response.json();
-                toast.error(data.error || 'Failed to save AI settings');
-            }
+            toast.success('AI settings saved successfully');
         } catch (error) {
-            toast.error('Failed to save AI settings: ' + error.message);
+            if (error instanceof ApiError) {
+                toast.error(error.body?.error || 'Failed to save AI settings');
+            } else {
+                toast.error('Failed to save AI settings: ' + error.message);
+            }
         } finally {
             setSaving(false);
         }
@@ -189,32 +160,22 @@ export default function UserProfilePanel({ onClose }) {
 
         setSaving(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/user/profile'), {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    name: profile.name,
-                    institution: profile.institution,
-                    address: profile.address,
-                    phone: profile.phone,
-                    alternative_email: profile.alternative_email,
-                    education: profile.education,
-                    grade: profile.grade
-                })
+            await apiPut('/user/profile', {
+                name: profile.name,
+                institution: profile.institution,
+                address: profile.address,
+                phone: profile.phone,
+                alternative_email: profile.alternative_email,
+                education: profile.education,
+                grade: profile.grade
             });
-
-            if (response.ok) {
-                toast.success('Profile updated successfully');
-            } else {
-                const data = await response.json();
-                toast.error(data.error || 'Failed to update profile');
-            }
+            toast.success('Profile updated successfully');
         } catch (error) {
-            toast.error('Failed to update profile: ' + error.message);
+            if (error instanceof ApiError) {
+                toast.error(error.body?.error || 'Failed to update profile');
+            } else {
+                toast.error('Failed to update profile: ' + error.message);
+            }
         } finally {
             setSaving(false);
         }
@@ -238,32 +199,22 @@ export default function UserProfilePanel({ onClose }) {
 
         setSaving(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(apiUrl('/user/password'), {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    current_password: passwordData.current_password,
-                    new_password: passwordData.new_password
-                })
+            await apiPut('/user/password', {
+                current_password: passwordData.current_password,
+                new_password: passwordData.new_password
             });
-
-            if (response.ok) {
-                toast.success('Password changed successfully');
-                setPasswordData({
-                    current_password: '',
-                    new_password: '',
-                    confirm_password: ''
-                });
-            } else {
-                const data = await response.json();
-                toast.error(data.error || 'Failed to change password');
-            }
+            toast.success('Password changed successfully');
+            setPasswordData({
+                current_password: '',
+                new_password: '',
+                confirm_password: ''
+            });
         } catch (error) {
-            toast.error('Failed to change password: ' + error.message);
+            if (error instanceof ApiError) {
+                toast.error(error.body?.error || 'Failed to change password');
+            } else {
+                toast.error('Failed to change password: ' + error.message);
+            }
         } finally {
             setSaving(false);
         }

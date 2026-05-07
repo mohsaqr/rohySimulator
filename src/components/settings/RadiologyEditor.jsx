@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Upload, Loader2, Scan, Clock, AlertCircle, RefreshCw, PenLine } from 'lucide-react';
-import { AuthService } from '../../services/authService';
-import { apiUrl } from '../../config/api';
+import { apiFetch } from '../../services/apiClient';
 import { useToast } from '../../contexts/ToastContext';
 
 // Default modalities for custom studies
@@ -49,17 +48,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
         setLoading(true);
         setError(null);
         try {
-            const token = AuthService.getToken();
-            if (!token) {
-                throw new Error('Not authenticated');
-            }
-            const res = await fetch(apiUrl('/radiology-database'), {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!res.ok) {
-                throw new Error(`Failed to fetch: ${res.status}`);
-            }
-            const data = await res.json();
+            const data = await apiFetch('/radiology-database');
             const fetchedStudies = Array.isArray(data.studies) ? data.studies : [];
             const fetchedModalities = Array.isArray(data.modalities) ? data.modalities : [];
             setStudies(fetchedStudies);
@@ -170,17 +159,10 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
         try {
             const formData = new FormData();
             formData.append('photo', file);
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/upload'), {
+            const data = await apiFetch('/upload', {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
-            if (!res.ok) {
-                const errorData = await res.json().catch(() => ({}));
-                throw new Error(errorData.error || `Upload failed with status ${res.status}`);
-            }
-            const data = await res.json();
             if (data.imageUrl) {
                 if (fileType === 'video') {
                     updateStudy(idx, 'videoUrl', data.imageUrl);

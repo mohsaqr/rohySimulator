@@ -48,6 +48,7 @@ import { renderWithProviders } from '../../../tests/utils/renderWithProviders.js
 // history if needed.
 // ---------------------------------------------------------------------
 const testVoiceProps = vi.fn();
+const voiceRequests = [];
 vi.mock('./TestVoiceButton.jsx', () => ({
     default: function TestVoiceButtonStub(props) {
         testVoiceProps(props);
@@ -122,6 +123,8 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => {
     server.resetHandlers(...defaultHandlers());
     testVoiceProps.mockClear();
+    voiceRequests.length = 0;
+    localStorage.clear();
 });
 afterAll(() => server.close());
 
@@ -252,6 +255,47 @@ describe('CaseAvatarVoicePicker — provider dropdown', () => {
 });
 
 describe('CaseAvatarVoicePicker — voice list filtering', () => {
+    it('fetches the effective provider voice list through apiFetch with bearer auth', async () => {
+        localStorage.setItem('token', 'admin-token');
+        server.use(
+            http.get('*/api/tts/voices', ({ request }) => {
+                voiceRequests.push({
+                    url: request.url,
+                    authorization: request.headers.get('authorization'),
+                    requestId: request.headers.get('x-request-id'),
+                });
+                const url = new URL(request.url);
+                const provider = url.searchParams.get('provider') || 'piper';
+                return HttpResponse.json({ voices: sampleVoices[provider] || [] });
+            })
+        );
+
+        mount();
+        await waitForVoices('piper');
+
+        expect(voiceRequests[0]).toMatchObject({
+            authorization: 'Bearer admin-token',
+        });
+        expect(new URL(voiceRequests[0].url).pathname).toBe('/api/tts/voices');
+        expect(new URL(voiceRequests[0].url).searchParams.get('provider')).toBe('piper');
+        expect(voiceRequests[0].requestId).toBeTruthy();
+    });
+
+    it('does not crash when the voice list request is forbidden', async () => {
+        server.use(
+            http.get('*/api/tts/voices', () =>
+                HttpResponse.json({ error: 'forbidden' }, { status: 403 })
+            )
+        );
+
+        mount();
+
+        await waitFor(() => {
+            const select = getCaseVoiceSelect();
+            expect(Array.from(select.querySelectorAll('option')).map(o => o.value)).toEqual(['']);
+        });
+    });
+
     it('fetches the voice list for the effective provider and renders each option', async () => {
         // CONTRACT 2 (positive side): the case-voice select reflects the
         // active provider's catalogue.

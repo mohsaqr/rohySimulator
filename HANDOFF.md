@@ -474,3 +474,118 @@ list, decisions, deferrals, and verification commands.
 - The client-log POST route exists and is tested, but no general-purpose
   browser log shipper beyond DiagnosticBar replay was added because the
   requested EventLogger telemetry already flows through `learning_events`.
+
+---
+
+# Deferred Audit Refactors Run — 2026-05-07 (Item A partial)
+
+## Landed in this run
+
+Item A progressed as complete, commit-ready slices. All migrated API calls now
+go through `src/services/apiClient.js`, so bearer auth, cookie/CSRF support,
+`ApiError`, and `X-Request-Id` are centralized.
+
+### Slice 1 — avatar/treatment settings
+
+- `src/components/settings/CaseAvatarVoicePicker.jsx`
+  - Migrated `/api/tts/voices?provider=...` to `apiFetch`.
+  - Left `baseUrl('/avatars/heads/manifest.json')` as direct fetch because it
+    is a static public asset, not an authenticated `/api/*` call.
+  - Expanded existing tests with bearer/path/request-id coverage and 403
+    no-crash coverage.
+- `src/components/settings/CaseTreatmentConfig.jsx`
+  - Migrated `/api/treatment-effects` to `apiFetch`.
+  - Migrated `PUT /api/cases/:id/treatments` to `apiPut`.
+  - Added component tests for authenticated GET, PUT body shape, and 403 toast.
+- `src/components/settings/AvatarsSettingsTab.jsx`
+  - Migrated `/api/platform-settings/avatars`, `/api/tts/voices`, and
+    `PUT /api/platform-settings/avatars` to `apiFetch`/`apiPut`.
+  - Left avatar manifest fetch as static asset fetch.
+  - Added component tests for authenticated GET, PUT body shape, and 403 toast.
+
+### Slice 2 — media upload editors
+
+- `src/components/settings/PhysicalExamEditor.jsx`
+  - Migrated audio uploads to `apiFetch('/upload', { method: 'POST', body:
+    formData })`; no manual `Content-Type`, so multipart boundaries remain
+    browser-managed.
+  - Added component tests for upload auth/path/FormData shape and 403 toast.
+- `src/components/settings/RadiologyEditor.jsx`
+  - Migrated `/api/radiology-database` to `apiFetch`.
+  - Migrated image/video uploads to `apiFetch` with `FormData`.
+  - Added component tests for authenticated GET, upload FormData body, success
+    state update, and 403 toast.
+
+### Slice 3 — profile/voice settings
+
+- `src/components/settings/UserProfilePanel.jsx`
+  - Migrated `/api/user/profile`, `/api/platform-settings/user-fields`,
+    `/api/users/preferences`, and profile/password/preference PUTs to
+    `apiFetch`/`apiPut`.
+  - Added component tests for authenticated profile GET, profile PUT body, and
+    403 toast.
+- `src/components/settings/VoiceSettingsTab.jsx`
+  - Migrated `/api/platform-settings/voice`, `/api/llm/models`,
+    `/api/tts/voices`, `/api/tts/usage`, and voice-settings PUTs to
+    `apiFetch`/`apiPut`.
+  - Added component tests for authenticated GET, PUT body, 403 toast, and the
+    existing admin usage-scope gate.
+
+### Slice 4 — lab manager
+
+- `src/components/settings/LabTestManager.jsx`
+  - Migrated `/api/labs/all`, `/api/labs/groups`, `/api/labs/stats`,
+    `/api/labs/test`, and `/api/labs/import` to `apiFetch`/method helpers.
+  - Added component tests for authenticated GET, POST body shape, and 409
+    toast.
+
+## Verification
+
+- Focused settings run:
+
+```text
+npx vitest run \
+  src/components/settings/CaseAvatarVoicePicker.test.jsx \
+  src/components/settings/CaseTreatmentConfig.test.jsx \
+  src/components/settings/AvatarsSettingsTab.test.jsx \
+  src/components/settings/PhysicalExamEditor.test.jsx \
+  src/components/settings/RadiologyEditor.test.jsx \
+  src/components/settings/UserProfilePanel.test.jsx \
+  src/components/settings/VoiceSettingsTab.test.jsx \
+  src/components/settings/LabTestManager.test.jsx
+
+8 files passed
+40 tests passed
+```
+
+- Full suite:
+
+```text
+npm test
+83 files passed
+1043 passed, 10 skipped
+```
+
+## Deferred / still outstanding
+
+- **Item A remaining files:** `src/components/settings/MedicationManager.jsx`
+  and `src/components/settings/ConfigPanel.jsx`.
+  - `MedicationManager.jsx` still has six authenticated direct-fetch paths:
+    `/master/medications`, `/catalogue/medications/:id`,
+    `/master/medications/:id`, `/master/medications/all`, and
+    `/master/medications/bulk`.
+  - `ConfigPanel.jsx` remains the large final slice and still has many direct
+    fetch paths across cases, uploads, platform settings, analytics, users,
+    labs, agents, and scenarios.
+- **Item B skipped:** TTS/LLM usage-budget tracker not started. Item A took the
+  available implementation budget.
+- **Item C skipped:** dbAdapter boundary migration not started.
+- **Item D skipped:** `server/routes.js` split not started.
+
+## Notes / friction
+
+- `rg` now reports direct `fetch` in the migrated files only for avatar manifest
+  static assets. Those use `baseUrl(...)`, not `/api/*`, and do not need auth.
+- There were pre-existing unrelated working-tree changes in
+  `server/security-headers.js` and `tests/server/security-headers.test.js`;
+  this run did not touch or revert them.

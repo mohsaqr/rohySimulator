@@ -4,9 +4,8 @@ import {
     Upload, Download, Edit2, Save, X, Check, RefreshCw,
     FlaskConical, Filter, Database, AlertTriangle
 } from 'lucide-react';
-import { AuthService } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
-import { apiUrl } from '../../config/api';
+import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
 
 /**
  * Lab Test Manager Component
@@ -51,22 +50,11 @@ export default function LabTestManager() {
     const fetchTests = async () => {
         setLoading(true);
         try {
-            const token = AuthService.getToken();
-            const [testsRes, groupsRes, statsRes] = await Promise.all([
-                fetch(apiUrl('/labs/all?pageSize=1000'), {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                }),
-                fetch(apiUrl('/labs/groups'), {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                }),
-                fetch(apiUrl('/labs/stats'), {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                })
+            const [testsData, groupsData, statsData] = await Promise.all([
+                apiFetch('/labs/all?pageSize=1000'),
+                apiFetch('/labs/groups'),
+                apiFetch('/labs/stats')
             ]);
-
-            const testsData = await testsRes.json();
-            const groupsData = await groupsRes.json();
-            const statsData = await statsRes.json();
 
             setTests(testsData.tests || []);
             setGroups(groupsData.groups || []);
@@ -136,7 +124,6 @@ export default function LabTestManager() {
         }
 
         try {
-            const token = AuthService.getToken();
             const testData = {
                 ...newTest,
                 min_value: parseFloat(newTest.min_value) || 0,
@@ -146,20 +133,7 @@ export default function LabTestManager() {
                     : []
             };
 
-            const res = await fetch(apiUrl('/labs/test'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(testData)
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Failed to add test');
-            }
+            await apiPost('/labs/test', testData);
 
             toast.success('Test added successfully');
             setNewTest({
@@ -180,21 +154,7 @@ export default function LabTestManager() {
     // Update test
     const handleUpdateTest = async (test) => {
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/labs/test'), {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(test)
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Failed to update test');
-            }
+            await apiPut('/labs/test', test);
 
             toast.success('Test updated successfully');
             setEditingTest(null);
@@ -210,21 +170,7 @@ export default function LabTestManager() {
         if (!confirmed) return;
 
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/labs/test'), {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ test_name, category })
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Failed to delete test');
-            }
+            await apiDelete('/labs/test', { json: { test_name, category } });
 
             toast.success('Test deleted');
             fetchTests();
@@ -279,31 +225,21 @@ export default function LabTestManager() {
         }
 
         try {
-            const token = AuthService.getToken();
-            const res = await fetch(apiUrl('/labs/import'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    tests: importPreview,
-                    overwrite: importOverwrite
-                })
+            const data = await apiPost('/labs/import', {
+                tests: importPreview,
+                overwrite: importOverwrite
             });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Import failed');
-            }
 
             toast.success(`Import complete: ${data.results.added} added, ${data.results.updated} updated, ${data.results.skipped} skipped`);
             setImportData('');
             setImportPreview([]);
             fetchTests();
         } catch (err) {
-            toast.error(err.message);
+            if (err instanceof ApiError) {
+                toast.error(err.body?.error || err.message);
+            } else {
+                toast.error(err.message);
+            }
         }
     };
 

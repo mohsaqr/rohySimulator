@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Loader2, RotateCcw } from 'lucide-react';
-import { apiUrl, baseUrl } from '../../config/api.js';
-import { AuthService } from '../../services/authService.js';
+import { baseUrl } from '../../config/api.js';
+import { apiFetch } from '../../services/apiClient.js';
 import { useVoice } from '../../contexts/VoiceContext.jsx';
 import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
@@ -67,10 +67,7 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
 
     useEffect(() => {
         let cancelled = false;
-        fetch(apiUrl(`/tts/voices?provider=${effectiveProvider}`), {
-            headers: { 'Authorization': `Bearer ${AuthService.getToken()}` }
-        })
-            .then(r => r.ok ? r.json() : { voices: [] })
+        apiFetch(`/tts/voices?provider=${effectiveProvider}`)
             .then(d => { if (!cancelled) setVoices(d.voices || []); })
             .catch(() => { if (!cancelled) setVoices([]); });
         return () => { cancelled = true; };

@@ -5,8 +5,8 @@
 
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Loader2, Save, Users, Image as ImageIcon, Sliders } from 'lucide-react';
-import { apiUrl, baseUrl } from '../../config/api.js';
-import { AuthService } from '../../services/authService.js';
+import { baseUrl } from '../../config/api.js';
+import { ApiError, apiFetch, apiPut } from '../../services/apiClient.js';
 import { AgentService } from '../../services/AgentService.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { useVoice } from '../../contexts/VoiceContext.jsx';
@@ -66,9 +66,9 @@ export default function AvatarsSettingsTab() {
                         ? fetch(baseUrl('/avatars/heads/manifest.json')).then(r => r.json())
                         : Promise.resolve(headManifest),
                     needDefaults
-                        ? fetch(apiUrl('/platform-settings/avatars'), { headers: AuthService.authHeaders() }).then(r => r.json())
+                        ? apiFetch('/platform-settings/avatars')
                         : Promise.resolve(platformAvatars),
-                    fetch(apiUrl('/tts/voices'), { headers: AuthService.authHeaders() }).then(r => r.json()),
+                    apiFetch('/tts/voices'),
                     AgentService.getTemplates()
                 ]);
                 if (cancelled) return;
@@ -102,19 +102,15 @@ export default function AvatarsSettingsTab() {
 
     const saveDefaults = async () => {
         try {
-            const res = await fetch(apiUrl('/platform-settings/avatars'), {
-                method: 'PUT',
-                headers: { ...AuthService.authHeaders(), 'Content-Type': 'application/json' },
-                body: JSON.stringify(defaults)
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error || `Save failed (${res.status})`);
-            }
+            await apiPut('/platform-settings/avatars', defaults);
             setPlatformAvatars(defaults);
             toast.success?.('Persona defaults saved');
         } catch (err) {
-            toast.error?.(err.message);
+            if (err instanceof ApiError) {
+                toast.error?.(err.body?.error || `Save failed (${err.status})`);
+            } else {
+                toast.error?.(err.message);
+            }
         }
     };
 
