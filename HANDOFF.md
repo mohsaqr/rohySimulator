@@ -218,6 +218,78 @@ High-leverage modules:
   HTTPS-listener + cert generator from the prior session are still
   the path off the insecure-context block. The cookie-mode auth this
   session adds is dependent on HTTPS being live in production —
+
+---
+
+# Continuation Handoff — 2026-05-07 (observability + audit trail Phases 1-2)
+
+## Landed in this run
+
+- **Phase 1 finish, `server/routes.js` route-family logging sweep.**
+  All remaining `console.log`, `console.warn`, and `console.error` calls
+  in `server/routes.js` were migrated to structured logging. Request
+  handlers use `req.log` where practical; helper/background callbacks use
+  route-family components:
+  `routes-auth-users-tenants`, `routes-cases-sessions`,
+  `routes-orders-labs-radiology`, `routes-llm-tts`, and
+  `routes-agent-tna-admin`.
+- Added review markers in `server/routes.js` for the requested route-family
+  slices: auth/users/tenants, cases/sessions, orders/labs/radiology,
+  LLM/TTS, admin/agent/TNA, and legacy lab/medication catalogue.
+- **Phase 2 audit hash chain.** Added `server/audit-chain.js` with
+  `canonicalRow`, `computeEntryHash`, `appendAuditEntry`,
+  `verifyAuditChain`, and migration backfill helpers.
+- Added `migrations/0008_audit_hash_chain.sql`. The SQL file owns the
+  chain traversal index; the migration runner handles SQLite-limited
+  idempotent column creation and SHA-256 backfill for version `0008` in
+  the same transaction.
+- Routed the existing `logAudit` / `logAuditAsync` chokepoint in
+  `server/routes.js` through `appendAuditEntry`. The local audit helper in
+  `server/routes/catalogue.js` also now uses `appendAuditEntry`, so direct
+  inserts into `system_audit_log` are no longer present in application
+  code.
+- Added `GET /api/admin/audit/verify` for admin-only tenant-scoped chain
+  verification.
+- Added `tests/server/audit-chain.test.js` covering append+verify,
+  tamper detection, tenant isolation, and migration backfill from legacy
+  rows.
+
+## Decisions
+
+- Hash chains are tenant-scoped. `prev_hash` for the first row in each
+  tenant chain is `NULL`, and verification walks `system_audit_log` by
+  `(tenant_id, id)`.
+- Canonicalisation includes the requested logical fields only:
+  `userId`, `action`, `resourceType`, `resourceId`, `resourceName`,
+  `oldValue`, `newValue`, `metadata`, `tenantId`, `ipAddress`,
+  `userAgent`, and `ts`. It excludes `id`, `prev_hash`, `entry_hash`, and
+  `created_at`/chain metadata.
+- `appendAuditEntry` uses `BEGIN IMMEDIATE` around prev-hash lookup and
+  insert so concurrent appends serialize per SQLite writer semantics.
+- Legacy migration rows keep their existing `timestamp`; new appended rows
+  get an ISO timestamp before hashing so the value hashed is the value
+  inserted.
+
+## Deferred
+
+- **Phase 3 client-side gap closure + correlation forwarding** is not
+  started. It remains the next implementation slice: `X-Request-Id` in
+  `apiClient`, `client_logs` migration/routes/rate-limit, eventLogger verb
+  expansion, voice focus/STT/TTS wiring, and DiagnosticBar replay panel.
+- **Phase 4 docs** is not started. Once Phase 3 lands, add
+  `docs/OBSERVABILITY.md`, `docs/AUDIT_TRAIL.md`,
+  `docs/LEARNING_ANALYTICS.md`, incident-response audit-chain entry, and
+  `CLAUDE.md` documentation map.
+
+## Verification
+
+- `node --check server/routes.js`
+- `node --check server/audit-chain.js`
+- `node --check server/migrationRunner.js`
+- `rg -n "console\\.(log|warn|error)" server/routes.js` returns no matches.
+- `npm test -- tests/server/audit-chain.test.js tests/server/route-auth-allowlist.test.js`
+- `npm test -- tests/server/sql-injection-guard.test.js tests/server/migrationRunner.test.js`
+- `npm test` passed: 75 files, 1010 tests passing, 10 skipped.
   `secure: true` on cookies is gated on `NODE_ENV==='production'`,
   so non-HTTPS prod would suppress the cookies entirely.
 - LEARNINGS.md was not updated this session; the per-commit messages
@@ -326,3 +398,13 @@ npm run test:server -- \
    `origin main`.
 4. Proceed to Phase 2 hash-chain audit once Phase 1 has no non-fatal
    `console.*` left outside the intentionally fatal auth startup messages.
+
+---
+
+# Latest Run Note — 2026-05-07
+
+The current working tree supersedes the stale "Next" list immediately above:
+Phase 1 route-family logging and Phase 2 audit-chain work have landed in the
+working tree. See the "Continuation Handoff — 2026-05-07 (observability +
+audit trail Phases 1-2)" section earlier in this file for the detailed file
+list, decisions, deferrals, and verification commands.

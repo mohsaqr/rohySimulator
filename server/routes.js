@@ -58,10 +58,16 @@ import {
     redactRows
 } from './redaction.js';
 import { logger } from './logger.js';
+import { appendAuditEntry, verifyAuditChain } from './audit-chain.js';
 
 const auditLog = logger('audit');
 const authLog = logger('auth');
 const radiologyLog = logger('radiology');
+const routesAuthLog = logger('routes-auth-users-tenants');
+const routesCasesLog = logger('routes-cases-sessions');
+const routesOrdersLog = logger('routes-orders-labs-radiology');
+const routesLlmLog = logger('routes-llm-tts');
+const routesAdminLog = logger('routes-agent-tna-admin');
 
 // Rate limiters for security
 const authLimiter = rateLimit({
@@ -251,31 +257,31 @@ function logAudit(params) {
     } = params;
     const tenant_id = params.tenantId ?? params.tenant_id ?? 1;
 
-    db.run(
-        `INSERT INTO system_audit_log
-         (user_id, username, action, resource_type, resource_id, resource_name,
-          old_value, new_value, ip_address, user_agent, session_id, status, error_message, metadata, tenant_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-            userId, username, action, resourceType ?? targetType, resourceId ?? targetId, resourceName ?? targetName,
-            oldValue ? JSON.stringify(redactAuditPayload(oldValue)) : null,
-            newValue ? JSON.stringify(redactAuditPayload(newValue)) : null,
-            ipAddress, userAgent, sessionId, status, errorMessage,
-            metadata ? JSON.stringify(redactAuditPayload(metadata)) : null,
-            tenant_id
-        ],
-        (err) => {
-            if (err) {
-                auditLog.warn('audit log write failed', {
-                    action,
-                    resource_type: resourceType ?? targetType ?? null,
-                    resource_id: resourceId ?? targetId ?? null,
-                    tenant_id,
-                    error: err.message
-                });
-            }
-        }
-    );
+    void appendAuditEntry({
+        userId,
+        username,
+        action,
+        resourceType: resourceType ?? targetType,
+        resourceId: resourceId ?? targetId,
+        resourceName: resourceName ?? targetName,
+        oldValue: oldValue ? JSON.stringify(redactAuditPayload(oldValue)) : null,
+        newValue: newValue ? JSON.stringify(redactAuditPayload(newValue)) : null,
+        ipAddress,
+        userAgent,
+        sessionId,
+        status,
+        errorMessage,
+        metadata: metadata ? JSON.stringify(redactAuditPayload(metadata)) : null,
+        tenantId: tenant_id
+    }).catch((err) => {
+        auditLog.warn('audit log write failed', {
+            action,
+            resource_type: resourceType ?? targetType ?? null,
+            resource_id: resourceId ?? targetId ?? null,
+            tenant_id,
+            error: err.message
+        });
+    });
 }
 
 function logAuditAsync(params) {
@@ -300,20 +306,23 @@ function logAuditAsync(params) {
     } = params;
     const tenant_id = params.tenantId ?? params.tenant_id ?? 1;
 
-    return dbRun(
-        `INSERT INTO system_audit_log
-         (user_id, username, action, resource_type, resource_id, resource_name,
-          old_value, new_value, ip_address, user_agent, session_id, status, error_message, metadata, tenant_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-            userId, username, action, resourceType ?? targetType, resourceId ?? targetId, resourceName ?? targetName,
-            oldValue ? JSON.stringify(redactAuditPayload(oldValue)) : null,
-            newValue ? JSON.stringify(redactAuditPayload(newValue)) : null,
-            ipAddress, userAgent, sessionId, status, errorMessage,
-            metadata ? JSON.stringify(redactAuditPayload(metadata)) : null,
-            tenant_id
-        ]
-    );
+    return appendAuditEntry({
+        userId,
+        username,
+        action,
+        resourceType: resourceType ?? targetType,
+        resourceId: resourceId ?? targetId,
+        resourceName: resourceName ?? targetName,
+        oldValue: oldValue ? JSON.stringify(redactAuditPayload(oldValue)) : null,
+        newValue: newValue ? JSON.stringify(redactAuditPayload(newValue)) : null,
+        ipAddress,
+        userAgent,
+        sessionId,
+        status,
+        errorMessage,
+        metadata: metadata ? JSON.stringify(redactAuditPayload(metadata)) : null,
+        tenantId: tenant_id
+    });
 }
 
 function auditSuccess(req, params) {
@@ -507,7 +516,7 @@ function clampInitialVitals(config) {
         if (!Number.isFinite(n)) continue;
         if (n < range.min || n > range.max) {
             clamped[key] = Math.max(range.min, Math.min(range.max, n));
-            console.warn(`[case clamp] initialVitals.${key} ${n} → ${clamped[key]} (range ${range.min}..${range.max})`);
+            routesCasesLog.warn('case initial vital clamped', { vital: key, value: n, clamped_value: clamped[key], min: range.min, max: range.max });
             changed = true;
         } else if (clamped[key] !== n) {
             clamped[key] = n; // coerce string-numbers to numbers
@@ -559,14 +568,14 @@ function resolveSessionCaseConfig(row) {
             const snap = JSON.parse(row.case_snapshot);
             if (snap && snap.config) return snap.config;
         } catch (e) {
-            console.warn('[snapshot] bad case_snapshot JSON, falling back to live config:', e.message);
+            routesCasesLog.warn('case snapshot json parse failed; using live config', { error: e.message });
         }
     }
     if (row && row.config) {
         try {
             return JSON.parse(row.config);
         } catch (e) {
-            console.warn('[snapshot] bad live case.config JSON:', e.message);
+            routesCasesLog.warn('live case config json parse failed', { error: e.message });
         }
     }
     return {};
@@ -586,7 +595,7 @@ function resolveSessionCaseScenario(row) {
         try {
             return JSON.parse(row.scenario);
         } catch (e) {
-            console.warn('[snapshot] bad live case.scenario JSON:', e.message);
+            routesCasesLog.warn('live case scenario json parse failed', { error: e.message });
         }
     }
     return null;
@@ -599,7 +608,7 @@ function createCaseVersion(caseId, userId, changeType, description, configSnapsh
         [caseId],
         (err, row) => {
             if (err) {
-                console.error('[Case Version] Error getting version number:', err.message);
+                routesCasesLog.error('case version lookup failed', { error: err.message });
                 return;
             }
             const versionNumber = row?.next_version || 1;
@@ -609,7 +618,7 @@ function createCaseVersion(caseId, userId, changeType, description, configSnapsh
                 [caseId, versionNumber, userId, changeType, description, JSON.stringify(configSnapshot), configSnapshot?.tenant_id || 1],
                 (err) => {
                     if (err) {
-                        console.error('[Case Version] Failed to create version:', err.message);
+                        routesCasesLog.error('case version create failed', { error: err.message });
                     }
                 }
             );
@@ -745,6 +754,11 @@ const uploadBodyImage = multer({
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB cap is plenty for a silhouette
 });
 
+// ---------------------------------------------------------------------------
+// Observability slice: routes — auth + users + tenants.
+// Console logging in this route family now goes through req.log where possible,
+// falling back to routes-auth-users-tenants for helper/background callbacks.
+// ---------------------------------------------------------------------------
 // --- AUTHENTICATION ---
 
 // POST /api/auth/register - Register a new user
@@ -871,7 +885,7 @@ router.post('/users/create', authenticateToken, requireAdmin, async (req, res) =
             });
         });
     } catch (err) {
-        console.error('[User Create] Error:', err.message);
+        (req.log || routesAuthLog).error('user create failed', { error: err.message });
         res.status(500).json({ error: 'Failed to create user' });
     }
 });
@@ -1389,7 +1403,7 @@ router.post('/upload-body-image', authenticateToken, requireAdmin, uploadBodyIma
             path: `/${imageType}${ext}`
         });
     } catch (err) {
-        console.error('Failed to save body image:', err);
+        (req.log || routesCasesLog).error('body image save failed', { error: err.message });
         res.status(500).json({ error: 'Failed to save image: ' + err.message });
     }
 });
@@ -1407,7 +1421,7 @@ router.get('/bodymap-regions', (req, res) => {
             res.json({ regions: null });
         }
     } catch (err) {
-        console.error('Failed to read bodymap regions:', err);
+        (req.log || routesCasesLog).error('bodymap regions read failed', { error: err.message });
         res.status(500).json({ error: 'Failed to read regions' });
     }
 });
@@ -1423,11 +1437,16 @@ router.post('/bodymap-regions', authenticateToken, requireEducator, (req, res) =
         fs.writeFileSync(BODYMAP_REGIONS_FILE, JSON.stringify({ regions }, null, 2));
         res.json({ success: true, message: 'Body map regions saved' });
     } catch (err) {
-        console.error('Failed to save bodymap regions:', err);
+        (req.log || routesCasesLog).error('bodymap regions save failed', { error: err.message });
         res.status(500).json({ error: 'Failed to save regions: ' + err.message });
     }
 });
 
+// ---------------------------------------------------------------------------
+// Observability slice: routes — cases + sessions.
+// Request-scoped warnings/errors now use req.log; shared case/session helpers
+// use routes-cases-sessions.
+// ---------------------------------------------------------------------------
 // --- CASES ---
 
 // GET /api/cases - Authenticated users can view cases (students only see available cases)
@@ -1463,7 +1482,7 @@ router.get('/cases', authenticateToken, (req, res) => {
             [tenantId(req)],
             (sErr, sessRows) => {
                 if (sErr) {
-                    console.warn('[cases] active session count failed:', sErr.message);
+                    (req.log || routesCasesLog).warn('case active session count failed', { error: sErr.message });
                     return res.json({ cases });
                 }
                 const counts = new Map(sessRows.map(r => [r.case_id, r.n]));
@@ -1611,7 +1630,7 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
 
     db.run(sql, params, function (err) {
         if (err) {
-            console.error('Error saving case:', err);
+            (req.log || routesCasesLog).error('case save failed', { error: err.message });
             logAudit({
                 userId: req.user.id,
                 username: req.user.username,
@@ -1699,7 +1718,7 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
 
         db.run(sql, params, function (err) {
             if (err) {
-                console.error('Error updating case:', err);
+                (req.log || routesCasesLog).error('case update failed', { error: err.message });
                 logAudit({
                     userId: req.user.id,
                     username: req.user.username,
@@ -1798,13 +1817,13 @@ router.post('/sessions', authenticateToken, async (req, res) => {
             if (userPrefs?.default_llm_settings) {
                 try {
                     effectiveLlmSettings = JSON.parse(userPrefs.default_llm_settings);
-                    console.log(`[Session] Using user ${user_id}'s default LLM settings`);
+                    (req.log || routesCasesLog).info('using user default llm settings', { user_id });
                 } catch {
-                    console.warn('[Session] Failed to parse user default LLM settings');
+                    (req.log || routesCasesLog).warn('user default llm settings parse failed');
                 }
             }
         } catch (err) {
-            console.warn('[Session] Failed to fetch user preferences:', err.message);
+            (req.log || routesCasesLog).warn('user preferences fetch failed', { error: err.message });
         }
     }
 
@@ -1822,10 +1841,10 @@ router.post('/sessions', authenticateToken, async (req, res) => {
         let parsedConfig = {};
         let parsedScenario = null;
         try { parsedConfig = caseRow.config ? JSON.parse(caseRow.config) : {}; } catch (e) {
-            console.warn('[Session start] bad case.config JSON:', e.message);
+            (req.log || routesCasesLog).warn('session start case config json parse failed', { error: e.message });
         }
         try { parsedScenario = caseRow.scenario ? JSON.parse(caseRow.scenario) : null; } catch (e) {
-            console.warn('[Session start] bad case.scenario JSON:', e.message);
+            (req.log || routesCasesLog).warn('session start case scenario json parse failed', { error: e.message });
         }
         // Stage-4 audit: include `system_prompt` in the snapshot. Pre-fix
         // the chat persona was rebuilt every render from the live
@@ -2254,7 +2273,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
             });
         }
     } catch (err) {
-        console.error('[User Update] Error:', err.message);
+        (req.log || routesAuthLog).error('user update failed', { error: err.message });
         res.status(500).json({ error: 'Failed to update user' });
     }
 });
@@ -2341,7 +2360,7 @@ router.post('/users/:id/purge', authenticateToken, requireAdmin, async (req, res
 
         res.json({ ...responsePlan, purged: true, anonymized_username: anonymizedUsername });
     } catch (err) {
-        console.error('[User Purge] Error:', err.message);
+        (req.log || routesAuthLog).error('user purge failed', { error: err.message });
         res.status(500).json({ error: 'Failed to purge user', details: err.message });
     }
 });
@@ -3774,6 +3793,11 @@ router.post('/sessions/:id/order', authenticateToken, async (req, res) => {
     });
 });
 
+// ---------------------------------------------------------------------------
+// Observability slice: routes — orders + labs + radiology.
+// Lab, radiology, treatment, and investigation-order diagnostics are structured
+// under req.log or routes-orders-labs-radiology.
+// ---------------------------------------------------------------------------
 // GET /api/sessions/:id/orders - Get all orders for session
 router.get('/sessions/:id/orders', authenticateToken, (req, res) => {
     const sessionId = req.params.id;
@@ -3807,7 +3831,7 @@ router.get('/sessions/:id/orders', authenticateToken, (req, res) => {
             return res.status(500).json({ error: err.message });
         }
 
-        console.log(`[Orders API] Session ${sessionId}: ${rows.length} raw rows from DB`);
+        (req.log || routesOrdersLog).debug('orders rows loaded', { session_id: sessionId, row_count: rows.length });
 
         // Parse JSON result_data and ensure all values are present
         const orders = rows.map(row => {
@@ -3822,7 +3846,7 @@ router.get('/sessions/:id/orders', authenticateToken, (req, res) => {
                 max_value: row.max_value ?? null,
                 current_value: row.current_value ?? null
             };
-            console.log(`  [Order] ${row.test_name}: is_ready=${order.is_ready}, mins_remaining_raw=${row.minutes_remaining?.toFixed(2)}, available_at=${row.available_at}`);
+            (req.log || routesOrdersLog).debug('order readiness calculated', { test_name: row.test_name, is_ready: order.is_ready, minutes_remaining: row.minutes_remaining, available_at: row.available_at });
             return order;
         });
 
@@ -4519,7 +4543,7 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, (req, res) 
                 try {
                     normalSamples = JSON.parse(lab.normal_samples || '[]');
                 } catch (e) {
-                    console.error(`[Labs API] Invalid normal_samples JSON for ${lab.test_name}:`, e.message);
+                    (req.log || routesOrdersLog).warn('lab normal_samples json parse failed', { test_name: lab.test_name, error: e.message });
                 }
                 configuredMap[lab.test_name] = {
                     ...lab,
@@ -4600,7 +4624,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
         return res.status(400).json({ error: 'lab_ids array is required' });
     }
 
-    console.log(`[Order Labs] Received request: session=${sessionId}, lab_ids=${JSON.stringify(lab_ids)}, turnaround_override=${turnaround_override}`);
+    (req.log || routesOrdersLog).info('lab order request received', { session_id: sessionId, lab_ids, turnaround_override });
 
     // Verify session exists and user has access; pull snapshot in same query
     db.get('SELECT user_id, case_id, case_snapshot FROM sessions WHERE id = ?', [sessionId], (err, session) => {
@@ -4619,7 +4643,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
         const defaultIds = lab_ids.filter(id => String(id).startsWith('default_'));
         const configIds = lab_ids.filter(id => String(id).startsWith('config_') || String(id).startsWith('lab_'));
 
-        console.log(`[Order Labs] ID breakdown: numeric=${numericIds.length}, default=${defaultIds.length}, config=${configIds.length}`);
+        (req.log || routesOrdersLog).debug('lab order id breakdown', { numeric_count: numericIds.length, default_count: defaultIds.length, config_count: configIds.length });
 
         // Track IDs that need to be inserted as orders
         const configuredIds = [...numericIds.map(id => parseInt(id, 10))];
@@ -4639,7 +4663,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
             const caseInstantResults = caseConfig.investigations?.instantResults === true;
             const caseDefaultTurnaround = caseConfig.investigations?.defaultTurnaround || 0;
 
-            console.log(`[Order Labs] Case config: instantResults=${caseInstantResults}, defaultTurnaround=${caseDefaultTurnaround}, configLabs=${configJsonLabs.length}`);
+            (req.log || routesOrdersLog).debug('lab order case config loaded', { instant_results: caseInstantResults, default_turnaround: caseDefaultTurnaround, config_lab_count: configJsonLabs.length });
 
             // Helper to get turnaround time (priority: instant/override > test default > case default)
             const getTurnaround = (testDefaultMinutes) => {
@@ -4692,7 +4716,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
 
                     db.all(labsSql, configuredIds, (err, labs) => {
                         if (err) {
-                            console.error('Error fetching labs:', err);
+                            (req.log || routesOrdersLog).error('labs fetch failed', { error: err.message });
                             return finalizeOrders();
                         }
 
@@ -4711,13 +4735,13 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                                     if (pendingInserts === 0) finalizeOrders();
                                     return;
                                 }
-                                console.log(`Ordering lab: ${lab.test_name}, turnaround: ${turnaround} min`);
+                                (req.log || routesOrdersLog).debug('ordering lab', { test_name: lab.test_name, turnaround_minutes: turnaround });
                                 db.run(insertSql, [sessionId, lab.id, turnaround], function(insertErr) {
                                     if (!insertErr) {
                                         orderIds.push({ id: this.lastID, test_name: lab.test_name, turnaround });
                                         inserted++;
                                     } else {
-                                        console.error('Error inserting order:', insertErr);
+                                        (req.log || routesOrdersLog).error('lab order insert failed', { error: insertErr.message });
                                     }
                                     pendingInserts--;
                                     if (pendingInserts === 0) {
@@ -4732,7 +4756,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                 }
 
                 function finalizeOrders() {
-                    console.log(`[Order Labs] Finalizing: ${inserted} orders created, IDs: ${orderIds.map(o => `${o.test_name}(${o.turnaround}m)`).join(', ')}`);
+                    (req.log || routesOrdersLog).info('lab orders finalized', { inserted, orders: orderIds });
 
                     // Log event to event_log
                     db.run(
@@ -4829,7 +4853,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                             if (!err) {
                                 configuredIds.push(this.lastID);
                             } else {
-                                console.error('Error creating config lab:', err);
+                                (req.log || routesOrdersLog).error('config lab create failed', { error: err.message });
                             }
                             checkComplete();
                         });
@@ -4839,7 +4863,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
 
             // Process default labs (from lab database with normal values)
             if (defaultIds.length > 0) {
-                console.log(`[Order Labs] Processing ${defaultIds.length} default lab IDs`);
+                (req.log || routesOrdersLog).debug('processing default lab ids', { count: defaultIds.length });
                 const testNames = defaultIds.map(id => String(id).replace('default_', '').replace(/_/g, ' '));
 
                 testNames.forEach((testName, idx) => {
@@ -4847,7 +4871,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                     if (genderSpecific) {
                         pendingOps++;
                         const normalValue = labDb.getRandomNormalValue(genderSpecific);
-                        console.log(`[Order Labs] Found default lab: "${testName}" -> "${genderSpecific.test_name}"`);
+                        (req.log || routesOrdersLog).debug('default lab resolved', { requested_test_name: testName, resolved_test_name: genderSpecific.test_name });
 
                         db.run(insertLabSql, [
                             session.case_id, 'lab',
@@ -4866,12 +4890,12 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                             if (!err) {
                                 configuredIds.push(this.lastID);
                             } else {
-                                console.error('Error creating default lab:', err);
+                                (req.log || routesOrdersLog).error('default lab create failed', { error: err.message });
                             }
                             checkComplete();
                         });
                     } else {
-                        console.warn(`[Order Labs] WARNING: Test not found in lab database: "${testName}" (from ID: ${defaultIds[idx]})`);
+                        (req.log || routesOrdersLog).warn('default lab not found', { test_name: testName, lab_id: defaultIds[idx] });
                     }
                 });
             }
@@ -4952,7 +4976,7 @@ router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireEducato
             `INSERT INTO event_log (session_id, event_type, description) VALUES (?, ?, ?)`,
             [sessionId, 'lab_value_edited', `Instructor edited lab value for test ID ${labId} to ${current_value}`],
             (err) => {
-                if (err) console.error('[Event Log] Failed to log lab edit:', err.message);
+                if (err) routesOrdersLog.warn('lab edit event log failed', { error: err.message });
             }
         );
 
@@ -5010,7 +5034,7 @@ router.get('/sessions/:sessionId/available-radiology', authenticateToken, (req, 
         [sessionId],
         (err, row) => {
             if (err) {
-                console.error('Error fetching case config:', err);
+                (req.log || routesOrdersLog).error('case config fetch failed', { error: err.message });
                 return res.json({
                     studies: radiologyDatabase,
                     groups: [...new Set(radiologyDatabase.map(s => s.modality))].sort(),
@@ -5155,7 +5179,7 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
 
             // For custom studies, we MUST have a configured result
             if (!study && !configuredResult) {
-                console.warn(`Radiology study not found and no config: ${radId}`);
+                (req.log || routesOrdersLog).warn('radiology study not found and no config', { radiology_id: radId });
                 pending--;
                 if (pending === 0) finalize();
                 return;
@@ -5216,7 +5240,7 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
                     turnaround
                 ], function(err) {
                     if (err) {
-                        console.error('Error inserting radiology study:', err);
+                        (req.log || routesOrdersLog).error('radiology study insert failed', { error: err.message });
                         pending--;
                         if (pending === 0) finalize();
                         return;
@@ -5491,7 +5515,7 @@ router.post('/sessions/:sessionId/administer/:orderId', authenticateToken, (req,
                         expiresAt, isContinuous ? 1 : 0
                     ], function(err) {
                         if (err) {
-                            console.error('[Treatments] Failed to create active effect:', err.message);
+                            routesOrdersLog.warn('active treatment effect create failed', { error: err.message });
                         }
 
                         res.json({
@@ -5553,7 +5577,7 @@ router.put('/sessions/:sessionId/discontinue/:orderId', authenticateToken, (req,
             // Mark active treatment as expired
             db.run(`UPDATE active_treatments SET phase = 'expired', expires_at = ? WHERE treatment_order_id = ?`,
                 [now, orderId], (err) => {
-                if (err) console.error('[Treatments] Failed to expire active treatment:', err.message);
+                if (err) routesOrdersLog.warn('active treatment expire failed', { error: err.message });
 
                 res.json({
                     message: 'Treatment discontinued',
@@ -5794,6 +5818,11 @@ router.get('/treatment-effects', authenticateToken, (req, res) => {
     });
 });
 
+// ---------------------------------------------------------------------------
+// Observability slice: routes — LLM + TTS.
+// Upstream LLM/TTS selection, failures, and usage logs are structured and
+// request-correlated when a request logger is available.
+// ---------------------------------------------------------------------------
 // --- LLM PROXY ROUTE with Authentication & Rate Limiting ---
 
 // Pull a safe, user-facing message out of an upstream LLM error body. Anthropic
@@ -5862,7 +5891,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         const logRateLimit = (msg) => {
             db.run('INSERT INTO llm_request_log (user_id, session_id, status, error_message) VALUES (?, ?, ?, ?)',
                 [userId, session_id, 'rate_limited', msg],
-                (err) => { if (err) console.error('[LLM Rate Limit] Log failed:', err.message); }
+                (err) => { if (err) routesLlmLog.warn('llm rate-limit log failed', { error: err.message }); }
             );
         };
 
@@ -5976,7 +6005,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 agentMaxTokens = parseInt(agent_llm_config.max_tokens, 10);
                 if (!Number.isFinite(agentMaxTokens)) agentMaxTokens = null;
             }
-            console.log(`[LLM Proxy] Using agent-specific LLM config: provider=${agentProvider}, model=${agentModel || '(default)'}, temp=${agentTemperature ?? '(default)'}, maxTokens=${agentMaxTokens ?? '(default)'}`);
+            (req.log || routesLlmLog).info('using agent-specific llm config', { provider: agentProvider, model: agentModel || null, temperature: agentTemperature ?? null, max_tokens: agentMaxTokens ?? null });
         } else if (agent_llm_config?.agent_template_id) {
             // Try to fetch agent template LLM config from DB
             const agentTemplate = await new Promise((resolve, reject) => {
@@ -5997,7 +6026,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 if (agentTemplate.llm_max_tokens !== null && Number.isFinite(agentTemplate.llm_max_tokens)) {
                     agentMaxTokens = agentTemplate.llm_max_tokens;
                 }
-                console.log(`[LLM Proxy] Using agent template ${agent_llm_config.agent_template_id} LLM config: provider=${agentProvider}, temp=${agentTemperature ?? '(default)'}, maxTokens=${agentMaxTokens ?? '(default)'}`);
+                (req.log || routesLlmLog).info('using agent-template llm config', { agent_template_id: agent_llm_config.agent_template_id, provider: agentProvider, temperature: agentTemperature ?? null, max_tokens: agentMaxTokens ?? null });
             }
         }
 
@@ -6017,7 +6046,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         }
         const model = voiceModelOverride || baseModel;
         if (voiceModelOverride) {
-            console.log(`[LLM Proxy] Voice-mode override active: model=${voiceModelOverride}`);
+            (req.log || routesLlmLog).info('voice-mode llm override active', { model: voiceModelOverride });
         }
 
         // For API key and base URL, also consider agent settings
@@ -6060,13 +6089,13 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 baseUrl = 'https://api.anthropic.com/v1';
                 apiKey = process.env.ANTHROPIC_API_KEY
                     || (platformVendor === 'anthropic' ? apiKey : '');
-                console.log(`[LLM Proxy] Voice override is a Claude model → routing to Anthropic`);
+                (req.log || routesLlmLog).info('voice override routed to anthropic');
             } else if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('o3-')) {
                 provider = 'openai';
                 baseUrl = 'https://api.openai.com/v1';
                 apiKey = process.env.OPENAI_API_KEY
                     || (platformVendor === 'openai' ? apiKey : '');
-                console.log(`[LLM Proxy] Voice override is an OpenAI model → routing to OpenAI`);
+                (req.log || routesLlmLog).info('voice override routed to openai');
             }
             if (!apiKey) {
                 const envName = provider === 'anthropic' ? 'ANTHROPIC_API_KEY'
@@ -6111,9 +6140,9 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         if (!Number.isFinite(temperature)) temperature = null;
 
         // Debug logging
-        console.log(`[LLM Proxy] Final settings: provider=${provider}, model=${model || '(default)'}, baseUrl=${baseUrl}`);
+        (req.log || routesLlmLog).info('llm final settings resolved', { provider, model: model || null, base_url: baseUrl });
         if (sessionLlmSettings && Object.keys(sessionLlmSettings).length > 0) {
-            console.log(`[LLM Proxy] Using session overrides for session ${session_id}:`, Object.keys(sessionLlmSettings).filter(k => sessionLlmSettings[k]));
+            (req.log || routesLlmLog).info('using session llm overrides', { session_id, override_keys: Object.keys(sessionLlmSettings).filter(k => sessionLlmSettings[k]) });
         }
 
         // 8. Build system prompt
@@ -6188,7 +6217,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         }
 
         // 10. Make LLM request
-        console.log(`[LLM Proxy] User ${userId} sending request to ${provider}${model ? '/' + model : ' (default model)'} at ${endpoint}`);
+        (req.log || routesLlmLog).info('llm upstream request sending', { user_id: userId, provider, model: model || null, endpoint });
 
         // Streaming branch — emit SSE deltas from the upstream provider.
         // Client requests it via Accept: text/event-stream OR ?stream=1.
@@ -6204,7 +6233,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             });
             if (!upstream.ok) {
                 const errText = await upstream.text();
-                console.error(`[LLM Proxy] Stream error ${upstream.status}: ${errText.slice(0, 200)}`);
+                (req.log || routesLlmLog).error('llm stream upstream error', { status: upstream.status, error: errText.slice(0, 200) });
                 db.run('INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms) VALUES (?, ?, ?, ?, ?, ?)',
                     [userId, session_id, model, 'error', errText.substring(0, 500), Date.now() - startTime]);
                 return res.status(upstream.status).json({ error: extractUpstreamError(errText) });
@@ -6280,7 +6309,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                     }
                 }
             } catch (streamErr) {
-                console.error('[LLM Proxy] stream interrupted', streamErr);
+                (req.log || routesLlmLog).error('llm stream interrupted', { error: streamErr.message });
                 streamInterrupted = true;
                 streamErrMessage = streamErr?.message?.slice(0, 500) || 'stream_error';
             }
@@ -6332,7 +6361,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
 
         if (!response.ok) {
             const errText = await response.text();
-            console.error(`[LLM Proxy] Error ${response.status}: ${errText}`);
+            (req.log || routesLlmLog).error('llm upstream error', { status: response.status, error: errText });
             db.run('INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms) VALUES (?, ?, ?, ?, ?, ?)',
                 [userId, session_id, model, 'error', errText.substring(0, 500), responseTime]);
             return res.status(response.status).json({ error: extractUpstreamError(errText) });
@@ -6396,12 +6425,12 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [userId, session_id, model, promptTokens, completionTokens, totalTokens, estimatedCost, 'success', responseTime]);
 
-        console.log(`[LLM Proxy] User ${userId}: ${totalTokens} tokens, $${estimatedCost.toFixed(4)}, ${responseTime}ms`);
+        (req.log || routesLlmLog).info('llm usage recorded', { user_id: userId, total_tokens: totalTokens, estimated_cost: Number(estimatedCost.toFixed(4)), response_time_ms: responseTime });
 
         // 15. Return response
         res.json(data);
     } catch (err) {
-        console.error('[LLM Proxy] Failure:', err);
+        (req.log || routesLlmLog).error('llm proxy failed', { error: err.message });
         res.status(500).json({ error: "LLM Request Failed", details: err.message });
     }
 });
@@ -6706,7 +6735,7 @@ router.post('/scenarios/seed', authenticateToken, requireAdmin, (req, res) => {
             [scenario.name, scenario.description, scenario.duration_minutes, scenario.category, JSON.stringify(scenario.timeline)],
             (err) => {
                 if (err) {
-                    console.error(`Error seeding scenario ${scenario.name}:`, err.message);
+                    routesAdminLog.error('scenario seed failed', { scenario_name: scenario.name, error: err.message });
                     errors++;
                 } else {
                     inserted++;
@@ -6888,6 +6917,11 @@ router.post('/cases/:caseId/restore/:versionId', authenticateToken, requireAdmin
 // /users/:id was capturing /users/preferences as id="preferences" → 404
 // "User not found" because no row had that id. Stage E5 fix.)
 
+// ---------------------------------------------------------------------------
+// Observability slice: routes — agent templates + TNA + admin.
+// Admin, audit-log, agent-template, patient-record, and analytics diagnostics
+// use structured route-family logging.
+// ---------------------------------------------------------------------------
 // --- SYSTEM AUDIT LOG ---
 
 function handleSystemAuditLogRequest(req, res) {
@@ -6932,6 +6966,21 @@ function handleSystemAuditLogRequest(req, res) {
 // GET /api/admin/audit-log - Get system audit log (Admin only)
 router.get('/admin/audit-log', authenticateToken, requireAdmin, (req, res) => {
     handleSystemAuditLogRequest(req, res);
+});
+
+// GET /api/admin/audit/verify - Verify tenant-scoped audit hash chain.
+router.get('/admin/audit/verify', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const result = await verifyAuditChain({ tenant_id: tenantId(req) });
+        res.json({
+            ok: result.ok,
+            lastVerifiedId: result.lastVerifiedId,
+            brokenAt: result.brokenAt,
+        });
+    } catch (err) {
+        (req.log || routesAdminLog).error('audit chain verify failed', { error: err.message });
+        res.status(500).json({ error: 'Failed to verify audit chain' });
+    }
 });
 
 // GET /api/system-audit-log - Alias for audit scripts and enterprise integrations.
@@ -7349,6 +7398,11 @@ router.post('/master/scenario-templates', authenticateToken, requireEducator, (r
     );
 });
 
+// ---------------------------------------------------------------------------
+// Observability slice: routes — lab/medication catalogue.
+// Legacy master-data endpoints share the structured routes-orders logger until
+// the catalogue router owns the full surface.
+// ---------------------------------------------------------------------------
 // --- LAB TESTS ---
 
 // GET /api/master/lab-tests - Get all lab tests
@@ -8343,7 +8397,7 @@ router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, asyn
             endpoint = `${baseUrl}/chat/completions`;
         }
 
-        console.log(`[LLM Test] Testing ${provider} at ${endpoint}`);
+        (req.log || routesLlmLog).info('llm test request sending', { provider, endpoint });
         const testResponse = await fetch(endpoint, {
             method: 'POST',
             headers,
@@ -8374,7 +8428,7 @@ router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, asyn
             response: responseContent
         });
     } catch (err) {
-        console.error('[LLM Test] Error:', err);
+        (req.log || routesLlmLog).error('llm test failed', { error: err.message });
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -8572,7 +8626,7 @@ router.get('/platform-settings/voice', authenticateToken, async (req, res) => {
         for (const k of VOICE_SLOT_KEYS) out[k] = raw[k] || null;
         res.json(out);
     } catch (err) {
-        console.error('[platform-settings/voice GET] error', err);
+        (req.log || routesLlmLog).error('voice platform settings read failed', { error: err.message });
         res.status(500).json({ error: 'Failed to load voice settings' });
     }
 });
@@ -8687,7 +8741,7 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
 
         res.json({ message: 'Voice settings updated successfully', updated: writes.map(w => w[0]) });
     } catch (err) {
-        console.error('[platform-settings/voice PUT] error', err);
+        (req.log || routesLlmLog).error('voice platform settings update failed', { error: err.message });
         res.status(500).json({ error: 'Failed to update voice settings' });
     }
 });
@@ -8894,7 +8948,7 @@ router.get('/tts/voices', authenticateToken, async (req, res) => {
                 piperInstalled: fs.existsSync(PIPER_BIN)
             });
         } catch (err) {
-            console.error('[kokoro] failed to load for voice listing', err);
+            (req.log || routesLlmLog).error('kokoro voice listing load failed', { error: err.message });
             return res.status(503).json({ error: 'Kokoro TTS failed to load' });
         }
     }
@@ -8984,7 +9038,7 @@ async function resolveTtsVoice(provider, requestedVoice, gender) {
                 return requestedVoice;   // unknown provider; let synth handle it
         }
     } catch (err) {
-        console.warn(`[tts-recovery] could not check ${provider} voice catalogue:`, err.message);
+        routesLlmLog.warn('tts voice catalogue check failed', { provider, error: err.message });
         return requestedVoice;
     }
     if (isValid) return requestedVoice;
@@ -8993,7 +9047,7 @@ async function resolveTtsVoice(provider, requestedVoice, gender) {
     const safeGender = ['male', 'female', 'child'].includes(gender) ? gender : 'female';
     const fallback = fallbackVoiceFor(provider, safeGender);
     if (fallback && fallback !== requestedVoice) {
-        console.warn(`[tts-recovery] ${provider} voice "${requestedVoice}" not in catalogue → falling back to "${fallback}"`);
+        routesLlmLog.warn('tts voice fallback selected', { provider, requested_voice: requestedVoice, fallback_voice: fallback });
         return fallback;
     }
     return requestedVoice;   // no fallback available — synth will throw UNKNOWN_VOICE
@@ -9013,7 +9067,7 @@ function recordTtsUsage(userId, provider, charCount) {
             estimated_cost = tts_usage.estimated_cost + excluded.estimated_cost,
             updated_at    = CURRENT_TIMESTAMP`,
         [userId, today, provider, charCount, cost],
-        (err) => { if (err) console.warn('[tts-usage] insert failed:', err.message); }
+        (err) => { if (err) routesLlmLog.warn('tts usage insert failed', { error: err.message }); }
     );
 }
 
@@ -9124,7 +9178,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
                 await pipePcmStream(res, synthesizeGoogleStream({ text, voice, speed, pitch: pitchSemitones, apiKey }));
                 return;
             } catch (err) {
-                console.error('[google-tts] streaming synthesis failed', err);
+                (req.log || routesLlmLog).error('google tts streaming synthesis failed', { error: err.message });
                 if (!res.headersSent) {
                     const status = err.code === 'UNKNOWN_VOICE' ? 400
                         : err.code === 'NO_API_KEY' || err.code === 'BAD_API_KEY' ? 503
@@ -9141,7 +9195,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
             res.set('Content-Length', String(wav.length));
             return res.end(wav);
         } catch (err) {
-            console.error('[google-tts] synthesis failed', err);
+            (req.log || routesLlmLog).error('google tts synthesis failed', { error: err.message });
             const status = err.code === 'UNKNOWN_VOICE' ? 400
                 : err.code === 'NO_API_KEY' || err.code === 'BAD_API_KEY' ? 503
                 : 502;
@@ -9171,7 +9225,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
                 await pipePcmStream(res, synthesizeOpenaiStream({ text, voice, speed, apiKey }));
                 return;
             } catch (err) {
-                console.error('[openai-tts] streaming synthesis failed', err);
+                (req.log || routesLlmLog).error('openai tts streaming synthesis failed', { error: err.message });
                 if (!res.headersSent) {
                     const status = err.code === 'UNKNOWN_VOICE' ? 400
                         : err.code === 'NO_API_KEY' || err.code === 'BAD_API_KEY' ? 503
@@ -9188,7 +9242,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
             res.set('Content-Length', String(wav.length));
             return res.end(wav);
         } catch (err) {
-            console.error('[openai-tts] synthesis failed', err);
+            (req.log || routesLlmLog).error('openai tts synthesis failed', { error: err.message });
             const status = err.code === 'UNKNOWN_VOICE' ? 400
                 : err.code === 'NO_API_KEY' || err.code === 'BAD_API_KEY' ? 503
                 : 502;
@@ -9250,7 +9304,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
                 res.write(eof);
                 return res.end();
             } catch (err) {
-                console.error('[kokoro] streaming synthesis failed', err);
+                (req.log || routesLlmLog).error('kokoro streaming synthesis failed', { error: err.message });
                 if (!res.headersSent && !clientGone) {
                     // UNKNOWN_VOICE is safe to surface (just names the bad voice).
                     // Anything else gets a generic message; details stay in the log.
@@ -9272,7 +9326,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
             res.set('Content-Length', String(wav.length));
             return res.end(wav);
         } catch (err) {
-            console.error('[kokoro] synthesis failed', err);
+            (req.log || routesLlmLog).error('kokoro synthesis failed', { error: err.message });
             const msg = err.code === 'UNKNOWN_VOICE' ? err.message : 'Kokoro synthesis failed';
             return res.status(err.code === 'UNKNOWN_VOICE' ? 400 : 500).json({ error: msg });
         }
@@ -9315,7 +9369,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
     try {
         fs.writeFileSync(tmpFile, text, 'utf8');
     } catch (err) {
-        console.error('[piper] failed to write temp input', err);
+        routesLlmLog.error('piper temp input write failed', { error: err.message });
         return res.status(500).json({ error: 'Failed to prepare TTS input' });
     }
 
@@ -9335,7 +9389,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
     try {
         piper = spawn(PIPER_BIN, args);
     } catch (err) {
-        console.error('[piper] spawn failed', err);
+        routesLlmLog.error('piper spawn failed', { error: err.message });
         try { fs.unlinkSync(tmpFile); } catch { /* noop */ }
         return res.status(500).json({ error: 'Failed to start Piper' });
     }
@@ -9370,7 +9424,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
     });
     piper.stderr.on('data', (d) => { stderrBuf += d.toString(); });
     piper.on('error', (err) => {
-        console.error('[piper] process error', err);
+        routesLlmLog.error('piper process error', { error: err.message });
         cleanup();
         if (!res.headersSent && !clientGone) res.status(500).json({ error: 'Piper process error' });
     });
@@ -9379,7 +9433,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
         if (clientGone || res.headersSent) return;
         if (aborted) return res.status(500).json({ error: 'TTS output exceeded size limit' });
         if (code !== 0) {
-            console.warn('[piper] exited non-zero', code, stderrBuf.slice(0, 500));
+            routesLlmLog.warn('piper exited non-zero', { code, stderr: stderrBuf.slice(0, 500) });
             return res.status(500).json({ error: 'Piper synthesis failed' });
         }
         const pcm = Buffer.concat(chunks, totalLen);
@@ -9637,7 +9691,7 @@ router.post('/patient-record/sync', authenticateToken, async (req, res) => {
             events_synced: events?.length || 0
         });
     } catch (err) {
-        console.error('Patient record sync error:', err);
+        (req.log || routesAdminLog).error('patient record sync failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -9675,7 +9729,7 @@ router.get('/patient-record/:sessionId', authenticateToken, async (req, res) => 
             updated_at: record.updated_at
         });
     } catch (err) {
-        console.error('Patient record get error:', err);
+        (req.log || routesAdminLog).error('patient record get failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -9714,7 +9768,7 @@ router.get('/patient-record/:sessionId/events', authenticateToken, async (req, r
 
         res.json({ events: parsedEvents });
     } catch (err) {
-        console.error('Patient record events get error:', err);
+        (req.log || routesAdminLog).error('patient record events get failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -9744,7 +9798,7 @@ router.delete('/patient-record/:sessionId', authenticateToken, async (req, res) 
 
         res.json({ success: true, message: 'Patient record deleted' });
     } catch (err) {
-        console.error('Patient record delete error:', err);
+        (req.log || routesAdminLog).error('patient record delete failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -9803,7 +9857,7 @@ router.get('/patient-record/:sessionId/summary', authenticateToken, async (req, 
             updated_at: record.updated_at
         });
     } catch (err) {
-        console.error('Patient record summary error:', err);
+        (req.log || routesAdminLog).error('patient record summary failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -9836,7 +9890,7 @@ router.get('/agents/templates', authenticateToken, async (req, res) => {
 
         res.json({ templates: parsed });
     } catch (err) {
-        console.error('Agent templates list error:', err);
+        (req.log || routesAdminLog).error('agent templates list failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -9867,7 +9921,7 @@ router.get('/agents/templates/:id', authenticateToken, async (req, res) => {
             is_default: template.is_default === 1
         });
     } catch (err) {
-        console.error('Agent template get error:', err);
+        (req.log || routesAdminLog).error('agent template get failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -9944,7 +9998,7 @@ router.post('/agents/templates', authenticateToken, requireEducator, async (req,
 
         res.status(201).json({ id: result.id, message: 'Agent template created' });
     } catch (err) {
-        console.error('Agent template create error:', err);
+        (req.log || routesAdminLog).error('agent template create failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10077,7 +10131,7 @@ router.put('/agents/templates/:id', authenticateToken, requireEducator, async (r
 
         res.json({ success: true, message: 'Agent template updated' });
     } catch (err) {
-        console.error('Agent template update error:', err);
+        (req.log || routesAdminLog).error('agent template update failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10147,7 +10201,7 @@ router.delete('/agents/templates/:id', authenticateToken, requireEducator, async
             : '';
         res.json({ success: true, message: `Agent template deleted${cascadedMsg}` });
     } catch (err) {
-        console.error('Agent template delete error:', err);
+        (req.log || routesAdminLog).error('agent template delete failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10267,7 +10321,7 @@ router.post('/agents/templates/:id/reset-to-default', authenticateToken, require
         });
         res.json({ success: true, message: `Reset "${baseline.name}" to shipped defaults`, template: fresh });
     } catch (err) {
-        console.error('Agent template reset error:', err);
+        (req.log || routesAdminLog).error('agent template reset failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10413,7 +10467,7 @@ router.post('/agents/templates/:id/test-llm', authenticateToken, requireEducator
             message: 'LLM connection test successful'
         });
     } catch (err) {
-        console.error('Agent LLM test error:', err);
+        (req.log || routesAdminLog).error('agent llm test failed', { error: err.message });
         res.status(500).json({
             success: false,
             error: err.message,
@@ -10493,7 +10547,7 @@ router.post('/agents/templates/:id/duplicate', authenticateToken, requireEducato
 
         res.status(201).json({ id: result.id, message: 'Agent template duplicated' });
     } catch (err) {
-        console.error('Agent template duplicate error:', err);
+        (req.log || routesAdminLog).error('agent template duplicate failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10557,7 +10611,7 @@ router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
 
         res.json({ agents: parsed });
     } catch (err) {
-        console.error('Case agents list error:', err);
+        (req.log || routesAdminLog).error('case agents list failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10624,7 +10678,7 @@ router.post('/cases/:caseId/agents', authenticateToken, async (req, res) => {
 
         res.status(201).json({ id: result.id, message: 'Agent added to case' });
     } catch (err) {
-        console.error('Case agent add error:', err);
+        (req.log || routesAdminLog).error('case agent add failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10697,7 +10751,7 @@ router.put('/cases/:caseId/agents/:agentId', authenticateToken, async (req, res)
 
         res.json({ success: true, message: 'Case agent updated' });
     } catch (err) {
-        console.error('Case agent update error:', err);
+        (req.log || routesAdminLog).error('case agent update failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10737,7 +10791,7 @@ router.delete('/cases/:caseId/agents/:agentId', authenticateToken, async (req, r
 
         res.json({ success: true, message: 'Agent removed from case' });
     } catch (err) {
-        console.error('Case agent delete error:', err);
+        (req.log || routesAdminLog).error('case agent delete failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10796,7 +10850,7 @@ router.post('/cases/:caseId/agents/add-defaults', authenticateToken, async (req,
 
         res.json({ success: true, added: addedCount, message: `Added ${addedCount} default agents to case` });
     } catch (err) {
-        console.error('Add default agents error:', err);
+        (req.log || routesAdminLog).error('add default agents failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10867,7 +10921,7 @@ router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) =>
 
         res.json({ agents: parsed });
     } catch (err) {
-        console.error('Session agents list error:', err);
+        (req.log || routesAdminLog).error('session agents list failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10894,7 +10948,7 @@ router.post('/sessions/:sessionId/agents/:agentType/page', authenticateToken, as
 
         res.json({ success: true, message: `Agent ${agentType} paged` });
     } catch (err) {
-        console.error('Page agent error:', err);
+        (req.log || routesAdminLog).error('page agent failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10920,7 +10974,7 @@ router.post('/sessions/:sessionId/agents/:agentType/arrive', authenticateToken, 
 
         res.json({ success: true, message: `Agent ${agentType} arrived` });
     } catch (err) {
-        console.error('Agent arrive error:', err);
+        (req.log || routesAdminLog).error('agent arrive failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10944,7 +10998,7 @@ router.post('/sessions/:sessionId/agents/:agentType/depart', authenticateToken, 
 
         res.json({ success: true, message: `Agent ${agentType} departed` });
     } catch (err) {
-        console.error('Agent depart error:', err);
+        (req.log || routesAdminLog).error('agent depart failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -10973,7 +11027,7 @@ router.get('/sessions/:sessionId/agents/:agentType/status', authenticateToken, a
             departed_at: state?.departed_at || null
         });
     } catch (err) {
-        console.error('Agent status error:', err);
+        (req.log || routesAdminLog).error('agent status failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -11000,7 +11054,7 @@ router.get('/sessions/:sessionId/agents/:agentType/conversation', authenticateTo
 
         res.json({ messages });
     } catch (err) {
-        console.error('Agent conversation get error:', err);
+        (req.log || routesAdminLog).error('agent conversation get failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -11029,7 +11083,7 @@ router.post('/sessions/:sessionId/agents/:agentType/conversation', authenticateT
 
         res.status(201).json({ id: result.id, message: 'Message added' });
     } catch (err) {
-        console.error('Agent conversation add error:', err);
+        (req.log || routesAdminLog).error('agent conversation add failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -11052,7 +11106,7 @@ router.delete('/sessions/:sessionId/agents/:agentType/conversation', authenticat
 
         res.json({ success: true, message: 'Conversation cleared' });
     } catch (err) {
-        console.error('Agent conversation clear error:', err);
+        (req.log || routesAdminLog).error('agent conversation clear failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -11079,7 +11133,7 @@ router.get('/sessions/:sessionId/team-communications', authenticateToken, async 
 
         res.json({ log });
     } catch (err) {
-        console.error('Team communications get error:', err);
+        (req.log || routesAdminLog).error('team communications get failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -11108,7 +11162,7 @@ router.post('/sessions/:sessionId/team-communications', authenticateToken, async
 
         res.status(201).json({ id: result.id, message: 'Entry added to team log' });
     } catch (err) {
-        console.error('Team communications add error:', err);
+        (req.log || routesAdminLog).error('team communications add failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -11242,7 +11296,7 @@ router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, (req, re
 
     db.all(sql, params, (err, rows) => {
         if (err) {
-            console.error('TNA sequences query error:', err);
+            (req.log || routesAdminLog).error('tna sequences query failed', { error: err.message });
             return res.status(500).json({ error: err.message });
         }
         if (!rows || rows.length === 0) {

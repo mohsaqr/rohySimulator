@@ -33,6 +33,7 @@ import { searchRxNorm } from '../services/rxnormProxy.js';
 import { searchOpenFda } from '../services/openfdaProxy.js';
 import { searchLoinc } from '../services/loincProxy.js';
 import { logger } from '../logger.js';
+import { appendAuditEntry } from '../audit-chain.js';
 
 const router = express.Router();
 const catalogueLog = logger('catalogue');
@@ -63,27 +64,21 @@ function dbRun(sql, params = []) {
 // audit issues should never block the user's mutation from succeeding.
 async function audit(req, params) {
     try {
-        await dbRun(
-            `INSERT INTO system_audit_log
-             (user_id, username, action, resource_type, resource_id, resource_name,
-              old_value, new_value, ip_address, user_agent, status, metadata, tenant_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                req.user?.id ?? null,
-                req.user?.username ?? null,
-                params.action,
-                params.resourceType ?? null,
-                params.resourceId != null ? String(params.resourceId) : null,
-                params.resourceName ?? null,
-                params.oldValue ? JSON.stringify(params.oldValue) : null,
-                params.newValue ? JSON.stringify(params.newValue) : null,
-                req.ip ?? null,
-                req.headers?.['user-agent'] ?? null,
-                params.status ?? 'success',
-                params.metadata ? JSON.stringify(params.metadata) : null,
-                req.user?.tenant_id ?? 1,
-            ]
-        );
+        await appendAuditEntry({
+            userId: req.user?.id ?? null,
+            username: req.user?.username ?? null,
+            action: params.action,
+            resourceType: params.resourceType ?? null,
+            resourceId: params.resourceId != null ? String(params.resourceId) : null,
+            resourceName: params.resourceName ?? null,
+            oldValue: params.oldValue ? JSON.stringify(params.oldValue) : null,
+            newValue: params.newValue ? JSON.stringify(params.newValue) : null,
+            ipAddress: req.ip ?? null,
+            userAgent: req.headers?.['user-agent'] ?? null,
+            status: params.status ?? 'success',
+            metadata: params.metadata ? JSON.stringify(params.metadata) : null,
+            tenantId: req.user?.tenant_id ?? 1,
+        });
     } catch (err) {
         (req.log || catalogueLog).warn('catalogue audit write failed', {
             action: params.action,

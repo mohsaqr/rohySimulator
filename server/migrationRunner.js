@@ -3,6 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { logger } from './logger.js';
+import { backfillAuditChain, ensureAuditChainColumns } from './audit-chain.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -145,6 +146,21 @@ async function recordMigration(db, migration) {
 }
 
 async function applyMigration(db, migration) {
+    if (migration.version === '0008') {
+        await run(db, 'BEGIN');
+        try {
+            await ensureAuditChainColumns(db);
+            await exec(db, migration.sql);
+            await backfillAuditChain(db);
+            await recordMigration(db, migration);
+            await run(db, 'COMMIT');
+        } catch (err) {
+            await run(db, 'ROLLBACK').catch(() => {});
+            throw err;
+        }
+        return;
+    }
+
     if (hasExplicitTransaction(migration.sql)) {
         await exec(db, migration.sql);
         await run(db, 'BEGIN');
