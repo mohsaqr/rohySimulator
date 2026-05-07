@@ -14,6 +14,7 @@ import requestIdMiddleware from './middleware/requestId.js';
 import requestLoggerMiddleware from './middleware/requestLogger.js';
 import errorHandler from './middleware/errorHandler.js';
 import { logger } from './logger.js';
+import { validateEnvOrExit } from './config/validateEnv.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +23,14 @@ const bootLog = logger('server');
 const httpsLog = logger('https');
 const migrationLog = logger('migration');
 const kokoroLog = logger('kokoro');
+
+// Boot-time env validation. Surfaces every configuration problem at once
+// rather than letting them dribble out as silent CORS 500s or DB-in-repo
+// surprises. Note: auth.js's import-time JWT_SECRET check still fires
+// first if that one var is missing — by the time we get here, JWT_SECRET
+// is set (or we never made it). validateEnvOrExit handles the rest.
+validateEnvOrExit(process.env, bootLog);
+
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 // Optional HTTPS listener — needed in any deployment that isn't
 // localhost/127.0.0.1, because Chrome blocks getUserMedia and

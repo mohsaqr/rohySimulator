@@ -16,6 +16,7 @@ import patientRecordRoutes from './routes/patient-record-routes.js';
 import agentsRoutes from './routes/agents-routes.js';
 import notesRoutes from './routes/notes-routes.js';
 import healthRoutes from './routes/health-routes.js';
+import { routeTimeout } from './middleware/routeTimeout.js';
 
 // Item D slice marker: D6 final mount point after D1-D5 extracted route domains.
 const router = express.Router();
@@ -35,6 +36,13 @@ const generalLimiter = rateLimit({
 router.use(healthRoutes);
 
 router.use(generalLimiter);
+
+// Per-route timeout — sends 504 if a handler runs longer than
+// ROHY_ROUTE_TIMEOUT_MS (default 30s). Skips /tts and /proxy/llm internally
+// because those are legitimate long-running streams. Mounted AFTER the
+// rate limiter so health probes are exempt (already returned by then) and
+// BEFORE the route handlers so they're all covered.
+router.use(routeTimeout());
 router.use('/catalogue', catalogueRouter);
 router.use(authRoutes);
 router.use(usersRoutes);

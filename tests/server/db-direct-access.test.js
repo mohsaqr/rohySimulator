@@ -47,7 +47,10 @@ function findDirectDbAccess() {
 }
 
 describe('database adapter boundary', () => {
-    it('keeps route and middleware persistence calls behind dbAdapter', () => {
+    // Long timeout: this test shells out to `grep -rn` across the whole
+    // server tree, which is filesystem-bound and can exceed the 5s
+    // vitest default on a busy box.
+    it('keeps route and middleware persistence calls behind dbAdapter', { timeout: 15_000 }, () => {
         const direct = findDirectDbAccess();
         if (direct.length > 0) {
             const report = direct
