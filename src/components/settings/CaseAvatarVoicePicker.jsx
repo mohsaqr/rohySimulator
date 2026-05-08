@@ -318,6 +318,7 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
                                 provider={effectiveProvider}
                                 rate={resolvedVoice.rate}
                                 pitch={resolvedVoice.pitch}
+                                gender={slot}
                             />
                         </div>
                     </div>

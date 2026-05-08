@@ -8,7 +8,7 @@
 //     then to 'playing' (Square icon, purple background) once
 //     audio.play() resolves; audio.onended returns to idle.
 //   - Clicks POST to apiUrl(`/tts?provider=<provider>`) with JSON body
-//     { text, voice, ...rate?, ...pitch? } and an Authorization header
+//     { text, voice, ...rate?, ...pitch?, ...gender? } and an Authorization header
 //     from AuthService.authHeaders(). `pitch` is forwarded in the BODY
 //     in semitones; the component MUST NOT touch audio.playbackRate or
 //     audio.preservesPitch — that was removed in bb34d88.
@@ -205,6 +205,7 @@ describe('TestVoiceButton', () => {
                 provider="google"
                 rate={1.25}
                 pitch={2}
+                gender="male"
                 text="hi"
             />
         );
@@ -216,7 +217,7 @@ describe('TestVoiceButton', () => {
         expect(init.method).toBe('POST');
         expect(init.headers['Content-Type']).toBe('application/json');
         const body = JSON.parse(init.body);
-        expect(body).toEqual({ text: 'hi', voice: 'alpha.onnx', rate: 1.25, pitch: 2 });
+        expect(body).toEqual({ text: 'hi', voice: 'alpha.onnx', rate: 1.25, pitch: 2, gender: 'male' });
     });
 
     it('REGRESSION LOCK (bb34d88): pitch is in the body, audio.playbackRate is NEVER set', async () => {

@@ -120,6 +120,21 @@ describe('POST /api/tts matrix — provider override and gender fallback', () =>
         }
     });
 
+    it('does not treat omitted gender as female for a valid Google male voice', async () => {
+        const beforeLogs = server.getStdout() + server.getStderr();
+        const res = await postTts(server, token, {
+            provider: 'google',
+            text: 'preview a male google voice with no gender field',
+            voice: 'en-US-Chirp3-HD-Charon',
+        });
+        expect(res.status).toBe(200);
+
+        const afterLogs = server.getStdout() + server.getStderr();
+        const newLogs = afterLogs.slice(beforeLogs.length);
+        expect(newLogs).not.toContain('tts gender fallback selected');
+        expect(newLogs).not.toContain('en-US-Neural2-F');
+    });
+
     it('falls back when a valid Google voice clearly mismatches the requested gender', async () => {
         const maleRes = await postTts(server, token, {
             provider: 'google',

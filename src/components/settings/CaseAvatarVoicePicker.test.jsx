@@ -9,7 +9,7 @@
 //      deletes `config.voice.case_voice` (voice ids are provider-specific
 //      so a Piper id has no meaning under Kokoro/Google/OpenAI).
 //   3. TEST VOICE BUTTON: TestVoiceButton receives the picker's resolved
-//      voice/provider/rate/pitch as props. We stub it to capture props —
+//      voice/provider/rate/pitch/gender as props. We stub it to capture props —
 //      the real button is owned by a sibling agent's tests.
 //   4. PITCH SLIDER UNITS (POST-bb34d88 REGRESSION LOCK):
 //        min = -10, max = 10, step = 0.25
@@ -60,6 +60,7 @@ vi.mock('./TestVoiceButton.jsx', () => ({
                 data-provider={props.provider ?? ''}
                 data-rate={props.rate ?? ''}
                 data-pitch={props.pitch ?? ''}
+                data-gender={props.gender ?? ''}
             >
                 test-voice-stub
             </button>
@@ -480,6 +481,7 @@ describe('CaseAvatarVoicePicker — TestVoiceButton wiring', () => {
         expect(stub.getAttribute('data-provider')).toBe('google');
         expect(stub.getAttribute('data-rate')).toBe('1.1');
         expect(stub.getAttribute('data-pitch')).toBe('2.5');
+        expect(stub.getAttribute('data-gender')).toBe('male');
     });
 
     it('falls back to inherited voice (empty here, no platformAvatars) when case_voice is unset', () => {

@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
 import renderWithProviders from '../../../tests/utils/renderWithProviders.jsx';
 import VoiceSettingsTab from './VoiceSettingsTab.jsx';
+import { useVoice } from '../../contexts/VoiceContext.jsx';
 
 const toast = {
     success: vi.fn(),
@@ -21,8 +23,10 @@ vi.mock('../../contexts/AuthContext.jsx', async (importActual) => {
     };
 });
 
+const testVoiceProps = vi.fn();
 vi.mock('./TestVoiceButton.jsx', () => ({
-    default: function TestVoiceButtonStub() {
+    default: function TestVoiceButtonStub(props) {
+        testVoiceProps(props);
         return <button type="button">test voice</button>;
     },
 }));
@@ -35,6 +39,19 @@ function jsonResponse(payload, init = {}) {
 }
 
 let fetchSpy;
+
+function VoiceProbe({ onUpdate }) {
+    const { voiceSettings } = useVoice();
+    useEffect(() => {
+        onUpdate?.(voiceSettings);
+    }, [onUpdate, voiceSettings]);
+    return (
+        <div
+            data-testid="voice-probe"
+            data-voice-settings={voiceSettings ? JSON.stringify(voiceSettings) : ''}
+        />
+    );
+}
 
 function voiceCalls() {
     return fetchSpy.mock.calls.filter(([url]) =>
@@ -125,6 +142,86 @@ describe('VoiceSettingsTab apiFetch migration', () => {
             voice_piper_male: 'amy.onnx',
             tts_rate: 1,
             tts_pitch: 0,
+        });
+    });
+
+    it('publishes loaded voice settings into VoiceContext so chat uses changed defaults without a reload', async () => {
+        const captured = { current: null };
+        renderWithProviders(
+            <>
+                <VoiceSettingsTab />
+                <VoiceProbe onUpdate={(settings) => { captured.current = settings; }} />
+            </>,
+            { withAuth: false, withNotifications: false, withToast: false }
+        );
+
+        expect(await screen.findByText(/Voice & Avatar/i)).toBeInTheDocument();
+
+        await waitFor(() => {
+            expect(captured.current).toMatchObject({
+                tts_provider: 'piper',
+                voice_piper_male: 'amy.onnx',
+            });
+            expect(screen.getByTestId('voice-probe').getAttribute('data-voice-settings'))
+                .toContain('voice_piper_male');
+        });
+    });
+
+    it('passes each slot gender to the voice preview button', async () => {
+        fetchSpy.mockImplementation((url) => {
+            if (typeof url === 'string' && url.endsWith('/api/platform-settings/voice')) {
+                return Promise.resolve(jsonResponse({
+                    voice_mode_enabled: true,
+                    tts_provider: 'google',
+                    tts_rate: 1,
+                    tts_pitch: 0,
+                    stt_provider: 'browser',
+                    stt_language: 'en-US',
+                    avatar_type: '3d_head',
+                    voice_google_male: 'en-US-Chirp3-HD-Charon',
+                    voice_google_female: 'en-US-Chirp3-HD-Aoede',
+                    voice_google_child: 'en-US-Chirp3-HD-Leda',
+                }));
+            }
+            if (typeof url === 'string' && url.endsWith('/api/llm/models')) return Promise.resolve(jsonResponse({ models: [] }));
+            if (typeof url === 'string' && url.includes('/api/tts/voices')) {
+                return Promise.resolve(jsonResponse({
+                    provider: 'google',
+                    voices: [
+                        { filename: 'en-US-Chirp3-HD-Charon', displayName: 'Charon', language: 'en-US', gender: 'male' },
+                        { filename: 'en-US-Chirp3-HD-Aoede', displayName: 'Aoede', language: 'en-US', gender: 'female' },
+                        { filename: 'en-US-Chirp3-HD-Leda', displayName: 'Leda', language: 'en-US', gender: 'female' },
+                    ],
+                }));
+            }
+            if (typeof url === 'string' && url.includes('/api/tts/usage')) {
+                return Promise.resolve(jsonResponse({ today: [], last_7_days: [], this_month: [], all_time: [] }));
+            }
+            return Promise.resolve(jsonResponse({}));
+        });
+
+        renderWithProviders(
+            <VoiceSettingsTab />,
+            { withAuth: false, withNotifications: false, withToast: false }
+        );
+
+        expect(await screen.findByText(/Voice & Avatar/i)).toBeInTheDocument();
+        await waitFor(() => {
+            expect(testVoiceProps).toHaveBeenCalledWith(expect.objectContaining({
+                voice: 'en-US-Chirp3-HD-Charon',
+                provider: 'google',
+                gender: 'male',
+            }));
+            expect(testVoiceProps).toHaveBeenCalledWith(expect.objectContaining({
+                voice: 'en-US-Chirp3-HD-Aoede',
+                provider: 'google',
+                gender: 'female',
+            }));
+            expect(testVoiceProps).toHaveBeenCalledWith(expect.objectContaining({
+                voice: 'en-US-Chirp3-HD-Leda',
+                provider: 'google',
+                gender: 'child',
+            }));
         });
     });
 

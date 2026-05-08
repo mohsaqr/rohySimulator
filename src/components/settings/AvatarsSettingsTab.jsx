@@ -306,7 +306,7 @@ function PersonaCard({ label, gender, manifest, voices, voicesProvider, avatarId
                                 </option>
                             ))}
                         </select>
-                        <TestVoiceButton voice={voiceFile || inheritedVoiceFile} provider={voicesProvider} rate={rate} pitch={pitch} />
+                        <TestVoiceButton voice={voiceFile || inheritedVoiceFile} provider={voicesProvider} rate={rate} pitch={pitch} gender={gender} />
                     </div>
                 </div>
 

@@ -33,6 +33,7 @@ vi.mock('./TestVoiceButton.jsx', () => ({
                 data-testid={`test-voice-${props.voice || 'empty'}`}
                 data-voice={props.voice || ''}
                 data-provider={props.provider || ''}
+                data-gender={props.gender || ''}
             >
                 test voice
             </button>
@@ -205,6 +206,7 @@ describe('AvatarsSettingsTab apiFetch migration', () => {
             expect(testVoiceProps).toHaveBeenCalledWith(expect.objectContaining({
                 voice: 'amy.onnx',
                 provider: 'piper',
+                gender: 'male',
             }));
         });
     });

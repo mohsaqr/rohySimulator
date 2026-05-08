@@ -4,6 +4,7 @@ import { ApiError, apiFetch, apiPut } from '../../services/apiClient.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import TestVoiceButton from './TestVoiceButton.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import { useVoice } from '../../contexts/VoiceContext.jsx';
 import { voicesForSlot, voiceGenderLabel } from '../../utils/voiceCatalogue.js';
 
 // Curated list of locales the browser SpeechRecognition handles reliably.
@@ -77,6 +78,7 @@ const blankSettings = {
 
 export default function VoiceSettingsTab() {
     const toast = useToast();
+    const { setVoiceSettings } = useVoice();
     const [settings, setSettings] = useState(blankSettings);
     const [voices, setVoices] = useState([]);
     const [piperInstalled, setPiperInstalled] = useState(true);
@@ -102,7 +104,7 @@ export default function VoiceSettingsTab() {
                 }
             }
 
-            setSettings({
+            const hydratedSettings = {
                 voice_mode_enabled: !!s.voice_mode_enabled,
                 tts_provider: provider,
                 voiceSlots,
@@ -118,7 +120,9 @@ export default function VoiceSettingsTab() {
                 openai_tts_api_key: '',
                 openai_tts_api_key_set: !!s.openai_tts_api_key_set,
                 openai_tts_api_key_via_env: !!s.openai_tts_api_key_via_env
-            });
+            };
+            setSettings(hydratedSettings);
+            setVoiceSettings?.(s);
             setVoices(v.voices || []);
             setPiperInstalled(v.piperInstalled !== false);
             setModels(m.models || []);
@@ -372,6 +376,7 @@ export default function VoiceSettingsTab() {
                                             provider={provider}
                                             rate={settings.tts_rate}
                                             pitch={settings.tts_pitch}
+                                            gender={g}
                                         />
                                     </div>
                                 </label>

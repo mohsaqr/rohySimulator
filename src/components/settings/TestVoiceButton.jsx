@@ -13,6 +13,8 @@ import { ApiError, apiFetch } from '../../services/apiClient.js';
 //   provider — 'piper' | 'kokoro' | 'openai' | 'google'
 //   rate     — optional speech rate (defaults to platform value server-side)
 //   pitch    — optional provider pitch in semitones (Google supports this)
+//   gender   — optional voice slot ('male' | 'female' | 'child') so server
+//              gender safety checks do not substitute the wrong fallback
 //   text     — optional sample phrase (sensible default below)
 //   size     — 'sm' (24px button, default) | 'md' (32px)
 
@@ -23,6 +25,7 @@ export default function TestVoiceButton({
     provider,
     rate,
     pitch,
+    gender,
     text = DEFAULT_PHRASE,
     size = 'sm',
     title,
@@ -70,6 +73,7 @@ export default function TestVoiceButton({
             const body = { text, voice };
             if (rate != null) body.rate = rate;
             if (pitch != null) body.pitch = pitch;
+            if (gender) body.gender = gender;
             let blob;
             try {
                 blob = await apiFetch(`/tts?provider=${encodeURIComponent(provider)}`, {

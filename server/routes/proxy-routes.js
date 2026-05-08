@@ -1042,10 +1042,10 @@ async function resolveTtsVoice(provider, requestedVoice, gender) {
         return requestedVoice;
     }
     const { fallbackVoiceFor } = await import('../services/voiceFallbacks.js');
-    const safeGender = ['male', 'female', 'child'].includes(gender) ? gender : 'female';
+    const safeGender = ['male', 'female', 'child'].includes(gender) ? gender : null;
     if (isValid) {
         const voiceGender = await providerVoiceGender(provider, requestedVoice);
-        if (voiceGenderMatchesSlot(voiceGender, safeGender)) return requestedVoice;
+        if (!safeGender || voiceGenderMatchesSlot(voiceGender, safeGender)) return requestedVoice;
         const fallback = fallbackVoiceFor(provider, safeGender);
         if (fallback && fallback !== requestedVoice) {
             routesLlmLog.warn('tts gender fallback selected', {
@@ -1060,7 +1060,7 @@ async function resolveTtsVoice(provider, requestedVoice, gender) {
         return requestedVoice;
     }
 
-    const fallback = fallbackVoiceFor(provider, safeGender);
+    const fallback = fallbackVoiceFor(provider, safeGender || 'female');
     if (fallback && fallback !== requestedVoice) {
         routesLlmLog.warn('tts voice fallback selected', { provider, requested_voice: requestedVoice, fallback_voice: fallback });
         return fallback;
