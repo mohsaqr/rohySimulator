@@ -1,0 +1,72 @@
+# Repo-root .dockerignore — read by `docker build` for the compose context.
+# (deploy/docker/.dockerignore is documentation; this file is the one
+# Docker actually reads.)
+
+# Build artifacts the Dockerfile rebuilds
+node_modules
+dist
+frontend
+coverage
+test-results.junit.xml
+playwright-report
+.vitest-cache
+
+# Runtime / local state — must not bake into images
+*.log
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite.bak.*
+.env
+.env.local
+.env.development.local
+.env.production.local
+
+# Server-local state directories
+server/data/piper/venv
+server/data/piper/voices
+server/data/uploads
+
+# OS + editor noise
+.DS_Store
+.idea
+.vscode
+.cursor
+
+# Source control + CI metadata not needed at build time
+.git
+.gitignore
+.github
+
+# Docs that bloat the context — Dockerfile only needs source
+docs
+*.md
+LEARNINGS.md
+HANDOFF.md
+CHANGES.md
+README.md
+deploy/README.md
+deploy/docker/README.md
+deploy/PORTABILITY.md
+
+# Tests don't ship to runtime images
+tests
+bench
+playwright.config.js
+vitest.config.js
+e2e
+
+# Agent + scratch directories
+codexIntmep
+AGENT-NOTE-*.md
+ultraReview
+.claude
+.claude-claudef
+
+# Container-build-only files that we DON'T want to copy into the image
+# beyond the Dockerfile itself (the Dockerfile is read separately)
+deploy/docker/Caddyfile
+deploy/docker/compose.yml
+deploy/docker/.env
+deploy/docker/.env.example

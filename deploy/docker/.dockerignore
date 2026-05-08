@@ -1,0 +1,51 @@
+# deploy/docker/.dockerignore — ignored when build context is the repo root.
+#
+# Note: this file lives next to the Dockerfile but Docker only reads
+# `.dockerignore` from the BUILD CONTEXT root. Keep this here as
+# documentation, but the canonical .dockerignore must be at the repo root.
+# Docker's build context for compose.yml is `../..` (repo root).
+
+# Build artifacts that the Dockerfile rebuilds
+node_modules
+dist
+frontend
+coverage
+test-results.junit.xml
+playwright-report
+.vitest-cache
+
+# Local-only state
+*.log
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite.bak.*
+.env
+.env.local
+
+# OS / editor cruft
+.DS_Store
+.idea
+.vscode
+
+# Sibling repos that we clone fresh inside the Dockerfile
+../dynajs
+../JStats
+
+# Docs and source-control noise that bloat the context
+.git
+.github
+docs
+*.md
+LEARNINGS.md
+HANDOFF.md
+CHANGES.md
+
+# Test fixtures don't ship to runtime
+tests
+bench
+
+# Codex/agent scratch
+codexIntmep
+AGENT-NOTE-*.md

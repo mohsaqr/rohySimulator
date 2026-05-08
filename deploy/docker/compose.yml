@@ -1,0 +1,104 @@
+# deploy/docker/compose.yml — single-command rohy deploy.
+#
+# Quickstart:
+#   cp deploy/docker/.env.example deploy/docker/.env
+#   $EDITOR deploy/docker/.env                            # set ROHY_HOSTNAME
+#   docker compose -f deploy/docker/compose.yml up -d --build
+#
+# Two services:
+#   - rohy   : the Node app, persistent DB + HF cache volumes
+#   - caddy  : reverse proxy with auto-TLS (Let's Encrypt for public hosts,
+#              internal CA for LAN/dev). Adjust Caddyfile for plain HTTP.
+#
+# Drop the `caddy` service if you front rohy with your own nginx/Traefik/
+# ingress controller. The rohy service exposes its HTTP listener on the
+# bridge network; bind-publish 4000 to host if you want direct access.
+#
+# Persistence model:
+#   rohy-db          : SQLite database. Survives `docker compose down`.
+#                      Wiped only by `docker volume rm rohy-db`.
+#   rohy-hf-cache    : Kokoro model + HF Transformers cache. ~330 MB
+#                      after first TTS request. Re-downloads if wiped.
+#   caddy-data       : Caddy's state (TLS certs from Let's Encrypt).
+#                      LOSING THIS triggers fresh ACME challenges; rate-
+#                      limit pain on Let's Encrypt's side.
+#   caddy-config     : Caddy's config snapshots; safe to wipe.
+
+services:
+  rohy:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      args:
+        # Set INCLUDE_PIPER=1 if you want Piper TTS bundled. Adds ~150 MB
+        # to the image. Kokoro/Google/OpenAI work without it.
+        INCLUDE_PIPER: "${INCLUDE_PIPER:-0}"
+        # Pin a dynajs commit for reproducible builds. Default is main.
+        DYNAJS_GIT_REF: "${DYNAJS_GIT_REF:-main}"
+    image: rohy:latest
+    container_name: rohy
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      # FRONTEND_URL is the public origin browsers use. Behind Caddy with
+      # auto-TLS, that's https://<your-hostname>/rohy.
+      FRONTEND_URL: "${FRONTEND_URL:-https://${ROHY_HOSTNAME:-localhost}/rohy}"
+      # Trust the proxy chain so rate-limit + X-Forwarded-* work.
+      ROHY_TRUST_PROXY: "${ROHY_TRUST_PROXY:-loopback}"
+      # First-boot only: seed admin/admin123. REMOVE after first login.
+      ALLOW_DEFAULT_USERS: "${ALLOW_DEFAULT_USERS:-}"
+      # JWT_SECRET is auto-generated and persisted to the volume on first
+      # boot. Override here only if you have an external secret manager.
+      JWT_SECRET: "${JWT_SECRET:-}"
+      # Optional API keys. Fine to leave empty — admin can set them in
+      # the in-app Settings tab once logged in.
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      GOOGLE_TTS_API_KEY: "${GOOGLE_TTS_API_KEY:-}"
+    volumes:
+      - rohy-db:/var/lib/rohy
+      - rohy-hf-cache:/var/cache/rohy-hf
+    networks:
+      - rohy-net
+    # Healthcheck is also defined in the Dockerfile; redeclaring here so
+    # `docker compose ps` shows the same status without inspecting the image.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: rohy-caddy
+    restart: unless-stopped
+    depends_on:
+      rohy:
+        condition: service_healthy
+    ports:
+      - "${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_PORT:-443}:443"
+    environment:
+      ROHY_HOSTNAME: "${ROHY_HOSTNAME:-localhost}"
+      ROHY_TLS_MODE: "${ROHY_TLS_MODE:-internal}"
+      # ROHY_TLS_MODE=auto    → Let's Encrypt (needs public DNS + port 80/443)
+      # ROHY_TLS_MODE=internal→ Caddy's internal CA (LAN / dev / mkcert-style)
+      # ROHY_TLS_MODE=off     → plain HTTP (only for localhost)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - rohy-net
+
+volumes:
+  rohy-db:
+  rohy-hf-cache:
+  caddy-data:
+  caddy-config:
+
+networks:
+  rohy-net:
+    driver: bridge

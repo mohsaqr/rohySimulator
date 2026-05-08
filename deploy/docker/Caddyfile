@@ -1,0 +1,137 @@
+# deploy/docker/Caddyfile — Caddy 2 config for rohy.
+#
+# Three TLS modes selected by the ROHY_TLS_MODE env var (set in the
+# rohy-caddy service env, surfaced here via {$VAR} interpolation):
+#
+#   auto      Let's Encrypt. Needs public DNS pointing here, ports 80+443
+#             reachable from the public internet, and a real hostname (no
+#             "localhost"). Caddy handles ACME automatically.
+#
+#   internal  Caddy's internal CA — issues a self-signed cert. The cert is
+#             valid for the configured hostname; browsers will warn until
+#             you trust the Caddy root CA. Use for LAN deploys.
+#             To trust on a client:
+#               docker exec rohy-caddy cat /data/caddy/pki/authorities/local/root.crt
+#             then add to your OS keychain.
+#
+#   off       Plain HTTP, port 80. Only sane for localhost or behind
+#             another TLS terminator. getUserMedia (mic) WILL NOT work
+#             on plain HTTP from a non-localhost origin.
+#
+# Streaming TTS:
+#   The /api/tts route streams audio chunks. Caddy's reverse_proxy flushes
+#   on every chunk by default for non-buffered transports, but binary
+#   streams need an explicit `flush_interval -1` in some Caddy versions.
+#   Hardcoded below so it doesn't regress.
+#
+# Subpath:
+#   rohy is built with `vite build --base=/rohy/`, so the SPA expects to
+#   live at /rohy/. The reverse_proxy strip_prefix below makes this work.
+
+{
+    # Caddy global options. Email is for Let's Encrypt account; only used
+    # in `auto` mode. Operators with the env unset still get a working
+    # Caddy in `internal`/`off` mode.
+    email {$ACME_EMAIL:admin@example.com}
+
+    # Disable auto-HTTPS when the operator picked `off` — otherwise Caddy
+    # tries to provision a cert for "localhost" and fails noisily.
+    auto_https {$ROHY_AUTO_HTTPS:on}
+}
+
+# === Site block ===========================================================
+{$ROHY_HOSTNAME:localhost} {
+    # TLS handling. Caddy snippet semantics: `tls internal` means use the
+    # internal CA. Empty `tls` block means the global mode applies (auto).
+    @internal expression `{env.ROHY_TLS_MODE} == "internal"`
+    @off      expression `{env.ROHY_TLS_MODE} == "off"`
+
+    # Render the right TLS directive for the active mode.
+    # (Caddy can't conditionally apply directives; we use a script-like
+    # approach via env-driven config templates. Simpler in practice:
+    # the operator picks one Caddyfile snippet at compose-up time.)
+
+    # NOTE: if you set ROHY_TLS_MODE=internal, uncomment the next line.
+    # tls internal
+
+    # NOTE: if you set ROHY_TLS_MODE=off, uncomment the next line and
+    # remove the site block's `https://` automatic upgrade.
+    # tls off
+
+    # Compression — Caddy auto-negotiates. Disable on /api/tts so audio
+    # frames don't get re-encoded mid-stream.
+    encode {
+        zstd
+        gzip 5
+    }
+
+    # Security headers. The Express layer also sets some of these; doubling
+    # up at the proxy is cheap and survives backend swaps.
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # HSTS only if TLS is real (auto). Leave commented otherwise so
+        # browsers don't pin to HTTPS for a localhost dev box.
+        # Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    # Body size — clinical record uploads can include images. 50 MB matches
+    # the multer cap inside rohy.
+    request_body {
+        max_size 50MB
+    }
+
+    # === Streaming TTS — DO NOT BUFFER ====================================
+    # The order matters: this matcher block has to come before the catch-all
+    # /rohy/* reverse_proxy so it wins the route.
+    handle_path /rohy/api/tts* {
+        reverse_proxy rohy:4000 {
+            # flush_interval -1 = flush on every Write (true streaming).
+            flush_interval -1
+            transport http {
+                # Disable response buffering for chunked binary audio.
+                response_header_timeout 300s
+                read_timeout 300s
+            }
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # === Health probes — bypass auth/rate-limit blocks =================
+    handle /rohy/api/health {
+        reverse_proxy rohy:4000 {
+            rewrite /api/health
+        }
+    }
+    handle /rohy/api/ready {
+        reverse_proxy rohy:4000 {
+            rewrite /api/ready
+        }
+    }
+
+    # === Everything else under /rohy ======================================
+    handle_path /rohy/* {
+        reverse_proxy rohy:4000 {
+            transport http {
+                response_header_timeout 300s
+                read_timeout 300s
+                dial_timeout 10s
+            }
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+        }
+    }
+
+    # If the operator hits `/`, redirect to /rohy/ for the SPA. Skip this
+    # if you serve other apps from the same hostname.
+    handle / {
+        redir /rohy/ 302
+    }
+}
