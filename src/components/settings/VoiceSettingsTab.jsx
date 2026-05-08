@@ -4,6 +4,7 @@ import { ApiError, apiFetch, apiPut } from '../../services/apiClient.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import TestVoiceButton from './TestVoiceButton.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import { voicesForSlot, voiceGenderLabel } from '../../utils/voiceCatalogue.js';
 
 // Curated list of locales the browser SpeechRecognition handles reliably.
 // Could be expanded; kept short to avoid choice paralysis.
@@ -224,12 +225,6 @@ export default function VoiceSettingsTab() {
         );
     }
 
-    const voiceOptions = voices.map(v => (
-        <option key={v.filename} value={v.filename}>
-            {v.displayName}{v.gender ? ` (${v.gender})` : ''} — {v.language}
-        </option>
-    ));
-
     const isKokoro = settings.tts_provider === 'kokoro';
     const showPiperWarning = settings.tts_provider === 'piper' && !piperInstalled;
     const providerInfo = TTS_PROVIDERS[settings.tts_provider];
@@ -352,6 +347,7 @@ export default function VoiceSettingsTab() {
                             const label = g === 'male' ? 'Male voice' : g === 'female' ? 'Female voice' : 'Child voice';
                             const provider = settings.tts_provider;
                             const value = PROVIDERS.includes(provider) ? settings.voiceSlots[provider][g] : '';
+                            const slotVoices = voicesForSlot(voices, g, value);
                             return (
                                 <label key={g} className="block">
                                     <span className="text-xs text-neutral-400 block mb-1">{label}</span>
@@ -362,7 +358,14 @@ export default function VoiceSettingsTab() {
                                             className="flex-1 min-w-0 bg-neutral-800 border border-neutral-700 rounded px-2 py-1.5 text-sm text-white"
                                         >
                                             <option value="">— none —</option>
-                                            {voiceOptions}
+                                            {slotVoices.map(v => {
+                                                const genderLabel = voiceGenderLabel(v);
+                                                return (
+                                                    <option key={v.filename} value={v.filename}>
+                                                        {v.displayName}{genderLabel ? ` (${genderLabel})` : ''} — {v.language}
+                                                    </option>
+                                                );
+                                            })}
                                         </select>
                                         <TestVoiceButton
                                             voice={value}

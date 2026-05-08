@@ -215,6 +215,13 @@ describe('synthesizeGoogleStream — pitch clamping', () => {
         }));
         expect(capturedBody.audioConfig.pitch).toBe(-10);
     });
+
+    it('omits pitch for Chirp voices instead of sending an unsupported control', async () => {
+        await drain(synthesizeGoogleStream({
+            text: 'hi', voice: 'en-US-Chirp3-HD-Charon', pitch: 5, apiKey: 'fake',
+        }));
+        expect(capturedBody.audioConfig).not.toHaveProperty('pitch');
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -243,21 +250,36 @@ describe('synthesizeGoogleStream — speakingRate (speed)', () => {
         expect(capturedBody.audioConfig.speakingRate).toBe(0.7);
     });
 
-    it('missing speed defaults audioConfig.speakingRate to 1', async () => {
+    it('missing speed omits audioConfig.speakingRate (Google native default)', async () => {
         await drain(synthesizeGoogleStream({
             text: 'hi', voice: 'en-US-Neural2-D', apiKey: 'fake',
         }));
-        expect(capturedBody.audioConfig.speakingRate).toBe(1);
+        expect(capturedBody.audioConfig).not.toHaveProperty('speakingRate');
     });
 
-    it('non-numeric speed defaults audioConfig.speakingRate to 1', async () => {
+    it('non-numeric speed omits audioConfig.speakingRate', async () => {
         // CONTRACT: speed coming from a config layer can be a string. The
-        // service-level guard (`typeof speed === 'number'`) is the only
-        // thing protecting Google from a 400. Lock the default explicitly.
+        // service-level guard (`typeof speed === 'number'`) protects Google
+        // from a 400 by omitting the field and letting the voice use its
+        // native default pace.
         await drain(synthesizeGoogleStream({
             text: 'hi', voice: 'en-US-Neural2-D', speed: 'fast', apiKey: 'fake',
         }));
-        expect(capturedBody.audioConfig.speakingRate).toBe(1);
+        expect(capturedBody.audioConfig).not.toHaveProperty('speakingRate');
+    });
+
+    it('legacy Chirp HD omits speakingRate even when speed is set', async () => {
+        await drain(synthesizeGoogleStream({
+            text: 'hi', voice: 'en-US-Chirp-HD-D', speed: 0.7, apiKey: 'fake',
+        }));
+        expect(capturedBody.audioConfig).not.toHaveProperty('speakingRate');
+    });
+
+    it('Chirp 3 HD keeps speakingRate because pace control is supported', async () => {
+        await drain(synthesizeGoogleStream({
+            text: 'hi', voice: 'en-US-Chirp3-HD-Charon', speed: 0.7, apiKey: 'fake',
+        }));
+        expect(capturedBody.audioConfig.speakingRate).toBe(0.7);
     });
 });
 

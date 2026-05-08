@@ -90,6 +90,16 @@ function clampPitchSemitones(pitch) {
     return Math.max(-10, Math.min(10, n));
 }
 
+function isChirpVoice(voice) {
+    return typeof voice === 'string' && voice.includes('-Chirp');
+}
+
+function supportsSpeakingRate(voice) {
+    // Legacy Chirp HD voices reject speakingRate. Chirp 3 HD supports pace
+    // controls, while Neural2/WaveNet use the regular AudioConfig field.
+    return typeof voice === 'string' && !voice.includes('-Chirp-HD-');
+}
+
 export async function* synthesizeGoogleStream({ text, voice, speed, pitch, apiKey }) {
     if (!VALID_VOICES.has(voice)) {
         const err = new Error(`unknown Google voice "${voice}" (expected one of: ${[...VALID_VOICES].slice(0, 5).join(', ')}, …)`);
@@ -103,6 +113,11 @@ export async function* synthesizeGoogleStream({ text, voice, speed, pitch, apiKe
         throw err;
     }
 
+    if (process.env.NODE_ENV === 'test' && process.env.ROHY_TEST_FAKE_GOOGLE_TTS === '1') {
+        yield { sampleRate: SAMPLE_RATE, pcm: Buffer.alloc(SAMPLE_RATE / 10 * 2) };
+        return;
+    }
+
     // Voice name format is `<lang>-<region>-<engine>-<id>` (e.g. en-US-Neural2-A);
     // languageCode is the first two segments.
     const parts = voice.split('-');
@@ -112,9 +127,6 @@ export async function* synthesizeGoogleStream({ text, voice, speed, pitch, apiKe
     const audioConfig = {
         audioEncoding: 'LINEAR16',
         sampleRateHertz: SAMPLE_RATE,
-        // Google's speakingRate is 0.25–4.0; the route layer clamps
-        // the user-facing range before we get here.
-        speakingRate: typeof speed === 'number' ? speed : 1,
         // headphone-class-device applies Google's headphone-tuned EQ.
         // Free, no quality regression on speakers, and noticeably
         // improves perceived clarity on headphones (where most of our
@@ -122,7 +134,12 @@ export async function* synthesizeGoogleStream({ text, voice, speed, pitch, apiKe
         // wins in the API.
         effectsProfileId: ['headphone-class-device']
     };
-    if (pitchSemitones !== null && pitchSemitones !== 0) {
+    if (supportsSpeakingRate(voice) && typeof speed === 'number' && speed !== 1) {
+        audioConfig.speakingRate = speed;
+    }
+    // Chirp voices are less permissive than Neural2 around pitch controls;
+    // omit pitch for Chirp rather than failing the whole synthesis request.
+    if (!isChirpVoice(voice) && pitchSemitones !== null && pitchSemitones !== 0) {
         audioConfig.pitch = pitchSemitones;
     }
 

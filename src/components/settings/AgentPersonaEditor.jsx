@@ -30,7 +30,8 @@ import { apiFetch } from '../../services/apiClient';
 import { baseUrl } from '../../config/api';
 import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
-import { resolveVoice } from '../../utils/voiceResolver.js';
+import { deriveSlot, resolveVoice } from '../../utils/voiceResolver.js';
+import { voicesForSlot, voiceGenderLabel } from '../../utils/voiceCatalogue.js';
 
 // Heavy three.js head viewer — lazy so admins who never open the editor
 // don't pay the bundle cost.
@@ -184,13 +185,13 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
    // Load voices for the current TTS provider — Piper and Kokoro have
    // disjoint catalogues, so the dropdown swaps when the engine changes.
    useEffect(() => {
-      const provider = template?.config?.voice?.tts_provider || 'piper';
+      const provider = template?.config?.voice?.tts_provider || voiceSettings?.tts_provider || 'piper';
       let cancelled = false;
       apiFetch(`/tts/voices?provider=${provider}`)
          .then(d => { if (!cancelled) setTtsVoices(d.voices || []); })
          .catch(() => { if (!cancelled) setTtsVoices([]); });
       return () => { cancelled = true; };
-   }, [template?.config?.voice?.tts_provider]);
+   }, [template?.config?.voice?.tts_provider, voiceSettings?.tts_provider]);
 
    // Stop any in-flight preview when the editor unmounts. Otherwise the
    // user could leave with a Kokoro buffer still draining into headphones.
@@ -232,6 +233,11 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
    const resolvedVoiceFile = resolvedVoice?.file || null;
    const resolvedProvider = resolvedVoice?.provider || 'piper';
    const resolvedRate = resolvedVoice?.rate ?? 1.0;
+   const resolvedPitch = resolvedVoice?.pitch;
+   const resolvedGender = template
+      ? deriveSlot(template.config?.gender || template.config?.voice?.gender || '', template.config?.age)
+      : undefined;
+   const voiceOptions = voicesForSlot(ttsVoices, resolvedGender, cfg.voice?.case_voice);
 
    // ─── mutators ──────────────────────────────────────────────────────────
    const set = (updater) => setTemplate(prev => updater({ ...prev }));
@@ -387,6 +393,8 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
             text,
             voice: resolvedVoiceFile,
             rate: resolvedRate,
+            pitch: resolvedPitch,
+            gender: resolvedGender,
             provider: resolvedProvider,
             onEnd: () => {
                setPreviewState({ playing: false, text: '' });
@@ -620,11 +628,14 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
                            className={inputClass}
                         >
                            <option value="">Inherit (global by gender)</option>
-                           {ttsVoices.map(v => (
+                           {voiceOptions.map(v => {
+                              const genderLabel = voiceGenderLabel(v);
+                              return (
                               <option key={v.filename} value={v.filename}>
-                                 {(v.displayName || v.filename) + (v.gender ? ` — ${v.gender}` : '')}
+                                 {(v.displayName || v.filename) + (genderLabel ? ` — ${genderLabel}` : '')}
                               </option>
-                           ))}
+                              );
+                           })}
                         </select>
                      </Field>
                      <div className="grid grid-cols-2 gap-3">

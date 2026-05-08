@@ -315,6 +315,21 @@ describe('resolveVoice — provider derivation', () => {
         expect(r.provider).toBe('kokoro');
     });
 
+    it("inherits voiceSettings.tts_provider when the speaker leaves provider unset", () => {
+        const r = resolveVoice({
+            voice: {},
+            voiceSettings: {
+                tts_provider: 'google',
+                voice_google_female: 'en-US-Neural2-F'
+            },
+            gender: 'female',
+            age: 40
+        });
+        expect(r.provider).toBe('google');
+        expect(r.file).toBe('en-US-Neural2-F');
+        expect(r.tier).toBe('voice-slot');
+    });
+
     it("falls back to 'piper' when neither side declares a provider", () => {
         const r = resolveVoice({});
         expect(r.provider).toBe('piper');

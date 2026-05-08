@@ -6,6 +6,9 @@ import { useVoice } from '../../contexts/VoiceContext.jsx';
 import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
 import TestVoiceButton from './TestVoiceButton.jsx';
+import { resolveVoice } from '../../utils/voiceResolver.js';
+import { voicesForSlot, voiceGenderLabel } from '../../utils/voiceCatalogue.js';
+import { avatarsForSlot } from '../../utils/resolveAvatar.js';
 
 // Per-case avatar + voice tab. Owns:
 //   config.avatar_id           — GLB filename, blank = auto-pick by gender/age
@@ -42,19 +45,49 @@ function personaSlotFor(config) {
 export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
     const [manifest, setManifest] = useState(null);
     const [voices, setVoices] = useState([]);
-    const { platformAvatars } = useVoice();
+    const {
+        voiceSettings: ctxVoiceSettings,
+        setVoiceSettings,
+        platformAvatars: ctxPlatformAvatars,
+        setPlatformAvatars
+    } = useVoice();
+    const [fetchedVoiceSettings, setFetchedVoiceSettings] = useState(null);
+    const [fetchedPlatformAvatars, setFetchedPlatformAvatars] = useState(null);
+    const voiceSettings = ctxVoiceSettings || fetchedVoiceSettings;
+    const platformAvatars = ctxPlatformAvatars || fetchedPlatformAvatars;
 
     const config = caseData?.config || {};
     const voice = config.voice || {};
     const cameraOverride = config.avatar_camera || null;
     const slot = personaSlotFor(config);
+    const rawGender = config?.demographics?.gender || '';
+    const age = config?.demographics?.age;
 
-    const effectiveProvider = voice.tts_provider || 'piper';
-    // Voice inheritance is keyed on the active TTS provider since voice IDs
-    // are provider-specific. Rate and pitch are flat (provider-independent).
-    const inheritedVoice = platformAvatars?.[`default_voice_${effectiveProvider}_${slot}`] || '';
-    const inheritedRate  = platformAvatars?.[`default_rate_${slot}`];
-    const inheritedPitch = platformAvatars?.[`default_pitch_${slot}`];
+    const inheritedVoiceConfig = { ...voice };
+    delete inheritedVoiceConfig.case_voice;
+    delete inheritedVoiceConfig.tts_rate;
+    delete inheritedVoiceConfig.tts_pitch;
+
+    const inheritedResolvedVoice = resolveVoice({
+        voice: inheritedVoiceConfig,
+        voiceSettings,
+        platformAvatars,
+        gender: rawGender,
+        age
+    });
+    const resolvedVoice = resolveVoice({
+        voice,
+        voiceSettings,
+        platformAvatars,
+        gender: rawGender,
+        age
+    });
+
+    const effectiveProvider = resolvedVoice.provider;
+    const inheritedVoice = inheritedResolvedVoice.file || '';
+    const inheritedRate = inheritedResolvedVoice.rate;
+    const inheritedPitch = inheritedResolvedVoice.pitch;
+    const voiceOptions = voicesForSlot(voices, slot, voice.case_voice);
 
     useEffect(() => {
         let cancelled = false;
@@ -67,7 +100,27 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
 
     useEffect(() => {
         let cancelled = false;
-        apiFetch(`/tts/voices?provider=${effectiveProvider}`)
+        (async () => {
+            const [voiceRes, avatarRes] = await Promise.allSettled([
+                voiceSettings ? Promise.resolve(voiceSettings) : apiFetch('/platform-settings/voice'),
+                platformAvatars ? Promise.resolve(platformAvatars) : apiFetch('/platform-settings/avatars')
+            ]);
+            if (cancelled) return;
+            if (!voiceSettings && voiceRes.status === 'fulfilled' && voiceRes.value) {
+                setFetchedVoiceSettings(voiceRes.value);
+                setVoiceSettings?.(voiceRes.value);
+            }
+            if (!platformAvatars && avatarRes.status === 'fulfilled' && avatarRes.value) {
+                setFetchedPlatformAvatars(avatarRes.value);
+                setPlatformAvatars?.(avatarRes.value);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [voiceSettings, platformAvatars, setVoiceSettings, setPlatformAvatars]);
+
+    useEffect(() => {
+        let cancelled = false;
+        apiFetch(`/tts/voices?provider=${encodeURIComponent(effectiveProvider)}`)
             .then(d => { if (!cancelled) setVoices(d.voices || []); })
             .catch(() => { if (!cancelled) setVoices([]); });
         return () => { cancelled = true; };
@@ -124,7 +177,7 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
         });
     };
 
-    const avatarOptions = manifest?.all || [];
+    const avatarOptions = avatarsForSlot(manifest, slot, config.avatar_id);
     const effectiveCamera = resolveCamera(manifest, config.avatar_id, cameraOverride);
 
     return (
@@ -250,8 +303,9 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
                                 <option value="">
                                     Inherit{inheritedVoice ? ` (${inheritedVoice})` : ` (${slot} default)`}
                                 </option>
-                                {voices.map(v => {
-                                    const tag = v.gender ? ` — ${v.gender}` : '';
+                                {voiceOptions.map(v => {
+                                    const genderLabel = voiceGenderLabel(v);
+                                    const tag = genderLabel ? ` — ${genderLabel}` : '';
                                     return (
                                         <option key={v.filename} value={v.filename}>
                                             {(v.displayName || v.filename) + tag}
@@ -260,10 +314,10 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
                                 })}
                             </select>
                             <TestVoiceButton
-                                voice={voice.case_voice || inheritedVoice}
+                                voice={resolvedVoice.file || ''}
                                 provider={effectiveProvider}
-                                rate={voice.tts_rate}
-                                pitch={voice.tts_pitch}
+                                rate={resolvedVoice.rate}
+                                pitch={resolvedVoice.pitch}
                             />
                         </div>
                     </div>

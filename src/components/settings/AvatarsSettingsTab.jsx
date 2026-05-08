@@ -14,6 +14,8 @@ import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
 import { parseConfig } from '../../utils/parseConfig.js';
 import TestVoiceButton from './TestVoiceButton.jsx';
+import { voicesForSlot } from '../../utils/voiceCatalogue.js';
+import { avatarsForSlot } from '../../utils/resolveAvatar.js';
 
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 
@@ -42,12 +44,16 @@ function emptyDefaults() {
 export default function AvatarsSettingsTab() {
     const toast = useToast();
     const {
+        voiceSettings: ctxVoiceSettings,
+        setVoiceSettings,
         headManifest, setHeadManifest,
         platformAvatars, setPlatformAvatars
     } = useVoice();
 
     const [manifest, setManifestLocal] = useState(headManifest);
     const [defaults, setDefaults] = useState(() => ({ ...emptyDefaults(), ...(platformAvatars || {}) }));
+    const [fetchedVoiceSettings, setFetchedVoiceSettings] = useState(null);
+    const voiceSettings = ctxVoiceSettings || fetchedVoiceSettings;
     const [voices, setVoices] = useState([]);          // [{ filename, displayName, language }]
     const [voicesProvider, setVoicesProvider] = useState(null);  // 'piper' | 'kokoro' | 'openai' | 'google'
     const [agents, setAgents] = useState([]);
@@ -61,13 +67,17 @@ export default function AvatarsSettingsTab() {
                 // otherwise fetch and write back so other consumers benefit too.
                 const needManifest = !headManifest;
                 const needDefaults = !platformAvatars;
-                const [manRes, defRes, voiceRes, ags] = await Promise.allSettled([
+                const needVoiceSettings = !ctxVoiceSettings;
+                const [manRes, defRes, platformVoiceRes, voiceRes, ags] = await Promise.allSettled([
                     needManifest
                         ? fetch(baseUrl('/avatars/heads/manifest.json')).then(r => r.json())
                         : Promise.resolve(headManifest),
                     needDefaults
                         ? apiFetch('/platform-settings/avatars')
                         : Promise.resolve(platformAvatars),
+                    needVoiceSettings
+                        ? apiFetch('/platform-settings/voice')
+                        : Promise.resolve(ctxVoiceSettings),
                     apiFetch('/tts/voices'),
                     AgentService.getTemplates()
                 ]);
@@ -84,6 +94,10 @@ export default function AvatarsSettingsTab() {
                     }
                     setDefaults(merged);
                     if (needDefaults) setPlatformAvatars(merged);
+                }
+                if (platformVoiceRes.status === 'fulfilled' && platformVoiceRes.value) {
+                    setFetchedVoiceSettings(platformVoiceRes.value);
+                    if (needVoiceSettings) setVoiceSettings?.(platformVoiceRes.value);
                 }
                 if (voiceRes.status === 'fulfilled') {
                     setVoices(voiceRes.value?.voices || []);
@@ -157,6 +171,9 @@ export default function AvatarsSettingsTab() {
                 <div className="space-y-4">
                     {PERSONAS.map(p => {
                         const voiceKey = voicesProvider ? `default_voice_${voicesProvider}_${p.gender}` : null;
+                        const inheritedVoice = voicesProvider
+                            ? voiceSettings?.[`voice_${voicesProvider}_${p.gender}`] || ''
+                            : '';
                         return (
                             <PersonaCard
                                 key={p.gender}
@@ -167,6 +184,7 @@ export default function AvatarsSettingsTab() {
                                 voicesProvider={voicesProvider}
                                 avatarId={defaults[`default_avatar_${p.gender}`]}
                                 voiceFile={voiceKey ? defaults[voiceKey] : ''}
+                                inheritedVoiceFile={inheritedVoice}
                                 rate={defaults[`default_rate_${p.gender}`]}
                                 pitch={defaults[`default_pitch_${p.gender}`]}
                                 onChange={(field, v) => {
@@ -245,11 +263,9 @@ function Section({ title, description, icon: Icon, children }) {
 // Per-gender persona row: avatar dropdown + voice dropdown + rate/pitch
 // sliders + live preview. Each control writes one slot of the parent's
 // `defaults` blob via onChange(field, value).
-function PersonaCard({ label, gender, manifest, voices, voicesProvider, avatarId, voiceFile, rate, pitch, onChange }) {
-    const avatars = (manifest?.all || []).filter(a => {
-        if (gender === 'child') return a.gender === 'child' || /child/i.test(a.id);
-        return a.gender === gender;
-    });
+function PersonaCard({ label, gender, manifest, voices, voicesProvider, avatarId, voiceFile, inheritedVoiceFile, rate, pitch, onChange }) {
+    const avatars = avatarsForSlot(manifest, gender, avatarId);
+    const voiceOptions = voicesForSlot(voices, gender, voiceFile);
     return (
         <div className="bg-neutral-800/50 rounded-lg border border-neutral-700 p-4">
             <div className="flex items-center justify-between mb-3">
@@ -281,14 +297,16 @@ function PersonaCard({ label, gender, manifest, voices, voicesProvider, avatarId
                             value={voiceFile || ''}
                             onChange={e => onChange('voice', e.target.value)}
                         >
-                            <option value="">— pick —</option>
-                            {voices.map(v => (
+                            <option value="">
+                                Inherit{inheritedVoiceFile ? ` (${inheritedVoiceFile})` : ' (platform voice slot)'}
+                            </option>
+                            {voiceOptions.map(v => (
                                 <option key={v.filename} value={v.filename}>
                                     {v.displayName}{v.language ? ` (${v.language})` : ''}
                                 </option>
                             ))}
                         </select>
-                        <TestVoiceButton voice={voiceFile} provider={voicesProvider} rate={rate} pitch={pitch} />
+                        <TestVoiceButton voice={voiceFile || inheritedVoiceFile} provider={voicesProvider} rate={rate} pitch={pitch} />
                     </div>
                 </div>
 

@@ -23,7 +23,7 @@ function resolveDiscussantVoice(discussant, voiceSettings, platformAvatars) {
         voice: r.file,
         provider: r.provider,
         rate: r.rate ?? 1.0,
-        pitch: r.pitch ?? 1.0,
+        pitch: r.pitch,
         gender: discussant?.voice?.gender || 'male'
     };
 }

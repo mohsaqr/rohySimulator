@@ -20,7 +20,7 @@ export default function PatientSummaryCard({ activeCase, headManifest, platformA
     const gender = cfg.demographics?.gender;
     const chief = cfg.structuredHistory?.chiefComplaint || activeCase.description;
     const hpi = cfg.structuredHistory?.historyOfPresentIllness;
-    const avatarId = cfg.patient_avatar || null;
+    const avatarId = cfg.avatar_id || cfg.patient_avatar || null;
 
     return (
         <div className="flex flex-col gap-4 h-full">
@@ -28,7 +28,7 @@ export default function PatientSummaryCard({ activeCase, headManifest, platformA
                 <div className="w-44 h-44 max-w-full mb-4">
                     <Suspense fallback={<div className="w-full h-full rounded-full bg-slate-700" />}>
                         <PatientAvatar
-                            patient={{ id: activeCase.id, name, gender }}
+                            patient={{ id: activeCase.id, name, gender, age }}
                             avatarId={avatarId}
                             headManifest={headManifest}
                             platformAvatars={platformAvatars}

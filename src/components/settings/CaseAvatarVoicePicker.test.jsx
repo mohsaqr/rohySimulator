@@ -96,6 +96,16 @@ const sampleVoices = {
     ],
 };
 
+const sampleAvatarManifest = {
+    all: [
+        { id: 'male-adult.glb', label: 'Male Adult', gender: 'male' },
+        { id: 'female-adult.glb', label: 'Female Adult', gender: 'female' },
+        { id: 'male-child.glb', label: 'Male Child', gender: 'male', age: 'child' },
+        { id: 'female-child.glb', label: 'Female Child', gender: 'female', age: 'child' },
+        { id: 'neutral.glb', label: 'Neutral' },
+    ],
+};
+
 function defaultHandlers() {
     return [
         http.get('*/avatars/heads/manifest.json', () =>
@@ -192,6 +202,15 @@ function getCaseVoiceSelect() {
     return found;
 }
 
+function getAvatarSelect() {
+    const selects = Array.from(document.querySelectorAll('select'));
+    const found = selects.find((s) =>
+        Array.from(s.querySelectorAll('option')).some((o) => /^Auto \(/.test(o.textContent || ''))
+    );
+    if (!found) throw new Error('avatar <select> not found');
+    return found;
+}
+
 // Wait until the picker has fetched the voice list for whichever provider
 // is currently active. The component sets voices via setVoices(...) inside
 // a useEffect that depends on `effectiveProvider`.
@@ -201,8 +220,8 @@ async function waitForVoices(provider = 'piper') {
     await waitFor(() => {
         const select = getCaseVoiceSelect();
         const optionTexts = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
-        // displayName + gender — the first voice's displayName must show up.
-        expect(optionTexts.some((t) => t && t.includes(expected[0].displayName))).toBe(true);
+        // At least one provider voice matching the case slot must show up.
+        expect(optionTexts.some((t) => expected.some(v => t && t.includes(v.displayName)))).toBe(true);
     });
 }
 
@@ -254,6 +273,83 @@ describe('CaseAvatarVoicePicker — provider dropdown', () => {
     });
 });
 
+describe('CaseAvatarVoicePicker — avatar list filtering', () => {
+    it('shows adult male avatars plus neutral avatars for adult male cases', async () => {
+        server.use(
+            http.get('*/avatars/heads/manifest.json', () =>
+                HttpResponse.json(sampleAvatarManifest)
+            )
+        );
+
+        mount({
+            id: 'male-case',
+            config: { demographics: { age: 35, gender: 'male' } },
+        });
+
+        await waitFor(() => {
+            const values = Array.from(getAvatarSelect().querySelectorAll('option')).map(o => o.value);
+            expect(values).toEqual(['', 'male-adult.glb', 'neutral.glb']);
+        });
+    });
+
+    it('shows adult female avatars plus neutral avatars for adult female cases', async () => {
+        server.use(
+            http.get('*/avatars/heads/manifest.json', () =>
+                HttpResponse.json(sampleAvatarManifest)
+            )
+        );
+
+        mount({
+            id: 'female-case',
+            config: { demographics: { age: 35, gender: 'female' } },
+        });
+
+        await waitFor(() => {
+            const values = Array.from(getAvatarSelect().querySelectorAll('option')).map(o => o.value);
+            expect(values).toEqual(['', 'female-adult.glb', 'neutral.glb']);
+        });
+    });
+
+    it('shows only child avatars for child cases', async () => {
+        server.use(
+            http.get('*/avatars/heads/manifest.json', () =>
+                HttpResponse.json(sampleAvatarManifest)
+            )
+        );
+
+        mount({
+            id: 'child-case',
+            config: { demographics: { age: 8, gender: 'female' } },
+        });
+
+        await waitFor(() => {
+            const values = Array.from(getAvatarSelect().querySelectorAll('option')).map(o => o.value);
+            expect(values).toEqual(['', 'male-child.glb', 'female-child.glb']);
+        });
+    });
+
+    it('keeps an existing mismatched avatar visible so it can be changed', async () => {
+        server.use(
+            http.get('*/avatars/heads/manifest.json', () =>
+                HttpResponse.json(sampleAvatarManifest)
+            )
+        );
+
+        mount({
+            id: 'male-case',
+            config: {
+                avatar_id: 'female-adult.glb',
+                demographics: { age: 35, gender: 'male' },
+            },
+        });
+
+        await waitFor(() => {
+            const values = Array.from(getAvatarSelect().querySelectorAll('option')).map(o => o.value);
+            expect(values).toEqual(['', 'female-adult.glb', 'male-adult.glb', 'neutral.glb']);
+        });
+    });
+});
+
 describe('CaseAvatarVoicePicker — voice list filtering', () => {
     it('fetches the effective provider voice list through apiFetch with bearer auth', async () => {
         localStorage.setItem('token', 'admin-token');
@@ -298,13 +394,27 @@ describe('CaseAvatarVoicePicker — voice list filtering', () => {
 
     it('fetches the voice list for the effective provider and renders each option', async () => {
         // CONTRACT 2 (positive side): the case-voice select reflects the
-        // active provider's catalogue.
+        // active provider's catalogue filtered to the patient slot.
         mount();
         await waitForVoices('piper');
         const select = getCaseVoiceSelect();
         const optionValues = Array.from(select.querySelectorAll('option')).map((o) => o.value);
-        expect(optionValues).toContain('en_US-amy-medium.onnx');
         expect(optionValues).toContain('en_US-ryan-medium.onnx');
+        expect(optionValues).not.toContain('en_US-amy-medium.onnx');
+    });
+
+    it('filters case voices by patient gender when catalogue metadata is available', async () => {
+        mount({
+            id: 'female-case',
+            config: {
+                demographics: { age: 35, gender: 'female' },
+            },
+        });
+        await waitForVoices('piper');
+        const select = getCaseVoiceSelect();
+        const optionValues = Array.from(select.querySelectorAll('option')).map((o) => o.value);
+        expect(optionValues).toContain('en_US-amy-medium.onnx');
+        expect(optionValues).not.toContain('en_US-ryan-medium.onnx');
     });
 
     it('clears case_voice when the provider changes (cross-provider voice ids are not portable)', async () => {
@@ -344,7 +454,7 @@ describe('CaseAvatarVoicePicker — voice list filtering', () => {
         await waitForVoices('google');
         const voiceSelect = getCaseVoiceSelect();
         const values = Array.from(voiceSelect.querySelectorAll('option')).map((o) => o.value);
-        expect(values).toContain('en-US-Neural2-F');
+        expect(values).toContain('en-US-Neural2-J');
         expect(values).not.toContain('en_US-amy-medium.onnx');
     });
 });
@@ -382,6 +492,29 @@ describe('CaseAvatarVoicePicker — TestVoiceButton wiring', () => {
         expect(stub.getAttribute('data-voice')).toBe('');
         // effectiveProvider defaults to 'piper' when unset.
         expect(stub.getAttribute('data-provider')).toBe('piper');
+    });
+
+    it('inherits the platform provider, voice slot, rate, and pitch for preview', async () => {
+        server.use(
+            http.get('*/api/platform-settings/voice', () => HttpResponse.json({
+                tts_provider: 'google',
+                voice_google_male: 'en-US-Neural2-J',
+                tts_rate: 0.9,
+                tts_pitch: 2,
+            })),
+            http.get('*/api/platform-settings/avatars', () => HttpResponse.json({}))
+        );
+
+        mount();
+        await waitForVoices('google');
+
+        const stub = screen.getByTestId('test-voice-button-stub');
+        await waitFor(() => {
+            expect(stub.getAttribute('data-provider')).toBe('google');
+            expect(stub.getAttribute('data-voice')).toBe('en-US-Neural2-J');
+            expect(stub.getAttribute('data-rate')).toBe('0.9');
+            expect(stub.getAttribute('data-pitch')).toBe('2');
+        });
     });
 });
 
@@ -464,9 +597,9 @@ describe('CaseAvatarVoicePicker — inherit handling and case-voice override', (
         const { captured } = mount();
         await waitForVoices('piper');
         const voiceSelect = getCaseVoiceSelect();
-        fireEvent.change(voiceSelect, { target: { value: 'en_US-amy-medium.onnx' } });
+        fireEvent.change(voiceSelect, { target: { value: 'en_US-ryan-medium.onnx' } });
         await waitFor(() => {
-            expect(captured.current.config.voice?.case_voice).toBe('en_US-amy-medium.onnx');
+            expect(captured.current.config.voice?.case_voice).toBe('en_US-ryan-medium.onnx');
         });
     });
 

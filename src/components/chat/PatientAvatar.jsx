@@ -73,32 +73,6 @@ function HeadMesh({ url, visemesRef, blinkRef }) {
     return <primitive object={scene} />;
 }
 
-function pickHeadFile(patient, manifest) {
-    if (!manifest) return null;
-    const age = Number(patient?.age);
-    const safeAge = Number.isFinite(age) ? age : 35;
-    const gender = /^f/i.test(patient?.gender || '') ? 'female' : 'male';
-    const bucket = safeAge < 13 ? 'child' : safeAge < 40 ? 'young' : safeAge < 65 ? 'middle' : 'elderly';
-
-    let pool = [];
-    if (bucket === 'child') {
-        pool = manifest.child || [];
-    } else {
-        pool = manifest[gender]?.[bucket] || [];
-    }
-    if (pool.length === 0) pool = manifest.fallback || [];
-    if (pool.length === 0) return null;
-
-    const seed = String(patient?.id ?? patient?.name ?? '');
-    let h = 0;
-    for (let i = 0; i < seed.length; i++) {
-        h = ((h << 5) - h) + seed.charCodeAt(i);
-        h |= 0;
-    }
-    const idx = Math.abs(h) % pool.length;
-    return pool[idx];
-}
-
 // `avatarType` used to be a prop accepting "3d" / "head" / "none" — but the
 // component never branched on "3d" vs "head" (both rendered the same R3F
 // canvas), and the "none" kill-switch is now enforced at the parent level
@@ -154,7 +128,6 @@ export default function PatientAvatar({
         gender: patient?.gender,
         manifest: headManifest,
         platformAvatars,
-        demographicPicker: pickHeadFile,
         patient
     });
     if (!filename) {

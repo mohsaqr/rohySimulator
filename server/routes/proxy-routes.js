@@ -945,7 +945,8 @@ router.get('/tts/voices', authenticateToken, async (req, res) => {
         const sampleRate = sidecar?.audio?.sample_rate || 22050;
         const m = filename.match(/^([a-z]{2}_[A-Z]{2})-([^-]+)-/);
         const speaker = m?.[2] || filename.replace(/\.onnx$/, '');
-        return { filename, displayName: speaker, language, sampleRate };
+        const gender = inferVoiceGenderFromName(`${speaker} ${filename}`);
+        return { filename, displayName: speaker, language, sampleRate, gender };
     });
     res.json({ provider: 'piper', voices, piperInstalled });
 });
@@ -961,6 +962,47 @@ const TTS_COST_PER_M_CHARS = {
     openai: 15,    // tts-1
     google: 16     // Neural2 / WaveNet — Chirp HD is $30 but we don't model it separately
 };
+
+function inferVoiceGenderFromName(name) {
+    const s = String(name || '').replace(/[_-]+/g, ' ');
+    if (/\b(child|kid|youth|young)\b/i.test(s)) return 'child';
+    if (/\b(amy|bella|aoede|kore|leda|zephyr|nova|shimmer|female|woman|girl)\b/i.test(s)) return 'female';
+    if (/\b(ryan|michael|charon|puck|orus|fenrir|echo|fable|onyx|male|man|boy)\b/i.test(s)) return 'male';
+    if (/\b(neutral|alloy)\b/i.test(s)) return 'neutral';
+    return '';
+}
+
+function voiceGenderMatchesSlot(voiceGender, slot) {
+    if (!voiceGender || voiceGender === 'neutral') return true;
+    if (slot === 'child') return voiceGender === 'child' || voiceGender === 'female';
+    return voiceGender === slot;
+}
+
+async function providerVoiceGender(provider, voice) {
+    try {
+        if (provider === 'google') {
+            const { listGoogleVoices } = await import('../services/googleTts.js');
+            const found = listGoogleVoices().find(v => v.filename === voice);
+            return found?.gender || inferVoiceGenderFromName(voice);
+        }
+        if (provider === 'openai') {
+            const { listOpenaiVoices } = await import('../services/openaiTts.js');
+            const found = listOpenaiVoices().find(v => v.filename === voice);
+            return found?.gender || inferVoiceGenderFromName(voice);
+        }
+        if (provider === 'kokoro') {
+            const { listKokoroVoices } = await import('../services/kokoroTts.js');
+            const found = listKokoroVoices().find(v => v.filename === voice);
+            return found?.gender || inferVoiceGenderFromName(voice);
+        }
+        if (provider === 'piper') {
+            return inferVoiceGenderFromName(voice);
+        }
+    } catch {
+        return inferVoiceGenderFromName(voice);
+    }
+    return inferVoiceGenderFromName(voice);
+}
 
 // Pre-flight voice validation. If the requested voice isn't in the active
 // provider's catalogue (typically because the persona default was saved
@@ -999,10 +1041,25 @@ async function resolveTtsVoice(provider, requestedVoice, gender) {
         routesLlmLog.warn('tts voice catalogue check failed', { provider, error: err.message });
         return requestedVoice;
     }
-    if (isValid) return requestedVoice;
-
     const { fallbackVoiceFor } = await import('../services/voiceFallbacks.js');
     const safeGender = ['male', 'female', 'child'].includes(gender) ? gender : 'female';
+    if (isValid) {
+        const voiceGender = await providerVoiceGender(provider, requestedVoice);
+        if (voiceGenderMatchesSlot(voiceGender, safeGender)) return requestedVoice;
+        const fallback = fallbackVoiceFor(provider, safeGender);
+        if (fallback && fallback !== requestedVoice) {
+            routesLlmLog.warn('tts gender fallback selected', {
+                provider,
+                requested_voice: requestedVoice,
+                requested_gender: voiceGender,
+                target_gender: safeGender,
+                fallback_voice: fallback
+            });
+            return fallback;
+        }
+        return requestedVoice;
+    }
+
     const fallback = fallbackVoiceFor(provider, safeGender);
     if (fallback && fallback !== requestedVoice) {
         routesLlmLog.warn('tts voice fallback selected', { provider, requested_voice: requestedVoice, fallback_voice: fallback });

@@ -401,6 +401,25 @@ describe('voiceService — TTS request body shape (1.4)', () => {
         expect(body).not.toHaveProperty('rate');
         expect(body).not.toHaveProperty('gender');
     });
+
+    it('piper uses the non-streaming WAV endpoint directly (no throwaway stream probe)', async () => {
+        const session = VoiceService.beginSpeechSession({
+            voice: 'en_US-amy-medium.onnx',
+            provider: 'piper',
+        });
+        session.enqueue('piper sentence');
+        await session.flush();
+        await waitForSources(1);
+
+        expect(sentRequests.length).toBe(1);
+        expect(sentRequests[0].path).toBe('/api/tts');
+        expect(sentRequests[0].isStream).toBe(false);
+        expect(sentRequests[0].body).toMatchObject({
+            text: 'piper sentence',
+            voice: 'en_US-amy-medium.onnx',
+            provider: 'piper',
+        });
+    });
 });
 
 // ---------------------------------------------------------------------------

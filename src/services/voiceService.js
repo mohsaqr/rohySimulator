@@ -354,17 +354,21 @@ async function speakOneSentence(session, text) {
     if (session.provider) body.provider = session.provider;
 
     let res;
-    let stream = true;
-    try {
-        res = await ttsFetch(true, body, session.abort.signal);
-    } catch (err) {
-        if (err.name === 'AbortError') return;
-        if (err.message?.startsWith('expected pcm-stream')) {
-            stream = false;
-            res = await ttsFetch(false, body, session.abort.signal);
-        } else {
-            throw err;
+    let stream = session.provider !== 'piper';
+    if (stream) {
+        try {
+            res = await ttsFetch(true, body, session.abort.signal);
+        } catch (err) {
+            if (err.name === 'AbortError') return;
+            if (err.message?.startsWith('expected pcm-stream')) {
+                stream = false;
+                res = await ttsFetch(false, body, session.abort.signal);
+            } else {
+                throw err;
+            }
         }
+    } else {
+        res = await ttsFetch(false, body, session.abort.signal);
     }
 
     const lipsync = await ensureLipsync();

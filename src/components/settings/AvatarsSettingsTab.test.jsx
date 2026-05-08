@@ -23,9 +23,20 @@ vi.mock('../chat/PatientAvatar.jsx', () => ({
     },
 }));
 
+const testVoiceProps = vi.fn();
 vi.mock('./TestVoiceButton.jsx', () => ({
-    default: function TestVoiceButtonStub() {
-        return <button type="button">test voice</button>;
+    default: function TestVoiceButtonStub(props) {
+        testVoiceProps(props);
+        return (
+            <button
+                type="button"
+                data-testid={`test-voice-${props.voice || 'empty'}`}
+                data-voice={props.voice || ''}
+                data-provider={props.provider || ''}
+            >
+                test voice
+            </button>
+        );
     },
 }));
 
@@ -65,6 +76,9 @@ beforeEach(() => {
         }
         if (typeof url === 'string' && url.endsWith('/api/platform-settings/avatars')) {
             return Promise.resolve(jsonResponse({ default_avatar_male: 'male.glb' }));
+        }
+        if (typeof url === 'string' && url.endsWith('/api/platform-settings/voice')) {
+            return Promise.resolve(jsonResponse({}));
         }
         if (typeof url === 'string' && url.endsWith('/api/tts/voices')) {
             return Promise.resolve(jsonResponse({
@@ -135,6 +149,9 @@ describe('AvatarsSettingsTab apiFetch migration', () => {
             if (typeof url === 'string' && url.endsWith('/api/platform-settings/avatars')) {
                 return Promise.resolve(jsonResponse({}));
             }
+            if (typeof url === 'string' && url.endsWith('/api/platform-settings/voice')) {
+                return Promise.resolve(jsonResponse({}));
+            }
             if (typeof url === 'string' && url.endsWith('/api/tts/voices')) {
                 return Promise.resolve(jsonResponse({ provider: 'piper', voices: [] }));
             }
@@ -150,5 +167,69 @@ describe('AvatarsSettingsTab apiFetch migration', () => {
         fireEvent.click(screen.getByRole('button', { name: /save persona defaults/i }));
 
         await waitFor(() => expect(toast.error).toHaveBeenCalledWith('no access'));
+    });
+
+    it('falls back to the Voice tab provider slot when no avatar default voice is set', async () => {
+        fetchSpy.mockImplementation((url) => {
+            if (typeof url === 'string' && url.endsWith('/avatars/heads/manifest.json')) {
+                return Promise.resolve(jsonResponse({
+                    all: [{ id: 'male.glb', label: 'Male Head', gender: 'male' }],
+                }));
+            }
+            if (typeof url === 'string' && url.endsWith('/api/platform-settings/avatars')) {
+                return Promise.resolve(jsonResponse({ default_avatar_male: 'male.glb' }));
+            }
+            if (typeof url === 'string' && url.endsWith('/api/platform-settings/voice')) {
+                return Promise.resolve(jsonResponse({
+                    tts_provider: 'piper',
+                    voice_piper_male: 'amy.onnx',
+                }));
+            }
+            if (typeof url === 'string' && url.endsWith('/api/tts/voices')) {
+                return Promise.resolve(jsonResponse({
+                    provider: 'piper',
+                    voices: [{ filename: 'amy.onnx', displayName: 'Amy', language: 'en-US' }],
+                }));
+            }
+            return Promise.resolve(jsonResponse({}));
+        });
+
+        renderWithProviders(
+            <AvatarsSettingsTab />,
+            { withAuth: false, withNotifications: false, withToast: false }
+        );
+
+        expect(await screen.findByRole('heading', { name: 'Persona defaults' })).toBeInTheDocument();
+        expect(await screen.findByText(/Inherit \(amy\.onnx\)/)).toBeInTheDocument();
+        await waitFor(() => {
+            expect(testVoiceProps).toHaveBeenCalledWith(expect.objectContaining({
+                voice: 'amy.onnx',
+                provider: 'piper',
+            }));
+        });
+    });
+
+    it('filters persona avatar dropdowns by the slot each persona controls', async () => {
+        renderWithProviders(
+            <AvatarsSettingsTab />,
+            { withAuth: false, withNotifications: false, withToast: false }
+        );
+
+        expect(await screen.findByRole('heading', { name: 'Persona defaults' })).toBeInTheDocument();
+
+        await waitFor(() => {
+            const selects = Array.from(document.querySelectorAll('select'));
+            const avatarSelects = selects.filter(select =>
+                Array.from(select.querySelectorAll('option')).some(option => option.textContent === '— pick —')
+            );
+
+            expect(avatarSelects.map(select =>
+                Array.from(select.querySelectorAll('option')).map(option => option.value)
+            )).toEqual([
+                ['', 'male.glb'],
+                ['', 'female.glb'],
+                ['', 'child.glb'],
+            ]);
+        });
     });
 });

@@ -71,6 +71,11 @@ export async function* synthesizeOpenaiStream({ text, voice, speed, apiKey, mode
         throw err;
     }
 
+    if (process.env.NODE_ENV === 'test' && process.env.ROHY_TEST_FAKE_OPENAI_TTS === '1') {
+        yield { sampleRate: SAMPLE_RATE, pcm: Buffer.alloc(SAMPLE_RATE / 10 * 2) };
+        return;
+    }
+
     // 30s upper bound: clinical sim lines are short (1-2 sentences), so a
     // round-trip > 30s is a stuck request. Audit #10: uniform timeout via
     // fetchWithTimeout so all providers share the same policy.
