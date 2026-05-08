@@ -648,6 +648,29 @@ describe('AgentService.buildDebriefingContext', () => {
         expect(out).toContain('[doctor]: EKG ordered');
     });
 
+    it('includes filtered authored case design when an active case is supplied', () => {
+        const agent = { agent_type: 'nurse', context_filter: 'full' };
+        const activeCase = {
+            name: 'Configured Case',
+            config: {
+                patient_name: 'Alex Patient',
+                demographics: { age: 44, gender: 'female' },
+                structuredHistory: {
+                    chiefComplaint: 'Shortness of breath',
+                    hpi: 'Worse when lying flat',
+                },
+                initialVitals: { hr: 118, bpSys: 100, bpDia: 64, spo2: 90 },
+                diagnosis: 'Pulmonary edema',
+            },
+        };
+        const out = AgentService.buildDebriefingContext(agent, null, [], null, activeCase);
+        expect(out).toContain('CASE CONTEXT');
+        expect(out).toContain('Patient: Alex Patient');
+        expect(out).toContain('History of Present Illness: Worse when lying flat');
+        expect(out).toContain('HR: 118 bpm');
+        expect(out).toContain('Expected diagnosis: Pulmonary edema');
+    });
+
     it('honours context_filter="history" by dropping non-matching agent_type entries', () => {
         const agent = { agent_type: 'nurse', context_filter: 'history' };
         const teamLog = [
@@ -816,6 +839,13 @@ describe('AgentService.sendAgentMessage', () => {
             [],
             { hr: 90 },
             [{ role: 'assistant', content: 'previous reply' }],
+            {
+                name: 'Agent Case',
+                config: {
+                    patient_name: 'Case Patient',
+                    structuredHistory: { chiefComplaint: 'Chest pain' },
+                },
+            },
         );
         expect(out).toBe('agent reply.');
 
@@ -823,6 +853,8 @@ describe('AgentService.sendAgentMessage', () => {
         expect(llmReq).toBeTruthy();
         expect(llmReq.body.session_id).toBe('sess-1');
         expect(llmReq.body.system_prompt).toContain('You are a triage nurse.');
+        expect(llmReq.body.system_prompt).toContain('Case: Agent Case');
+        expect(llmReq.body.system_prompt).toContain('Chief Complaint: Chest pain');
         expect(llmReq.body.messages).toEqual([
             { role: 'assistant', content: 'previous reply' },
             { role: 'user', content: 'BP is rising' },

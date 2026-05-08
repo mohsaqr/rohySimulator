@@ -14,6 +14,7 @@
  */
 
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from './apiClient.js';
+import { buildDiscussionCaseContext } from '../utils/casePromptContext.js';
 
 async function tryReturning(fallback, fn, label) {
   try {
@@ -239,7 +240,7 @@ export const AgentService = {
    * Combines patient record, team communications, and agent-specific filtering
    * Respects agent's memory_access configuration to filter patient record data
    */
-  buildDebriefingContext(agent, patientRecord, teamLog, currentVitals) {
+  buildDebriefingContext(agent, patientRecord, teamLog, currentVitals, activeCase = null) {
     const lines = [];
 
     let memoryAccess = agent.memory_access;
@@ -253,12 +254,17 @@ export const AgentService = {
       };
     }
 
+    const caseContext = buildDiscussionCaseContext(activeCase, agent.context_filter || 'full');
+    if (caseContext) {
+      lines.push(caseContext.trim());
+    }
+
     if (patientRecord) {
       lines.push('=== PATIENT BRIEFING ===');
 
       if (patientRecord.getFilteredNarrative && typeof patientRecord.getFilteredNarrative === 'function') {
         const allowedVerbs = Object.entries(memoryAccess)
-          .filter(([_, allowed]) => allowed)
+          .filter(([, allowed]) => allowed)
           .map(([verb]) => verb);
         const narrative = patientRecord.getFilteredNarrative('context', allowedVerbs);
         if (narrative) lines.push(narrative);
@@ -319,11 +325,11 @@ export const AgentService = {
    * Send a message to an agent via the LLM proxy
    * Handles the full flow: build context, send message, log response
    */
-  async sendAgentMessage(sessionId, agent, userMessage, patientRecord, teamLog, currentVitals, conversationHistory = []) {
+  async sendAgentMessage(sessionId, agent, userMessage, patientRecord, teamLog, currentVitals, conversationHistory = [], activeCase = null) {
     try {
       await this.addMessage(sessionId, agent.agent_type, 'user', userMessage);
 
-      const debriefingContext = this.buildDebriefingContext(agent, patientRecord, teamLog, currentVitals);
+      const debriefingContext = this.buildDebriefingContext(agent, patientRecord, teamLog, currentVitals, activeCase);
       const systemPrompt = this.buildAgentSystemPrompt(agent, debriefingContext);
 
       const messages = [

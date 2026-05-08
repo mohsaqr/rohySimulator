@@ -401,7 +401,7 @@ describe('buildCaseContext — filter-aware prompt context', () => {
         expect(out).toContain('Expected diagnosis: STEMI');
         expect(out).toContain('Expected treatment plan: ASA, heparin, cath lab');
         expect(out).toContain('Learning objectives: recognize STEMI; order labs');
-        expect(out).toContain('Pre-admission meds: lisinopril, metformin');
+        expect(out).toContain('Current Medications: lisinopril, metformin');
         expect(out).toContain('Allergies: NKDA');
     });
 
@@ -409,8 +409,8 @@ describe('buildCaseContext — filter-aware prompt context', () => {
         // CONTRACT: 'history' is for cases where the discussant should
         // reason from the story, not the diagnosis or vitals.
         const out = buildCaseContext(fullCase, 'history');
-        expect(out).toContain('HPI: sudden onset 1h ago');
-        expect(out).toContain('PMH: HTN, T2DM');
+        expect(out).toContain('History of Present Illness: sudden onset 1h ago');
+        expect(out).toContain('Past Medical History: HTN, T2DM');
         expect(out).not.toContain('Expected diagnosis');
         expect(out).not.toContain('Initial vitals');
         expect(out).not.toContain('Pre-admission meds');
@@ -418,10 +418,10 @@ describe('buildCaseContext — filter-aware prompt context', () => {
 
     it('vitals filter includes initial vitals but strips HPI and diagnosis', () => {
         const out = buildCaseContext(fullCase, 'vitals');
-        expect(out).toContain('Initial vitals:');
-        expect(out).toContain('HR 110');
-        expect(out).toContain('BP 90/60');
-        expect(out).toContain('SpO2 92%');
+        expect(out).toContain('Initial Vitals');
+        expect(out).toContain('HR: 110 bpm');
+        expect(out).toContain('BP: 90/60');
+        expect(out).toContain('SpO2: 92%');
         expect(out).not.toContain('HPI:');
         expect(out).not.toContain('Expected diagnosis');
     });
@@ -432,9 +432,9 @@ describe('buildCaseContext — filter-aware prompt context', () => {
         // anchor the conversation.
         const out = buildCaseContext(fullCase, 'history');
         expect(out).toContain('Case: Acute MI');
-        expect(out).toContain('patient Jane Doe');
-        expect(out).toContain('58y');
-        expect(out).toContain('Chief complaint: chest pain');
+        expect(out).toContain('Patient: Jane Doe');
+        expect(out).toContain('Age: 58');
+        expect(out).toContain('Chief Complaint: chest pain');
     });
 
     it('emits the spoiler-guard footer reminding the discussant to ask the learner', () => {

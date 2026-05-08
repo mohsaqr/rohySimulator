@@ -22,6 +22,7 @@ import {
     formatVitalsAsMarkdown,
     formatRecentActivityAsMarkdown,
 } from '../../data/aiPromptContext';
+import { buildPatientCaseDesignContext } from '../../utils/casePromptContext';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
 // only when a user actually toggles voice mode on for the first time.
@@ -512,6 +513,13 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         richSystemPrompt += `${sourceSystemPrompt || 'You are a patient.'}\n`;
         richSystemPrompt += `\nSpeak only what the patient would say aloud. Never use stage directions, narration, or asterisk-wrapped action descriptors (e.g. "*nods*", "*clutches chest*", "*sighs*"). Express feelings through words alone.\n`;
 
+        richSystemPrompt += buildPatientCaseDesignContext({
+            ...activeCase,
+            name: sourceName,
+            system_prompt: sourceSystemPrompt,
+            config,
+        });
+
         if (config.constraints) {
             richSystemPrompt += `\n## CONSTRAINTS\n${config.constraints}\n`;
         }
@@ -992,7 +1000,8 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 patientRecord.record,
                 teamLog,
                 currentVitals,
-                currentConversation
+                currentConversation,
+                caseSnapshot || activeCase
             );
 
             // Use functional update with fallback to empty array

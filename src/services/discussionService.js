@@ -1,5 +1,6 @@
 import { apiFetch } from './apiClient.js';
 import { AgentService } from './AgentService';
+import { buildDiscussionCaseContext } from '../utils/casePromptContext.js';
 
 // The discussant resolution order:
 //   1) Per-case attached discussant in case_agents (overrides apply)
@@ -57,48 +58,5 @@ function parseConfig(value) {
 // Build case-context block prepended to the discussant's system prompt.
 // Honors context_filter to keep Socratic / minimal modes spoiler-free.
 export function buildCaseContext(activeCase, contextFilter) {
-    if (!activeCase || contextFilter === 'minimal') return '';
-    const parts = [];
-    const cfg = activeCase.config || {};
-
-    const summary = `Case: ${activeCase.name || 'Unnamed'}`
-        + (cfg.patient_name ? ` — patient ${cfg.patient_name}` : '')
-        + (cfg.demographics?.age ? `, ${cfg.demographics.age}y` : '')
-        + (cfg.demographics?.gender ? ` ${cfg.demographics.gender}` : '');
-    parts.push(summary);
-
-    if (cfg.structuredHistory?.chiefComplaint) {
-        parts.push(`Chief complaint: ${cfg.structuredHistory.chiefComplaint}`);
-    }
-
-    if (contextFilter === 'history' || contextFilter === 'full') {
-        if (cfg.structuredHistory?.historyOfPresentIllness) {
-            parts.push(`HPI: ${cfg.structuredHistory.historyOfPresentIllness}`);
-        }
-        if (cfg.structuredHistory?.pastMedicalHistory) {
-            parts.push(`PMH: ${cfg.structuredHistory.pastMedicalHistory}`);
-        }
-    }
-
-    if (contextFilter === 'vitals' || contextFilter === 'full') {
-        if (cfg.initial_vitals) {
-            const v = cfg.initial_vitals;
-            parts.push(`Initial vitals: HR ${v.hr || '?'} BP ${v.bpSys || '?'}/${v.bpDia || '?'} SpO2 ${v.spo2 || '?'}% RR ${v.rr || '?'} T ${v.temp || '?'}°C`);
-        }
-    }
-
-    if (contextFilter === 'full') {
-        if (cfg.structuredHistory?.medications) parts.push(`Pre-admission meds: ${cfg.structuredHistory.medications}`);
-        if (cfg.structuredHistory?.allergies) parts.push(`Allergies: ${cfg.structuredHistory.allergies}`);
-        if (cfg.diagnosis || cfg.expected_diagnosis) parts.push(`Expected diagnosis: ${cfg.diagnosis || cfg.expected_diagnosis}`);
-        if (cfg.treatment_plan) parts.push(`Expected treatment plan: ${cfg.treatment_plan}`);
-        if (cfg.learning_objectives) {
-            const lo = Array.isArray(cfg.learning_objectives) ? cfg.learning_objectives.join('; ') : cfg.learning_objectives;
-            parts.push(`Learning objectives: ${lo}`);
-        }
-    }
-
-    if (parts.length === 0) return '';
-    return `\n\n=== CASE CONTEXT ===\n${parts.join('\n')}\n=== END CONTEXT ===\n`
-        + `\nNote: the learner's actual orders, exam findings, lab results, and treatments performed in this session aren't in this prompt; ask the learner about them rather than assuming.\n`;
+    return buildDiscussionCaseContext(activeCase, contextFilter);
 }
