@@ -1,4 +1,8 @@
 import crypto from 'node:crypto';
+import sqlite3 from 'sqlite3';
+import { logger } from './logger.js';
+
+const auditLog = logger('audit-chain');
 
 const LOGICAL_FIELDS = [
     'action',
@@ -35,9 +39,57 @@ function dbRun(database, sql, params = []) {
     });
 }
 
+// Audit-chain uses a DEDICATED sqlite connection, not the shared `db.js`
+// default. Why: routes like bulk_replace_case_labs run their own
+// `BEGIN`/`COMMIT` on the shared connection (often fire-and-forget). If
+// any of those COMMITs fails silently, the shared connection is stuck in
+// a pending transaction. Audit's `BEGIN IMMEDIATE` then throws
+// "cannot start a transaction within a transaction" and the connection
+// stays poisoned — every subsequent op blocks on the writer lock until
+// the event loop is starved enough that nginx returns 502.
+//
+// With our own connection, route transaction state CAN'T affect audit
+// transaction state. SQLite's per-connection transaction tracking means
+// each handle has its own BEGIN/COMMIT bookkeeping; the file lock layer
+// already handles cross-connection serialization.
+//
+// Tests can inject their own handle via `appendAuditEntry(row, { database })`
+// to keep fixtures isolated.
+let dedicatedDb = null;
+let dedicatedDbPromise = null;
+
 async function defaultDb() {
-    const mod = await import('./db.js');
-    return mod.default;
+    if (dedicatedDb) return dedicatedDb;
+    if (dedicatedDbPromise) return dedicatedDbPromise;
+    dedicatedDbPromise = (async () => {
+        // Wait for the primary connection to finish bootstrap (migrations,
+        // seeds) so system_audit_log is guaranteed to exist before we
+        // open our own handle on it.
+        const mod = await import('./db.js');
+        try { await mod.dbReady; } catch { /* primary boot failure surfaces elsewhere */ }
+        const handle = await new Promise((resolve, reject) => {
+            const conn = new sqlite3.Database(mod.dbPath, (err) => {
+                err ? reject(err) : resolve(conn);
+            });
+        });
+        // Match the WAL/timeout posture of the primary connection so we
+        // don't trip BUSY when reading mid-write.
+        await new Promise((resolve) => handle.run('PRAGMA journal_mode=WAL', () => resolve()));
+        await new Promise((resolve) => handle.run('PRAGMA busy_timeout=5000', () => resolve()));
+        dedicatedDb = handle;
+        auditLog.info('audit-chain dedicated connection opened', { db_path: mod.dbPath });
+        return handle;
+    })();
+    return dedicatedDbPromise;
+}
+
+// Test-only — release the cached dedicated handle so the next call
+// re-opens. Safe to call repeatedly. Not exported in production builds
+// because there's no use case outside tests.
+export function __resetDedicatedAuditDbForTests() {
+    if (dedicatedDb) { try { dedicatedDb.close(); } catch { /* best effort */ } }
+    dedicatedDb = null;
+    dedicatedDbPromise = null;
 }
 
 function parseJsonish(value) {
@@ -225,7 +277,24 @@ export async function appendAuditEntry(row, options = {}) {
 async function _appendAuditEntryUnlocked(row, { database } = {}) {
     const db = database || await defaultDb();
     await ensureAuditChainColumns(db);
-    await dbRun(db, 'BEGIN IMMEDIATE');
+    // Defense-in-depth: if the dedicated-connection invariant is ever
+    // broken (e.g., a test passes the shared handle in via `database`),
+    // the connection might already be in a transaction from a sibling
+    // route. Catch that one specific signature and clear it before
+    // proceeding. Loud log so we notice if it ever fires in prod.
+    try {
+        await dbRun(db, 'BEGIN IMMEDIATE');
+    } catch (err) {
+        if (err && /cannot start a transaction within a transaction/i.test(err.message)) {
+            auditLog.warn('audit handle was inside a stale transaction; rolling back and retrying', {
+                error: err.message,
+            });
+            await dbRun(db, 'ROLLBACK').catch(() => {});
+            await dbRun(db, 'BEGIN IMMEDIATE');
+        } else {
+            throw err;
+        }
+    }
     try {
         const tenantId = row.tenantId ?? row.tenant_id ?? 1;
         const previous = await dbGet(

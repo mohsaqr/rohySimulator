@@ -212,4 +212,42 @@ describe('audit hash chain', () => {
             fs.rmSync(dir, { recursive: true, force: true });
         }
     });
+
+    // Regression lock: route-side BEGIN/COMMIT poisoning the connection
+    // must not corrupt audit appends. Pre-fix, this test reproduces the
+    // 2026-05-08 "are you from here" 502 cascade — appendAuditEntry
+    // throws "cannot start a transaction within a transaction" because
+    // the test passes the same handle a route already left mid-BEGIN.
+    // Post-fix, the self-healing ROLLBACK in audit-chain clears the
+    // orphan transaction and the audit append succeeds.
+    it('recovers when the injected handle is stuck in a stale transaction', async () => {
+        const ctx = await freshCtx('audit-chain-stuck-tx');
+
+        // Simulate a route that opened BEGIN and never reached COMMIT
+        // (e.g. a fire-and-forget COMMIT that silently failed).
+        await run(ctx.db, 'BEGIN');
+
+        // Audit append on the SAME handle would normally throw
+        // SQLITE_ERROR: cannot start a transaction within a transaction.
+        // The self-healing layer should detect that, ROLLBACK, and retry.
+        const result = await appendAuditEntry({
+            tenantId: 1,
+            userId: null,
+            action: 'TEST_RECOVERY',
+            resourceType: 'case',
+            resourceId: '99',
+            metadata: { reason: 'simulated stuck route transaction' },
+        }, { database: ctx.db });
+
+        expect(result.id).toBeGreaterThan(0);
+
+        // The audit row should be visible and chain-valid.
+        const verify = await verifyAuditChain({ tenant_id: 1, database: ctx.db });
+        expect(verify.ok).toBe(true);
+
+        // And the connection should now be in a clean state — no
+        // dangling transaction. A fresh BEGIN/COMMIT must succeed.
+        await run(ctx.db, 'BEGIN');
+        await run(ctx.db, 'COMMIT');
+    });
 });

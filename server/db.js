@@ -15,7 +15,7 @@ const sqlite = sqlite3.verbose();
 const dbLog = logger('db');
 
 // Connect to SQLite database
-const dbPath = process.env.ROHY_DB || path.resolve(__dirname, 'database.sqlite');
+export const dbPath = process.env.ROHY_DB || path.resolve(__dirname, 'database.sqlite');
 let resolveDbReady;
 let rejectDbReady;
 export const dbReady = new Promise((resolve, reject) => {

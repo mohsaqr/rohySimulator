@@ -1,5 +1,24 @@
 import db from './db.js';
 import { timeDbAdapterQuery } from './observability.js';
+import { logger } from './logger.js';
+
+const adapterLog = logger('dbAdapter');
+
+// Routes use fire-and-forget `dbAdapter.run('BEGIN')` / `.run('COMMIT')`
+// with no callback. Without a callback, sqlite3-driver errors vanish.
+// If COMMIT silently fails (BUSY, constraint check, etc.), the
+// connection stays in a pending transaction and the next BEGIN throws
+// "cannot start a transaction within a transaction" — the cascade that
+// caused the 2026-05-08 chat 502 incident.
+//
+// We catch this class at the adapter level: when the SQL is a TCL verb
+// AND no callback was passed AND the call fails, log loudly with the
+// SQL + error so on-call sees it instead of having to dig the cascade
+// out of nginx error logs.
+const TCL_VERB_RE = /^\s*(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)\b/i;
+function isTclStatement(sql) {
+    return typeof sql === 'string' && TCL_VERB_RE.test(sql);
+}
 
 /**
  * Stage E8 database portability adapter.
@@ -74,7 +93,20 @@ export function run(sql, params = [], callback) {
             });
         });
     }));
-    if (args.callback) promise.then((result) => args.callback.call(result.statement, null), (err) => args.callback(err));
+    if (args.callback) {
+        promise.then((result) => args.callback.call(result.statement, null), (err) => args.callback(err));
+    } else if (isTclStatement(sql)) {
+        // Fire-and-forget transaction-control with no callback. If it
+        // fails, log loudly. Callers that want to handle the error
+        // should pass a callback or `await` the returned promise.
+        promise.catch((err) => {
+            adapterLog.error('fire-and-forget TCL statement failed', {
+                sql: sql.trim().slice(0, 80),
+                error: err.message,
+                hint: 'Pass a callback or await the promise to handle this error in the route.',
+            });
+        });
+    }
     return promise;
 }
 
