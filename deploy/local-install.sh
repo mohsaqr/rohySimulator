@@ -117,9 +117,27 @@ if (( SKIP_BUILD )); then
     say "skipping rohy install + build (--skip-build)"
 else
     say "installing rohy deps + building (this is the slow step, ~2-5 min)"
+    # `npm install` runs our postinstall hook which downloads the Oyon
+    # MediaPipe + ONNX vendor bundles (~93 MB, gitignored). The hook is
+    # tolerant — runs the explicit downloader below to surface failures
+    # loudly so a broken Oyon doesn't ship silently.
     npm install --prefer-offline --no-audit --no-fund
     npm run build
     ok "build complete (frontend/ regenerated)"
+fi
+
+# -- step 3b: Oyon model + vendor bundles (~93 MB, idempotent) -------------
+say "fetching Oyon model + vendor bundles (idempotent — skips files already present)"
+if [[ -x "$REPO_DIR/OyonR/scripts/download-models.sh" ]]; then
+    if bash "$REPO_DIR/OyonR/scripts/download-models.sh"; then
+        ok "Oyon assets present in OyonR/standalone/{models,vendor}"
+    else
+        warn "Oyon download failed — face / emotion capture will not work."
+        warn "Re-run later with:  bash OyonR/scripts/download-models.sh"
+        warn "Common causes: no curl on PATH, no internet, upstream URL gone."
+    fi
+else
+    warn "OyonR/scripts/download-models.sh missing — Oyon support unavailable."
 fi
 
 # -- step 4: env file -------------------------------------------------------

@@ -36,10 +36,12 @@ FROM node:${NODE_VERSION} AS builder
 ARG DYNAJS_GIT_URL
 ARG DYNAJS_GIT_REF
 
-# Build deps: git for cloning dynajs, python3/make/g++ for sqlite3 native build.
+# Build deps: git for cloning dynajs, python3/make/g++ for sqlite3 native
+# build, curl for OyonR/scripts/download-models.sh (fetches the ~93 MB
+# MediaPipe + ONNX vendor bundles that are gitignored — see .gitignore).
 RUN apt-get update -qq \
  && apt-get install -y --no-install-recommends \
-        git ca-certificates python3 make g++ \
+        git ca-certificates python3 make g++ curl \
  && rm -rf /var/lib/apt/lists/*
 
 # Clone + build dynajs FIRST so its dist/ exists before rohy's npm install
@@ -61,7 +63,14 @@ RUN npm install --prefer-offline --no-audit --no-fund
 WORKDIR /workspace/rohy
 COPY package.json package-lock.json* ./
 COPY OyonR ./OyonR
-RUN npm install --prefer-offline --no-audit --no-fund
+# `npm install` triggers our postinstall hook which calls
+# OyonR/scripts/download-models.sh — that fetches the ~93 MB MediaPipe +
+# ONNX bundles + emotion models. The script is idempotent (skips if
+# already present) and the postinstall is `|| true` tolerant, so we
+# re-run it explicitly here to FAIL THE BUILD if the download didn't
+# succeed (vs. shipping a runtime image without face/emotion assets).
+RUN npm install --prefer-offline --no-audit --no-fund \
+ && bash OyonR/scripts/download-models.sh
 
 # Now bring in source and build.
 COPY . .

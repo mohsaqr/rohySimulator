@@ -14,7 +14,8 @@ Everything runs on your own infrastructure. Local TTS (Piper, Kokoro) and local 
 ## Quick Start
 
 ```bash
-# 1. Install
+# 1. Install (also downloads ~93 MB of Oyon MediaPipe + ONNX bundles
+#    via the postinstall hook — needs `curl` on PATH and internet)
 npm install
 
 # 2. Configure environment
@@ -29,6 +30,12 @@ npm run dev
 - **Backend API:** http://localhost:3000
 - **Default seeded users (development only):** `admin` / `admin123`, `student` / `student123` — refused in production unless you set `ALLOW_DEFAULT_USERS=1`
 
+If the Oyon download was skipped (no `curl`, no network during `npm install`, behind a proxy), face/emotion capture won't work until you re-run:
+
+```bash
+npm run setup:oyon          # idempotent — only fetches missing files
+```
+
 For optional local TTS, install Piper:
 
 ```bash
@@ -36,6 +43,18 @@ bash server/scripts/install-piper.sh
 ```
 
 Kokoro TTS (~330 MB) is downloaded automatically on first use and warmed up at boot when selected.
+
+### Production / multi-user deploys
+
+Three packaged paths, pick one:
+
+| Target | Path | What you get |
+|---|---|---|
+| Docker (anywhere) | `docker compose -f deploy/docker/compose.yml up -d --build` | rohy + Caddy reverse proxy, auto-TLS, persistent volumes |
+| Linux + systemd | `sudo deploy/bootstrap.sh --frontend-url=https://your-host/rohy --admin-bootstrap` | systemd unit, nginx vhost, env file, idempotent re-runs for upgrades |
+| Single machine (lab / classroom) | `bash deploy/local-install.sh --port 4000` | runs as your user, generates `.env`, prints the start command |
+
+All three handle the Oyon binary download automatically. Verify any deploy with `scripts/smoke.sh https://your-host/rohy`.
 
 > See [`docs/getting-started/quickstart.md`](docs/getting-started/quickstart.md) for a step-by-step walkthrough.
 

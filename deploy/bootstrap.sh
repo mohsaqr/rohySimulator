@@ -257,7 +257,19 @@ if (( DO_BUILD )); then
         printf '  ! no package.json at %s — bootstrap must run from inside the rohy repo\n' "$REPO_SRC" >&2
         exit 1
     fi
+    # `npm install` triggers our postinstall hook which calls
+    # OyonR/scripts/download-models.sh — fetches the ~93 MB MediaPipe +
+    # ONNX vendor bundles + emotion models that are gitignored. Hook is
+    # tolerant; the explicit re-run below makes failure loud so a
+    # broken Oyon doesn't ship silently to a production install.
     run sudo -u "$ROHY_USER" bash -c "cd '$REPO_SRC' && npm install --prefer-offline --no-audit --no-fund"
+    if [[ -x "$REPO_SRC/OyonR/scripts/download-models.sh" ]]; then
+        if ! run sudo -u "$ROHY_USER" bash -c "cd '$REPO_SRC' && bash OyonR/scripts/download-models.sh"; then
+            printf '  ! Oyon model download FAILED — face / emotion capture will not work.\n' >&2
+            printf '  ! Re-run later as %s:  bash %s/OyonR/scripts/download-models.sh\n' "$ROHY_USER" "$REPO_SRC" >&2
+            printf '  ! Common causes: no curl on PATH, no internet, upstream URL gone.\n' >&2
+        fi
+    fi
     run sudo -u "$ROHY_USER" bash -c "cd '$REPO_SRC' && npm run build"
 else
     printf '\n[4/10] rohy npm install + build — SKIPPED (--skip-build)\n'
