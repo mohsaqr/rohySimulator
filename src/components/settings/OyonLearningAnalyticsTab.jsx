@@ -68,6 +68,10 @@ export default function OyonLearningAnalyticsTab() {
       } catch (e) {
          if (e instanceof ApiError && e.status === 403) {
             setError('disabled');
+         } else if (e instanceof ApiError && (e.code === 'OYON_DISABLED' || e.code === 'OYON_IMPORT_FAILED')) {
+            // Server-side disabled stub — surface the exact reason from the
+            // 503 body instead of "Could not load analytics".
+            setError({ kind: 'serverDisabled', code: e.code, message: e.message });
          } else {
             setError(e?.message || 'Could not load analytics');
          }
@@ -103,6 +107,9 @@ export default function OyonLearningAnalyticsTab() {
 
    if (error === 'disabled') {
       return <DisabledByTenant />;
+   }
+   if (error && typeof error === 'object' && error.kind === 'serverDisabled') {
+      return <DisabledOnServer code={error.code} message={error.message} />;
    }
 
    return (
@@ -200,6 +207,34 @@ function DisabledByTenant() {
             <AlertTriangle className="w-5 h-5 mx-auto mb-2 text-amber-400" />
             Oyon analytics is disabled for your role in this tenant. An admin can enable it
             in Settings → Oyon — Emotion Capture.
+         </div>
+      </div>
+   );
+}
+
+// Rendered when the server returns the OYON_DISABLED / OYON_IMPORT_FAILED
+// stub. Shows the operator-actionable message from the 503 body so the
+// fix is surfaced in the UI instead of buried in a server log.
+function DisabledOnServer({ code, message }) {
+   const isImportFail = code === 'OYON_IMPORT_FAILED';
+   return (
+      <div className="p-6 max-w-3xl">
+         <div className="rounded-md border border-amber-700/40 bg-amber-950/20 p-5 text-sm">
+            <div className="flex items-start gap-3">
+               <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+               <div className="space-y-2">
+                  <p className="font-semibold text-amber-200">
+                     {isImportFail
+                        ? 'Oyon analytics — module failed to load'
+                        : 'Oyon analytics — disabled on this server'}
+                  </p>
+                  <p className="text-amber-100/80 whitespace-pre-line">{message}</p>
+                  <p className="text-xs text-amber-100/60 pt-1">
+                     After fixing the issue and restarting rohy, refresh this page.
+                     Reason code: <code className="text-amber-100/80">{code}</code>
+                  </p>
+               </div>
+            </div>
          </div>
       </div>
    );

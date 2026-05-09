@@ -1,3 +1,17 @@
+### 2026-05-09 — Oyon: friendly disabled state, stop the silent 404
+
+When Oyon was off (no `OYON_ENABLED=1` in env) or had failed to import, every Settings → Oyon tab showed a useless `Request failed (404)` toast because the routes simply didn't exist server-side. Operators couldn't tell whether the cause was a missing env var, missing binary download, or an actual bug. Two-part fix:
+
+- **`server/routes.js`**: when Oyon is gated off, mount a small stub at `/api/addons/oyon` that 503s every request with structured JSON: `{code, error, message}`. Three states are now distinguishable from the response: enabled (real routes), `OYON_DISABLED` (env var unset), `OYON_IMPORT_FAILED` (env var set but `oyon-routes.js` couldn't import — the failure reason is bubbled into `message`). `apiClient.js` already maps the JSON `code` field onto `ApiError.code`, so frontend branches are clean: `if (e.code === 'OYON_DISABLED')`.
+- **`deploy/env.example`**: added `OYON_ENABLED=1` (default-on) with a comment explaining what it gates and why turning it off doesn't save space (only the routes are gated, the binaries still ship).
+- **`deploy/local-install.sh`**: writes `OYON_ENABLED=1` into the generated `.env`. New `--no-oyon` flag for opt-out (and `--with-oyon` for symmetry). Help text updated.
+- **`OyonSettingsTab.jsx`**: when the disabled stub responds, render a friendly amber panel showing the operator-actionable message and the reason code, instead of routing through the generic error toast.
+- **`OyonLearningAnalyticsTab.jsx`**: extended the existing tenant-disabled handler — same pattern (`DisabledOnServer` component) so the analytics tab also shows the actionable text rather than "Could not load analytics".
+- Tests:
+  - 7-case stub smoke test (`/config`, `/settings` GET+PUT, `/analytics/students`, `/emotion-records`, `/admin/live`, root path) all confirmed to return 503 + `OYON_DISABLED` body. Caught one real bug during testing: the original `router.all('*')` pattern doesn't work in Express 5 (path-to-regexp v6 rejects bare `*` — needs `/{*splat}` or middleware). Fixed by switching to `router.use((req, res) => ...)` which catches everything by default and is version-agnostic.
+  - shellcheck clean on `local-install.sh`; `node --check` clean on `routes.js`; ESLint clean on both modified JSX files.
+- Net effect: fresh installs with `bash deploy/local-install.sh` get Oyon working out of the box on `http://host:PORT/rohy/`. Existing installs with `OYON_ENABLED` unset get a clear "Oyon is disabled — set `OYON_ENABLED=1` in your env file and restart" panel instead of a confusing 404. Failed Oyon imports surface their real reason (e.g. "face_landmarker.task not found") instead of a silent miss.
+
 ### 2026-05-09 — Air-gap bundler (`deploy/bundle-airgap.sh`)
 
 New script for producing a self-contained tarball that installs rohy with no network access on the target host. Closes the "1 GB of npm + models is gitignored, every fresh install needs internet" gap for operators on isolated/air-gapped sites.

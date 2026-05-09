@@ -18,13 +18,48 @@ import notesRoutes from './routes/notes-routes.js';
 import healthRoutes from './routes/health-routes.js';
 import { routeTimeout } from './middleware/routeTimeout.js';
 
+// Oyon mounts in three possible states. The stub matters because earlier
+// versions left /api/addons/oyon/* completely unrouted when Oyon was off,
+// which produced a bare Express 404 with no JSON body — the frontend then
+// showed "Request failed (404)" with no clue that the cause was a missing
+// env var or a failed binary download. The stub now responds with a JSON
+// 503 that apiClient.js reads via parsed.error/parsed.message, so settings
+// tabs render an actionable "Oyon is disabled, here's how to enable it"
+// panel instead of a generic toast.
 let oyonRoutes = null;
+let oyonDisabledReason = null;
 if (process.env.OYON_ENABLED === '1') {
     try {
         oyonRoutes = (await import('./routes/oyon-routes.js')).default;
     } catch (err) {
-        console.warn('[OyonR] add-on route import failed; continuing without Oyon:', err.message);
+        console.warn('[OyonR] add-on route import failed; mounting disabled stub:', err.message);
+        oyonDisabledReason = {
+            code: 'OYON_IMPORT_FAILED',
+            error: 'oyon_import_failed',
+            message: `Oyon module failed to load: ${err.message}. Check that OyonR/scripts/download-models.sh ran successfully and OyonR/standalone/{models,vendor} contain the expected assets.`,
+        };
     }
+} else {
+    oyonDisabledReason = {
+        code: 'OYON_DISABLED',
+        error: 'oyon_disabled',
+        message: 'Oyon is disabled on this server. Set OYON_ENABLED=1 in your env file (e.g. /etc/rohy/env or .env) and restart rohy. The Oyon binary bundles must also be present — run `bash OyonR/scripts/download-models.sh` if they were not fetched at install time.',
+    };
+}
+
+function buildOyonDisabledStub(reason) {
+    // Tiny router that 503s every Oyon API call with a structured body so
+    // ApiError.code on the frontend equals reason.code (e.g. 'OYON_DISABLED'
+    // or 'OYON_IMPORT_FAILED'). The 503 status is intentional: the routes
+    // exist conceptually but the service is currently unavailable.
+    //
+    // Implemented as middleware (not a route handler with `'*'`) because
+    // Express 5 + path-to-regexp v6 reject bare `*` wildcards — they
+    // require a named splat like `/{*any}`. Middleware mounted at the
+    // base path matches every sub-path without that constraint.
+    const stub = express.Router();
+    stub.use((req, res) => res.status(503).json(reason));
+    return stub;
 }
 
 // Item D slice marker: D6 final mount point after D1-D5 extracted route domains.
@@ -67,7 +102,11 @@ router.use(adminRoutes);
 router.use(patientRecordRoutes);
 router.use(agentsRoutes);
 router.use(notesRoutes);
-if (oyonRoutes) router.use('/addons/oyon', oyonRoutes);
+if (oyonRoutes) {
+    router.use('/addons/oyon', oyonRoutes);
+} else if (oyonDisabledReason) {
+    router.use('/addons/oyon', buildOyonDisabledStub(oyonDisabledReason));
+}
 
 // Route auth allowlist manifest. Non-runtime comments kept so the legacy
 // route-auth-allowlist test can continue pinning the public/auth surface

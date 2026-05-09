@@ -32,6 +32,7 @@
 #   bash deploy/local-install.sh --with-piper           # if you want offline TTS
 #   bash deploy/local-install.sh --prewarm-kokoro       # download model now
 #   bash deploy/local-install.sh --bind localhost --port 3000  # dev mode
+#   bash deploy/local-install.sh --no-oyon              # disable Oyon emotion capture
 
 set -euo pipefail
 
@@ -42,6 +43,7 @@ WITH_PIPER=0
 PREWARM_KOKORO=0
 SKIP_BUILD=0
 ALLOW_DEFAULTS=0
+WITH_OYON=1   # default on — install paths also fetch the Oyon binary bundles
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -52,6 +54,8 @@ while [[ $# -gt 0 ]]; do
         --prewarm-kokoro)  PREWARM_KOKORO=1; shift ;;
         --skip-build)      SKIP_BUILD=1; shift ;;
         --allow-defaults)  ALLOW_DEFAULTS=1; shift ;;
+        --no-oyon)         WITH_OYON=0; shift ;;
+        --with-oyon)       WITH_OYON=1; shift ;;
         --help|-h)
             sed -n '2,40p' "$0" | sed 's/^# \?//'
             exit 0 ;;
@@ -161,6 +165,10 @@ else
         echo "FRONTEND_URL=${FRONTEND_URL}"
         echo "ROHY_DB=${REPO_DIR}/data/database.sqlite"
         echo "TRANSFORMERS_CACHE=${REPO_DIR}/data/hf-cache"
+        # Oyon emotion-capture add-on. Default-on because we also fetched
+        # the binary bundles in step 3b. Use --no-oyon to opt out; the
+        # server will then mount a 503 stub that tells settings tabs why.
+        echo "OYON_ENABLED=$([[ $WITH_OYON -eq 1 ]] && echo 1 || echo 0)"
         if (( ALLOW_DEFAULTS )); then
             echo
             echo "# REMOVE the next line after first login + password change."

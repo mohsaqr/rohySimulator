@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Camera, ExternalLink, BarChart3, ShieldCheck, Loader2, Save, LineChart, Cpu } from 'lucide-react';
-import { apiFetch } from '../../services/apiClient';
+import { Camera, ExternalLink, BarChart3, ShieldCheck, Loader2, Save, LineChart, Cpu, AlertTriangle } from 'lucide-react';
+import { apiFetch, ApiError } from '../../services/apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { VALENCE_GRAPH_PREF_KEY, CONSENT_PREF_KEY } from '../oyon/OyonCaptureWidget';
 import { modelProfileList, DEFAULT_MODEL_PROFILE } from '../oyon/modelProfiles';
@@ -24,6 +24,10 @@ export default function OyonSettingsTab() {
    const [savingSettings, setSavingSettings] = useState(false);
    const [savedFlash, setSavedFlash] = useState(false);
    const [error, setError] = useState(null);
+   // serverDisabled holds the structured 503 payload from the disabled-Oyon
+   // stub mounted in server/routes.js — { code: 'OYON_DISABLED' | 'OYON_IMPORT_FAILED', message: '...' }.
+   // When set, we render the friendly panel instead of trying to load config.
+   const [serverDisabled, setServerDisabled] = useState(null);
    const [defaultConsent, setDefaultConsent] = useState(() => {
       try { return localStorage.getItem(CONSENT_PREF_KEY) === '1'; } catch { return false; }
    });
@@ -35,7 +39,17 @@ export default function OyonSettingsTab() {
       let cancelled = false;
       apiFetch('/addons/oyon/config')
          .then(c => { if (!cancelled) setConfig(c); })
-         .catch(e => { if (!cancelled) setError(e?.message || 'Could not load Oyon config'); });
+         .catch(e => {
+            if (cancelled) return;
+            // Server-side 503 stub: Oyon is gated off (OYON_ENABLED!=1) or
+            // the route module failed to import. apiClient maps the JSON
+            // body's `code` onto ApiError.code, so we can branch cleanly.
+            if (e instanceof ApiError && (e.code === 'OYON_DISABLED' || e.code === 'OYON_IMPORT_FAILED')) {
+               setServerDisabled({ code: e.code, message: e.message });
+            } else {
+               setError(e?.message || 'Could not load Oyon config');
+            }
+         });
       if (admin) {
          apiFetch('/addons/oyon/settings')
             .then(r => { if (!cancelled) setSettings(r?.settings || null); })
@@ -94,6 +108,41 @@ export default function OyonSettingsTab() {
    };
 
    const captureEnabled = Boolean(config?.enabled);
+
+   if (serverDisabled) {
+      const isImportFail = serverDisabled.code === 'OYON_IMPORT_FAILED';
+      return (
+         <div className="space-y-6 p-6 max-w-4xl">
+            <div className="flex items-center gap-2 mb-2">
+               <Camera className="w-6 h-6 text-neutral-500" />
+               <h2 className="text-xl font-bold text-neutral-300">Oyon — Emotion Capture</h2>
+               <span className="ml-auto px-2.5 py-1 rounded-full text-xs font-bold bg-neutral-800 text-neutral-400 border border-neutral-700">
+                  {isImportFail ? 'Module failed to load' : 'Disabled on this server'}
+               </span>
+            </div>
+            <div className="rounded-lg border border-amber-700/40 bg-amber-950/20 p-5 space-y-3">
+               <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+                  <div className="space-y-2 text-sm">
+                     <p className="font-semibold text-amber-200">
+                        {isImportFail
+                           ? 'The Oyon add-on is enabled but failed to load.'
+                           : 'The Oyon add-on is not enabled on this server.'}
+                     </p>
+                     <p className="text-amber-100/80 whitespace-pre-line">{serverDisabled.message}</p>
+                     <p className="text-xs text-amber-100/60 pt-1">
+                        After fixing the issue and restarting rohy, refresh this page to load the Oyon
+                        settings.
+                     </p>
+                  </div>
+               </div>
+            </div>
+            <div className="text-xs text-neutral-500 px-1">
+               Reason code: <code className="text-neutral-400">{serverDisabled.code}</code>
+            </div>
+         </div>
+      );
+   }
 
    return (
       <div className="space-y-6 p-6 max-w-4xl">
