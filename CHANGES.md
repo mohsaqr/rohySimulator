@@ -1,3 +1,53 @@
+### 2026-05-09 — Air-gap bundler (`deploy/bundle-airgap.sh`)
+
+New script for producing a self-contained tarball that installs rohy with no network access on the target host. Closes the "1 GB of npm + models is gitignored, every fresh install needs internet" gap for operators on isolated/air-gapped sites.
+
+- `deploy/bundle-airgap.sh` (new): driver script. Two modes — `--mode=source` packs repo + `node_modules/` + Oyon vendor + Piper (configurable) + optional HF cache + optional dynajs sibling; `--mode=docker` runs `docker compose build` and `docker save` to ship a single-image install. `--mode=both` (default) produces both. Stamps every artifact with `<git-sha>-<date>`, writes a `manifest.json` (kind, sha, build host, included components, sizes), and emits sha256 alongside each tarball. Cross-platform (works on macOS + Linux build hosts; uses `shasum` if `sha256sum` is missing). Prints copy-paste hosting commands for GitHub Releases / Hugging Face Hub / Cloudflare R2 at the end.
+- Embedded inside the source tarball: `airgap-install.sh` — the offline-side installer. Takes `--user --repo-dir --data-dir --frontend-url --proxy=nginx|caddy|none`, copies the staged repo to `/opt/rohy`, restores HF cache to `$TRANSFORMERS_CACHE` if bundled, places dynajs sibling at `<repo-dir>/../dynajs` if bundled, generates a fresh JWT and writes `/etc/rohy/env`, installs systemd unit + reverse-proxy vhost from the templates already in the repo. No network calls anywhere in the install path.
+- Embedded inside the docker tarball: `install.sh` — `docker load -i rohy-image.tar && docker compose --env-file .env up -d`. Two-step UX (first run prompts to edit `.env`, second run starts containers).
+- Tests (real, not just bash -n):
+  - Synthetic mini-repo end-to-end: build → tarball produced, sha256 valid, manifest valid JSON, embedded `airgap-install.sh` is executable + bash-n + shellcheck clean, installer arg-parsing rejects missing root/missing flags.
+  - Exclusion verification: `tar -tzf` confirms `.git/`, `tmp/`, `dist/airgap/`, `server/database.sqlite*`, `server/.env` all absent from the bundle.
+  - Inclusion verification: `package.json`, `node_modules/`, `OyonR/vendor/*.onnx`, `deploy/env.example`, `deploy/systemd/rohy.service.example` all present.
+  - `--with-piper` / `--no-piper` / auto-detect — all 3 paths produce expected piper-presence in tarball + manifest (`with_piper: true|false`).
+  - Negative tests: missing `node_modules/` → exit 1 with "Run 'npm install' first" message; missing OyonR vendor assets → exit 1 with "Run 'bash OyonR/scripts/download-models.sh' first" message; `--with-piper` but no `server/data/piper/` → exit 1 with "install-piper.sh first".
+  - Docker absence: `--mode=docker` without docker → FATAL exit 1; `--mode=both` without docker → warns and falls back to source-only with exit 0.
+- Real production-size build (the "try it" run): 1.5 GB node_modules + 326 MB Piper + 157 MB OyonR → **1.8 GB tarball, 3:52 build time on Apple Silicon**. Sits just under GitHub Releases' 2 GB-per-file cap. Adding `--with-hf-cache` (+330 MB) would blow past it; bundle that separately if needed.
+- **Platform stamping** added after a real-bundle inspection found platform-specific native binaries: `node_sqlite3.node` (compiled C++), `onnxruntime_pybind11_state.so`, `libonnxruntime.1.25.1.dylib`, `cpython-314-darwin.so` (numpy), `Darwin/FBX2glTF`. A darwin-arm64 bundle would silently break on linux-x86_64 production hosts. Mitigations:
+  - Tarball name now includes platform: `rohy-airgap-source-<sha>-<platform>-<date>.tar.gz` (e.g. `darwin-arm64`, `linux-x86_64`).
+  - Manifest carries `"platform"` field.
+  - Build-time NOTE printed for non-typical-prod platforms (anything not `linux-x86_64` or `linux-aarch64`).
+  - `airgap-install.sh` checks platform first thing on the target host and exits 1 with a clear message on mismatch. Override via `SKIP_PLATFORM_CHECK=1` for cross-compiled or browser-only deploys. Old bundles with no `platform` field fall through gracefully (no false-positive on upgrade).
+- Bugs caught + fixed during testing:
+  1. macOS bash 3.2 + `set -u` + empty array expansion: `"${piper_excludes[@]}"` raised "unbound variable" when the array had zero elements. Fixed with the empty-safe form `"${piper_excludes[@]+"${piper_excludes[@]}"}"`. macOS-only quirk — Linux bash 4+ doesn't have it.
+  2. `pipefail` + `grep` returning 1 on no-match aborted the installer's platform check on bundles built before this version (i.e. no `platform` field in the manifest). Fixed with `... | sed ... || true` so the absence falls through to other checks instead of exiting.
+  3. Initial installer ordering put root/arg checks BEFORE platform check — meant a non-root operator hit "must run as root" before getting the more useful "platform mismatch" message. Reordered: platform check first (read-only, cheap), then privilege/arg validation.
+- shellcheck on the bundler + embedded installer: clean (rc=0).
+- `dist/airgap/` is auto-gitignored (existing `dist` rule covers it).
+- Dry-run cleanup: `--dry-run` no longer creates the staging directory under `dist/airgap/.stage-source-*` (was leaking a half-empty stage tree on every dry-run). Now early-returns from each builder function before any filesystem mutation; the inline `if (( DRY_RUN )); then ... else ... fi` branches that became dead after the early-return were also removed for readability.
+- README.md updated: added a fourth row to the production deploys table for the air-gap path, plus a sub-section showing the full build → publish → offline-install flow including the docker-on-mac trick for cross-platform builds and the explicit platform-lock warning.
+
+### 2026-05-09 — Deployment hardening (deployment_fix.md P1–P5)
+
+Worked through the full backlog in `deployment_fix.md`. Bash + smoke checks pass on all edited scripts; nginx config not lint-checked locally (no nginx binary).
+
+- `deploy/nginx/rohy.conf.example`: **P1.** Added `/oyon/`, `/standalone/`, and `/api/addons/oyon` proxy blocks mirroring the existing Caddyfile parity. Same generous 300s timeouts as the `/rohy/` block so first-load model/wasm fetches don't 504.
+- `deploy/docker/.env.example`: **P2.** Removed dead `ROHY_TLS_MODE=internal` line that was never read by Caddyfile. Replaced with an explicit "manual edit, NOT env-driven" comment block citing the original incident.
+- `production/deploy.sh`: **P3.** Added legacy guard at top — exits 1 with a redirection message unless `PRODUCTION_DEPLOY_FORCE=1`. Body of script unchanged so forced runs still work for muscle-memory operators.
+- `deploy/preflight.sh`: **P4.** Added `detect_service_user` (parses `User=` from `/etc/systemd/system/rohy.service`, overridable via `ROHY_SERVICE_USER`) and `writable_as_user` (uses `sudo -u <user> test -w` when running as root, falls back to `[[ -w ]]`). Wired into `[6/9] ROHY_DB` and `[7/9] TRANSFORMERS_CACHE` checks. Result: preflight invoked as root no longer falsely reports "writable" when the rohy account can't actually write.
+- `deploy/bootstrap.sh`: **P5.** With-dynajs path now fetches + verifies clone matches `ROHY_DYNAJS_REF` instead of leaving stale checkouts. If drift is detected, checks out the new ref and removes `dist/` to force rebuild. New `DYNAJS_REF_LOCK=1` env opts back into "leave alone" behavior for operators managing dynajs by hand.
+- Tests (real, not just bash -n):
+  - `nginx -t` on the patched config — passes. End-to-end probe with a Python echo upstream: all 8 routes (`/rohy/`, `/rohy/foo`, `/oyon/standalone/logs.html`, `/standalone/vendor/onnx.js`, `/api/addons/oyon`, `/api/addons/oyon/config`, `/rohy/api/health`, `/rohy/api/ready`) hit the upstream with the expected paths; HTTP→HTTPS 301 redirect intact.
+  - `caddy validate` on the unchanged Caddyfile — Valid configuration (only pre-existing `header_up X-Forwarded-*` warnings remain; not from this change).
+  - `docker compose` parse-check via Python YAML loader (docker not installed locally) — compose.yml parses; `ROHY_TLS_MODE` no longer referenced anywhere except the explanatory comment in Caddyfile.
+  - `production/deploy.sh` guard state machine — refused with exit 1 for FORCE in {0, "", yes, true, TRUE}; only literal `1` proceeds. Forced flow still hits original `.env file not found` and SSH-attempt paths.
+  - `preflight.sh` — 5 scenarios (no override; SERVICE_USER=current; SERVICE_USER=nonexistent; SERVICE_USER=nobody no-root; env-override beats systemd-unit lookup) plus 6-case writable_as_user truth table (rc=0/1/2 paths all reachable, including non-writable system dir).
+  - `bootstrap.sh` dynajs drift — fake remote with two tagged commits, 5 cases: no-op when HEAD==ref, drift+checkout+dist removal, unresolvable ref → warning, lock mode preserves HEAD, drift message format includes short SHAs.
+- Bugs caught + fixed during testing:
+  - `preflight.sh`: original `case $?` after `writable_as_user` would trip `set -e` when the function returned 1 or 2, aborting preflight mid-run. Fixed by capturing the rc explicitly: `wrc=0; writable_as_user … || wrc=$?`.
+  - `bootstrap.sh`: original `git rev-parse "$REF"` echoes the literal ref name to stdout when the ref doesn't exist (only stderr gets the error), so `target_sha` was ending up "non-empty but bogus" and the subsequent checkout would noisy-fail. Fixed by switching to `git rev-parse --verify --quiet "${REF}^{commit}"` which returns empty on non-resolution.
+- shellcheck: preflight clean (rc=0); bootstrap and production carry only pre-existing findings on lines I didn't touch.
+
 ### 2026-05-09 (night) — Unified data grid + export consolidation
 
 The follow-up pass to last session's logging plumbing — replaces three hand-rolled tables with one shared component, kills four duplicate CSV export endpoints, and cleans up the System Logs panel.

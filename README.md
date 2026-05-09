@@ -46,15 +46,67 @@ Kokoro TTS (~330 MB) is downloaded automatically on first use and warmed up at b
 
 ### Production / multi-user deploys
 
-Three packaged paths, pick one:
+Four packaged paths, pick one:
 
 | Target | Path | What you get |
 |---|---|---|
 | Docker (anywhere) | `docker compose -f deploy/docker/compose.yml up -d --build` | rohy + Caddy reverse proxy, auto-TLS, persistent volumes |
 | Linux + systemd | `sudo deploy/bootstrap.sh --frontend-url=https://your-host/rohy --admin-bootstrap` | systemd unit, nginx vhost, env file, idempotent re-runs for upgrades |
 | Single machine (lab / classroom) | `bash deploy/local-install.sh --port 4000` | runs as your user, generates `.env`, prints the start command |
+| Air-gapped / offline target | build: `deploy/bundle-airgap.sh` &nbsp;·&nbsp; install: `sudo ./airgap-install.sh --user=rohy --frontend-url=https://your-host/rohy --proxy=nginx` | one tarball with repo + `node_modules` + Oyon bundles + Piper + (optional) Kokoro HF cache, sha256-verified, platform-stamped, no network needed on target |
 
-All three handle the Oyon binary download automatically. Verify any deploy with `scripts/smoke.sh https://your-host/rohy`.
+All four handle the Oyon binary download automatically (the air-gap path packs them into the tarball at build time instead of fetching at install time). Verify any deploy with `scripts/smoke.sh https://your-host/rohy`.
+
+#### Air-gap bundling — full flow
+
+For sites with no internet on the target host (clinical labs, secured networks, lab classrooms with restricted egress):
+
+```bash
+# On a CONNECTED build host that matches the target's OS+arch
+# (linux-x86_64 prod → linux-x86_64 build host; ARM target → ARM build host):
+npm install
+bash OyonR/scripts/download-models.sh
+bash server/scripts/install-piper.sh                    # optional, +326 MB
+deploy/bundle-airgap.sh --mode=source --with-hf-cache   # optional Kokoro pre-warm, +330 MB
+# → dist/airgap/rohy-airgap-source-<sha>-<platform>-<date>.tar.gz   (~1.8 GB)
+# → dist/airgap/rohy-airgap-source-<sha>-<platform>-<date>.tar.gz.sha256
+
+# Publish (any of these — the script prints all three commands):
+gh release create v$(git rev-parse --short HEAD) dist/airgap/*.tar.gz dist/airgap/*.sha256
+huggingface-cli upload <user>/rohy-airgap dist/airgap/ .
+rclone copy dist/airgap/ r2:rohy-airgap/
+
+# On the AIR-GAPPED target host (no internet required from here on):
+curl -L -o rohy.tar.gz <release-url>                    # last network step
+curl -L -o rohy.tar.gz.sha256 <release-url>.sha256
+sha256sum -c rohy.tar.gz.sha256                         # verify integrity
+tar xzf rohy.tar.gz && cd rohy-airgap-*
+sudo ./airgap-install.sh \
+    --user=rohy \
+    --repo-dir=/opt/rohy \
+    --frontend-url=https://your-host/rohy \
+    --proxy=nginx                                       # nginx | caddy | none
+sudo systemctl start rohy
+```
+
+**Key flags** (see `deploy/bundle-airgap.sh --help` for the full list):
+
+- `--mode=source|docker|both` — source tarball, `docker save`'d image, or both. Source needs node + sqlite3 on target; docker needs only docker.
+- `--with-hf-cache` — bundle `$TRANSFORMERS_CACHE` so Kokoro TTS works offline on first request (otherwise skipped; first request would need network).
+- `--with-dynajs` — bundle the `../dynajs` sibling clone if your `package.json` uses `file:../dynajs`.
+- `--no-piper` / `--with-piper` — exclude or require the Piper venv (auto-detected by default; saves ~326 MB if excluded).
+
+**Platform lock — important**: the source bundle ships native binaries (`node_sqlite3.node`, `onnxruntime` `.dylib`/`.so`, `Darwin/FBX2glTF`) compiled for the build host's OS+arch. The bundle filename includes the platform (`darwin-arm64`, `linux-x86_64`, etc.) and `airgap-install.sh` refuses to install on a mismatched host. To produce a Linux-x86_64 bundle from a Mac, run the bundler inside a Linux container:
+
+```bash
+docker run --rm -v "$PWD:/work" -w /work --platform=linux/amd64 node:22-bookworm bash -c "
+    apt-get update && apt-get install -y rsync python3-venv sqlite3 && \
+    npm install && bash OyonR/scripts/download-models.sh && \
+    deploy/bundle-airgap.sh --mode=source
+"
+```
+
+Or use `--mode=docker` instead of source — Docker images are Linux regardless of build host, and the target only needs Docker.
 
 > See [`docs/getting-started/quickstart.md`](docs/getting-started/quickstart.md) for a step-by-step walkthrough.
 

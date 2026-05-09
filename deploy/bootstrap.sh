@@ -230,7 +230,44 @@ if (( DO_DYNAJS )); then
         run sudo -u "$ROHY_USER" git clone "$ROHY_DYNAJS_URL" "$DYNAJS_DIR"
         run sudo -u "$ROHY_USER" git -C "$DYNAJS_DIR" checkout "$ROHY_DYNAJS_REF"
     else
-        printf '  dynajs already present at %s — leaving alone\n' "$DYNAJS_DIR"
+        # Existing clone — fetch and verify it matches ROHY_DYNAJS_REF.
+        # Without this, an upgrade run that sets ROHY_DYNAJS_REF=v0.2.0
+        # would silently keep building against whatever ref was checked out
+        # last time. We fetch first (so the ref is resolvable even if it
+        # was added upstream after the original clone), then compare the
+        # current HEAD to the resolved target. If they differ, we either
+        # check out the new ref (default) or warn-only (DYNAJS_REF_LOCK=1
+        # for operators who manage dynajs by hand).
+        printf '  dynajs already present at %s — verifying ref=%s\n' "$DYNAJS_DIR" "$ROHY_DYNAJS_REF"
+        if (( DRY_RUN )); then
+            printf '  [dry-run] would: git fetch --tags && rev-parse HEAD vs %s; checkout if mismatch\n' "$ROHY_DYNAJS_REF"
+        else
+            sudo -u "$ROHY_USER" git -C "$DYNAJS_DIR" fetch --tags --quiet origin || \
+                printf '  ! git fetch failed (offline?) — comparing against existing local refs only\n' >&2
+            current_sha=$(sudo -u "$ROHY_USER" git -C "$DYNAJS_DIR" rev-parse HEAD 2>/dev/null || echo "")
+            # `rev-parse --verify --quiet` is the only form that returns
+            # empty + non-zero exit when the ref doesn't resolve. The plain
+            # form echoes the literal ref name to stdout on failure, which
+            # would have made target_sha look "non-empty but bogus" and the
+            # subsequent checkout would noisy-fail in production.
+            target_sha=$(sudo -u "$ROHY_USER" git -C "$DYNAJS_DIR" rev-parse --verify --quiet "${ROHY_DYNAJS_REF}^{commit}" 2>/dev/null || echo "")
+            if [[ -z "$target_sha" ]]; then
+                printf '  ! target ref "%s" not resolvable in %s — skipping checkout (left as-is)\n' "$ROHY_DYNAJS_REF" "$DYNAJS_DIR" >&2
+            elif [[ "$current_sha" == "$target_sha" ]]; then
+                printf '  ✓ dynajs already at %s (%s)\n' "$ROHY_DYNAJS_REF" "${current_sha:0:10}"
+            elif [[ "${DYNAJS_REF_LOCK:-0}" == "1" ]]; then
+                printf '  ! WARNING: dynajs HEAD=%s but ROHY_DYNAJS_REF=%s (=%s).\n' \
+                    "${current_sha:0:10}" "$ROHY_DYNAJS_REF" "${target_sha:0:10}" >&2
+                printf '  ! DYNAJS_REF_LOCK=1 set — leaving checkout alone. Re-run without lock to update.\n' >&2
+            else
+                printf '  drift detected: HEAD=%s -> checking out %s (=%s)\n' \
+                    "${current_sha:0:10}" "$ROHY_DYNAJS_REF" "${target_sha:0:10}"
+                run sudo -u "$ROHY_USER" git -C "$DYNAJS_DIR" checkout "$ROHY_DYNAJS_REF"
+                # Force a rebuild on ref change — old dist/ would otherwise
+                # outlive the source it was built from.
+                run sudo -u "$ROHY_USER" rm -rf "$DYNAJS_DIR/dist"
+            fi
+        fi
     fi
     if [[ ! -f "$DYNAJS_DIR/dist/index.mjs" && ! -f "$DYNAJS_DIR/dist/index.js" ]]; then
         printf '  building dynajs (npm install runs the prepare script that produces dist/)\n'

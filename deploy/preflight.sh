@@ -68,6 +68,52 @@ read_env_var() {
     printf '%s' "$val"
 }
 
+# Detect the systemd User= for rohy.service. Returns empty if the unit
+# doesn't exist or doesn't declare a User=. Honoured override:
+#   ROHY_SERVICE_USER=<name>
+detect_service_user() {
+    if [[ -n "${ROHY_SERVICE_USER:-}" ]]; then
+        printf '%s' "$ROHY_SERVICE_USER"
+        return
+    fi
+    local unit
+    for unit in /etc/systemd/system/rohy.service /lib/systemd/system/rohy.service; do
+        if [[ -r "$unit" ]]; then
+            local u
+            u=$(grep -E '^User=' "$unit" | tail -n1 | cut -d= -f2- | tr -d '[:space:]')
+            if [[ -n "$u" ]]; then
+                printf '%s' "$u"
+                return
+            fi
+        fi
+    done
+}
+
+# Test whether $1 (a path) is writable by user $2. Falls back to a plain
+# `[[ -w ]]` if we can't sudo to the target user (e.g. preflight not run
+# as root, or the user doesn't exist). Returns 0 if writable, 1 if not,
+# 2 if we couldn't even test (callers may downgrade to a warn).
+writable_as_user() {
+    local path="$1" target="$2"
+    if [[ -z "$target" || "$target" == "$USER" ]]; then
+        [[ -w "$path" ]] && return 0 || return 1
+    fi
+    if ! id -u "$target" >/dev/null 2>&1; then
+        return 2
+    fi
+    if [[ $EUID -eq 0 ]]; then
+        # `sudo -u <user> test -w <path>` is the canonical "would this
+        # account see the dir as writable" probe. -n stops sudo from
+        # prompting if a config issue would otherwise hang.
+        if sudo -n -u "$target" test -w "$path" 2>/dev/null; then
+            return 0
+        else
+            return 1
+        fi
+    fi
+    return 2
+}
+
 # -- 1. PATH binaries ------------------------------------------------------
 printf '\n[1/9] checking required binaries on PATH\n'
 for bin in node npm; do
@@ -152,6 +198,10 @@ fi
 
 # -- 6. ROHY_DB path -------------------------------------------------------
 printf '\n[6/9] checking ROHY_DB path\n'
+SERVICE_USER=$(detect_service_user || true)
+if [[ -n "$SERVICE_USER" ]]; then
+    ok "systemd service user resolved: $SERVICE_USER (writability checks below run as this user)"
+fi
 ROHY_DB=$(read_env_var ROHY_DB || true)
 if [[ -z "$ROHY_DB" ]]; then
     if [[ "$NODE_ENV_VAL" == "production" ]]; then
@@ -163,11 +213,19 @@ else
     parent=$(dirname "$ROHY_DB")
     if [[ -d "$parent" ]]; then
         ok "parent dir $parent exists"
-        if [[ -w "$parent" ]]; then
-            ok "parent dir is writable by $USER"
-        else
-            warn "parent dir $parent not writable by $USER (sudo? wrong owner?)"
-        fi
+        # Run the writability probe against the systemd User= when known.
+        # Without this, preflight invoked as root would always report "writable"
+        # even if the rohy account can't actually create the SQLite file —
+        # masking the failure mode that bites first on real boot.
+        # Guard the function call with `|| wrc=$?` so a non-zero return
+        # doesn't trip `set -e` and abort the rest of preflight.
+        check_user="${SERVICE_USER:-$USER}"
+        wrc=0; writable_as_user "$parent" "$check_user" || wrc=$?
+        case "$wrc" in
+            0) ok "parent dir is writable by $check_user" ;;
+            1) fail "parent dir $parent is NOT writable by service user $check_user — chown -R $check_user:$check_user $parent" ;;
+            2) warn "parent dir writability checked as $USER only (couldn't test as $check_user — run preflight via sudo, or set ROHY_SERVICE_USER)" ;;
+        esac
     else
         fail "parent dir $parent does not exist — mkdir -p it before starting rohy"
     fi
@@ -194,11 +252,17 @@ if [[ -z "$TC" ]]; then
 elif [[ ! -d "$TC" ]]; then
     warn "TRANSFORMERS_CACHE=$TC does not exist — mkdir -p it before first TTS request"
 else
-    if [[ -w "$TC" ]]; then
-        ok "TRANSFORMERS_CACHE=$TC exists and is writable"
-    else
-        warn "TRANSFORMERS_CACHE=$TC not writable by $USER"
-    fi
+    # Same service-user-aware check as ROHY_DB: Kokoro writes ~330 MB into
+    # this dir on first TTS request, and the rohy account has to own that
+    # write. Root-only writability would silently break first-TTS for the
+    # service while looking fine here. Same `|| wrc=$?` guard against set -e.
+    check_user="${SERVICE_USER:-$USER}"
+    wrc=0; writable_as_user "$TC" "$check_user" || wrc=$?
+    case "$wrc" in
+        0) ok "TRANSFORMERS_CACHE=$TC exists and is writable by $check_user" ;;
+        1) fail "TRANSFORMERS_CACHE=$TC NOT writable by service user $check_user — chown -R $check_user:$check_user $TC" ;;
+        2) warn "TRANSFORMERS_CACHE writability checked as $USER only (couldn't test as $check_user)" ;;
+    esac
 fi
 
 # -- 8. dynajs sibling -----------------------------------------------------

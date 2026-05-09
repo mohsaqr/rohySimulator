@@ -64,6 +64,67 @@ server {
     # the multer cap inside rohy.
     client_max_body_size 50m;
 
+    # === Oyon root-absolute paths =========================================
+    # The Oyon widget and the vendored standalone HTML use root-absolute
+    # URLs like /oyon/standalone/logs.html, /standalone/vendor/onnxruntime-web/,
+    # and /api/addons/oyon/* — they don't honour the SPA's /rohy/ base.
+    # Making the client base-aware would touch model/wasm fetch URLs, the
+    # standalone's importmap, and every "Open Oyon" launcher in the SPA;
+    # proxying these prefixes through to the same upstream is far less
+    # invasive and keeps the privacy contract identical (still local
+    # browser inference, still aggregate windows). Mirrors the Caddyfile
+    # blocks in deploy/docker/Caddyfile.
+    location /oyon/ {
+        # CHANGE — match your rohy.service PORT= env var.
+        proxy_pass http://127.0.0.1:4000/oyon/;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # Oyon model/wasm bundles are large; keep the same generous
+        # timeouts as the /rohy/ block so first-load fetches don't 504.
+        proxy_read_timeout    300s;
+        proxy_send_timeout    300s;
+        proxy_connect_timeout 10s;
+    }
+
+    location /standalone/ {
+        proxy_pass http://127.0.0.1:4000/standalone/;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        proxy_read_timeout    300s;
+        proxy_send_timeout    300s;
+        proxy_connect_timeout 10s;
+    }
+
+    # Note the missing trailing slash on both sides — the addons API
+    # routes are mounted at /api/addons/oyon (no trailing slash on the
+    # collection endpoint) and we want to forward the path as-is.
+    location /api/addons/oyon {
+        proxy_pass http://127.0.0.1:4000/api/addons/oyon;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        proxy_read_timeout    300s;
+        proxy_send_timeout    300s;
+        proxy_connect_timeout 10s;
+    }
+
     # CHANGE the location prefix if you serve rohy at the URL root rather
     # than a /rohy/ subpath. The trailing slash on `proxy_pass` is
     # load-bearing — it strips the matched prefix before forwarding.

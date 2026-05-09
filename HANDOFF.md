@@ -1,86 +1,83 @@
-# Session Handoff — 2026-05-09 (night)
+# Session Handoff — 2026-05-09 (night, take 2)
 
 ## What this session was about
 
-The previous handoff queued five priorities. All five done.
+Follow-on to the data-grid + export-consolidation pass (HEAD `0070684`). Three threads:
 
-1. **Build a single proper data grid component** ✅
-   - `src/components/analytics/LogGrid.jsx` — TanStack Table v8 backed, headless. Sortable headers, column visibility, density toggle, sticky header, resizable columns, click-to-copy on every cell, inline per-column filter row, optional row expansion, paginated load-more bar. Density + visibility persist to localStorage per surface.
+1. **Deploy fix** — closed the silent gap created by gitignoring the 93 MB of OyonR/standalone/{vendor,models} in `0070684`. Without this fix, fresh clones and Docker builds shipped without Oyon vendor binaries → 404s on face/emotion at runtime.
+2. **Codex review attempts** — `/ultrareview` (cancelled then timed out at 30 min on the big batched commit), `/codex:review` (rejected — needs `/codex:adversarial-review` for custom focus), `/codex:adversarial-review` (ran fine but returned no findings because the working tree was clean and there was no branch diff to review).
+3. **Wrote a playbook** — `docs/OYON_INTEGRATION_PLAYBOOK.md`, the how-to-replicate companion to the existing policy + history Oyon docs. ~590 lines, uses Oyon as the worked example through the pill / logs / settings, ends with a 50-item generalized checklist for the next integration.
 
-2. **Audit and unify exports** ✅
-   - Removed four redundant CSV endpoints from `server/routes/analytics-routes.js`: `/api/export/{login-logs, chat-logs, settings-logs, session-settings}`. Each was already covered by `/api/export/system-log/:source` (with `auth | config | chat | …` aliases) or `/api/export/learning-events`.
-   - Removed the corresponding 4 buttons + the global "Export Data (CSV)" grid from ConfigPanel.
-   - Surviving export surfaces: `/api/export/learning-events`, `/api/export/system-log/:source`, `/api/export/complete-session/:id`, `/api/export/questionnaire-responses`. Each viewer mounts its own export inline.
+## Completed (committed + pushed)
 
-3. **Migrate every log viewer to the new grid** ✅
-   - `ActivityTable.jsx`, `SystemLogTable.jsx`, `ChatLogTable.jsx` rewritten as thin column-config + fetch wrappers around LogGrid.
-   - New `SessionsTable.jsx` replaces the inline `<table>` that lived inside ConfigPanel.
-   - Same UX across all four tabs (toolbar shape, search, density, column chooser, CSV button).
+- **`ae67dee` — `deploy: auto-fetch Oyon binary bundles in every install path`**
+  - `package.json`: `postinstall` runs `OyonR/scripts/download-models.sh` (tolerant: `|| echo` fallback so partial installs don't break). New `npm run setup:oyon` for explicit retry.
+  - `deploy/docker/Dockerfile`: builder stage adds `curl` to apt-get; explicit `RUN bash OyonR/scripts/download-models.sh` after `npm install` so a failed download fails the docker build instead of shipping a broken image.
+  - `deploy/local-install.sh`: explicit step 3b after `npm install + npm run build`.
+  - `deploy/bootstrap.sh`: same explicit step inside the systemd path (step 4/10), running as `ROHY_USER`.
+  - `README.md`: Quick Start mentions the postinstall + retry; new "Production / multi-user deploys" table covering Docker / systemd / single-machine.
+  - 5 files, +64 / −4 LOC.
 
-4. **Verify by actually using the app** ✅
-   - Started `OYON_ENABLED=1 npm run dev`, logged in `admin / admin123`, opened Settings → System Logs, cycled through Activity / Sessions / System Log / Chat Log. Caught a wrong-endpoint bug in SessionsTable (was hitting `/api/sessions` which 404s; correct is `/api/analytics/sessions`) — fixed and re-verified.
+## Completed (NOT committed — your call)
 
-5. **Verify the chat-blank bug** ✅
-   - Confirmed in the browser: chat panel + monitor both stay rendered after sending a message. The suspected leftover `</>` JSX fragment in `ChatLogTable.jsx` was either already cleaned up before this session or never existed there — the file's structure is well-formed.
+- **`docs/OYON_INTEGRATION_PLAYBOOK.md`** (~590 lines, untracked)
+  - Sections: architecture diagram → pill → logs → custom settings → cross-cutting concerns (COOP/COEP, CSRF, idempotency, single source of truth, structured logging, failure isolation) → deploy bootstrap → 50-item generalized checklist → reading order → naming-conventions appendix.
+  - Each major section ends with a *General principle* callout that abstracts the Oyon-specific lesson.
 
-## Tests
+- **Memory rule added:** `feedback_check_before_acting.md` — for the rohySimulator project, always survey the current state and propose a plan before modifying files / committing / pushing. The standing "every delivery → Codex review" rule still applies once a change is approved and made.
 
-- Full server suite `npx vitest run --no-coverage tests/server/` → **545 passing | 11 skipped | 0 failing**.
-- ConfigPanel.test.jsx → 17/17.
-- New `tests/server/exports-unification.test.js` (8 tests) — pins that the four retired endpoints return 404, the four survivors return CSV, and `/api/export/system-log/:source` rejects unknown sources with 404.
-- Build: `npx vite build` clean.
+## What is honestly open / unfinished
 
-Three pre-existing test files were broken on entry to this session (the previous handoff's "70/70 still green" claim was over-optimistic, almost certainly because last session ran them individually instead of as a suite). All three are now fixed:
-- `analytics-tna.test.js` — three count assertions (28 → 29, 2 → 3) didn't account for last session's auth dual-write inserting a `LOGGED_IN` row per `login()` call. Updated with comments explaining the +1.
-- `sessions-concurrency.test.js` — original contract demanded N distinct ids; last session's intentional 30s dedup collapses bursts. Test rewritten for the new contract.
-- `sql-injection-guard.test.js` — six interpolated SQL strings flagged (all server-controlled enum identifiers, values parameterised). Added to the substring allowlist with justifications.
+- **The big commit `0070684` was never properly Codex-reviewed.** Three rounds attempted (ultrareview cancelled, ultrareview timed out at 30 min, adversarial-review returned "no findings — diff is empty because we're on main"). The deploy commit `ae67dee` also unreviewed. To get an adversarial review on either, the next session would need to checkout a feature branch starting from an older base (e.g. `65a1fa9`) so the diff is non-empty for Codex's reviewer.
+- **Stale `SETUP_ENV.sh` at root** — labelled "VipSim" (old project name), uses port 3000, only generates a minimal `.env`. Flagged this session, not touched. Either delete it or update it to match the documented three-path deploy. Decision deferred to user.
+- **LogGrid interactive features (from the previous session) were rendered but not exercised end-to-end.** Sort, column chooser, density toggle, inline filter row, click-to-copy, row expansion, CSV export buttons, resizable columns, localStorage persistence — all built, all rendered, none of them clicked through in the Playwright smoke test. The user interrupted the smoke test before the row-expansion check (and later confirmed the chat-blank symptom was an HMR/auth staleness issue, not a real LogGrid bug).
+- **Multi-column sort works in TanStack** (shift-click) but isn't visually telegraphed in the header. Worth a small UI polish.
+- **Column resize works but widths don't persist to localStorage.** Density and visibility do.
 
-## What is honestly broken / out of scope
+## Key decisions made this session
 
-- **True server-side cursor pagination is not implemented.** LogGrid still uses load-more increments (100 → 500 → 2000 → 10000) over the existing `LIMIT N` endpoints. For tables that grow into the millions this will become memory-painful in the browser. Migrating each endpoint to `WHERE id < ? ORDER BY id DESC LIMIT N` is a follow-up — every endpoint has a slightly different sort key.
-- **Reflection Questionnaire is not migrated to LogGrid.** Its row shape is a variable-length nested object (per-question responses), which doesn't fit a flat-grid model. The expand-on-click `<table>` stays.
-- **Multi-column sort works in TanStack** (shift-click) but isn't visually telegraphed in the header — users won't discover it. Worth a small UI polish next pass (e.g. show "1 / 2" on the chevron).
-- **Column resize is on but column widths don't persist to localStorage.** Density and visibility do; sizing was a reach too far this round. Add it when someone complains about it.
-- **Per-tab `from` / `to` date filters are export-only on Activity and load-time on System Log.** Activity's grid filters in-memory by global search rather than re-fetching with a date range — for very large datasets the user has to expand the cap to find old rows. Acceptable for now since the cohort export carries the date range.
+- **Gitignore the OyonR vendor binaries + auto-fetch via postinstall.** Trade-off: every npm install does an extra ~few-seconds idempotent check (or a one-time ~93 MB download for fresh clones). Benefit: repo size stays small, git history doesn't carry binary churn. The download script is reproducible from upstream URLs.
+- **Belt-and-suspenders deploys.** Postinstall is tolerant (`|| true`) so npm install never breaks for users who don't need Oyon. Dockerfile + bootstrap + local-install re-run the same script *without* tolerance, so production paths fail loudly on a missing download. Idempotency means the second run is free.
+- **Generalized playbook over Oyon-specific notes.** The existing `OYON_INTEGRATION_POLICY.md` covers boundaries; `OYONR_INTEGRATION_NOTE.md` covers history. The new playbook covers the how-to-replicate pattern with Oyon as the worked example, so the next integration (voice biometric, gesture, eye tracker, …) has a checklist instead of "go read the Oyon code and reverse-engineer the pattern."
 
-## What the next session might do
+## What the next session should do, in priority order
 
-1. **Cursor-paginate the four feeds** (`/learning-events/all`, `/system-log/feed`, `/chat-log/feed`, `/analytics/sessions`). Wire the LogGrid to a `nextCursor` prop and replace the load-more increments with infinite scroll.
-2. **Persist column widths.** When `columnSizing` changes, write to `localStorage[<storageKey>.sizing]`.
-3. **Migrate Reflection Questionnaire to LogGrid** with a custom expand renderer for the nested-object responses.
-4. **Audit other inline `<table>` surfaces** in the codebase. UserManagement, agents/personas, and a few admin lists are still hand-rolled — they'd benefit from LogGrid.
-5. **Run `/ultrareview`** before merging this session's diff. Codex pass per the standing memory rule.
+1. **Decide on the playbook commit.** Either `git add docs/OYON_INTEGRATION_PLAYBOOK.md && commit + push`, or trim/restructure first.
+2. **Get a real adversarial Codex review** of `0070684` + `ae67dee`. Either checkout a feature branch with both as the diff against an older base (e.g. `65a1fa9`), or invoke `/codex:adversarial-review --base 65a1fa9` if the slash command supports `--base` (didn't try this round).
+3. **Decide on `SETUP_ENV.sh`.** Delete (the three deploy paths cover everything it does + more), or rename + modernise.
+4. **Verify LogGrid interactive features** in the browser — sort by clicking headers, toggle column visibility, switch density, type in the inline filter, click a Chat Log row to expand, click each CSV button, drag a column header to resize, reload to confirm density + visibility persist.
+5. **Decide on cursor pagination for the LogGrid** — current load-more increments (100 → 500 → 2000 → 10000) work, but server-side cursor would scale to millions of rows. Each existing endpoint has a different sort key so it's a per-endpoint migration.
 
 ## Files touched (high-level)
 
-Frontend (new + rewritten):
-- `src/components/analytics/LogGrid.jsx` (new) — 280-line shared grid.
-- `src/components/analytics/ActivityTable.jsx` — rewritten as column config + fetch.
-- `src/components/analytics/SystemLogTable.jsx` — rewritten with per-source export dropdown.
-- `src/components/analytics/ChatLogTable.jsx` — rewritten with row-expand panel.
-- `src/components/analytics/SessionsTable.jsx` (new) — replaces ConfigPanel's inline table.
-- `src/components/settings/ConfigPanel.jsx` — `SystemLogs` gutted: dead state + dead branches + global export grid removed (~−430 lines net).
+This session committed (`ae67dee`):
+- `package.json` — postinstall + setup:oyon scripts.
+- `deploy/docker/Dockerfile` — curl in builder stage; explicit download RUN.
+- `deploy/local-install.sh` — step 3b explicit Oyon download.
+- `deploy/bootstrap.sh` — step 4/10 explicit Oyon download.
+- `README.md` — updated Quick Start; new packaged-deploys table.
 
-Server:
-- `server/routes/analytics-routes.js` — removed `/export/login-logs`, `/export/chat-logs`, `/export/settings-logs`, `/export/session-settings` (~−190 lines), replaced with a comment block documenting the canonical surface.
+This session uncommitted:
+- `docs/OYON_INTEGRATION_PLAYBOOK.md` (new, ~590 lines).
 
-Tests:
-- `tests/server/exports-unification.test.js` (new, 8 tests).
-- `tests/server/analytics-tna.test.js`, `tests/server/sessions-concurrency.test.js`, `tests/server/sql-injection-guard.test.js` — pre-existing failures fixed.
-
-Dependencies:
-- `package.json` — `@tanstack/react-table` added.
-
-Docs:
-- `CHANGES.md` — full per-area changelog appended at top.
-- `LEARNINGS.md` — five new entries on lessons from this round.
-- `HANDOFF.md` — this file.
+This session memory:
+- `~/.claude/projects/.../memory/feedback_check_before_acting.md` (new) + indexed in `MEMORY.md`.
 
 ## Context
 
 - **Working dir:** `/Users/mohammedsaqr/Documents/Github/rohySimulator`
-- **Branch:** `main` (large staged-but-uncommitted footprint includes prior-session Oyon work + last session's logging plumbing + this session's grid + export work).
+- **Branch:** `main`. In sync with `origin/main` at `ae67dee`. Working tree has one untracked file (the new playbook).
+- **Recent commits (top of `git log --oneline`):**
+  - `ae67dee deploy: auto-fetch Oyon binary bundles in every install path` (this session)
+  - `0070684 Unified learning analytics, data grid viewers, Oyon capture engine` (previous session, pushed earlier today)
 - **Dev:** `OYON_ENABLED=1 npm run dev`. Express on :3000 (or :3001 if 3000 in use), Vite on :5173 (or :5174).
 - **Login:** seed admin `admin` / `admin123` (per `server/seeders/users.js`).
-- **DB:** `server/database.sqlite`. Migration sequence current through 0018. Restart the server before testing migration changes — they only run on boot.
-- **Memory rule:** every delivery → Codex review (`feedback_codex_review.md`). This session's diff has not been Codex-reviewed yet — that should be the first thing the next session does (or the user runs `/ultrareview`).
+- **DB:** `server/database.sqlite`. Migrations current through 0018. Restart server before testing migration changes — they only run on boot.
+- **Tests:** full server suite 545 passing | 11 skipped | 0 failing across 49 files. ConfigPanel.test.jsx 17/17. Build green (`npx vite build`).
+- **Memory rules in effect:**
+  - Every delivery → Codex review (`feedback_codex_review.md`). The deploy commit `ae67dee` and the new playbook still owe a Codex pass.
+  - Survey + propose + wait before file edits / commits / pushes (`feedback_check_before_acting.md`). Set this session.
+
+## One-liner for picking this back up
+
+> `git status` → confirm one untracked file (the playbook). Read this file + LEARNINGS.md. Decide if the playbook ships as-is. Then queue a Codex adversarial pass on `0070684..ae67dee` against an older base so the reviewer has a non-empty diff to chew on.
