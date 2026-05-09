@@ -6,14 +6,10 @@
 //   3. demographic auto-pick (hash-based)
 //   4. manifest.fallback[0]
 
-// Loose female detector — covers "Female", "female", "F", "f". Used wherever
-// an avatar/voice has to fork by gender so all sites agree on the rule.
-export const isFemale = (gender) => /^f/i.test(gender || '');
+import { deriveDemographicSlot, isFemale } from './demographics.js';
 
 export function deriveAvatarSlot(gender, age) {
-    const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
-    if (safeAge < 13) return 'child';
-    return isFemale(gender) ? 'female' : 'male';
+    return deriveDemographicSlot(gender, age);
 }
 
 export function avatarAgeBucket(age) {
@@ -101,3 +97,5 @@ export function resolveAvatarId({ avatarId, gender, manifest, platformAvatars, d
     if (isKnownAvatarId(manifest, fb)) return fb;
     return null;
 }
+
+export { isFemale };

@@ -1,16 +1,17 @@
 // Concurrency test for POST /api/sessions.
 //
-// Audit follow-up: the audit didn't ask about a session_id collision under
-// parallel creation, but the race exists in principle — two tabs that
-// click "Start" simultaneously could either both create distinct rows
-// (good — last write wins on the client side) or one could 500 due to
-// a UNIQUE constraint collision.
-//
-// SQLite uses an INTEGER PRIMARY KEY AUTOINCREMENT for sessions.id, so
-// distinct rowids are guaranteed. The contract this test pins:
-//   - N concurrent POST /sessions calls all succeed.
-//   - Every returned session id is distinct.
-//   - The DB row count after the burst equals N.
+// Original contract (audit follow-up) checked that N concurrent POSTs
+// produced N distinct rowids. After the dedup window introduced in the
+// PLAN_LOGGING follow-up — POST /sessions returns the existing active
+// session for the same user×case if one was started in the last 30s —
+// that contract no longer holds. The new contract:
+//   - N concurrent POST /sessions calls all succeed (no 5xx).
+//   - Every response carries an id (either freshly created OR the existing
+//     dedup target).
+//   - DB row count == the number of distinct ids returned (no orphan
+//     UNIQUE-constraint failures, no double-creates).
+//   - Under burst conditions inside the 30s window the dedup collapses
+//     the burst to a small number of ids (typically 1).
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import bcrypt from 'bcrypt';
@@ -84,7 +85,7 @@ describe('POST /api/sessions — concurrency', () => {
         if (server) await server.close();
     });
 
-    it('20 concurrent POST /sessions return 20 distinct session ids', async () => {
+    it('20 concurrent POST /sessions all succeed; dedup collapses to a small set; DB row count matches', async () => {
         const N = 20;
         const promises = Array.from({ length: N }, () =>
             fetch(`${server.baseUrl}/api/sessions`, {
@@ -98,20 +99,23 @@ describe('POST /api/sessions — concurrency', () => {
         );
         const results = await Promise.all(promises);
 
-        // Every response should carry an id.
+        // Every response should carry an id (no 5xx, no UNIQUE collisions).
         const ids = results.map(r => r.id).filter(Boolean);
         expect(ids).toHaveLength(N);
 
-        // All ids distinct.
+        // The 30s dedup window collapses the burst — distinct count is
+        // small (typically 1; allow a couple in case the burst straddles
+        // a millisecond boundary in CI).
         const uniq = new Set(ids);
-        expect(uniq.size).toBe(N);
+        expect(uniq.size).toBeLessThanOrEqual(3);
 
-        // DB has exactly N rows for this user × case.
+        // DB row count matches the distinct id count exactly — no
+        // orphan/leaked rows.
         const db = await openDb(server.dbPath);
         const rows = await dbAll(db,
             'SELECT id FROM sessions WHERE user_id = ? AND case_id = ?',
             [userId, caseId]);
         await dbClose(db);
-        expect(rows.length).toBe(N);
+        expect(rows.length).toBe(uniq.size);
     });
 });

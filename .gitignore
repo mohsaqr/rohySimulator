@@ -27,7 +27,19 @@ dist-ssr
 # Server files
 server/.env
 server/database.sqlite
+server/database.sqlite-shm
+server/database.sqlite-wal
 server/database.sqlite.backup-*
+server/database.sqlite.bak.*
+
+# Local scratch — screenshots, dumps, etc.
+tmp/
+
+# Vendored Oyon assets — re-downloadable via OyonR/scripts/download-models.sh
+# (~93 MB of MediaPipe + ONNX bundles + emotion models, not worth the git history).
+OyonR/node_modules/
+OyonR/standalone/vendor/
+OyonR/standalone/models/
 
 # User uploads
 public/uploads/

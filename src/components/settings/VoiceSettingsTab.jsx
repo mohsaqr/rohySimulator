@@ -53,7 +53,7 @@ function emptyVoiceSlots() {
 
 const blankSettings = {
     voice_mode_enabled: false,
-    tts_provider: 'piper',
+    tts_provider: 'kokoro',
     // Per-provider voice slots. Switching providers no longer wipes anything;
     // each provider keeps its own selections. UI shows the current provider's
     // slots only; save only writes the current provider's three keys.
@@ -81,7 +81,7 @@ export default function VoiceSettingsTab() {
     const { setVoiceSettings } = useVoice();
     const [settings, setSettings] = useState(blankSettings);
     const [voices, setVoices] = useState([]);
-    const [piperInstalled, setPiperInstalled] = useState(true);
+    const [piperInstalled, setPiperInstalled] = useState(false);
     const [models, setModels] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -93,7 +93,7 @@ export default function VoiceSettingsTab() {
                 apiFetch('/platform-settings/voice'),
                 apiFetch('/llm/models')
             ]);
-            const provider = s.tts_provider || 'piper';
+            const provider = s.tts_provider || 'kokoro';
             const v = await apiFetch(`/tts/voices?provider=${provider}`);
 
             // Hydrate voice slots from the new per-provider keys.
@@ -266,8 +266,8 @@ export default function VoiceSettingsTab() {
                     onChange={(e) => update('tts_provider', e.target.value)}
                     className="w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1.5 text-sm text-white"
                 >
-                    <option value="piper">Piper — local, fast (~0.5 s), robotic, ~25 MB voices</option>
                     <option value="kokoro">Kokoro-82M — local, ~0.7× realtime, expressive, ~330 MB model</option>
+                    <option value="piper">Piper — local, fast (~0.5 s), robotic, ~25 MB voices</option>
                     <option value="google">Google Cloud TTS — cloud, 1M chars/month free on Neural2/Chirp HD</option>
                     <option value="openai">OpenAI TTS — cloud, lowest latency, ~$0.015 per 1k chars</option>
                 </select>

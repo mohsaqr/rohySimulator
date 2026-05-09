@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { centralities, clusterSequences, maxWeight, prune } from './tnaUtils';
+import { centralities, clusterSequences, maxWeight, prune, tna } from './tnaUtils';
 
 // Audit #16: client-analytics-tna flagged that tnaUtils edge cases (cluster,
 // prune, max weight, centrality) are untested. Lock the contract for each
@@ -58,6 +58,17 @@ describe('tnaUtils.prune', () => {
         const out = prune(m, 0.5);
         expect(out.labels).toEqual(['onlyOne']);
         expect(out.inits).toBe(m.inits); // same reference, not copied
+    });
+});
+
+describe('tnaUtils.tna', () => {
+    it('passes caller-supplied label order through to dynajs', () => {
+        const out = tna([['B', 'A']], { labels: ['A', 'B'] });
+        expect(out.labels).toEqual(['A', 'B']);
+        expect(out.weights).toEqual([
+            [0, 0],
+            [1, 0],
+        ]);
     });
 });
 

@@ -1,0 +1,64 @@
+{
+  "name": "oyon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local facial-expression analytics for browser-based learning simulations. Camera-side inference with MediaPipe + ONNX Runtime Web; only aggregate windows leave the device. Runs standalone or attaches to a host app.",
+  "main": "src/index.js",
+  "exports": {
+    ".":            "./src/index.js",
+    "./react":      "./src/react/useRohyFer.js",
+    "./adapter":    "./src/adapters/rohyAttach.js",
+    "./addon":      "./src/addon/RohyOyonAddon.js",
+    "./validation": "./src/validation/validateEmotionPayload.js",
+    "./settings":   "./src/settings/OyonSettings.js",
+    "./logging":    "./src/logging/OyonLogger.js",
+    "./analytics":  "./src/analytics/DynamicalFeatures.js",
+    "./storage":    "./src/storage/IndexedDbOyonStore.js"
+  },
+  "files": [
+    "src",
+    "standalone",
+    "examples",
+    "docs",
+    "README.md",
+    "INSTALL.md",
+    "LICENSE",
+    "NOTICE.md"
+  ],
+  "scripts": {
+    "start": "vite --host 127.0.0.1",
+    "demo": "vite --host 127.0.0.1",
+    "check": "find src -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "test": "node tests/aggregation.test.js && node tests/validation.test.js && node tests/local-transport.test.js && node tests/fallback-transport.test.js && node tests/rohy-addon.test.js && node tests/settings.test.js && node tests/logging.test.js && node tests/metrics.test.js && node tests/dynamics.test.js && node tests/runtime-settings.test.js && node tests/transition-network.test.js",
+    "download-models": "bash scripts/download-models.sh"
+  },
+  "peerDependencies": {
+    "@mediapipe/tasks-vision": "^0.10.22",
+    "onnxruntime-web": "^1.20.0",
+    "react": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true }
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "keywords": [
+    "facial-expression",
+    "affect",
+    "fer",
+    "mediapipe",
+    "onnx",
+    "browser",
+    "education",
+    "research",
+    "learning-analytics"
+  ],
+  "author": "Mohammed Saqr",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mohsaqr/Oyon.git"
+  }
+}

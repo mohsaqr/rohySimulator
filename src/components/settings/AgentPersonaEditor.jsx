@@ -185,7 +185,7 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
    // Load voices for the current TTS provider — Piper and Kokoro have
    // disjoint catalogues, so the dropdown swaps when the engine changes.
    useEffect(() => {
-      const provider = template?.config?.voice?.tts_provider || voiceSettings?.tts_provider || 'piper';
+      const provider = template?.config?.voice?.tts_provider || voiceSettings?.tts_provider || 'kokoro';
       let cancelled = false;
       apiFetch(`/tts/voices?provider=${provider}`)
          .then(d => { if (!cancelled) setTtsVoices(d.voices || []); })
@@ -231,7 +231,7 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
    }, [template, voiceSettings, platformAvatars, ttsVoices]);
 
    const resolvedVoiceFile = resolvedVoice?.file || null;
-   const resolvedProvider = resolvedVoice?.provider || 'piper';
+   const resolvedProvider = resolvedVoice?.provider || 'kokoro';
    const resolvedRate = resolvedVoice?.rate ?? 1.0;
    const resolvedPitch = resolvedVoice?.pitch;
    const resolvedGender = template

@@ -285,6 +285,19 @@ export async function buildUserPurgePlan(userId, tenant_id) {
     plan.anonymize_retained.session_settings = await dbScalar(`SELECT COUNT(*) AS count FROM session_settings WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
     plan.anonymize_retained.physical_exam_findings = await dbScalar(`SELECT COUNT(*) AS count FROM physical_exam_findings WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
     plan.anonymize_retained.emotion_logs = await dbScalar(`SELECT COUNT(*) AS count FROM emotion_logs WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+    // Oyon tables store tenant_id and user_id as TEXT, so cast explicitly to
+    // string when comparing — sqlite does NOT auto-coerce TEXT='1' to
+    // INTEGER 1 in equality. Records get anonymised (preserves aggregate
+    // analytics value), consents get hard-deleted (consents are personal
+    // acts, not aggregates).
+    plan.anonymize_retained.oyon_emotion_records = await dbScalar(
+        `SELECT COUNT(*) AS count FROM oyon_emotion_records WHERE tenant_id = ? AND user_id = ?`,
+        [String(tenant_id), String(userId)]
+    );
+    plan.hard_delete.oyon_emotion_consents = await dbScalar(
+        `SELECT COUNT(*) AS count FROM oyon_emotion_consents WHERE tenant_id = ? AND user_id = ?`,
+        [String(tenant_id), String(userId)]
+    );
     for (const retention of RETENTION_TABLES.filter(t => t.userColumn)) {
         plan.anonymize_retained[retention.table] = await dbScalar(
             `SELECT COUNT(*) AS count FROM ${retention.table} WHERE tenant_id = ? AND ${retention.userColumn} = ?`,
@@ -333,6 +346,23 @@ export async function executeUserPurge({ userId, tenant_id, anonymizedUsername, 
         await dbRun(`UPDATE session_settings SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
         await dbRun(`UPDATE physical_exam_findings SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
         await dbRun(`UPDATE emotion_logs SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+        // Oyon: anonymise records (rows kept for aggregate analytics, but
+        // the user pointer + name snapshot are scrubbed), then hard-delete
+        // consents (a personal act with no aggregate value once the user is
+        // gone). String-cast required: oyon tables hold TEXT ids.
+        await dbRun(
+            `UPDATE oyon_emotion_records
+             SET user_id = NULL,
+                 student_id = NULL,
+                 student_name_snapshot = ?,
+                 student_role_snapshot = NULL
+             WHERE tenant_id = ? AND user_id = ?`,
+            [anonymizedUsername, String(tenant_id), String(userId)]
+        );
+        await dbRun(
+            `DELETE FROM oyon_emotion_consents WHERE tenant_id = ? AND user_id = ?`,
+            [String(tenant_id), String(userId)]
+        );
         await dbRun(`UPDATE platform_settings SET updated_by = NULL WHERE updated_by = ?`, [userId]);
         await dbRun(`UPDATE scenario_templates SET created_by = NULL WHERE created_by = ?`, [userId]);
         await dbRun(`UPDATE scenario_events SET acknowledged_by = NULL WHERE tenant_id = ? AND acknowledged_by = ?`, [tenant_id, userId]);
@@ -352,6 +382,52 @@ export async function executeUserPurge({ userId, tenant_id, anonymizedUsername, 
         await dbRun('ROLLBACK').catch(() => {});
         throw err;
     }
+}
+
+/**
+ * Per-tenant retention sweep for oyon_emotion_records.
+ *
+ * Each tenant sets its own `oyon_settings.retention_days`. This is independent
+ * of the global retention-sweep script's hardcoded TABLES list — Oyon data is
+ * privacy-sensitive enough that admins want explicit control per tenant
+ * rather than a single global value.
+ *
+ * Behaviour:
+ *   - `retention_days IS NULL` or `<= 0`: tenant opted out of automatic
+ *     deletion; no rows touched. (Default for fresh tenants.)
+ *   - `retention_days > 0`: rows where `window_start` is older than the
+ *     cutoff are hard-deleted. We do NOT anonymise here because retention is
+ *     about removing stale data entirely; anonymisation is the user-purge
+ *     path.
+ *
+ * Accepts an optional `runner` { all, run } so the production retention-sweep
+ * script can pass its own raw-sqlite3 connection (it doesn't share the
+ * dbAdapter singleton) and tests can inject a test-db wrapper. Defaults to
+ * dbAdapter for in-process use.
+ *
+ * Returns a map of tenant_id → deleted row count for logging/tests.
+ */
+export async function sweepOyonRetention({ runner } = {}) {
+    const all = runner?.all ?? dbAll;
+    const run = runner?.run ?? dbRun;
+    const tenants = await all(
+        `SELECT tenant_id, retention_days
+         FROM oyon_settings
+         WHERE retention_days IS NOT NULL AND retention_days > 0`
+    );
+    const deletedByTenant = {};
+    for (const row of tenants) {
+        const days = Math.floor(Number(row.retention_days));
+        if (!Number.isFinite(days) || days <= 0) continue;
+        const result = await run(
+            `DELETE FROM oyon_emotion_records
+             WHERE tenant_id = ?
+               AND window_start < datetime('now', ? || ' days')`,
+            [String(row.tenant_id), `-${days}`]
+        );
+        deletedByTenant[row.tenant_id] = result?.changes || 0;
+    }
+    return deletedByTenant;
 }
 
 // Physiological clamp ranges for case.config.initialVitals. The editor's
@@ -511,6 +587,37 @@ export function createCaseVersion(caseId, userId, changeType, description, confi
  * non-scoped writes are OK) pass through. Pass `requireSession: true` to
  * reject when sessionId is falsy.
  */
+/**
+ * Resolve the canonical (user_id, case_id) for a given session within a tenant.
+ *
+ * This is the server-side trinity invariant for learning-analytics writes:
+ * the client sends `session_id`; the server derives `user_id` and `case_id`
+ * from the sessions row. Client-supplied values for those columns are
+ * ignored. A stale/replayed batch can no longer mislabel a row.
+ *
+ * Returns:
+ *   { found: true, user_id, case_id }       — session exists in tenant
+ *   { found: false, reason: 'cross_tenant' } — id exists outside tenant or not at all
+ *
+ * Callers should drop events whose trinity cannot be resolved.
+ */
+export function resolveSessionTrinity(sessionId, tenant_id) {
+    return new Promise((resolve) => {
+        if (sessionId === undefined || sessionId === null || sessionId === '') {
+            return resolve({ found: false, reason: 'no_session_id' });
+        }
+        dbAdapter.get(
+            'SELECT user_id, case_id FROM sessions WHERE id = ? AND tenant_id = ?',
+            [sessionId, tenant_id],
+            (err, row) => {
+                if (err) return resolve({ found: false, reason: 'db_error' });
+                if (!row) return resolve({ found: false, reason: 'cross_tenant' });
+                resolve({ found: true, user_id: row.user_id, case_id: row.case_id });
+            }
+        );
+    });
+}
+
 export function verifySessionOwnership(sessionId, user, res, { requireSession = false } = {}) {
     return new Promise((resolve) => {
         if (sessionId === undefined || sessionId === null || sessionId === '') {

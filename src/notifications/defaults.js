@@ -76,6 +76,7 @@ export const DEFAULT_PREFS = {
     audioMuted: false,
     bannerMuted: false,
     consoleMuted: false, // false in dev = noisy console. true = silent.
+    avatarAlarmSpeechEnabled: true,
 
     // Default snooze duration in minutes when user clicks "Snooze".
     snoozeDuration: 5,

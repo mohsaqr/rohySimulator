@@ -4,14 +4,14 @@
 // so admins are never blocked by incomplete metadata, but known opposite-sex
 // voices are filtered out of gendered slots.
 
+import { deriveDemographicSlot } from './demographics.js';
+
 const FEMALE_NAME_HINTS = /\b(amy|bella|aoede|kore|leda|zephyr|nova|shimmer|female|woman|girl)\b/i;
 const MALE_NAME_HINTS = /\b(ryan|michael|charon|puck|orus|fenrir|echo|fable|onyx|male|man|boy)\b/i;
 const CHILD_NAME_HINTS = /\b(child|kid|youth|young)\b/i;
 
 export function voiceSlotForDemographics(gender, age) {
-    const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
-    if (safeAge < 13) return 'child';
-    return /^f/i.test(gender || '') ? 'female' : 'male';
+    return deriveDemographicSlot(gender, age);
 }
 
 export function normalizeVoiceGender(voice) {

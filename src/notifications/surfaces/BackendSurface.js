@@ -60,6 +60,16 @@ export default function BackendSurface({ sessionId, userId, caseId }) {
                 if (queueRef.current.length > MAX_QUEUE) {
                     queueRef.current.splice(0, queueRef.current.length - MAX_QUEUE);
                 }
+                // Session-end events drain the queue immediately so logout /
+                // close-without-page-nav doesn't lose the ENDED_SESSION row.
+                // Without this, the queue waits for the periodic interval and
+                // can be discarded if the surface unmounts first (e.g. auth
+                // state change re-keys NotificationProvider).
+                if (n.data?.verb === 'ENDED_SESSION') {
+                    flush(true);
+                    return;
+                }
+
                 if (queueRef.current.length >= prefs.telemetryBatchSize) {
                     flush();
                 }
@@ -99,6 +109,10 @@ export default function BackendSurface({ sessionId, userId, caseId }) {
         return () => {
             clearInterval(flushTimerRef.current);
             flushTimerRef.current = null;
+            // Drain on unmount — auth state changes (logout) re-key the
+            // NotificationProvider, unmounting this surface before the
+            // periodic timer fires. Without this, the last batch is lost.
+            if (queueRef.current.length > 0) flush(true);
         };
     }, [prefs.telemetryFlushIntervalMs, flush]);
 
@@ -232,37 +246,71 @@ function defaultVerbFor(n) {
 }
 
 function sendTelemetry(events, immediate) {
+    // Trinity (user_id, case_id) is server-derived from session_id —
+    // we deliberately do not send them. The server reads the sessions
+    // row and ignores any client values. See PLAN_LOGGING.md Phase 1.
     const payload = {
-        events: events.map(n => ({
-            timestamp: new Date(n.createdAt).toISOString(),
-            session_id: n.sessionId || null,
-            user_id: n.userId || null,
-            case_id: n.caseId || null,
-            verb: n.data?.verb || defaultVerbFor(n),
-            object_type: n.data?.objectType || 'notification',
-            severity: NOTIFY_TO_XAPI_SEVERITY[n.severity] || 'INFO',
-            category: n.data?.category || 'NAVIGATION',
-            object_id: n.data?.objectId || null,
-            object_name: n.data?.objectName || n.title || null,
-            component: n.data?.component || null,
-            parent_component: n.data?.parentComponent || null,
-            result: n.data?.result || n.message || null,
-            duration_ms: n.data?.durationMs || null,
-            context: n.data?.context || null,
-            message_content: n.data?.messageContent || null,
-            message_role: n.data?.messageRole || null,
-        })),
+        events: events.map(n => {
+            const v = n.data?.vitals || null;
+            return {
+                timestamp: new Date(n.createdAt).toISOString(),
+                session_id: n.sessionId || null,
+                verb: n.data?.verb || defaultVerbFor(n),
+                object_type: n.data?.objectType || 'notification',
+                severity: NOTIFY_TO_XAPI_SEVERITY[n.severity] || 'INFO',
+                category: n.data?.category || 'NAVIGATION',
+                object_id: n.data?.objectId || null,
+                object_name: n.data?.objectName || n.title || null,
+                component: n.data?.component || null,
+                parent_component: n.data?.parentComponent || null,
+                result: n.data?.result || n.message || null,
+                duration_ms: n.data?.durationMs || null,
+                context: n.data?.context || null,
+                message_content: n.data?.messageContent || null,
+                message_role: n.data?.messageRole || null,
+                // Wide vitals snapshot — null when no monitor has reported
+                // (pre-session events, bare API users).
+                vital_hr:     v?.hr     ?? null,
+                vital_spo2:   v?.spo2   ?? null,
+                vital_bp_sys: v?.bp_sys ?? null,
+                vital_bp_dia: v?.bp_dia ?? null,
+                vital_rr:     v?.rr     ?? null,
+                vital_temp:   v?.temp   ?? null,
+                vital_etco2:  v?.etco2  ?? null,
+                vital_rhythm: v?.rhythm ?? null,
+            };
+        }),
     };
 
     if (immediate && navigator.sendBeacon) {
         // sendBeacon doesn't carry custom headers reliably; the route
         // accepts beacon traffic without auth specifically for unload paths.
         const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-        navigator.sendBeacon(apiUrl('/learning-events/batch'), blob);
+        const queued = navigator.sendBeacon(apiUrl('/learning-events/batch'), blob);
+        if (queued) return;
+        // sendBeacon returns false when the user-agent's queue is full or
+        // the payload exceeds the implementation cap (~64KB per spec).
+        // Fall back to a keepalive fetch so the last batch on
+        // logout/unload isn't dropped silently. Codex round-3 finding 3.
+        try {
+            fetch(apiUrl('/learning-events/batch'), {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(payload),
+                keepalive: true,
+                credentials: 'include',
+            }).catch(() => { /* best-effort */ });
+        } catch { /* no-op */ }
         return;
     }
 
-    apiPost('/learning-events/batch', payload).catch((err) => {
+    apiPost('/learning-events/batch', payload).then((resp) => {
+        if (resp && resp.dropped > 0) {
+            // Surface drops so misconfigured tabs / replay bugs are not silent.
+            // eslint-disable-next-line no-console
+            console.warn('[telemetry] server dropped events', resp.dropped_reasons || {});
+        }
+    }).catch((err) => {
         recordFailure('telemetry', {
             count: events.length,
             reason: err?.message || 'network error',

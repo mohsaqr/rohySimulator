@@ -9,6 +9,7 @@ import TestVoiceButton from './TestVoiceButton.jsx';
 import { resolveVoice } from '../../utils/voiceResolver.js';
 import { voicesForSlot, voiceGenderLabel } from '../../utils/voiceCatalogue.js';
 import { avatarsForSlot } from '../../utils/resolveAvatar.js';
+import { deriveDemographicSlot } from '../../utils/demographics.js';
 
 // Per-case avatar + voice tab. Owns:
 //   config.avatar_id           — GLB filename, blank = auto-pick by gender/age
@@ -28,18 +29,15 @@ const PatientAvatar = lazy(() => import('../chat/PatientAvatar'));
 
 const PROVIDER_OPTIONS = [
     { value: '',       label: 'Inherit (use global)' },
-    { value: 'piper',  label: 'Piper (local, fast, robotic)' },
     { value: 'kokoro', label: 'Kokoro-82M (local, expressive)' },
+    { value: 'piper',  label: 'Piper (local, fast, robotic)' },
     { value: 'google', label: 'Google Cloud TTS (cloud, 1M chars/month free)' },
     { value: 'openai', label: 'OpenAI TTS (cloud, lowest latency, paid)' }
 ];
 
 // Decide which persona slot a case inherits from based on patient demographics.
 function personaSlotFor(config) {
-    const age = Number(config?.demographics?.age);
-    const safeAge = Number.isFinite(age) ? age : 35;
-    if (safeAge < 13) return 'child';
-    return /^f/i.test(config?.demographics?.gender || '') ? 'female' : 'male';
+    return deriveDemographicSlot(config?.demographics?.gender, config?.demographics?.age);
 }
 
 export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {

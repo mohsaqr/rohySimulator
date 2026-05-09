@@ -1,0 +1,20 @@
+export const OPENVINO_RETAIL_0003_CONFIG = {
+  id: 'openvino-emotions-recognition-retail-0003',
+  modelName: 'emotions-recognition-retail-0003',
+  modelVersion: 'open-model-zoo-retail-0003',
+  labels: ['neutral', 'happy', 'sad', 'surprise', 'anger'],
+  inputSize: 64,
+  inputName: 'data',
+  outputName: 'prob_emotion',
+  colorOrder: 'BGR',
+  inputScale: 1,
+  mean: [0, 0, 0],
+  std: [1, 1, 1],
+  expectedOnnxPath: '/models/emotion/openvino-retail-0003.onnx',
+  notes: [
+    'This is the first baseline contract, not a claim that the model is best.',
+    'The original OpenVINO model is commonly distributed as OpenVINO IR/Caffe-derived assets.',
+    'For browser use, provide a converted or equivalent ONNX file at expectedOnnxPath.',
+    'It has five labels only: neutral, happy, sad, surprise, anger.',
+  ],
+};

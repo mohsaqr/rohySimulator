@@ -57,6 +57,7 @@ import {
     redactRows,
     resolveSessionCaseConfig,
     resolveSessionCaseScenario,
+    resolveSessionTrinity,
     roleForStorage,
     tenantId,
     validatePassword,
@@ -276,9 +277,9 @@ router.get('/analytics/user-stats/:userId', authenticateToken, (req, res) => {
 // POST /api/settings/log - Log settings changes
 router.post('/settings/log', authenticateToken, (req, res) => {
     const { session_id, case_id, setting_type, setting_name, old_value, new_value, settings_json } = req.body;
-    
+
     const sql = `INSERT INTO settings_logs (
-        user_id, session_id, case_id, setting_type, setting_name, 
+        user_id, session_id, case_id, setting_type, setting_name,
         old_value, new_value, settings_json, tenant_id
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
@@ -287,6 +288,26 @@ router.post('/settings/log', authenticateToken, (req, res) => {
         old_value, new_value, JSON.stringify(settings_json), tenantId(req)
     ], function (err) {
         if (err) return res.status(500).json({ error: err.message });
+
+        // Dual-write into learning_events so the unified Activity view sees
+        // settings changes alongside session events.
+        dbAdapter.run(
+            `INSERT INTO learning_events (
+                session_id, user_id, case_id, verb, object_type, object_id, object_name,
+                component, result, context, severity, category, tenant_id
+            ) VALUES (?, ?, ?, 'CHANGED_SETTING', 'setting', ?, ?, 'CONFIG_PANEL', ?, ?, 'INFO', 'CONFIGURATION', ?)`,
+            [
+                session_id || null,
+                req.user.id,
+                case_id || null,
+                setting_type || null,
+                setting_name || setting_type,
+                new_value != null ? `${old_value ?? ''} → ${new_value}` : null,
+                JSON.stringify({ setting_type, setting_name, old_value, new_value }),
+                tenantId(req),
+            ]
+        );
+
         res.json({ id: this.lastID, message: 'Setting logged' });
     });
 });
@@ -330,192 +351,18 @@ router.get('/analytics/settings-logs', authenticateToken, requireAdmin, (req, re
     });
 });
 
-// --- COMPREHENSIVE EXPORT ENDPOINTS ---
-
-// GET /api/export/login-logs - Export login logs as CSV
-router.get('/export/login-logs', authenticateToken, requireAdmin, (req, res) => {
-    const { start_date, end_date } = req.query;
-    let sql = `
-        SELECT 
-            ll.id, ll.user_id, ll.username, ll.action, 
-            ll.ip_address, ll.user_agent, ll.timestamp,
-            u.email, u.role
-        FROM login_logs ll
-        LEFT JOIN users u ON ll.user_id = u.id
-    `;
-    
-    const params = [];
-    if (start_date || end_date) {
-        sql += ' WHERE 1=1';
-        if (start_date) {
-            sql += ' AND ll.timestamp >= ?';
-            params.push(start_date);
-        }
-        if (end_date) {
-            sql += ' AND ll.timestamp <= ?';
-            params.push(end_date);
-        }
-    }
-    sql += ' ORDER BY ll.timestamp DESC';
-
-    dbAdapter.all(sql, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        // Convert to CSV
-        const csv = convertToCSV(redactRows(rows, { pii: 'allow', internal: 'allow' }));
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename=login_logs.csv');
-        res.send(csv);
-    });
-});
-
-// GET /api/export/chat-logs - Export chat logs as CSV
-router.get('/export/chat-logs', authenticateToken, (req, res) => {
-    const { session_id, case_id, start_date, end_date } = req.query;
-    
-    let sql = `
-        SELECT 
-            i.id, i.session_id, i.role, i.content, i.timestamp,
-            s.case_id, s.user_id, s.student_name, s.start_time, s.duration,
-            c.name as case_name, u.username, u.email
-        FROM interactions i
-        JOIN sessions s ON i.session_id = s.id
-        JOIN cases c ON s.case_id = c.id
-        JOIN users u ON s.user_id = u.id
-        WHERE 1=1
-    `;
-    
-    const params = [];
-    
-    // Users can only see their own, admins see all
-    if (!canReadAcrossUsers(req.user)) {
-        sql += ' AND s.user_id = ?';
-        params.push(req.user.id);
-    }
-    
-    if (session_id) {
-        sql += ' AND i.session_id = ?';
-        params.push(session_id);
-    }
-    if (case_id) {
-        sql += ' AND s.case_id = ?';
-        params.push(case_id);
-    }
-    if (start_date) {
-        sql += ' AND i.timestamp >= ?';
-        params.push(start_date);
-    }
-    if (end_date) {
-        sql += ' AND i.timestamp <= ?';
-        params.push(end_date);
-    }
-    
-    sql += ' ORDER BY i.timestamp ASC';
-
-    dbAdapter.all(sql, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        const csv = convertToCSV(redactRows(rows, { pii: canReadAcrossUsers(req.user) ? 'allow' : 'redact' }));
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename=chat_logs.csv');
-        res.send(csv);
-    });
-});
-
-// GET /api/export/settings-logs - Export settings logs as CSV
-router.get('/export/settings-logs', authenticateToken, requireAdmin, (req, res) => {
-    const { start_date, end_date, setting_type } = req.query;
-    
-    let sql = `
-        SELECT 
-            sl.id, sl.user_id, sl.session_id, sl.case_id,
-            sl.setting_type, sl.setting_name, sl.old_value, sl.new_value,
-            sl.settings_json, sl.timestamp,
-            u.username, u.email, c.name as case_name
-        FROM settings_logs sl
-        LEFT JOIN users u ON sl.user_id = u.id
-        LEFT JOIN cases c ON sl.case_id = c.id
-        WHERE 1=1
-    `;
-    
-    const params = [];
-    if (setting_type) {
-        sql += ' AND sl.setting_type = ?';
-        params.push(setting_type);
-    }
-    if (start_date) {
-        sql += ' AND sl.timestamp >= ?';
-        params.push(start_date);
-    }
-    if (end_date) {
-        sql += ' AND sl.timestamp <= ?';
-        params.push(end_date);
-    }
-    
-    sql += ' ORDER BY sl.timestamp DESC';
-
-    dbAdapter.all(sql, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        const csv = convertToCSV(redactRows(rows, { pii: 'allow', internal: 'allow' }));
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename=settings_logs.csv');
-        res.send(csv);
-    });
-});
-
-// GET /api/export/session-settings - Export session settings as CSV
-router.get('/export/session-settings', authenticateToken, (req, res) => {
-    const { start_date, end_date, case_id } = req.query;
-    
-    let sql = `
-        SELECT 
-            ss.id, ss.session_id, ss.case_id, ss.user_id,
-            ss.llm_provider, ss.llm_model, ss.llm_base_url,
-            ss.monitor_hr, ss.monitor_rhythm, ss.monitor_spo2,
-            ss.monitor_bp_sys, ss.monitor_bp_dia, ss.monitor_rr, ss.monitor_temp,
-            ss.timestamp,
-            u.username, u.email, c.name as case_name,
-            s.start_time, s.end_time, s.duration
-        FROM session_settings ss
-        JOIN users u ON ss.user_id = u.id
-        JOIN cases c ON ss.case_id = c.id
-        JOIN sessions s ON ss.session_id = s.id
-        WHERE 1=1
-    `;
-    
-    const params = [];
-    
-    // Users can only see their own
-    if (!canReadAcrossUsers(req.user)) {
-        sql += ' AND ss.user_id = ?';
-        params.push(req.user.id);
-    }
-    
-    if (case_id) {
-        sql += ' AND ss.case_id = ?';
-        params.push(case_id);
-    }
-    if (start_date) {
-        sql += ' AND ss.timestamp >= ?';
-        params.push(start_date);
-    }
-    if (end_date) {
-        sql += ' AND ss.timestamp <= ?';
-        params.push(end_date);
-    }
-    
-    sql += ' ORDER BY ss.timestamp DESC';
-
-    dbAdapter.all(sql, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        const csv = convertToCSV(redactRows(rows, { pii: canReadAcrossUsers(req.user) ? 'allow' : 'redact' }));
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename=session_settings.csv');
-        res.send(csv);
-    });
-});
+// --- CSV EXPORT ENDPOINTS ---
+//
+// Four legacy per-table exports (login-logs, chat-logs, settings-logs,
+// session-settings) were removed in the export-unification pass. Their
+// content is now served by:
+//   * /api/export/learning-events     — every student action (xAPI canonical)
+//   * /api/export/system-log/:source  — admin firehose, source = auth | config
+//                                       | chat | learning | alarm | llm | tts
+//                                       | emotion | oyon | vitals | scenario
+//                                       | client | admin (server-paged stream)
+//   * /api/export/complete-session/:id — per-session CSV bundle (kept below)
+//   * /api/export/questionnaire-responses — reflection questionnaire
 
 // GET /api/export/complete-session/:sessionId - Export complete session data
 router.get('/export/complete-session/:sessionId', authenticateToken, (req, res) => {
@@ -608,66 +455,13 @@ function convertCompleteSessionToCSV(data) {
     return csv;
 }
 
-// --- EVENT LOG ENDPOINTS ---
-
-// POST /api/events/batch - Log multiple events at once
-router.post('/events/batch', authenticateToken, async (req, res) => {
-    const { session_id, events } = req.body;
-    const user_id = req.user.id;
-
-    if (!session_id || !events || !Array.isArray(events)) {
-        return res.status(400).json({ error: 'session_id and events array required' });
-    }
-
-    if (!await verifySessionOwnership(session_id, req.user, res, { requireSession: true })) return;
-
-    const sql = `INSERT INTO event_log (session_id, user_id, event_type, description, vital_sign, old_value, new_value, timestamp)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-
-    const stmt = dbAdapter.prepare(sql);
-    let inserted = 0;
-    let runError = null;
-    let pending = events.length;
-
-    if (pending === 0) {
-        stmt.finalize();
-        return res.json({ message: '0 events logged' });
-    }
-
-    events.forEach(event => {
-        stmt.run(
-            [
-                session_id,
-                user_id,
-                event.event_type,
-                event.description,
-                event.vital_sign || null,
-                event.old_value || null,
-                event.new_value || null,
-                event.timestamp
-            ],
-            function(err) {
-                if (err && !runError) {
-                    runError = err;
-                } else if (!err) {
-                    inserted++;
-                }
-                pending--;
-                if (pending === 0) {
-                    stmt.finalize((finalizeErr) => {
-                        if (runError) {
-                            return res.status(500).json({ error: runError.message });
-                        }
-                        if (finalizeErr) {
-                            return res.status(500).json({ error: finalizeErr.message });
-                        }
-                        res.json({ message: `${inserted} events logged` });
-                    });
-                }
-            }
-        );
-    });
-});
+// --- EVENT LOG ENDPOINTS (legacy) ---
+//
+// POST /api/events/batch was retired in Phase 2 of PLAN_LOGGING.md (legacy
+// event_log writer migration). All callers now use /api/learning-events/batch.
+// The GET endpoint below remains for any read code still depending on the
+// table; it is fed only by historical rows and is queued for removal once
+// Phase 4's UI consolidation lands.
 
 // GET /api/sessions/:id/events - Get all events for a session
 router.get('/sessions/:id/events', authenticateToken, async (req, res) => {
@@ -723,6 +517,8 @@ const LEARNING_VERBS = [
     // Monitor interactions
     'ADJUSTED_VITAL', 'ACKNOWLEDGED_ALARM', 'SILENCED_ALARM',
     'ALARM_TRIGGERED', 'VIEWED_TRENDS',
+    // Instructor / case authoring
+    'EDITED_LAB_VALUE',
     // Patient record
     'VIEWED_PATIENT_SUMMARY', 'VIEWED_HISTORY', 'VIEWED_MEDICATIONS',
     'VIEWED_ALLERGIES',
@@ -744,10 +540,14 @@ const LEARNING_VERBS = [
 ];
 
 // POST /api/learning-events - Log a learning event
+//
+// Trinity invariant (Phase 1 of PLAN_LOGGING.md): the server derives user_id
+// and case_id from session_id via the sessions table. Client-supplied
+// case_id is ignored; client-supplied user_id is irrelevant (auth principal
+// is used for pre-session events). A stale/replayed POST cannot mislabel.
 router.post('/learning-events', authenticateToken, async (req, res) => {
     const {
         session_id,
-        case_id,
         verb,
         object_type,
         object_id,
@@ -761,9 +561,6 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
         message_role
     } = req.body;
 
-    const user_id = req.user.id;
-
-    // Validate verb
     if (!verb || !LEARNING_VERBS.includes(verb)) {
         return res.status(400).json({
             error: `Invalid verb. Must be one of: ${LEARNING_VERBS.join(', ')}`
@@ -774,9 +571,24 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
         return res.status(400).json({ error: 'object_type is required' });
     }
 
-    // session_id is optional on learning events (e.g. pre-session telemetry).
-    // When present, verify ownership; when absent, allow.
-    if (session_id && !await verifySessionOwnership(session_id, req.user, res)) return;
+    let user_id;
+    let case_id;
+
+    if (session_id) {
+        const trinity = await resolveSessionTrinity(session_id, tenantId(req));
+        if (!trinity.found) {
+            return res.status(404).json({
+                error: 'session not found in tenant',
+                reason: trinity.reason,
+            });
+        }
+        user_id = trinity.user_id;
+        case_id = trinity.case_id;
+    } else {
+        // Pre-session telemetry (e.g. case browsing before session start).
+        user_id = req.user.id;
+        case_id = null;
+    }
 
     const sql = `
         INSERT INTO learning_events (
@@ -789,7 +601,7 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
     `;
 
     dbAdapter.run(sql, [
-        session_id,
+        session_id || null,
         user_id,
         case_id,
         verb,
@@ -813,31 +625,37 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
 });
 
 // POST /api/learning-events/batch - Log multiple events at once
+//
+// Trinity invariant (Phase 1 of PLAN_LOGGING.md): for each event the server
+// derives user_id and case_id from the session_id via the sessions table.
+// Client-supplied case_id is ignored; client-supplied user_id is unused.
+// Trinity is cached per distinct session_id (one DB read per session, not
+// per event).
+//
+// Response shape (tightened per Codex round-2):
+//   {
+//     inserted, dropped, total,
+//     dropped_reasons: {
+//       cross_tenant: <int>,
+//       missing_required_field: <int>,
+//       db_error: <int>,
+//     }
+//   }
 router.post('/learning-events/batch', authenticateToken, async (req, res) => {
     const { events } = req.body;
-    const user_id = req.user.id;
+    const reqTenantId = tenantId(req);
+    const principalUserId = req.user.id;
 
     if (!Array.isArray(events) || events.length === 0) {
         return res.status(400).json({ error: 'events array is required' });
     }
 
-    // Verify ownership of every distinct session_id present in the batch.
-    // Events without session_id are allowed (pre-session telemetry).
-    // Educators/admins bypass ownership for supervised event capture.
-    if (!hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
-        const distinctSessionIds = [...new Set(events.map(e => e.session_id).filter(Boolean))];
-        if (distinctSessionIds.length > 0) {
-            const ownerships = await Promise.all(distinctSessionIds.map(sid => new Promise((resolve) => {
-                dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [sid, tenantId(req)], (err, row) => {
-                    if (err || !row) return resolve(false);
-                    resolve(row.user_id === user_id);
-                });
-            })));
-            if (ownerships.some(ok => !ok)) {
-                return res.status(403).json({ error: 'Batch contains session_id(s) not owned by user' });
-            }
-        }
-    }
+    // Resolve trinity once per distinct session_id.
+    const distinctSessionIds = [...new Set(events.map(e => e.session_id).filter(Boolean))];
+    const trinityCache = new Map();
+    await Promise.all(distinctSessionIds.map(async (sid) => {
+        trinityCache.set(sid, await resolveSessionTrinity(sid, reqTenantId));
+    }));
 
     const sql = `
         INSERT INTO learning_events (
@@ -845,41 +663,94 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
             object_type, object_id, object_name,
             component, parent_component,
             result, duration_ms, context,
-            message_content, message_role, timestamp, tenant_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            message_content, message_role, timestamp, tenant_id,
+            vital_hr, vital_spo2, vital_bp_sys, vital_bp_dia,
+            vital_rr, vital_temp, vital_etco2, vital_rhythm
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                  ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const stmt = dbAdapter.prepare(sql);
     let inserted = 0;
+    let dropped = 0;
+    const droppedReasons = {
+        cross_tenant: 0,
+        missing_required_field: 0,
+        db_error: 0,
+    };
 
-    events.forEach(event => {
-        stmt.run([
-            event.session_id,
-            user_id,
-            event.case_id,
-            event.verb,
-            event.object_type,
-            event.object_id || null,
-            event.object_name || null,
-            event.component || null,
-            event.parent_component || null,
-            event.result || null,
-            event.duration_ms || null,
-            event.context ? JSON.stringify(event.context) : null,
-            event.message_content || null,
-            event.message_role || null,
-            event.timestamp || new Date().toISOString(),
-            tenantId(req)
-        ], function(err) {
-            if (!err) inserted++;
-        });
-    });
+    // Codex round-3 finding 2: prepare + finalize wrapped so a thrown
+    // promise (DB error during a run, JSON.stringify on a circular
+    // context, etc.) cannot leak the prepared statement nor leave the
+    // request without a terminal response.
+    try {
+        const runPromises = [];
+        for (const event of events) {
+            if (!event.verb || !event.object_type) {
+                dropped++;
+                droppedReasons.missing_required_field++;
+                continue;
+            }
 
-    stmt.finalize((err) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+            let user_id;
+            let case_id;
+            if (event.session_id) {
+                const trinity = trinityCache.get(event.session_id);
+                if (!trinity || !trinity.found) {
+                    dropped++;
+                    droppedReasons.cross_tenant++;
+                    continue;
+                }
+                user_id = trinity.user_id;
+                case_id = trinity.case_id;
+            } else {
+                user_id = principalUserId;
+                case_id = null;
+            }
+
+            runPromises.push(
+                stmt.run([
+                    event.session_id || null,
+                    user_id,
+                    case_id,
+                    event.verb,
+                    event.object_type,
+                    event.object_id || null,
+                    event.object_name || null,
+                    event.component || null,
+                    event.parent_component || null,
+                    event.result || null,
+                    event.duration_ms || null,
+                    event.context ? JSON.stringify(event.context) : null,
+                    event.message_content || null,
+                    event.message_role || null,
+                    event.timestamp || new Date().toISOString(),
+                    reqTenantId,
+                    event.vital_hr ?? null,
+                    event.vital_spo2 ?? null,
+                    event.vital_bp_sys ?? null,
+                    event.vital_bp_dia ?? null,
+                    event.vital_rr ?? null,
+                    event.vital_temp ?? null,
+                    event.vital_etco2 ?? null,
+                    event.vital_rhythm ?? null,
+                ]).then(() => { inserted++; }, () => {
+                    dropped++;
+                    droppedReasons.db_error++;
+                })
+            );
         }
-        res.json({ inserted, total: events.length });
+
+        await Promise.all(runPromises);
+    } finally {
+        try { await stmt.finalize(); } catch { /* finalize errors don't change the response */ }
+    }
+
+    res.json({
+        inserted,
+        dropped,
+        total: events.length,
+        dropped_reasons: droppedReasons,
     });
 });
 
@@ -1321,6 +1192,952 @@ router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req
     });
 });
 
+// GET /api/export/learning-events - Cohort xAPI CSV export (Phase 5 of PLAN_LOGGING.md)
+//
+// One row per learning_events record with the trinity (session_id, user_id,
+// case_id) plus xAPI columns and joined username/case_name. Tenant-scoped.
+// Non-admin callers see only their own rows; admins see tenant-wide.
+//
+// Filters (all optional): from, to (ISO date), user_id, case_id, session_id, verb.
+//
+// Row-cap policy (Codex round-2):
+//   - Soft cap 50,000. Default request returns 413 if matched count > 50k.
+//   - Hard ceiling 200,000 (admin override via ?confirm_large=1).
+//   - Beyond 200k → 413 even with confirm_large; ask researcher to script
+//     directly against SQLite or use date-range slicing.
+const LEARNING_EVENTS_SOFT_CAP = 50_000;
+const LEARNING_EVENTS_HARD_CAP = 200_000;
+
+function csvEscape(value) {
+    if (value === null || value === undefined) return '';
+    let s = typeof value === 'string' ? value : String(value);
+    // Spreadsheet-injection guard (Codex round-3): cells starting with =,
+    // +, -, @, or tab/CR are interpreted as formulas by Excel/Calc/Numbers.
+    // Prefix a single quote to neutralise. We then still apply RFC 4180.
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+}
+
+router.get('/export/learning-events', authenticateToken, (req, res) => {
+    const tenant_id = tenantId(req);
+    // Aligned with /api/learning-events/all: reviewer+ can read across
+    // users; non-reviewers see only their own rows. The "admin-only"
+    // confirm_large override is a stricter cap, not the read scope.
+    const canCross = canReadAcrossUsers(req.user);
+    const isAdmin = hasRoleAtLeast(req.user, ROLE_RANKS.admin);
+    const confirmLarge = req.query.confirm_large === '1';
+
+    // Build WHERE
+    const filters = ['le.tenant_id = ?'];
+    const params = [tenant_id];
+
+    if (!canCross) {
+        filters.push('le.user_id = ?');
+        params.push(req.user.id);
+    }
+    if (req.query.from) { filters.push('le.timestamp >= ?'); params.push(req.query.from); }
+    if (req.query.to)   { filters.push('le.timestamp < date(?, "+1 day")'); params.push(req.query.to); }
+    if (req.query.user_id)    { filters.push('le.user_id = ?');    params.push(req.query.user_id); }
+    if (req.query.case_id)    { filters.push('le.case_id = ?');    params.push(req.query.case_id); }
+    if (req.query.session_id) { filters.push('le.session_id = ?'); params.push(req.query.session_id); }
+    if (req.query.verb)       { filters.push('le.verb = ?');       params.push(req.query.verb); }
+
+    const whereClause = filters.join(' AND ');
+
+    // Pre-flight: count rows so we can refuse oversize requests deterministically.
+    const countSql = `SELECT COUNT(*) AS n FROM learning_events le WHERE ${whereClause}`;
+    dbAdapter.get(countSql, params, (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const count = row?.n || 0;
+
+        if (count > LEARNING_EVENTS_HARD_CAP) {
+            return res.status(413).json({
+                error: 'export too large',
+                count,
+                hint: 'Narrow with ?from / ?to / ?user_id / ?case_id, or query the database directly.',
+            });
+        }
+        if (count > LEARNING_EVENTS_SOFT_CAP && !(isAdmin && confirmLarge)) {
+            return res.status(413).json({
+                error: 'export exceeds soft cap',
+                count,
+                soft_cap: LEARNING_EVENTS_SOFT_CAP,
+                hint: isAdmin
+                    ? 'Add ?confirm_large=1 to override (admin only) or narrow filters.'
+                    : 'Narrow filters with ?from / ?to / ?user_id / ?case_id.',
+            });
+        }
+
+        // Stream rows in chunks. Joined columns make the CSV self-contained.
+        // Tenant predicates on JOINs (Codex round-3 finding 4): if a
+        // bug ever wrote a learning_events row pointing at a user/case in
+        // another tenant, the LEFT JOIN without these predicates would
+        // disclose the foreign tenant's name in the export. Belt-and-
+        // braces — the WHERE le.tenant_id filter already scopes le, but
+        // the joins should be scoped too.
+        const dataSql = `
+            SELECT
+                le.timestamp, le.user_id, u.username, le.case_id, c.name AS case_name,
+                le.session_id, le.verb, le.object_type, le.object_id, le.object_name,
+                le.component, le.parent_component, le.result, le.duration_ms,
+                le.message_role, le.message_content, le.severity, le.category, le.context
+            FROM learning_events le
+            LEFT JOIN users u ON le.user_id = u.id AND u.tenant_id = le.tenant_id
+            LEFT JOIN cases c ON le.case_id = c.id AND c.tenant_id = le.tenant_id
+            WHERE ${whereClause}
+            ORDER BY le.timestamp ASC
+        `;
+
+        const filename = `learning-events_${new Date().toISOString().slice(0, 10)}.csv`;
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+        const headers = [
+            'timestamp', 'user_id', 'username', 'case_id', 'case_name', 'session_id',
+            'verb', 'object_type', 'object_id', 'object_name',
+            'component', 'parent_component', 'result', 'duration_ms',
+            'message_role', 'message_content', 'severity', 'category', 'context_json',
+        ];
+        res.write(headers.join(',') + '\n');
+
+        // Memory bound: row count is already gated by the cap above
+        // (50k soft / 200k hard), so loading via `all` is safe. Once a
+        // streaming cursor lands in dbAdapter we can swap to `each`.
+        dbAdapter.all(dataSql, params, (err2, rows) => {
+            if (err2) {
+                // Headers already sent; close cleanly.
+                res.end();
+                logger('analytics-routes').warn('learning-events export query failed', {
+                    error: err2.message, expected: count,
+                });
+                return;
+            }
+            for (const r of rows) {
+                const cells = [
+                    r.timestamp, r.user_id, r.username, r.case_id, r.case_name, r.session_id,
+                    r.verb, r.object_type, r.object_id, r.object_name,
+                    r.component, r.parent_component, r.result, r.duration_ms,
+                    r.message_role, r.message_content, r.severity, r.category, r.context,
+                ].map(csvEscape);
+                res.write(cells.join(',') + '\n');
+            }
+            res.end();
+        });
+    });
+});
+
+// --- CHAT LOG (every chat-related event, admin only) ---
+//
+// One feed for everything that touches the conversation: raw chat rows,
+// SENT/RECEIVED/COPIED/EDITED/STT/TTS verbs, every LLM API call (with
+// prompt/response/tokens/latency), TTS playbacks, and student emotion
+// samples. Rows are normalised to:
+//   { ts, user_id, username, case_id, case_name, session_id, source,
+//     role, content, tokens_in, tokens_out, latency_ms, model, extra }
+router.get('/chat-log/feed', authenticateToken, requireAdmin, (req, res) => {
+    const tenant = tenantId(req);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 10000);
+    const sessionId = req.query.session_id || null;
+
+    const dateFrom = req.query.from || null;
+    const dateTo = req.query.to || null;
+    const dateFilter = (col) => {
+        const parts = []; const params = [];
+        if (dateFrom) { parts.push(`${col} >= ?`); params.push(dateFrom); }
+        if (dateTo)   { parts.push(`${col} < date(?, '+1 day')`); params.push(dateTo); }
+        return { clause: parts.length ? ' AND ' + parts.join(' AND ') : '', params };
+    };
+    const sessionWhere = (col) => sessionId ? ` AND ${col} = ?` : '';
+    const sessionParam = () => sessionId ? [sessionId] : [];
+
+    const tableExists = (name) => new Promise((resolve) => {
+        dbAdapter.get(
+            `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`,
+            [name], (err, row) => resolve(err ? false : !!row)
+        );
+    });
+    const allP = (sql, params) => new Promise((resolve) => {
+        dbAdapter.all(sql, params, (err, rows) => resolve(err ? [] : (rows || [])));
+    });
+
+    const queries = [];
+
+    // 1. interactions → raw chat (full content, untruncated).
+    queries.push(async () => {
+        if (!await tableExists('interactions')) return [];
+        const f = dateFilter('i.timestamp');
+        return allP(`
+            SELECT i.timestamp AS ts,
+                   s.user_id, u.username,
+                   s.case_id, c.name AS case_name,
+                   i.session_id,
+                   'interaction' AS source,
+                   i.role AS role,
+                   i.content AS content,
+                   NULL AS tokens_in, NULL AS tokens_out,
+                   NULL AS latency_ms, NULL AS model,
+                   NULL AS extra
+            FROM interactions i
+            LEFT JOIN sessions s ON i.session_id = s.id
+            LEFT JOIN users u ON s.user_id = u.id
+            LEFT JOIN cases c ON s.case_id = c.id
+            WHERE i.tenant_id = ? ${f.clause} ${sessionWhere('i.session_id')}
+            ORDER BY i.timestamp DESC LIMIT ?
+        `, [tenant, ...f.params, ...sessionParam(), limit]);
+    });
+
+    // 2. learning_events for everything chat/voice/affect/audio related.
+    // Catches COMMUNICATION category plus stragglers (STT_ERROR is in ERROR
+    // category) and voice/audio object_types.
+    queries.push(async () => {
+        const f = dateFilter('le.timestamp');
+        return allP(`
+            SELECT le.timestamp AS ts,
+                   le.user_id, u.username,
+                   le.case_id, c.name AS case_name,
+                   le.session_id,
+                   'event' AS source,
+                   COALESCE(le.message_role, le.verb) AS role,
+                   COALESCE(le.message_content, le.object_name, le.result, le.verb) AS content,
+                   NULL AS tokens_in, NULL AS tokens_out,
+                   le.duration_ms AS latency_ms,
+                   le.component AS model,
+                   le.verb AS extra
+            FROM learning_events le
+            LEFT JOIN users u ON le.user_id = u.id
+            LEFT JOIN cases c ON le.case_id = c.id
+            WHERE le.tenant_id = ?
+              AND (
+                  le.category = 'COMMUNICATION'
+                  OR le.verb IN ('EXPRESSED_EMOTION', 'STT_RESULT', 'STT_ERROR', 'TTS_PLAYED', 'SENT_MESSAGE', 'RECEIVED_MESSAGE', 'COPIED_MESSAGE', 'EDITED_MESSAGE')
+                  OR le.object_type IN ('voice', 'audio', 'message', 'chat')
+              )
+              ${f.clause} ${sessionWhere('le.session_id')}
+            ORDER BY le.timestamp DESC LIMIT ?
+        `, [tenant, ...f.params, ...sessionParam(), limit]);
+    });
+
+    // 2b. agent_conversations → multi-agent chat threads (consultant, lab,
+    // pharmacy, etc.). Each agent_type has its own role + content stream.
+    queries.push(async () => {
+        if (!await tableExists('agent_conversations')) return [];
+        const f = dateFilter('ac.created_at');
+        return allP(`
+            SELECT ac.created_at AS ts,
+                   s.user_id, u.username,
+                   s.case_id, c.name AS case_name,
+                   ac.session_id,
+                   'agent' AS source,
+                   ac.role AS role,
+                   ac.content AS content,
+                   NULL AS tokens_in, NULL AS tokens_out,
+                   NULL AS latency_ms,
+                   ac.agent_type AS model,
+                   ac.agent_type AS extra
+            FROM agent_conversations ac
+            LEFT JOIN sessions s ON ac.session_id = s.id
+            LEFT JOIN users u ON s.user_id = u.id
+            LEFT JOIN cases c ON s.case_id = c.id
+            WHERE ac.tenant_id = ? ${f.clause} ${sessionWhere('ac.session_id')}
+            ORDER BY ac.created_at DESC LIMIT ?
+        `, [tenant, ...f.params, ...sessionParam(), limit]);
+    });
+
+    // 2c. team_communications_log → end-of-handoff summaries from each
+    // agent type. Per-session "what was discussed" key points.
+    queries.push(async () => {
+        if (!await tableExists('team_communications_log')) return [];
+        const f = dateFilter('tcl.created_at');
+        return allP(`
+            SELECT tcl.created_at AS ts,
+                   s.user_id, u.username,
+                   s.case_id, c.name AS case_name,
+                   tcl.session_id,
+                   'team' AS source,
+                   'summary' AS role,
+                   tcl.key_points AS content,
+                   NULL AS tokens_in, NULL AS tokens_out,
+                   NULL AS latency_ms,
+                   tcl.agent_type AS model,
+                   tcl.agent_type AS extra
+            FROM team_communications_log tcl
+            LEFT JOIN sessions s ON tcl.session_id = s.id
+            LEFT JOIN users u ON s.user_id = u.id
+            LEFT JOIN cases c ON s.case_id = c.id
+            WHERE tcl.tenant_id = ? ${f.clause} ${sessionWhere('tcl.session_id')}
+            ORDER BY tcl.created_at DESC LIMIT ?
+        `, [tenant, ...f.params, ...sessionParam(), limit]);
+    });
+
+    // 3. llm_request_log → every LLM API call with prompt/response/tokens.
+    queries.push(async () => {
+        if (!await tableExists('llm_request_log')) return [];
+        // Schema varies — discover columns once and adapt.
+        const cols = await new Promise((resolve) => {
+            dbAdapter.all(`PRAGMA table_info("llm_request_log")`, [], (err, rows) =>
+                resolve(err ? [] : (rows || []).map(r => r.name)));
+        });
+        const has = (n) => cols.includes(n);
+        const inTok  = has('prompt_tokens')     ? 'lrl.prompt_tokens'     : has('input_tokens')  ? 'lrl.input_tokens'  : 'NULL';
+        const outTok = has('completion_tokens') ? 'lrl.completion_tokens' : has('output_tokens') ? 'lrl.output_tokens' : 'NULL';
+        const latency= has('latency_ms')        ? 'lrl.latency_ms'        : has('duration_ms')   ? 'lrl.duration_ms'   : 'NULL';
+        const sessCol= has('session_id') ? 'lrl.session_id' : 'NULL';
+        const f = dateFilter('lrl.request_timestamp');
+        return allP(`
+            SELECT lrl.request_timestamp AS ts,
+                   lrl.user_id, u.username,
+                   NULL AS case_id, NULL AS case_name,
+                   ${sessCol} AS session_id,
+                   'llm' AS source,
+                   COALESCE(lrl.status, 'request') AS role,
+                   COALESCE(lrl.error_message, lrl.model) AS content,
+                   ${inTok} AS tokens_in, ${outTok} AS tokens_out,
+                   ${latency} AS latency_ms,
+                   lrl.model AS model,
+                   lrl.status AS extra
+            FROM llm_request_log lrl
+            LEFT JOIN users u ON lrl.user_id = u.id
+            WHERE lrl.tenant_id = ? ${f.clause}
+                  ${sessionId && has('session_id') ? `AND lrl.session_id = ?` : ''}
+            ORDER BY lrl.request_timestamp DESC LIMIT ?
+        `, [tenant, ...f.params, ...(sessionId && has('session_id') ? [sessionId] : []), limit]);
+    });
+
+    // 4. tts_usage → every TTS playback.
+    queries.push(async () => {
+        if (!await tableExists('tts_usage')) return [];
+        const f = dateFilter('tu.created_at');
+        return allP(`
+            SELECT tu.created_at AS ts,
+                   tu.user_id, u.username,
+                   NULL AS case_id, NULL AS case_name,
+                   NULL AS session_id,
+                   'tts' AS source,
+                   tu.voice AS role,
+                   tu.provider || COALESCE(' / ' || tu.voice, '') AS content,
+                   NULL AS tokens_in, NULL AS tokens_out,
+                   NULL AS latency_ms,
+                   tu.provider AS model,
+                   NULL AS extra
+            FROM tts_usage tu
+            LEFT JOIN users u ON tu.user_id = u.id
+            WHERE tu.tenant_id = ? ${f.clause}
+            ORDER BY tu.created_at DESC LIMIT ?
+        `, [tenant, ...f.params, limit]);
+    });
+
+    // 5b. oyon_emotion_records → camera-based facial emotion samples.
+    queries.push(async () => {
+        if (!await tableExists('oyon_emotion_records')) return [];
+        const f = dateFilter('oer.window_start');
+        return allP(`
+            SELECT oer.window_start AS ts,
+                   oer.user_id, oer.student_name_snapshot AS username,
+                   oer.case_id, oer.case_title_snapshot AS case_name,
+                   oer.session_id,
+                   'oyon' AS source,
+                   'face' AS role,
+                   COALESCE(oer.dominant_emotion, 'unknown') AS content,
+                   NULL AS tokens_in, NULL AS tokens_out,
+                   NULL AS latency_ms,
+                   'face-cam' AS model,
+                   oer.dominant_emotion AS extra
+            FROM oyon_emotion_records oer
+            WHERE oer.tenant_id = ? ${f.clause}
+                  ${sessionId ? 'AND oer.session_id = ?' : ''}
+            ORDER BY oer.window_start DESC LIMIT ?
+        `, [String(tenant), ...f.params, ...(sessionId ? [String(sessionId)] : []), limit]);
+    });
+
+    // 5. emotion_logs → student emotion samples (self-report).
+    queries.push(async () => {
+        if (!await tableExists('emotion_logs')) return [];
+        const f = dateFilter('el.created_at');
+        return allP(`
+            SELECT el.created_at AS ts,
+                   s.user_id, u.username,
+                   s.case_id, c.name AS case_name,
+                   el.session_id,
+                   'emotion' AS source,
+                   'student' AS role,
+                   el.emotion AS content,
+                   NULL AS tokens_in, NULL AS tokens_out,
+                   NULL AS latency_ms, NULL AS model,
+                   NULL AS extra
+            FROM emotion_logs el
+            LEFT JOIN sessions s ON el.session_id = s.id
+            LEFT JOIN users u ON s.user_id = u.id
+            LEFT JOIN cases c ON s.case_id = c.id
+            WHERE el.tenant_id = ? ${f.clause} ${sessionWhere('el.session_id')}
+            ORDER BY el.created_at DESC LIMIT ?
+        `, [tenant, ...f.params, ...sessionParam(), limit]);
+    });
+
+    Promise.all(queries.map(q => q())).then((results) => {
+        const flat = results.flat();
+        const events = flat
+            .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))
+            .slice(0, limit);
+        const sources = {};
+        for (const r of flat) sources[r.source] = (sources[r.source] || 0) + 1;
+        res.json({ events, sources });
+    }).catch((e) => res.status(500).json({ error: e.message }));
+});
+
+// --- SYSTEM LOG per-source CSV export (admin only) ---
+//
+// One source → one CSV download, streamed page-by-page from SQLite so a
+// 2M-row table doesn't blow the server. Not built client-side — the user
+// clicks a chip's download button and the browser saves the file as it
+// arrives. Optional ?from / ?to for date filtering.
+//
+// Each entry below pins (table, dateColumn, columns to export, tenant
+// scoping). The :source param is matched against this map; anything not
+// listed returns 404.
+const EXPORT_SOURCES = {
+    auth: {
+        table: 'login_logs',
+        dateCol: 'timestamp',
+        tenant: true,
+    },
+    admin: {
+        table: 'system_audit_log',
+        dateCol: 'timestamp',
+        tenant: false, // system_audit_log isn't tenant-scoped today
+    },
+    config: {
+        table: 'settings_logs',
+        dateCol: 'timestamp',
+        tenant: true,
+    },
+    learning: {
+        table: 'learning_events',
+        dateCol: 'timestamp',
+        tenant: true,
+    },
+    chat: {
+        table: 'interactions',
+        dateCol: 'timestamp',
+        tenant: true,
+    },
+    alarm: {
+        table: 'alarm_events',
+        dateCol: 'triggered_at',
+        tenant: true,
+    },
+    llm: {
+        table: 'llm_request_log',
+        dateCol: 'request_timestamp',
+        tenant: true,
+    },
+    tts: {
+        table: 'tts_usage',
+        dateCol: 'created_at',
+        tenant: true,
+    },
+    emotion: {
+        table: 'emotion_logs',
+        dateCol: 'created_at',
+        tenant: true,
+    },
+    oyon: {
+        table: 'oyon_emotion_records',
+        dateCol: 'window_start',
+        tenant: true,
+    },
+    vitals: {
+        table: 'session_vitals',
+        dateCol: 'recorded_at',
+        tenant: false,
+    },
+    scenario: {
+        table: 'scenario_events',
+        dateCol: 'created_at',
+        tenant: false,
+    },
+    client: {
+        table: 'client_logs',
+        dateCol: 'created_at',
+        tenant: true,
+    },
+};
+
+function csvCellEscape(value) {
+    if (value === null || value === undefined) return '';
+    let s = typeof value === 'string' ? value : String(value);
+    // Spreadsheet-injection guard.
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+}
+
+router.get('/export/system-log/:source', authenticateToken, requireAdmin, async (req, res) => {
+    const source = String(req.params.source || '').toLowerCase();
+    const cfg = EXPORT_SOURCES[source];
+    if (!cfg) return res.status(404).json({ error: `Unknown source: ${source}` });
+
+    // Verify the table actually exists on this database. Older schemas may
+    // not have every optional table.
+    const exists = await new Promise((resolve) => {
+        dbAdapter.get(
+            `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`,
+            [cfg.table], (err, row) => resolve(err ? false : !!row)
+        );
+    });
+    if (!exists) return res.status(404).json({ error: `Table not in this DB: ${cfg.table}` });
+
+    // Discover columns dynamically — schema varies across migrations.
+    const cols = await new Promise((resolve, reject) => {
+        dbAdapter.all(`PRAGMA table_info("${cfg.table}")`, [], (err, rows) => {
+            err ? reject(err) : resolve((rows || []).map(r => r.name));
+        });
+    });
+
+    // Build the WHERE clause.
+    const where = [];
+    const params = [];
+    if (cfg.tenant && cols.includes('tenant_id')) {
+        where.push('tenant_id = ?');
+        params.push(tenantId(req));
+    }
+    if (req.query.from) {
+        where.push(`"${cfg.dateCol}" >= ?`);
+        params.push(req.query.from);
+    }
+    if (req.query.to) {
+        where.push(`"${cfg.dateCol}" < date(?, '+1 day')`);
+        params.push(req.query.to);
+    }
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    // Stream-friendly headers.
+    const filename = `${source}_${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.write(cols.join(',') + '\n');
+
+    // Page through SQLite so we never hold the whole result set in memory.
+    // 5,000 rows per page is a reasonable trade-off between query overhead
+    // and memory peak (~1 MB per page at typical row sizes).
+    const PAGE = 5000;
+    let offset = 0;
+    let total = 0;
+
+    try {
+        while (true) {
+            const sql = `SELECT * FROM "${cfg.table}" ${whereClause} ORDER BY "${cfg.dateCol}" ASC LIMIT ? OFFSET ?`;
+            const rows = await new Promise((resolve, reject) => {
+                dbAdapter.all(sql, [...params, PAGE, offset], (err, r) => err ? reject(err) : resolve(r || []));
+            });
+            if (rows.length === 0) break;
+            for (const r of rows) {
+                res.write(cols.map(c => csvCellEscape(r[c])).join(',') + '\n');
+            }
+            total += rows.length;
+            if (rows.length < PAGE) break;
+            offset += PAGE;
+            // Yield to the event loop between pages so the server stays
+            // responsive to other requests during a multi-million-row export.
+            await new Promise(r => setImmediate(r));
+        }
+        res.end();
+        logger('analytics-routes').info('system-log export complete', {
+            source, table: cfg.table, rows: total,
+        });
+    } catch (err) {
+        // Headers already sent; we can't switch to a JSON error. Log and
+        // close cleanly so the partial CSV is what the client gets.
+        logger('analytics-routes').warn('system-log export errored mid-stream', {
+            source, error: err.message, written: total,
+        });
+        res.end();
+    }
+});
+
+// --- SYSTEM LOG (firehose, admin only) ---
+//
+// Every timestamped event in the database, unioned and sorted. Coughs and
+// birds included. Rows are normalised to one shape:
+//   { ts, user_id, username, component, event, description,
+//     origin, ip, ref_type, ref_id, status }
+router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
+    const tenant = tenantId(req);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 1000, 10000);
+    // Per-source cap defaults to the total cap so we never artificially
+    // drop a recent row from one source to make room for an older row
+    // from another. Override with ?per_source=N if you want the old
+    // "fair representation across sources" behaviour.
+    const perSource = Math.min(parseInt(req.query.per_source, 10) || limit, limit);
+    const dateFrom = req.query.from || null;
+    const dateTo = req.query.to || null;
+
+    const dateFilter = (col) => {
+        const parts = [];
+        const params = [];
+        if (dateFrom) { parts.push(`${col} >= ?`); params.push(dateFrom); }
+        if (dateTo)   { parts.push(`${col} < date(?, '+1 day')`); params.push(dateTo); }
+        return { clause: parts.length ? ' AND ' + parts.join(' AND ') : '', params };
+    };
+
+    // Helper: probes sqlite_master so the feed degrades gracefully when a
+    // table doesn't exist on this tenant's schema (older DB, etc.).
+    const tableExists = (name) => new Promise((resolve) => {
+        dbAdapter.get(
+            `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`,
+            [name], (err, row) => resolve(err ? false : !!row)
+        );
+    });
+
+    const allP = (sql, params) => new Promise((resolve) => {
+        dbAdapter.all(sql, params, (err, rows) => resolve(err ? [] : (rows || [])));
+    });
+
+    // ---- Every source. Each emits the canonical row shape. -----------
+    // Per-source LIMIT is enforced at the SQL level so a giant table can't
+    // starve sibling sources; the merged feed is sorted client-side and
+    // capped at `limit`.
+
+    const queries = [];
+
+    // 1. system_audit_log → 'admin'
+    queries.push(async () => {
+        const f = dateFilter('sal.timestamp');
+        return allP(`
+            SELECT sal.timestamp AS ts, sal.user_id, sal.username,
+                   'admin' AS component, sal.action AS event,
+                   COALESCE(sal.resource_name,
+                       CASE WHEN sal.resource_type IS NOT NULL
+                            THEN sal.resource_type || ' #' || sal.resource_id
+                            ELSE sal.action END) AS description,
+                   'web' AS origin, sal.ip_address AS ip,
+                   sal.resource_type AS ref_type, sal.resource_id AS ref_id,
+                   sal.status AS status
+            FROM system_audit_log sal
+            WHERE 1=1 ${f.clause}
+            ORDER BY sal.timestamp DESC LIMIT ?
+        `, [...f.params, perSource]);
+    });
+
+    // 2. ALL learning_events → 'learning' (verb tells you what)
+    queries.push(async () => {
+        const f = dateFilter('le.timestamp');
+        return allP(`
+            SELECT le.timestamp AS ts, le.user_id, u.username,
+                   'learning' AS component, le.verb AS event,
+                   COALESCE(le.object_name,
+                            le.message_content,
+                            le.result,
+                            le.verb) AS description,
+                   'web' AS origin,
+                   json_extract(le.context, '$.ip') AS ip,
+                   le.object_type AS ref_type,
+                   le.object_id AS ref_id,
+                   le.severity AS status
+            FROM learning_events le
+            LEFT JOIN users u ON le.user_id = u.id
+            WHERE le.tenant_id = ? ${f.clause}
+            ORDER BY le.timestamp DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
+    });
+
+    // 3. ALL client_logs → 'client' (every level, not just error/warn)
+    queries.push(async () => {
+        const f = dateFilter('cl.created_at');
+        return allP(`
+            SELECT cl.created_at AS ts, cl.user_id, u.username,
+                   'client' AS component, cl.level AS event,
+                   cl.message AS description,
+                   'web' AS origin, NULL AS ip,
+                   cl.context AS ref_type, NULL AS ref_id,
+                   cl.level AS status
+            FROM client_logs cl
+            LEFT JOIN users u ON cl.user_id = u.id
+            WHERE cl.tenant_id = ? ${f.clause}
+            ORDER BY cl.created_at DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
+    });
+
+    // 4. login_logs → 'auth' (raw, before the dual-write into learning_events)
+    queries.push(async () => {
+        const f = dateFilter('ll.timestamp');
+        return allP(`
+            SELECT ll.timestamp AS ts, ll.user_id, ll.username,
+                   'auth' AS component, ll.action AS event,
+                   ll.username || ' ' || ll.action AS description,
+                   'web' AS origin, ll.ip_address AS ip,
+                   NULL AS ref_type, NULL AS ref_id,
+                   CASE WHEN ll.action = 'failed_login' THEN 'failure' ELSE 'success' END AS status
+            FROM login_logs ll
+            WHERE ll.tenant_id = ? ${f.clause}
+            ORDER BY ll.timestamp DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
+    });
+
+    // 5. settings_logs → 'config' (raw)
+    queries.push(async () => {
+        const f = dateFilter('sl.timestamp');
+        return allP(`
+            SELECT sl.timestamp AS ts, sl.user_id, u.username,
+                   'config' AS component, sl.setting_type AS event,
+                   COALESCE(sl.setting_name, sl.setting_type) ||
+                   COALESCE(': ' || sl.old_value || ' → ' || sl.new_value, '') AS description,
+                   'web' AS origin, NULL AS ip,
+                   sl.setting_type AS ref_type, sl.case_id AS ref_id,
+                   'success' AS status
+            FROM settings_logs sl
+            LEFT JOIN users u ON sl.user_id = u.id
+            WHERE sl.tenant_id = ? ${f.clause}
+            ORDER BY sl.timestamp DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
+    });
+
+    // 6. interactions (raw chat rows) → 'chat'
+    queries.push(async () => {
+        if (!await tableExists('interactions')) return [];
+        const f = dateFilter('i.timestamp');
+        return allP(`
+            SELECT i.timestamp AS ts, s.user_id, u.username,
+                   'chat' AS component, i.role AS event,
+                   substr(i.content, 1, 200) AS description,
+                   'web' AS origin, NULL AS ip,
+                   'session' AS ref_type, CAST(i.session_id AS TEXT) AS ref_id,
+                   'success' AS status
+            FROM interactions i
+            LEFT JOIN sessions s ON i.session_id = s.id
+            LEFT JOIN users u ON s.user_id = u.id
+            WHERE i.tenant_id = ? ${f.clause}
+            ORDER BY i.timestamp DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
+    });
+
+    // 7. alarm_events → 'alarm'
+    queries.push(async () => {
+        if (!await tableExists('alarm_events')) return [];
+        const f = dateFilter('ae.triggered_at');
+        return allP(`
+            SELECT ae.triggered_at AS ts, s.user_id, u.username,
+                   'alarm' AS component,
+                   ae.vital_sign || ' ' || ae.threshold_type AS event,
+                   ae.vital_sign || ' ' || ae.threshold_type ||
+                   COALESCE(' = ' || ae.actual_value, '') AS description,
+                   'web' AS origin, NULL AS ip,
+                   'session' AS ref_type, CAST(ae.session_id AS TEXT) AS ref_id,
+                   CASE WHEN ae.acknowledged_at IS NOT NULL THEN 'acked' ELSE 'active' END AS status
+            FROM alarm_events ae
+            LEFT JOIN sessions s ON ae.session_id = s.id
+            LEFT JOIN users u ON s.user_id = u.id
+            WHERE ae.tenant_id = ? ${f.clause}
+            ORDER BY ae.triggered_at DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
+    });
+
+    // 8. llm_request_log → 'llm'
+    queries.push(async () => {
+        if (!await tableExists('llm_request_log')) return [];
+        const f = dateFilter('lrl.request_timestamp');
+        return allP(`
+            SELECT lrl.request_timestamp AS ts, lrl.user_id, u.username,
+                   'llm' AS component, lrl.model AS event,
+                   lrl.model || ' ' || COALESCE(lrl.status, '') AS description,
+                   'api' AS origin, NULL AS ip,
+                   'model' AS ref_type, lrl.model AS ref_id,
+                   lrl.status AS status
+            FROM llm_request_log lrl
+            LEFT JOIN users u ON lrl.user_id = u.id
+            WHERE lrl.tenant_id = ? ${f.clause}
+            ORDER BY lrl.request_timestamp DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
+    });
+
+    // 9. tts_usage → 'tts'
+    queries.push(async () => {
+        if (!await tableExists('tts_usage')) return [];
+        const f = dateFilter('tu.created_at');
+        return allP(`
+            SELECT tu.created_at AS ts, tu.user_id, u.username,
+                   'tts' AS component, tu.provider AS event,
+                   tu.provider || COALESCE(' / ' || tu.voice, '') AS description,
+                   'api' AS origin, NULL AS ip,
+                   'voice' AS ref_type, tu.voice AS ref_id,
+                   'success' AS status
+            FROM tts_usage tu
+            LEFT JOIN users u ON tu.user_id = u.id
+            WHERE tu.tenant_id = ? ${f.clause}
+            ORDER BY tu.created_at DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
+    });
+
+    // 10. emotion_logs → 'emotion'
+    queries.push(async () => {
+        if (!await tableExists('emotion_logs')) return [];
+        const f = dateFilter('el.created_at');
+        return allP(`
+            SELECT el.created_at AS ts, s.user_id, u.username,
+                   'emotion' AS component, el.emotion AS event,
+                   el.emotion AS description,
+                   'web' AS origin, NULL AS ip,
+                   'session' AS ref_type, CAST(el.session_id AS TEXT) AS ref_id,
+                   'info' AS status
+            FROM emotion_logs el
+            LEFT JOIN sessions s ON el.session_id = s.id
+            LEFT JOIN users u ON s.user_id = u.id
+            WHERE el.tenant_id = ? ${f.clause}
+            ORDER BY el.created_at DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
+    });
+
+    // 11. oyon_emotion_records → 'oyon'
+    queries.push(async () => {
+        if (!await tableExists('oyon_emotion_records')) return [];
+        const f = dateFilter('oer.window_start');
+        return allP(`
+            SELECT oer.window_start AS ts, oer.user_id, u.username,
+                   'oyon' AS component,
+                   COALESCE(oer.dominant, 'sample') AS event,
+                   COALESCE(oer.dominant, 'unknown') ||
+                   COALESCE(' (' || ROUND(oer.confidence, 2) || ')', '') AS description,
+                   'web' AS origin, NULL AS ip,
+                   'session' AS ref_type, CAST(oer.session_id AS TEXT) AS ref_id,
+                   'info' AS status
+            FROM oyon_emotion_records oer
+            LEFT JOIN users u ON oer.user_id = u.id
+            WHERE oer.tenant_id = ? ${f.clause}
+            ORDER BY oer.window_start DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
+    });
+
+    // 12. session_vitals → 'vitals' (every monitor sample)
+    queries.push(async () => {
+        if (!await tableExists('session_vitals')) return [];
+        const f = dateFilter('sv.recorded_at');
+        return allP(`
+            SELECT sv.recorded_at AS ts, s.user_id, u.username,
+                   'vitals' AS component, 'sample' AS event,
+                   'HR ' || COALESCE(CAST(sv.hr AS TEXT), '?') ||
+                   ' SpO2 ' || COALESCE(CAST(sv.spo2 AS TEXT), '?') AS description,
+                   'web' AS origin, NULL AS ip,
+                   'session' AS ref_type, CAST(sv.session_id AS TEXT) AS ref_id,
+                   'info' AS status
+            FROM session_vitals sv
+            LEFT JOIN sessions s ON sv.session_id = s.id
+            LEFT JOIN users u ON s.user_id = u.id
+            WHERE 1=1 ${f.clause}
+            ORDER BY sv.recorded_at DESC LIMIT ?
+        `, [...f.params, perSource]);
+    });
+
+    // 13. scenario_events → 'scenario'
+    queries.push(async () => {
+        if (!await tableExists('scenario_events')) return [];
+        const f = dateFilter('se.created_at');
+        return allP(`
+            SELECT se.created_at AS ts, NULL AS user_id, NULL AS username,
+                   'scenario' AS component,
+                   COALESCE(se.event_type, 'event') AS event,
+                   COALESCE(se.description, se.event_type) AS description,
+                   'engine' AS origin, NULL AS ip,
+                   'scenario' AS ref_type, CAST(se.scenario_id AS TEXT) AS ref_id,
+                   'info' AS status
+            FROM scenario_events se
+            WHERE 1=1 ${f.clause}
+            ORDER BY se.created_at DESC LIMIT ?
+        `, [...f.params, perSource]);
+    });
+
+    Promise.all(queries.map(q => q())).then((results) => {
+        const flat = results.flat();
+        const events = flat
+            .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))
+            .slice(0, limit);
+        // Per-source counts so you can see what fired and what was empty.
+        const sources = {};
+        for (const r of flat) {
+            sources[r.component] = (sources[r.component] || 0) + 1;
+        }
+        res.json({ events, sources });
+    }).catch((e) => res.status(500).json({ error: e.message }));
+});
+
+// --- SYSTEM LOG (raw DB reflection, admin only) ---
+//
+// Goal: an obsessive raw view of every table in the database. No curation,
+// no joins — just one table at a time. The endpoint validates the
+// requested table name against sqlite_master so callers can't smuggle
+// arbitrary SQL through ":name". Tenant scoping is applied when the
+// target table has a tenant_id column.
+
+// GET /api/system-log/tables — list every table with its row count.
+router.get('/system-log/tables', authenticateToken, requireAdmin, (req, res) => {
+    dbAdapter.all(
+        `SELECT name FROM sqlite_master
+         WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+         ORDER BY name`,
+        [],
+        async (err, tables) => {
+            if (err) return res.status(500).json({ error: err.message });
+            try {
+                const out = await Promise.all(tables.map(t => new Promise((resolve) => {
+                    dbAdapter.get(
+                        `SELECT COUNT(*) AS n FROM "${t.name}"`,
+                        [],
+                        (e2, row) => resolve({ name: t.name, count: e2 ? null : (row?.n ?? 0) })
+                    );
+                })));
+                res.json({ tables: out });
+            } catch (e) {
+                res.status(500).json({ error: e.message });
+            }
+        }
+    );
+});
+
+// GET /api/system-log/table/:name — return rows from a single table.
+// Validated against sqlite_master before any SQL is built.
+router.get('/system-log/table/:name', authenticateToken, requireAdmin, (req, res) => {
+    const { name } = req.params;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 500, 5000);
+    const offset = parseInt(req.query.offset, 10) || 0;
+
+    dbAdapter.get(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
+        [name],
+        (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!row) return res.status(404).json({ error: `Unknown table: ${name}` });
+
+            // Discover columns + tenant_id presence.
+            dbAdapter.all(`PRAGMA table_info("${name}")`, [], (err2, cols) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                const colNames = cols.map(c => c.name);
+                const hasTenant = colNames.includes('tenant_id');
+                const orderCol = colNames.includes('id') ? 'id' :
+                                 colNames.includes('timestamp') ? 'timestamp' :
+                                 colNames.includes('created_at') ? 'created_at' : null;
+
+                const where = hasTenant ? `WHERE tenant_id = ?` : '';
+                const orderClause = orderCol ? `ORDER BY "${orderCol}" DESC` : '';
+                const sql = `SELECT * FROM "${name}" ${where} ${orderClause} LIMIT ? OFFSET ?`;
+                const params = hasTenant
+                    ? [tenantId(req), limit, offset]
+                    : [limit, offset];
+
+                dbAdapter.all(sql, params, (err3, rows) => {
+                    if (err3) return res.status(500).json({ error: err3.message });
+                    res.json({
+                        table: name,
+                        columns: colNames,
+                        rows,
+                        limit,
+                        offset,
+                        total_returned: rows.length,
+                    });
+                });
+            });
+        }
+    );
+});
+
 // --- ALARM ENDPOINTS ---
 
 // POST /api/alarms/log - Log an alarm event
@@ -1567,6 +2384,44 @@ const TNA_VERB_MERGE_MAP = {
     'TREATMENT_EFFECT_ENDED': null,
 };
 
+function isDateOnly(value) {
+    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function buildLearningEventWhere(req, { alias = '', includeUser = true } = {}) {
+    const { case_id, user_id, start_date, end_date } = req.query || {};
+    const prefix = alias && alias.endsWith('.') ? alias : alias ? `${alias}.` : '';
+    const column = (name) => `${prefix}${name}`;
+    const clauses = [`${column('tenant_id')} = ?`];
+    const params = [tenantId(req)];
+
+    if (case_id) {
+        clauses.push(`${column('case_id')} = ?`);
+        params.push(case_id);
+    }
+    if (includeUser && user_id) {
+        clauses.push(`${column('user_id')} = ?`);
+        params.push(user_id);
+    }
+    if (start_date) {
+        clauses.push(`${column('timestamp')} >= ?`);
+        params.push(start_date);
+    }
+    if (end_date) {
+        if (isDateOnly(end_date)) {
+            clauses.push(`${column('timestamp')} < date(?, '+1 day')`);
+        } else {
+            clauses.push(`${column('timestamp')} <= ?`);
+        }
+        params.push(end_date);
+    }
+
+    return {
+        where: `WHERE ${clauses.join(' AND ')}`,
+        params,
+    };
+}
+
 // GET /api/analytics/tna-sequences — LAILA-shaped TNA sequence builder
 //
 // Returns parallel arrays { sequences[][], objectTypeSequences[][] } so the
@@ -1586,7 +2441,6 @@ const TNA_VERB_MERGE_MAP = {
 //      the distance matrix in the Clusters tab)
 router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, (req, res) => {
     const {
-        case_id, user_id, start_date, end_date,
         min_sequence_length = '2',
         min_verb_pct = '0.05',
         skip_merges,
@@ -1596,21 +2450,18 @@ router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, (req, re
     const minVerbPct = Math.max(0, parseFloat(min_verb_pct) || 0);
     const skipMerges = String(skip_merges) === 'true';
     const grouping = group_by === 'actor' ? 'actor' : 'actor-session';
+    const filters = buildLearningEventWhere(req, { alias: 'le.' });
 
     let sql = `
         SELECT le.user_id, le.session_id, le.verb, le.object_type, le.timestamp,
                c.name AS case_title
           FROM learning_events le
-          LEFT JOIN cases c ON c.id = le.case_id
-         WHERE 1=1`;
-    const params = [];
-    if (case_id)    { sql += ' AND le.case_id = ?';    params.push(case_id); }
-    if (user_id)    { sql += ' AND le.user_id = ?';    params.push(user_id); }
-    if (start_date) { sql += ' AND le.timestamp >= ?'; params.push(start_date); }
-    if (end_date)   { sql += ' AND le.timestamp <= ?'; params.push(end_date); }
-    sql += ' ORDER BY le.user_id ASC, le.timestamp ASC LIMIT 50000';
+          LEFT JOIN cases c ON c.id = le.case_id AND c.tenant_id = le.tenant_id
+          ${filters.where}
+         ORDER BY le.user_id ASC, le.session_id ASC, le.timestamp ASC, le.id ASC
+         LIMIT 50000`;
 
-    dbAdapter.all(sql, params, (err, rows) => {
+    dbAdapter.all(sql, filters.params, (err, rows) => {
         if (err) {
             (req.log || routesAdminLog).error('tna sequences query failed', { error: err.message });
             return res.status(500).json({ error: err.message });
@@ -1728,14 +2579,10 @@ router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, (req, re
 
 // GET /api/analytics/daily-counts — events per calendar day for the timeline.
 router.get('/analytics/daily-counts', authenticateToken, requireAdmin, (req, res) => {
-    const { case_id, user_id, start_date, end_date } = req.query;
+    const filters = buildLearningEventWhere(req);
     let sql = `SELECT date(timestamp) AS day, COUNT(*) AS n
-                 FROM learning_events WHERE 1=1`;
-    const params = [];
-    if (case_id)    { sql += ' AND case_id = ?';    params.push(case_id); }
-    if (user_id)    { sql += ' AND user_id = ?';    params.push(user_id); }
-    if (start_date) { sql += ' AND timestamp >= ?'; params.push(start_date); }
-    if (end_date)   { sql += ' AND timestamp <= ?'; params.push(end_date); }
+                 FROM learning_events ${filters.where}`;
+    const params = filters.params;
     sql += ' GROUP BY day ORDER BY day';
     dbAdapter.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -1751,16 +2598,12 @@ router.get('/analytics/daily-counts', authenticateToken, requireAdmin, (req, res
 // Date.getDay(). Unobserved cells are returned with count=0 so the
 // heatmap renders a full grid even on sparse data.
 router.get('/analytics/hourly-counts', authenticateToken, requireAdmin, (req, res) => {
-    const { case_id, user_id, start_date, end_date } = req.query;
+    const filters = buildLearningEventWhere(req);
     let sql = `SELECT CAST(strftime('%w', timestamp) AS INTEGER) AS dow,
                       CAST(strftime('%H', timestamp) AS INTEGER) AS hour,
                       COUNT(*) AS n
-                 FROM learning_events WHERE 1=1`;
-    const params = [];
-    if (case_id)    { sql += ' AND case_id = ?';    params.push(case_id); }
-    if (user_id)    { sql += ' AND user_id = ?';    params.push(user_id); }
-    if (start_date) { sql += ' AND timestamp >= ?'; params.push(start_date); }
-    if (end_date)   { sql += ' AND timestamp <= ?'; params.push(end_date); }
+                 FROM learning_events ${filters.where}`;
+    const params = filters.params;
     sql += ' GROUP BY dow, hour ORDER BY dow, hour';
     dbAdapter.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -1788,14 +2631,10 @@ router.get('/analytics/hourly-counts', authenticateToken, requireAdmin, (req, re
 // Limits to the top 10 verbs by total count and folds the rest into a
 // synthetic 'OTHER' series so the legend stays readable.
 router.get('/analytics/timeline-series', authenticateToken, requireAdmin, (req, res) => {
-    const { case_id, user_id, start_date, end_date } = req.query;
+    const filters = buildLearningEventWhere(req);
     let sql = `SELECT date(timestamp) AS day, verb, COUNT(*) AS n
-                 FROM learning_events WHERE 1=1`;
-    const params = [];
-    if (case_id)    { sql += ' AND case_id = ?';    params.push(case_id); }
-    if (user_id)    { sql += ' AND user_id = ?';    params.push(user_id); }
-    if (start_date) { sql += ' AND timestamp >= ?'; params.push(start_date); }
-    if (end_date)   { sql += ' AND timestamp <= ?'; params.push(end_date); }
+                 FROM learning_events ${filters.where}`;
+    const params = filters.params;
     sql += ' GROUP BY day, verb ORDER BY day, verb';
     dbAdapter.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -1829,13 +2668,7 @@ router.get('/analytics/timeline-series', authenticateToken, requireAdmin, (req, 
 
 // GET /api/analytics/summary — top-line stat-card numbers.
 router.get('/analytics/summary', authenticateToken, requireAdmin, (req, res) => {
-    const { case_id, user_id, start_date, end_date } = req.query;
-    let where = ' WHERE 1=1';
-    const params = [];
-    if (case_id)    { where += ' AND case_id = ?';    params.push(case_id); }
-    if (user_id)    { where += ' AND user_id = ?';    params.push(user_id); }
-    if (start_date) { where += ' AND timestamp >= ?'; params.push(start_date); }
-    if (end_date)   { where += ' AND timestamp <= ?'; params.push(end_date); }
+    const { where, params } = buildLearningEventWhere(req);
 
     const sql = `SELECT COUNT(*) AS totalActivities,
                         COUNT(DISTINCT user_id) AS uniqueUsers,
@@ -1856,12 +2689,7 @@ router.get('/analytics/summary', authenticateToken, requireAdmin, (req, res) => 
 
 // GET /api/analytics/stats — verb + object type frequency for donut charts.
 router.get('/analytics/stats', authenticateToken, requireAdmin, (req, res) => {
-    const { case_id, start_date, end_date } = req.query;
-    let where = ' WHERE 1=1';
-    const params = [];
-    if (case_id)    { where += ' AND case_id = ?';    params.push(case_id); }
-    if (start_date) { where += ' AND timestamp >= ?'; params.push(start_date); }
-    if (end_date)   { where += ' AND timestamp <= ?'; params.push(end_date); }
+    const { where, params } = buildLearningEventWhere(req);
 
     const verbsSql = `SELECT verb AS label, COUNT(*) AS count FROM learning_events ${where} GROUP BY verb ORDER BY count DESC`;
     const objsSql  = `SELECT object_type AS label, COUNT(*) AS count FROM learning_events ${where} GROUP BY object_type ORDER BY count DESC`;
@@ -1878,15 +2706,13 @@ router.get('/analytics/stats', authenticateToken, requireAdmin, (req, res) => {
 // simulator equivalent of LAILA's top resources). Useful to spot which
 // labs / treatments / patients the cohort gravitates to.
 router.get('/analytics/top-resources', authenticateToken, requireAdmin, (req, res) => {
-    const { case_id, user_id, start_date, end_date, limit = '10' } = req.query;
+    const { limit = '10' } = req.query;
+    const filters = buildLearningEventWhere(req);
     let sql = `SELECT object_type, object_name, COUNT(*) AS n
                  FROM learning_events
-                WHERE object_name IS NOT NULL AND object_name != ''`;
-    const params = [];
-    if (case_id)    { sql += ' AND case_id = ?';    params.push(case_id); }
-    if (user_id)    { sql += ' AND user_id = ?';    params.push(user_id); }
-    if (start_date) { sql += ' AND timestamp >= ?'; params.push(start_date); }
-    if (end_date)   { sql += ' AND timestamp <= ?'; params.push(end_date); }
+                ${filters.where}
+                  AND object_name IS NOT NULL AND object_name != ''`;
+    const params = filters.params;
     sql += ' GROUP BY object_type, object_name ORDER BY n DESC LIMIT ?';
     params.push(Math.min(parseInt(limit, 10) || 10, 100));
     dbAdapter.all(sql, params, (err, rows) => {
@@ -1898,16 +2724,17 @@ router.get('/analytics/top-resources', authenticateToken, requireAdmin, (req, re
 // GET /api/analytics/filter-options — courses + students for dropdown filters.
 router.get('/analytics/filter-options', authenticateToken, requireAdmin, (req, res) => {
     dbAdapter.all(
-        `SELECT id, name AS title FROM cases WHERE deleted_at IS NULL ORDER BY name`,
-        [],
+        `SELECT id, name AS title FROM cases WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY name`,
+        [tenantId(req)],
         (err1, cases) => {
             if (err1) return res.status(500).json({ error: err1.message });
             dbAdapter.all(
                 `SELECT DISTINCT u.id, u.username, u.name AS fullname, u.email
                    FROM users u
-                   JOIN learning_events le ON le.user_id = u.id
+                   JOIN learning_events le ON le.user_id = u.id AND le.tenant_id = ?
+                  WHERE u.tenant_id = ?
                   ORDER BY u.username`,
-                [],
+                [tenantId(req), tenantId(req)],
                 (err2, users) => {
                     if (err2) return res.status(500).json({ error: err2.message });
                     res.json({ cases: cases || [], users: users || [] });

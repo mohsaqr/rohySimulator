@@ -57,6 +57,7 @@ import {
     redactRows,
     resolveSessionCaseConfig,
     resolveSessionCaseScenario,
+    resolveSessionTrinity,
     roleForStorage,
     tenantId,
     validatePassword,
@@ -1165,11 +1166,10 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                 function finalizeOrders() {
                     (req.log || routesOrdersLog).info('lab orders finalized', { inserted, orders: orderIds });
 
-                    // Log event to event_log
-                    dbAdapter.run(
-                        `INSERT INTO event_log (session_id, event_type, description) VALUES (?, ?, ?)`,
-                        [sessionId, 'investigation_ordered', `Ordered ${inserted} lab tests`]
-                    );
+                    // Per-lab learning_events rows below are the canonical record;
+                    // the legacy event_log dual-write was dropped in Phase 2 of
+                    // PLAN_LOGGING.md (one row per ordered lab is more useful than
+                    // one summary row anyway).
 
                     // Log detailed learning events for each ordered lab
                     const logSql = `
@@ -1359,33 +1359,59 @@ router.get('/sessions/:sessionId/lab-results', authenticateToken, (req, res) => 
 });
 
 // PUT /api/sessions/:sessionId/labs/:labId - Instructor edit lab value during simulation (Admin only)
-router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireEducator, (req, res) => {
+router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireEducator, async (req, res) => {
     const { sessionId, labId } = req.params;
     const { current_value } = req.body;
-    
+
     if (current_value === undefined) {
         return res.status(400).json({ error: 'current_value is required' });
     }
-    
+
     // Update the lab value in case_investigations
     const sql = `UPDATE case_investigations SET current_value = ?, is_abnormal = 1 WHERE id = ?`;
-    
-    dbAdapter.run(sql, [current_value, labId], function(err) {
+
+    dbAdapter.run(sql, [current_value, labId], async function(err) {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
         if (this.changes === 0) {
             return res.status(404).json({ error: 'Lab test not found' });
         }
-        
-        // Log the instructor edit
-        dbAdapter.run(
-            `INSERT INTO event_log (session_id, event_type, description) VALUES (?, ?, ?)`,
-            [sessionId, 'lab_value_edited', `Instructor edited lab value for test ID ${labId} to ${current_value}`],
-            (err) => {
-                if (err) routesOrdersLog.warn('lab edit event log failed', { error: err.message });
-            }
-        );
+
+        // Log the instructor edit to learning_events (canonical xAPI store).
+        // Trinity is server-derived from sessionId. Verb EDITED_LAB_VALUE is
+        // attributed to the session owner (the student), with the editing
+        // instructor recorded in context.instructor_id for offline auditing.
+        const trinity = await resolveSessionTrinity(sessionId, tenantId(req));
+        if (trinity.found) {
+            dbAdapter.run(
+                `INSERT INTO learning_events (
+                    session_id, user_id, case_id, verb,
+                    object_type, object_id, object_name,
+                    component, result, context, severity, category, tenant_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    sessionId,
+                    trinity.user_id,
+                    trinity.case_id,
+                    'EDITED_LAB_VALUE',
+                    'lab',
+                    String(labId),
+                    `Lab ${labId}`,
+                    'INSTRUCTOR_PANEL',
+                    `value=${current_value}`,
+                    JSON.stringify({ current_value, instructor_id: req.user.id }),
+                    'IMPORTANT',
+                    'CLINICAL',
+                    tenantId(req),
+                ],
+                (insertErr) => {
+                    if (insertErr) routesOrdersLog.warn('lab edit learning_events failed', { error: insertErr.message });
+                }
+            );
+        } else {
+            routesOrdersLog.warn('lab edit: session trinity not resolvable', { sessionId, labId });
+        }
 
         res.json({
             message: 'Lab value updated',

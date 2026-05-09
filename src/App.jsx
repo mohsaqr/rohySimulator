@@ -148,6 +148,25 @@ function MainApp() {
       }
    };
 
+   // Auto-end on tab close. Uses sendBeacon (queued by the UA past
+   // unload) — without this every browser-close left a session "active"
+   // forever. The server's PUT /sessions/:id/end is idempotent so a
+   // duplicate call from an explicit End click is harmless.
+   useEffect(() => {
+      const handler = () => {
+         if (!sessionId) return;
+         try {
+            const url = `/api/sessions/${sessionId}/end`;
+            // sendBeacon doesn't carry custom headers; the route accepts
+            // unauthenticated end calls for unload paths to avoid losing
+            // sessions when the JWT cookie is cleared first.
+            navigator.sendBeacon?.(url, new Blob(['{}'], { type: 'application/json' }));
+         } catch { /* best-effort */ }
+      };
+      window.addEventListener('pagehide', handler);
+      return () => window.removeEventListener('pagehide', handler);
+   }, [sessionId]);
+
    // View persistence ("breadcrumbs"). Same rule as session state: only
    // Exit/End/case-switch clears it. On refresh we land back on whatever
    // surface the user last had open — Settings tab + wizard step,
@@ -590,7 +609,11 @@ function MainApp() {
                               )}
                               <div className="border-t border-neutral-700" />
                               <button
-                                 onClick={() => { logout(); setShowUserMenu(false); }}
+                                 onClick={() => {
+                                    EventLogger.log('CLICKED', 'button', { objectId: 'logout', objectName: 'Logout', component: COMPONENTS.APP });
+                                    logout();
+                                    setShowUserMenu(false);
+                                 }}
                                  className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-red-900/30 flex items-center gap-3"
                               >
                                  <LogOut className="w-4 h-4" />
@@ -605,6 +628,7 @@ function MainApp() {
                {/* End & Debrief — bottom-left of the avatar tile, out of the
                    way of the head/face render but easy to reach. Was at the
                    top by the case banner; moved here per operator request. */}
+
                {activeCase && (
                   <button
                      onClick={handleEndSession}

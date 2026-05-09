@@ -1,0 +1,28 @@
+# Text file normalization
+*.md         text eol=lf
+*.js         text eol=lf
+*.jsx        text eol=lf
+*.ts         text eol=lf
+*.tsx        text eol=lf
+*.html       text eol=lf
+*.css        text eol=lf
+*.json       text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+*.sh         text eol=lf
+*.sql        text eol=lf
+
+# Binary assets (do not normalize line endings)
+*.onnx       binary
+*.task       binary
+*.wasm       binary
+*.png        binary
+*.jpg        binary
+*.jpeg       binary
+*.gif        binary
+
+# Git LFS — declarations intentionally NOT enabled here.
+# When ready to migrate the binary assets to LFS, see scripts/README.md
+# for the one-time migration commands. Adding `filter=lfs diff=lfs merge=lfs`
+# now would create an inconsistency between cloners with LFS installed and
+# cloners without, since the existing blobs are not yet LFS pointers.

@@ -74,6 +74,41 @@ app.use(express.urlencoded({ limit: '256kb', extended: true }));
 // Routes
 app.use('/api', apiRoutes);
 
+// Full OyonR app. This intentionally serves the copied Oyon tree as-is so
+// Rohy does not recreate Oyon capture, settings, logs, or analytics UI.
+const oyonRoot = path.join(__dirname, "..", "OyonR");
+if (fs.existsSync(oyonRoot)) {
+    const allowOyonFrame = (req, res, next) => {
+        res.removeHeader('X-Frame-Options');
+        const frameAncestors = process.env.NODE_ENV === 'production'
+            ? "'self'"
+            : "'self' http://127.0.0.1:5173 http://localhost:5173";
+        res.setHeader(
+            'Content-Security-Policy',
+            [
+                "default-src 'self'",
+                "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data: blob:",
+                "media-src 'self' blob:",
+                "font-src 'self' data:",
+                "connect-src 'self' blob: data:",
+                "worker-src 'self' blob:",
+                `frame-ancestors ${frameAncestors}`,
+                "form-action 'self'",
+                "base-uri 'self'",
+                "object-src 'none'",
+            ].join('; ')
+        );
+        next();
+    };
+    app.use('/oyon', allowOyonFrame);
+    app.use('/standalone', allowOyonFrame);
+    app.use('/oyon', express.static(oyonRoot));
+    // Oyon standalone currently uses absolute /standalone asset URLs.
+    app.use('/standalone', express.static(path.join(oyonRoot, 'standalone')));
+}
+
 // Health Check
 app.get('/', (req, res) => {
     //res.send('Virtual Patient Platform Backend is Running');

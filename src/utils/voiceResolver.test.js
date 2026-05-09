@@ -330,8 +330,10 @@ describe('resolveVoice — provider derivation', () => {
         expect(r.tier).toBe('voice-slot');
     });
 
-    it("falls back to 'piper' when neither side declares a provider", () => {
+    it("falls back to 'kokoro' when neither side declares a provider", () => {
         const r = resolveVoice({});
-        expect(r.provider).toBe('piper');
+        expect(r.provider).toBe('kokoro');
+        expect(r.file).toBe(PROVIDER_FALLBACK_VOICE.kokoro.male);
+        expect(r.tier).toBe('hardcoded');
     });
 });

@@ -15,7 +15,10 @@ import { stripStageDirections } from '../../utils/stageDirections';
 import { parseConfig } from '../../utils/parseConfig';
 import { extractCompleteSentences } from '../../utils/sentenceSplit';
 import { resolveVoice } from '../../utils/voiceResolver';
+import { deriveDemographicSlot } from '../../utils/demographics';
 import { useToast } from '../../contexts/ToastContext';
+import { useNotifications } from '../../notifications/useNotifications';
+import { SOURCES, SEVERITY } from '../../notifications/types';
 import { formatHistoryAsMarkdown } from '../../data/historyGroups';
 import {
     formatRadiologyAsMarkdown,
@@ -89,6 +92,53 @@ function ttsErrorToast(toast, err) {
 
 const EMOTIONS_ROW1 = ['Inspired', 'Alert', 'Excited', 'Enthusiastic', 'Determined'];
 const EMOTIONS_ROW2 = ['Afraid', 'Upset', 'Nervous', 'Scared', 'Distressed'];
+const ALARM_SPEECH_COOLDOWN_MS = 90 * 1000;
+const AVATAR_ALARM_SPEECH_FORCE_OFF_KEY = 'rohy_avatar_alarm_speech_force_off';
+const ALARM_SEVERITY_RANK = {
+    [SEVERITY.WARNING]: 1,
+    [SEVERITY.ERROR]: 2,
+    [SEVERITY.CRITICAL]: 3,
+};
+
+function alarmSpeechLine(notification) {
+    if (notification?.source !== SOURCES.CLINICAL) return null;
+    if (!notification.key?.startsWith('alarm:')) return null;
+    if (![SEVERITY.WARNING, SEVERITY.CRITICAL].includes(notification.severity)) return null;
+
+    const data = notification.data || {};
+    const key = notification.key.replace(/^alarm:/, '');
+    const vital = data.vital || key.split('_')[0];
+    const kind = data.thresholdType || key.split('_').slice(1).join('_');
+    const critical = notification.severity === SEVERITY.CRITICAL;
+
+    const lines = {
+        hr_high: critical ? 'My heart is racing and I feel much worse.' : 'My heart feels like it is racing.',
+        hr_low: critical ? 'I feel very weak and lightheaded.' : 'I feel weak and a little lightheaded.',
+        spo2_low: critical ? 'I feel much more short of breath.' : 'I am getting more short of breath.',
+        bpSys_low: critical ? 'I feel like I might pass out.' : 'I feel dizzy and lightheaded.',
+        bpDia_low: critical ? 'I feel like I might pass out.' : 'I feel dizzy and lightheaded.',
+        bpSys_high: critical ? 'My head is pounding and I feel worse.' : 'My head is starting to pound.',
+        bpDia_high: critical ? 'My head is pounding and I feel worse.' : 'My head is starting to pound.',
+        rr_high: critical ? 'I cannot catch my breath.' : 'It is getting harder to breathe.',
+        rr_low: critical ? 'I feel very drowsy and it is hard to breathe.' : 'I feel unusually drowsy.',
+        temp_high: critical ? 'I feel like I am burning up.' : 'I feel hot and unwell.',
+        temp_low: critical ? 'I am shivering and feel very cold.' : 'I feel cold and shaky.',
+        etco2_high: critical ? 'I feel drowsy and short of breath.' : 'I feel more drowsy.',
+        etco2_low: critical ? 'I feel lightheaded and short of breath.' : 'I feel lightheaded.',
+    };
+
+    return lines[`${vital}_${kind}`] || (critical
+        ? 'Something feels really wrong. I feel worse.'
+        : 'I am starting to feel worse.');
+}
+
+function isAvatarAlarmSpeechForceOff() {
+    try {
+        return localStorage.getItem(AVATAR_ALARM_SPEECH_FORCE_OFF_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
 
 export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, currentVitals }) {
     const [input, setInput] = useState('');
@@ -98,6 +148,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const messagesEndRef = useRef(null);
     const { user } = useAuth();
     const toast = useToast();
+    const { subscribe, prefs } = useNotifications();
 
     // Voice-mode transcript curtain. The transcript is the textual log of
     // what was said. Showing it during a real patient interaction feels
@@ -180,6 +231,8 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const [agentStates, setAgentStates] = useState({}); // { agent_type: { status, paged_at, ... } }
     const [pagingTimers, setPagingTimers] = useState({}); // { agent_type: timeoutId }
     const [teamLog, setTeamLog] = useState([]);
+    const alarmSpeechCooldownRef = useRef(new Map());
+    const pendingAlarmSpeechRef = useRef(null);
 
     // Load chat settings (doctor name/avatar)
     useEffect(() => {
@@ -682,6 +735,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         if (!sessionId) return;
         setShowQuestionnaire(false);
         startQuestionnaireTimer();
+        // Canonical xAPI event (routes through EventLogger → BackendSurface
+        // → /learning-events/batch). The previous /events/batch dual-write
+        // to the legacy event_log table was dropped in Phase 2 of
+        // PLAN_LOGGING.md.
         EventLogger.emotionExpressed(emotion, COMPONENTS.CHAT_INTERFACE);
         try {
             await apiPost('/emotion-logs', {
@@ -691,18 +748,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             });
         } catch (err) {
             console.error('Failed to log emotion:', err);
-        }
-        try {
-            await apiPost('/events/batch', {
-                session_id: sessionId,
-                events: [{
-                    event_type: 'emotion_selected',
-                    description: `Emotion: ${emotion}`,
-                    timestamp: new Date().toISOString(),
-                }],
-            });
-        } catch (err) {
-            console.error('Failed to log emotion to event log:', err);
         }
     };
 
@@ -724,13 +769,13 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // shape (file/provider/rate/pitch/tier) lets callers forward the picked
     // engine to the server — without that, /api/tts silently falls back to
     // the platform default tts_provider and learners hear the wrong engine.
-    const resolveSpeakerVoice = (override, gender, age) => resolveVoice({
+    const resolveSpeakerVoice = useCallback((override, gender, age) => resolveVoice({
         voice: override,
         voiceSettings,
         platformAvatars,
         gender,
         age
-    });
+    }), [voiceSettings, platformAvatars]);
 
     const handleSendToPatient = async (overrideText) => {
         const text = (overrideText ?? input).trim();
@@ -765,8 +810,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             const override = activeCase?.config?.voice;
             const rawGender = activeCase?.config?.demographics?.gender;
             const age      = activeCase?.config?.demographics?.age;
-            const safeAge  = Number.isFinite(Number(age)) ? Number(age) : 35;
-            const slotGender = safeAge < 13 ? 'child' : (/^f/i.test(rawGender || '') ? 'female' : 'male');
+            const slotGender = deriveDemographicSlot(rawGender, age);
             const r = resolveSpeakerVoice(override, rawGender, age);
             if (!r.file) {
                 // Silent-fail guard: when nothing in the resolver chain
@@ -879,14 +923,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         if (!r.file) {
             // Same silent-fail guard the patient path now has — agents used
             // to go quiet without explanation if no voice resolved.
-            const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
-            const slot = safeAge < 13 ? 'child' : (/^f/i.test(gender || '') ? 'female' : 'male');
+            const slot = deriveDemographicSlot(gender, age);
             console.warn('[voice] no voice resolved for agent', { provider: r.provider, slot });
             toast?.error?.(`No voice configured for provider "${r.provider}" / ${slot}. Set a default in Settings → Voice & Avatar.`);
             return;
         }
-        const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
-        const slotGender = safeAge < 13 ? 'child' : (/^f/i.test(gender || '') ? 'female' : 'male');
+        const slotGender = deriveDemographicSlot(gender, age);
         VoiceService.speak({
             text: spokenText,
             voice: r.file,
@@ -907,6 +949,84 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             }
         });
     };
+
+    const speakPatientAlarm = useCallback(({ text }) => {
+        if (!voiceMode || activeTab !== 'patient') return false;
+        if (prefs.avatarAlarmSpeechEnabled === false || isAvatarAlarmSpeechForceOff()) return false;
+        const demographics = activeCase?.config?.demographics || {};
+        const r = resolveSpeakerVoice(
+            activeCase?.config?.voice,
+            demographics.gender,
+            demographics.age
+        );
+        const spokenText = stripStageDirections(text);
+        if (!spokenText || !r.file) return false;
+
+        const slotGender = deriveDemographicSlot(demographics.gender, demographics.age);
+        setMessages(prev => [...prev, { role: 'assistant', content: spokenText }]);
+        EventLogger.messageReceived(spokenText, COMPONENTS.CHAT_INTERFACE);
+        VoiceService.speak({
+            text: spokenText,
+            voice: r.file,
+            rate: r.rate,
+            pitch: r.pitch,
+            gender: slotGender,
+            provider: r.provider,
+            onStart: () => setSpeaking(true),
+            onVisemes: setVisemes,
+            onEnd: () => {
+                setSpeaking(false);
+                setVisemes({ viseme_sil: 1 });
+            },
+            onError: (err) => {
+                console.error('TTS error:', err);
+                setSpeaking(false);
+                ttsErrorToast(toast, err);
+            }
+        });
+        return true;
+    }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, activeCase?.config?.voice, activeCase?.config?.demographics, resolveSpeakerVoice, toast, setSpeaking, setVisemes]);
+
+    useEffect(() => {
+        return subscribe((event) => {
+            if (event?.type !== 'notify') return;
+            const notification = event.notification;
+            const text = alarmSpeechLine(notification);
+            if (!text || !voiceMode || activeTab !== 'patient') return;
+            if (prefs.avatarAlarmSpeechEnabled === false || isAvatarAlarmSpeechForceOff()) return;
+
+            const now = Date.now();
+            const nextRank = ALARM_SEVERITY_RANK[notification.severity] || 0;
+            const last = alarmSpeechCooldownRef.current.get(notification.key);
+            if (last && now - last.at < ALARM_SPEECH_COOLDOWN_MS && nextRank <= last.rank) {
+                return;
+            }
+            alarmSpeechCooldownRef.current.set(notification.key, { at: now, rank: nextRank });
+
+            const alarmSpeech = { key: notification.key, severity: notification.severity, text };
+            const busy = loading || listening || speaking || VoiceService.isSpeaking();
+            if (busy) {
+                if (notification.severity === SEVERITY.CRITICAL) {
+                    pendingAlarmSpeechRef.current = alarmSpeech;
+                }
+                return;
+            }
+            speakPatientAlarm(alarmSpeech);
+        });
+    }, [subscribe, voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, loading, listening, speaking, speakPatientAlarm]);
+
+    useEffect(() => {
+        if (!voiceMode || activeTab !== 'patient') return;
+        if (prefs.avatarAlarmSpeechEnabled === false || isAvatarAlarmSpeechForceOff()) {
+            pendingAlarmSpeechRef.current = null;
+            return;
+        }
+        if (loading || listening || speaking || VoiceService.isSpeaking()) return;
+        const pending = pendingAlarmSpeechRef.current;
+        if (!pending) return;
+        pendingAlarmSpeechRef.current = null;
+        speakPatientAlarm(pending);
+    }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, loading, listening, speaking, speakPatientAlarm]);
 
     const startVoiceTurn = () => {
         if (!VoiceService.isSttSupported()) {

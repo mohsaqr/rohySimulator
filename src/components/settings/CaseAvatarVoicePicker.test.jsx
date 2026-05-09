@@ -3,7 +3,7 @@
 //
 // CONTRACT (locked from src/components/settings/CaseAvatarVoicePicker.jsx):
 //   1. PROVIDER DROPDOWN: lists exactly the providers
-//      ['', 'piper', 'kokoro', 'google', 'openai']. Picking one writes
+//      ['', 'kokoro', 'piper', 'google', 'openai']. Picking one writes
 //      `config.voice.tts_provider`; picking '' (Inherit) deletes it.
 //   2. PROVIDER CHANGE INVALIDATES VOICE: switching provider always
 //      deletes `config.voice.case_voice` (voice ids are provider-specific
@@ -91,6 +91,7 @@ const sampleVoices = {
     ],
     kokoro: [
         { filename: 'af_bella', displayName: 'Bella', gender: 'female' },
+        { filename: 'am_michael', displayName: 'Michael', gender: 'male' },
     ],
     openai: [
         { filename: 'alloy', displayName: 'Alloy', gender: 'female' },
@@ -115,7 +116,7 @@ function defaultHandlers() {
         // Provider-aware voices endpoint.
         http.get('*/api/tts/voices', ({ request }) => {
             const url = new URL(request.url);
-            const provider = url.searchParams.get('provider') || 'piper';
+            const provider = url.searchParams.get('provider') || 'kokoro';
             return HttpResponse.json({ voices: sampleVoices[provider] || [] });
         }),
         // Catch-all to keep the provider stack quiet.
@@ -215,7 +216,7 @@ function getAvatarSelect() {
 // Wait until the picker has fetched the voice list for whichever provider
 // is currently active. The component sets voices via setVoices(...) inside
 // a useEffect that depends on `effectiveProvider`.
-async function waitForVoices(provider = 'piper') {
+async function waitForVoices(provider = 'kokoro') {
     const expected = sampleVoices[provider] || [];
     if (expected.length === 0) return;
     await waitFor(() => {
@@ -236,7 +237,7 @@ describe('CaseAvatarVoicePicker — provider dropdown', () => {
         mount();
         const select = getProviderSelect();
         const values = Array.from(select.querySelectorAll('option')).map((o) => o.value);
-        expect(values).toEqual(['', 'piper', 'kokoro', 'google', 'openai']);
+        expect(values).toEqual(['', 'kokoro', 'piper', 'google', 'openai']);
     });
 
     it('defaults the provider dropdown to "" (inherit) when no override is set', () => {
@@ -362,19 +363,19 @@ describe('CaseAvatarVoicePicker — voice list filtering', () => {
                     requestId: request.headers.get('x-request-id'),
                 });
                 const url = new URL(request.url);
-                const provider = url.searchParams.get('provider') || 'piper';
+                const provider = url.searchParams.get('provider') || 'kokoro';
                 return HttpResponse.json({ voices: sampleVoices[provider] || [] });
             })
         );
 
         mount();
-        await waitForVoices('piper');
+        await waitForVoices('kokoro');
 
         expect(voiceRequests[0]).toMatchObject({
             authorization: 'Bearer admin-token',
         });
         expect(new URL(voiceRequests[0].url).pathname).toBe('/api/tts/voices');
-        expect(new URL(voiceRequests[0].url).searchParams.get('provider')).toBe('piper');
+        expect(new URL(voiceRequests[0].url).searchParams.get('provider')).toBe('kokoro');
         expect(voiceRequests[0].requestId).toBeTruthy();
     });
 
@@ -397,11 +398,11 @@ describe('CaseAvatarVoicePicker — voice list filtering', () => {
         // CONTRACT 2 (positive side): the case-voice select reflects the
         // active provider's catalogue filtered to the patient slot.
         mount();
-        await waitForVoices('piper');
+        await waitForVoices('kokoro');
         const select = getCaseVoiceSelect();
         const optionValues = Array.from(select.querySelectorAll('option')).map((o) => o.value);
-        expect(optionValues).toContain('en_US-ryan-medium.onnx');
-        expect(optionValues).not.toContain('en_US-amy-medium.onnx');
+        expect(optionValues).toContain('am_michael');
+        expect(optionValues).not.toContain('af_bella');
     });
 
     it('filters case voices by patient gender when catalogue metadata is available', async () => {
@@ -411,11 +412,11 @@ describe('CaseAvatarVoicePicker — voice list filtering', () => {
                 demographics: { age: 35, gender: 'female' },
             },
         });
-        await waitForVoices('piper');
+        await waitForVoices('kokoro');
         const select = getCaseVoiceSelect();
         const optionValues = Array.from(select.querySelectorAll('option')).map((o) => o.value);
-        expect(optionValues).toContain('en_US-amy-medium.onnx');
-        expect(optionValues).not.toContain('en_US-ryan-medium.onnx');
+        expect(optionValues).toContain('af_bella');
+        expect(optionValues).not.toContain('am_michael');
     });
 
     it('clears case_voice when the provider changes (cross-provider voice ids are not portable)', async () => {
@@ -484,16 +485,13 @@ describe('CaseAvatarVoicePicker — TestVoiceButton wiring', () => {
         expect(stub.getAttribute('data-gender')).toBe('male');
     });
 
-    it('falls back to inherited voice (empty here, no platformAvatars) when case_voice is unset', () => {
-        // CONTRACT 3: with no override and no platform default, the stub
-        // receives an empty voice prop — it does NOT receive `undefined`
-        // wrapped as a string.
+    it('falls back to the Kokoro default when case_voice is unset', () => {
+        // CONTRACT 3: with no override and no platform default, the default
+        // provider is Kokoro, which has a hardcoded fallback voice.
         mount();
         const stub = screen.getByTestId('test-voice-button-stub');
-        // No case_voice + no platform persona default => empty.
-        expect(stub.getAttribute('data-voice')).toBe('');
-        // effectiveProvider defaults to 'piper' when unset.
-        expect(stub.getAttribute('data-provider')).toBe('piper');
+        expect(stub.getAttribute('data-voice')).toBe('am_michael');
+        expect(stub.getAttribute('data-provider')).toBe('kokoro');
     });
 
     it('inherits the platform provider, voice slot, rate, and pitch for preview', async () => {
@@ -597,11 +595,11 @@ describe('CaseAvatarVoicePicker — inherit handling and case-voice override', (
     it('writes config.voice.case_voice when a specific voice is picked', async () => {
         // CONTRACT 7: choosing a voice in the dropdown stores it.
         const { captured } = mount();
-        await waitForVoices('piper');
+        await waitForVoices('kokoro');
         const voiceSelect = getCaseVoiceSelect();
-        fireEvent.change(voiceSelect, { target: { value: 'en_US-ryan-medium.onnx' } });
+        fireEvent.change(voiceSelect, { target: { value: 'am_michael' } });
         await waitFor(() => {
-            expect(captured.current.config.voice?.case_voice).toBe('en_US-ryan-medium.onnx');
+            expect(captured.current.config.voice?.case_voice).toBe('am_michael');
         });
     });
 
@@ -611,10 +609,10 @@ describe('CaseAvatarVoicePicker — inherit handling and case-voice override', (
             id: 'c',
             config: {
                 demographics: { age: 35, gender: 'male' },
-                voice: { case_voice: 'en_US-amy-medium.onnx' },
+                voice: { case_voice: 'am_michael' },
             },
         });
-        await waitForVoices('piper');
+        await waitForVoices('kokoro');
         const voiceSelect = getCaseVoiceSelect();
         fireEvent.change(voiceSelect, { target: { value: '' } });
         await waitFor(() => {

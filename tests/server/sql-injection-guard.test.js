@@ -110,6 +110,36 @@ const ALLOWLIST = [
         lineSubstring: 'FROM learning_events ${where}',
         why: '`where` is built earlier in the function with `where += " AND col = ?"` shapes; values go through the params array.',
     },
+    {
+        file: 'server/routes/analytics-routes.js',
+        lineSubstring: 'FROM learning_events le WHERE ${whereClause}',
+        why: 'whereClause = filters.join(" AND ") where each filter is a hardcoded "le.col = ?" string; all values flow through params[]. Pre-flight count for /export/learning-events.',
+    },
+    {
+        file: 'server/routes/analytics-routes.js',
+        lineSubstring: 'WHERE ${where.join(\' AND \')}',
+        why: '/export/system-log/:source — where[] is built from a fixed list of conditions ("tenant_id = ?", "${cfg.dateCol} >= ?"); cfg.dateCol comes from EXPORT_SOURCES (constant map). Values parameterised.',
+    },
+    {
+        file: 'server/routes/analytics-routes.js',
+        lineSubstring: 'FROM "${cfg.table}" ${whereClause} ORDER BY "${cfg.dateCol}"',
+        why: '/export/system-log/:source — cfg.table and cfg.dateCol come from EXPORT_SOURCES, a server-controlled constant map keyed by req.params.source which is validated against the map keys before this line.',
+    },
+    {
+        file: 'server/routes/analytics-routes.js',
+        lineSubstring: 'FROM "${t.name}"',
+        why: '/system-log/tables — t.name is enumerated from sqlite_master, never from a request.',
+    },
+    {
+        file: 'server/routes/analytics-routes.js',
+        lineSubstring: 'FROM "${name}" ${where}',
+        why: '/system-log/table/:name — name is validated against sqlite_master existence on the line above (404 otherwise) before any SQL is built; orderClause comes from a hardcoded { id | timestamp | created_at } selection.',
+    },
+    {
+        file: 'server/routes/analytics-routes.js',
+        lineSubstring: 'WHERE ${clauses.join(\' AND \')}',
+        why: 'TNA filter helper — clauses[] entries are hardcoded SQL fragments with ? placeholders; values go through params[].',
+    },
 ];
 
 function isAllowlisted(filePath, line) {

@@ -1,22 +1,11 @@
 # deploy/docker/Caddyfile — Caddy 2 config for rohy.
 #
-# Three TLS modes selected by the ROHY_TLS_MODE env var (set in the
-# rohy-caddy service env, surfaced here via {$VAR} interpolation):
-#
-#   auto      Let's Encrypt. Needs public DNS pointing here, ports 80+443
-#             reachable from the public internet, and a real hostname (no
-#             "localhost"). Caddy handles ACME automatically.
-#
-#   internal  Caddy's internal CA — issues a self-signed cert. The cert is
-#             valid for the configured hostname; browsers will warn until
-#             you trust the Caddy root CA. Use for LAN deploys.
-#             To trust on a client:
-#               docker exec rohy-caddy cat /data/caddy/pki/authorities/local/root.crt
-#             then add to your OS keychain.
-#
-#   off       Plain HTTP, port 80. Only sane for localhost or behind
-#             another TLS terminator. getUserMedia (mic) WILL NOT work
-#             on plain HTTP from a non-localhost origin.
+# TLS: this file is INTERNAL-ONLY (Caddy's internal CA, self-signed certs).
+# Earlier revisions advertised env-driven auto/internal/off selection via
+# ROHY_TLS_MODE, but Caddyfiles can't conditionally include directives, and
+# the file ended up always emitting `tls internal` regardless of the env —
+# so the docs lied. Made honest now: this file is one mode, switching is a
+# manual edit (instructions at the bottom of the file).
 #
 # Streaming TTS:
 #   The /api/tts route streams audio chunks. Caddy's reverse_proxy flushes
@@ -34,29 +23,18 @@
     # Caddy in `internal`/`off` mode.
     email {$ACME_EMAIL:admin@example.com}
 
-    # Disable auto-HTTPS when the operator picked `off` — otherwise Caddy
-    # tries to provision a cert for "localhost" and fails noisily.
-    auto_https {$ROHY_AUTO_HTTPS:on}
+    # Auto-HTTPS is on by default, which is right for `auto` and `internal`
+    # modes. For `off` mode (plain HTTP), add `auto_https off` here AND
+    # prefix the site block below with `http://`.
 }
 
 # === Site block ===========================================================
 {$ROHY_HOSTNAME:localhost} {
-    # TLS handling. Caddy snippet semantics: `tls internal` means use the
-    # internal CA. Empty `tls` block means the global mode applies (auto).
-    @internal expression `{env.ROHY_TLS_MODE} == "internal"`
-    @off      expression `{env.ROHY_TLS_MODE} == "off"`
-
-    # Render the right TLS directive for the active mode.
-    # (Caddy can't conditionally apply directives; we use a script-like
-    # approach via env-driven config templates. Simpler in practice:
-    # the operator picks one Caddyfile snippet at compose-up time.)
-
-    # NOTE: if you set ROHY_TLS_MODE=internal, uncomment the next line.
-    # tls internal
-
-    # NOTE: if you set ROHY_TLS_MODE=off, uncomment the next line and
-    # remove the site block's `https://` automatic upgrade.
-    # tls off
+    # Internal CA, self-signed cert. Browsers will warn until you trust the
+    # Caddy root CA on the client. To extract and trust it:
+    #   docker exec rohy-caddy cat /data/caddy/pki/authorities/local/root.crt
+    # then add the resulting PEM to your OS keychain.
+    tls internal
 
     # Compression — Caddy auto-negotiates. Disable on /api/tts so audio
     # frames don't get re-encoded mid-stream.
@@ -85,7 +63,8 @@
     # === Streaming TTS — DO NOT BUFFER ====================================
     # The order matters: this matcher block has to come before the catch-all
     # /rohy/* reverse_proxy so it wins the route.
-    handle_path /rohy/api/tts* {
+    handle /rohy/api/tts* {
+        uri strip_prefix /rohy
         reverse_proxy rohy:4000 {
             # flush_interval -1 = flush on every Write (true streaming).
             flush_interval -1
@@ -113,6 +92,58 @@
         }
     }
 
+    # === Oyon root-absolute paths =======================================
+    # The Oyon widget and the vendored standalone HTML use root-absolute
+    # URLs like /oyon/standalone/logs.html, /standalone/vendor/onnxruntime-web/,
+    # and /api/addons/oyon/* — they don't honour the SPA's /rohy/ base.
+    # Making the client base-aware would touch model/wasm fetch URLs, the
+    # standalone's importmap, and every "Open Oyon" launcher in the SPA;
+    # proxying these prefixes through to the same Express upstream is far
+    # less invasive and keeps the privacy contract identical (still local
+    # browser inference, still aggregate windows).
+    handle /oyon/* {
+        reverse_proxy rohy:4000 {
+            transport http {
+                response_header_timeout 300s
+                read_timeout 300s
+                dial_timeout 10s
+            }
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+        }
+    }
+    handle /standalone/* {
+        reverse_proxy rohy:4000 {
+            transport http {
+                response_header_timeout 300s
+                read_timeout 300s
+                dial_timeout 10s
+            }
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+        }
+    }
+    handle /api/addons/oyon* {
+        reverse_proxy rohy:4000 {
+            transport http {
+                response_header_timeout 300s
+                read_timeout 300s
+                dial_timeout 10s
+            }
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+        }
+    }
+
     # === Everything else under /rohy ======================================
     handle_path /rohy/* {
         reverse_proxy rohy:4000 {
@@ -135,3 +166,21 @@
         redir /rohy/ 302
     }
 }
+
+# === How to switch TLS mode (manual edits) ================================
+#
+# Default (above) is INTERNAL CA, suitable for LAN/dev. Two other modes:
+#
+# 1) Let's Encrypt (`auto`):
+#    - Replace the line `tls internal` with no `tls` directive at all.
+#    - Set ACME_EMAIL in your environment (already templated above).
+#    - Make sure ROHY_HOSTNAME is a real public hostname, not localhost.
+#    - Open ports 80 + 443 from the public internet to this container.
+#
+# 2) Plain HTTP (`off`) — localhost / behind another TLS terminator only:
+#    - Add `auto_https off` to the global block at the top of this file.
+#    - Replace `tls internal` with `# tls off (no directive needed)`.
+#    - Prefix the site block with `http://` so Caddy doesn't auto-upgrade:
+#        http://{$ROHY_HOSTNAME:localhost} { ... }
+#    - getUserMedia (mic) DOES NOT work on plain HTTP from non-localhost
+#      origins, so this mode is useful only behind a real TLS terminator.

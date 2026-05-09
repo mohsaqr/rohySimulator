@@ -16,7 +16,7 @@
 //      (voice_<provider>_<slot> in /api/platform-settings/voice)
 //   4. hardcoded provider fallback  → tier='hardcoded'
 //      (PROVIDER_FALLBACK_VOICE — empty for piper today, populated for the
-//      cloud providers)
+//      Kokoro and cloud providers)
 //   5. catalog-first (editor only)  → tier='catalog-first'
 //      Only used when the caller passes ttsVoices (the loaded provider
 //      catalogue). Picks the first voice the engine actually has installed
@@ -24,23 +24,22 @@
 //      fresh install with empty platform slots. The runtime would 503 here.
 
 import { PROVIDER_FALLBACK_VOICE } from './voiceFallbacks';
+import { deriveDemographicSlot } from './demographics.js';
 
 // Slot is age-driven: <13 → child, otherwise male/female by gender prefix.
 // Keep this aligned with the server's resolveTtsVoice (server/routes.js)
 // or admin previews drift from runtime.
 function deriveSlot(gender, age) {
-    const safeAge = Number.isFinite(Number(age)) ? Number(age) : 35;
-    if (safeAge < 13) return 'child';
-    return /^f/i.test(gender || '') ? 'female' : 'male';
+    return deriveDemographicSlot(gender, age);
 }
 
 // Pick the active provider from the speaker config + platform default. The
 // per-speaker tts_provider wins; otherwise the platform's default tts_provider
-// applies. Last-resort default is 'piper' (matches server-side fallback).
+// applies. Last-resort default is 'kokoro' (matches server-side fallback).
 function deriveProvider(voice, voiceSettings) {
     return voice?.tts_provider
         || voiceSettings?.tts_provider
-        || 'piper';
+        || 'kokoro';
 }
 
 // Effective rate/pitch for the speaker. Per-speaker override wins; otherwise

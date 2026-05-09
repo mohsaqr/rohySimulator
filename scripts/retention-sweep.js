@@ -2,6 +2,7 @@
 import sqlite3 from 'sqlite3';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sweepOyonRetention } from '../server/routes/_helpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -69,6 +70,25 @@ async function sweep() {
             results[entry.table] = result.changes || 0;
         }
 
+        // Oyon retention is per-tenant from oyon_settings.retention_days, not
+        // the global window above. Run the shared helper inside the same
+        // transaction so the audit row covers both global + Oyon deletes.
+        // Pass the local sqlite3-backed runner — sweepOyonRetention defaults
+        // to dbAdapter, which has its own connection unrelated to this script.
+        const oyonRunner = {
+            all: (sql, params) => new Promise((resolve, reject) => {
+                db.all(sql, params || [], (err, rows) => err ? reject(err) : resolve(rows || []));
+            }),
+            run: (sql, params) => new Promise((resolve, reject) => {
+                db.run(sql, params || [], function onRun(err) {
+                    err ? reject(err) : resolve({ changes: this.changes, lastID: this.lastID });
+                });
+            }),
+        };
+        const oyonDeletedByTenant = await sweepOyonRetention({ runner: oyonRunner });
+        const oyonTotal = Object.values(oyonDeletedByTenant).reduce((a, b) => a + Number(b || 0), 0);
+        results.oyon_emotion_records = oyonTotal;
+
         await run(
             `INSERT INTO system_audit_log
              (user_id, username, action, resource_type, resource_id, resource_name,
@@ -76,7 +96,7 @@ async function sweep() {
              VALUES (NULL, 'retention-sweep', 'retention_sweep', 'retention', 'time_bounded_logs',
                      'Retention sweep', ?, 'success', ?, 1)`,
             [
-                JSON.stringify({ deleted: results }),
+                JSON.stringify({ deleted: results, oyon_per_tenant: oyonDeletedByTenant }),
                 JSON.stringify({ retention_seconds: seconds, retention_days: seconds / 86400 })
             ]
         );

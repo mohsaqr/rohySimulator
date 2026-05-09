@@ -27,6 +27,12 @@ describe('buildAllowedOrigins', () => {
         expect(list).toContain('https://rohy.example.com');
     });
 
+    it('normalises a FRONTEND_URL with a path to its origin', () => {
+        const list = buildAllowedOrigins({ frontendUrl: 'https://rohy.example.com/rohy' });
+        expect(list).toContain('https://rohy.example.com');
+        expect(list).not.toContain('https://rohy.example.com/rohy');
+    });
+
     it('drops empty / undefined FRONTEND_URL silently', () => {
         const list = buildAllowedOrigins({ frontendUrl: '' });
         expect(list).not.toContain('');

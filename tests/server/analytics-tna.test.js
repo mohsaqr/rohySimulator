@@ -27,38 +27,46 @@ function pRun(db, sql, params = []) {
     );
 }
 
-async function seedAdmin(db, username) {
+async function seedTenant(db, { id, slug, name }) {
+    await pRun(db,
+        `INSERT OR IGNORE INTO tenants (id, slug, name, is_default)
+         VALUES (?, ?, ?, 0)`,
+        [id, slug, name]
+    );
+}
+
+async function seedAdmin(db, username, tenantId = 1) {
     const hash = await bcrypt.hash(PASSWORD, 4);
     const r = await pRun(db,
         `INSERT INTO users (username, name, email, password_hash, role, tenant_id, status)
-         VALUES (?, ?, ?, ?, 'admin', 1, 'active')`,
-        [username, username, `${username}@example.com`, hash]
+         VALUES (?, ?, ?, ?, 'admin', ?, 'active')`,
+        [username, username, `${username}@example.com`, hash, tenantId]
     );
     return r.lastID;
 }
 
-async function seedCase(db, name) {
+async function seedCase(db, name, tenantId = 1) {
     const r = await pRun(db,
         `INSERT INTO cases (name, description, system_prompt, config, tenant_id)
-         VALUES (?, ?, ?, ?, 1)`,
-        [name, '', 'prompt', '{}']
+         VALUES (?, ?, ?, ?, ?)`,
+        [name, '', 'prompt', '{}', tenantId]
     );
     return r.lastID;
 }
 
-async function seedSession(db, userId, caseId) {
+async function seedSession(db, userId, caseId, tenantId = 1) {
     const r = await pRun(db,
-        `INSERT INTO sessions (case_id, user_id, status, tenant_id) VALUES (?, ?, 'active', 1)`,
-        [caseId, userId]
+        `INSERT INTO sessions (case_id, user_id, status, tenant_id) VALUES (?, ?, 'active', ?)`,
+        [caseId, userId, tenantId]
     );
     return r.lastID;
 }
 
-async function seedEvent(db, { userId, caseId, sessionId, verb, objectType, ts }) {
+async function seedEvent(db, { userId, caseId, sessionId, verb, objectType, ts, tenantId = 1, objectName = null }) {
     await pRun(db,
-        `INSERT INTO learning_events (session_id, user_id, case_id, verb, object_type, object_id, object_name, severity, category, timestamp)
-         VALUES (?, ?, ?, ?, ?, NULL, NULL, 'INFO', 'CLINICAL', ?)`,
-        [sessionId, userId, caseId, verb, objectType, ts]
+        `INSERT INTO learning_events (session_id, user_id, case_id, verb, object_type, object_id, object_name, severity, category, timestamp, tenant_id)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, 'INFO', 'CLINICAL', ?, ?)`,
+        [sessionId, userId, caseId, verb, objectType, objectName, ts, tenantId]
     );
 }
 
@@ -73,7 +81,9 @@ async function login(baseUrl, username) {
 
 describe('/api/analytics — LAILA-shaped endpoints', () => {
     let server, token;
+    let otherTenantToken;
     let userIdA, userIdB, caseId;
+    let otherTenantUserId, otherTenantCaseId;
 
     beforeAll(async () => {
         server = await startTestServer({ seed: false });
@@ -83,10 +93,14 @@ describe('/api/analytics — LAILA-shaped endpoints', () => {
             userIdA = await seedAdmin(db, 'analytics-userA');
             userIdB = await seedAdmin(db, 'analytics-userB');
             caseId = await seedCase(db, 'Sepsis Drill');
+            await seedTenant(db, { id: 2, slug: 'analytics-other', name: 'Analytics Other Tenant' });
+            otherTenantUserId = await seedAdmin(db, 'analytics-other-admin', 2);
+            otherTenantCaseId = await seedCase(db, 'Other Tenant Drill', 2);
 
             const sessA1 = await seedSession(db, userIdA, caseId);
             const sessA2 = await seedSession(db, userIdA, caseId);
             const sessB1 = await seedSession(db, userIdB, caseId);
+            const otherSess = await seedSession(db, otherTenantUserId, otherTenantCaseId, 2);
 
             // userA, session 1: a normal-length sequence (5 events).
             const t = (mins) => new Date(2026, 4, 1, 9, mins, 0).toISOString();
@@ -125,17 +139,39 @@ describe('/api/analytics — LAILA-shaped endpoints', () => {
                 });
             }
 
+            // Tenant 2 probe data. These rows should never affect tenant 1
+            // analytics counts, filters, or sequences.
+            await seedEvent(db, {
+                userId: otherTenantUserId, caseId: otherTenantCaseId, sessionId: otherSess,
+                verb: 'ORDERED_MEDICATION', objectType: 'medication',
+                objectName: 'Other Tenant Drug',
+                ts: new Date(2026, 4, 1, 11, 0, 0).toISOString(),
+                tenantId: 2,
+            });
+            await seedEvent(db, {
+                userId: otherTenantUserId, caseId: otherTenantCaseId, sessionId: otherSess,
+                verb: 'ADMINISTERED_MEDICATION', objectType: 'medication',
+                objectName: 'Other Tenant Drug',
+                ts: new Date(2026, 4, 1, 11, 2, 0).toISOString(),
+                tenantId: 2,
+            });
+
             void adminId;
         } finally {
             await closeDb(db);
         }
         token = await login(server.baseUrl, 'analytics-admin');
+        otherTenantToken = await login(server.baseUrl, 'analytics-other-admin');
     }, 30_000);
 
     afterAll(async () => { if (server) await server.close(); });
 
     function authedFetch(path) {
         return fetch(`${server.baseUrl}${path}`, { headers: { Authorization: `Bearer ${token}` } });
+    }
+
+    function otherTenantFetch(path) {
+        return fetch(`${server.baseUrl}${path}`, { headers: { Authorization: `Bearer ${otherTenantToken}` } });
     }
 
     describe('GET /tna-sequences', () => {
@@ -146,7 +182,7 @@ describe('/api/analytics — LAILA-shaped endpoints', () => {
 
         it('returns parallel sequences + objectTypeSequences arrays', async () => {
             const res = await authedFetch('/api/analytics/tna-sequences?skip_merges=true');
-            expect(res.status).toBe(200);
+            expect(res.status, await res.clone().text()).toBe(200);
             const body = await res.json();
 
             expect(Array.isArray(body.sequences)).toBe(true);
@@ -191,6 +227,31 @@ describe('/api/analytics — LAILA-shaped endpoints', () => {
             expect(body.metadata.uniqueVerbs).toContain('STARTED_SESSION');
             expect(body.metadata.uniqueObjectTypes).toContain('lab_test');
         });
+
+        it('is tenant-scoped and does not leak other-tenant events', async () => {
+            const res = await authedFetch('/api/analytics/tna-sequences?skip_merges=true');
+            const body = await res.json();
+            // 28 seeded clinical events + 1 LOGGED_IN event written by the
+            // auth dual-write when this test logged its admin in (Phase 3
+            // of PLAN_LOGGING.md).
+            expect(body.metadata.totalEvents).toBe(29);
+            expect(body.metadata.uniqueVerbs).not.toContain('ORDERED_MEDICATION');
+
+            const otherRes = await otherTenantFetch('/api/analytics/tna-sequences?skip_merges=true');
+            const otherBody = await otherRes.json();
+            // 2 seeded medication events + 1 LOGGED_IN row from the
+            // other-tenant admin login. uniqueVerbs is built from
+            // sequences[], which excludes session-less events; the
+            // LOGGED_IN row counts in totalEvents but not in uniqueVerbs.
+            expect(otherBody.metadata.totalEvents).toBe(3);
+            expect(otherBody.metadata.uniqueVerbs).toEqual(['ADMINISTERED_MEDICATION', 'ORDERED_MEDICATION']);
+        });
+
+        it('treats date-only end_date as inclusive of the selected calendar day', async () => {
+            const res = await authedFetch('/api/analytics/tna-sequences?skip_merges=true&start_date=2026-05-01&end_date=2026-05-01');
+            const body = await res.json();
+            expect(body.metadata.totalEvents).toBe(28);
+        });
     });
 
     describe('GET /summary', () => {
@@ -198,10 +259,25 @@ describe('/api/analytics — LAILA-shaped endpoints', () => {
             const res = await authedFetch('/api/analytics/summary');
             expect(res.status).toBe(200);
             const body = await res.json();
-            expect(body.totalActivities).toBeGreaterThanOrEqual(28);
-            expect(body.uniqueUsers).toBe(2);
+            // 28 seeded events + 1 LOGGED_IN from the auth dual-write
+            // performed during beforeAll's login(); see analytics-tna
+            // brittleness note in LEARNINGS.md. uniqueUsers also gains
+            // the admin (3 total: userA, userB, analytics-admin).
+            expect(body.totalActivities).toBe(29);
+            expect(body.uniqueUsers).toBe(3);
             expect(body.uniqueSessions).toBe(3);
             expect(body.avgPerUser).toBeGreaterThan(0);
+        });
+
+        it('keeps tenant totals isolated', async () => {
+            const res = await otherTenantFetch('/api/analytics/summary');
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            // 2 seeded events + 1 LOGGED_IN from the other-tenant admin
+            // login.
+            expect(body.totalActivities).toBe(3);
+            expect(body.uniqueUsers).toBe(1);
+            expect(body.uniqueSessions).toBe(1);
         });
     });
 
@@ -260,11 +336,30 @@ describe('/api/analytics — LAILA-shaped endpoints', () => {
             }
         });
 
+        it('stats honors the selected student filter', async () => {
+            const res = await authedFetch(`/api/analytics/stats?user_id=${userIdA}`);
+            const body = await res.json();
+            const verbs = new Map(body.verbs.map((row) => [row.label, row.count]));
+            expect(verbs.get('SENT_MESSAGE')).toBe(2);
+            expect(verbs.has('OPENED')).toBe(false);
+            expect(verbs.has('ORDERED_MEDICATION')).toBe(false);
+        });
+
         it('filter-options surfaces the seeded case', async () => {
             const res = await authedFetch('/api/analytics/filter-options');
             const body = await res.json();
             expect(body.cases.some((c) => c.title === 'Sepsis Drill')).toBe(true);
+            expect(body.cases.some((c) => c.title === 'Other Tenant Drill')).toBe(false);
             expect(body.users.length).toBeGreaterThanOrEqual(2);
+            expect(body.users.some((u) => u.username === 'analytics-other-admin')).toBe(false);
+        });
+
+        it('filter-options are tenant-scoped', async () => {
+            const res = await otherTenantFetch('/api/analytics/filter-options');
+            const body = await res.json();
+            expect(body.cases.map((c) => c.title)).toContain('Other Tenant Drill');
+            expect(body.cases.map((c) => c.title)).not.toContain('Sepsis Drill');
+            expect(body.users.map((u) => u.username)).toEqual(['analytics-other-admin']);
         });
     });
 });

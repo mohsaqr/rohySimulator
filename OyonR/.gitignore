@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+build/
+.cache/
+.vite/
+
+# environment + secrets
+.env
+.env.*
+!.env.example
+
+# editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# logs
+*.log
+npm-debug.log*
+
+# test artifacts
+coverage/
+.nyc_output/
+
+# tmp / scratch (per global rules — keep ./tmp/ excluded by default)
+tmp/
+.tmp/

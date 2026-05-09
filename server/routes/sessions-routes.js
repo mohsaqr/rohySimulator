@@ -191,6 +191,27 @@ router.post('/sessions', authenticateToken, async (req, res) => {
         return res.status(404).json({ error: 'Case not found' });
     }
 
+    // Dedup: React StrictMode (dev) double-fires effects, and parent
+    // re-renders with a new activeCase reference cause the start-session
+    // effect to re-run. Without this guard you get 2-3 sessions per real
+    // start, all clustered at the same second. Return any active session
+    // for the same (user, case) started in the last 30 seconds.
+    const recent = await new Promise((resolve) => {
+        dbAdapter.get(
+            `SELECT id FROM sessions
+             WHERE user_id = ? AND case_id = ? AND tenant_id = ?
+               AND end_time IS NULL
+               AND start_time > datetime('now', '-30 seconds')
+             ORDER BY id DESC LIMIT 1`,
+            [user_id, case_id, tenantId(req)],
+            (err, row) => resolve(err ? null : row)
+        );
+    });
+    if (recent) {
+        (req.log || routesCasesLog).info('reusing recent active session', { id: recent.id, user_id, case_id });
+        return res.json({ id: recent.id, message: 'Reused recent active session' });
+    }
+
     const sql = `INSERT INTO sessions (case_id, user_id, student_name, llm_settings, monitor_settings, case_snapshot, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)`;
 
     dbAdapter.run(sql, [

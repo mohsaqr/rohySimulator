@@ -52,9 +52,15 @@ WORKDIR /workspace/dynajs
 RUN npm install --prefer-offline --no-audit --no-fund
 
 # Copy rohy and install. The bind-mount of package*.json gives a cached
-# layer when source changes but deps don't.
+# layer when source changes but deps don't. OyonR/ has to be copied
+# BEFORE `npm install` because rohy's package.json declares
+# `"oyon": "file:./OyonR"` — npm needs that directory present at
+# install time to satisfy the local file dep. Without it, the build
+# either fails or silently skips Oyon, and the runtime image ships
+# without the local module.
 WORKDIR /workspace/rohy
 COPY package.json package-lock.json* ./
+COPY OyonR ./OyonR
 RUN npm install --prefer-offline --no-audit --no-fund
 
 # Now bring in source and build.
@@ -122,6 +128,10 @@ COPY --from=builder --chown=node:node /workspace/rohy/scripts ./scripts
 COPY --from=builder --chown=node:node /workspace/rohy/migrations ./migrations
 COPY --from=builder --chown=node:node /workspace/rohy/frontend ./frontend
 COPY --from=builder --chown=node:node /workspace/rohy/dist ./dist
+# OyonR/ ships the standalone HTML/JS/wasm/onnx assets that Express
+# serves at /oyon/* and /standalone/*; without it those routes 404
+# in the container.
+COPY --from=builder --chown=node:node /workspace/rohy/OyonR ./OyonR
 COPY --from=builder --chown=node:node /workspace/dynajs /opt/dynajs
 
 # rohy's package.json declares dynajs at "file:../dynajs". Recreate that

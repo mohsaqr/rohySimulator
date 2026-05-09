@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Oyon × Rohy — integration mock</title>
+    <style>
+      :root {
+        --rohy-bg-0: #f6f7fb;
+        --rohy-bg-1: #ffffff;
+        --rohy-bg-2: #eef0f6;
+        --rohy-line: #d8dee8;
+        --rohy-ink-0: #17202a;
+        --rohy-ink-1: #4b5563;
+        --rohy-ink-2: #6b7280;
+        --rohy-accent: #2563eb;
+        --rohy-positive: #16a34a;
+        --rohy-warn: #d97706;
+
+        --oyon-accent: #16a34a;
+        --oyon-accent-bg: rgba(22, 163, 74, 0.10);
+        --oyon-accent-line: rgba(22, 163, 74, 0.45);
+        --oyon-warn: #d97706;
+        --oyon-warn-bg: rgba(217, 119, 6, 0.10);
+        --oyon-warn-line: rgba(217, 119, 6, 0.45);
+        --oyon-idle-bg: var(--rohy-bg-2);
+        --oyon-idle-line: var(--rohy-line);
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0; padding: 0;
+        background: var(--rohy-bg-0);
+        color: var(--rohy-ink-0);
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ───── Mock-only state controls ───── */
+      .mock-controls {
+        position: sticky; top: 0; z-index: 100;
+        background: #fef3c7;
+        border-bottom: 1px solid #fbbf24;
+        padding: 8px 14px;
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        font-size: 12px;
+      }
+      .mock-controls strong { color: #92400e; letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px; }
+      .mock-controls button {
+        font: inherit; font-size: 12px;
+        background: #ffffff; border: 1px solid #fbbf24; color: #92400e;
+        padding: 4px 10px; border-radius: 6px; cursor: pointer;
+      }
+      .mock-controls button[aria-pressed="true"] { background: #92400e; color: #fef3c7; }
+      .mock-controls button:hover { background: #fde68a; }
+      .mock-controls .sep { color: #d97706; }
+
+      /* ───── Fake Rohy shell ───── */
+      .rohy-app { min-height: 100vh; display: grid; grid-template-rows: 56px 1fr; }
+      .rohy-topbar {
+        background: var(--rohy-bg-1);
+        border-bottom: 1px solid var(--rohy-line);
+        display: flex; align-items: center; padding: 0 18px; gap: 14px;
+      }
+      .rohy-brand {
+        font-weight: 700; font-size: 16px; letter-spacing: -0.01em;
+        display: flex; align-items: center; gap: 9px;
+      }
+      .rohy-brand .mark {
+        width: 26px; height: 26px; border-radius: 7px;
+        background: linear-gradient(135deg, #2563eb, #0ea5e9);
+        display: grid; place-items: center;
+        color: #fff; font-size: 13px; font-weight: 700;
+      }
+      .rohy-case-title { color: var(--rohy-ink-1); font-size: 13px; }
+      .rohy-case-title strong { color: var(--rohy-ink-0); }
+      .rohy-spacer { flex: 1; }
+      .rohy-timer {
+        font-variant-numeric: tabular-nums;
+        background: var(--rohy-bg-2); padding: 5px 10px; border-radius: 6px;
+        font-size: 12.5px; color: var(--rohy-ink-1);
+        display: inline-flex; align-items: center; gap: 6px;
+      }
+      .rohy-user {
+        display: flex; align-items: center; gap: 8px; font-size: 13px;
+      }
+      .rohy-user .avatar {
+        width: 28px; height: 28px; border-radius: 50%;
+        background: #6366f1; color: #fff; display: grid; place-items: center;
+        font-size: 11px; font-weight: 700;
+      }
+
+      .rohy-main {
+        display: grid; grid-template-columns: 200px 1fr 320px;
+        gap: 0;
+      }
+      .rohy-sidebar {
+        background: var(--rohy-bg-1);
+        border-right: 1px solid var(--rohy-line);
+        padding: 16px 12px;
+      }
+      .rohy-nav-item {
+        display: flex; align-items: center; gap: 9px;
+        padding: 7px 10px; border-radius: 6px;
+        font-size: 13.5px; color: var(--rohy-ink-1);
+        cursor: pointer;
+      }
+      .rohy-nav-item:hover { background: var(--rohy-bg-2); }
+      .rohy-nav-item.active { background: var(--rohy-accent); color: #fff; }
+      .rohy-nav-item .ico {
+        width: 16px; height: 16px; border-radius: 4px;
+        background: currentColor; opacity: 0.55;
+      }
+
+      .rohy-content { padding: 18px 22px 50px; overflow: auto; }
+      .rohy-vitals-strip {
+        display: grid; grid-template-columns: repeat(5, 1fr);
+        gap: 8px; margin-bottom: 18px;
+      }
+      .rohy-vital {
+        background: var(--rohy-bg-1);
+        border: 1px solid var(--rohy-line);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+      .rohy-vital .lbl {
+        font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
+        color: var(--rohy-ink-2);
+      }
+      .rohy-vital .val {
+        font-size: 19px; font-weight: 700; margin-top: 2px;
+        font-variant-numeric: tabular-nums;
+      }
+      .rohy-vital.warn .val { color: var(--rohy-warn); }
+
+      .rohy-chat {
+        background: var(--rohy-bg-1);
+        border: 1px solid var(--rohy-line);
+        border-radius: 10px;
+        padding: 16px;
+      }
+      .rohy-chat h3 { margin: 0 0 12px; font-size: 14px; color: var(--rohy-ink-1); }
+      .rohy-bubble {
+        background: var(--rohy-bg-2);
+        padding: 10px 12px; border-radius: 8px; max-width: 80%;
+        margin-bottom: 8px; font-size: 13.5px; line-height: 1.45;
+      }
+      .rohy-bubble.you {
+        background: var(--rohy-accent); color: #fff; margin-left: auto;
+      }
+
+      .rohy-tools {
+        background: var(--rohy-bg-1);
+        border-left: 1px solid var(--rohy-line);
+        padding: 16px;
+      }
+      .rohy-tabs {
+        display: flex; gap: 2px; padding: 3px;
+        background: var(--rohy-bg-2);
+        border-radius: 8px; margin-bottom: 12px;
+      }
+      .rohy-tab {
+        flex: 1; padding: 5px 8px; font-size: 12.5px; font-weight: 600;
+        text-align: center; color: var(--rohy-ink-1); cursor: pointer;
+        border-radius: 6px;
+      }
+      .rohy-tab.active { background: var(--rohy-bg-1); color: var(--rohy-ink-0); box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+      .rohy-tool-item {
+        font-size: 13px; padding: 7px 0;
+        border-bottom: 1px solid var(--rohy-line);
+        color: var(--rohy-ink-1);
+      }
+      .rohy-tool-item strong { color: var(--rohy-ink-0); }
+
+      /* ───── OYON PILL — sits in the topbar next to the timer ───── */
+      .oyon-pill {
+        display: inline-flex; align-items: center; gap: 7px;
+        padding: 5px 10px; border-radius: 999px;
+        font-size: 12.5px; font-weight: 500; line-height: 1;
+        cursor: pointer;
+        background: var(--oyon-idle-bg);
+        border: 1px solid var(--oyon-idle-line);
+        color: var(--rohy-ink-1);
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+        transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+        position: relative;
+      }
+      .oyon-pill[hidden] { display: none; }
+      .oyon-pill:hover { background: #e2e6ee; }
+      .oyon-pill .dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--rohy-ink-2);
+        flex-shrink: 0;
+      }
+      .oyon-pill[data-state="capturing"] {
+        background: var(--oyon-accent-bg);
+        border-color: var(--oyon-accent-line);
+        color: var(--oyon-accent);
+      }
+      .oyon-pill[data-state="capturing"] .dot {
+        background: var(--oyon-accent);
+        box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+        animation: oyon-pulse 1.4s ease-in-out infinite;
+      }
+      .oyon-pill[data-state="paused"] {
+        background: var(--oyon-warn-bg);
+        border-color: var(--oyon-warn-line);
+        color: var(--oyon-warn);
+      }
+      .oyon-pill[data-state="paused"] .dot { background: var(--oyon-warn); }
+      .oyon-pill[data-state="stopped"] {
+        opacity: 0.7;
+      }
+      @keyframes oyon-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      .oyon-pill .caret {
+        font-size: 9px; opacity: 0.6; margin-left: 1px;
+      }
+
+      /* ───── Pill popover ───── */
+      .oyon-popover {
+        position: absolute; top: calc(100% + 8px); right: 0;
+        background: #ffffff;
+        border: 1px solid var(--rohy-line);
+        border-radius: 10px;
+        box-shadow: 0 12px 32px -10px rgba(15, 23, 42, 0.18);
+        min-width: 220px;
+        padding: 6px;
+        z-index: 60;
+        font-size: 13px;
+      }
+      .oyon-popover[hidden] { display: none; }
+      .oyon-popover .pop-header {
+        padding: 8px 10px 6px;
+        border-bottom: 1px solid var(--rohy-line);
+        margin-bottom: 4px;
+      }
+      .oyon-popover .pop-header strong {
+        display: block; color: var(--rohy-ink-0);
+        font-size: 12.5px;
+      }
+      .oyon-popover .pop-header small {
+        display: block; color: var(--rohy-ink-2);
+        font-size: 11.5px; margin-top: 2px;
+        letter-spacing: 0.02em;
+      }
+      .oyon-popover button {
+        display: flex; align-items: center; gap: 9px;
+        width: 100%; padding: 7px 10px;
+        background: transparent; border: 0;
+        border-radius: 6px;
+        font: inherit; font-size: 12.5px;
+        color: var(--rohy-ink-0);
+        cursor: pointer; text-align: left;
+      }
+      .oyon-popover button:hover { background: var(--rohy-bg-2); }
+      .oyon-popover button.danger { color: #b91c1c; }
+      .oyon-popover button.danger:hover { background: #fef2f2; }
+      .oyon-popover .ico {
+        width: 14px; height: 14px; border-radius: 3px;
+        background: currentColor; opacity: 0.55;
+      }
+      .oyon-popover .pop-foot {
+        margin-top: 4px;
+        padding: 6px 10px;
+        border-top: 1px solid var(--rohy-line);
+        font-size: 11px; color: var(--rohy-ink-2);
+        line-height: 1.4;
+      }
+
+      /* ───── Consent modal (unchanged styling, full-page) ───── */
+      .oyon-modal-backdrop {
+        position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55);
+        z-index: 70; display: grid; place-items: center;
+        padding: 18px;
+      }
+      .oyon-modal-backdrop[hidden] { display: none; }
+      .oyon-modal {
+        background: var(--rohy-bg-1);
+        color: var(--rohy-ink-0);
+        border: 1px solid var(--rohy-line);
+        border-radius: 14px;
+        max-width: 460px; width: 100%;
+        padding: 22px 24px 18px;
+        box-shadow: 0 30px 80px -20px rgba(0,0,0,0.35);
+      }
+      .oyon-modal h2 {
+        margin: 0 0 6px; font-size: 18px;
+        display: flex; align-items: center; gap: 9px;
+      }
+      .oyon-modal h2 .swatch {
+        width: 22px; height: 22px; border-radius: 6px;
+        background: linear-gradient(135deg, #34d399, #14b8a6);
+      }
+      .oyon-modal p {
+        margin: 8px 0; color: var(--rohy-ink-1); font-size: 13px; line-height: 1.55;
+      }
+      .oyon-modal ul {
+        margin: 6px 0 14px; padding-left: 18px; font-size: 12.5px;
+        color: var(--rohy-ink-1);
+      }
+      .oyon-modal ul li { margin: 3px 0; }
+      .oyon-modal .law {
+        font-size: 11.5px; color: var(--rohy-ink-1);
+        background: #fff7ed; padding: 8px 10px; border-radius: 6px;
+        line-height: 1.5; margin-bottom: 14px;
+        border-left: 2px solid var(--oyon-warn);
+      }
+      .oyon-modal .actions {
+        display: flex; gap: 8px; justify-content: flex-end;
+        margin-top: 4px;
+      }
+      .oyon-modal-btn {
+        font: inherit; font-size: 13px; font-weight: 600;
+        padding: 8px 14px; border-radius: 8px; cursor: pointer;
+        background: var(--rohy-bg-2); border: 1px solid var(--rohy-line); color: var(--rohy-ink-0);
+      }
+      .oyon-modal-btn.primary {
+        background: var(--oyon-accent); border-color: var(--oyon-accent); color: #ffffff;
+      }
+      .oyon-modal-btn.ghost { background: transparent; }
+    </style>
+  </head>
+  <body>
+    <!-- Mock state controls (NOT part of Rohy or Oyon) -->
+    <div class="mock-controls">
+      <strong>Mock state</strong>
+      <button data-state="hidden">Server flag OFF (pill hidden)</button>
+      <span class="sep">·</span>
+      <button data-state="idle" aria-pressed="true">Idle</button>
+      <button data-state="consent">Consent modal</button>
+      <button data-state="capturing">Capturing</button>
+      <button data-state="paused">Paused</button>
+      <button data-state="stopped">Stopped</button>
+      <span class="sep">·</span>
+      <button data-state="capturing-popover">Capturing + popover</button>
+    </div>
+
+    <!-- ───── Fake Rohy app shell ───── -->
+    <div class="rohy-app">
+      <header class="rohy-topbar">
+        <div class="rohy-brand"><span class="mark">R</span> Rohy Simulator</div>
+        <div class="rohy-case-title">Case <strong>#23</strong> · 67-year-old male, chest pain</div>
+        <div class="rohy-spacer"></div>
+
+        <!-- The Oyon pill, right next to the timer -->
+        <div class="oyon-pill" id="oyonPill" data-state="idle">
+          <span class="dot"></span>
+          <span id="oyonPillText">Affect off · Enable</span>
+          <span class="caret">▾</span>
+          <div class="oyon-popover" id="oyonPopover" hidden>
+            <div class="pop-header">
+              <strong id="oyonPopTitle">Affect capture</strong>
+              <small id="oyonPopSub">Local · no frames stored</small>
+            </div>
+            <div id="oyonPopActions"></div>
+            <div class="pop-foot">Outputs are uncertain analytics signals — not used for grading.</div>
+          </div>
+        </div>
+
+        <div class="rohy-timer">⏱ 04:18</div>
+        <div class="rohy-user"><span class="avatar">MS</span> Mohammed S.</div>
+      </header>
+
+      <div class="rohy-main">
+        <aside class="rohy-sidebar">
+          <div class="rohy-nav-item active"><span class="ico"></span>Active case</div>
+          <div class="rohy-nav-item"><span class="ico"></span>Cases</div>
+          <div class="rohy-nav-item"><span class="ico"></span>Templates</div>
+          <div class="rohy-nav-item"><span class="ico"></span>Notifications</div>
+          <div class="rohy-nav-item"><span class="ico"></span>Profile</div>
+        </aside>
+
+        <main class="rohy-content">
+          <section class="rohy-vitals-strip">
+            <div class="rohy-vital"><div class="lbl">HR</div><div class="val">112</div></div>
+            <div class="rohy-vital warn"><div class="lbl">BP</div><div class="val">94/58</div></div>
+            <div class="rohy-vital"><div class="lbl">SpO₂</div><div class="val">96%</div></div>
+            <div class="rohy-vital"><div class="lbl">Temp</div><div class="val">37.2</div></div>
+            <div class="rohy-vital warn"><div class="lbl">Pain</div><div class="val">8/10</div></div>
+          </section>
+
+          <section class="rohy-chat">
+            <h3>Patient interview</h3>
+            <div class="rohy-bubble">It started maybe 40 minutes ago. Like a heavy weight on my chest. Hard to breathe.</div>
+            <div class="rohy-bubble you">Have you ever had this kind of pain before?</div>
+            <div class="rohy-bubble">Once, last year. They told me it was reflux but this feels different — sharper, and it goes into my left arm.</div>
+            <div class="rohy-bubble you">Any nausea, sweating, or shortness of breath?</div>
+            <div class="rohy-bubble">Yes, both. I'm sweating a lot.</div>
+          </section>
+        </main>
+
+        <aside class="rohy-tools">
+          <div class="rohy-tabs">
+            <div class="rohy-tab active">Orders</div>
+            <div class="rohy-tab">Notes</div>
+            <div class="rohy-tab">Labs</div>
+          </div>
+          <div class="rohy-tool-item"><strong>ECG 12-lead</strong><br><span style="font-size:12px;color:var(--rohy-ink-2);">Pending · ordered 04:14</span></div>
+          <div class="rohy-tool-item"><strong>Troponin</strong><br><span style="font-size:12px;color:var(--rohy-ink-2);">Pending · ordered 04:15</span></div>
+          <div class="rohy-tool-item"><strong>Aspirin 300 mg PO</strong><br><span style="font-size:12px;color:var(--rohy-ink-2);">Given · 04:16</span></div>
+          <div class="rohy-tool-item"><strong>IV access × 2</strong><br><span style="font-size:12px;color:var(--rohy-ink-2);">Done · 04:13</span></div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ───── Consent modal ───── -->
+    <div id="oyonModal" class="oyon-modal-backdrop" hidden>
+      <div class="oyon-modal" role="dialog" aria-labelledby="oyonModalTitle">
+        <h2 id="oyonModalTitle"><span class="swatch"></span>Enable affect capture?</h2>
+        <p>Oyon will use this laptop's camera to estimate your <em>visible facial expression</em> while you work through this case. The video stream stays on this device.</p>
+        <ul>
+          <li>Inference runs <strong>locally</strong> in your browser.</li>
+          <li>Only <strong>aggregate signals</strong> (every few seconds) leave the device.</li>
+          <li>No video, image, or audio is stored.</li>
+          <li>You can pause or stop at any time using the pill in the top bar.</li>
+        </ul>
+        <div class="law">
+          <strong>Note:</strong> Outputs are uncertain analytics signals — not your "true" emotion. They will not be used for grading, ranking, or any automated decision.
+        </div>
+        <div class="actions">
+          <button class="oyon-modal-btn ghost" data-action="skip">Skip for this session</button>
+          <button class="oyon-modal-btn primary" data-action="confirm">Enable for session</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const pill = document.getElementById('oyonPill');
+      const pillText = document.getElementById('oyonPillText');
+      const popover = document.getElementById('oyonPopover');
+      const popTitle = document.getElementById('oyonPopTitle');
+      const popSub = document.getElementById('oyonPopSub');
+      const popActions = document.getElementById('oyonPopActions');
+      const modal = document.getElementById('oyonModal');
+      const buttons = document.querySelectorAll('.mock-controls button');
+
+      function setActions(html) { popActions.innerHTML = html; }
+
+      const states = {
+        hidden: () => { pill.hidden = true; modal.hidden = true; popover.hidden = true; },
+        idle: () => {
+          pill.hidden = false; modal.hidden = true; popover.hidden = true;
+          pill.dataset.state = 'idle';
+          pillText.textContent = 'Affect off · Enable';
+          popTitle.textContent = 'Affect capture';
+          popSub.textContent = 'Click to enable for this session';
+          setActions('<button data-action="enable"><span class="ico"></span>Enable for session</button>');
+        },
+        consent: () => {
+          pill.hidden = false; modal.hidden = false; popover.hidden = true;
+          pill.dataset.state = 'idle';
+          pillText.textContent = 'Awaiting consent…';
+        },
+        capturing: () => {
+          pill.hidden = false; modal.hidden = true; popover.hidden = true;
+          pill.dataset.state = 'capturing';
+          pillText.textContent = 'Capturing 0:42';
+          popTitle.textContent = 'Capturing affect';
+          popSub.textContent = 'EmotiEff MobileViT · 2 fps';
+          setActions(
+            '<button data-action="pause"><span class="ico"></span>Pause</button>' +
+            '<button data-action="stop" class="danger"><span class="ico"></span>Stop</button>'
+          );
+        },
+        'capturing-popover': () => {
+          states.capturing();
+          popover.hidden = false;
+        },
+        paused: () => {
+          pill.hidden = false; modal.hidden = true; popover.hidden = true;
+          pill.dataset.state = 'paused';
+          pillText.textContent = 'Paused';
+          popTitle.textContent = 'Paused';
+          popSub.textContent = 'Camera light is off';
+          setActions(
+            '<button data-action="resume"><span class="ico"></span>Resume</button>' +
+            '<button data-action="stop" class="danger"><span class="ico"></span>Stop</button>'
+          );
+        },
+        stopped: () => {
+          pill.hidden = false; modal.hidden = true; popover.hidden = true;
+          pill.dataset.state = 'stopped';
+          pillText.textContent = 'Stopped';
+        },
+      };
+
+      function setState(name) {
+        states[name]?.();
+        for (const b of buttons) b.setAttribute('aria-pressed', String(b.dataset.state === name));
+      }
+      for (const b of buttons) b.addEventListener('click', () => setState(b.dataset.state));
+
+      // Pill click — toggle popover (except in idle, where it goes straight to consent)
+      pill.addEventListener('click', e => {
+        e.stopPropagation();
+        if (pill.dataset.state === 'idle') {
+          setState('consent');
+        } else {
+          popover.hidden = !popover.hidden;
+        }
+      });
+
+      // Action handlers
+      document.body.addEventListener('click', e => {
+        const action = e.target?.closest?.('[data-action]')?.dataset?.action;
+        if (!action) {
+          if (!popover.contains(e.target) && e.target !== pill) popover.hidden = true;
+          return;
+        }
+        if (action === 'enable')  setState('consent');
+        if (action === 'skip')    setState('idle');
+        if (action === 'confirm') setState('capturing');
+        if (action === 'pause')   setState('paused');
+        if (action === 'resume')  setState('capturing');
+        if (action === 'stop')    setState('stopped');
+      });
+
+      setState('idle');
+    </script>
+  </body>
+</html>

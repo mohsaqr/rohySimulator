@@ -76,9 +76,6 @@ vi.mock('./CaseTreatmentConfig.jsx', () => ({
 vi.mock('./CaseAvatarVoicePicker.jsx', () => ({
     default: () => <div data-testid="stub-cavp">cavp</div>,
 }));
-vi.mock('../monitor/EventLog.jsx', () => ({
-    default: () => <div data-testid="stub-event-log">event-log</div>,
-}));
 vi.mock('../analytics/SessionLogViewer.jsx', () => ({
     default: () => <div data-testid="stub-session-log">session-log</div>,
 }));

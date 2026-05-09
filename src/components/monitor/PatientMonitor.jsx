@@ -11,6 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 // (mounted in App.jsx); the legacy alarmAudio helpers are no longer needed
 // here. Imports and audio init click-handler removed below.
 import LabValueEditor from '../investigations/LabValueEditor';
+import OyonCaptureWidget from '../oyon/OyonCaptureWidget';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { apiFetch, apiPost } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
@@ -401,25 +402,14 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       }));
    }, [treatmentEffects.aggregate, treatmentEffects.count]);
    
-   // Log significant vital changes via the EventLogger (which routes through
-   // the central NotificationCenter). Per-vital deadbands match the legacy
-   // useEventLog thresholds so the event-volume profile is unchanged.
+   // Push current vitals into the EventLogger singleton so every emitted
+   // event row carries the patient's physiology at that moment (wide
+   // schema — see migration 0018). No more ADJUSTED_VITAL spam from
+   // scenario ticks; the vitals just travel along with real actions.
    useEffect(() => {
-      if (!sessionId) return;
-      const prev = prevVitalsRef.current;
-      const current = displayVitals;
-      const DEADBAND = { hr: 10, spo2: 5, bpSys: 10, bpDia: 10, rr: 3, temp: 0.5 };
-      Object.keys(current).forEach(vital => {
-         const oldV = parseFloat(prev[vital]);
-         const newV = parseFloat(current[vital]);
-         if (!Number.isFinite(oldV) || !Number.isFinite(newV)) return;
-         const threshold = DEADBAND[vital] ?? 5;
-         if (Math.abs(newV - oldV) >= threshold) {
-            EventLogger.vitalAdjusted(vital, oldV, newV, COMPONENTS.PATIENT_MONITOR);
-         }
-      });
+      EventLogger.setCurrentVitals?.(displayVitals);
       prevVitalsRef.current = displayVitals;
-   }, [displayVitals, sessionId]);
+   }, [displayVitals]);
 
    // Session timer — increments by 1 each second.
    useEffect(() => {
@@ -1244,6 +1234,10 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                   </div>
                </div>
             </div>
+
+            {/* Oyon emotion miniature — sits between the patient name and the
+                clock so it's easy to glance at without covering the avatar. */}
+            <OyonCaptureWidget sessionId={sessionId} caseId={caseData?.id} />
 
             <div className="flex items-center gap-3">
                {/* Session Timer */}

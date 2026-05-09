@@ -225,10 +225,16 @@ router.post('/auth/login', authLimiter, (req, res) => {
         }
 
         if (!user) {
-            // Log failed login attempt
+            // Log failed login attempt — dual-write so the unified Activity
+            // view sees auth events alongside in-session learning events.
             dbAdapter.run(
                 `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
                 [null, username, 'failed_login', ipAddress, userAgent, 1]
+            );
+            dbAdapter.run(
+                `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id)
+                 VALUES (NULL, 'FAILED_LOGIN', 'auth', ?, 'IMPORTANT', 'SESSION', ?, 1)`,
+                [username, JSON.stringify({ ip: ipAddress, ua: userAgent, reason: 'unknown_user' })]
             );
             return res.status(401).json({ error: 'Invalid username or password' });
         }
@@ -268,13 +274,23 @@ router.post('/auth/login', authLimiter, (req, res) => {
                     `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
                     [user.id, username, 'failed_login', ipAddress, userAgent, user.tenant_id || 1]
                 );
+                dbAdapter.run(
+                    `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id)
+                     VALUES (?, 'FAILED_LOGIN', 'auth', ?, 'IMPORTANT', 'SESSION', ?, ?)`,
+                    [user.id, username, JSON.stringify({ ip: ipAddress, ua: userAgent, reason: 'bad_password', attempts: newAttempts }), user.tenant_id || 1]
+                );
                 return res.status(401).json({ error: 'Invalid username or password' });
             }
 
-            // Log successful login
+            // Log successful login (dual-write: legacy login_logs + canonical learning_events).
             dbAdapter.run(
                 `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
                 [user.id, username, 'login', ipAddress, userAgent, user.tenant_id || 1]
+            );
+            dbAdapter.run(
+                `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id)
+                 VALUES (?, 'LOGGED_IN', 'auth', ?, 'INFO', 'SESSION', ?, ?)`,
+                [user.id, username, JSON.stringify({ ip: ipAddress, ua: userAgent }), user.tenant_id || 1]
             );
 
             // Reset both failed_login_attempts and locked_until on success.
@@ -473,6 +489,13 @@ router.post('/auth/logout', authenticateToken, async (req, res) => {
     // Drop the CSRF half too so a stale token can't sit around in the
     // browser after logout.
     res.clearCookie(CSRF_COOKIE_NAME, csrfCookieOptions(0));
+
+    // Dual-write: legacy login_logs + canonical learning_events.
+    dbAdapter.run(
+        `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id)
+         VALUES (?, 'LOGGED_OUT', 'auth', ?, 'INFO', 'SESSION', ?, ?)`,
+        [req.user.id, req.user.username, JSON.stringify({ ip: ipAddress, ua: userAgent }), tenantId(req)]
+    );
 
     dbAdapter.run(
         `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,

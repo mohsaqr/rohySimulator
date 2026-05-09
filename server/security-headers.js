@@ -76,6 +76,20 @@ export function securityHeaders({ nodeEnv } = {}) {
             // only on same origin. Block geolocation, payment, USB, etc.
             'microphone=(self), camera=(self), geolocation=(), payment=(), usb=()'
         );
+        // Cross-origin isolation: required so SharedArrayBuffer becomes
+        // available, which lets ONNX Runtime Web run multi-threaded WASM
+        // inference for the Oyon emotion classifier. Without this, the
+        // browser silently drops ORT into single-threaded mode and each
+        // inference takes seconds instead of ~50–150ms — the "pill is
+        // lagging" symptom we hit in the May 9 session.
+        //   COOP=same-origin: any window opened from us is in our agent
+        //     cluster only.
+        //   COEP=credentialless: third-party subresources (fonts, images
+        //     proxied from Rohy) load without credentials but DON'T need
+        //     a CORP header — strictly less invasive than require-corp,
+        //     so Three.js GLB textures and TTS blobs keep working.
+        res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+        res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
         next();
     };
 }

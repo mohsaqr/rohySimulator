@@ -82,10 +82,10 @@ services:
       - "${CADDY_HTTPS_PORT:-443}:443"
     environment:
       ROHY_HOSTNAME: "${ROHY_HOSTNAME:-localhost}"
-      ROHY_TLS_MODE: "${ROHY_TLS_MODE:-internal}"
-      # ROHY_TLS_MODE=auto    → Let's Encrypt (needs public DNS + port 80/443)
-      # ROHY_TLS_MODE=internal→ Caddy's internal CA (LAN / dev / mkcert-style)
-      # ROHY_TLS_MODE=off     → plain HTTP (only for localhost)
+      # TLS mode is fixed in Caddyfile (internal CA / self-signed). To
+      # switch to Let's Encrypt or plain HTTP, edit Caddyfile per the
+      # instructions at the bottom of that file. There is no env-driven
+      # selection — Caddyfile syntax can't conditionally apply directives.
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

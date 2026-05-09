@@ -1,11 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy, Mic } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy, Mic, Camera } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
-import EventLog from '../monitor/EventLog';
 import SessionLogViewer from '../analytics/SessionLogViewer';
+import ActivityTable from '../analytics/ActivityTable';
+import SystemLogTable from '../analytics/SystemLogTable';
+import ChatLogTable from '../analytics/ChatLogTable';
+import SessionsTable from '../analytics/SessionsTable';
 import ScenarioRepository from './ScenarioRepository';
 import LabInvestigationEditor from './LabInvestigationEditor';
 import RadiologyEditor from './RadiologyEditor';
@@ -18,13 +21,19 @@ import CaseTreatmentConfig from './CaseTreatmentConfig';
 import VoiceSettingsTab from './VoiceSettingsTab';
 import AvatarsSettingsTab from './AvatarsSettingsTab';
 import NotificationsSettingsTab from './NotificationsSettingsTab';
+import OyonSettingsTab from './OyonSettingsTab';
+import OyonLearningAnalyticsTab from './OyonLearningAnalyticsTab';
 import TnaDashboardV2 from '../analytics/tna/TnaDashboardV2';
 import { Bell as BellIcon } from 'lucide-react';
 import CaseAvatarVoicePicker from './CaseAvatarVoicePicker';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'cases', initialWizardStep = 1, onOpenPersonaEditor }) {
-    const { isAdmin } = useAuth();
+    const { isAdmin, user } = useAuth();
+    // Educator+ gate for the Learning Analytics tab. Server still enforces the
+    // real rule (assertOyonReadAccess); this hides the sidebar item for users
+    // who couldn't reach the page anyway.
+    const canSeeOyonAnalytics = user?.role === 'educator' || user?.role === 'admin';
     const toast = useToast();
     // Default to 'cases' tab for all users; the parent can pass `initialTab`
     // to land directly on a specific tab — used when the persona editor
@@ -326,6 +335,22 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     >
                         <BellIcon className="w-4 h-4" /> Notifications
                     </button>
+                    {/* Oyon — emotion capture: terms/consent for everyone, tenant settings for admins. */}
+                    <button
+                        onClick={() => setActiveTab('oyon')}
+                        className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'oyon' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    >
+                        <Camera className="w-4 h-4" /> Oyon — Emotion Capture
+                    </button>
+                    {/* Oyon — Learning Analytics: per-student/per-case rollups + session timeline aligned with learning events. Educator+ only; tenant view-enabled flag enforced server-side. */}
+                    {canSeeOyonAnalytics && (
+                        <button
+                            onClick={() => setActiveTab('oyon-analytics')}
+                            className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'oyon-analytics' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                        >
+                            <Activity className="w-4 h-4" /> Oyon — Learning Analytics
+                        </button>
+                    )}
                 </div>
 
                 {/* Content Area */}
@@ -845,6 +870,16 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     {/* --- NOTIFICATIONS TAB (all users) --- */}
                     {activeTab === 'notifications' && (
                         <NotificationsSettingsTab />
+                    )}
+
+                    {/* --- OYON TAB (all users; admin section gated inside) --- */}
+                    {activeTab === 'oyon' && (
+                        <OyonSettingsTab />
+                    )}
+
+                    {/* --- OYON LEARNING ANALYTICS (educator+ only; server enforces tenant view setting) --- */}
+                    {activeTab === 'oyon-analytics' && canSeeOyonAnalytics && (
+                        <OyonLearningAnalyticsTab />
                     )}
 
                 </div>
@@ -1952,74 +1987,23 @@ function MonitorConfiguration() {
 }
 
 // System Logs Component (Admin Only)
+//
+// All four log surfaces (Activity, Sessions, System Log, Chat Log) now mount
+// the same unified `LogGrid` data grid via thin wrapper components in
+// `src/components/analytics/`. Each wrapper owns its own fetch + per-tab
+// CSV export — there is no longer a global "Export Data (CSV)" grid here.
+// The Reflection Questionnaire stays inline because its row shape
+// (variable-length nested object) doesn't fit the flat-grid model.
 function SystemLogs() {
     const toast = useToast();
-    const [activeLogTab, setActiveLogTab] = useState('activity'); // activity, login, sessions, settings, events, questionnaire
-    const [loginLogs, setLoginLogs] = useState([]);
-    const [settingsLogs, setSettingsLogs] = useState([]);
-    const [sessionsList, setSessionsList] = useState([]);
+    const [activeLogTab, setActiveLogTab] = useState('activity'); // activity, sessions, system, chat, questionnaire
     const [questionnaireResponses, setQuestionnaireResponses] = useState([]);
     const [expandedQRow, setExpandedQRow] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
-    const [selectedSessionForEvents, setSelectedSessionForEvents] = useState(null);
 
     useEffect(() => {
-        if (activeLogTab === 'login') {
-            loadLoginLogs();
-        } else if (activeLogTab === 'settings') {
-            loadSettingsLogs();
-        } else if (['sessions', 'events', 'activity'].includes(activeLogTab)) {
-            loadSessions();
-        } else if (activeLogTab === 'questionnaire') {
-            loadQuestionnaireResponses();
-        }
-    }, [activeLogTab, dateFilter]);
-
-    // Auto-refresh session list every 10 s so newly started sessions appear (no spinner)
-    useEffect(() => {
-        if (!['sessions', 'events', 'activity'].includes(activeLogTab)) return;
-        const interval = setInterval(() => loadSessions(false), 10000);
-        return () => clearInterval(interval);
+        if (activeLogTab === 'questionnaire') loadQuestionnaireResponses();
     }, [activeLogTab]);
-
-    const loadLoginLogs = async () => {
-        setLoading(true);
-        try {
-            const data = await apiFetch('/analytics/login-logs?limit=200');
-            setLoginLogs(data.logs || []);
-        } catch (err) {
-            console.error('Failed to load login logs', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const loadSettingsLogs = async () => {
-        setLoading(true);
-        try {
-            const data = await apiFetch('/analytics/settings-logs?limit=200');
-            setSettingsLogs(data.logs || []);
-        } catch (err) {
-            console.error('Failed to load settings logs', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const loadSessions = async (showSpinner = true) => {
-        if (showSpinner) setLoading(true);
-        try {
-            const data = await apiFetch('/analytics/sessions', {
-                cache: 'no-store',
-            });
-            setSessionsList(data.sessions || []);
-        } catch (err) {
-            console.error('Failed to load sessions', err);
-        } finally {
-            if (showSpinner) setLoading(false);
-        }
-    };
 
     const loadQuestionnaireResponses = async () => {
         setLoading(true);
@@ -2033,107 +2017,63 @@ function SystemLogs() {
         }
     };
 
-    const downloadCSV = async (logType) => {
-        let path = '';
-
-        switch (logType) {
-            case 'login':
-                path = '/export/login-logs';
-                break;
-            case 'chat':
-                path = '/export/chat-logs';
-                break;
-            case 'settings':
-                path = '/export/settings-logs';
-                break;
-            case 'session-settings':
-                path = '/export/session-settings';
-                break;
-            case 'questionnaire':
-                path = '/export/questionnaire-responses';
-                break;
-        }
-
-        // Add date filters if set
-        const params = new URLSearchParams();
-        if (dateFilter.start) params.append('start_date', dateFilter.start);
-        if (dateFilter.end) params.append('end_date', dateFilter.end);
-        const queryString = params.toString() ? `?${params.toString()}` : '';
-
+    const downloadQuestionnaire = async () => {
         try {
-            const blob = await apiFetch(path + queryString, { parseAs: 'blob' });
-
-            // Create download link
+            const blob = await apiFetch('/export/questionnaire-responses', { parseAs: 'blob' });
             const downloadUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = downloadUrl;
-            a.download = `${logType}_logs_${new Date().toISOString().split('T')[0]}.csv`;
+            a.download = `questionnaire_${new Date().toISOString().split('T')[0]}.csv`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             window.URL.revokeObjectURL(downloadUrl);
-
-            toast.success(`${logType} logs exported successfully!`);
+            toast.success('Questionnaire exported.');
         } catch (error) {
-            console.error('Export failed:', error);
-            toast.error('Export failed. Please try again.');
+            const hint = error?.body?.hint || error?.body?.error;
+            toast.error(hint ? `Export failed: ${hint}` : 'Export failed. Please try again.');
         }
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             <div className="flex justify-between items-center">
                 <h3 className="text-lg font-bold">System Logs</h3>
-                <div className="flex gap-2">
-                    <input
-                        type="date"
-                        value={dateFilter.start}
-                        onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))}
-                        className="px-3 py-1 bg-neutral-800 border border-neutral-700 rounded text-sm"
-                        placeholder="Start Date"
-                    />
-                    <input
-                        type="date"
-                        value={dateFilter.end}
-                        onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))}
-                        className="px-3 py-1 bg-neutral-800 border border-neutral-700 rounded text-sm"
-                        placeholder="End Date"
-                    />
-                </div>
+                <span className="text-xs text-neutral-500">
+                    Date filters live inside each tab now.
+                </span>
             </div>
 
-            {/* Log Viewer Tabs */}
+            {/* Log Viewer Tabs.
+                Login + Settings tabs were retired — the same content shows
+                up under System Log → component=auth/config (with per-source
+                CSV streaming) and under Activity → category=AUTH/CONFIGURATION
+                via the dual-write to learning_events. */}
             <div className="border-b border-neutral-700 flex gap-4 overflow-x-auto">
                 <button
                     onClick={() => setActiveLogTab('activity')}
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-1 whitespace-nowrap ${activeLogTab === 'activity' ? 'border-cyan-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     <Activity className="w-4 h-4" />
-                    Activity Log
-                </button>
-                <button
-                    onClick={() => setActiveLogTab('login')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'login' ? 'border-green-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                >
-                    Login Activity ({loginLogs.length})
+                    Activity
                 </button>
                 <button
                     onClick={() => setActiveLogTab('sessions')}
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'sessions' ? 'border-blue-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
-                    All Sessions ({sessionsList.length})
+                    Sessions
                 </button>
                 <button
-                    onClick={() => setActiveLogTab('settings')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'settings' ? 'border-purple-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    onClick={() => setActiveLogTab('system')}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'system' ? 'border-cyan-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
-                    Settings Changes ({settingsLogs.length})
+                    System Log
                 </button>
                 <button
-                    onClick={() => setActiveLogTab('events')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'events' ? 'border-orange-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    onClick={() => setActiveLogTab('chat')}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'chat' ? 'border-indigo-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
-                    Event Log
+                    Chat Log
                 </button>
                 <button
                     onClick={() => setActiveLogTab('questionnaire')}
@@ -2143,186 +2083,41 @@ function SystemLogs() {
                 </button>
             </div>
 
-            {/* Log Content - Table View */}
+            {/* Log Content. Each LogGrid surface owns its own toolbar,
+                fetch, filters, and CSV export — same UX across tabs. */}
             <div className="flex-1 overflow-auto">
-                {loading && activeLogTab !== 'activity' ? (
-                    <div className="text-center py-8">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto" />
-                    </div>
-                ) : activeLogTab === 'activity' ? (
+                {activeLogTab === 'activity' ? (
                     <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
-                        <SessionLogViewer showAllSessions={true} />
-                    </div>
-                ) : activeLogTab === 'login' ? (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="bg-neutral-800 sticky top-0">
-                                <tr>
-                                    <th className="px-4 py-3 text-left font-bold">Username</th>
-                                    <th className="px-4 py-3 text-left font-bold">Email</th>
-                                    <th className="px-4 py-3 text-left font-bold">Action</th>
-                                    <th className="px-4 py-3 text-left font-bold">IP Address</th>
-                                    <th className="px-4 py-3 text-left font-bold">Timestamp</th>
-                                    <th className="px-4 py-3 text-left font-bold">User Agent</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loginLogs.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="6" className="text-center py-8 text-neutral-500">
-                                            No login logs yet
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    loginLogs.map((log, idx) => (
-                                        <tr key={idx} className="border-b border-neutral-800 hover:bg-neutral-800/50">
-                                            <td className="px-4 py-3 font-medium">{log.username || 'N/A'}</td>
-                                            <td className="px-4 py-3 text-neutral-400">{log.email || 'N/A'}</td>
-                                            <td className="px-4 py-3">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold ${log.action === 'login' ? 'bg-green-900 text-green-200' :
-                                                    log.action === 'logout' ? 'bg-blue-900 text-blue-200' :
-                                                        'bg-red-900 text-red-200'
-                                                    }`}>
-                                                    {log.action}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 font-mono text-xs text-neutral-400">{log.ip_address}</td>
-                                            <td className="px-4 py-3 text-neutral-400">{new Date(log.timestamp).toLocaleString()}</td>
-                                            <td className="px-4 py-3 text-xs text-neutral-500 max-w-xs truncate">{log.user_agent}</td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                        <ActivityTable />
                     </div>
                 ) : activeLogTab === 'sessions' ? (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="bg-neutral-800 sticky top-0">
-                                <tr>
-                                    <th className="px-4 py-3 text-left font-bold">ID</th>
-                                    <th className="px-4 py-3 text-left font-bold">User</th>
-                                    <th className="px-4 py-3 text-left font-bold">Case</th>
-                                    <th className="px-4 py-3 text-left font-bold">Start Time</th>
-                                    <th className="px-4 py-3 text-left font-bold">Duration</th>
-                                    <th className="px-4 py-3 text-left font-bold">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {sessionsList.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="6" className="text-center py-8 text-neutral-500">
-                                            No sessions yet
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    sessionsList.map((session, idx) => (
-                                        <tr key={idx} className="border-b border-neutral-800 hover:bg-neutral-800/50">
-                                            <td className="px-4 py-3 font-mono">#{session.id}</td>
-                                            <td className="px-4 py-3 font-medium">{session.username || session.student_name}</td>
-                                            <td className="px-4 py-3 text-neutral-400">{session.case_name}</td>
-                                            <td className="px-4 py-3 text-neutral-400">{new Date(session.start_time).toLocaleString()}</td>
-                                            <td className="px-4 py-3">
-                                                {session.duration ?
-                                                    `${Math.floor(session.duration / 60)}m ${session.duration % 60}s` :
-                                                    <span className="text-yellow-400">In Progress</span>
-                                                }
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold ${session.end_time ? 'bg-green-900 text-green-200' : 'bg-yellow-900 text-yellow-200'
-                                                    }`}>
-                                                    {session.end_time ? 'Completed' : 'Active'}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
+                        <SessionsTable />
                     </div>
-                ) : activeLogTab === 'settings' ? (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="bg-neutral-800 sticky top-0">
-                                <tr>
-                                    <th className="px-4 py-3 text-left font-bold">User</th>
-                                    <th className="px-4 py-3 text-left font-bold">Type</th>
-                                    <th className="px-4 py-3 text-left font-bold">Setting</th>
-                                    <th className="px-4 py-3 text-left font-bold">Old Value</th>
-                                    <th className="px-4 py-3 text-left font-bold">New Value</th>
-                                    <th className="px-4 py-3 text-left font-bold">Case</th>
-                                    <th className="px-4 py-3 text-left font-bold">Timestamp</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {settingsLogs.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="7" className="text-center py-8 text-neutral-500">
-                                            No settings changes yet
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    settingsLogs.map((log, idx) => (
-                                        <tr key={idx} className="border-b border-neutral-800 hover:bg-neutral-800/50">
-                                            <td className="px-4 py-3 font-medium">{log.username}</td>
-                                            <td className="px-4 py-3">
-                                                <span className="px-2 py-1 bg-purple-900 text-purple-200 rounded text-xs font-bold">
-                                                    {log.setting_type}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-neutral-400">{log.setting_name || 'N/A'}</td>
-                                            <td className="px-4 py-3 font-mono text-xs text-neutral-500">{log.old_value || '-'}</td>
-                                            <td className="px-4 py-3 font-mono text-xs text-green-400">{log.new_value || '-'}</td>
-                                            <td className="px-4 py-3 text-neutral-400">{log.case_name || 'N/A'}</td>
-                                            <td className="px-4 py-3 text-neutral-400 text-xs">{new Date(log.timestamp).toLocaleString()}</td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                ) : activeLogTab === 'system' ? (
+                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
+                        <SystemLogTable />
                     </div>
-                ) : activeLogTab === 'events' ? (
-                    <div className="space-y-4">
-                        {/* Session Selector */}
-                        <div className="bg-neutral-800 p-4 rounded border border-neutral-700">
-                            <label className="block text-sm font-bold mb-2">Select Session to View Events</label>
-                            <select
-                                value={selectedSessionForEvents || ''}
-                                onChange={(e) => setSelectedSessionForEvents(e.target.value)}
-                                className="w-full bg-neutral-900 border border-neutral-700 rounded p-2 text-sm"
-                            >
-                                <option value="">-- Select a session --</option>
-                                {sessionsList.map(session => (
-                                    <option key={session.id} value={session.id}>
-                                        Session #{session.id} - {session.username || session.student_name} - {session.case_name} - {new Date(session.start_time).toLocaleString()}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Event Log Display */}
-                        {selectedSessionForEvents ? (
-                            <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '600px' }}>
-                                <EventLog sessionId={selectedSessionForEvents} />
-                            </div>
-                        ) : (
-                            <div className="text-center py-12 text-neutral-500">
-                                Please select a session to view its event log
-                            </div>
-                        )}
+                ) : activeLogTab === 'chat' ? (
+                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
+                        <ChatLogTable />
                     </div>
                 ) : activeLogTab === 'questionnaire' ? (
                     <div className="overflow-x-auto">
                         <div className="flex justify-end mb-3">
                             <button
-                                onClick={() => downloadCSV('questionnaire')}
+                                onClick={downloadQuestionnaire}
                                 className="flex items-center gap-2 px-3 py-1.5 bg-teal-700 hover:bg-teal-600 text-white rounded text-sm font-medium transition-colors"
                             >
                                 <Download className="w-4 h-4" />
                                 Download CSV
                             </button>
                         </div>
-                        {questionnaireResponses.length === 0 ? (
+                        {loading ? (
+                            <div className="text-center py-8">
+                                <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                            </div>
+                        ) : questionnaireResponses.length === 0 ? (
                             <div className="text-center py-12 text-neutral-500 text-sm">
                                 No questionnaire responses recorded yet.
                             </div>
@@ -2397,51 +2192,6 @@ function SystemLogs() {
                         )}
                     </div>
                 ) : null}
-            </div>
-
-            {/* Export Section */}
-            <div className="border-t border-neutral-700 pt-6">
-                <h4 className="font-bold text-sm mb-4 flex items-center gap-2">
-                    <Download className="w-4 h-4" />
-                    Export Data (CSV)
-                </h4>
-                <div className="grid grid-cols-4 gap-3">
-                    <button
-                        onClick={() => downloadCSV('login')}
-                        className="flex items-center justify-center gap-2 px-3 py-2 bg-green-700 hover:bg-green-600 text-white rounded text-sm font-medium"
-                    >
-                        <Download className="w-4 h-4" />
-                        Login Logs
-                    </button>
-                    <button
-                        onClick={() => downloadCSV('chat')}
-                        className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-700 hover:bg-blue-600 text-white rounded text-sm font-medium"
-                    >
-                        <Download className="w-4 h-4" />
-                        Chat Logs
-                    </button>
-                    <button
-                        onClick={() => downloadCSV('settings')}
-                        className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded text-sm font-medium"
-                    >
-                        <Download className="w-4 h-4" />
-                        Settings Logs
-                    </button>
-                    <button
-                        onClick={() => downloadCSV('session-settings')}
-                        className="flex items-center justify-center gap-2 px-3 py-2 bg-orange-700 hover:bg-orange-600 text-white rounded text-sm font-medium"
-                    >
-                        <Download className="w-4 h-4" />
-                        Session Settings
-                    </button>
-                    <button
-                        onClick={() => downloadCSV('questionnaire')}
-                        className="flex items-center justify-center gap-2 px-3 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded text-sm font-medium"
-                    >
-                        <Download className="w-4 h-4" />
-                        Questionnaire
-                    </button>
-                </div>
             </div>
         </div>
     );

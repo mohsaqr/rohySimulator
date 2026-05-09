@@ -165,6 +165,18 @@ export default function NotificationsSettingsTab() {
                         <Toggle on={!prefs.consoleMuted} onChange={(v) => setPrefs({ consoleMuted: !v })} />
                     }
                 />
+                <Row
+                    label="Patient speaks alarm changes"
+                    hint="Lets the patient avatar say short first-person lines when clinical alarms fire. Does not affect alarm beeps, banners, or history."
+                    right={
+                        <Toggle
+                            on={prefs.avatarAlarmSpeechEnabled !== false}
+                            onChange={(v) => setPrefs({ avatarAlarmSpeechEnabled: v })}
+                            onIcon={Volume2}
+                            offIcon={VolumeX}
+                        />
+                    }
+                />
             </Section>
 
             {/* Audio tuning */}

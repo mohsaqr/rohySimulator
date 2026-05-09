@@ -33,7 +33,7 @@ function matrixTo2D(matrix, n) {
  * @returns {{ labels: string[], weights: number[][], inits: Float64Array }}
  */
 export function tna(sequences, { labels }) {
-  const model = tnajTna(sequences);
+  const model = tnajTna(sequences, { labels });
   const n = model.labels.length;
   return {
     labels: model.labels,

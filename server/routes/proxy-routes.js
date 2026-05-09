@@ -870,6 +870,7 @@ const PIPER_DIR = path.join(__dirname, '../data', 'piper');
 // continue to work via the PIPER_BIN env override.
 const PIPER_BIN = process.env.PIPER_BIN || path.join(PIPER_DIR, 'venv', 'bin', 'piper');
 const TTS_TEXT_LIMIT = 2000;
+const DEFAULT_TTS_PROVIDER = 'kokoro';
 
 const readVoiceSidecar = (filename) => {
     const sidecar = path.join(PIPER_DIR, filename + '.json');
@@ -885,7 +886,7 @@ router.get('/tts/voices', authenticateToken, async (req, res) => {
     const queryProvider = typeof req.query.provider === 'string' ? req.query.provider : '';
     const ttsProvider = VOICE_TTS_PROVIDERS.includes(queryProvider)
         ? queryProvider
-        : (await getPlatformSetting('tts_provider')) || 'piper';
+        : (await getPlatformSetting('tts_provider')) || DEFAULT_TTS_PROVIDER;
 
     if (ttsProvider === 'kokoro') {
         try {
@@ -1158,7 +1159,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
         ? bodyProvider
         : null;
     const providerOverride = queryProvider || bodyProviderOverride;
-    const ttsProvider = providerOverride || (await getPlatformSetting('tts_provider')) || 'piper';
+    const ttsProvider = providerOverride || (await getPlatformSetting('tts_provider')) || DEFAULT_TTS_PROVIDER;
 
     try {
         await enforceBudget({

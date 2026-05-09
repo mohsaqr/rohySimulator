@@ -18,6 +18,15 @@ import notesRoutes from './routes/notes-routes.js';
 import healthRoutes from './routes/health-routes.js';
 import { routeTimeout } from './middleware/routeTimeout.js';
 
+let oyonRoutes = null;
+if (process.env.OYON_ENABLED === '1') {
+    try {
+        oyonRoutes = (await import('./routes/oyon-routes.js')).default;
+    } catch (err) {
+        console.warn('[OyonR] add-on route import failed; continuing without Oyon:', err.message);
+    }
+}
+
 // Item D slice marker: D6 final mount point after D1-D5 extracted route domains.
 const router = express.Router();
 
@@ -58,6 +67,7 @@ router.use(adminRoutes);
 router.use(patientRecordRoutes);
 router.use(agentsRoutes);
 router.use(notesRoutes);
+if (oyonRoutes) router.use('/addons/oyon', oyonRoutes);
 
 // Route auth allowlist manifest. Non-runtime comments kept so the legacy
 // route-auth-allowlist test can continue pinning the public/auth surface

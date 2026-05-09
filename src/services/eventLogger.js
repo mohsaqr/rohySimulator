@@ -73,6 +73,7 @@ export const VERBS = {
     ADJUSTED_VITAL: 'ADJUSTED_VITAL', ACKNOWLEDGED_ALARM: 'ACKNOWLEDGED_ALARM',
     SILENCED_ALARM: 'SILENCED_ALARM', ALARM_TRIGGERED: 'ALARM_TRIGGERED',
     VIEWED_TRENDS: 'VIEWED_TRENDS',
+    EDITED_LAB_VALUE: 'EDITED_LAB_VALUE',
     VIEWED_PATIENT_SUMMARY: 'VIEWED_PATIENT_SUMMARY', VIEWED_HISTORY: 'VIEWED_HISTORY',
     VIEWED_MEDICATIONS: 'VIEWED_MEDICATIONS', VIEWED_ALLERGIES: 'VIEWED_ALLERGIES',
     CHANGED_SETTING: 'CHANGED_SETTING', SAVED_SETTING: 'SAVED_SETTING',
@@ -143,6 +144,7 @@ const VERB_METADATA = {
     SILENCED_ALARM: { severity: SEVERITY.INFO, category: CATEGORIES.MONITORING },
     ALARM_TRIGGERED: { severity: SEVERITY.CRITICAL, category: CATEGORIES.MONITORING },
     VIEWED_TRENDS: { severity: SEVERITY.INFO, category: CATEGORIES.MONITORING },
+    EDITED_LAB_VALUE: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
     VIEWED_PATIENT_SUMMARY: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
     VIEWED_HISTORY: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
     VIEWED_MEDICATIONS: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
@@ -207,6 +209,26 @@ class EventLoggerService {
         this.eventCounts = new Map();
         this.preCenterBuffer = []; // events logged before NotificationCenter mounted
         this.preCenterCap = 1000;
+        // Current physiology snapshot. PatientMonitor updates this on every
+        // displayVitals change; log() copies it into every emitted event so
+        // each action row carries vitals AT THAT MOMENT (wide schema).
+        this.currentVitals = null;
+    }
+
+    setCurrentVitals(v) {
+        // Accepts snake_case or camelCase keys, normalises to snake_case
+        // matching the migration column names.
+        if (!v || typeof v !== 'object') { this.currentVitals = null; return; }
+        this.currentVitals = {
+            hr: v.hr ?? null,
+            spo2: v.spo2 ?? null,
+            bp_sys: v.bp_sys ?? v.bpSys ?? null,
+            bp_dia: v.bp_dia ?? v.bpDia ?? null,
+            rr: v.rr ?? null,
+            temp: v.temp ?? null,
+            etco2: v.etco2 ?? null,
+            rhythm: v.rhythm ?? null,
+        };
     }
 
     setMinimumSeverity(s) { this.minimumSeverity = s; }
@@ -253,9 +275,19 @@ class EventLoggerService {
             key: `telemetry:${verb}:${objectType}:${options.objectId || ''}`,
             title: options.objectName || verb,
             message: options.result || '',
+            // Stamp the singleton's trinity into data.* so BackendSurface
+            // picks them up regardless of React-prop staleness on its
+            // BackendSurfaceBridge. The bridge only re-renders on auth-context
+            // change, so without this, sessionId/caseId stay null in the
+            // queued event even though the singleton has the right values.
+            // Server still re-derives user_id/case_id from session_id, so
+            // these fields are advisory — but session_id needs to be right.
             data: {
                 verb, objectType,
-                category, // xAPI category preserved on the wire
+                category,
+                sessionId: this.sessionId,
+                userId: this.userId,
+                caseId: this.caseId,
                 objectId: options.objectId || null,
                 objectName: options.objectName || null,
                 component: options.component || null,
@@ -265,6 +297,10 @@ class EventLoggerService {
                 messageContent: options.messageContent || null,
                 messageRole: options.messageRole || null,
                 result: options.result || null,
+                // Physiology snapshot at the moment of action. Wide schema —
+                // each vital is its own field so the server can map directly
+                // to its column. Null when no monitor has registered vitals.
+                vitals: this.currentVitals ? { ...this.currentVitals } : null,
             },
         };
 
@@ -316,6 +352,11 @@ class EventLoggerService {
     focusResumed() { this.log(VERBS.RESUMED_FOCUS, OBJECT_TYPES.COMPONENT, { objectId: COMPONENTS.APP, objectName: 'Window focus', component: COMPONENTS.APP }); }
     unload() { this.log(VERBS.UNLOAD, OBJECT_TYPES.SESSION, { objectId: String(this.sessionId || ''), objectName: 'Window unload', component: COMPONENTS.APP }); }
     caseLoaded(caseId, caseName) {
+        // Re-stamp the singleton so subsequent events on the client carry
+        // the new caseId in EventLogger.getStatus(). The server is now
+        // authoritative for the row-level trinity (PLAN_LOGGING.md Phase 1)
+        // but consumers reading getStatus() directly need fresh state.
+        this.setContext({ caseId });
         this.log(VERBS.LOADED_CASE, OBJECT_TYPES.CASE, { objectId: String(caseId), objectName: caseName, component: COMPONENTS.CONFIG_PANEL });
     }
     componentOpened(c, n = null) { this.log(VERBS.OPENED, OBJECT_TYPES.COMPONENT, { objectId: c, objectName: n || c, component: c }); }

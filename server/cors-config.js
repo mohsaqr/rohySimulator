@@ -24,8 +24,16 @@ const STATIC_DEV_ORIGINS = [
     'http://[::1]:3000',          // IPv6 loopback - local production
 ];
 
+// Browsers send `Origin: <scheme>://<host>[:<port>]` — never with a path.
+// FRONTEND_URL is the full app URL (for example https://example.com/rohy),
+// so compare against only its origin.
+function toOrigin(url) {
+    if (!url) return null;
+    try { return new URL(url).origin; } catch { return null; }
+}
+
 export function buildAllowedOrigins({ frontendUrl } = {}) {
-    return [...STATIC_DEV_ORIGINS, frontendUrl].filter(Boolean);
+    return [...STATIC_DEV_ORIGINS, toOrigin(frontendUrl)].filter(Boolean);
 }
 
 export function buildCorsOptions({ nodeEnv, frontendUrl, logger = console } = {}) {

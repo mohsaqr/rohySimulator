@@ -1,0 +1,24 @@
+{
+  "id": "oyon",
+  "name": "Oyon Emotion Capture",
+  "version": "0.1.0",
+  "enabledEnv": "OYON_ENABLED",
+  "routesBase": "/api/addons/oyon",
+  "tables": [
+    "oyon_settings",
+    "oyon_emotion_consents",
+    "oyon_emotion_records"
+  ],
+  "slots": [
+    "front_page_actions",
+    "case_toolbar_actions",
+    "admin_pages",
+    "student_pages"
+  ],
+  "fallback": {
+    "defaultOff": true,
+    "lazyLoadFrontend": true,
+    "dropTelemetryOnSaveFailure": true,
+    "disableAfterSaveFailures": 3
+  }
+}
