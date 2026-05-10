@@ -84,3 +84,22 @@ playwright-report/
 test-results/
 test-results.e2e.junit.xml
 tests/e2e/.auth/
+
+# Local-only working notes (kept on disk, not tracked).
+# Repo-level operator docs live in docs/{INSTALL,DEPLOY,UPDATING,UPDATE-STRATEGY}.md
+# and are tracked normally. Anything below is per-developer scratch.
+/CHANGES.md
+/Cdx_review.md
+/HANDOFF.md
+/LEARNINGS.md
+/PLAN_LOGGING.md
+/deployment_fix.md
+/docs/OYONR_INTEGRATION_NOTE.md
+/docs/OYON_INTEGRATION_PLAYBOOK.md
+/docs/OYON_INTEGRATION_POLICY.md
+/docs/audits/
+/OyonR/HANDOFF.md
+/OyonR/docs/
+/OyonR/examples/rohy-addon/README.md
+/OyonR/examples/rohy-backend/ATTACH_BACKEND.md
+/OyonR/scripts/README.md

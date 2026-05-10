@@ -278,7 +278,7 @@ rohySimulator/
 │   ├── e2e/                           # 12 Playwright specs
 │   └── utils/                         # seedDb, startTestServer, mockTtsServer, renderWithProviders
 ├── bench/                             # 3 vitest benches: TTS latency, LLM throughput, concurrent sessions
-├── docs/                              # Operator manual, design docs, Oyon integration policy, audits
+├── docs/                              # Operator lifecycle: INSTALL, DEPLOY, UPDATING, UPDATE-STRATEGY
 ├── Lab_database.json                  # 215 lab tests with gender-specific ranges
 └── server/data/radiology_database.json  # 74 radiology studies
 ```
@@ -358,18 +358,11 @@ Plus **18 enterprise audit shell scripts** at `scripts/audit-*.sh` (one per E-st
 |---|---|
 | [`OyonR/README.md`](OyonR/README.md) | Library overview: standalone usage, browser-only inference, transports. |
 | [`OyonR/INSTALL.md`](OyonR/INSTALL.md) | Embedding into a non-rohy host app. |
-| [`docs/OYON_INTEGRATION_PLAYBOOK.md`](docs/OYON_INTEGRATION_PLAYBOOK.md) | How rohy wires Oyon: routes, settings, consent flow, validator contract. |
-| [`docs/OYON_INTEGRATION_POLICY.md`](docs/OYON_INTEGRATION_POLICY.md) | Privacy & data-handling commitments (no raw frames or landmarks leave the device). |
-| [`docs/OYONR_INTEGRATION_NOTE.md`](docs/OYONR_INTEGRATION_NOTE.md) | Dev notes on the `oyon` package (`file:./OyonR`) integration. |
 
 ### Engineering
 
 | Document | What's inside |
 |---|---|
-| [`LEARNINGS.md`](LEARNINGS.md) | Append-only insight log: data quirks, pitfalls, decisions made and why. |
-| [`CHANGES.md`](CHANGES.md) | Human-readable changelog (git-independent). |
-| [`HANDOFF.md`](HANDOFF.md) | Latest session-handoff snapshot (current state, queued work, next-session entry point). |
-| [`docs/audits/`](docs/audits/) | Stability audit + handoff reports. |
 | [`kits/talking-avatars/`](kits/talking-avatars/) | Embeddable voice + avatar kit (standalone tarball at `kits/talking-avatars.tar.gz`). |
 
 ---
