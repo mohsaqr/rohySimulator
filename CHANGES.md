@@ -1,3 +1,40 @@
+### 2026-05-10 — Camera robustness, vendor self-population, post-deploy verification
+
+End-to-end fix for the Oyon camera failure first reported as `Could not start video source` on the user's MacBook (Continuity Camera paired with iPhone). The shipped fallback in commit `56fe0d1` was reactive (try-and-retry) and only caught one error class. This pass replaces it with a proactive enumeration strategy AND closes the surrounding deployment gaps so the same fix carries to every future install — not just this Mac.
+
+- **`OyonR/src/capture/CameraController.js`** — full rewrite (preserves the public `start()`/`stop()` API).
+  - Permission-prime first to populate `enumerateDevices()` labels (browser privacy guard hides them until at least one successful `getUserMedia` per origin).
+  - Enumerate, rank (non-Continuity first; Continuity last as fallback for iPhone-only setups), then loop with explicit `deviceId:{exact:...}` so macOS can't re-route to the paired iPhone.
+  - Broaden retryable errors: `NotReadableError`, `OverconstrainedError`, `AbortError`, `TrackStartError`. Only `NotAllowedError` / `SecurityError` aborts the whole attempt.
+  - Cache last-working `deviceId` in `localStorage` (`oyon.preferred-camera-id`); next start tries it first. On total failure, clear the cache so a fresh attempt re-enumerates.
+  - Defensive cleanup: any throw between `getUserMedia` resolving and `video.play()` returning stops every track of every allocated stream — closes the "wedged camera" edge case where a half-built controller would hold the device.
+  - Final fallback to the original configured constraint preserves historic behaviour for browsers that refuse `enumerateDevices`.
+  - Throws now attach `err.cameras = [{deviceId,label}, ...]` for a future device-picker UX or DevTools console inspection.
+- **`OyonR/scripts/download-models.sh`** — extended to actually populate `standalone/vendor/`, closing the gap where every fresh clone of the repo (Mac or server) silently broke at runtime because vendor/ was gitignored with no automated source path.
+  - Adds ONNX Runtime Web wasm/mjs (10 files at the pinned version, 6 required + 4 optional flavors) downloaded from jsDelivr.
+  - Adds MediaPipe `tasks-vision` wasm/mjs (5 required + 2 optional). Default `MP_VERSION` bumped to 0.10.35 because npm doesn't publish 0.10.10–0.10.34 (peerDep range was unsatisfiable as written).
+  - Optional/required distinction: ORT loads asyncify/jspi only when the browser/EP combo needs them; treating them as optional means missing flavors don't fail the install. Soft-failure path `rm -f "$dest"` on 404 so the next idempotent run retries instead of seeing the zero-byte stub.
+  - Override versions via `ORT_VERSION=...` `MP_VERSION=...` env vars. Final summary lists what was skipped so operators see exactly what's missing.
+  - Verified end-to-end: stashed `vendor/onnxruntime-web` + `vendor/mediapipe`, ran the script from scratch, confirmed all required files re-downloaded with the expected sizes; optional skips logged correctly.
+- **`scripts/tech-test.sh`** — newly tracked (was an uncommitted session artifact). 235-line deploy verifier exercising liveness, frontend bundle integrity, Oyon API surface, nginx parity, auth gating, security headers, and response timing.
+- **`JStats/website/sites.conf`** + **`JStats/website/deploy.sh`** — wired tech-test.sh as the rohy `POST_VERIFY` step. After a `./deploy.sh rohy` restart succeeds, the verifier runs locally on this Mac against the LAN URL; non-zero exit fails the deploy (status flips to `warn`, summary shows red). Generic `POST_VERIFY_<svc>` field; other services can opt in by adding their own line. Doesn't change behaviour for services without it.
+- **`LEARNINGS.md`** — appended 2026-05-10 entry with the eight findings above (Continuity routing, label gating, error-class breadth, defensive cleanup, peerDep trap, MediaPipe version skip, ORT optional flavors, partial-file curl gotcha, POST_VERIFY rationale).
+- **`HANDOFF.md`** — overwritten reflecting the new state.
+
+Tests:
+- `node --check` clean on rewritten `CameraController.js`.
+- `bash -n` + shellcheck clean on rewritten `download-models.sh` and modified `JStats/website/deploy.sh`.
+- `download-models.sh` re-run from a stashed-empty `vendor/`: 13 files downloaded successfully, 4 optional skipped with notice, idempotent re-run shows all "already present".
+- `./deploy.sh list` from `JStats/website/` still parses sites.conf correctly with the new POST_VERIFY field.
+- Browser camera verification: pending (requires user to hard-refresh the LAN URL after deploy and click the pill — the actual end-to-end check this work was driven by).
+
+Backup of original vendor (asyncify/jspi flavors that aren't on jsDelivr 1.20.1) preserved at `/tmp/oyon-vendor-backup/` until camera is confirmed working post-deploy. Delete after verification.
+
+**Codex review pass** caught and addressed before commit:
+- `CameraController.js`: added concurrency guard (`_inFlight` flag rejects double-start) and a generation counter so `stop()` during a pending `start()` causes the in-flight acquisition to throw `CameraStartAbortedError` and clean up its local refs instead of installing an orphan stream after the user has already requested teardown. The commit point (`this.stream = acquired...`) moved to the very end of `start()` so partial state never lands on the controller during the race window. Hard-fail errors (`NotAllowedError`/`SecurityError`) now also clear the cached preferred deviceId.
+- `download-models.sh`: replaced the `2>&1`-noisy HTTP code capture with a clean `if http=$(curl ...); then ... fi` form that lets `set -e` coexist with intentional failure capture and yields a deterministic `$http` value. Atomic temp-file pattern: download to `<dest>.part`, verify success + non-zero size, then `mv` into place — so a failed/aborted run leaves no partial file and the next idempotent run re-downloads instead of treating a truncated file as "already present".
+- `JStats/website/deploy.sh`: the `eval "$verify"` now runs in a subshell with `cd "$SCRIPT_DIR"` first, making relative paths in POST_VERIFY predictable regardless of the operator's cwd. Added a comment block documenting the trust model (sites.conf is source-controlled — same boundary as the existing `eval`'d PULL_BUILD/RESTART fields).
+
 ### 2026-05-09 — Oyon: friendly disabled state, stop the silent 404
 
 When Oyon was off (no `OYON_ENABLED=1` in env) or had failed to import, every Settings → Oyon tab showed a useless `Request failed (404)` toast because the routes simply didn't exist server-side. Operators couldn't tell whether the cause was a missing env var, missing binary download, or an actual bug. Two-part fix:
