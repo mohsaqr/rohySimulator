@@ -1,3 +1,13 @@
+### 2026-05-10 — Oyon ON by default in every deploy path
+
+Closes the gap where Oyon was on-by-default for source/systemd/local-install paths but effectively OFF in Docker (compose.yml never propagated `OYON_ENABLED`, so the container's process didn't see the env.example default). Now every deploy path defaults to `OYON_ENABLED=1`.
+
+- `deploy/docker/compose.yml`: pass `OYON_ENABLED: "${OYON_ENABLED:-1}"` to the rohy service. Default 1 even when `.env` doesn't set it; operator can opt out by adding `OYON_ENABLED=0` to `.env` and re-running `docker compose up -d`.
+- `deploy/docker/.env.example`: documented the variable with a commented-out `# OYON_ENABLED=1` line and an explanation that toggling only gates the routes (binary bundles are always present in the image, so disabling doesn't shrink the install).
+- `README.md`: added a "Oyon is ON by default" callout under the production deploys table with a per-path opt-out matrix (local-install: `--no-oyon`; bootstrap.sh: edit `/etc/rohy/env`; Docker: set `OYON_ENABLED=0` in `.env`).
+
+`deploy/env.example` (used by bootstrap.sh + local-install.sh) already had `OYON_ENABLED=1`. `local-install.sh` already had `--no-oyon`. The fix was scoped to the Docker path + cross-cutting documentation.
+
 ### 2026-05-10 — Camera robustness, vendor self-population, post-deploy verification
 
 End-to-end fix for the Oyon camera failure first reported as `Could not start video source` on the user's MacBook (Continuity Camera paired with iPhone). The shipped fallback in commit `56fe0d1` was reactive (try-and-retry) and only caught one error class. This pass replaces it with a proactive enumeration strategy AND closes the surrounding deployment gaps so the same fix carries to every future install — not just this Mac.

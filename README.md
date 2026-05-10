@@ -57,6 +57,16 @@ Four packaged paths, pick one:
 
 All four handle the Oyon binary download automatically (the air-gap path packs them into the tarball at build time instead of fetching at install time). Verify any deploy with `scripts/smoke.sh https://your-host/rohy`.
 
+**Oyon (local-browser emotion capture) is ON by default in every deploy path.** The routes mount under `/api/addons/oyon/*` and the standalone analytics page at `/oyon/standalone/`; the wasm/mjs runtime + face landmarker + emotion classifiers are downloaded automatically by `npm install` (`OyonR/scripts/download-models.sh`). To opt out:
+
+| Path | How to disable |
+|---|---|
+| `local-install.sh` | re-run with `--no-oyon` |
+| `bootstrap.sh` (systemd) | edit `/etc/rohy/env`, set `OYON_ENABLED=0`, `sudo systemctl restart rohy` |
+| Docker | set `OYON_ENABLED=0` in `deploy/docker/.env`, `docker compose up -d` |
+
+When disabled, Settings → Oyon shows a friendly panel explaining the state instead of returning 404s. Toggling does NOT change image / install size — only the routes are gated; the binary bundles are always present.
+
 #### Air-gap bundling — full flow
 
 For sites with no internet on the target host (clinical labs, secured networks, lab classrooms with restricted egress):

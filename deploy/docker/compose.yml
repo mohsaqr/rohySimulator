@@ -51,6 +51,10 @@ services:
       # JWT_SECRET is auto-generated and persisted to the volume on first
       # boot. Override here only if you have an external secret manager.
       JWT_SECRET: "${JWT_SECRET:-}"
+      # Local-browser emotion capture add-on (Oyon). Defaults to ON to
+      # match the source-install path. Set OYON_ENABLED=0 in .env to opt
+      # out — Settings shows a friendly disabled panel rather than 404s.
+      OYON_ENABLED: "${OYON_ENABLED:-1}"
       # Optional API keys. Fine to leave empty — admin can set them in
       # the in-app Settings tab once logged in.
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
