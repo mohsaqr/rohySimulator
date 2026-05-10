@@ -38,7 +38,15 @@ tmp/
 # Vendored Oyon assets — re-downloadable via OyonR/scripts/download-models.sh
 # (~93 MB of MediaPipe + ONNX bundles + emotion models, not worth the git history).
 OyonR/node_modules/
-OyonR/standalone/vendor/
+# Vendor dirs are mostly populated by OyonR/scripts/download-models.sh
+# at install time (huge wasm/mjs/onnx files; not git-friendly). Two
+# subdirs are exceptions and DO need to be tracked because they're
+# small (≤300 KB combined), are not fetched by any download script,
+# and the standalone HTML page hard-imports them — without them in the
+# repo a fresh install / Docker build serves /oyon/standalone/logs.html
+# with broken NetworkGraph + dynajs imports.
+OyonR/standalone/vendor/onnxruntime-web/
+OyonR/standalone/vendor/mediapipe/
 OyonR/standalone/models/
 
 # User uploads
