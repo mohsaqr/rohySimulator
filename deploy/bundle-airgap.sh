@@ -24,9 +24,12 @@
 #   deploy/bundle-airgap.sh --dry-run                                # plan only
 #
 # Output (default to ./dist/airgap/):
-#   rohy-airgap-source-<sha>-<date>.tar.gz       (and .sha256)
-#   rohy-airgap-docker-<sha>-<date>.tar.gz       (and .sha256)
-#   manifest-<sha>-<date>.json                    (what's inside)
+#   rohy-airgap-source-<sha>-<platform>-<date>.tar.gz   (and .sha256)
+#   rohy-airgap-docker-<sha>-<platform>-<date>.tar.gz   (and .sha256)
+#
+# Each tarball contains a manifest.json at its root describing what's
+# inside (platform, git sha, included packages, flags). Inspect with:
+#     tar -xzOf rohy-airgap-source-*.tar.gz '*/manifest.json' | jq .
 
 set -euo pipefail
 

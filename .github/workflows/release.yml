@@ -170,10 +170,14 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.ref }}
           fail_on_unmatched_files: true
+          # The bundler writes its manifest.json INSIDE each tarball at
+          # the root (deploy/bundle-airgap.sh:416), not as a sibling
+          # file. Operators reading what's in a bundle look at
+          # `tar tzf foo.tar.gz | grep manifest.json` — no separate
+          # sidecar to upload here.
           files: |
             dist/airgap/*.tar.gz
             dist/airgap/*.sha256
-            dist/airgap/manifest-*.json
           body: |
             ## Install paths for this release
 
