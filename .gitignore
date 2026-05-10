@@ -111,3 +111,7 @@ tests/e2e/.auth/
 /OyonR/examples/rohy-addon/README.md
 /OyonR/examples/rohy-backend/ATTACH_BACKEND.md
 /OyonR/scripts/README.md
+# Upstream dynajs library docs — third-party content. We only need
+# index.js / index.d.ts / package.json from the vendored copy.
+/OyonR/standalone/vendor/dynajs/README.md
+/OyonR/standalone/vendor/dynajs/LEARNINGS.md
