@@ -62,6 +62,33 @@ If `ROHY_VERIFY_URL` is empty, the post-deploy verifier is skipped — the
 update succeeds as long as the service comes back up. Setting it gives you
 the strongest signal that the new version actually works.
 
+### 2b. (Optional) Arm the Oyon contract probe
+
+By default the verifier checks 27 things including liveness, route
+mounting, security headers, and bundle integrity. With one extra step you
+also get a contract probe that POSTs a deliberately-malformed emotion
+batch and asserts the server validator catches it (the May-2026
+"label-set drift" bug class). To enable it, drop a credentials file:
+
+```bash
+sudo install -m 0600 -o "$USER" -g "$USER" /dev/null "$HOME/.rohy-deploy-creds"
+sudo tee "$HOME/.rohy-deploy-creds" >/dev/null <<EOF
+ROHY_LOGIN_URL='https://192.168.50.39:4001/rohy/api/auth/login'
+ROHY_DEPLOY_USER='deploy-verifier'
+ROHY_DEPLOY_PASS='<paste-password-here>'
+EOF
+chmod 600 "$HOME/.rohy-deploy-creds"
+```
+
+The credentials must belong to a real rohy user — any role works, the
+contract probe doesn't read data, it just needs to pass `authenticateToken`
+so the route reaches the validator. A dedicated low-privilege account is
+recommended.
+
+If the file is absent, `rohy-update`'s post-verify still runs — the
+contract probe just skips and the deploy passes on the other 27 checks.
+No breaking change.
+
 ### 3. Take a manual baseline backup
 
 Belt-and-braces — every `apply` snapshots automatically, but a manual

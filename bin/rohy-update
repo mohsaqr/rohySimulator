@@ -181,8 +181,20 @@ post_verify() {
     return 0
   fi
   step "post-deploy verify against $ROHY_VERIFY_URL"
+  # Prefer the post-verify wrapper when present: it mints a token from
+  # \$HOME/.rohy-deploy-creds (or \$ROHY_DEPLOY_CREDS) before calling
+  # tech-test.sh, which arms the Oyon contract probe (tech-test.sh
+  # section 6 — POST a deliberately-bad emotion batch and assert the
+  # validator returns 400 + "sum close to 1"). Without the wrapper the
+  # probe gates on \$ROHY_TOKEN and silently skips, so we'd only verify
+  # routes are mounted, not validator behavior. Wrapper falls back to
+  # the same no-token tech-test.sh run if creds are absent, so this is
+  # strictly an improvement: same coverage at minimum, contract probe
+  # at maximum. Operator setup is documented in docs/UPDATING.md.
+  local verifier="$SELF_DIR/../scripts/post-verify-rohy.sh"
+  [[ -x "$verifier" ]] || verifier="$SELF_DIR/../scripts/tech-test.sh"
   ROHY_INSECURE="$ROHY_INSECURE" \
-    bash "$SELF_DIR/../scripts/tech-test.sh" "$ROHY_VERIFY_URL" || return 1
+    bash "$verifier" "$ROHY_VERIFY_URL" || return 1
   return 0
 }
 
