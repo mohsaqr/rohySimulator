@@ -5,7 +5,7 @@ import { createOyonSettings, expectedSamplesPerWindow, settingsSnapshot } from '
   const settings = createOyonSettings();
   assert.equal(settings.sample_interval_ms, 1000);
   assert.equal(settings.aggregate_window_ms, 10000);
-  assert.equal(settings.min_valid_frames, 6);
+  assert.equal(settings.min_valid_frames, 3);
   assert.equal(settings.enable_dynamics, true);
 }
 

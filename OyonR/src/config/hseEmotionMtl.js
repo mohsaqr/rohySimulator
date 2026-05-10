@@ -1,9 +1,14 @@
+import { assertCanonicalLabels } from './emotionLabels.js';
+
 export const HSE_EMOTION_MTL_CONFIG = {
   id: 'hsemotion-enet-b0-8-va-mtl',
   modelName: 'enet_b0_8_va_mtl',
   modelVersion: 'hsemotion-onnx-0.3.1-source',
   modelUrl: '/standalone/models/emotion/enet_b0_8_va_mtl.onnx',
-  labels: ['anger', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'],
+  labels: assertCanonicalLabels(
+    ['anger', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'],
+    'hsemotion-enet-b0-8-va-mtl',
+  ),
   inputSize: 224,
   inputChannels: 3,
   inputName: 'input',

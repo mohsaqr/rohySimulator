@@ -1,18 +1,18 @@
+import { ALLOWED_EMOTIONS } from '../config/emotionLabels.js';
+
 export class EmotionAggregator {
   constructor(options = {}) {
     this.options = {
       windowMs: 10000,
-      minValidFrames: 6,
+      minValidFrames: 3,
       sampleIntervalMs: 1000,
-      // Default to the 8-emotion set every shipped model uses (HSE,
-      // EmotiEff MobileViT, EmotiEff MBF — all emit anger/contempt/
-      // disgust/fear/happy/neutral/sad/surprise). The runtime overrides
-      // this with the actual classifier labels at construction; callers
-      // constructing the aggregator directly without a classifier still
-      // get a sane modern default. Previously defaulted to the legacy
-      // 7-emotion FER set (no contempt) which produced sums ~0.875 and
-      // got rejected by the server validator.
-      labels: ['neutral', 'happy', 'sad', 'surprise', 'anger', 'fear', 'disgust', 'contempt'],
+      // Default labels come from the canonical ALLOWED_EMOTIONS in
+      // ../config/emotionLabels.js — the same source the validator and
+      // every model config use. The runtime overrides this with the
+      // actual classifier labels at construction; callers constructing
+      // the aggregator directly without a classifier still get a sane
+      // default that round-trips through the validator.
+      labels: ALLOWED_EMOTIONS,
       ...options,
     };
     this.windowStart = null;

@@ -30,7 +30,7 @@
     "start": "vite --host 127.0.0.1",
     "demo": "vite --host 127.0.0.1",
     "check": "find src -name '*.js' -print0 | xargs -0 -n1 node --check",
-    "test": "node tests/aggregation.test.js && node tests/validation.test.js && node tests/local-transport.test.js && node tests/fallback-transport.test.js && node tests/rohy-addon.test.js && node tests/settings.test.js && node tests/logging.test.js && node tests/metrics.test.js && node tests/dynamics.test.js && node tests/runtime-settings.test.js && node tests/transition-network.test.js",
+    "test": "node tests/aggregation.test.js && node tests/validation.test.js && node tests/local-transport.test.js && node tests/fallback-transport.test.js && node tests/rohy-addon.test.js && node tests/settings.test.js && node tests/logging.test.js && node tests/metrics.test.js && node tests/dynamics.test.js && node tests/runtime-settings.test.js && node tests/transition-network.test.js && node tests/contract.test.js",
     "download-models": "bash scripts/download-models.sh"
   },
   "peerDependencies": {

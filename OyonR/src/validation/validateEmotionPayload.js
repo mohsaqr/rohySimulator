@@ -1,4 +1,8 @@
-export const ALLOWED_EMOTIONS = ['neutral', 'happy', 'sad', 'surprise', 'anger', 'fear', 'disgust', 'contempt'];
+// Re-exported for compatibility — the canonical list lives in
+// ../config/emotionLabels.js so the aggregator, validator, and every
+// model config share one source of truth.
+export { ALLOWED_EMOTIONS } from '../config/emotionLabels.js';
+import { ALLOWED_EMOTIONS } from '../config/emotionLabels.js';
 
 const MAX_BATCH_EVENTS = 120;
 const MAX_JSON_STRING_LENGTH = 20_000;

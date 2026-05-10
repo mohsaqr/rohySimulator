@@ -7,6 +7,7 @@ import dbAdapter from '../dbAdapter.js';
 import { authenticateToken, hasRoleAtLeast, requireAdmin, ROLE_RANKS } from '../middleware/auth.js';
 import { dbAll, dbGet, dbRun, logAuditAsync, redactRow, tenantId } from './_helpers.js';
 import { logger } from '../logger.js';
+import { rejectionMiddleware, getStats as getRejectionStats } from './oyon-rejection-counter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,7 +29,7 @@ const DEFAULT_RUNTIME = {
     // tune per tenant in Settings → Oyon → Capture engine.
     sample_interval_ms: 500,
     window_ms: 10000,
-    min_valid_frames: 6,
+    min_valid_frames: 3,
     smoothing_alpha: 0.28,
     min_hold_ms: 3000,
     min_switch_confidence: 0.5,
@@ -45,6 +46,10 @@ router.use('/assets', express.static(ASSET_ROOT, {
     immutable: true,
     maxAge: '1h',
 }));
+
+// Per-endpoint 4xx/5xx counter. Mounted before any route handler so it
+// observes every Oyon response. Exposed via GET /admin/health below.
+router.use(rejectionMiddleware);
 
 router.get('/config', authenticateToken, async (req, res) => {
     const settings = await ensureSettings(tenantId(req));
@@ -491,6 +496,26 @@ router.get('/student/me', authenticateToken, async (req, res) => {
     );
     oyonLog.debug('student self-records read', { user_id: req.user.id, returned: rows.length });
     res.json({ records: rows.map(hydrateRecord) });
+});
+
+router.get('/admin/health', authenticateToken, async (req, res) => {
+    // Operator dashboard for "is the Oyon write path healthy right now?"
+    // Returns per-endpoint rejection counts (4xx + 5xx) for the last 5min
+    // and last hour. Empty `endpoints` means no rejections in the last
+    // hour — the happy state. A spike on POST /emotion-records is the
+    // signature of label-set drift, validator changes, or session-bounds
+    // bugs. Operator view: same gate as /admin/live.
+    const settings = await ensureSettings(tenantId(req));
+    if (!assertOyonReadAccess(req, res, settings)) return;
+    const endpoints = getRejectionStats();
+    const total_5m = Object.values(endpoints).reduce((acc, e) => acc + e.count_5m, 0);
+    const total_1h = Object.values(endpoints).reduce((acc, e) => acc + e.count_1h, 0);
+    res.json({
+        endpoints,
+        total_5m,
+        total_1h,
+        generated_at: new Date().toISOString(),
+    });
 });
 
 router.get('/admin/live', authenticateToken, async (req, res) => {

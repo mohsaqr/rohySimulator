@@ -18,7 +18,7 @@
     "setup:oyon": "bash OyonR/scripts/download-models.sh",
     "postinstall": "bash OyonR/scripts/download-models.sh 2>/dev/null || echo '[oyon] model bundles not downloaded — run: npm run setup:oyon (needs curl + network)'",
     "production": "NODE_ENV=production node server/server.js",
-    "build": "vite build --base=/rohy/ && rm -rf frontend/* && mkdir -p frontend && cp -r dist/* frontend/",
+    "build": "vite build --base=/rohy/ && rm -rf frontend && mkdir -p frontend && cp -rf dist/. frontend/",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run --reporter=default",

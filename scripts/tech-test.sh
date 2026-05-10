@@ -11,6 +11,14 @@
 #   ROHY_INSECURE=1 scripts/tech-test.sh ...                       # accept self-signed certs
 #   ROHY_VERBOSE=1 scripts/tech-test.sh ...                        # print response bodies on FAIL
 #
+# Minting a token for the contract probe (operator-side, one-shot):
+#   curl -ksS -X POST -H 'Content-Type: application/json' \
+#     -d '{"username":"<op>","password":"<pw>"}' \
+#     https://192.168.50.39:4001/rohy/api/auth/login | jq -r .token
+# Stash it in your shell:
+#   export ROHY_TOKEN=...
+# Then re-run tech-test.sh; the Oyon contract probe (section 8) will fire.
+#
 # Exit codes: 0 = all pass · 1 = any fail · 2 = usage error.
 #
 # Output: each check is one line, color-coded:
@@ -219,7 +227,45 @@ for p in /api/users /api/cases /api/auth/profile /api/auth/verify /api/admin/dat
     probe "$BASE_URL$p" "401,403,404" 0 "" "$p"
 done
 
-# ── 6. Security headers ────────────────────────────────────────────────────
+# ── 6. Oyon contract probe (auth'd) ────────────────────────────────────────
+# When ROHY_TOKEN is set, POST a synthetic batch with a deliberately-bad
+# probabilities sum (7 labels of 0.125 = 0.875) and assert the validator
+# catches it with 400 + "sum close to 1" in the body. Catches the May-2026
+# regression class — drift between client label set and server validator
+# — at deploy time, before any user starts a capture.
+#
+# The route's check order (oyon-routes.js:212-265) is:
+#   1. settings.emotion_capture_enabled → 403 if disabled
+#   2. validateEmotionBatch              → 400 if payload invalid
+#   3. session lookup                    → 404 if not found
+#   4. ownership check                   → 403 if wrong user
+#   5. consent check                     → 403 if not granted
+# Step 2 fires before any session/consent check, so we don't need a real
+# session — a bogus session_id is fine because the bad payload trips the
+# validator first.
+if [[ -n "$TOKEN" ]]; then
+    section "Oyon contract probe (auth'd)"
+    BAD_BATCH='{"session_id":"contract-probe-no-such-session","events":[{"window_start":"2026-05-10T00:00:00Z","window_end":"2026-05-10T00:00:10Z","duration_ms":10000,"expected_samples":10,"dominant_emotion":"happy","probabilities":{"neutral":0.125,"happy":0.125,"sad":0.125,"surprise":0.125,"anger":0.125,"fear":0.125,"disgust":0.125},"valence":0.1,"arousal":0.05,"confidence":0.5,"entropy":1.5,"valid_frames":6,"missing_face_ratio":0.1,"capture_mode":"local-browser","consent_version":"fer-consent-v1"}]}'
+    out_body=$(mktemp)
+    bad_status=$(curl $INSECURE_ARG -sS -o "$out_body" -w "%{http_code}" \
+        -X POST -H "Content-Type: application/json" "${AUTH_HDR[@]+"${AUTH_HDR[@]}"}" \
+        -d "$BAD_BATCH" "$BASE_URL/api/addons/oyon/emotion-records" 2>/dev/null || echo 000)
+    if [[ "$bad_status" == "400" ]] && grep -q "sum close to 1" "$out_body" 2>/dev/null; then
+        printf '  %s✓%s %-46s validator caught 7-of-8 sum (400 + correct error)\n' "$GRN" "$CLR" "POST emotion-records (bad sum)"
+        PASS=$((PASS+1))
+    elif [[ "$bad_status" == "400" ]]; then
+        printf '  %s!%s %-46s 400 received but error message unexpected\n' "$YEL" "$CLR" "POST emotion-records (bad sum)"
+        WARN=$((WARN+1))
+        (( VERBOSE )) && { echo "    body:"; head -c 300 "$out_body" | sed 's/^/      /'; echo; }
+    else
+        printf '  %s✗%s %-46s expected 400 (validator), got %s\n' "$RED" "$CLR" "POST emotion-records (bad sum)" "$bad_status"
+        FAIL=$((FAIL+1)); FAILED_CATEGORIES+=("$CURRENT_CAT")
+        (( VERBOSE )) && { echo "    body:"; head -c 300 "$out_body" | sed 's/^/      /'; echo; }
+    fi
+    rm -f "$out_body"
+fi
+
+# ── 7. Security headers ────────────────────────────────────────────────────
 section "Security headers"
 header_check "$BASE_URL/api/health" "X-Content-Type-Options" "nosniff"
 header_check "$BASE_URL/"           "X-Frame-Options"        "DENY|SAMEORIGIN"
@@ -227,7 +273,7 @@ header_check "$BASE_URL/"           "Referrer-Policy"        "."
 header_check "$BASE_URL/"           "Content-Security-Policy" "default-src|script-src"
 header_check "$BASE_URL/"           "Strict-Transport-Security" "max-age" || true   # only on HTTPS
 
-# ── 7. Response timing sanity ──────────────────────────────────────────────
+# ── 8. Response timing sanity ──────────────────────────────────────────────
 # Anything > 5000 ms on a static route signals nginx misconfig or back-pressure.
 # Reject status≠200 first — a TLS/connect failure can return in 20ms and would
 # otherwise look "fast" in the timing column.
