@@ -78,11 +78,26 @@ PLATFORM="${HOST_OS}-${HOST_ARCH}"
 STAMP="${GIT_SHA}-${PLATFORM}-${DATE_STAMP}"
 
 # Cross-platform sha256 — GNU has sha256sum, BSD/macOS has shasum.
+#
+# Emits the standard `<hash>  <basename>` format (two spaces, GNU style)
+# instead of just the hash. That's what `sha256sum -c file.sha256`
+# expects, so the sidecars we write here can be verified with the
+# vanilla command on the target host (and in CI):
+#
+#     cd dist/airgap && sha256sum -c rohy-airgap-source-*.sha256
+#
+# Using the basename (not the full path) keeps the sidecar
+# self-contained — operators can move both files together without
+# rewriting the checksum line.
 sha256() {
+    local file="$1"
+    local dir basename
+    dir="$(dirname "$file")"
+    basename="$(basename "$file")"
     if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum "$1" | awk '{print $1}'
+        ( cd "$dir" && sha256sum "$basename" )
     else
-        shasum -a 256 "$1" | awk '{print $1}'
+        ( cd "$dir" && shasum -a 256 "$basename" )
     fi
 }
 
