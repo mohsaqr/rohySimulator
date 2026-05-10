@@ -93,6 +93,7 @@ migration also requires adding a row here**.
 | 0016 | `0016_oyon_records_unique_record_id.sql` | additive | Partial unique index. |
 | 0017 | `0017_oyon_records_window_metadata.sql` | additive | New columns with defaults. |
 | 0018 | `0018_learning_events_vitals.sql` | additive | New columns. |
+| 0019 | `0019_oyon_lower_min_valid_frames.sql` | additive | Default change only — backfills legacy 6 → 3 so analytics stop dropping windows on normal blinks. |
 
 **To add a new migration**: append a row above. ID + filename match the SQL
 file. Set `Type` per the policy. `Notes` is freeform — what changed and why
