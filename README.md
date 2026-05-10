@@ -57,6 +57,18 @@ Four packaged paths, pick one:
 
 All four handle the Oyon binary download automatically (the air-gap path packs them into the tarball at build time instead of fetching at install time). Verify any deploy with `scripts/smoke.sh https://your-host/rohy`.
 
+#### Updating an existing install
+
+Once installed, keep the install current with `bin/rohy-update` — backup-first, atomic, with one-command rollback:
+
+```bash
+sudo rohy-update check       # what would change?
+sudo rohy-update apply       # apply with auto-snapshot + auto-rollback on failure
+sudo rohy-update rollback    # undo the last apply
+```
+
+See [`docs/UPDATING.md`](docs/UPDATING.md) for the full operator manual (backup setup, destructive migrations, troubleshooting, off-site backup recipes). The design rationale lives in [`docs/UPDATE-STRATEGY.md`](docs/UPDATE-STRATEGY.md).
+
 **Oyon (local-browser emotion capture) is ON by default in every deploy path.** The routes mount under `/api/addons/oyon/*` and the standalone analytics page at `/oyon/standalone/`; the wasm/mjs runtime + face landmarker + emotion classifiers are downloaded automatically by `npm install` (`OyonR/scripts/download-models.sh`). To opt out:
 
 | Path | How to disable |

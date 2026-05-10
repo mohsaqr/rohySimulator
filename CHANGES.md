@@ -1,3 +1,33 @@
+### 2026-05-10 — Seamless update story (Phases A/B/C/E)
+
+End-to-end operator-pull update tooling for self-hosted rohy installs. Designed for the "1-2 h downtime acceptable, backup essential, no fleet, but many third parties may self-host" constraint set. Plan + design rationale captured in `docs/UPDATE-STRATEGY.md`.
+
+- **`bin/rohy-update`** (new, ~470 LOC bash). One CLI, five subcommands: `check`, `apply`, `rollback`, `list-backups`, `restore-backup`.
+  - `apply` flow: pre-flight (disk + service health + lock) → snapshot → stop → checkout → npm ci → build → migration dry-run → start → POST_VERIFY (tech-test.sh) → write rollback recipe. Any failure auto-rolls back to pre-apply state.
+  - Rollback recipes persist at `/var/lib/rohy/rollback/<sha>.json` with symlink at `last`. Records from-sha, snapshot path, and `destructive` flag so `rollback` can refuse when destructive migrations are involved (and points the operator at the manual procedure instead).
+  - Lockfile at `/var/lock/rohy-update.lock` prevents concurrent runs. Logs at `/var/log/rohy-update.log`.
+  - Reads `/etc/rohy/update.conf` (optional) for site-specific config; sane defaults match the `bootstrap.sh` install layout.
+- **`scripts/rohy-backup.sh`** (new, ~180 LOC bash). Standalone snapshotter, also called from `rohy-update apply`.
+  - SQLite `VACUUM INTO` for consistent online snapshot (no write lock).
+  - Per-snapshot directory with `database.sqlite` + `env` copy + `manifest.json` + `migrations.lst`.
+  - `PRAGMA integrity_check` runs on every snapshot; fails the snapshot rather than retaining a corrupt one.
+  - Retention: keep last N (default 10) + one per month for M months (default 12) + always protect <24h-old. Configurable via `ROHY_BACKUP_KEEP_LAST` / `ROHY_BACKUP_KEEP_MONTHS`.
+  - `--check` mode for ad-hoc integrity verification. `--label` for tagged snapshots ("pre-import", "before-q4-merge").
+- **`migrations/MANIFEST.md`** (new). Canonical migration policy: additive-only by default, destructive changes require multi-release procedure (add → backfill → switch reads → drop, ≥3 releases). Per-migration table classifies all 18 existing migrations as `additive`. `rohy-update apply` reads this manifest at the target sha and refuses to proceed on `unknown` or `destructive` (without explicit `--allow-destructive`).
+- **`docs/UPDATING.md`** (new). Operator-facing manual — the page third parties read before pressing the upgrade button. TL;DR commands, full upgrade procedure, rollback paths (auto + manual), troubleshooting, off-site backup recipes (rsync + rclone), security caveats for v1 (signature verification deferred to Phase D), explicit "what the tool does NOT do" list. Modeled on Plausible's self-hosted upgrade page.
+- **`docs/UPDATE-STRATEGY.md`** (new). Design rationale for maintainers. Constraints, goals/non-goals, subsystem architecture diagram, four-pillar mapping, phased roadmap, risk register, references to comparable open-source projects (Mastodon, Plausible, Vaultwarden, Discourse, Kamal, Sigstore, TUF). Things explicitly out of scope (blue-green, fleet management, auto-update timer) recorded with rationale.
+- **`README.md`**: added "Updating an existing install" subsection under production deploys, linking both new docs.
+
+Tests:
+- `bash -n` + shellcheck clean on `rohy-update` and `rohy-backup.sh`.
+- `rohy-update --help` prints correctly. Each subcommand's path lines up with the documented flow.
+- Not exercised end-to-end against a real apply (would require a running Linux install + a target sha to apply); the next session can dry-run inside a Multipass VM if you want belt-and-braces validation before recommending it to third parties.
+
+Deferred to next sessions (planned in `UPDATE-STRATEGY.md`):
+- C-followup: wire `bin/rohy-update` symlink + default `update.conf` into `bootstrap.sh` so fresh installs pick it up.
+- Phase D: github-releases pipeline with signed artifacts (sigstore/cosign recommended over GPG); `rohy-update` verifies signature before checkout.
+- Phase F: first-class off-site backup via rclone preset in `update.conf`.
+
 ### 2026-05-10 — Oyon ON by default in every deploy path
 
 Closes the gap where Oyon was on-by-default for source/systemd/local-install paths but effectively OFF in Docker (compose.yml never propagated `OYON_ENABLED`, so the container's process didn't see the env.example default). Now every deploy path defaults to `OYON_ENABLED=1`.

@@ -1,0 +1,502 @@
+#!/usr/bin/env bash
+#
+# bin/rohy-update — operator-driven seamless update for rohy.
+#
+# One CLI, five subcommands. Designed for operators self-hosting rohy who
+# want a single, predictable, backup-first upgrade path. See docs/UPDATING.md
+# for the operator-facing manual; this header is the implementer/maintainer
+# reference.
+#
+# Usage:
+#   sudo rohy-update check                    # is there an update? what changes?
+#   sudo rohy-update apply [--yes] [--allow-destructive]
+#                                             # apply update; auto-rollback on fail
+#   sudo rohy-update rollback                 # undo the last apply
+#   sudo rohy-update list-backups             # show local snapshots
+#   sudo rohy-update restore-backup <name>    # restore a specific snapshot
+#
+# Configuration (env vars or /etc/rohy/update.conf):
+#   ROHY_REPO_DIR=/opt/repos/rohy             where the source lives
+#   ROHY_DB=/opt/data/rohy/database.sqlite    where the DB lives
+#   ROHY_ENV_FILE=/etc/rohy/env               systemd EnvironmentFile
+#   ROHY_BACKUP_DIR=/var/backups/rohy         where snapshots live
+#   ROHY_SERVICE=rohy                          systemd service name
+#   ROHY_VERIFY_URL=https://localhost:4001/rohy
+#                                             URL POST_VERIFY tests against
+#   ROHY_INSECURE=1                           accept self-signed in verify
+#   ROHY_UPDATE_BRANCH=main                   git ref to track
+#
+# Exit codes:
+#   0   success (apply succeeded, or check found no update, etc.)
+#   10  check found an update available (caller can act on this)
+#   1   user-recoverable failure (caller can retry; usually rolled back)
+#   2   catastrophic failure (rolled back to old version manually required)
+#   3   usage error
+#
+# Idempotency: re-running `apply` on the same target is a no-op. Re-running
+# after a partial failure picks up cleanly because each step is atomic.
+
+set -uo pipefail
+
+# Pull this script's directory and resolve repo root from there. Allows the
+# binary to live at /usr/local/bin/rohy-update (symlinked) AND find the repo.
+SELF="${BASH_SOURCE[0]}"
+while [[ -L "$SELF" ]]; do SELF="$(readlink "$SELF")"; done
+SELF_DIR="$(cd "$(dirname "$SELF")" && pwd)"
+REPO_DEFAULT="$(cd "$SELF_DIR/.." && pwd)"
+
+# ── config (env vars first, then /etc/rohy/update.conf, then defaults) ─────
+[[ -f /etc/rohy/update.conf ]] && source /etc/rohy/update.conf
+
+ROHY_REPO_DIR="${ROHY_REPO_DIR:-$REPO_DEFAULT}"
+ROHY_DB="${ROHY_DB:-/opt/data/rohy/database.sqlite}"
+ROHY_ENV_FILE="${ROHY_ENV_FILE:-/etc/rohy/env}"
+ROHY_BACKUP_DIR="${ROHY_BACKUP_DIR:-/var/backups/rohy}"
+ROHY_SERVICE="${ROHY_SERVICE:-rohy}"
+ROHY_VERIFY_URL="${ROHY_VERIFY_URL:-}"
+ROHY_INSECURE="${ROHY_INSECURE:-0}"
+ROHY_UPDATE_BRANCH="${ROHY_UPDATE_BRANCH:-main}"
+ROHY_LOCK="/var/lock/rohy-update.lock"
+ROHY_LOG="/var/log/rohy-update.log"
+
+# ── output helpers ─────────────────────────────────────────────────────────
+RED=$'\033[0;31m'; GRN=$'\033[0;32m'; YEL=$'\033[0;33m'; BLU=$'\033[0;34m'; CLR=$'\033[0m'
+say()  { printf '  %s\n' "$*"; }
+ok()   { printf '  %s✓%s %s\n' "$GRN" "$CLR" "$*"; }
+warn() { printf '  %s!%s %s\n' "$YEL" "$CLR" "$*"; }
+err()  { printf '  %s✗%s %s\n' "$RED" "$CLR" "$*" >&2; }
+step() { printf '\n%s━━ %s ━━%s\n' "$BLU" "$*" "$CLR"; }
+die()  { err "$*"; exit 1; }
+need() { command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"; }
+log()  { printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >> "$ROHY_LOG" 2>/dev/null || true; }
+
+# ── lock guard (prevents concurrent runs) ──────────────────────────────────
+acquire_lock() {
+  exec 9>"$ROHY_LOCK" 2>/dev/null || die "cannot open lock file $ROHY_LOCK (need root?)"
+  flock -n 9 || die "another rohy-update is running (lock $ROHY_LOCK held). Wait or remove if stale."
+  trap 'rm -f "$ROHY_LOCK"' EXIT
+}
+
+# ── git helpers ────────────────────────────────────────────────────────────
+git_cur_sha() { git -C "$ROHY_REPO_DIR" rev-parse --short=12 HEAD; }
+git_cur_full_sha() { git -C "$ROHY_REPO_DIR" rev-parse HEAD; }
+git_remote_sha() { git -C "$ROHY_REPO_DIR" rev-parse "origin/$ROHY_UPDATE_BRANCH"; }
+git_count_ahead() {
+  git -C "$ROHY_REPO_DIR" rev-list --count "HEAD..origin/$ROHY_UPDATE_BRANCH"
+}
+
+git_fetch_quiet() {
+  git -C "$ROHY_REPO_DIR" fetch --tags --quiet origin "$ROHY_UPDATE_BRANCH" 2>&1 \
+    | sed 's/^/    /'
+}
+
+# Migrations pending = files in migrations/ that aren't in the DB's
+# schema_migrations table. Returns nothing if the DB doesn't exist (fresh
+# install — the runner creates the table on first start).
+list_pending_migrations() {
+  local cur_sha="$1" target_sha="$2"
+  # Files added between current and target. Robust to additions both
+  # in current-but-removed-in-target (shouldn't happen) and target-only.
+  git -C "$ROHY_REPO_DIR" diff --name-only --diff-filter=A \
+       "$cur_sha" "$target_sha" -- 'migrations/*.sql' 2>/dev/null \
+    | sed 's|.*/||'
+}
+
+# ── manifest reader ────────────────────────────────────────────────────────
+# Reads migrations/MANIFEST.md at $target_sha (so we read the future state)
+# and returns the Type column for the given migration filename, or "unknown".
+manifest_type_for() {
+  local target_sha="$1" filename="$2"
+  git -C "$ROHY_REPO_DIR" show "$target_sha:migrations/MANIFEST.md" 2>/dev/null \
+    | awk -F'|' -v f="$filename" '
+        $0 ~ f {
+          for (i=1; i<=NF; i++) {
+            gsub(/^ +| +$/, "", $i)
+            if ($i ~ /^(additive|destructive|unknown)$/) { print $i; found=1; exit }
+          }
+        }
+        END { if (!found) print "unknown" }
+      '
+}
+
+# Inspect every pending migration. Echoes "destructive" if any are flagged
+# destructive; "unknown" if any aren't in the manifest; "additive" only if
+# all are explicitly additive.
+classify_pending() {
+  local cur_sha="$1" target_sha="$2"
+  local worst="additive"
+  while IFS= read -r m; do
+    [[ -z "$m" ]] && continue
+    t=$(manifest_type_for "$target_sha" "$m")
+    case "$t" in
+      destructive) worst="destructive"; break ;;
+      unknown)     [[ "$worst" == "additive" ]] && worst="unknown" ;;
+    esac
+  done < <(list_pending_migrations "$cur_sha" "$target_sha")
+  printf '%s' "$worst"
+}
+
+# ── backup wrapper ─────────────────────────────────────────────────────────
+take_snapshot() {
+  local label="$1"
+  ROHY_DB="$ROHY_DB" ROHY_ENV_FILE="$ROHY_ENV_FILE" \
+  ROHY_BACKUP_DIR="$ROHY_BACKUP_DIR" REPO_DIR="$ROHY_REPO_DIR" \
+    bash "$SELF_DIR/../scripts/rohy-backup.sh" --label "$label"
+}
+
+# Path to the most recent snapshot directory.
+latest_snapshot() {
+  ls -1dt "$ROHY_BACKUP_DIR"/*/ 2>/dev/null | head -1 | sed 's:/$::'
+}
+
+# ── service helpers ────────────────────────────────────────────────────────
+service_running() {
+  systemctl is-active --quiet "$ROHY_SERVICE"
+}
+
+service_stop() {
+  step "stopping $ROHY_SERVICE"
+  systemctl stop "$ROHY_SERVICE"
+  for _ in {1..30}; do
+    service_running || { ok "stopped"; return 0; }
+    sleep 1
+  done
+  die "service did not stop within 30s"
+}
+
+service_start() {
+  step "starting $ROHY_SERVICE"
+  systemctl start "$ROHY_SERVICE"
+  for i in {1..60}; do
+    if service_running; then ok "running (after ${i}s)"; return 0; fi
+    sleep 1
+  done
+  die "service did not start within 60s — see 'journalctl -u $ROHY_SERVICE -n 50'"
+}
+
+# ── verifier ───────────────────────────────────────────────────────────────
+post_verify() {
+  if [[ -z "$ROHY_VERIFY_URL" ]]; then
+    warn "ROHY_VERIFY_URL not set — skipping post-deploy verify"
+    return 0
+  fi
+  step "post-deploy verify against $ROHY_VERIFY_URL"
+  ROHY_INSECURE="$ROHY_INSECURE" \
+    bash "$SELF_DIR/../scripts/tech-test.sh" "$ROHY_VERIFY_URL" || return 1
+  return 0
+}
+
+# ── migration dry-run ──────────────────────────────────────────────────────
+# Run the migration runner with --dry-run inside the (already updated) repo.
+# Failure here aborts BEFORE we apply for real, so the DB is untouched.
+migration_dry_run() {
+  step "migration dry-run"
+  if [[ ! -f "$ROHY_REPO_DIR/scripts/migrate.js" ]]; then
+    warn "scripts/migrate.js not found in target — skipping dry-run"
+    return 0
+  fi
+  ( cd "$ROHY_REPO_DIR" && ROHY_DB="$ROHY_DB" node scripts/migrate.js --dry-run ) \
+    || die "migration dry-run failed — refusing to apply (no changes made)"
+  ok "dry-run clean"
+}
+
+# ── subcommand: check ──────────────────────────────────────────────────────
+cmd_check() {
+  step "checking for updates"
+  need git
+  git_fetch_quiet
+  local cur target ahead
+  cur=$(git_cur_sha)
+  target=$(git_remote_sha | head -c 12)
+  ahead=$(git_count_ahead)
+  say "current : $cur (branch: $(git -C "$ROHY_REPO_DIR" rev-parse --abbrev-ref HEAD))"
+  say "remote  : $target (origin/$ROHY_UPDATE_BRANCH)"
+  say "behind  : $ahead commits"
+  if (( ahead == 0 )); then
+    ok "up to date — nothing to do"
+    return 0
+  fi
+  step "changes summary"
+  git -C "$ROHY_REPO_DIR" log --oneline "HEAD..origin/$ROHY_UPDATE_BRANCH" | sed 's/^/  /'
+  step "migrations"
+  local pending; pending=$(list_pending_migrations "$cur" "$target")
+  if [[ -z "$pending" ]]; then
+    ok "no new migrations"
+  else
+    say "pending:"
+    printf '%s\n' "$pending" | sed 's/^/    - /'
+    local class; class=$(classify_pending "$cur" "$target")
+    case "$class" in
+      additive)    ok "all migrations are additive — safe to apply" ;;
+      destructive) warn "destructive migrations present — apply requires --allow-destructive" ;;
+      unknown)     warn "one or more migrations missing from migrations/MANIFEST.md — apply will refuse" ;;
+    esac
+  fi
+  step "to apply"
+  say "sudo rohy-update apply"
+  return 10
+}
+
+# ── subcommand: apply ──────────────────────────────────────────────────────
+cmd_apply() {
+  acquire_lock
+  local AUTO_YES=0 ALLOW_DESTR=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --yes|-y)            AUTO_YES=1; shift ;;
+      --allow-destructive) ALLOW_DESTR=1; shift ;;
+      *) die "unknown apply arg: $1" ;;
+    esac
+  done
+
+  need git; need npm; need sqlite3; need systemctl
+
+  step "pre-flight"
+  git_fetch_quiet
+  local cur target
+  cur=$(git_cur_sha); target=$(git_remote_sha | head -c 12)
+  if [[ "$cur" == "$target" ]]; then
+    ok "already at $cur — nothing to do"
+    return 0
+  fi
+  say "from $cur → $target"
+
+  # Disk space: need at least DB size × 3 (current + snapshot + working room).
+  local db_bytes free_bytes
+  db_bytes=$(stat -c%s "$ROHY_DB" 2>/dev/null || stat -f%z "$ROHY_DB" 2>/dev/null || echo 0)
+  free_bytes=$(df -P "$ROHY_BACKUP_DIR" 2>/dev/null | awk 'NR==2 {print $4*1024}')
+  free_bytes="${free_bytes:-0}"
+  if (( db_bytes > 0 && free_bytes < db_bytes * 3 )); then
+    die "insufficient free space at $ROHY_BACKUP_DIR (need 3× $db_bytes, have $free_bytes)"
+  fi
+  ok "disk: free=$(numfmt --to=iec "$free_bytes" 2>/dev/null || echo "$free_bytes")B, db=$(numfmt --to=iec "$db_bytes" 2>/dev/null || echo "$db_bytes")B"
+
+  # Service must be healthy NOW. Don't update a sick install.
+  if ! service_running; then
+    die "$ROHY_SERVICE is not running. Fix the current install first; don't update on top of a broken service."
+  fi
+  ok "$ROHY_SERVICE currently active"
+
+  # Migration safety
+  local class; class=$(classify_pending "$cur" "$target")
+  case "$class" in
+    destructive)
+      if (( ! ALLOW_DESTR )); then
+        err "destructive migrations pending. Re-run with --allow-destructive after reading the release notes."
+        say "Pending migrations:"
+        list_pending_migrations "$cur" "$target" | sed 's/^/    - /'
+        exit 1
+      fi
+      warn "destructive migrations will be applied (--allow-destructive)"
+      ;;
+    unknown)
+      err "one or more migrations not declared in migrations/MANIFEST.md. Refusing to apply."
+      say "Add a row for each pending migration in MANIFEST.md and try again."
+      exit 1
+      ;;
+    additive) ok "all migrations additive" ;;
+  esac
+
+  # Confirm
+  if (( ! AUTO_YES )); then
+    printf '\nProceed with update %s → %s? [y/N] ' "$cur" "$target"
+    read -r REPLY
+    [[ "$REPLY" =~ ^[Yy]$ ]] || { say "aborted"; return 0; }
+  fi
+
+  log "apply start: $cur → $target"
+
+  # 1. Snapshot
+  step "backup"
+  take_snapshot "pre-apply-$target" || die "backup failed — aborting apply (DB untouched)"
+  local snapshot; snapshot=$(latest_snapshot)
+  ok "snapshot: $snapshot"
+
+  # 2. Stop service
+  service_stop
+
+  # 3. Fetch + checkout
+  step "checkout $target"
+  ( cd "$ROHY_REPO_DIR" && git checkout "$target" ) || rollback_to "$snapshot" "$cur" "git checkout failed"
+
+  # 4. npm ci + build
+  step "npm ci"
+  ( cd "$ROHY_REPO_DIR" && npm ci --prefer-offline --silent --no-audit --no-fund ) \
+    || rollback_to "$snapshot" "$cur" "npm ci failed"
+  step "npm run build"
+  ( cd "$ROHY_REPO_DIR" && npm run build ) \
+    || rollback_to "$snapshot" "$cur" "npm run build failed"
+
+  # 5. Migration dry-run
+  migration_dry_run || rollback_to "$snapshot" "$cur" "migration dry-run failed"
+
+  # 6. Start service (will run real migrations on boot)
+  service_start
+
+  # 7. Verify
+  if ! post_verify; then
+    rollback_to "$snapshot" "$cur" "post-deploy verify failed"
+  fi
+
+  # 8. Persist rollback recipe
+  mkdir -p /var/lib/rohy/rollback
+  cat > "/var/lib/rohy/rollback/$target.json" <<EOF
+{
+  "applied_at": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
+  "from_sha": "$cur",
+  "to_sha": "$target",
+  "snapshot": "$snapshot",
+  "destructive": $([[ "$class" == "destructive" ]] && echo true || echo false)
+}
+EOF
+  ln -sf "/var/lib/rohy/rollback/$target.json" /var/lib/rohy/rollback/last
+  log "apply success: $cur → $target"
+
+  step "done"
+  ok "rohy is now on $target"
+  say "rollback with: sudo rohy-update rollback"
+}
+
+# Internal: restore snapshot + checkout old sha + restart. Called from apply
+# on any failure path. Always exits non-zero (the apply itself failed).
+rollback_to() {
+  local snapshot="$1" old_sha="$2" reason="$3"
+  err "$reason"
+  warn "auto-rollback to $old_sha"
+  log "auto-rollback: reason=$reason → snapshot=$snapshot"
+  systemctl stop "$ROHY_SERVICE" 2>/dev/null || true
+  ( cd "$ROHY_REPO_DIR" && git checkout "$old_sha" ) \
+    || die "git checkout $old_sha failed during rollback — MANUAL RECOVERY REQUIRED. snapshot=$snapshot"
+  ( cd "$ROHY_REPO_DIR" && npm ci --prefer-offline --silent --no-audit --no-fund ) \
+    || warn "npm ci failed during rollback — you may need to install deps manually"
+  if [[ -f "$snapshot/database.sqlite" ]]; then
+    cp "$snapshot/database.sqlite" "$ROHY_DB"
+    ok "DB restored from $snapshot"
+  fi
+  if [[ -f "$snapshot/env" && -w "$ROHY_ENV_FILE" ]]; then
+    cp "$snapshot/env" "$ROHY_ENV_FILE"
+    chmod 600 "$ROHY_ENV_FILE"
+    ok "env restored"
+  fi
+  systemctl start "$ROHY_SERVICE" || die "service failed to start after rollback — MANUAL RECOVERY REQUIRED"
+  warn "rolled back to $old_sha (was attempting update). See $ROHY_LOG."
+  exit 1
+}
+
+# ── subcommand: rollback ───────────────────────────────────────────────────
+cmd_rollback() {
+  acquire_lock
+  local recipe="/var/lib/rohy/rollback/last"
+  [[ -L "$recipe" ]] || die "no last-apply recipe at $recipe — nothing to roll back"
+  recipe="$(readlink -f "$recipe")"
+  [[ -f "$recipe" ]] || die "stale symlink — recipe missing"
+
+  local from_sha to_sha snapshot destructive
+  from_sha=$(grep -oE '"from_sha": "[^"]+"' "$recipe" | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+  to_sha=$(grep -oE '"to_sha": "[^"]+"' "$recipe" | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+  snapshot=$(grep -oE '"snapshot": "[^"]+"' "$recipe" | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+  destructive=$(grep -oE '"destructive": (true|false)' "$recipe" | awk '{print $2}')
+
+  step "rollback plan"
+  say "current : $to_sha"
+  say "target  : $from_sha"
+  say "snapshot: $snapshot"
+  if [[ "$destructive" == "true" ]]; then
+    err "the apply included destructive migrations. Auto-rollback is unsafe — old code may not handle the new schema."
+    say "Restore manually with: sudo rohy-update restore-backup $(basename "$snapshot")"
+    say "And then: cd $ROHY_REPO_DIR && git checkout $from_sha && npm ci && npm run build && systemctl restart $ROHY_SERVICE"
+    exit 1
+  fi
+
+  printf '\nProceed with rollback %s → %s? [y/N] ' "$to_sha" "$from_sha"
+  read -r REPLY
+  [[ "$REPLY" =~ ^[Yy]$ ]] || { say "aborted"; return 0; }
+
+  service_stop
+  ( cd "$ROHY_REPO_DIR" && git checkout "$from_sha" ) || die "git checkout $from_sha failed"
+  ( cd "$ROHY_REPO_DIR" && npm ci --prefer-offline --silent --no-audit --no-fund ) \
+    || die "npm ci failed during rollback"
+  ( cd "$ROHY_REPO_DIR" && npm run build ) || die "npm run build failed during rollback"
+  cp "$snapshot/database.sqlite" "$ROHY_DB"
+  if [[ -f "$snapshot/env" && -w "$ROHY_ENV_FILE" ]]; then
+    cp "$snapshot/env" "$ROHY_ENV_FILE"
+    chmod 600 "$ROHY_ENV_FILE"
+  fi
+  service_start
+  log "rollback: $to_sha → $from_sha (snapshot=$snapshot)"
+  ok "rolled back to $from_sha"
+}
+
+# ── subcommand: list-backups ───────────────────────────────────────────────
+cmd_list_backups() {
+  step "snapshots in $ROHY_BACKUP_DIR"
+  if [[ ! -d "$ROHY_BACKUP_DIR" ]]; then
+    say "(none — directory does not exist)"
+    return 0
+  fi
+  printf '  %-32s %-14s %-10s %s\n' "NAME" "GIT" "DB SIZE" "CREATED"
+  printf '  %-32s %-14s %-10s %s\n' "----" "---" "-------" "-------"
+  for d in $(ls -1dt "$ROHY_BACKUP_DIR"/*/ 2>/dev/null | sed 's:/$::'); do
+    local name man sha created bytes
+    name=$(basename "$d")
+    man="$d/manifest.json"
+    if [[ -f "$man" ]]; then
+      sha=$(grep -oE '"git_sha": "[^"]+"' "$man" | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+      created=$(grep -oE '"created_at": "[^"]+"' "$man" | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+      bytes=$(grep -oE '"db_bytes": [0-9]+' "$man" | awk '{print $2}')
+    else
+      sha="?"; created="?"; bytes=0
+    fi
+    printf '  %-32s %-14s %-10s %s\n' "$name" "$sha" \
+      "$(numfmt --to=iec "$bytes" 2>/dev/null || echo "$bytes")" "$created"
+  done
+}
+
+# ── subcommand: restore-backup ─────────────────────────────────────────────
+cmd_restore_backup() {
+  acquire_lock
+  local name="${1:-}"
+  [[ -n "$name" ]] || die "usage: rohy-update restore-backup <snapshot-name>"
+  local d="$ROHY_BACKUP_DIR/$name"
+  [[ -d "$d" ]] || die "snapshot not found: $d"
+  [[ -f "$d/database.sqlite" ]] || die "snapshot is missing database.sqlite"
+
+  step "restoring $name"
+  warn "this will OVERWRITE $ROHY_DB with the snapshot's DB."
+  printf '\nProceed? [y/N] '
+  read -r REPLY
+  [[ "$REPLY" =~ ^[Yy]$ ]] || { say "aborted"; return 0; }
+
+  service_stop
+  cp "$d/database.sqlite" "$ROHY_DB"
+  ok "DB restored"
+  if [[ -f "$d/env" ]]; then
+    say "snapshot also contains an env file. Restore it too? [y/N] "
+    read -r REPLY
+    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+      cp "$d/env" "$ROHY_ENV_FILE"
+      chmod 600 "$ROHY_ENV_FILE"
+      ok "env restored"
+    fi
+  fi
+  service_start
+  log "manual restore: $name"
+}
+
+# ── dispatch ───────────────────────────────────────────────────────────────
+case "${1:-}" in
+  check)           shift; cmd_check "$@" ;;
+  apply)           shift; cmd_apply "$@" ;;
+  rollback)        shift; cmd_rollback "$@" ;;
+  list-backups|list) shift; cmd_list_backups "$@" ;;
+  restore-backup)  shift; cmd_restore_backup "$@" ;;
+  -h|--help|help|"")
+    sed -n '2,30p' "$0" | sed 's/^# \?//'
+    exit 0
+    ;;
+  *)
+    err "unknown command: $1"
+    say "run 'rohy-update --help'"
+    exit 3
+    ;;
+esac
