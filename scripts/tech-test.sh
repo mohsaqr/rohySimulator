@@ -215,7 +215,29 @@ HOST_ROOT="${BASE_URL%/rohy}"
 [[ "$HOST_ROOT" == "$BASE_URL" ]] && HOST_ROOT=$(echo "$BASE_URL" | grep -oE 'https?://[^/]+')
 warn_probe "$HOST_ROOT/oyon/standalone/"            "200" "GET /oyon/standalone/  (Open Oyon)"
 warn_probe "$HOST_ROOT/oyon/standalone/logs.html"   "200" "GET /oyon/standalone/logs.html"
-warn_probe "$HOST_ROOT/standalone/vendor/onnxruntime-web/ort.min.mjs" "200" "GET /standalone/vendor/onnxruntime-web/ort.min.mjs"
+
+# ORT vendor runtime files. The browser pulls these at session start —
+# checking them at deploy time catches the May-2026 / Docker class of
+# bug where a missing wasm file makes ORT throw "no available backend
+# found" at first capture instead of failing loud at install.
+#
+# REQUIRED set: the plain `onnxruntime-web` bundle's runtime deps.
+# These MUST be present and 200 — failure here means the camera widget
+# won't initialise on this host.
+ORT_VENDOR="$HOST_ROOT/standalone/vendor/onnxruntime-web"
+for f in ort.min.mjs ort-wasm-simd-threaded.mjs ort-wasm-simd-threaded.wasm; do
+    probe "$ORT_VENDOR/$f" "200" 0 "" "GET /standalone/vendor/onnxruntime-web/$f"
+done
+
+# OPTIONAL set: present in some ORT versions, absent in others. As of
+# 1.20.x the asyncify variant is NOT published on jsDelivr and we no
+# longer load the WebGPU bundle (which dynamically imports it). A 404
+# here is fine as long as the served frontend bundle doesn't import
+# 'onnxruntime-web/webgpu'. Probed as warn so the operator notices if
+# someone reverts the loadOrt() fix.
+for f in ort-wasm-simd-threaded.jsep.mjs ort-wasm-simd-threaded.jsep.wasm ort-wasm-simd-threaded.asyncify.mjs ort-wasm-simd-threaded.asyncify.wasm; do
+    warn_probe "$ORT_VENDOR/$f" "200,404" "GET /standalone/vendor/onnxruntime-web/$f (optional)"
+done
 
 # ── 5. Auth gating sanity ──────────────────────────────────────────────────
 # A handful of GET-protected routes that MUST NOT return 2xx without a token.
