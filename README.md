@@ -46,24 +46,31 @@ Kokoro TTS (~330 MB) is downloaded automatically on first use and warmed up at b
 
 ### Going to production?
 
+**Latest release:** [`v1.0.0`](https://github.com/mohsaqr/rohySimulator/releases/tag/v1.0.0) — multi-arch Docker image at `ghcr.io/mohsaqr/rohy:v1.0.0`, plus self-contained source and Docker tarballs (sha256-verified, for air-gapped sites). The release workflow boots the published image and runs `tech-test.sh` against it before the tag finalises, so "tag exists" already means "verified to install."
+
 Three sibling docs cover the operator lifecycle end-to-end:
 
 | Doc | When to read it |
 |---|---|
-| **[docs/INSTALL.md](docs/INSTALL.md)** | Putting Rohy on a new machine. Four paths: Docker / Linux+systemd / single-machine / air-gapped. Prerequisites, smoke verify, first-boot checklist, troubleshooting. |
-| **[docs/DEPLOY.md](docs/DEPLOY.md)** | Hardening a real deploy. Reverse proxy (nginx/Caddy), TLS, environment reference, security checklist, deploy verification + live monitoring (`/admin/health`), Postgres readiness, retention. |
-| **[docs/UPDATING.md](docs/UPDATING.md)** | Operator manual for `bin/rohy-update`. Pre-flight, atomic upgrade procedure, automatic rollback, off-site backup recipes (rsync + rclone), troubleshooting, contract-probe creds setup. Design rationale: [docs/UPDATE-STRATEGY.md](docs/UPDATE-STRATEGY.md). |
+| **[docs/INSTALL.md](docs/INSTALL.md)** | Putting Rohy on a new machine. Five paths: published image (recommended) / Docker build / Linux+systemd / single-machine / air-gapped. Prerequisites, smoke verify, first-boot checklist, troubleshooting. |
+| **[docs/DEPLOY.md](docs/DEPLOY.md)** | Hardening a real deploy. Build-vs-pull, reverse proxy (nginx/Caddy), TLS, environment reference, security checklist, deploy verification + live monitoring (`/admin/health`), Postgres readiness, retention. |
+| **[docs/UPDATING.md](docs/UPDATING.md)** | Two upgrade paths: `bin/rohy-update` (source/systemd installs) or `docker pull` a newer tag (Docker installs). Pre-flight, atomic upgrade procedure, automatic rollback, off-site backup recipes, troubleshooting, contract-probe creds setup. Design rationale: [docs/UPDATE-STRATEGY.md](docs/UPDATE-STRATEGY.md). |
 
 **TL;DR for the impatient:**
 
 ```bash
-# Linux + systemd, public DNS, auto-TLS via certbot
+# Fastest: pull the published image
+docker pull ghcr.io/mohsaqr/rohy:v1.0.0
+docker compose -f deploy/docker/compose.yml up -d
+
+# OR — Linux + systemd from source, public DNS, auto-TLS via certbot
 sudo deploy/bootstrap.sh --frontend-url=https://your-host/rohy --admin-bootstrap
 
 # Once installed, ongoing upgrades:
-sudo rohy-update check       # what would change?
+sudo rohy-update check       # source path — what would change?
 sudo rohy-update apply       # snapshot → upgrade → verify → auto-rollback on failure
-sudo rohy-update rollback    # undo the last apply
+docker compose pull rohy     # docker path — fetch the new image tag
+docker compose up -d         # apply
 ```
 
 **Oyon (local-browser emotion capture) is ON by default in every deploy path.** Routes mount under `/api/addons/oyon/*`, the standalone analytics page at `/oyon/standalone/`, models auto-downloaded by `npm install`. Disable: `OYON_ENABLED=0` in env, restart. When disabled, the Settings tab shows a friendly panel — install size unchanged, only routes gated. See [DEPLOY.md § Disabling features](docs/DEPLOY.md#disabling-features) for path-by-path detail.

@@ -7,6 +7,40 @@ see [UPDATING.md](UPDATING.md).
 
 ---
 
+## Build-from-source vs published-image
+
+Two ways to get rohy running in production:
+
+| Approach | When to use | Source of truth |
+|---|---|---|
+| **Pulled image** (recommended) | You want a byte-identical deploy across boxes, with the same image other operators are running | `ghcr.io/mohsaqr/rohy:vX.Y.Z` published per tagged release. Each tag is verified by the release workflow's `verify-published-image` job *before* the artifact is announced — boots, answers `/api/health`, passes `tech-test.sh`, serves every Oyon vendor asset. |
+| **Built from source** | You're modifying rohy / running on an arch we don't publish (ARM64 boards beyond the matrix) | `docker compose build` against the local checkout. Use this for `main` HEAD or for forks. |
+
+For production deploys, **prefer pulled images**. The release workflow
+runs every check `tech-test.sh` runs *against the actual published
+artifact* before the tag is finalised — so "tag exists" already means
+"verified to boot." Building from source on a fresh box adds 10-12 min
+to deploy time and re-walks every install-path failure mode that the
+nightly install-from-scratch workflow already catches.
+
+The compose file ships with `build:` directive uncommented for the
+source path. Switch to image-pull:
+
+```yaml
+# deploy/docker/compose.yml
+services:
+  rohy:
+    # build: { context: ../.., dockerfile: deploy/docker/Dockerfile }
+    image: ghcr.io/mohsaqr/rohy:v1.0.0
+    # … rest of service config unchanged
+```
+
+Pin to an exact tag (not `:latest`) for reproducible deploys. Operators
+who deploy `:latest` get a moving target with every push to `main` once
+we publish more tags.
+
+---
+
 ## Production checklist
 
 Walk this before any user touches the box:

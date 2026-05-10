@@ -104,7 +104,48 @@ Backups live at `/var/backups/rohy/<timestamp>-<git-sha>-<label>/`.
 
 ---
 
-## The upgrade procedure
+## Two upgrade paths
+
+Pick one — both end at the same place.
+
+### Path A: `bin/rohy-update` (source/systemd installs)
+
+For boxes installed via `bootstrap.sh` or `local-install.sh`. Git-based:
+`rohy-update` pulls latest, rebuilds in place, runs migrations,
+verifies, auto-rolls-back on failure. **This is the path the rest of
+this document covers.**
+
+### Path B: `docker pull` a newer tag (Docker installs)
+
+For boxes installed via the published image. Each tagged release
+publishes `ghcr.io/mohsaqr/rohy:vX.Y.Z` and `:latest`. Upgrade:
+
+```bash
+# Snapshot the DB first (Docker doesn't do this for you)
+docker compose -f deploy/docker/compose.yml exec rohy \
+    sqlite3 /var/lib/rohy/database.sqlite \
+    ".backup /var/lib/rohy/backup-$(date -u +%Y%m%dT%H%M%SZ).sqlite"
+
+# Pull and recreate
+docker compose -f deploy/docker/compose.yml pull rohy
+docker compose -f deploy/docker/compose.yml up -d --no-deps rohy
+
+# Verify
+ROHY_INSECURE=0 scripts/tech-test.sh https://your-host
+```
+
+Migrations auto-run on container start (same code path as `rohy-update`).
+The release workflow's `verify-published-image` job already proved the
+image boots cleanly before publishing the tag, so this upgrade is
+low-risk by construction.
+
+Rollback for Docker = pin to the previous tag in `compose.yml` and
+`up -d` again. Image layers for the previous tag are still cached
+locally until you `docker image prune`.
+
+---
+
+## The upgrade procedure (Path A — `bin/rohy-update`)
 
 ### Step 1: `rohy-update check`
 
