@@ -30,10 +30,20 @@ export class EmotionRuntime {
     this.camera = options.camera || new CameraController(options.cameraOptions);
     this.faceTracker = options.faceTracker || new MediaPipeFaceTracker(options.mediaPipe);
     this.classifier = options.classifier || new OnnxEmotionClassifier(options.onnx);
+    // Pass the classifier's label set into the aggregator. Without this the
+    // aggregator falls back to its 7-emotion default (legacy FER set, no
+    // 'contempt'), but every shipped model config — HSE, EmotiEff MobileViT,
+    // EmotiEff MBF — emits 8 emotions including 'contempt'. The aggregator
+    // would then average 7 of 8 probabilities per window, producing sums
+    // around 0.875 — outside the server validator's [0.95, 1.05] window.
+    // Result: every emotion-records POST got a 400 and zero rows landed in
+    // oyon_emotion_records. Wiring the label set through fixes it at the
+    // source rather than relaxing the validator.
     this.aggregator = options.aggregator || new EmotionAggregator({
       windowMs: this.settings.aggregate_window_ms,
       minValidFrames: this.settings.min_valid_frames,
       sampleIntervalMs: this.settings.sample_interval_ms,
+      labels: this.classifier?.options?.labels,
       ...options.aggregation,
     });
     this.transport = options.transport || new HttpEmotionTransport(options.transportOptions);

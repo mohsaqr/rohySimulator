@@ -1,3 +1,20 @@
+### 2026-05-10 — Oyon: emit 8-emotion windows so the server validator stops rejecting them
+
+After the consent + auto-detect fixes shipped, capture finally fired POSTs to `/api/addons/oyon/emotion-records` — but every batch was rejected with HTTP 400 and `events[0].probabilities should sum close to 1`. Server logs showed 11 consent rows, 0 emotion records.
+
+Root cause: label-set mismatch between classifier and aggregator.
+- Every shipped model config (HSE, EmotiEff MobileViT, EmotiEff MBF) emits 8 softmaxed emotions including `contempt` (sum = 1.0 per sample).
+- `EmotionAggregator` defaulted to the legacy 7-emotion FER set (no `contempt`) and was constructed in `EmotionRuntime` without label override.
+- `meanProbabilities` averages only the labels it knows. Per window: model emits 8 probs (sum 1.0) but aggregator outputs 7 (sum ~0.875, contempt's share dropped on the floor).
+- Server validator checks 0.95 ≤ sum ≤ 1.05 → 400 on every batch.
+- Server's `ALLOWED_EMOTIONS` already accepts `contempt` (8-emotion set), so no server change needed; just wire the label set through on the client side.
+
+Two-line fix:
+- `OyonR/src/core/EmotionRuntime.js`: pass `this.classifier.options.labels` into the aggregator at construction. Now every window's probability vector matches the model's emission set; sum is 1.0; validator accepts.
+- `OyonR/src/aggregation/EmotionAggregator.js`: default label set updated to the modern 8-emotion shape (`+contempt`) so anyone constructing the aggregator directly without a classifier (tests, custom transports) still gets a sane shape.
+
+`OyonR/tests/aggregation.test.js` passes unchanged.
+
 ### 2026-05-10 — Oyon persistence: defaults that actually persist
 
 End-to-end fix for "no records in oyon_emotion_records, no analytics shown" reported after the camera fix landed. Root cause: three independent gates that all had to be manually flipped before any record could leave the browser. Each gate had a defensible privacy reason but together produced a broken-by-default experience. This change keeps the gates AS opt-outs, but flips their defaults to opt-ins so a fresh install captures + persists + shows analytics out of the box.
