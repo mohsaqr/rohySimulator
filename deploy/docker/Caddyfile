@@ -49,9 +49,13 @@
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
         Referrer-Policy "strict-origin-when-cross-origin"
-        # HSTS only if TLS is real (auto). Leave commented otherwise so
-        # browsers don't pin to HTTPS for a localhost dev box.
-        # Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        # HSTS — Caddy's `auto_https` issues a real cert via Let's Encrypt
+        # for any non-localhost {$CADDY_DOMAIN}, so HSTS is safe to pin.
+        # If you point CADDY_DOMAIN at a localhost / .local hostname for
+        # dev, comment this line out so browsers don't pin HTTPS to a box
+        # that can't terminate TLS. 1 year + includeSubDomains; preload
+        # left off pending hstspreload.org submission.
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
     }
 
     # Body size — clinical record uploads can include images. 50 MB matches

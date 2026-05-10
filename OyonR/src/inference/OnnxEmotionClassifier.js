@@ -96,11 +96,20 @@ export class OnnxEmotionClassifier {
 }
 
 async function loadOrt() {
-  try {
-    return await import('onnxruntime-web/webgpu');
-  } catch {
-    return await import('onnxruntime-web');
-  }
+  // Always use the plain `onnxruntime-web` bundle. The `/webgpu` bundle
+  // dynamically imports `ort-wasm-simd-threaded.asyncify.mjs` at runtime,
+  // and that file is *not published* on jsDelivr for ORT 1.20.x or 1.21.x
+  // (the asyncify variant was dropped from npm dist in 1.20). When the
+  // dynamic import 404s, ORT marks initWasm() as failed and the WASM
+  // execution provider fallback also dies — every classify() throws
+  // "no available backend found".
+  //
+  // The plain bundle has no asyncify dependency. We default to
+  // `executionProviders: ['wasm']` anyway (see executionProviders()
+  // below), so WebGPU acceleration would have been unused. Until ORT
+  // ships asyncify on the CDN again — or we change to a vendor that does
+  // — the plain bundle is the only stable choice.
+  return await import('onnxruntime-web');
 }
 
 function configureOrt(ort, options) {
