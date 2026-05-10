@@ -34,9 +34,18 @@
 
 export function buildCsp({ nodeEnv } = {}) {
     const isDev = nodeEnv !== 'production';
+    // 'wasm-unsafe-eval' (production): the OyonCaptureWidget pill instantiates
+    // ONNX Runtime + MediaPipe Vision wasm modules in the SPA context. Without
+    // this directive the browser refuses WebAssembly.instantiate() with the
+    // "violates 'script-src self'" CompileError. The token is a targeted relax
+    // of 'unsafe-eval' — it ALLOWS WebAssembly compilation but NOT eval()/new
+    // Function(), so it doesn't widen the XSS surface like full 'unsafe-eval'
+    // would. Supported in Chrome ≥91, Safari ≥15.4, Firefox ≥89 — well under
+    // the rohy floor. The standalone iframe at /oyon/standalone/ has its own
+    // CSP set by allowOyonFrame in server.js and is unaffected.
     const scriptSrc = isDev
         ? "'self' 'unsafe-eval' 'unsafe-inline'"   // Vite HMR + React refresh
-        : "'self'";
+        : "'self' 'wasm-unsafe-eval'";
     const directives = [
         `default-src 'self'`,
         `script-src ${scriptSrc}`,

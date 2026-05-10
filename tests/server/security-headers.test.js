@@ -17,16 +17,21 @@ function makeRes() {
 }
 
 describe('buildCsp', () => {
-    it('production: script-src is self only — no unsafe-inline, no unsafe-eval', () => {
+    it("production: script-src allows wasm-unsafe-eval (Oyon wasm) but NOT 'unsafe-eval' or 'unsafe-inline'", () => {
         const csp = buildCsp({ nodeEnv: 'production' });
         expect(csp).toContain("script-src 'self'");
-        expect(csp).not.toContain("'unsafe-inline'  ");
         const scriptDirective = csp.split(';').find(d => d.trim().startsWith('script-src'));
-        expect(scriptDirective).not.toContain('unsafe-eval');
-        expect(scriptDirective).not.toContain('unsafe-inline');
+        // wasm-unsafe-eval is required for the OyonCaptureWidget pill to
+        // instantiate ONNX Runtime + MediaPipe Vision wasm in the SPA context.
+        expect(scriptDirective).toContain("'wasm-unsafe-eval'");
+        // The full 'unsafe-eval' token (which would also allow eval()/new
+        // Function() and widen the XSS surface) must NOT be present. Quote
+        // the token so 'wasm-unsafe-eval' doesn't false-positive as a match.
+        expect(scriptDirective).not.toContain("'unsafe-eval'");
+        expect(scriptDirective).not.toContain("'unsafe-inline'");
     });
 
-    it('development: script-src allows unsafe-eval (Vite HMR)', () => {
+    it("development: script-src allows 'unsafe-eval' (Vite HMR)", () => {
         const csp = buildCsp({ nodeEnv: 'development' });
         expect(csp).toContain("'unsafe-eval'");
     });
