@@ -17,23 +17,39 @@ const STORAGE = {
 // existing session filter; admins/educators see records from every session
 // they're allowed to read, students see only their own.
 //
-// Auto-detect: if a rohy auth cookie exists for this origin, default to
-// rohy mode even without `?source=rohy` in the URL. `?source=standalone`
-// is the explicit opt-out for "I really want local-only mode while logged
-// into rohy." This means opening /oyon/standalone/logs.html bare from a
-// logged-in rohy tab Just Works (shows server records by session) instead
-// of silently reading from empty localStorage.
+// Auto-detect: if a rohy auth credential is reachable from this origin,
+// default to rohy mode even without `?source=rohy` in the URL.
+// `?source=standalone` is the explicit opt-out. This means opening
+// /oyon/standalone/logs.html bare from a logged-in rohy tab Just Works
+// (shows server records by session) instead of silently reading from
+// empty localStorage.
+//
+// Rohy supports two auth modes:
+//   - cookie-auth: rohy_session HttpOnly cookie + rohy_csrf companion.
+//                  Detected via document.cookie pattern below.
+//   - token-auth (default): JWT in localStorage at key 'token'. Same-origin
+//                  localStorage is shared with the SPA, so we can read it
+//                  here. Detected via the rohy app token key.
+// We accept either as evidence of "user is logged in to rohy on this
+// origin" and route the fetch through whichever credential is present.
 const ROHY_QUERY = new URLSearchParams(window.location.search);
+const ROHY_TOKEN_KEY = 'token';
+function readRohyToken() {
+  try { return localStorage.getItem(ROHY_TOKEN_KEY) || null; } catch { return null; }
+}
 function hasRohyAuthCookie() {
   if (typeof document === 'undefined' || !document.cookie) return false;
   return /\b(rohy_session|rohy_csrf)\s*=/.test(document.cookie);
+}
+function hasRohyAuthCredential() {
+  return hasRohyAuthCookie() || !!readRohyToken();
 }
 const ROHY_SOURCE = ROHY_QUERY.get('source');
 const ROHY_MODE = ROHY_SOURCE === 'rohy'
   ? true
   : ROHY_SOURCE === 'standalone'
   ? false
-  : hasRohyAuthCookie();
+  : hasRohyAuthCredential();
 const ROHY_SESSION_ID = ROHY_QUERY.get('session_id') || null;
 const ROHY_API_BASE = '/api/addons/oyon';
 
@@ -228,10 +244,21 @@ async function loadAndRender() {
 async function readDataFromRohy() {
   let rawWindows = [];
   try {
+    // Send BOTH credentials — cookies for cookie-auth tenants and the
+    // bearer token for token-auth tenants. Either alone is sufficient at
+    // the server (auth middleware accepts both); sending both costs
+    // nothing and lets the dashboard work regardless of which mode the
+    // tenant is configured for. Without the bearer header, token-auth
+    // deploys (rohy's default) get a 401 here even when the user is
+    // actively logged into the SPA in another tab — symptom: the logs
+    // page shows zero records.
+    const headers = { Accept: 'application/json' };
+    const token = readRohyToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch(`${ROHY_API_BASE}/emotion-records?limit=500`, {
       method: 'GET',
       credentials: 'include',
-      headers: { Accept: 'application/json' },
+      headers,
     });
     if (!res.ok) {
       console.warn('[oyon dashboard] backend returned', res.status);

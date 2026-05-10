@@ -32,12 +32,18 @@ function hasRohyAuthCookie() {
   if (typeof document === 'undefined' || !document.cookie) return false;
   return /\b(rohy_session|rohy_csrf)\s*=/.test(document.cookie);
 }
+function hasRohyAuthToken() {
+  // Token-auth mode (rohy default): JWT in localStorage at key 'token'.
+  // Same-origin storage is shared with the SPA so its presence is a valid
+  // signal that the user is logged in to rohy on this origin.
+  try { return !!localStorage.getItem('token'); } catch { return false; }
+}
 const ROHY_SOURCE = ROHY_QUERY.get('source');
 const ROHY_MODE = ROHY_SOURCE === 'rohy'
   ? true
   : ROHY_SOURCE === 'standalone'
   ? false
-  : hasRohyAuthCookie();
+  : (hasRohyAuthCookie() || hasRohyAuthToken());
 const ROHY_SESSION_ID = ROHY_QUERY.get('session_id') || null;
 const ROHY_CASE_ID = ROHY_QUERY.get('case_id') || null;
 
@@ -165,6 +171,18 @@ const DEFAULT_MODEL_PROFILE = 'hse-emotion-mtl';
 // into `X-CSRF-Token` on every POST/PUT/PATCH/DELETE. Without this header,
 // the standalone's consent + emotion-records writes get 403 in deployed Rohy
 // even though they share an origin.
+// Read the JWT bearer token rohy stores in localStorage when running in
+// token-auth mode (the default). Same-origin localStorage is shared with
+// the rohy SPA, so the standalone page can pick it up here. Without
+// this, token-auth tenants get 401 on every standalone backend call
+// even though the user is logged into rohy in another tab. Cookie-auth
+// tenants don't need this — the rohy_session cookie carries auth
+// automatically — but reading a missing key is harmless.
+const ROHY_TOKEN_KEY = 'token';
+function readRohyToken() {
+  try { return localStorage.getItem(ROHY_TOKEN_KEY) || null; } catch { return null; }
+}
+
 function readRohyCsrfCookie() {
   if (typeof document === 'undefined' || !document.cookie) return null;
   for (const pair of document.cookie.split(';')) {
@@ -185,6 +203,12 @@ function rohyFetch(url, init = {}) {
     const tok = readRohyCsrfCookie();
     if (tok) headers['X-CSRF-Token'] = tok;
   }
+  // Send the bearer token if available — covers token-auth tenants. The
+  // server's authenticateToken middleware accepts EITHER the cookie OR
+  // a Bearer header, so sending both costs nothing and works for both
+  // auth modes without configuration.
+  const bearer = readRohyToken();
+  if (bearer && !headers.Authorization) headers.Authorization = `Bearer ${bearer}`;
   return fetch(url, { ...init, headers, credentials: 'include' });
 }
 
