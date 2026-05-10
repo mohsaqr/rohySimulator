@@ -3,7 +3,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
 ![Stack](https://img.shields.io/badge/stack-React%2019%20%7C%20Node%20%7C%20SQLite-blue)
-![Tests](https://img.shields.io/badge/tests-695%20passing-success)
+![Tests](https://img.shields.io/badge/tests-vitest%20%2B%20playwright-success)
 
 A comprehensive medical simulation platform for clinical education. Trainees converse with an AI-driven virtual patient — by text **or by voice with an animated 3D avatar** — interpret a live multi-parameter monitor with physiologically accurate ECG, order labs and imaging from a 225-test database with gender-specific normal ranges and 32 lab panels, perform structured physical examinations on a clickable anatomical body map across 67 named regions, administer 33 default treatments (18 medications + IV fluids + oxygen delivery + positioning) that produce time-decaying changes to vitals, debrief afterwards with an AI discussant, and have every action analysed in a Transition Network Analysis dashboard.
 
@@ -130,7 +130,78 @@ docker run --rm -v "$PWD:/work" -w /work --platform=linux/amd64 node:22-bookworm
 
 Or use `--mode=docker` instead of source — Docker images are Linux regardless of build host, and the target only needs Docker.
 
-> See [`docs/getting-started/quickstart.md`](docs/getting-started/quickstart.md) for a step-by-step walkthrough.
+#### Deploy verification & live monitoring
+
+Every install path can be verified end-to-end with one command — same script,
+called automatically by `bin/rohy-update` after each upgrade and by the
+SaqrServer hub deploy as `POST_VERIFY_rohy`:
+
+```bash
+scripts/tech-test.sh https://your-host/rohy           # 27 checks: liveness, bundle integrity,
+                                                      # Oyon API surface, auth gating, security
+                                                      # headers, response timing
+ROHY_INSECURE=1 scripts/tech-test.sh ...              # accept self-signed certs (LAN deploys)
+ROHY_TOKEN=eyJ... scripts/tech-test.sh ...            # arms the Oyon contract probe (section 6)
+```
+
+The contract probe POSTs a deliberately-malformed emotion batch and
+asserts the server validator catches it (a 400 + "sum close to 1" in the
+body). Catches client/server label drift at deploy time — the May-2026
+"label-set drift" bug class — before any user starts a capture. Set up
+once with the wrapper:
+
+```bash
+# One-time on each operator host
+cat > ~/.rohy-deploy-creds <<EOF
+ROHY_LOGIN_URL='https://your-host/rohy/api/auth/login'
+ROHY_DEPLOY_USER='deploy-verifier'
+ROHY_DEPLOY_PASS='<password>'
+EOF
+chmod 600 ~/.rohy-deploy-creds
+```
+
+After that, `scripts/post-verify-rohy.sh` (and `bin/rohy-update`'s
+post-verify step) mints a token automatically before each verification
+run. If the file is absent, the contract probe silently skips and the
+deploy still passes on the other 27 checks — strict no-regression.
+
+**Live operator dashboard**:
+
+```bash
+curl -ksS https://your-host/rohy/api/addons/oyon/admin/health \
+     -H "Authorization: Bearer $TOKEN" | jq
+# → { "endpoints": {...}, "total_5m": 0, "total_1h": 0, "generated_at": ... }
+```
+
+`/api/addons/oyon/admin/health` returns per-endpoint 4xx + 5xx rejection
+counts for the last 5 minutes and last hour. Operator gate matches
+`/admin/live` (educator+ role with the per-role view-enabled flag).
+Non-zero `total_5m` is the early-warning signal we used to miss until
+users complained.
+
+Smoke-test only the API surface (no asset checks):
+
+```bash
+scripts/smoke.sh https://your-host/rohy
+```
+
+#### Backup & rollback
+
+`bin/rohy-update` snapshots the SQLite DB (via `sqlite3 VACUUM INTO`),
+copies the env file, and writes a manifest before every `apply`. Auto-rollback
+fires on any verify failure. Manual control:
+
+```bash
+sudo rohy-update list-backups          # show local snapshots
+sudo rohy-update rollback              # undo the last apply
+sudo rohy-update restore-backup <name> # restore an arbitrary snapshot
+sudo scripts/rohy-backup.sh --label baseline   # standalone snapshot
+sudo scripts/rohy-backup.sh --check            # verify a snapshot is readable
+```
+
+Retention by default keeps the **last 10 snapshots** + **monthly for 12
+months** + always protects snapshots <24h old. Off-site backups are an
+operator concern — see `docs/UPDATING.md` for rsync and rclone recipes.
 
 ---
 
@@ -238,6 +309,29 @@ Replaced 4 parallel notification systems (Toast, useAlarms, EventLogger, native 
 | **E8** | Connection pooling + portability | Promise-based `dbAdapter.js` shim; SQL fragment helpers (`now()`, `upsert()`); Postgres readiness inventory |
 | **E9** | Observability hooks | NDJSON request logging with request-id propagation, slow-query threshold, error tracker; configurable via `ROHY_LOG_LEVEL`, `ROHY_SLOW_QUERY_MS`, `ROHY_LOG_SKIP_PATHS` |
 
+### Oyon — Local-Browser Emotion Capture & Analytics
+
+Camera-side emotion analytics for capture sessions. **Inference runs entirely
+in the browser** (MediaPipe face landmarker + ONNX Runtime Web emotion
+classifier); only aggregated 10-second windows leave the device — never
+raw frames or landmarks (server validator hard-rejects raw-media fields).
+
+- **Three production multi-task models** (HSE EfficientNet-B0, EmotiEffLib MobileViT, EmotiEffLib MobileFaceNet — all 8-emotion AffectNet: anger / contempt / disgust / fear / happy / neutral / sad / surprise + valence/arousal regression). Auto-downloaded by `npm install` from jsDelivr (~93 MB total). Air-gap path bundles them in the tarball.
+- **Window aggregation** — 10s default window, 1Hz sampling, configurable per-tenant (window length, sample interval, min valid frames, smoothing alpha, hold time, switch confidence).
+- **Per-session DB persistence** — `oyon_emotion_records` stores window-level dominant emotion + per-label probabilities + valence/arousal/entropy/stability/missing-face-ratio/quality-JSON. Dynamics features (`computeDynamicalFeatures`) attached when enabled.
+- **Consent — opt-out by default once tenant enables Oyon.** Per-user toggle in Settings → Oyon. Server stamps records with the consent row's `consent_version`, not the client's claim (avoids version drift).
+- **Live operator dashboards** — `/api/addons/oyon/admin/live` shows latest window per session; `/api/addons/oyon/admin/health` exposes per-endpoint 4xx counts (5min + 1h windows). Per-tenant view gates: admin / educator / student each toggleable.
+- **Standalone analytics page** at `/oyon/standalone/` — works either as a guest demo or, when a `rohy_session` cookie is present, automatically attaches to the rohy backend. Includes logs dashboard at `/oyon/standalone/logs.html`.
+- **Drift prevention (4 layers)**:
+  1. Single canonical `ALLOWED_EMOTIONS` constant (`OyonR/src/config/emotionLabels.js`) imported by aggregator, validator, and every model config. Each model asserts its labels are a permutation of the canonical set at *import time* — typos fail to load.
+  2. Pre-merge contract test (`OyonR/tests/contract.test.js`) composes synthetic samples → aggregator → validator end-to-end for every shipped profile, with a negative control reproducing the May-2026 7-of-8 sum bug.
+  3. `tech-test.sh` contract probe (section 6) — when armed via `~/.rohy-deploy-creds`, every deploy POSTs a malformed batch and asserts the validator catches it.
+  4. In-memory rejection counter at `/admin/health` — surfaces 4xx spikes without parsing journalctl.
+- **Forward-compatible migrations** — Schema changes are additive-only by default; destructive changes follow a multi-release add → backfill → switch-reads → drop procedure. Policy in `migrations/MANIFEST.md`.
+- **Toggle**: `OYON_ENABLED=0` in env disables the routes (Settings tab shows a friendly disabled panel; binary bundles still ship — toggling does not change install size).
+
+The standalone library is also published independently — see [`OyonR/README.md`](OyonR/README.md) and [`OyonR/INSTALL.md`](OyonR/INSTALL.md) for embedding into a non-rohy app.
+
 ### Auth & Multi-User
 
 - **JWT auth** with 4-hour default TTL, bcrypt password hashing.
@@ -268,7 +362,16 @@ rohySimulator/
 │   │   └── errorHandler.js            # Last-mile error tracker
 │   ├── seeders/                       # Default users, 6 acute cases, 5 agent personas
 │   └── services/                      # Lab DB, googleTts, openaiTts, kokoroTts, voiceFallbacks, wav
-├── migrations/                        # 6 versioned SQL migrations
+├── migrations/                        # 19 versioned SQL migrations + MANIFEST.md (additive-only policy)
+├── OyonR/                             # Local-browser emotion capture (MediaPipe + ONNX-Web)
+│   ├── src/                           # Camera, face tracker, classifier, aggregator,
+│   │                                  # validator, transports, settings, model configs
+│   ├── tests/                         # 12 tests incl. contract.test.js (pre-merge guard)
+│   ├── standalone/                    # Self-contained demo + logs dashboard
+│   ├── examples/rohy-backend/         # Reference Express route adapter
+│   └── scripts/download-models.sh     # jsDelivr vendor population (atomic, idempotent)
+├── bin/
+│   └── rohy-update                    # Operator CLI: check/apply/rollback/list-backups
 ├── src/                               # React 19 + Vite 7
 │   ├── components/
 │   │   ├── auth/                      # Login + register
@@ -300,18 +403,22 @@ rohySimulator/
 │   ├── audit-*.sh                     # 18 enterprise audit scripts (E1-E9 + per-area)
 │   ├── retention-sweep.js             # Cron-able log retention sweeper (E7)
 │   ├── migrate.js                     # Manual migration runner (E2)
+│   ├── rohy-backup.sh                 # Standalone DB snapshotter (VACUUM INTO)
+│   ├── tech-test.sh                   # Comprehensive deploy verifier (POST_VERIFY hook)
+│   ├── post-verify-rohy.sh            # Wrapper: mints a token before tech-test.sh
+│   ├── smoke.sh                       # Lightweight liveness check
 │   └── rocketbox-convert/             # GLB pipeline for adding new avatars
-├── tests/                             # 40 test files, 695 unit + e2e tests
+├── tests/                             # Vitest + Playwright suite (server, client, e2e, audio)
 │   ├── server/                        # Server unit + integration tests
 │   ├── e2e/                           # 12 Playwright specs
 │   └── utils/                         # seedDb, startTestServer, mockTtsServer, renderWithProviders
 ├── bench/                             # 3 vitest benches: TTS latency, LLM throughput, concurrent sessions
-├── docs/                              # Per-feature documentation
+├── docs/                              # Operator manual, design docs, Oyon integration policy, audits
 ├── Lab_database.json                  # 215 lab tests with gender-specific ranges
 └── server/data/radiology_database.json  # 74 radiology studies
 ```
 
-### Database (65 tables, 6 migrations)
+### Database (65+ tables, 19 versioned migrations)
 
 Core: `users`, `cases`, `sessions`, `interactions`, `event_log`, `case_versions`, `system_audit_log`.
 
@@ -377,7 +484,7 @@ Environment (`server/.env`):
 
 ## Testing
 
-The repo ships **695 passing tests across 40 files** running in 6.83 seconds, organised in an explicit pyramid (see [`CLAUDE.md`](CLAUDE.md) for the full guide):
+The repo ships a comprehensive test pyramid (vitest + playwright):
 
 | Tier | Files | Run with | Notes |
 |---|---|---|---|
@@ -385,33 +492,43 @@ The repo ships **695 passing tests across 40 files** running in 6.83 seconds, or
 | Component (RTL) | `src/components/**/*.test.jsx` | `npm run test:client` | < 30s |
 | Server route (supertest + spawned server) | `tests/server/**` | `npm run test:server` | < 10s |
 | Audio fidelity (live API + FFT pitch shift) | `tests/server/audio/**` | `npm run test:server` | Skip without API keys |
-| **Playwright E2E** (12 specs) | `tests/e2e/**/*.spec.js` | `npm run test:e2e` | Includes the 2026-05-06 regression lock |
+| **Playwright E2E** | `tests/e2e/**/*.spec.js` | `npm run test:e2e` | Includes the 2026-05-06 regression lock |
+| **OyonR contract** | `OyonR/tests/contract.test.js` | `cd OyonR && npm test` | Composes aggregator → validator with 8-emotion synthetic samples per shipped model. Negative control reproduces the May-2026 7-of-8 sum bug. |
 | Benchmarks | `bench/**/*.bench.js` | `npm run bench` | Vitest bench mode |
 
-Plus **18 enterprise audit shell scripts** at `scripts/audit-*.sh` (one per E-stage and one per feature area) that exercise the HTTP boundary and self-clean.
+Plus **18 enterprise audit shell scripts** at `scripts/audit-*.sh` (one per E-stage and one per feature area) that exercise the HTTP boundary and self-clean. **`scripts/tech-test.sh`** verifies a live deploy end-to-end (27 checks); see "Deploy verification & live monitoring" above.
 
 ---
 
 ## Documentation
 
-| Document | Description |
+### Operator-facing
+
+| Document | What's inside |
 |---|---|
-| [Documentation index](docs/README.md) | Full doc map |
-| [Quick start](docs/getting-started/quickstart.md) | 3-minute setup walkthrough |
-| [Authentication](docs/getting-started/authentication.md) | Users, 5-rank role hierarchy, JWT |
-| [Architecture](docs/reference/architecture.md) | System architecture and data flow |
-| [System reference](docs/reference/system-documentation.md) | Complete API and DB schema |
-| [Laboratory system](docs/guides/laboratory-system.md) | Lab tests, panels, gender ranges |
-| [Scenario system](docs/guides/scenario-system.md) | Timeline-based deterioration |
-| [Scenario selector](docs/guides/scenario-selector.md) | Choosing scenario templates |
-| [Monitor settings](docs/guides/monitor-settings.md) | Vitals and alarm configuration |
-| [ECG patterns](docs/guides/ecg-patterns.md) | Clinical ECG reference |
-| [Clinical features](docs/guides/clinical-features.md) | Alarms, events, investigations |
-| [Logging](docs/guides/logging-system.md) | Event tracking and CSV export |
-| [Import/Export](docs/guides/import-export.md) | JSON case and settings management |
-| [Alarm demo](docs/guides/alarm-demo.md) | Sample case for alarm testing |
-| [Talking-Avatars Kit](kits/talking-avatars/README.md) | Embeddable voice + avatar kit |
-| [Testing pyramid](CLAUDE.md) | How to add tests + coverage gate policy |
+| [`docs/UPDATING.md`](docs/UPDATING.md) | Operator manual for `bin/rohy-update`: pre-flight, upgrade procedure, rollback paths, off-site backup recipes (rsync + rclone), troubleshooting, contract-probe creds setup. |
+| [`docs/UPDATE-STRATEGY.md`](docs/UPDATE-STRATEGY.md) | Design rationale: why operator-pull, why 1–2h downtime is OK, four-pillar architecture, phased roadmap. Read this before changing the update tool. |
+| [`migrations/MANIFEST.md`](migrations/MANIFEST.md) | Migration policy: additive-only by default, multi-release procedure for destructive changes. |
+
+### Oyon (emotion capture)
+
+| Document | What's inside |
+|---|---|
+| [`OyonR/README.md`](OyonR/README.md) | Library overview: standalone usage, browser-only inference, transports. |
+| [`OyonR/INSTALL.md`](OyonR/INSTALL.md) | Embedding into a non-rohy host app. |
+| [`docs/OYON_INTEGRATION_PLAYBOOK.md`](docs/OYON_INTEGRATION_PLAYBOOK.md) | How rohy wires Oyon: routes, settings, consent flow, validator contract. |
+| [`docs/OYON_INTEGRATION_POLICY.md`](docs/OYON_INTEGRATION_POLICY.md) | Privacy & data-handling commitments (no raw frames or landmarks leave the device). |
+| [`docs/OYONR_INTEGRATION_NOTE.md`](docs/OYONR_INTEGRATION_NOTE.md) | Dev notes on the `oyon` package (`file:./OyonR`) integration. |
+
+### Engineering
+
+| Document | What's inside |
+|---|---|
+| [`LEARNINGS.md`](LEARNINGS.md) | Append-only insight log: data quirks, pitfalls, decisions made and why. |
+| [`CHANGES.md`](CHANGES.md) | Human-readable changelog (git-independent). |
+| [`HANDOFF.md`](HANDOFF.md) | Latest session-handoff snapshot (current state, queued work, next-session entry point). |
+| [`docs/audits/`](docs/audits/) | Stability audit + handoff reports. |
+| [`kits/talking-avatars/`](kits/talking-avatars/) | Embeddable voice + avatar kit (standalone tarball at `kits/talking-avatars.tar.gz`). |
 
 ---
 
@@ -489,7 +606,7 @@ A sample deploy script is at `production/deploy.sh`.
 
 ## Embedding the Voice + Avatar Kit
 
-The talking-avatars stack is also distributed as a **standalone embeddable kit** at [`kits/talking-avatars/`](kits/talking-avatars/README.md) — a self-contained drop-in bundle of the entire talking-head + lipsync + TTS pipeline. Includes the 28-avatar GLB library, server-side TTS routes (Google + Kokoro), client-side `PatientAvatar` component, viseme map, and a vanilla-JS standalone example. Tarball at `kits/talking-avatars.tar.gz`.
+The talking-avatars stack is also distributed as a **standalone embeddable kit** at [`kits/talking-avatars/`](kits/talking-avatars/) — a self-contained drop-in bundle of the entire talking-head + lipsync + TTS pipeline. Includes the 28-avatar GLB library, server-side TTS routes (Google + Kokoro), client-side `PatientAvatar` component, viseme map, and a vanilla-JS standalone example. Tarball at `kits/talking-avatars.tar.gz`.
 
 ---
 
