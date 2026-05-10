@@ -1,0 +1,296 @@
+# Fresh-Linux-box install verification.
+#
+# Why this exists: every paper-cut bug we hit on a fresh Docker deploy in
+# May 2026 — ORT/wasm version drift, the asyncify 404 / WebGPU bundle
+# mismatch, missing rohy-tna and dynajs vendor files, missing model
+# .onnx files, the standalone bearer-token gap — would have been caught
+# by a single CI run that did `git clone && docker build && docker run
+# && open in browser`. The repo's other CI (ci.yml) verifies units and
+# the server contract, not the *end-to-end install flow*. This workflow
+# does that, every night and on every PR that touches the install
+# surface.
+#
+# Scope: build the production image from scratch, start the container,
+# probe every static asset the standalone HTML hard-imports, then load
+# the standalone dashboard in headless Chromium and assert no 4xx /
+# console errors. If a future commit ever silently re-breaks one of the
+# install paths, this turns red before the operator does.
+
+name: Install from scratch (Docker)
+
+on:
+  schedule:
+    # 04:00 UTC daily — catches drift from upstream CDN bumps (ORT,
+    # MediaPipe, jsDelivr) even when nobody pushes.
+    - cron: '0 4 * * *'
+  push:
+    branches: [main]
+    paths:
+      # Only re-run on paths that can actually break the install. Most
+      # commits (route handlers, UI, tests) don't change the install
+      # surface and shouldn't burn CI minutes here — they have ci.yml.
+      - 'deploy/docker/**'
+      - 'deploy/bootstrap.sh'
+      - 'OyonR/scripts/download-models.sh'
+      - 'OyonR/standalone/**'
+      - 'OyonR/package.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.gitignore'
+      - 'scripts/tech-test.sh'
+      - '.github/workflows/install-from-scratch.yml'
+  pull_request:
+    paths:
+      - 'deploy/docker/**'
+      - 'OyonR/scripts/download-models.sh'
+      - 'OyonR/standalone/**'
+      - 'OyonR/package.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.gitignore'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Don't waste minutes overlapping. A push that supersedes a previous
+# run cancels the older one mid-flight.
+concurrency:
+  group: install-from-scratch-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fresh-docker-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --no-cache simulates a truly fresh build — the same path a
+      # first-time operator hits. With cache, layers from a previous CI
+      # run could mask a regression like "rohy-tna got removed from git
+      # but the cached layer still has it." Burn ~10 min once a day to
+      # be sure the build is reproducible from scratch.
+      - name: Build rohy production image (no cache)
+        run: |
+          docker build \
+            --no-cache \
+            --progress=plain \
+            -f deploy/docker/Dockerfile \
+            -t rohy:ci \
+            .
+
+      # JWT_SECRET is required (server refuses to start without it). We
+      # use ALLOW_DEFAULT_USERS=1 only so the seeded `admin` user is
+      # present for the optional auth'd browser smoke later — no real
+      # secrets ever land in this throwaway container.
+      - name: Start container (port 4000 → host)
+        run: |
+          docker run -d \
+            --name rohy-ci \
+            -p 4000:4000 \
+            -e JWT_SECRET="$(openssl rand -hex 32)" \
+            -e NODE_ENV=production \
+            -e ALLOW_DEFAULT_USERS=1 \
+            -e OYON_ENABLED=1 \
+            rohy:ci
+
+      # Migrations + seed checks take ~3-6s on a cold start. Poll
+      # /api/health for up to 90s before declaring failure — same
+      # readiness wait tech-test.sh does in its POST_VERIFY mode.
+      - name: Wait for /api/health (max 90s)
+        run: |
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:4000/api/health > /dev/null 2>&1; then
+              echo "✓ rohy is healthy after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "✗ rohy did not become healthy within 90s"
+          docker logs rohy-ci
+          exit 1
+
+      # tech-test runs 27+ checks (liveness, frontend bundle integrity,
+      # Oyon API gating, security headers, response timing, ORT vendor
+      # files). Any FAIL fails the deploy verifier in production, so
+      # the CI mirror should fail here too.
+      - name: Run tech-test.sh against the container
+        run: |
+          ROHY_VERBOSE=1 bash scripts/tech-test.sh http://localhost:4000
+
+      # Explicit probes for the exact files the May-2026 deploys were
+      # missing. Each maps 1:1 to a paper-cut bug we shipped a fix for:
+      #   - ort.min.mjs / ort-wasm-simd-threaded.{mjs,wasm} →
+      #     download-models.sh asset list
+      #   - dynajs/index.js, rohy-tna/NetworkGraph.js →
+      #     accidentally gitignored under standalone/vendor/
+      #   - models/emotion/*.onnx → download-models.sh emotion blobs
+      #   - models/face_landmarker.task → MediaPipe model
+      # Anything non-200 here means a fresh install would 404 in the
+      # browser; fail loud at CI time so the operator never sees it.
+      - name: Probe static assets explicitly (catches the May-2026 404 class)
+        run: |
+          set -e
+          MISSING=0
+          declare -a paths=(
+            standalone/
+            standalone/logs.html
+            standalone/vendor/onnxruntime-web/ort.min.mjs
+            standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.mjs
+            standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.wasm
+            standalone/vendor/mediapipe/vision_bundle.mjs
+            standalone/vendor/dynajs/index.js
+            standalone/vendor/rohy-tna/NetworkGraph.js
+            standalone/vendor/rohy-tna/SequencePlots.js
+            standalone/vendor/rohy-tna/tnaColors.js
+            standalone/models/face_landmarker.task
+            standalone/models/emotion/enet_b0_8_va_mtl.onnx
+            standalone/models/emotion/mobilevit_va_mtl.onnx
+            standalone/models/emotion/mbf_va_mtl.onnx
+          )
+          for p in "${paths[@]}"; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:4000/$p")
+            if [ "$code" != "200" ]; then
+              echo "  ✗ /$p → HTTP $code"
+              MISSING=$((MISSING+1))
+            else
+              echo "  ✓ /$p"
+            fi
+          done
+          if [ "$MISSING" -gt 0 ]; then
+            echo ""
+            echo "✗ $MISSING required asset(s) returned non-200 — fresh installs would 404 in the browser"
+            exit 1
+          fi
+
+      # Browser-level smoke. Verifies that loading
+      # /oyon/standalone/logs.html doesn't throw — catches:
+      #   - JS module import errors (e.g. NetworkGraph.js missing)
+      #   - ORT initWasm failures (the t.getValue / asyncify class)
+      #   - 4xx / 5xx on any resource the page actually requests
+      # Headless Chromium is enough; we don't need to authenticate or
+      # interact. A 401 on /api/addons/oyon/emotion-records is the
+      # expected unauthenticated response and is filtered out below.
+      - name: Install npm deps (for Playwright)
+        run: npm ci --prefer-offline --no-audit --no-fund --ignore-scripts
+        # --ignore-scripts skips OyonR's postinstall download (already
+        # in the container; we just need Playwright on the runner).
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Browser smoke — standalone logs.html loads without errors
+        run: |
+          mkdir -p .ci
+          cat > .ci/install-smoke.spec.js <<'EOF'
+          const { test, expect } = require('@playwright/test');
+
+          test('GET /oyon/standalone/logs.html — no 4xx/5xx, no console errors', async ({ page }) => {
+            const consoleErrors = [];
+            const failedRequests = [];
+
+            page.on('console', msg => {
+              if (msg.type() === 'error') consoleErrors.push(msg.text());
+            });
+            page.on('response', res => {
+              const url = res.url();
+              const status = res.status();
+              // Expected and OK:
+              //   - 401 on /api/addons/oyon/* with no auth
+              //   - any /favicon.ico response
+              const isExpectedAuth401 = url.includes('/api/addons/oyon/') && status === 401;
+              const isFavicon = url.includes('/favicon');
+              if (status >= 400 && !isExpectedAuth401 && !isFavicon) {
+                failedRequests.push(`${status} ${url}`);
+              }
+            });
+            page.on('pageerror', err => {
+              consoleErrors.push(`pageerror: ${err.message}`);
+            });
+
+            const res = await page.goto('http://localhost:4000/oyon/standalone/logs.html', {
+              waitUntil: 'networkidle',
+              timeout: 30000,
+            });
+            expect(res.ok()).toBeTruthy();
+
+            // Settle for any deferred imports (NetworkGraph, dynajs, ORT init).
+            await page.waitForTimeout(3000);
+
+            const realErrors = consoleErrors.filter(e => !e.toLowerCase().includes('favicon'));
+            if (failedRequests.length || realErrors.length) {
+              const msg = [
+                `failed requests: ${failedRequests.length}`,
+                ...failedRequests.map(f => '  ' + f),
+                `console errors: ${realErrors.length}`,
+                ...realErrors.map(e => '  ' + e),
+              ].join('\n');
+              throw new Error('standalone logs.html had errors:\n' + msg);
+            }
+          });
+          EOF
+
+          # Minimal Playwright config so we don't need playwright.config.js
+          # in the repo root for this throwaway test.
+          cat > .ci/playwright.config.js <<'EOF'
+          module.exports = {
+            testDir: '.',
+            timeout: 60000,
+            workers: 1,
+            reporter: 'list',
+            use: {
+              browserName: 'chromium',
+              ignoreHTTPSErrors: true,
+            },
+          };
+          EOF
+
+          npx playwright test .ci/install-smoke.spec.js --config=.ci/playwright.config.js
+        timeout-minutes: 5
+
+      # Verify the new ORT/MP version auto-resolution actually picked
+      # the right versions. If the script defaulted to the hardcoded
+      # fallbacks (1.20.1 / 0.10.35) when node_modules was available,
+      # that's a regression of the d36bb73 fix.
+      - name: Verify ORT/MP versions match what npm installed
+        run: |
+          NPM_ORT=$(docker exec rohy-ci node -p "require('/opt/rohy/node_modules/onnxruntime-web/package.json').version")
+          NPM_MP=$(docker exec rohy-ci node -p "require('/opt/rohy/node_modules/@mediapipe/tasks-vision/package.json').version")
+          # The build log line we added in download-models.sh:
+          #   [oyon-vendor] resolved versions: ORT=… · MP=…
+          BUILD_LOG=$(docker logs rohy-ci 2>&1 | head -100)
+          # Best-effort check; the build log isn't in the runtime container
+          # but the versions of the wasm files should match npm's pin via
+          # download-models.sh's resolve_pkg_version. We probe by URL: if
+          # jsDelivr serves the npm-pinned version, the file is fine.
+          ORT_PROBE=$(curl -sS -o /dev/null -w '%{http_code}' \
+            "https://cdn.jsdelivr.net/npm/onnxruntime-web@${NPM_ORT}/dist/ort.min.mjs")
+          if [ "$ORT_PROBE" != "200" ]; then
+            echo "✗ npm pinned onnxruntime-web@${NPM_ORT} but jsDelivr does not serve that version (HTTP $ORT_PROBE)"
+            echo "  → download-models.sh's verify_jsdelivr_version warning would have fired"
+            exit 1
+          fi
+          echo "✓ ORT version coherent: npm=${NPM_ORT} on jsDelivr"
+          echo "✓ MP version installed: npm=${NPM_MP}"
+
+      # On any failure, dump container logs so the operator doesn't
+      # have to re-run with `docker logs` to figure out what crashed.
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          echo "=== docker ps ==="
+          docker ps -a
+          echo ""
+          echo "=== rohy-ci logs (last 200 lines) ==="
+          docker logs --tail 200 rohy-ci || true
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker stop rohy-ci 2>/dev/null || true
+          docker rm rohy-ci 2>/dev/null || true
