@@ -44,164 +44,29 @@ bash server/scripts/install-piper.sh
 
 Kokoro TTS (~330 MB) is downloaded automatically on first use and warmed up at boot when selected.
 
-### Production / multi-user deploys
+### Going to production?
 
-Four packaged paths, pick one:
+Three sibling docs cover the operator lifecycle end-to-end:
 
-| Target | Path | What you get |
-|---|---|---|
-| Docker (anywhere) | `docker compose -f deploy/docker/compose.yml up -d --build` | rohy + Caddy reverse proxy, auto-TLS, persistent volumes |
-| Linux + systemd | `sudo deploy/bootstrap.sh --frontend-url=https://your-host/rohy --admin-bootstrap` | systemd unit, nginx vhost, env file, idempotent re-runs for upgrades |
-| Single machine (lab / classroom) | `bash deploy/local-install.sh --port 4000` | runs as your user, generates `.env`, prints the start command |
-| Air-gapped / offline target | build: `deploy/bundle-airgap.sh` &nbsp;·&nbsp; install: `sudo ./airgap-install.sh --user=rohy --frontend-url=https://your-host/rohy --proxy=nginx` | one tarball with repo + `node_modules` + Oyon bundles + Piper + (optional) Kokoro HF cache, sha256-verified, platform-stamped, no network needed on target |
+| Doc | When to read it |
+|---|---|
+| **[docs/INSTALL.md](docs/INSTALL.md)** | Putting Rohy on a new machine. Four paths: Docker / Linux+systemd / single-machine / air-gapped. Prerequisites, smoke verify, first-boot checklist, troubleshooting. |
+| **[docs/DEPLOY.md](docs/DEPLOY.md)** | Hardening a real deploy. Reverse proxy (nginx/Caddy), TLS, environment reference, security checklist, deploy verification + live monitoring (`/admin/health`), Postgres readiness, retention. |
+| **[docs/UPDATING.md](docs/UPDATING.md)** | Operator manual for `bin/rohy-update`. Pre-flight, atomic upgrade procedure, automatic rollback, off-site backup recipes (rsync + rclone), troubleshooting, contract-probe creds setup. Design rationale: [docs/UPDATE-STRATEGY.md](docs/UPDATE-STRATEGY.md). |
 
-All four handle the Oyon binary download automatically (the air-gap path packs them into the tarball at build time instead of fetching at install time). Verify any deploy with `scripts/smoke.sh https://your-host/rohy`.
-
-#### Updating an existing install
-
-Once installed, keep the install current with `bin/rohy-update` — backup-first, atomic, with one-command rollback:
+**TL;DR for the impatient:**
 
 ```bash
+# Linux + systemd, public DNS, auto-TLS via certbot
+sudo deploy/bootstrap.sh --frontend-url=https://your-host/rohy --admin-bootstrap
+
+# Once installed, ongoing upgrades:
 sudo rohy-update check       # what would change?
-sudo rohy-update apply       # apply with auto-snapshot + auto-rollback on failure
+sudo rohy-update apply       # snapshot → upgrade → verify → auto-rollback on failure
 sudo rohy-update rollback    # undo the last apply
 ```
 
-See [`docs/UPDATING.md`](docs/UPDATING.md) for the full operator manual (backup setup, destructive migrations, troubleshooting, off-site backup recipes). The design rationale lives in [`docs/UPDATE-STRATEGY.md`](docs/UPDATE-STRATEGY.md).
-
-**Oyon (local-browser emotion capture) is ON by default in every deploy path.** The routes mount under `/api/addons/oyon/*` and the standalone analytics page at `/oyon/standalone/`; the wasm/mjs runtime + face landmarker + emotion classifiers are downloaded automatically by `npm install` (`OyonR/scripts/download-models.sh`). To opt out:
-
-| Path | How to disable |
-|---|---|
-| `local-install.sh` | re-run with `--no-oyon` |
-| `bootstrap.sh` (systemd) | edit `/etc/rohy/env`, set `OYON_ENABLED=0`, `sudo systemctl restart rohy` |
-| Docker | set `OYON_ENABLED=0` in `deploy/docker/.env`, `docker compose up -d` |
-
-When disabled, Settings → Oyon shows a friendly panel explaining the state instead of returning 404s. Toggling does NOT change image / install size — only the routes are gated; the binary bundles are always present.
-
-#### Air-gap bundling — full flow
-
-For sites with no internet on the target host (clinical labs, secured networks, lab classrooms with restricted egress):
-
-```bash
-# On a CONNECTED build host that matches the target's OS+arch
-# (linux-x86_64 prod → linux-x86_64 build host; ARM target → ARM build host):
-npm install
-bash OyonR/scripts/download-models.sh
-bash server/scripts/install-piper.sh                    # optional, +326 MB
-deploy/bundle-airgap.sh --mode=source --with-hf-cache   # optional Kokoro pre-warm, +330 MB
-# → dist/airgap/rohy-airgap-source-<sha>-<platform>-<date>.tar.gz   (~1.8 GB)
-# → dist/airgap/rohy-airgap-source-<sha>-<platform>-<date>.tar.gz.sha256
-
-# Publish (any of these — the script prints all three commands):
-gh release create v$(git rev-parse --short HEAD) dist/airgap/*.tar.gz dist/airgap/*.sha256
-huggingface-cli upload <user>/rohy-airgap dist/airgap/ .
-rclone copy dist/airgap/ r2:rohy-airgap/
-
-# On the AIR-GAPPED target host (no internet required from here on):
-curl -L -o rohy.tar.gz <release-url>                    # last network step
-curl -L -o rohy.tar.gz.sha256 <release-url>.sha256
-sha256sum -c rohy.tar.gz.sha256                         # verify integrity
-tar xzf rohy.tar.gz && cd rohy-airgap-*
-sudo ./airgap-install.sh \
-    --user=rohy \
-    --repo-dir=/opt/rohy \
-    --frontend-url=https://your-host/rohy \
-    --proxy=nginx                                       # nginx | caddy | none
-sudo systemctl start rohy
-```
-
-**Key flags** (see `deploy/bundle-airgap.sh --help` for the full list):
-
-- `--mode=source|docker|both` — source tarball, `docker save`'d image, or both. Source needs node + sqlite3 on target; docker needs only docker.
-- `--with-hf-cache` — bundle `$TRANSFORMERS_CACHE` so Kokoro TTS works offline on first request (otherwise skipped; first request would need network).
-- `--with-dynajs` — bundle the `../dynajs` sibling clone if your `package.json` uses `file:../dynajs`.
-- `--no-piper` / `--with-piper` — exclude or require the Piper venv (auto-detected by default; saves ~326 MB if excluded).
-
-**Platform lock — important**: the source bundle ships native binaries (`node_sqlite3.node`, `onnxruntime` `.dylib`/`.so`, `Darwin/FBX2glTF`) compiled for the build host's OS+arch. The bundle filename includes the platform (`darwin-arm64`, `linux-x86_64`, etc.) and `airgap-install.sh` refuses to install on a mismatched host. To produce a Linux-x86_64 bundle from a Mac, run the bundler inside a Linux container:
-
-```bash
-docker run --rm -v "$PWD:/work" -w /work --platform=linux/amd64 node:22-bookworm bash -c "
-    apt-get update && apt-get install -y rsync python3-venv sqlite3 && \
-    npm install && bash OyonR/scripts/download-models.sh && \
-    deploy/bundle-airgap.sh --mode=source
-"
-```
-
-Or use `--mode=docker` instead of source — Docker images are Linux regardless of build host, and the target only needs Docker.
-
-#### Deploy verification & live monitoring
-
-Every install path can be verified end-to-end with one command — same script,
-called automatically by `bin/rohy-update` after each upgrade and by the
-SaqrServer hub deploy as `POST_VERIFY_rohy`:
-
-```bash
-scripts/tech-test.sh https://your-host/rohy           # 27 checks: liveness, bundle integrity,
-                                                      # Oyon API surface, auth gating, security
-                                                      # headers, response timing
-ROHY_INSECURE=1 scripts/tech-test.sh ...              # accept self-signed certs (LAN deploys)
-ROHY_TOKEN=eyJ... scripts/tech-test.sh ...            # arms the Oyon contract probe (section 6)
-```
-
-The contract probe POSTs a deliberately-malformed emotion batch and
-asserts the server validator catches it (a 400 + "sum close to 1" in the
-body). Catches client/server label drift at deploy time — the May-2026
-"label-set drift" bug class — before any user starts a capture. Set up
-once with the wrapper:
-
-```bash
-# One-time on each operator host
-cat > ~/.rohy-deploy-creds <<EOF
-ROHY_LOGIN_URL='https://your-host/rohy/api/auth/login'
-ROHY_DEPLOY_USER='deploy-verifier'
-ROHY_DEPLOY_PASS='<password>'
-EOF
-chmod 600 ~/.rohy-deploy-creds
-```
-
-After that, `scripts/post-verify-rohy.sh` (and `bin/rohy-update`'s
-post-verify step) mints a token automatically before each verification
-run. If the file is absent, the contract probe silently skips and the
-deploy still passes on the other 27 checks — strict no-regression.
-
-**Live operator dashboard**:
-
-```bash
-curl -ksS https://your-host/rohy/api/addons/oyon/admin/health \
-     -H "Authorization: Bearer $TOKEN" | jq
-# → { "endpoints": {...}, "total_5m": 0, "total_1h": 0, "generated_at": ... }
-```
-
-`/api/addons/oyon/admin/health` returns per-endpoint 4xx + 5xx rejection
-counts for the last 5 minutes and last hour. Operator gate matches
-`/admin/live` (educator+ role with the per-role view-enabled flag).
-Non-zero `total_5m` is the early-warning signal we used to miss until
-users complained.
-
-Smoke-test only the API surface (no asset checks):
-
-```bash
-scripts/smoke.sh https://your-host/rohy
-```
-
-#### Backup & rollback
-
-`bin/rohy-update` snapshots the SQLite DB (via `sqlite3 VACUUM INTO`),
-copies the env file, and writes a manifest before every `apply`. Auto-rollback
-fires on any verify failure. Manual control:
-
-```bash
-sudo rohy-update list-backups          # show local snapshots
-sudo rohy-update rollback              # undo the last apply
-sudo rohy-update restore-backup <name> # restore an arbitrary snapshot
-sudo scripts/rohy-backup.sh --label baseline   # standalone snapshot
-sudo scripts/rohy-backup.sh --check            # verify a snapshot is readable
-```
-
-Retention by default keeps the **last 10 snapshots** + **monthly for 12
-months** + always protects snapshots <24h old. Off-site backups are an
-operator concern — see `docs/UPDATING.md` for rsync and rclone recipes.
+**Oyon (local-browser emotion capture) is ON by default in every deploy path.** Routes mount under `/api/addons/oyon/*`, the standalone analytics page at `/oyon/standalone/`, models auto-downloaded by `npm install`. Disable: `OYON_ENABLED=0` in env, restart. When disabled, the Settings tab shows a friendly panel — install size unchanged, only routes gated. See [DEPLOY.md § Disabling features](docs/DEPLOY.md#disabling-features) for path-by-path detail.
 
 ---
 
@@ -452,33 +317,10 @@ Observability + governance: `llm_usage`, `llm_request_log`, `llm_model_pricing`,
 
 ## Configuration
 
-All runtime configuration lives in **Platform Settings** (admin-only) and is persisted in the `platform_settings` table. Nothing model- or voice-specific is hardcoded in the client.
+Runtime configuration lives in two places:
 
-Categories:
-- **LLM** — provider, API key, default model, temperature, max-tokens, system-prompt overrides per agent
-- **Voice** — TTS provider, per-(provider, gender) voice ID, speech rate, pitch in semitones, language
-- **Avatars** — default avatar per gender, framing override per case, mute toggles
-- **Monitor** — alarm thresholds, audio patterns, plethysmograph, ECG visibility, EtCO₂, NIBP cycle
-- **Chat** — message window, streaming, stage-direction stripping, voice mode default
-- **Notifications** — routing matrix, mute hierarchy, severity threshold, audio frequency
-- **Rate limits** — per-user and platform-wide caps
-- **Retention** — configurable days for time-bounded logs (`retention_days` / `log_retention_days`)
-- **Observability** — slow-query threshold (`slow_query_ms`)
-
-Environment (`server/.env`):
-
-| Variable | Required | Notes |
-|---|---|---|
-| `JWT_SECRET` | yes | Server refuses to start without it |
-| `JWT_EXPIRY` | no | Default `4h` |
-| `PORT` | no | Default `3000`, falls through to next free port |
-| `NODE_ENV` | no | `production` disables seeded default users (override with `ALLOW_DEFAULT_USERS=1`) |
-| `FRONTEND_URL` | prod | Allowed CORS origin |
-| `ROHY_DB` | no | Override SQLite file location |
-| `ROHY_LOG_LEVEL` | no | `debug` / `info` (default) / `warn` / `error` |
-| `ROHY_LOG_SKIP_PATHS` | no | Default `/api/proxy/llm,/health` |
-| `ROHY_SLOW_QUERY_MS` | no | Override platform-setting threshold (default `100`) |
-| `ROHY_RETENTION_DAYS` | no | Override platform-setting retention (default `90`) |
+- **Platform Settings** (admin-only) — persisted in `platform_settings`. Categories: LLM, Voice, Avatars, Monitor, Chat, Notifications, Rate limits, Retention, Observability. Nothing model- or voice-specific is hardcoded in the client.
+- **Environment** (`server/.env` in dev, `/etc/rohy/env` in systemd, `deploy/docker/.env` in compose) — `JWT_SECRET`, `NODE_ENV`, `FRONTEND_URL`, `ROHY_DB`, `OYON_ENABLED`, observability knobs, etc. Full reference table in [DEPLOY.md § Environment](docs/DEPLOY.md#environment-reference).
 
 ---
 
@@ -558,31 +400,6 @@ Development tips:
 - Adding a lab test: append to `Lab_database.json` (test_name, group, category, min_value, max_value, unit, normal_samples) — the seeder picks it up on next boot.
 - Adding a scenario template: append to `src/data/scenarioTemplates.js` with timeline keyframes; it appears in the Scenario Repository.
 - Adding an audit endpoint: write `scripts/audit-<area>.sh` mirroring the pattern in `scripts/audit-observability.sh` (start isolated server, drive HTTP, assert).
-
----
-
-## Production
-
-```bash
-npm run build
-NODE_ENV=production node server/server.js
-```
-
-The build copies `dist/` into `frontend/`, which Express serves statically alongside the API.
-
-Production checklist:
-- [ ] Strong, unique `JWT_SECRET`
-- [ ] HTTPS terminator in front (nginx, Caddy, …)
-- [ ] `FRONTEND_URL` set so CORS allows only your origin
-- [ ] Default seeded users disabled (default in `NODE_ENV=production`)
-- [ ] SQLite database backups (or migrate to Postgres via Stage E8 adapter)
-- [ ] Rate limits reviewed in Platform Settings → Rate limits
-- [ ] LLM API keys scoped to this app
-- [ ] Retention sweep cron installed (see `scripts/retention-sweep.js` header for cron pattern)
-- [ ] Observability log shipper wired to NDJSON stdout (or `ROHY_LOG_LEVEL=warn` for production)
-- [ ] CODECOV_TOKEN added to repo secrets if you want PR coverage gates active
-
-A sample deploy script is at `production/deploy.sh`.
 
 ---
 
