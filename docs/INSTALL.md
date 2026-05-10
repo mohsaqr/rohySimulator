@@ -12,10 +12,11 @@ hardening (TLS, reverse proxy, env, security checklist) and
 
 | Target | Path | What you get |
 |---|---|---|
+| **Pre-built release** (fastest) | [§ Published release](#published-release-recommended) | `docker pull ghcr.io/mohsaqr/rohy:latest` — image already built, models baked in |
 | **Local dev** (your laptop) | [§ Local development](#local-development) | `npm run dev` — Vite + Express, hot reload, default seeded users |
 | **Single machine** (lab / classroom) | [§ Local install](#single-machine-local-install) | `bash deploy/local-install.sh` — runs as your user, no root needed |
 | **Linux + systemd** (multi-user prod) | [§ Linux + systemd](#linux--systemd-bootstrap) | `sudo deploy/bootstrap.sh` — systemd unit, nginx vhost, env file |
-| **Docker** | [§ Docker](#docker) | `docker compose -f deploy/docker/compose.yml up -d` — Caddy auto-TLS, persistent volumes |
+| **Docker (build from source)** | [§ Docker](#docker) | `docker compose -f deploy/docker/compose.yml up -d --build` — Caddy auto-TLS, persistent volumes |
 | **Air-gapped** (no internet on target) | [§ Air-gap](#air-gapped-target) | One signed tarball, sha256-verified, platform-stamped |
 
 After any path → [§ First boot](#first-boot) and [§ Smoke verify](#smoke-verify).
@@ -32,6 +33,67 @@ After any path → [§ First boot](#first-boot) and [§ Smoke verify](#smoke-ver
 | **curl** | any | Required for the post-install Oyon model download (~93 MB from jsDelivr); skip with no internet → see air-gap path |
 | **Python 3** | 3.10+ | Optional, only for `post-verify-rohy.sh` JSON parsing |
 | **OS** | macOS arm64, Linux x86_64, Linux arm64 | Native binaries are platform-locked; cross-builds need Docker (see [§ Air-gap](#air-gapped-target)) |
+
+---
+
+## Published release (recommended)
+
+If a release has been tagged, the fastest install is to pull the pre-built
+image instead of building locally. Every tag publishes three artifacts:
+
+| Artifact | What | Where |
+|---|---|---|
+| `ghcr.io/mohsaqr/rohy:<tag>` | Multi-arch Docker image (amd64 + arm64), models baked in | GitHub Container Registry |
+| `rohy-airgap-source-<sha>-linux-amd64-<date>.tar.gz` | Self-contained source tarball (~1.8 GB), zero-network install | GitHub Releases |
+| `rohy-airgap-docker-<sha>-linux-amd64-<date>.tar.gz` | `docker save`'d image tarball for air-gapped sites with Docker | GitHub Releases |
+
+Each has a `.sha256` sidecar for integrity verification.
+
+### Docker pull (smallest, simplest)
+
+```bash
+git clone https://github.com/mohsaqr/rohySimulator.git rohy   # for compose + Caddyfile
+cd rohy
+cp deploy/docker/.env.example deploy/docker/.env
+# edit deploy/docker/.env — at minimum CADDY_DOMAIN and JWT_SECRET
+
+# Pull the published image instead of building
+sed -i.bak 's|build:.*|image: ghcr.io/mohsaqr/rohy:latest|' deploy/docker/compose.yml
+docker compose -f deploy/docker/compose.yml up -d
+```
+
+This skips the ~10-minute local build entirely. Models, vendor wasm, and
+all dependencies are already inside the image.
+
+### Air-gap tarball (zero-network target)
+
+```bash
+# On a host that CAN reach the internet (this is the only network step):
+TAG=v0.1.0   # the release you want
+curl -LO https://github.com/mohsaqr/rohySimulator/releases/download/$TAG/rohy-airgap-source-*-linux-amd64-*.tar.gz
+curl -LO https://github.com/mohsaqr/rohySimulator/releases/download/$TAG/rohy-airgap-source-*-linux-amd64-*.tar.gz.sha256
+
+# Transfer both files to the offline target host, then:
+sha256sum -c rohy-airgap-source-*-linux-amd64-*.tar.gz.sha256
+tar xzf rohy-airgap-source-*-linux-amd64-*.tar.gz
+cd rohy-airgap-*
+sudo ./airgap-install.sh --frontend-url=https://your-host
+sudo systemctl start rohy
+```
+
+The target needs `node 22`, `sqlite3`, and a reverse proxy (`nginx` or
+`caddy`) already installed. Nothing else fetches from the network.
+
+### Air-gapped Docker (target has Docker but no internet)
+
+```bash
+# On a connected host:
+curl -LO https://github.com/mohsaqr/rohySimulator/releases/download/$TAG/rohy-airgap-docker-*-linux-amd64-*.tar.gz
+
+# Transfer to the offline target, then:
+docker load < rohy-airgap-docker-*-linux-amd64-*.tar.gz
+docker compose -f deploy/docker/compose.yml up -d
+```
 
 ---
 
