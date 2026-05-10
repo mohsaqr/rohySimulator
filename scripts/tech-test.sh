@@ -36,6 +36,14 @@ PASS=0; FAIL=0; WARN=0; SKIP=0
 FAILED_CATEGORIES=()
 START_NS=$(date +%s%N 2>/dev/null || date +%s)
 
+# Readiness wait: when invoked as a POST_VERIFY hook right after `systemctl
+# restart rohy`, the Express upstream needs ~3-6s to finish init (sqlite open,
+# migrations, seed checks). Without this, tech-test races the restart and
+# every probe sees nginx returning 502 (no upstream). Polls /api/health up
+# to ROHY_WAIT_READY_S seconds; default 30. Set to 0 to skip (e.g. when
+# verifying an already-stable deploy).
+ROHY_WAIT_READY_S="${ROHY_WAIT_READY_S:-30}"
+
 # ── helpers ────────────────────────────────────────────────────────────────
 # probe URL EXPECTED_STATUSES [auth=0|1] [body_grep=]
 # auth=1 will skip if no token, send token if present
@@ -113,6 +121,31 @@ if [[ "$BASE_URL" == https://* && -z "$INSECURE_ARG" ]]; then
         printf '   if your cert is self-signed (LAN deploy), re-run with %sROHY_INSECURE=1%s :\n' "$DIM" "$CLR"
         printf '       ROHY_INSECURE=1 %s %s\n' "$0" "$BASE_URL"
         echo
+    fi
+fi
+
+# Readiness probe: poll /api/health until it returns 200 or the timeout
+# elapses. 502 from nginx means the Express upstream hasn't bound yet — the
+# normal state during a freshly-fired `systemctl restart rohy`. 200 means
+# we're ready to start verifying. Anything else (or a timeout) → bail with
+# a clear "upstream never came ready" message rather than producing a sea
+# of misleading FAILs.
+if (( ROHY_WAIT_READY_S > 0 )); then
+    printf '  %s→%s waiting for upstream readiness (max %ss)... ' "$BLU" "$CLR" "$ROHY_WAIT_READY_S"
+    waited=0
+    while (( waited < ROHY_WAIT_READY_S )); do
+        st=$(curl $INSECURE_ARG -sS -o /dev/null -w "%{http_code}" --max-time 3 "$BASE_URL/api/health" 2>/dev/null || echo 000)
+        if [[ "$st" == "200" ]]; then
+            printf '%sready in %ss%s\n\n' "$GRN" "$waited" "$CLR"
+            break
+        fi
+        sleep 1
+        waited=$((waited+1))
+    done
+    if (( waited >= ROHY_WAIT_READY_S )); then
+        printf '%sgave up (last status: %s)%s\n' "$RED" "$st" "$CLR"
+        printf '  %s✗%s upstream did not become ready within %ss — failing fast\n\n' "$RED" "$CLR" "$ROHY_WAIT_READY_S"
+        exit 1
     fi
 fi
 
