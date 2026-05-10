@@ -29,7 +29,10 @@ export default function OyonSettingsTab() {
    // When set, we render the friendly panel instead of trying to load config.
    const [serverDisabled, setServerDisabled] = useState(null);
    const [defaultConsent, setDefaultConsent] = useState(() => {
-      try { return localStorage.getItem(CONSENT_PREF_KEY) === '1'; } catch { return false; }
+      // Match the opt-out semantics in OyonCaptureWidget.readConsentPref:
+      // ON unless explicitly turned off ('0'). Tenant-level enablement is the
+      // admin's opt-in; per-user consent only acts as the opt-out switch.
+      try { return localStorage.getItem(CONSENT_PREF_KEY) !== '0'; } catch { return true; }
    });
    const [showValenceGraph, setShowValenceGraph] = useState(() => {
       try { return localStorage.getItem(VALENCE_GRAPH_PREF_KEY) === '1'; } catch { return false; }
@@ -251,11 +254,12 @@ export default function OyonSettingsTab() {
                />
                <span>
                   <span className="block text-sm font-semibold text-neutral-100">
-                     I agree to local emotion capture in my simulation sessions
+                     Capture emotions during my simulation sessions
                   </span>
                   <span className="block text-xs text-neutral-400 mt-0.5">
-                     Stored on this device. Each new session you start will use this preference; you can
-                     still revoke per-session in the Oyon app.
+                     Default: on. Records are stored server-side under your account when you start a session
+                     with the camera pill. Untick to disable — the live preview still runs (it stays on this
+                     device) but nothing is persisted. You can flip this any time.
                   </span>
                </span>
             </label>

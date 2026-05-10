@@ -20,8 +20,24 @@ import {
 // When opened from Rohy (?source=rohy&session_id=…&case_id=…) the standalone
 // switches its transport from local-only to Rohy's authenticated backend so
 // emotion windows are persisted per-session/student/case in Rohy's database.
+//
+// `?source=standalone` is the explicit opt-out for "I really do want pure
+// local-only mode even though I'm logged into rohy." With no query param we
+// auto-detect: if a rohy auth cookie is present in this origin, treat it as
+// rohy mode. This makes opening /oyon/standalone/ bare from a logged-in rohy
+// session do the right thing (server-backed) without requiring the operator
+// to remember the query params.
 const ROHY_QUERY = new URLSearchParams(window.location.search);
-const ROHY_MODE = ROHY_QUERY.get('source') === 'rohy';
+function hasRohyAuthCookie() {
+  if (typeof document === 'undefined' || !document.cookie) return false;
+  return /\b(rohy_session|rohy_csrf)\s*=/.test(document.cookie);
+}
+const ROHY_SOURCE = ROHY_QUERY.get('source');
+const ROHY_MODE = ROHY_SOURCE === 'rohy'
+  ? true
+  : ROHY_SOURCE === 'standalone'
+  ? false
+  : hasRohyAuthCookie();
 const ROHY_SESSION_ID = ROHY_QUERY.get('session_id') || null;
 const ROHY_CASE_ID = ROHY_QUERY.get('case_id') || null;
 

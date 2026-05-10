@@ -473,7 +473,18 @@ async function persistEvents(events, sessionId, caseId, setPersistOk) {
 }
 
 function readConsentPref() {
-   try { return localStorage.getItem(CONSENT_PREF_KEY) === '1'; } catch { return false; }
+   // Tenant-level emotion_capture_enabled is the admin's opt-in. Per-user
+   // consent defaults to ON when the tenant has opted in, opting OUT only
+   // when the user explicitly toggled the switch off in Settings → Oyon
+   // (which writes '0'). Previously this defaulted to false, which meant
+   // every fresh login captured locally for the live preview but never
+   // persisted — analytics stayed empty until the user found and flipped
+   // the toggle. Default-on matches what the deployment's admin already
+   // decided when they enabled Oyon at the tenant level.
+   try {
+      const v = localStorage.getItem(CONSENT_PREF_KEY);
+      return v !== '0';
+   } catch { return true; }
 }
 
 // Pick the label with the highest probability from the classifier's

@@ -16,8 +16,24 @@ const STORAGE = {
 // fetch instead of localStorage. The launching session is preselected in the
 // existing session filter; admins/educators see records from every session
 // they're allowed to read, students see only their own.
+//
+// Auto-detect: if a rohy auth cookie exists for this origin, default to
+// rohy mode even without `?source=rohy` in the URL. `?source=standalone`
+// is the explicit opt-out for "I really want local-only mode while logged
+// into rohy." This means opening /oyon/standalone/logs.html bare from a
+// logged-in rohy tab Just Works (shows server records by session) instead
+// of silently reading from empty localStorage.
 const ROHY_QUERY = new URLSearchParams(window.location.search);
-const ROHY_MODE = ROHY_QUERY.get('source') === 'rohy';
+function hasRohyAuthCookie() {
+  if (typeof document === 'undefined' || !document.cookie) return false;
+  return /\b(rohy_session|rohy_csrf)\s*=/.test(document.cookie);
+}
+const ROHY_SOURCE = ROHY_QUERY.get('source');
+const ROHY_MODE = ROHY_SOURCE === 'rohy'
+  ? true
+  : ROHY_SOURCE === 'standalone'
+  ? false
+  : hasRohyAuthCookie();
 const ROHY_SESSION_ID = ROHY_QUERY.get('session_id') || null;
 const ROHY_API_BASE = '/api/addons/oyon';
 

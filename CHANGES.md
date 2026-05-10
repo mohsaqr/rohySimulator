@@ -1,3 +1,20 @@
+### 2026-05-10 — Oyon persistence: defaults that actually persist
+
+End-to-end fix for "no records in oyon_emotion_records, no analytics shown" reported after the camera fix landed. Root cause: three independent gates that all had to be manually flipped before any record could leave the browser. Each gate had a defensible privacy reason but together produced a broken-by-default experience. This change keeps the gates AS opt-outs, but flips their defaults to opt-ins so a fresh install captures + persists + shows analytics out of the box.
+
+- **`src/components/oyon/OyonCaptureWidget.jsx`** — `readConsentPref()` now defaults to `true` unless `localStorage['oyon.defaultConsent']` is explicitly `'0'`. Previously defaulted to `false`, which meant every fresh user account ran the live preview but never POSTed `/api/addons/oyon/consent` or `/emotion-records`. Tenant-level `emotion_capture_enabled` is the admin's opt-in; per-user consent is now the opt-out switch.
+- **`src/components/settings/OyonSettingsTab.jsx`** — toggle's initial state aligned to the same opt-out semantics. Reworded copy: "Capture emotions during my simulation sessions — Default: on. Untick to disable."
+- **`OyonR/standalone/standalone-demo.js` + `OyonR/standalone/logs-dashboard.js`** — `ROHY_MODE` now auto-detects from the rohy auth cookie (`rohy_csrf` / `rohy_session`) when `?source=` query param is absent. `?source=rohy` and `?source=standalone` remain as explicit overrides. Means opening `/oyon/standalone/` or `/oyon/standalone/logs.html` bare from a logged-in rohy tab now goes server-backed (HttpEmotionTransport + `/api/addons/oyon/emotion-records`) instead of silently using LocalEmotionTransport (browser-only IndexedDB) and writing nothing.
+
+Net effect: fresh install + admin enables Oyon at tenant level → user opens a session → clicks the camera pill → records flow to the server → analytics tab in Settings shows session-level breakdown. No localStorage poking, no URL query params, no toggles.
+
+The privacy contract is preserved: per-user opt-out still works (toggle in Settings → Oyon writes `'0'`); tenant-level disable still works; standalone explicit local-only mode still works (`?source=standalone`).
+
+Tests:
+- `node --check` clean on all modified JS.
+- Bundle marker check confirms updated CameraController code is on the server (sha matches HEAD).
+- End-to-end browser verification still pending operator (requires actual session + camera).
+
 ### 2026-05-10 — Seamless update story (Phases A/B/C/E)
 
 End-to-end operator-pull update tooling for self-hosted rohy installs. Designed for the "1-2 h downtime acceptable, backup essential, no fleet, but many third parties may self-host" constraint set. Plan + design rationale captured in `docs/UPDATE-STRATEGY.md`.
