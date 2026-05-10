@@ -41,14 +41,78 @@ MP_DIR="$VENDOR/mediapipe"
 FORCE=0
 [[ "${1:-}" == "--force" ]] && FORCE=1
 
-ORT_VERSION="${ORT_VERSION:-1.20.1}"
+# Resolve a package's installed version by reading its package.json from
+# whichever node_modules tree contains it. Order:
+#   1. The host repo's node_modules (e.g. rohy's, when OyonR is consumed via
+#      `file:./OyonR`) — this is what the Docker build produces.
+#   2. OyonR's own node_modules (when the package is being used standalone).
+#   3. The provided fallback.
+# Without this, the script would download the hardcoded default version while
+# the SPA bundle uses whatever npm actually pinned — leading to a wasm/JS
+# Emscripten ABI mismatch ("t.getValue is not a function" inside ORT). Pinning
+# from the live install makes the mismatch impossible by construction.
+resolve_pkg_version() {
+  local pkg="$1" fallback="$2"
+  local found=""
+  for candidate in \
+    "$ROOT/../node_modules/$pkg/package.json" \
+    "$ROOT/node_modules/$pkg/package.json" \
+  ; do
+    if [[ -f "$candidate" ]]; then
+      # Prefer node if available (handles every JSON edge case correctly);
+      # fall back to a grep for `"version": "..."` if node isn't on PATH.
+      if command -v node >/dev/null 2>&1; then
+        found=$(node -p "require('$candidate').version" 2>/dev/null || true)
+      else
+        found=$(grep -m1 '"version"' "$candidate" 2>/dev/null \
+          | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' \
+          || true)
+      fi
+      if [[ -n "$found" ]]; then
+        printf '%s' "$found"
+        return 0
+      fi
+    fi
+  done
+  printf '%s' "$fallback"
+}
+
+# Hardcoded fallbacks used only if node_modules can't be inspected (e.g. the
+# script is run before `npm install` in a fresh clone). Keep them in sync
+# with the OyonR peerDependencies so the standalone path still works.
+ORT_FALLBACK="1.20.1"
 # MediaPipe tasks-vision: peerDep declares ^0.10.22 but npm doesn't actually
 # publish 0.10.10–0.10.34 — the closest published version that satisfies the
-# range is 0.10.35. Pin to that. Override only if you know upstream republished
-# an interim version.
-MP_VERSION="${MP_VERSION:-0.10.35}"
+# range is 0.10.35. Pin to that as the standalone fallback.
+MP_FALLBACK="0.10.35"
+
+ORT_VERSION="${ORT_VERSION:-$(resolve_pkg_version onnxruntime-web "$ORT_FALLBACK")}"
+MP_VERSION="${MP_VERSION:-$(resolve_pkg_version @mediapipe/tasks-vision "$MP_FALLBACK")}"
 ORT_BASE="https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist"
 MP_BASE="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}"
+
+# Verify the resolved version is actually published before we start
+# downloading. A bogus version (typo, removed snapshot, ahead-of-CDN dev
+# build) would otherwise produce a sea of 404s that look like a network
+# blip; this surfaces the mismatch with one clear message instead.
+verify_jsdelivr_version() {
+  local label="$1" base="$2" canary="$3"
+  local code
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$base/$canary" 2>/dev/null || echo 000)
+  if [[ "$code" == "200" ]]; then
+    return 0
+  fi
+  printf '\n[oyon-vendor] WARNING: %s probe returned HTTP %s for %s/%s\n' "$label" "$code" "$base" "$canary" >&2
+  printf '[oyon-vendor]   The resolved version may not be published on jsDelivr.\n' >&2
+  printf '[oyon-vendor]   If this is a dev/snapshot build, the JS bundle in node_modules\n' >&2
+  printf '[oyon-vendor]   will not be served from the CDN. Pin a real published version\n' >&2
+  printf '[oyon-vendor]   in package.json or override with %s_VERSION=… env.\n' "$label" >&2
+  return 1
+}
+verify_jsdelivr_version ORT "$ORT_BASE" "ort.min.mjs" || true
+verify_jsdelivr_version MP "$MP_BASE" "vision_bundle.mjs" || true
+
+printf '[oyon-vendor] resolved versions: ORT=%s · MP=%s\n' "$ORT_VERSION" "$MP_VERSION"
 
 SKIPPED_OPTIONAL=()
 
