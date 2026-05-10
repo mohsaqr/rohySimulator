@@ -225,6 +225,127 @@ jobs:
           done
 
   # ----------------------------------------------------------------------
+  # Post-publish verification — pull the image WE JUST PUSHED and prove
+  # an operator on a fresh machine can boot it cleanly.
+  #
+  # Why this matters: the docker-image job confirms `docker build && docker
+  # push` worked. That's not the same as "an operator pulling the published
+  # tag gets a working install." Manifest issues, missing entrypoint, wrong
+  # env defaults, layer order bugs — all surface only when the image is
+  # consumed, not when it's produced. This job runs the consumer side as
+  # if it were a stranger on a fresh box: pulls by tag, runs it, hits
+  # /api/health, and runs the full tech-test.sh suite.
+  #
+  # On red: the release page already exists at this point (artifacts
+  # uploaded by airgap-bundle / docker-tarball), so we don't auto-revoke.
+  # Operators should see this red mark on the release notes and pin to
+  # the last green version.
+  # ----------------------------------------------------------------------
+  verify-published-image:
+    needs: docker-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ref=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "ref=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull the published image (same command an operator runs)
+        run: |
+          docker pull ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}
+          docker image inspect ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }} \
+            --format '{{.Architecture}} {{.Os}} size={{.Size}}'
+
+      - name: Boot the container as if on a fresh box
+        run: |
+          docker run -d \
+            --name rohy-verify \
+            -p 4000:4000 \
+            -e JWT_SECRET="$(openssl rand -hex 32)" \
+            -e NODE_ENV=production \
+            -e ALLOW_DEFAULT_USERS=1 \
+            -e OYON_ENABLED=1 \
+            ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}
+
+      - name: Wait for /api/health
+        run: |
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:4000/api/health > /dev/null 2>&1; then
+              echo "✓ healthy after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs rohy-verify
+          exit 1
+
+      - name: Run tech-test.sh against the published image
+        run: ROHY_VERBOSE=1 bash scripts/tech-test.sh http://localhost:4000
+
+      - name: Verify the standalone assets actually serve
+        run: |
+          # Same probe list as install-from-scratch.yml — if any returns
+          # non-200 here, the published image is broken from an
+          # operator's POV regardless of what CI thinks.
+          MISSING=0
+          for p in \
+              standalone/ \
+              standalone/logs.html \
+              standalone/vendor/onnxruntime-web/ort.min.mjs \
+              standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.mjs \
+              standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.wasm \
+              standalone/vendor/mediapipe/vision_bundle.mjs \
+              standalone/vendor/dynajs/index.js \
+              standalone/vendor/rohy-tna/NetworkGraph.js \
+              standalone/models/face_landmarker.task \
+              standalone/models/emotion/enet_b0_8_va_mtl.onnx ; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:4000/$p")
+            if [ "$code" != "200" ]; then
+              echo "  ✗ /$p → $code"
+              MISSING=$((MISSING+1))
+            else
+              echo "  ✓ /$p"
+            fi
+          done
+          if [ "$MISSING" -gt 0 ]; then
+            echo "$MISSING asset(s) missing — published image is incomplete"
+            exit 1
+          fi
+
+      - name: Container logs on failure
+        if: failure()
+        run: |
+          echo "=== docker logs rohy-verify (last 200 lines) ==="
+          docker logs --tail 200 rohy-verify || true
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker stop rohy-verify 2>/dev/null || true
+          docker rm rohy-verify 2>/dev/null || true
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "## Published image verified" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}\` boots, answers /api/health, passes all tech-test.sh probes, and serves every standalone asset operators import." >> $GITHUB_STEP_SUMMARY
+
+  # ----------------------------------------------------------------------
   # Docker-as-tarball (for air-gapped sites that have Docker but no
   # internet). Smaller than the source bundle because it doesn't include
   # node_modules separately — it's all inside the image layers.
