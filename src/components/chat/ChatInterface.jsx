@@ -811,7 +811,25 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         let speech = null;
         let voiceErrored = false;
         if (voiceMode) {
-            const override = activeCase?.config?.voice;
+            // Patient voice precedence (locked 2026-05-12):
+            //   1. activeCase.config.voice.case_voice  — per-case override.
+            //      Optional; admins set this in the Case Avatar/Voice picker
+            //      when a specific case needs a different voice than the
+            //      platform default for the Patient template.
+            //   2. patientTemplate.config.voice         — Patient agent persona.
+            //      THIS is what an admin edits when they want "all my
+            //      patients to sound like this." It's the de-facto default.
+            //   3. PROVIDER_FALLBACK_VOICE              — hardcoded.
+            //
+            // Before today, the patient persona's voice field was a no-op:
+            // the chat read only activeCase.config.voice and ignored the
+            // template. Admins who set the voice in the persona editor (the
+            // discoverable place) saw nothing change.
+            const caseVoiceConfig = activeCase?.config?.voice;
+            const templateVoiceConfig = patientTemplate?.config?.voice;
+            const override = caseVoiceConfig?.case_voice
+                ? caseVoiceConfig
+                : (templateVoiceConfig?.case_voice ? templateVoiceConfig : caseVoiceConfig);
             const rawGender = activeCase?.config?.demographics?.gender;
             const age      = activeCase?.config?.demographics?.age;
             const slotGender = deriveDemographicSlot(rawGender, age);
