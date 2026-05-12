@@ -190,15 +190,12 @@ describe('useDiscussionEngine — voice resolution at session start', () => {
         const { result } = renderHook(() => useDiscussionEngine(makeProps()));
         await act(async () => { await result.current.sendMessage('hi'); });
 
-        // CONTRACT: voice resolution is done inline via resolveVoice with
-        // the discussant.voice + voiceSettings + platformAvatars + gender.
-        // The hook does NOT preload a voice on mount or session-start; it
-        // resolves per-send. This locks the call shape.
+        // CONTRACT (post-2026-05-12): voice resolution is done inline via
+        // resolveVoice with the discussant.voice + voiceSettings. No slot/
+        // gender/platformAvatars args — the resolver dropped all of those.
         expect(resolveVoice).toHaveBeenCalledWith(expect.objectContaining({
             voice: { gender: 'male' },
             voiceSettings: { provider: 'google' },
-            platformAvatars: expect.any(Object),
-            gender: 'male',
         }));
 
         expect(VoiceService.beginSpeechSession).toHaveBeenCalledTimes(1);
@@ -208,8 +205,9 @@ describe('useDiscussionEngine — voice resolution at session start', () => {
             provider: 'google',
             rate: 1.1,
             pitch: 2,
-            gender: 'male',
         });
+        // gender used to be passed for piper's slot lookup. It's gone now.
+        expect(opts.gender).toBeUndefined();
     });
 
     it('skips TTS when voiceMode is false', async () => {

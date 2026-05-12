@@ -7,85 +7,69 @@ import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
 import TestVoiceButton from './TestVoiceButton.jsx';
 import { resolveVoice } from '../../utils/voiceResolver.js';
-import { voicesForSlot, voiceGenderLabel } from '../../utils/voiceCatalogue.js';
+import { voiceGenderLabel } from '../../utils/voiceCatalogue.js';
 import { avatarsForSlot } from '../../utils/resolveAvatar.js';
 import { deriveDemographicSlot } from '../../utils/demographics.js';
 
 // Per-case avatar + voice tab. Owns:
 //   config.avatar_id           — GLB filename, blank = auto-pick by gender/age
 //   config.avatar_camera       — { pos:[x,y,z], lookY, fov } framing override
-//   config.voice.tts_provider  — 'piper' | 'kokoro' | '' (inherit)
-//   config.voice.case_voice    — single voice id; wins over the gender slot
+//   config.voice.case_voice    — single voice id; overrides the Patient persona
+//                                default. Blank = inherit the persona default.
 //   config.voice.tts_rate      — server tempo (0.5–1.5), blank = inherit
 //   config.voice.tts_pitch     — provider pitch in semitones, blank = inherit
 //
-// Empty-string values mean "inherit from the platform persona default for
-// this case's gender". ChatInterface.resolveSpeakerSettings strips empties
-// before merging so cases get a coherent voice/rate/pitch combo without
-// having to set every field explicitly.
+// TTS provider is platform-wide (Settings → Voice). It's deliberately not
+// editable per-case — having the provider in two places is what made it
+// impossible to tell which engine the runtime would actually use.
 
 // Pull in the 3D head only when the editor is open (~250 KB gzip lazy chunk).
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar'));
 
-const PROVIDER_OPTIONS = [
-    { value: '',       label: 'Inherit (use global)' },
-    { value: 'kokoro', label: 'Kokoro-82M (local, expressive)' },
-    { value: 'piper',  label: 'Piper (local, fast, robotic)' },
-    { value: 'google', label: 'Google Cloud TTS (cloud, 1M chars/month free)' },
-    { value: 'openai', label: 'OpenAI TTS (cloud, lowest latency, paid)' }
-];
-
-// Decide which persona slot a case inherits from based on patient demographics.
-function personaSlotFor(config) {
+// Avatar slot is still demographic (the 3D head should match the patient).
+// Only the *voice* lost its slot pickers.
+function avatarSlotFor(config) {
     return deriveDemographicSlot(config?.demographics?.gender, config?.demographics?.age);
 }
 
-export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
+export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTemplateVoice = null }) {
     const [manifest, setManifest] = useState(null);
     const [voices, setVoices] = useState([]);
     const {
         voiceSettings: ctxVoiceSettings,
-        setVoiceSettings,
-        platformAvatars: ctxPlatformAvatars,
-        setPlatformAvatars
+        setVoiceSettings
     } = useVoice();
     const [fetchedVoiceSettings, setFetchedVoiceSettings] = useState(null);
-    const [fetchedPlatformAvatars, setFetchedPlatformAvatars] = useState(null);
     const voiceSettings = ctxVoiceSettings || fetchedVoiceSettings;
-    const platformAvatars = ctxPlatformAvatars || fetchedPlatformAvatars;
+    // When the caller doesn't pass it in, fetch the Patient persona template
+    // ourselves so the "inherits (…)" label shows the actual default the
+    // runtime will play.
+    const [fetchedTemplateVoice, setFetchedTemplateVoice] = useState(null);
+    const templateVoice = patientTemplateVoice || fetchedTemplateVoice;
 
     const config = caseData?.config || {};
     const voice = config.voice || {};
     const cameraOverride = config.avatar_camera || null;
-    const slot = personaSlotFor(config);
-    const rawGender = config?.demographics?.gender || '';
-    const age = config?.demographics?.age;
+    const slot = avatarSlotFor(config);
 
-    const inheritedVoiceConfig = { ...voice };
-    delete inheritedVoiceConfig.case_voice;
-    delete inheritedVoiceConfig.tts_rate;
-    delete inheritedVoiceConfig.tts_pitch;
-
+    // The "what plays if you leave this case blank" preview comes from the
+    // Patient persona template. That's the only fallback that exists now —
+    // there's no hardcoded provider voice.
     const inheritedResolvedVoice = resolveVoice({
-        voice: inheritedVoiceConfig,
-        voiceSettings,
-        platformAvatars,
-        gender: rawGender,
-        age
+        voice: templateVoice || {},
+        voiceSettings
     });
     const resolvedVoice = resolveVoice({
-        voice,
-        voiceSettings,
-        platformAvatars,
-        gender: rawGender,
-        age
+        voice: { ...(templateVoice || {}), ...voice },
+        voiceSettings
     });
 
     const effectiveProvider = resolvedVoice.provider;
     const inheritedVoice = inheritedResolvedVoice.file || '';
     const inheritedRate = inheritedResolvedVoice.rate;
     const inheritedPitch = inheritedResolvedVoice.pitch;
-    const voiceOptions = voicesForSlot(voices, slot, voice.case_voice);
+    // Voice list is the full platform-provider catalogue — no slot filter.
+    const voiceOptions = voices;
 
     useEffect(() => {
         let cancelled = false;
@@ -97,26 +81,37 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
     }, []);
 
     useEffect(() => {
+        if (patientTemplateVoice) return;
         let cancelled = false;
-        (async () => {
-            const [voiceRes, avatarRes] = await Promise.allSettled([
-                voiceSettings ? Promise.resolve(voiceSettings) : apiFetch('/platform-settings/voice'),
-                platformAvatars ? Promise.resolve(platformAvatars) : apiFetch('/platform-settings/avatars')
-            ]);
-            if (cancelled) return;
-            if (!voiceSettings && voiceRes.status === 'fulfilled' && voiceRes.value) {
-                setFetchedVoiceSettings(voiceRes.value);
-                setVoiceSettings?.(voiceRes.value);
-            }
-            if (!platformAvatars && avatarRes.status === 'fulfilled' && avatarRes.value) {
-                setFetchedPlatformAvatars(avatarRes.value);
-                setPlatformAvatars?.(avatarRes.value);
-            }
-        })();
+        apiFetch('/agents/templates')
+            .then(data => {
+                if (cancelled) return;
+                const patient = (data?.templates || []).find(t => t.agent_type === 'patient');
+                let cfg = patient?.config;
+                if (typeof cfg === 'string') {
+                    try { cfg = JSON.parse(cfg); } catch { cfg = {}; }
+                }
+                setFetchedTemplateVoice(cfg?.voice || {});
+            })
+            .catch(() => { /* leave null — inherit label will just say "(none set)" */ });
         return () => { cancelled = true; };
-    }, [voiceSettings, platformAvatars, setVoiceSettings, setPlatformAvatars]);
+    }, [patientTemplateVoice]);
 
     useEffect(() => {
+        if (voiceSettings) return;
+        let cancelled = false;
+        apiFetch('/platform-settings/voice')
+            .then(v => {
+                if (cancelled || !v) return;
+                setFetchedVoiceSettings(v);
+                setVoiceSettings?.(v);
+            })
+            .catch(() => { /* fallthrough — UI will show "no provider" hint */ });
+        return () => { cancelled = true; };
+    }, [voiceSettings, setVoiceSettings]);
+
+    useEffect(() => {
+        if (!effectiveProvider) { setVoices([]); return; }
         let cancelled = false;
         apiFetch(`/tts/voices?provider=${encodeURIComponent(effectiveProvider)}`)
             .then(d => { if (!cancelled) setVoices(d.voices || []); })
@@ -154,20 +149,6 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
             const nextVoice = { ...(prev.config?.voice || {}) };
             if (val === '' || val === null || val === undefined) delete nextVoice[key];
             else nextVoice[key] = val;
-            const nextConfig = { ...(prev.config || {}) };
-            if (Object.keys(nextVoice).length === 0) delete nextConfig.voice;
-            else nextConfig.voice = nextVoice;
-            return { ...prev, config: nextConfig };
-        });
-    };
-
-    const updateProvider = (val) => {
-        setCaseData(prev => {
-            const nextVoice = { ...(prev.config?.voice || {}) };
-            // Provider change invalidates voice id (Kokoro and Piper share no filenames).
-            delete nextVoice.case_voice;
-            if (val === '') delete nextVoice.tts_provider;
-            else nextVoice.tts_provider = val;
             const nextConfig = { ...(prev.config || {}) };
             if (Object.keys(nextVoice).length === 0) delete nextConfig.voice;
             else nextConfig.voice = nextVoice;
@@ -259,66 +240,53 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData }) {
                 <header>
                     <h3 className="text-sm font-bold text-neutral-200">Voice</h3>
                     <p className="text-[11px] text-neutral-500 mt-0.5">
-                        Empty fields inherit the platform's <span className="text-neutral-300">{slot}</span> persona
-                        default. The first sentence of the LLM reply starts speaking as it streams — no extra
-                        delay added.
+                        TTS engine is set platform-wide in <span className="text-neutral-300">Settings → Voice</span>
+                        {effectiveProvider ? <> (currently <span className="font-mono text-neutral-300">{effectiveProvider}</span>)</> : ' (no provider set)'}.
+                        Leave the voice empty to inherit the Patient persona's default.
                     </p>
                 </header>
 
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="label-xs">TTS engine</label>
-                        <select
-                            className="input-dark"
-                            value={voice.tts_provider || ''}
-                            onChange={e => updateProvider(e.target.value)}
-                        >
-                            {PROVIDER_OPTIONS.map(o => (
-                                <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <div className="flex items-center justify-between">
-                            <label className="label-xs">Case voice</label>
-                            {voice.case_voice && (
-                                <button
-                                    type="button"
-                                    onClick={() => updateVoice('case_voice', '')}
-                                    className="text-[10px] text-neutral-500 hover:text-neutral-300 flex items-center gap-1"
-                                >
-                                    <RotateCcw className="w-3 h-3" /> Reset
-                                </button>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2 min-w-0">
-                            <select
-                                className="input-dark flex-1 min-w-0"
-                                value={voice.case_voice || ''}
-                                onChange={e => updateVoice('case_voice', e.target.value)}
+                <div>
+                    <div className="flex items-center justify-between">
+                        <label className="label-xs">Case voice</label>
+                        {voice.case_voice && (
+                            <button
+                                type="button"
+                                onClick={() => updateVoice('case_voice', '')}
+                                className="text-[10px] text-neutral-500 hover:text-neutral-300 flex items-center gap-1"
                             >
-                                <option value="">
-                                    Inherit{inheritedVoice ? ` (${inheritedVoice})` : ` (${slot} default)`}
-                                </option>
-                                {voiceOptions.map(v => {
-                                    const genderLabel = voiceGenderLabel(v);
-                                    const tag = genderLabel ? ` — ${genderLabel}` : '';
-                                    return (
-                                        <option key={v.filename} value={v.filename}>
-                                            {(v.displayName || v.filename) + tag}
-                                        </option>
-                                    );
-                                })}
-                            </select>
-                            <TestVoiceButton
-                                voice={resolvedVoice.file || ''}
-                                provider={effectiveProvider}
-                                rate={resolvedVoice.rate}
-                                pitch={resolvedVoice.pitch}
-                                gender={slot}
-                            />
-                        </div>
+                                <RotateCcw className="w-3 h-3" /> Reset
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2 min-w-0">
+                        <select
+                            className="input-dark flex-1 min-w-0"
+                            value={voice.case_voice || ''}
+                            onChange={e => updateVoice('case_voice', e.target.value)}
+                            disabled={!effectiveProvider}
+                        >
+                            <option value="">
+                                {inheritedVoice
+                                    ? `Inherit from Patient persona (${inheritedVoice})`
+                                    : 'Inherit from Patient persona (none set)'}
+                            </option>
+                            {voiceOptions.map(v => {
+                                const genderLabel = voiceGenderLabel(v);
+                                const tag = genderLabel ? ` — ${genderLabel}` : '';
+                                return (
+                                    <option key={v.filename} value={v.filename}>
+                                        {(v.displayName || v.filename) + tag}
+                                    </option>
+                                );
+                            })}
+                        </select>
+                        <TestVoiceButton
+                            voice={resolvedVoice.file || ''}
+                            provider={effectiveProvider}
+                            rate={resolvedVoice.rate}
+                            pitch={resolvedVoice.pitch}
+                        />
                     </div>
                 </div>
 

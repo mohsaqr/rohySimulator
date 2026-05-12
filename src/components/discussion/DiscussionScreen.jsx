@@ -49,7 +49,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose }) {
     // from text still triggers voice playback if the discussant has a voice.
     const { messages, busy, speaking, visemes, sendMessage, startConversation } = useDiscussionEngine({
         sessionId, activeCase, discussant, voiceMode: true,
-        voiceSettings, platformAvatars,
+        voiceSettings,
     });
 
     const handleStart = async () => {

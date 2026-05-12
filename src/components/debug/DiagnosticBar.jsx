@@ -23,7 +23,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { apiFetch } from '../../services/apiClient';
 import EventLogger from '../../services/eventLogger';
 import { resolveVoice } from '../../utils/voiceResolver';
-import { PROVIDER_FALLBACK_VOICE } from '../../utils/voiceFallbacks';
 import { parseConfig } from '../../utils/parseConfig';
 import { getLastTtsRequest, getRecentTtsRequests, auditionWirePayload } from '../../services/voiceService';
 import { getBackendTelemetry } from '../../notifications/surfaces/BackendSurface';
@@ -267,15 +266,9 @@ export default function DiagnosticBar() {
 
                 // Patient row.
                 const caseConfig = parseConfig(caseData?.case?.config || caseData?.config);
-                const patientVoice = caseConfig?.voice;
-                const patientGender = caseConfig?.demographics?.gender || '';
-                const patientAge = caseConfig?.demographics?.age;
                 const patientResolved = resolveVoice({
-                    voice: patientVoice,
-                    voiceSettings,
-                    platformAvatars,
-                    gender: patientGender,
-                    age: patientAge
+                    voice: caseConfig?.voice,
+                    voiceSettings
                 });
                 speakers.push({
                     role: 'patient',
@@ -290,9 +283,7 @@ export default function DiagnosticBar() {
                     const cfg = parseConfig(a.config);
                     const r = resolveVoice({
                         voice: cfg?.voice,
-                        voiceSettings,
-                        platformAvatars,
-                        gender: cfg?.voice?.gender || cfg?.gender || ''
+                        voiceSettings
                     });
                     speakers.push({
                         role: a.agent_type || 'agent',
@@ -308,7 +299,7 @@ export default function DiagnosticBar() {
             }
         })();
         return () => { cancelled = true; };
-    }, [enabled, caseId, voiceSettings, platformAvatars]);
+    }, [enabled, caseId, voiceSettings]);
 
     const toggleEnabled = useCallback((next) => {
         setDiagnosticBarEnabled(userId, next);
@@ -803,19 +794,14 @@ function TierBadge({ tier }) {
     );
 }
 
-// Resolve the hardcoded fallback voice for the given (provider, slot). The
-// platform `voice_<provider>_<slot>` rows are no longer read by the
-// resolver (2026-05-12), so the bar's one-liner shows what the resolver
-// would actually play — the hardcoded fallback, not the legacy slot.
-function activeVoiceSlot(voiceSettings, participant) {
-    if (!voiceSettings?.tts_provider) return '';
-    const provider = voiceSettings.tts_provider;
-    const gender = (participant?.gender || '').toLowerCase();
-    const slot = /^f/.test(gender) ? 'female' : (gender === 'child' ? 'child' : 'male');
-    return PROVIDER_FALLBACK_VOICE?.[provider]?.[slot] || '';
+// No hardcoded fallback exists post-2026-05-12. When the configured-speakers
+// table has no resolved voice for the active speaker, the bar shows
+// "(no voice)" instead of guessing — that mirrors what the runtime does
+// and makes "I haven't configured a voice yet" visible at a glance.
+function activeVoiceSlot() {
+    return '';
 }
 
-function pickSlot(voiceSettings, slot) {
-    if (!voiceSettings?.tts_provider) return '';
-    return PROVIDER_FALLBACK_VOICE?.[voiceSettings.tts_provider]?.[slot] || '';
+function pickSlot() {
+    return '';
 }

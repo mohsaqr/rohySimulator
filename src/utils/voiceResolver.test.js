@@ -1,344 +1,127 @@
-// Run with:  npm run test:client
+// Tests for src/utils/voiceResolver.js — the post-2026-05-12 contract.
 //
-// Locks the resolveVoice() contract documented at the top of voiceResolver.js.
-//
-// 2026-05-12 — chain was collapsed from 5 tiers to 3 after admins reported
-// the Voice Settings tab appeared to do nothing (case_voice silently won
-// over the platform slot). The new contract:
-//
-//   1. case_voice (per-character) → tier='override'
-//   2. PROVIDER_FALLBACK_VOICE   → tier='hardcoded'
-//   3. catalog-first (editor only)→ tier='catalog-first'
-//
-// Rate/pitch resolution is independent of which voice file is picked and
-// keeps the original three-tier pickNum chain (voice → persona → settings).
+// The resolver has exactly one tier: voice.case_voice → file. Anything else
+// returns file:null. Provider is read only from voiceSettings.tts_provider.
+// No slot logic, no per-provider hardcoded map, no catalogue fallback.
 
 import { describe, it, expect } from 'vitest';
 import { resolveVoice, deriveSlot } from './voiceResolver.js';
-import { PROVIDER_FALLBACK_VOICE } from './voiceFallbacks.js';
 
-// ---- Fixtures -------------------------------------------------------------
-
-// Legacy platform-level voice settings — present in the test fixture so we
-// can prove they are NO LONGER read at resolution time. New deployments
-// won't write them; older DBs that still have them must be ignored.
-const platformAvatarsLegacy = {
-    default_voice_piper_male: 'persona-male.onnx',
-    default_voice_piper_female: 'persona-female.onnx',
-    default_voice_piper_child: 'persona-child.onnx',
-    default_rate_male: 1.1,
-    default_pitch_male: -2
-};
-
-const voiceSettingsLegacy = {
-    tts_provider: 'piper',
-    voice_piper_male: 'slot-male.onnx',
-    voice_piper_female: 'slot-female.onnx',
-    voice_piper_child: 'slot-child.onnx',
-    tts_rate: 0.9,
-    tts_pitch: 4
-};
-
-const ttsCatalogue = [
-    { filename: 'first-installed.onnx', label: 'First Installed' },
-    { filename: 'second.onnx',          label: 'Second' }
-];
-
-// ---- Tier 1: per-character case_voice -------------------------------------
-
-describe('resolveVoice — Tier 1: case_voice (the source of truth)', () => {
-    it('case_voice is returned when set, regardless of legacy platform fields', () => {
+describe('resolveVoice — tier 1: case_voice override', () => {
+    it('returns the voice.case_voice when present', () => {
         const r = resolveVoice({
-            voice: { case_voice: 'override.onnx', tts_provider: 'piper' },
-            platformAvatars: platformAvatarsLegacy,
-            voiceSettings: voiceSettingsLegacy,
-            gender: 'male',
-            age: 40
+            voice: { case_voice: 'af_bella' },
+            voiceSettings: { tts_provider: 'kokoro' }
         });
+        expect(r.file).toBe('af_bella');
         expect(r.tier).toBe('override');
-        expect(r.file).toBe('override.onnx');
-    });
-
-    it('case_voice wins for kokoro even with legacy persona + slot + hardcoded all present', () => {
-        const r = resolveVoice({
-            voice: { case_voice: 'override.onnx', tts_provider: 'kokoro' },
-            platformAvatars: { default_voice_kokoro_male: 'persona.bin' },
-            voiceSettings: { voice_kokoro_male: 'slot.bin' },
-            gender: 'male',
-            age: 40,
-            ttsVoices: ttsCatalogue
-        });
-        expect(r.tier).toBe('override');
-        expect(r.file).toBe('override.onnx');
         expect(r.provider).toBe('kokoro');
     });
+
+    it('ignores voice.tts_provider and reads provider from voiceSettings only', () => {
+        const r = resolveVoice({
+            voice: { case_voice: 'foo', tts_provider: 'google' },
+            voiceSettings: { tts_provider: 'kokoro' }
+        });
+        expect(r.provider).toBe('kokoro');
+    });
+
+    it('treats empty/null/undefined case_voice as "not set"', () => {
+        for (const value of ['', null, undefined]) {
+            const r = resolveVoice({
+                voice: { case_voice: value },
+                voiceSettings: { tts_provider: 'kokoro' }
+            });
+            expect(r.file).toBeNull();
+            expect(r.tier).toBeNull();
+        }
+    });
 });
 
-// ---- Tier 2: hardcoded provider fallback ----------------------------------
-//
-// Without a case_voice, the resolver ignores legacy platform per-gender
-// voice fields and falls straight through to PROVIDER_FALLBACK_VOICE.
-
-describe('resolveVoice — Tier 2: PROVIDER_FALLBACK_VOICE', () => {
-    it('uses the kokoro hardcoded male fallback when no case_voice is set', () => {
+describe('resolveVoice — no fallback below tier 1', () => {
+    it('returns file:null when nothing matches — no hardcoded provider voice', () => {
         const r = resolveVoice({
-            voice: { tts_provider: 'kokoro' },
-            platformAvatars: null,
-            voiceSettings: null,
-            gender: 'male',
-            age: 40
+            voice: {},
+            voiceSettings: { tts_provider: 'kokoro' }
         });
-        expect(r.tier).toBe('hardcoded');
-        expect(r.file).toBe(PROVIDER_FALLBACK_VOICE.kokoro.male);
-        expect(r.file).toBe('am_michael');
-    });
-
-    it('ignores legacy default_voice_*_* (Avatars tab) entries entirely', () => {
-        const r = resolveVoice({
-            voice: { tts_provider: 'piper' },
-            platformAvatars: platformAvatarsLegacy,    // persona-male.onnx set
-            voiceSettings: null,
-            gender: 'male',
-            age: 40
-        });
-        // Piper has no hardcoded fallback (PROVIDER_FALLBACK_VOICE.piper.* is ''),
-        // so the resolver falls through to null instead of returning the legacy
-        // persona-male.onnx — that's the whole point of the collapse.
-        expect(r.tier).toBeNull();
         expect(r.file).toBeNull();
-    });
-
-    it('ignores legacy voice_*_* (Voice Settings tab) entries entirely', () => {
-        const r = resolveVoice({
-            voice: { tts_provider: 'piper' },
-            platformAvatars: null,
-            voiceSettings: voiceSettingsLegacy,        // slot-male.onnx set
-            gender: 'male',
-            age: 40
-        });
         expect(r.tier).toBeNull();
-        expect(r.file).toBeNull();
+        // Provider is still surfaced so the caller can build a helpful error
+        // ("No voice configured for provider X. Set one in …").
+        expect(r.provider).toBe('kokoro');
     });
 
-    it('uses the kokoro hardcoded female fallback for a female speaker', () => {
+    it('extra args from older callsites (gender / age / platformAvatars / ttsVoices) are ignored', () => {
         const r = resolveVoice({
-            voice: { tts_provider: 'kokoro' },
+            voice: {},
+            voiceSettings: { tts_provider: 'kokoro' },
             gender: 'female',
-            age: 40
+            age: 8,
+            platformAvatars: { default_voice_kokoro_child: 'af_bella' },
+            ttsVoices: [{ filename: 'whatever' }]
         });
-        expect(r.tier).toBe('hardcoded');
-        expect(r.file).toBe(PROVIDER_FALLBACK_VOICE.kokoro.female);
+        expect(r.file).toBeNull();
+    });
+});
+
+describe('resolveVoice — provider sourcing', () => {
+    it('returns null provider when voiceSettings has none configured', () => {
+        const r = resolveVoice({
+            voice: { case_voice: 'af_bella' },
+            voiceSettings: {}
+        });
         expect(r.file).toBe('af_bella');
+        expect(r.provider).toBeNull();
     });
 
-    it('returns file=null for piper when no case_voice (piper has empty hardcoded fallback)', () => {
-        // CONTRACT: PROVIDER_FALLBACK_VOICE.piper.* is '' so the truthy check
-        // in tier 2 fails for piper and the resolver returns null. Intentional —
-        // Piper has no baked-in default; admins must configure case_voice per case.
-        const r = resolveVoice({
-            voice: { tts_provider: 'piper' },
-            gender: 'male',
-            age: 40
-        });
-        expect(r.file).toBeNull();
-        expect(r.tier).toBeNull();
+    it('returns null provider when voiceSettings is null', () => {
+        const r = resolveVoice({ voice: { case_voice: 'x' } });
+        expect(r.provider).toBeNull();
     });
 });
 
-// ---- Tier 3: catalog-first (editor only) ----------------------------------
-
-describe('resolveVoice — Tier 3: catalog-first (editor preview only)', () => {
-    it('triggers when ttsVoices is provided AND no hardcoded fallback exists (piper)', () => {
+describe('resolveVoice — rate and pitch', () => {
+    it('per-character rate/pitch wins over platform values', () => {
         const r = resolveVoice({
-            voice: { tts_provider: 'piper' },
-            gender: 'male',
-            age: 40,
-            ttsVoices: ttsCatalogue
+            voice: { case_voice: 'x', tts_rate: 0.8, tts_pitch: 2 },
+            voiceSettings: { tts_provider: 'kokoro', tts_rate: 1.2, tts_pitch: 0 }
         });
-        expect(r.tier).toBe('catalog-first');
-        expect(r.file).toBe('first-installed.onnx');
+        expect(r.rate).toBe(0.8);
+        expect(r.pitch).toBe(2);
     });
 
-    it('does NOT trigger when ttsVoices is null — runtime should 503 instead of guessing', () => {
+    it('falls back to platform rate/pitch when per-character is unset', () => {
         const r = resolveVoice({
-            voice: { tts_provider: 'piper' },
-            gender: 'male',
-            age: 40,
-            ttsVoices: null
+            voice: { case_voice: 'x' },
+            voiceSettings: { tts_provider: 'kokoro', tts_rate: 1.2, tts_pitch: -1 }
         });
-        expect(r.tier).toBeNull();
-        expect(r.file).toBeNull();
+        expect(r.rate).toBe(1.2);
+        expect(r.pitch).toBe(-1);
     });
 
-    it('does NOT trigger when ttsVoices is an empty array', () => {
+    it('returns undefined when neither layer provides a value', () => {
         const r = resolveVoice({
-            voice: { tts_provider: 'piper' },
-            ttsVoices: []
-        });
-        expect(r.tier).toBeNull();
-        expect(r.file).toBeNull();
-    });
-
-    it('catalog-first is below tier 2 — kokoro hardcoded still wins over the catalogue', () => {
-        const r = resolveVoice({
-            voice: { tts_provider: 'kokoro' },
-            ttsVoices: ttsCatalogue,
-            gender: 'male',
-            age: 40
-        });
-        expect(r.tier).toBe('hardcoded');
-        expect(r.file).toBe('am_michael');
-    });
-});
-
-// ---- Slot derivation ------------------------------------------------------
-
-describe('resolveVoice — slot derivation', () => {
-    it("gender='male' + age<13 → child slot → kokoro child fallback (af_bella)", () => {
-        const r = resolveVoice({
-            voice: { tts_provider: 'kokoro' },
-            gender: 'male',
-            age: 8
-        });
-        expect(r.tier).toBe('hardcoded');
-        expect(r.file).toBe(PROVIDER_FALLBACK_VOICE.kokoro.child);
-    });
-
-    it("gender='' + age=undefined → male slot (default age=35, default gender male)", () => {
-        const r = resolveVoice({
-            voice: { tts_provider: 'kokoro' },
-            gender: '',
-            age: undefined
-        });
-        // CONTRACT: When age is undefined, the destructure default (35) applies,
-        // so safeAge=35 → not child. Gender '' fails /^f/i.test → male.
-        expect(r.tier).toBe('hardcoded');
-        expect(r.file).toBe(PROVIDER_FALLBACK_VOICE.kokoro.male);
-    });
-
-    it("deriveSlot helper: 'female' + age 30 → female", () => {
-        expect(deriveSlot('female', 30)).toBe('female');
-    });
-
-    it('deriveSlot helper: NaN-ish age coerces to 35 → not child', () => {
-        // CONTRACT: deriveSlot uses Number(age) and falls back to 35 when
-        // not finite. So 'abc' → 35 → male (since gender '' is not female).
-        expect(deriveSlot('', 'abc')).toBe('male');
-    });
-});
-
-// ---- Rate/pitch precedence (the 2026-05-06 bug) --------------------------
-//
-// Rate/pitch resolution is INDEPENDENT of which voice file gets picked.
-// pickNum order remains: voice → persona (Avatars tab default_rate/pitch
-// for the slot) → voiceSettings global tts_rate/tts_pitch. These fields
-// were not part of the tier collapse — admins can still set platform-wide
-// rate/pitch defaults; only the per-gender voice *files* were removed.
-
-describe('resolveVoice — rate/pitch precedence', () => {
-    it('voice.tts_pitch wins over voiceSettings.tts_pitch (regression: bb34d88)', () => {
-        const r = resolveVoice({
-            voice: { tts_provider: 'piper', tts_pitch: 7 },
-            voiceSettings: { tts_pitch: 99 },
-            platformAvatars: platformAvatarsLegacy,
-            gender: 'male',
-            age: 40
-        });
-        expect(r.pitch).toBe(7);
-    });
-
-    it('voice.tts_rate wins over voiceSettings.tts_rate', () => {
-        const r = resolveVoice({
-            voice: { tts_provider: 'piper', tts_rate: 1.5 },
-            voiceSettings: { tts_rate: 0.5 },
-            platformAvatars: platformAvatarsLegacy,
-            gender: 'male',
-            age: 40
-        });
-        expect(r.rate).toBe(1.5);
-    });
-
-    it('persona default rate/pitch sit between voice and voiceSettings', () => {
-        // pickNum order: voice → persona → voiceSettings
-        const r = resolveVoice({
-            voice: { tts_provider: 'piper' }, // no per-voice rate/pitch
-            voiceSettings: { tts_rate: 0.5, tts_pitch: 99 },
-            platformAvatars: platformAvatarsLegacy, // default_rate_male=1.1, default_pitch_male=-2
-            gender: 'male',
-            age: 40
-        });
-        expect(r.rate).toBe(1.1);
-        expect(r.pitch).toBe(-2);
-    });
-
-    it('pickNum returns the first finite value across voice → persona → voiceSettings', () => {
-        // voice.tts_rate is empty string (skip), persona missing, voiceSettings.tts_rate=0.75 finite
-        const r = resolveVoice({
-            voice: { tts_provider: 'piper', tts_rate: '', tts_pitch: null },
-            voiceSettings: { tts_rate: 0.75, tts_pitch: 3 },
-            platformAvatars: null,
-            gender: 'male',
-            age: 40
-        });
-        expect(r.rate).toBe(0.75);
-        expect(r.pitch).toBe(3);
-    });
-
-    it('pickNum returns undefined when nothing applies', () => {
-        const r = resolveVoice({
-            voice: { tts_provider: 'piper' },
-            voiceSettings: null,
-            platformAvatars: null
+            voice: { case_voice: 'x' },
+            voiceSettings: { tts_provider: 'kokoro' }
         });
         expect(r.rate).toBeUndefined();
         expect(r.pitch).toBeUndefined();
     });
 
-    it('pickNum skips non-finite strings and picks the next finite value', () => {
+    it('treats non-numeric values as unset (skips them)', () => {
         const r = resolveVoice({
-            voice: { tts_provider: 'piper', tts_rate: 'fast' }, // not finite → skip
-            voiceSettings: { tts_rate: 0.8 },
-            platformAvatars: null,
-            gender: 'male',
-            age: 40
+            voice: { case_voice: 'x', tts_rate: '', tts_pitch: 'nope' },
+            voiceSettings: { tts_provider: 'kokoro', tts_rate: 1.05 }
         });
-        // CONTRACT: pickNum continues past non-finite Number('fast')=NaN to
-        // the next candidate; it does NOT short-circuit on bad strings.
-        expect(r.rate).toBe(0.8);
+        expect(r.rate).toBe(1.05);
+        expect(r.pitch).toBeUndefined();
     });
 });
 
-// ---- Provider derivation -------------------------------------------------
-
-describe('resolveVoice — provider derivation', () => {
-    it("voice.tts_provider wins over voiceSettings.tts_provider", () => {
-        const r = resolveVoice({
-            voice: { tts_provider: 'kokoro' },
-            voiceSettings: { tts_provider: 'piper' },
-            gender: 'male',
-            age: 40
-        });
-        expect(r.provider).toBe('kokoro');
-    });
-
-    it('inherits voiceSettings.tts_provider when the speaker leaves provider unset', () => {
-        const r = resolveVoice({
-            voice: {},
-            voiceSettings: { tts_provider: 'google' },
-            gender: 'female',
-            age: 40
-        });
-        expect(r.provider).toBe('google');
-        // Falls through to the hardcoded google female fallback, NOT to any
-        // legacy voice_google_female slot setting.
-        expect(r.file).toBe(PROVIDER_FALLBACK_VOICE.google.female);
-        expect(r.tier).toBe('hardcoded');
-    });
-
-    it("falls back to 'kokoro' when neither side declares a provider", () => {
-        const r = resolveVoice({});
-        expect(r.provider).toBe('kokoro');
-        expect(r.file).toBe(PROVIDER_FALLBACK_VOICE.kokoro.male);
-        expect(r.tier).toBe('hardcoded');
+describe('deriveSlot — preserved for UI labels (not used by the resolver)', () => {
+    it('maps demographics to a slot tag', () => {
+        expect(deriveSlot('female', 30)).toBe('female');
+        expect(deriveSlot('male', 30)).toBe('male');
+        expect(deriveSlot('female', 8)).toBe('child');
     });
 });

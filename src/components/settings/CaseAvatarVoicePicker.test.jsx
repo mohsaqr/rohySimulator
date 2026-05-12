@@ -1,35 +1,23 @@
 // Tests for CaseAvatarVoicePicker.jsx — the per-case voice/avatar override
 // picker shown inside the case wizard.
 //
-// CONTRACT (locked from src/components/settings/CaseAvatarVoicePicker.jsx):
-//   1. PROVIDER DROPDOWN: lists exactly the providers
-//      ['', 'kokoro', 'piper', 'google', 'openai']. Picking one writes
-//      `config.voice.tts_provider`; picking '' (Inherit) deletes it.
-//   2. PROVIDER CHANGE INVALIDATES VOICE: switching provider always
-//      deletes `config.voice.case_voice` (voice ids are provider-specific
-//      so a Piper id has no meaning under Kokoro/Google/OpenAI).
-//   3. TEST VOICE BUTTON: TestVoiceButton receives the picker's resolved
-//      voice/provider/rate/pitch/gender as props. We stub it to capture props —
-//      the real button is owned by a sibling agent's tests.
-//   4. PITCH SLIDER UNITS (POST-bb34d88 REGRESSION LOCK):
-//        min = -10, max = 10, step = 0.25
-//      Helper text contains "semitones (Google only)". This is the unit
-//      change from "ratio multiplier" to "semitones" introduced in
-//      migration 0006_tts_pitch_semitones.sql.
-//   5. RATE SLIDER: min = 0.5, max = 1.5, step = 0.05.
-//   6. INHERIT HANDLING: empty values (the default) produce NO
-//      `config.voice` key. Clearing the last override removes the whole
-//      `voice` object.
-//   7. CASE-VOICE OVERRIDE: choosing a voice writes
-//      `config.voice.case_voice`.
-//   8. HINT COPY: the literal string "semitones (Google only)" is
-//      present in the rendered DOM.
-//
-// We mount the component with `renderWithProviders` (default stack
-// includes VoiceProvider, which exposes `platformAvatars` = null — that
-// matches the case where no platform persona defaults are loaded yet).
-// `useState`-based parent simulates the wizard owner so we can read the
-// resulting `caseData.config` object.
+// CONTRACT (post-2026-05-12, after the provider-picker removal):
+//   1. NO PROVIDER PICKER. TTS provider is platform-wide (Voice Settings).
+//      The case voice <select> uses voiceSettings.tts_provider to fetch
+//      its catalogue and disables itself if no provider is configured.
+//   2. TEST VOICE BUTTON: receives the picker's resolved voice, the platform
+//      provider, plus per-case rate/pitch. No `gender` prop (slot logic
+//      removed).
+//   3. CASE VOICE OVERRIDE: choosing a voice writes
+//      `config.voice.case_voice`. Resetting clears it.
+//   4. INHERIT FROM PATIENT PERSONA: the picker fetches the Patient persona
+//      template and shows its case_voice in the "(inherit …)" placeholder.
+//      No hardcoded provider voice anywhere — if neither case nor persona
+//      has a voice set, the placeholder says "(none set)".
+//   5. PITCH SLIDER UNITS: min=-10, max=10, step=0.25 (semitones).
+//   6. RATE SLIDER: min=0.5, max=1.5, step=0.05.
+//   7. AVATAR LIST: still slot-filtered by patient demographics (avatar
+//      logic is unchanged — only voice lost its slot pickers).
 
 import React, { useEffect, useState } from 'react';
 import { describe, it, expect, vi, beforeAll, afterEach, afterAll } from 'vitest';
@@ -39,14 +27,6 @@ import { setupServer } from 'msw/node';
 
 import { renderWithProviders } from '../../../tests/utils/renderWithProviders.jsx';
 
-// ---------------------------------------------------------------------
-// Stub TestVoiceButton.
-// The picker passes resolved {voice, provider, rate, pitch} props down.
-// We render a probe element whose data-attributes mirror those props so
-// each test can assert on them without firing actual TTS network traffic.
-// Importantly the stub itself uses vi.fn() so we can also inspect call
-// history if needed.
-// ---------------------------------------------------------------------
 const testVoiceProps = vi.fn();
 const voiceRequests = [];
 vi.mock('./TestVoiceButton.jsx', () => ({
@@ -60,7 +40,6 @@ vi.mock('./TestVoiceButton.jsx', () => ({
                 data-provider={props.provider ?? ''}
                 data-rate={props.rate ?? ''}
                 data-pitch={props.pitch ?? ''}
-                data-gender={props.gender ?? ''}
             >
                 test-voice-stub
             </button>
@@ -68,18 +47,12 @@ vi.mock('./TestVoiceButton.jsx', () => ({
     },
 }));
 
-// PatientAvatar is lazy-loaded via dynamic import. We never set
-// `config.avatar_id`, so it never renders. Stub anyway just so the import
-// graph doesn't try to pull in three.js/r3f at test time.
 vi.mock('../chat/PatientAvatar', () => ({
     default: function PatientAvatarStub() {
         return <div data-testid="patient-avatar-stub" />;
     },
 }));
 
-// ---------------------------------------------------------------------
-// MSW endpoints the picker hits on mount.
-// ---------------------------------------------------------------------
 const sampleVoices = {
     piper: [
         { filename: 'en_US-amy-medium.onnx', displayName: 'Amy', gender: 'female' },
@@ -113,19 +86,24 @@ function defaultHandlers() {
         http.get('*/avatars/heads/manifest.json', () =>
             HttpResponse.json({ all: [] })
         ),
-        // Provider-aware voices endpoint.
         http.get('*/api/tts/voices', ({ request }) => {
             const url = new URL(request.url);
             const provider = url.searchParams.get('provider') || 'kokoro';
             return HttpResponse.json({ voices: sampleVoices[provider] || [] });
         }),
-        // Catch-all to keep the provider stack quiet.
         http.get('*/api/auth/verify', () =>
             HttpResponse.json({ user: null }, { status: 401 })
         ),
-        http.get('*/api/platform-settings/voice', () => HttpResponse.json({})),
+        // Default: platform provider = kokoro. Tests that need other
+        // behaviour override this handler explicitly.
+        http.get('*/api/platform-settings/voice', () =>
+            HttpResponse.json({ tts_provider: 'kokoro' })
+        ),
         http.get('*/api/platform-settings/avatars', () => HttpResponse.json({})),
         http.get('*/api/platform-settings/chat', () => HttpResponse.json({})),
+        http.get('*/api/agents/templates', () =>
+            HttpResponse.json({ templates: [] })
+        ),
         http.get('*/api/*', () => HttpResponse.json({})),
     ];
 }
@@ -140,12 +118,9 @@ afterEach(() => {
 });
 afterAll(() => server.close());
 
-// ---------------------------------------------------------------------
-// Mount harness — owns the caseData state like the real wizard would.
-// ---------------------------------------------------------------------
 import CaseAvatarVoicePicker from './CaseAvatarVoicePicker.jsx';
 
-function mount(initialCase = null) {
+function mount(initialCase = null, props = {}) {
     const captured = { current: null };
     const baseCase = initialCase || {
         id: 'case-test',
@@ -156,10 +131,6 @@ function mount(initialCase = null) {
 
     function Harness() {
         const [caseData, setCaseData] = useState(baseCase);
-        // react-hooks/immutability forbids assigning to outer-scope refs
-        // during render; the effect runs after commit and is the
-        // sanctioned escape hatch (see VoiceContext.test.jsx for the same
-        // pattern).
         useEffect(() => {
             captured.current = caseData;
         }, [caseData]);
@@ -171,6 +142,7 @@ function mount(initialCase = null) {
                         typeof updater === 'function' ? updater(prev) : updater
                     );
                 }}
+                {...props}
             />
         );
     }
@@ -179,24 +151,7 @@ function mount(initialCase = null) {
     return { ...utils, captured };
 }
 
-// The component renders three <select> elements with no htmlFor links so
-// getByLabelText doesn't work. We locate them by signature instead:
-//   - provider select  : has an <option value="piper">
-//   - case-voice select: any other select that's a sibling of the
-//                        TestVoiceButton stub
-//   - 3D avatar select : has <option value="">Auto (...)</option>
-function getProviderSelect() {
-    const selects = Array.from(document.querySelectorAll('select'));
-    const found = selects.find((s) =>
-        Array.from(s.querySelectorAll('option')).some((o) => o.value === 'piper')
-    );
-    if (!found) throw new Error('provider <select> not found');
-    return found;
-}
-
 function getCaseVoiceSelect() {
-    // The case-voice select is the one that sits next to the
-    // TestVoiceButton stub inside the same flex container.
     const stub = screen.getByTestId('test-voice-button-stub');
     const container = stub.parentElement;
     const found = container.querySelector('select');
@@ -213,69 +168,43 @@ function getAvatarSelect() {
     return found;
 }
 
-// Wait until the picker has fetched the voice list for whichever provider
-// is currently active. The component sets voices via setVoices(...) inside
-// a useEffect that depends on `effectiveProvider`.
 async function waitForVoices(provider = 'kokoro') {
     const expected = sampleVoices[provider] || [];
     if (expected.length === 0) return;
     await waitFor(() => {
         const select = getCaseVoiceSelect();
-        const optionTexts = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
-        // At least one provider voice matching the case slot must show up.
-        expect(optionTexts.some((t) => expected.some(v => t && t.includes(v.displayName)))).toBe(true);
+        const optionTexts = Array.from(select.querySelectorAll('option')).map((o) => o.textContent || '');
+        expect(optionTexts.some(t => expected.some(v => t.includes(v.displayName)))).toBe(true);
     });
 }
 
-// ---------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------
-
-describe('CaseAvatarVoicePicker — provider dropdown', () => {
-    it('lists every supported provider plus the inherit option', () => {
-        // CONTRACT 1: dropdown contains exactly the canonical provider set.
+describe('CaseAvatarVoicePicker — provider picker is gone (platform-wide)', () => {
+    it('does not render a provider <select>', async () => {
         mount();
-        const select = getProviderSelect();
-        const values = Array.from(select.querySelectorAll('option')).map((o) => o.value);
-        expect(values).toEqual(['', 'kokoro', 'piper', 'google', 'openai']);
+        await waitForVoices('kokoro');
+        // The only selects on the page should be avatar + voice — none of
+        // them should expose provider options.
+        const selects = Array.from(document.querySelectorAll('select'));
+        for (const s of selects) {
+            const optionValues = Array.from(s.querySelectorAll('option')).map(o => o.value);
+            expect(optionValues).not.toContain('piper');
+            expect(optionValues).not.toContain('google');
+        }
     });
 
-    it('defaults the provider dropdown to "" (inherit) when no override is set', () => {
-        // CONTRACT 6: empty config => no `voice` key => provider control
-        // shows the inherit option as selected.
+    it('disables the case-voice select when no platform provider is configured', async () => {
+        server.use(
+            http.get('*/api/platform-settings/voice', () => HttpResponse.json({}))
+        );
         mount();
-        const select = getProviderSelect();
-        expect(select.value).toBe('');
-    });
-
-    it('writes config.voice.tts_provider when a non-inherit provider is picked', async () => {
-        // CONTRACT 1: picking 'google' updates the voice config.
-        const { captured } = mount();
-        const select = getProviderSelect();
-        fireEvent.change(select, { target: { value: 'google' } });
         await waitFor(() => {
-            expect(captured.current.config.voice?.tts_provider).toBe('google');
-        });
-    });
-
-    it('removes config.voice entirely when provider is set back to inherit', async () => {
-        // CONTRACT 6: clearing all overrides deletes the voice object.
-        const { captured } = mount({
-            id: 'c',
-            config: {
-                demographics: { age: 35, gender: 'male' },
-                voice: { tts_provider: 'google' },
-            },
-        });
-        const select = getProviderSelect();
-        fireEvent.change(select, { target: { value: '' } });
-        await waitFor(() => {
-            expect(captured.current.config.voice).toBeUndefined();
+            const select = getCaseVoiceSelect();
+            expect(select.disabled).toBe(true);
         });
     });
 });
 
-describe('CaseAvatarVoicePicker — avatar list filtering', () => {
+describe('CaseAvatarVoicePicker — avatar list filtering (unchanged)', () => {
     it('shows adult male avatars plus neutral avatars for adult male cases', async () => {
         server.use(
             http.get('*/avatars/heads/manifest.json', () =>
@@ -352,16 +281,11 @@ describe('CaseAvatarVoicePicker — avatar list filtering', () => {
     });
 });
 
-describe('CaseAvatarVoicePicker — voice list filtering', () => {
-    it('fetches the effective provider voice list through apiFetch with bearer auth', async () => {
-        localStorage.setItem('token', 'admin-token');
+describe('CaseAvatarVoicePicker — voice list comes from the platform provider', () => {
+    it('fetches the platform provider voices through /api/tts/voices', async () => {
         server.use(
             http.get('*/api/tts/voices', ({ request }) => {
-                voiceRequests.push({
-                    url: request.url,
-                    authorization: request.headers.get('authorization'),
-                    requestId: request.headers.get('x-request-id'),
-                });
+                voiceRequests.push({ url: request.url });
                 const url = new URL(request.url);
                 const provider = url.searchParams.get('provider') || 'kokoro';
                 return HttpResponse.json({ voices: sampleVoices[provider] || [] });
@@ -371,12 +295,7 @@ describe('CaseAvatarVoicePicker — voice list filtering', () => {
         mount();
         await waitForVoices('kokoro');
 
-        expect(voiceRequests[0]).toMatchObject({
-            authorization: 'Bearer admin-token',
-        });
-        expect(new URL(voiceRequests[0].url).pathname).toBe('/api/tts/voices');
         expect(new URL(voiceRequests[0].url).searchParams.get('provider')).toBe('kokoro');
-        expect(voiceRequests[0].requestId).toBeTruthy();
     });
 
     it('does not crash when the voice list request is forbidden', async () => {
@@ -390,86 +309,59 @@ describe('CaseAvatarVoicePicker — voice list filtering', () => {
 
         await waitFor(() => {
             const select = getCaseVoiceSelect();
-            expect(Array.from(select.querySelectorAll('option')).map(o => o.value)).toEqual(['']);
+            // Only the "inherit" placeholder remains.
+            expect(Array.from(select.querySelectorAll('option'))).toHaveLength(1);
         });
     });
 
-    it('fetches the voice list for the effective provider and renders each option', async () => {
-        // CONTRACT 2 (positive side): the case-voice select reflects the
-        // active provider's catalogue filtered to the patient slot.
-        mount();
-        await waitForVoices('kokoro');
-        const select = getCaseVoiceSelect();
-        const optionValues = Array.from(select.querySelectorAll('option')).map((o) => o.value);
-        expect(optionValues).toContain('am_michael');
-        expect(optionValues).not.toContain('af_bella');
-    });
-
-    it('filters case voices by patient gender when catalogue metadata is available', async () => {
+    it('renders every voice in the platform provider catalogue, regardless of patient gender', async () => {
+        // Slot-filtering was removed. A female patient sees male voices too,
+        // because per-character voice id is the entire model — gender is no
+        // longer used to filter the list.
         mount({
             id: 'female-case',
-            config: {
-                demographics: { age: 35, gender: 'female' },
-            },
+            config: { demographics: { age: 35, gender: 'female' } },
         });
         await waitForVoices('kokoro');
         const select = getCaseVoiceSelect();
-        const optionValues = Array.from(select.querySelectorAll('option')).map((o) => o.value);
-        expect(optionValues).toContain('af_bella');
-        expect(optionValues).not.toContain('am_michael');
+        const values = Array.from(select.querySelectorAll('option')).map(o => o.value);
+        expect(values).toContain('am_michael');
+        expect(values).toContain('af_bella');
     });
 
-    it('clears case_voice when the provider changes (cross-provider voice ids are not portable)', async () => {
-        // CONTRACT 2: the picker forcibly deletes the stale case_voice on
-        // provider change.
-        const { captured } = mount({
-            id: 'c',
-            config: {
-                demographics: { age: 35, gender: 'male' },
-                voice: {
-                    tts_provider: 'piper',
-                    case_voice: 'en_US-amy-medium.onnx',
-                },
-            },
-        });
-        await waitForVoices('piper');
-        const providerSelect = getProviderSelect();
-        fireEvent.change(providerSelect, { target: { value: 'google' } });
-        await waitFor(() => {
-            expect(captured.current.config.voice?.tts_provider).toBe('google');
-            expect(captured.current.config.voice?.case_voice).toBeUndefined();
-        });
-    });
+    it('refetches when the platform provider switches', async () => {
+        // Simulate the admin changing tts_provider from kokoro to google in
+        // Voice Settings — the case picker should reload its catalogue.
+        const { rerender } = mount();
+        await waitForVoices('kokoro');
 
-    it('refetches the voice list when the provider switches', async () => {
-        // CONTRACT 2: the new provider's voices replace the old list.
-        mount({
-            id: 'c',
-            config: {
-                demographics: { age: 35, gender: 'male' },
-                voice: { tts_provider: 'piper' },
-            },
-        });
-        await waitForVoices('piper');
-        const providerSelect = getProviderSelect();
-        fireEvent.change(providerSelect, { target: { value: 'google' } });
+        server.use(
+            http.get('*/api/platform-settings/voice', () =>
+                HttpResponse.json({ tts_provider: 'google' })
+            )
+        );
+        // Trigger a remount with the new platform settings.
+        rerender(<div />);
+        mount();
         await waitForVoices('google');
-        const voiceSelect = getCaseVoiceSelect();
-        const values = Array.from(voiceSelect.querySelectorAll('option')).map((o) => o.value);
+        const select = getCaseVoiceSelect();
+        const values = Array.from(select.querySelectorAll('option')).map(o => o.value);
         expect(values).toContain('en-US-Neural2-J');
-        expect(values).not.toContain('en_US-amy-medium.onnx');
     });
 });
 
 describe('CaseAvatarVoicePicker — TestVoiceButton wiring', () => {
-    it('passes resolved voice/provider/rate/pitch to TestVoiceButton', async () => {
-        // CONTRACT 3: the stubbed button receives the live picker state.
+    it('forwards case_voice + platform provider + rate + pitch to TestVoiceButton', async () => {
+        server.use(
+            http.get('*/api/platform-settings/voice', () =>
+                HttpResponse.json({ tts_provider: 'google' })
+            )
+        );
         mount({
             id: 'c',
             config: {
                 demographics: { age: 35, gender: 'male' },
                 voice: {
-                    tts_provider: 'google',
                     case_voice: 'en-US-Neural2-J',
                     tts_rate: 1.1,
                     tts_pitch: 2.5,
@@ -482,60 +374,48 @@ describe('CaseAvatarVoicePicker — TestVoiceButton wiring', () => {
         expect(stub.getAttribute('data-provider')).toBe('google');
         expect(stub.getAttribute('data-rate')).toBe('1.1');
         expect(stub.getAttribute('data-pitch')).toBe('2.5');
-        expect(stub.getAttribute('data-gender')).toBe('male');
     });
 
-    it('falls back to the Kokoro default when case_voice is unset', () => {
-        // CONTRACT 3: with no override and no platform default, the default
-        // provider is Kokoro, which has a hardcoded fallback voice.
+    it('forwards empty voice when neither case nor patient persona has one set', async () => {
+        // No silent hardcoded fallback — if nothing is configured, the test
+        // button has nothing to play and the admin gets a clear "no voice"
+        // signal in the UI.
         mount();
+        await waitForVoices('kokoro');
         const stub = screen.getByTestId('test-voice-button-stub');
-        expect(stub.getAttribute('data-voice')).toBe('am_michael');
+        expect(stub.getAttribute('data-voice')).toBe('');
         expect(stub.getAttribute('data-provider')).toBe('kokoro');
     });
 
-    it('inherits the platform provider, rate, and pitch — voice slot is no longer read', async () => {
-        // 2026-05-12 — per-gender voice slots in Voice Settings were removed.
-        // The case picker now falls back to the hardcoded PROVIDER_FALLBACK_VOICE
-        // for the gender slot (here: male → en-US-Neural2-A for google), NOT
-        // to the legacy `voice_google_male` setting even when it's still in
-        // the DB. rate/pitch keep inheriting from voiceSettings since those
-        // weren't part of the per-gender voice-file collapse.
+    it('inherits voice from the Patient persona template when case_voice is unset', async () => {
+        // The picker fetches the Patient persona template; its case_voice is
+        // the only fallback below case-level — no PROVIDER_FALLBACK_VOICE.
         server.use(
-            http.get('*/api/platform-settings/voice', () => HttpResponse.json({
-                tts_provider: 'google',
-                voice_google_male: 'en-US-Neural2-J', // legacy field; resolver ignores it now
-                tts_rate: 0.9,
-                tts_pitch: 2,
-            })),
-            http.get('*/api/platform-settings/avatars', () => HttpResponse.json({}))
+            http.get('*/api/agents/templates', () =>
+                HttpResponse.json({
+                    templates: [
+                        {
+                            id: 1,
+                            agent_type: 'patient',
+                            config: { voice: { case_voice: 'af_bella' } },
+                        },
+                    ],
+                })
+            )
         );
-
         mount();
-        await waitForVoices('google');
-
+        await waitForVoices('kokoro');
         const stub = screen.getByTestId('test-voice-button-stub');
         await waitFor(() => {
-            expect(stub.getAttribute('data-provider')).toBe('google');
-            // Hardcoded fallback for google male — defined in
-            // src/utils/voiceFallbacks.js.
-            expect(stub.getAttribute('data-voice')).toBe('en-US-Neural2-A');
-            expect(stub.getAttribute('data-rate')).toBe('0.9');
-            expect(stub.getAttribute('data-pitch')).toBe('2');
+            expect(stub.getAttribute('data-voice')).toBe('af_bella');
         });
     });
 });
 
-describe('CaseAvatarVoicePicker — pitch slider (POST-bb34d88 SEMITONES UNIT)', () => {
-    it('renders a pitch slider with min=-10, max=10, step=0.25 (semitones)', () => {
-        // CONTRACT 4: regression lock for the unit change. Pre-bb34d88 the
-        // slider was a 0.5..2.0 ratio; post-bb34d88 it's -10..10 semitones.
+describe('CaseAvatarVoicePicker — pitch slider', () => {
+    it('renders a pitch slider with min=-10, max=10, step=0.25 (semitones)', async () => {
         mount();
-        const labels = Array.from(document.querySelectorAll('label'));
-        const pitchLabel = labels.find((l) => /Pitch/.test(l.textContent || ''));
-        expect(pitchLabel).toBeTruthy();
-        // The slider sits as a sibling of the label inside the SliderRow.
-        // Find the range input whose min/max match semitone bounds.
+        await waitForVoices('kokoro');
         const ranges = Array.from(document.querySelectorAll('input[type="range"]'));
         const pitchRange = ranges.find(
             (r) => r.getAttribute('min') === '-10' && r.getAttribute('max') === '10'
@@ -544,18 +424,15 @@ describe('CaseAvatarVoicePicker — pitch slider (POST-bb34d88 SEMITONES UNIT)',
         expect(pitchRange.getAttribute('step')).toBe('0.25');
     });
 
-    it('renders the helper text "semitones (Google only)" near the pitch label', () => {
-        // CONTRACT 8: the literal hint string must be in the DOM. This is
-        // the one-line user-facing signal that the unit changed; remove
-        // it and admins won't know -10..10 isn't a ratio anymore.
+    it('renders the helper text "semitones (Google only)" near the pitch label', async () => {
         mount();
-        // Grab text content of the whole rendered tree and search.
+        await waitForVoices('kokoro');
         expect(document.body.textContent).toContain('semitones (Google only)');
     });
 
     it('writes config.voice.tts_pitch as a number when the pitch slider moves', async () => {
-        // CONTRACT 4: dragging the slider stores a numeric semitone value.
         const { captured } = mount();
+        await waitForVoices('kokoro');
         const ranges = Array.from(document.querySelectorAll('input[type="range"]'));
         const pitchRange = ranges.find(
             (r) => r.getAttribute('min') === '-10' && r.getAttribute('max') === '10'
@@ -568,9 +445,9 @@ describe('CaseAvatarVoicePicker — pitch slider (POST-bb34d88 SEMITONES UNIT)',
 });
 
 describe('CaseAvatarVoicePicker — rate slider', () => {
-    it('renders a rate slider with min=0.5, max=1.5, step=0.05', () => {
-        // CONTRACT 5: rate range is independent of pitch unit changes.
+    it('renders a rate slider with min=0.5, max=1.5, step=0.05', async () => {
         mount();
+        await waitForVoices('kokoro');
         const ranges = Array.from(document.querySelectorAll('input[type="range"]'));
         const rateRange = ranges.find(
             (r) => r.getAttribute('min') === '0.5' && r.getAttribute('max') === '1.5'
@@ -580,8 +457,8 @@ describe('CaseAvatarVoicePicker — rate slider', () => {
     });
 
     it('writes config.voice.tts_rate when the rate slider moves', async () => {
-        // CONTRACT 5: rate edits round-trip into config.voice.
         const { captured } = mount();
+        await waitForVoices('kokoro');
         const ranges = Array.from(document.querySelectorAll('input[type="range"]'));
         const rateRange = ranges.find(
             (r) => r.getAttribute('min') === '0.5' && r.getAttribute('max') === '1.5'
@@ -595,13 +472,11 @@ describe('CaseAvatarVoicePicker — rate slider', () => {
 
 describe('CaseAvatarVoicePicker — inherit handling and case-voice override', () => {
     it('starts with no config.voice when the case carries no override', () => {
-        // CONTRACT 6: empty defaults => no override object.
         const { captured } = mount();
         expect(captured.current.config.voice).toBeUndefined();
     });
 
     it('writes config.voice.case_voice when a specific voice is picked', async () => {
-        // CONTRACT 7: choosing a voice in the dropdown stores it.
         const { captured } = mount();
         await waitForVoices('kokoro');
         const voiceSelect = getCaseVoiceSelect();
@@ -612,7 +487,6 @@ describe('CaseAvatarVoicePicker — inherit handling and case-voice override', (
     });
 
     it('removes case_voice (and config.voice if empty) when reset to inherit', async () => {
-        // CONTRACT 6 + 7: clearing the last override deletes the wrapper.
         const { captured } = mount({
             id: 'c',
             config: {
@@ -626,5 +500,22 @@ describe('CaseAvatarVoicePicker — inherit handling and case-voice override', (
         await waitFor(() => {
             expect(captured.current.config.voice).toBeUndefined();
         });
+    });
+
+    it('passing patientTemplateVoice prop skips the /agents/templates fetch and uses the prop', async () => {
+        let templatesFetched = false;
+        server.use(
+            http.get('*/api/agents/templates', () => {
+                templatesFetched = true;
+                return HttpResponse.json({ templates: [] });
+            })
+        );
+        mount(null, { patientTemplateVoice: { case_voice: 'af_bella' } });
+        await waitForVoices('kokoro');
+        const stub = screen.getByTestId('test-voice-button-stub');
+        await waitFor(() => {
+            expect(stub.getAttribute('data-voice')).toBe('af_bella');
+        });
+        expect(templatesFetched).toBe(false);
     });
 });

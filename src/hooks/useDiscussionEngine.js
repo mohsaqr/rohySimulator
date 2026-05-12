@@ -7,24 +7,22 @@ import { resolveVoice } from '../utils/voiceResolver';
 import { buildPersonaBlocks } from '../utils/personaBlocks';
 import EventLogger, { COMPONENTS } from '../services/eventLogger';
 
-// Discussant voice — same shared resolver the patient chat and admin
-// preview use. The discussant is given a male clinician slot by default to
-// match the seeded clinician avatar; the resolver derives slot from gender.
-function resolveDiscussantVoice(discussant, voiceSettings, platformAvatars) {
+// Discussant voice — same shared resolver the patient chat uses. No slot
+// logic, no hardcoded fallback: the discussant must have a case_voice set
+// in their persona or the resolver returns null and the discussion stays
+// silent (loudly, via toast in the caller).
+function resolveDiscussantVoice(discussant, voiceSettings) {
     if (!voiceSettings) return null;
     const r = resolveVoice({
         voice: discussant?.voice,
-        voiceSettings,
-        platformAvatars,
-        gender: discussant?.voice?.gender || 'male'
+        voiceSettings
     });
     if (!r.file) return null;
     return {
         voice: r.file,
         provider: r.provider,
         rate: r.rate ?? 1.0,
-        pitch: r.pitch,
-        gender: discussant?.voice?.gender || 'male'
+        pitch: r.pitch
     };
 }
 
@@ -44,7 +42,7 @@ async function logTurn(sessionId, role, content) {
 //   - per-sentence TTS playback during the stream
 //   - viseme + speaking state for the avatar
 //   - lifecycle cleanup so leaving mid-stream cancels everything
-export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMode, voiceSettings, platformAvatars }) {
+export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMode, voiceSettings }) {
     const [messages, setMessages] = useState(() => {
         try {
             const saved = sessionId ? localStorage.getItem(STORAGE_KEY(sessionId)) : null;
@@ -102,17 +100,12 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
 
         let speech = null;
         if (voiceMode) {
-            const resolved = resolveDiscussantVoice(discussant, voiceSettings, platformAvatars);
+            const resolved = resolveDiscussantVoice(discussant, voiceSettings);
             if (resolved?.voice) {
                 speech = VoiceService.beginSpeechSession({
                     voice: resolved.voice,
                     rate: resolved.rate,
                     pitch: resolved.pitch,
-                    gender: resolved.gender,
-                    // Forward the resolved engine; without this the server
-                    // falls back to the platform default and the discussant
-                    // sounds like whatever Google/whatever is configured
-                    // platform-wide instead of the discussant's own engine.
                     provider: resolved.provider,
                     onStart: () => setSpeaking(true),
                     onVisemes: setVisemes,
@@ -188,7 +181,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
             abortRef.current = null;
             speechRef.current = null;
         }
-    }, [sessionId, activeCase, discussant, voiceMode, voiceSettings, platformAvatars, busy, messages]);
+    }, [sessionId, activeCase, discussant, voiceMode, voiceSettings, busy, messages]);
 
     const startConversation = useCallback(() => {
         // The kick-off prompt is treated as a user turn at the LLM layer (so

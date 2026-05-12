@@ -889,106 +889,58 @@ function inferVoiceGenderFromName(name) {
     return '';
 }
 
-function voiceGenderMatchesSlot(voiceGender, slot) {
-    // Case-insensitive — kokoro-js emits Title-Case ("Female"/"Male") natively;
-    // other providers normalise to lowercase. Lowering both sides keeps any
-    // future provider that forgets to normalise from silently mis-routing
-    // every voice to the hardcoded fallback.
-    const vg = (voiceGender || '').toLowerCase();
-    const sl = (slot || '').toLowerCase();
-    if (!vg || vg === 'neutral') return true;
-    if (sl === 'child') return vg === 'child' || vg === 'female';
-    return vg === sl;
-}
-
-async function providerVoiceGender(provider, voice) {
-    try {
-        if (provider === 'google') {
-            const { listGoogleVoices } = await import('../services/googleTts.js');
-            const found = listGoogleVoices().find(v => v.filename === voice);
-            return found?.gender || inferVoiceGenderFromName(voice);
-        }
-        if (provider === 'openai') {
-            const { listOpenaiVoices } = await import('../services/openaiTts.js');
-            const found = listOpenaiVoices().find(v => v.filename === voice);
-            return found?.gender || inferVoiceGenderFromName(voice);
-        }
-        if (provider === 'kokoro') {
-            const { listKokoroVoices } = await import('../services/kokoroTts.js');
-            const found = listKokoroVoices().find(v => v.filename === voice);
-            return found?.gender || inferVoiceGenderFromName(voice);
-        }
-        if (provider === 'piper') {
-            return inferVoiceGenderFromName(voice);
-        }
-    } catch {
-        return inferVoiceGenderFromName(voice);
-    }
-    return inferVoiceGenderFromName(voice);
-}
-
 // Pre-flight voice validation. If the requested voice isn't in the active
 // provider's catalogue (typically because the persona default was saved
-// under a different provider), substitute the provider's hardcoded
-// fallback so the conversation keeps going. Logs a warning so admins can
-// see the misconfiguration in server logs.
-async function resolveTtsVoice(provider, requestedVoice, gender) {
-    let isValid = true;
+// under a different provider), the request is rejected loudly — no silent
+// hardcoded fallback. This used to substitute a provider default and call
+// it "graceful degradation," but it meant admins who changed the provider
+// in Voice Settings heard the *fallback* voice while the persona dropdown
+// still showed their picked voice. Three weeks of "I changed it and
+// nothing happened" later, we strip the fallback entirely.
+//
+// Returns { ok: true, voice } when the requested voice is valid for the
+// active provider. Returns { ok: false, reason } otherwise — the route
+// layer maps that to a 4xx and the client surfaces it as a toast.
+async function resolveTtsVoice(provider, requestedVoice) {
     try {
         switch (provider) {
             case 'kokoro': {
                 const { isKokoroVoice } = await import('../services/kokoroTts.js');
-                isValid = await isKokoroVoice(requestedVoice);
-                break;
+                if (!(await isKokoroVoice(requestedVoice))) {
+                    return { ok: false, reason: `voice "${requestedVoice}" is not a kokoro voice` };
+                }
+                return { ok: true, voice: requestedVoice };
             }
             case 'openai': {
                 const { isOpenaiVoice } = await import('../services/openaiTts.js');
-                isValid = isOpenaiVoice(requestedVoice);
-                break;
+                if (!isOpenaiVoice(requestedVoice)) {
+                    return { ok: false, reason: `voice "${requestedVoice}" is not an openai voice` };
+                }
+                return { ok: true, voice: requestedVoice };
             }
             case 'google': {
                 const { isGoogleVoice } = await import('../services/googleTts.js');
-                isValid = isGoogleVoice(requestedVoice);
-                break;
+                if (!isGoogleVoice(requestedVoice)) {
+                    return { ok: false, reason: `voice "${requestedVoice}" is not a google voice` };
+                }
+                return { ok: true, voice: requestedVoice };
             }
             case 'piper': {
-                isValid = typeof requestedVoice === 'string'
+                const valid = typeof requestedVoice === 'string'
                     && requestedVoice.endsWith('.onnx')
                     && fs.existsSync(path.join(PIPER_DIR, requestedVoice));
-                break;
+                if (!valid) {
+                    return { ok: false, reason: `piper voice "${requestedVoice}" is not installed` };
+                }
+                return { ok: true, voice: requestedVoice };
             }
             default:
-                return requestedVoice;   // unknown provider; let synth handle it
+                return { ok: false, reason: `unknown provider "${provider}"` };
         }
     } catch (err) {
         routesLlmLog.warn('tts voice catalogue check failed', { provider, error: err.message });
-        return requestedVoice;
+        return { ok: false, reason: `catalogue check failed: ${err.message}` };
     }
-    const { fallbackVoiceFor } = await import('../services/voiceFallbacks.js');
-    const safeGender = ['male', 'female', 'child'].includes(gender) ? gender : null;
-    if (isValid) {
-        const voiceGender = await providerVoiceGender(provider, requestedVoice);
-        if (!safeGender || voiceGenderMatchesSlot(voiceGender, safeGender)) return requestedVoice;
-        const fallback = fallbackVoiceFor(provider, safeGender);
-        if (fallback && fallback !== requestedVoice) {
-            routesLlmLog.warn('tts gender fallback selected', {
-                provider,
-                requested_voice: requestedVoice,
-                requested_gender: voiceGender,
-                target_gender: safeGender,
-                fallback_voice: fallback
-            });
-            return fallback;
-        }
-        return requestedVoice;
-    }
-
-    const fallback = fallbackVoiceFor(provider, safeGender || 'female');
-    if (fallback && fallback !== requestedVoice) {
-        routesLlmLog.warn('tts voice fallback selected', { provider, requested_voice: requestedVoice, fallback_voice: fallback });
-        return fallback;
-    }
-    return requestedVoice;   // no fallback available — synth will throw UNKNOWN_VOICE
 }
 
 function recordTtsUsage(userId, provider, charCount) {
@@ -1056,7 +1008,9 @@ async function pipePcmStream(res, asyncIter) {
 //   - OpenAI (cloud, lowest latency, native streaming PCM at 24 kHz)
 // based on the `tts_provider` platform setting.
 router.post('/tts', authenticateToken, async (req, res) => {
-    const { text, voice: requestedVoice, rate, pitch, gender, provider: bodyProvider } = req.body || {};
+    // `gender` is still accepted on the wire so older clients don't break,
+    // but it's no longer consulted — the resolver dropped slot-based logic.
+    const { text, voice: requestedVoice, rate, pitch, provider: bodyProvider } = req.body || {};
 
     if (typeof text !== 'string' || !text.trim()) {
         return res.status(400).json({ error: 'text required' });
@@ -1098,13 +1052,26 @@ router.post('/tts', authenticateToken, async (req, res) => {
         throw err;
     }
 
-    // Validate the requested voice against the active provider's catalogue
-    // and substitute the provider's hardcoded fallback if it's unknown.
-    // This is the safety net for "persona default was set under a different
-    // provider" — without it, the patient just goes silent on switch.
-    // The original UNKNOWN_VOICE error path inside each synth service still
-    // exists, but we should never hit it from real chats now.
-    const voice = await resolveTtsVoice(ttsProvider, requestedVoice, gender);
+    // Validate the requested voice against the active provider's catalogue.
+    // No hardcoded fallback — if the persona was authored under a different
+    // provider, we'd rather surface that to the admin than silently swap to
+    // some default voice that doesn't match the dropdown selection.
+    const resolved = await resolveTtsVoice(ttsProvider, requestedVoice);
+    if (!resolved.ok) {
+        routesLlmLog.warn('tts voice rejected', {
+            provider: ttsProvider,
+            requested_voice: requestedVoice,
+            reason: resolved.reason
+        });
+        return res.status(400).json({
+            error: 'invalid_voice',
+            message: `Voice "${requestedVoice}" is not valid for the active TTS provider (${ttsProvider}). Pick a voice from this provider's catalogue in Settings → Voice or the Patient persona.`,
+            provider: ttsProvider,
+            requested_voice: requestedVoice,
+            reason: resolved.reason
+        });
+    }
+    const voice = resolved.voice;
 
     // Record char usage up-front. We charge optimistically — even if the
     // synth fails partway through, we already paid for the API call

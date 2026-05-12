@@ -14,7 +14,6 @@ import { stripStageDirections } from '../../utils/stageDirections';
 import { parseConfig } from '../../utils/parseConfig';
 import { extractCompleteSentences } from '../../utils/sentenceSplit';
 import { resolveVoice } from '../../utils/voiceResolver';
-import { deriveDemographicSlot } from '../../utils/demographics';
 import { useToast } from '../../contexts/ToastContext';
 import { useNotifications } from '../../notifications/useNotifications';
 import { SOURCES, SEVERITY } from '../../notifications/types';
@@ -144,10 +143,19 @@ function isAvatarAlarmSpeechForceOff() {
 // "inherit" — they don't clobber the template's value. Used by both the
 // patient chat path and the alarm-speech path so any future edge case
 // (e.g., "rate=0 should still override") lands in one place.
+//
+// Only voice-shape fields (case_voice, tts_rate, tts_pitch) propagate.
+// tts_provider is intentionally dropped: provider is a platform-level
+// decision read from voiceSettings only, so a stale persona authored
+// under a different engine can't leak its provider into the runtime.
+const PATIENT_VOICE_FIELDS = ['case_voice', 'tts_rate', 'tts_pitch'];
 function mergePatientVoiceConfig(caseVoice, templateVoice) {
-    const out = { ...(templateVoice || {}) };
-    for (const [k, v] of Object.entries(caseVoice || {})) {
-        if (v !== '' && v !== null && v !== undefined) out[k] = v;
+    const out = {};
+    for (const k of PATIENT_VOICE_FIELDS) {
+        const tv = templateVoice?.[k];
+        if (tv !== '' && tv != null) out[k] = tv;
+        const cv = caseVoice?.[k];
+        if (cv !== '' && cv != null) out[k] = cv;
     }
     return out;
 }
@@ -196,7 +204,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         setVisemes,
         voiceSettings, setVoiceSettings,
         setHeadManifest,
-        platformAvatars, setPlatformAvatars,
+        setPlatformAvatars,
         setActiveParticipant
     } = useVoice();
 
@@ -791,13 +799,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // shape (file/provider/rate/pitch/tier) lets callers forward the picked
     // engine to the server — without that, /api/tts silently falls back to
     // the platform default tts_provider and learners hear the wrong engine.
-    const resolveSpeakerVoice = useCallback((override, gender, age) => resolveVoice({
+    const resolveSpeakerVoice = useCallback((override) => resolveVoice({
         voice: override,
-        voiceSettings,
-        platformAvatars,
-        gender,
-        age
-    }), [voiceSettings, platformAvatars]);
+        voiceSettings
+    }), [voiceSettings]);
 
     const handleSendToPatient = async (overrideText) => {
         const text = (overrideText ?? input).trim();
@@ -844,26 +849,20 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             // template. Admins who set the voice in the persona editor (the
             // discoverable place) saw nothing change.
             const override = mergePatientVoiceConfig(activeCase?.config?.voice, patientTemplate?.config?.voice);
-            const rawGender = activeCase?.config?.demographics?.gender;
-            const age      = activeCase?.config?.demographics?.age;
-            const slotGender = deriveDemographicSlot(rawGender, age);
-            const r = resolveSpeakerVoice(override, rawGender, age);
+            const r = resolveSpeakerVoice(override);
             if (!r.file) {
-                // Silent-fail guard: when nothing in the resolver chain
-                // matches the active provider+slot the runtime path used to
-                // skip without telling anyone. That's the deployed-but-mute
-                // symptom — admin sees no toast, no /api/tts request, no log.
-                // Surface it instead so the missing slot is fixable from the
-                // UI without a DevTools dive.
-                console.warn('[voice] no voice resolved for case', { provider: r.provider, slot: slotGender });
-                toast?.error?.(`No voice configured for provider "${r.provider}" / ${slotGender}. Set a default in Settings → Voice & Avatar, or assign a voice to this case.`);
+                // No silent fallback by design (see voiceResolver.js header).
+                // If neither the case nor the Patient persona has a
+                // case_voice set, the patient stays mute and the admin gets
+                // a loud toast pointing at the two places they can fix it.
+                console.warn('[voice] no voice resolved for case', { provider: r.provider });
+                toast?.error?.('No voice configured. Set a Case voice in the Case editor, or a default voice on the Patient persona.');
                 voiceErrored = true;
             } else {
                 speech = VoiceService.beginSpeechSession({
                     voice: r.file,
                     rate: r.rate,
                     pitch: r.pitch,
-                    gender: slotGender,
                     // Forward the resolved engine — without this the server
                     // silently routes to the platform default tts_provider
                     // and a Piper-configured case would actually play Google.
@@ -952,25 +951,20 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // LLM streaming hook today, so it stays single-shot). Goes through the
     // shared resolver so the engine the case was configured for is the engine
     // that plays.
-    const speakResponse = (responseText, { override, gender, age }) => {
-        const r = resolveSpeakerVoice(override, gender, age);
+    const speakResponse = (responseText, { override }) => {
+        const r = resolveSpeakerVoice(override);
         const spokenText = stripStageDirections(responseText);
         if (!spokenText || responseText.startsWith('Error:')) return;
         if (!r.file) {
-            // Same silent-fail guard the patient path now has — agents used
-            // to go quiet without explanation if no voice resolved.
-            const slot = deriveDemographicSlot(gender, age);
-            console.warn('[voice] no voice resolved for agent', { provider: r.provider, slot });
-            toast?.error?.(`No voice configured for provider "${r.provider}" / ${slot}. Set a default in Settings → Voice & Avatar.`);
+            console.warn('[voice] no voice resolved for agent', { provider: r.provider });
+            toast?.error?.('No voice configured for this agent persona. Set one in Settings → Agent Personas.');
             return;
         }
-        const slotGender = deriveDemographicSlot(gender, age);
         VoiceService.speak({
             text: spokenText,
             voice: r.file,
             rate: r.rate,
             pitch: r.pitch,
-            gender: slotGender,
             provider: r.provider,
             onStart: () => setSpeaking(true),
             onVisemes: setVisemes,
@@ -989,17 +983,11 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const speakPatientAlarm = useCallback(({ text }) => {
         if (!voiceMode || activeTab !== 'patient') return false;
         if (prefs.avatarAlarmSpeechEnabled === false || isAvatarAlarmSpeechForceOff()) return false;
-        const demographics = activeCase?.config?.demographics || {};
         const override = mergePatientVoiceConfig(activeCase?.config?.voice, patientTemplate?.config?.voice);
-        const r = resolveSpeakerVoice(
-            override,
-            demographics.gender,
-            demographics.age
-        );
+        const r = resolveSpeakerVoice(override);
         const spokenText = stripStageDirections(text);
         if (!spokenText || !r.file) return false;
 
-        const slotGender = deriveDemographicSlot(demographics.gender, demographics.age);
         setMessages(prev => [...prev, { role: 'assistant', content: spokenText }]);
         EventLogger.messageReceived(spokenText, COMPONENTS.CHAT_INTERFACE);
         VoiceService.speak({
@@ -1007,7 +995,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             voice: r.file,
             rate: r.rate,
             pitch: r.pitch,
-            gender: slotGender,
             provider: r.provider,
             onStart: () => setSpeaking(true),
             onVisemes: setVisemes,
@@ -1022,7 +1009,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             }
         });
         return true;
-    }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, activeCase?.config?.voice, activeCase?.config?.demographics, patientTemplate?.config?.voice, resolveSpeakerVoice, toast, setSpeaking, setVisemes]);
+    }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, activeCase?.config?.voice, patientTemplate?.config?.voice, resolveSpeakerVoice, toast, setSpeaking, setVisemes]);
 
     useEffect(() => {
         return subscribe((event) => {
@@ -1177,11 +1164,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             // on their tab).
             if (voiceMode) {
                 const cfg = parseConfig(agent.config);
-                speakResponse(responseText, {
-                    override: cfg.voice,
-                    gender: cfg.gender,
-                    age: undefined
-                });
+                speakResponse(responseText, { override: cfg.voice });
             }
         } catch (err) {
             console.error('Failed to send message to agent:', err);

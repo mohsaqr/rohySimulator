@@ -135,10 +135,15 @@ describe('POST /api/tts matrix — provider override and gender fallback', () =>
         expect(newLogs).not.toContain('en-US-Neural2-F');
     });
 
-    it('falls back when a valid Google voice clearly mismatches the requested gender', async () => {
+    it('a valid Google voice plays even when gender mismatches (no gender-based swap)', async () => {
+        // Post-2026-05-12: gender-based voice substitution was removed. The
+        // server now plays exactly the voice the client asks for as long as
+        // it's in the provider's catalogue. If admins want a gender-
+        // appropriate voice they pick one in Settings → Voice or the case
+        // editor — silent swaps are gone.
         const maleRes = await postTts(server, token, {
             provider: 'google',
-            text: 'male should not use female voice',
+            text: 'male requesting a female-coded google voice',
             voice: 'en-US-Chirp3-HD-Aoede',
             gender: 'male',
         });
@@ -146,31 +151,37 @@ describe('POST /api/tts matrix — provider override and gender fallback', () =>
 
         const femaleRes = await postTts(server, token, {
             provider: 'google',
-            text: 'female should not use male voice',
+            text: 'female requesting a male-coded google voice',
             voice: 'en-US-Chirp3-HD-Charon',
             gender: 'female',
         });
         expect(femaleRes.status).toBe(200);
 
         const logs = server.getStdout() + server.getStderr();
-        expect(logs).toContain('tts gender fallback selected');
-        expect(logs).toContain('en-US-Neural2-A');
-        expect(logs).toContain('en-US-Neural2-F');
+        // Old gender-fallback warning must not appear.
+        expect(logs).not.toContain('tts gender fallback selected');
     });
 
-    it('falls back when body.provider differs from platform default and the voice belongs to another provider', async () => {
+    it('rejects with 400 when the voice does not belong to the active provider', async () => {
+        // Old behaviour: silently substitute the provider's hardcoded
+        // fallback voice. New behaviour: 400 invalid_voice. The error body
+        // names the offending voice and the active provider so the admin
+        // can fix it.
         const res = await postTts(server, token, {
             provider: 'google',
-            text: 'piper id sent to google should fall back',
+            text: 'piper id sent to google must fail loudly',
             voice: 'en_US-amy-medium.onnx',
             gender: 'male',
         });
-        expect(res.status).toBe(200);
+        expect(res.status).toBe(400);
+
+        const body = JSON.parse(res.buf.toString());
+        expect(body.error).toBe('invalid_voice');
+        expect(body.provider).toBe('google');
+        expect(body.requested_voice).toBe('en_US-amy-medium.onnx');
 
         const logs = server.getStdout() + server.getStderr();
-        expect(logs).toContain('tts voice fallback selected');
-        expect(logs).toContain('en_US-amy-medium.onnx');
-        expect(logs).toContain('en-US-Neural2-A');
+        expect(logs).toContain('tts voice rejected');
     });
 
     it('routes OpenAI by body.provider even when platform default is Google', async () => {
