@@ -81,7 +81,16 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
         ? studies
         : studies.filter(s => s && s.modality === selectedModality);
 
-    // Add a new study configuration from master database
+    // Add a new study configuration from master database.
+    //
+    // Prepopulate `findings` and `interpretation` with the master defaults so
+    // the editor matches what the rendered report will show — admins were
+    // seeing the canned "1. No acute cardiopulmonary disease…" impression at
+    // runtime (the server-side fallback in orders-routes.js#1633) but an
+    // empty textarea in the editor, and had no way to know where the text
+    // came from or how to override it. Surfacing the defaults at add-time
+    // makes the case definition self-describing: edit to customise, clear to
+    // get a generic report (the modal's own hardcoded fallback handles that).
     const addStudy = (study) => {
         if (!study || !study.id) return;
         // Check if already added
@@ -97,8 +106,8 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
             turnaroundMinutes: study.turnaround_minutes || 30,
             imageUrl: '',
             videoUrl: '',
-            findings: '',
-            interpretation: '',
+            findings: study.normal_findings || '',
+            interpretation: study.normal_interpretation || '',
             isCustom: false
         };
         updateRadiology([...radiology, newStudy]);
@@ -402,6 +411,16 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                 {radiology.map((study, idx) => {
                                     if (!study) return null;
                                     const turnaround = study.turnaroundMinutes ?? 30;
+                                    // Master DB defaults — used for the editor placeholder + "Use default"
+                                    // affordance so cases saved before this fix (where findings/interpretation
+                                    // were stored empty and the server filled in normal_* at order time) still
+                                    // make their defaults visible at edit time. Custom studies have no master
+                                    // entry; fields just stay empty for those.
+                                    const masterStudy = !study.isCustom
+                                        ? studies.find(s => s && s.id === study.studyId)
+                                        : null;
+                                    const defaultFindings = masterStudy?.normal_findings || '';
+                                    const defaultInterpretation = masterStudy?.normal_interpretation || '';
                                     return (
                                         <div key={study.id || idx} className="p-4 bg-neutral-900/30">
                                             {/* Header */}
@@ -559,24 +578,58 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                             {/* Findings & Interpretation */}
                                             <div className="space-y-3">
                                                 <div>
-                                                    <label className="text-xs text-neutral-400 mb-1.5 block">Findings</label>
+                                                    <div className="flex items-center justify-between mb-1.5">
+                                                        <label className="text-xs text-neutral-400">Findings</label>
+                                                        {defaultFindings && !study.findings && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => updateStudy(idx, 'findings', defaultFindings)}
+                                                                className="text-[10px] text-cyan-400 hover:text-cyan-300 underline"
+                                                                title="Copy the master default into this field so you can edit it"
+                                                            >
+                                                                Use default
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                     <textarea
                                                         rows={2}
                                                         value={study.findings || ''}
                                                         onChange={e => updateStudy(idx, 'findings', e.target.value)}
                                                         className="input-dark text-xs w-full resize-none"
-                                                        placeholder="Describe what the study shows..."
+                                                        placeholder={defaultFindings || 'Describe what the study shows...'}
                                                     />
+                                                    {defaultFindings && !study.findings && (
+                                                        <p className="text-[10px] text-neutral-500 mt-1">
+                                                            Empty → report shows the master default above.
+                                                        </p>
+                                                    )}
                                                 </div>
                                                 <div>
-                                                    <label className="text-xs text-neutral-400 mb-1.5 block">Interpretation</label>
+                                                    <div className="flex items-center justify-between mb-1.5">
+                                                        <label className="text-xs text-neutral-400">Interpretation</label>
+                                                        {defaultInterpretation && !study.interpretation && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => updateStudy(idx, 'interpretation', defaultInterpretation)}
+                                                                className="text-[10px] text-cyan-400 hover:text-cyan-300 underline"
+                                                                title="Copy the master default into this field so you can edit it"
+                                                            >
+                                                                Use default
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                     <textarea
                                                         rows={2}
                                                         value={study.interpretation || ''}
                                                         onChange={e => updateStudy(idx, 'interpretation', e.target.value)}
                                                         className="input-dark text-xs w-full resize-none"
-                                                        placeholder="Clinical interpretation..."
+                                                        placeholder={defaultInterpretation || 'Clinical interpretation...'}
                                                     />
+                                                    {defaultInterpretation && !study.interpretation && (
+                                                        <p className="text-[10px] text-neutral-500 mt-1">
+                                                            Empty → report shows the master default above (printed under "Impression").
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

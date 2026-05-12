@@ -130,6 +130,62 @@ describe('RadiologyEditor apiFetch migration', () => {
         expect(toast.success).toHaveBeenCalledWith('Image uploaded successfully');
     });
 
+    it('surfaces the master normal_findings / normal_interpretation defaults at edit time', async () => {
+        // Regression for "the IMPRESSION text in the rendered report wasn't
+        // visible when editing the case". Master JSON ships normal_findings +
+        // normal_interpretation; the server falls back to them when the case
+        // config left those fields empty. Editor used to render empty
+        // textareas with generic placeholders, leaving admins unable to see
+        // (let alone edit) the text that would appear in the report.
+        const studyWithDefaults = {
+            ...study,
+            normal_findings: 'Lungs clear. No effusion.',
+            normal_interpretation: '1. No acute cardiopulmonary disease.',
+        };
+        fetchSpy.mockImplementation((url) => {
+            if (typeof url === 'string' && url.endsWith('/api/radiology-database')) {
+                return Promise.resolve(jsonResponse({ studies: [studyWithDefaults], modalities: ['X-Ray'] }));
+            }
+            return Promise.resolve(jsonResponse({}));
+        });
+
+        const { captured } = mount([{
+            id: 1,
+            studyId: 11,
+            studyName: 'Chest X-Ray',
+            modality: 'X-Ray',
+            bodyRegion: 'Chest',
+            turnaroundMinutes: 15,
+            imageUrl: '',
+            videoUrl: '',
+            findings: '',
+            interpretation: '',
+            isCustom: false,
+        }]);
+
+        // Wait for master DB to load — the existing study row only knows the
+        // defaults after `studies` populates from /api/radiology-database.
+        await waitFor(() => {
+            const findingsBox = screen.getByPlaceholderText('Lungs clear. No effusion.');
+            expect(findingsBox).toBeInTheDocument();
+            const interpBox = screen.getByPlaceholderText('1. No acute cardiopulmonary disease.');
+            expect(interpBox).toBeInTheDocument();
+        });
+
+        // Two "Use default" affordances — one per empty field.
+        const useDefaultButtons = screen.getAllByRole('button', { name: /use default/i });
+        expect(useDefaultButtons).toHaveLength(2);
+
+        // Clicking the first ("Findings") copies the master default into the
+        // case config so the admin can edit it from there.
+        fireEvent.click(useDefaultButtons[0]);
+        await waitFor(() => {
+            expect(captured.current.config.radiology[0].findings).toBe('Lungs clear. No effusion.');
+        });
+        // Interpretation still empty until its own button fires.
+        expect(captured.current.config.radiology[0].interpretation).toBe('');
+    });
+
     it('surfaces an API error toast when image upload fails', async () => {
         fetchSpy.mockImplementation((url) => {
             if (typeof url === 'string' && url.endsWith('/api/radiology-database')) {
