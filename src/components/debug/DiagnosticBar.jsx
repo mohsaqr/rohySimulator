@@ -254,20 +254,33 @@ export default function DiagnosticBar() {
         let cancelled = false;
         (async () => {
             try {
-                // Fetch case + case_agents in parallel via apiFetch (cookie-
-                // or-bearer auth handled centrally; null-token surfaces as
-                // missing-Authorization → cookie fallback, not "Bearer null").
-                const [caseData, agentsData] = await Promise.all([
+                // Fetch case + case_agents + agent templates in parallel via
+                // apiFetch (cookie-or-bearer auth handled centrally; null-token
+                // surfaces as missing-Authorization → cookie fallback, not
+                // "Bearer null"). The patient template is needed so the
+                // diagnostic mirrors the chat runtime's case→template merge
+                // — otherwise the bar reads "(no voice)" while the runtime
+                // actually plays the persona default.
+                const [caseData, agentsData, templatesData] = await Promise.all([
                     apiFetch(`/cases/${caseId}`).catch(() => null),
                     apiFetch(`/cases/${caseId}/agents`).catch(() => null),
+                    apiFetch(`/agents/templates`).catch(() => null),
                 ]);
                 if (cancelled) return;
                 const speakers = [];
 
-                // Patient row.
+                // Patient row — merge template voice with case overrides, same
+                // shape as mergePatientVoiceConfig() in ChatInterface.
                 const caseConfig = parseConfig(caseData?.case?.config || caseData?.config);
+                const patientTemplate = (templatesData?.templates || [])
+                    .find(t => t.agent_type === 'patient');
+                const patientTemplateVoice = parseConfig(patientTemplate?.config)?.voice || {};
+                const mergedPatientVoice = { ...patientTemplateVoice };
+                for (const [k, v] of Object.entries(caseConfig?.voice || {})) {
+                    if (v !== '' && v != null) mergedPatientVoice[k] = v;
+                }
                 const patientResolved = resolveVoice({
-                    voice: caseConfig?.voice,
+                    voice: mergedPatientVoice,
                     voiceSettings
                 });
                 speakers.push({
