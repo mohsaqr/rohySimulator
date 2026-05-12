@@ -42,6 +42,11 @@ function MainApp() {
    // editor gets the entire viewport. On close we reopen ConfigPanel with
    // its activeTab pinned to 'agents' so the user lands back where they were.
    const [personaEditorTarget, setPersonaEditorTarget] = useState(null);
+   // Bumped on every successful AgentPersonaEditor save. ChatInterface
+   // watches this and re-fetches the patient template + agents list so an
+   // admin who edits the persona voice and goes back to chat sees the
+   // change immediately, without needing a session restart.
+   const [personaRefreshCounter, setPersonaRefreshCounter] = useState(0);
    // Where to send the user when the persona editor closes. Default null =
    // land on the Agent Personas tab. Callers may pass {tab,wizardStep} to
    // round-trip back to a specific surface (eg. case wizard step 11) so
@@ -477,6 +482,7 @@ function MainApp() {
          <AgentPersonaEditor
             templateId={personaEditorTarget}
             onClose={handleClosePersonaEditor}
+            onSaved={() => setPersonaRefreshCounter(c => c + 1)}
          />
       );
    }
@@ -655,6 +661,7 @@ function MainApp() {
                      activeCase={activeCase}
                      onSessionStart={setSessionId}
                      restoredSessionId={sessionId}
+                     personaRefreshCounter={personaRefreshCounter}
                   />
                )}
             </div>

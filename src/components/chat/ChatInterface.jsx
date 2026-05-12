@@ -139,7 +139,7 @@ function isAvatarAlarmSpeechForceOff() {
     }
 }
 
-export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, currentVitals }) {
+export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, currentVitals, personaRefreshCounter = 0 }) {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [sessionId, setSessionId] = useState(null);
@@ -344,7 +344,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         };
 
         loadAgents();
-    }, [sessionId, activeCase?.id]);
+        // `personaRefreshCounter` from App.jsx bumps when AgentPersonaEditor
+        // saves, so this effect re-runs and refetches the Patient template +
+        // agents list. Without it, the chat tab keeps the pre-edit copy and
+        // an admin who just changed the patient persona's voice still hears
+        // the old voice — exactly the bug that triggered today's session.
+    }, [sessionId, activeCase?.id, personaRefreshCounter]);
 
     // Load agent conversations when switching tabs
     useEffect(() => {

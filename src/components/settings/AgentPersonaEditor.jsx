@@ -115,7 +115,7 @@ const DEFAULT_PREVIEW_TEXT = (template) => {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export default function AgentPersonaEditor({ templateId, onClose }) {
+export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
    const toast = useToast();
    const { headManifest: ctxHeadManifest, voiceSettings: ctxVoiceSettings, platformAvatars: ctxPlatformAvatars, setSpeaking } = useVoice();
 
@@ -304,6 +304,11 @@ export default function AgentPersonaEditor({ templateId, onClose }) {
             await AgentService.updateTemplate(template.id, template);
             toast.success(isStandard ? 'Standard template updated' : 'Template updated');
          }
+         // Notify the parent (App.jsx) so the running chat tab can refetch
+         // the patient template + agents list. Without this, the chat's
+         // in-memory copy stays stale and admin's voice change doesn't
+         // play until session restart.
+         onSaved?.();
          onClose?.();
       } catch (err) {
          toast.error(err.message || 'Failed to save template');
