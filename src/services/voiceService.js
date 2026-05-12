@@ -57,9 +57,21 @@ function teardown() {
     }
     _activeSources = [];
     if (_session) {
+        // 2026-05-12 — fire the dying session's onEnd so callers that set
+        // `speaking=true` in onStart always get a matching `speaking=false`.
+        // Without this, a second beginSpeechSession() (or a cancel()) would
+        // silently abort the previous session and the "Patient speaking…"
+        // banner would stay stuck on while the mic stayed disabled. onEnd
+        // is idempotent at every known callsite (setSpeaking(false)), so
+        // firing it here even when flush() also fires it later is safe.
+        const dying = _session;
         _session.aborted = true;
         try { _session.abort.abort(); } catch { /* noop */ }
         _session = null;
+        if (dying.onEnd && !dying._endFired) {
+            dying._endFired = true;
+            try { dying.onEnd(); } catch (err) { console.warn('[VoiceService] teardown onEnd threw:', err); }
+        }
     }
     // Note: we deliberately do NOT close _lipsync.audioContext here. Browsers
     // cap the number of live AudioContexts (~6); recreating one per turn
@@ -438,14 +450,65 @@ function beginSpeechSession({ voice, rate, pitch, gender, provider, onStart, onV
         },
 
         async flush() {
-            if (session.aborted) return;
-            await session.chain;
+            // 2026-05-12 — guarantee onEnd fires. Previously the two early-
+            // return paths (session aborted OR _session !== session) bailed
+            // without notifying the caller; whoever had setSpeaking(true)
+            // in onStart was left with no matching false. The fireEnd helper
+            // is idempotent via session._endFired so it's safe alongside
+            // teardown()'s own onEnd fire.
+            const fireEnd = () => {
+                if (session._endFired) return;
+                session._endFired = true;
+                try { onEnd?.(); } catch (err) { console.warn('[VoiceService] flush onEnd threw:', err); }
+            };
+            if (session.aborted) {
+                fireEnd();
+                return;
+            }
+            // Watchdog: cap the wait on `session.chain` so a server-side
+            // hang (a /tts route that holds the connection without writing
+            // an EOF frame, an LLM stream that never closes, etc.) can't
+            // strand the UI in "speaking=true" forever. The cap is generous
+            // (90s) — typical patient replies finish in under 15s; this is
+            // the last-resort escape valve, not a normal-path timer.
+            const chainWithWatchdog = Promise.race([
+                session.chain,
+                new Promise((_, reject) => {
+                    session._watchdogId = setTimeout(
+                        () => reject(new Error('flush watchdog (90s) — TTS chain did not resolve')),
+                        90_000,
+                    );
+                }),
+            ]).finally(() => {
+                if (session._watchdogId) {
+                    clearTimeout(session._watchdogId);
+                    session._watchdogId = null;
+                }
+            });
+            try {
+                await chainWithWatchdog;
+            } catch (err) {
+                console.warn('[VoiceService] flush watchdog:', err.message);
+                // Abort any in-flight TTS fetches that may have been holding
+                // the chain open, then fall through to fire onEnd.
+                try { session.abort.abort(); } catch { /* noop */ }
+                session.aborted = true;
+                fireEnd();
+                return;
+            }
             const audioCtx = _lipsync?.audioContext;
             if (audioCtx && session.endTime > audioCtx.currentTime && !session.aborted) {
                 const remainingMs = (session.endTime - audioCtx.currentTime) * 1000;
                 await new Promise(r => setTimeout(r, remainingMs + 80));
             }
-            if (session.aborted || _session !== session) return;
+            // The "_session !== session" case means a newer session took
+            // over while we were awaiting. The newer session will fire its
+            // own onEnd; we still fire ours so the original caller's
+            // speaking=true / speaking=false stays balanced.
+            if (session.aborted || _session !== session) {
+                fireEnd();
+                return;
+            }
             session.emit('viseme_sil');
             if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
             _started = false;
@@ -454,12 +517,20 @@ function beginSpeechSession({ voice, rate, pitch, gender, provider, onStart, onV
                 voice: session.voice || null,
                 provider: session.provider || null,
             });
-            onEnd?.();
+            fireEnd();
         },
 
         cancel() {
             session.aborted = true;
             try { session.abort.abort(); } catch { /* noop */ }
+            // teardown() now fires onEnd for the dying session, but only if
+            // _session points at it. If this session has already been
+            // displaced (rare race), fire it here so the cancel caller's
+            // speaking=true gets its balancing false.
+            if (_session !== session && !session._endFired) {
+                session._endFired = true;
+                try { onEnd?.(); } catch (err) { console.warn('[VoiceService] cancel onEnd threw:', err); }
+            }
             teardown();
         }
     };
