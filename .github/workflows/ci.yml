@@ -159,6 +159,12 @@ jobs:
           mkdir -p frontend
           cp -r dist/* frontend/
       - name: Run e2e tests
+        # Dozens of e2e tests legitimately log in as fresh seeded users from
+        # the same runner IP inside the production 15-min window; the auth
+        # rate limiter would turn every later test into a 429. The server
+        # honours this opt-in env to relax the cap — never set in prod.
+        env:
+          ROHY_DISABLE_AUTH_RATE_LIMIT: '1'
         run: npm run test:e2e
       - name: Upload Playwright report
         if: always()
@@ -195,12 +201,36 @@ jobs:
           cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
       - name: Install dependencies
         run: npm ci
+      # The audit-*.sh scripts (except audit-observability.sh, which spins
+      # up its own isolated server) all default to ROHY_API=http://localhost:3000
+      # and `admin / admin123` for login. Start a CI-only server with
+      # ALLOW_DEFAULT_USERS=1 so the seeded admin exists, then tear it
+      # down after the loop. Each script is sequential — they share the
+      # default port and can't run in parallel.
+      - name: Start CI server (port 3000) for audit scripts
+        run: |
+          mkdir -p /tmp/rohy-audit
+          PORT=3000 \
+          ROHY_DB=/tmp/rohy-audit/audit.sqlite \
+          JWT_SECRET=audit-ci-only-secret-do-not-reuse-anywhere \
+          NODE_ENV=production \
+          FRONTEND_URL=http://localhost:3000 \
+          ALLOW_DEFAULT_USERS=1 \
+          ROHY_DISABLE_AUTH_RATE_LIMIT=1 \
+          OYON_ENABLED=1 \
+          nohup node server/server.js > /tmp/rohy-audit/server.log 2>&1 &
+          echo $! > /tmp/rohy-audit/server.pid
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+              echo "✓ audit server up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "✗ audit server failed to boot in 60s"
+          tail -100 /tmp/rohy-audit/server.log
+          exit 1
       - name: Run audit scripts
-        # Each audit-*.sh script spins up its own throwaway server on a
-        # high port (3900+) using a temp ROHY_DB and tears it down on exit
-        # (see scripts/audit-observability.sh for the reference pattern).
-        # We run them sequentially — the scripts assume isolation but
-        # share the 3900–4399 port range, so parallelism risks collisions.
         run: |
           set -e
           shopt -s nullglob
@@ -209,3 +239,16 @@ jobs:
             bash "${script}"
             echo "::endgroup::"
           done
+      - name: Stop CI server
+        if: always()
+        run: |
+          if [ -f /tmp/rohy-audit/server.pid ]; then
+            kill -TERM "$(cat /tmp/rohy-audit/server.pid)" 2>/dev/null || true
+          fi
+      - name: Upload audit server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-server-log
+          path: /tmp/rohy-audit/server.log
+          if-no-files-found: warn

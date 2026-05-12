@@ -214,6 +214,15 @@ describe('Oyon purge + retention contract', () => {
     let oyonUserId;
 
     beforeAll(async () => {
+        // The retention-sweep test below dynamic-imports
+        // `server/routes/_helpers.js`, which transitively loads
+        // `server/middleware/auth.js` at module level and calls
+        // `process.exit(1)` if JWT_SECRET isn't in the current process's
+        // env. The other tests in this file run code via `startTestServer`
+        // (separate process where env is injected), so they don't trip the
+        // exit. Set the env on the test process too so the in-process
+        // import path works regardless of how the harness was launched.
+        process.env.JWT_SECRET = process.env.JWT_SECRET || TEST_JWT_SECRET;
         server = await startTestServer({ env: { JWT_SECRET: TEST_JWT_SECRET } });
         const db = await openDb(server.dbPath);
         const passwordHash = await bcrypt.hash('testpass', 4);

@@ -159,7 +159,17 @@ describe('apiClient', () => {
         it('parseAs:blob returns a blob', async () => {
             fetchSpy.mockResolvedValue(new Response('xyz', { status: 200 }));
             const blob = await apiFetch('/x', { parseAs: 'blob' });
-            expect(blob).toBeInstanceOf(Blob);
+            // Duck-type instead of `instanceof Blob` — Node 22's
+            // Response.blob() returns the node:buffer Blob class, while the
+            // global `Blob` resolved at vitest expect-time is jsdom's
+            // (less-complete) shim; the two are different constructors so
+            // `instanceof` fails on CI even though the value satisfies the
+            // Blob web spec. jsdom doesn't ship `arrayBuffer()` on its
+            // Blob shim either, so we assert only the contract-stable
+            // fields (`size` + `type`).
+            expect(typeof blob.size).toBe('number');
+            expect(typeof blob.type).toBe('string');
+            expect(blob.size).toBe(3);
         });
 
         it('parseAs:arrayBuffer returns an ArrayBuffer', async () => {

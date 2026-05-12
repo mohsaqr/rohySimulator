@@ -97,6 +97,14 @@ export const STORAGE_REGISTRY = Object.freeze({
         purpose: 'Per-user toggle for the dev diagnostic bar.',
         lifetime: 'forever',
     },
+    // ── Avatar / alarm runtime toggles ──────────────────────────────────────
+    rohy_avatar_alarm_speech_force_off: {
+        owner: 'src/components/chat/ChatInterface.jsx',
+        purpose: 'User preference: suppress the alarm-triggered avatar speech '
+            + '("the patient is alarming") regardless of the platform default. '
+            + 'Read by ChatInterface to gate the TTS announcement path.',
+        lifetime: 'forever',
+    },
     // ── Auth cookies (server-set, not localStorage) ────────────────────────
     rohy_auth: {
         owner: 'server/middleware/auth.js + server/routes.js (login/logout)',

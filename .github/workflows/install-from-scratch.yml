@@ -192,9 +192,14 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: Browser smoke — standalone logs.html loads without errors
+        # File extensions are .cjs because rohy's package.json declares
+        # `"type": "module"`, which makes any in-repo .js file ESM — the
+        # CommonJS `require(...)` shape used by the throwaway spec would
+        # then throw `ReferenceError: module is not defined in ES module
+        # scope` at parse time.
         run: |
           mkdir -p .ci
-          cat > .ci/install-smoke.spec.js <<'EOF'
+          cat > .ci/install-smoke.spec.cjs <<'EOF'
           const { test, expect } = require('@playwright/test');
 
           test('GET /oyon/standalone/logs.html — no 4xx/5xx, no console errors', async ({ page }) => {
@@ -243,8 +248,9 @@ jobs:
           EOF
 
           # Minimal Playwright config so we don't need playwright.config.js
-          # in the repo root for this throwaway test.
-          cat > .ci/playwright.config.js <<'EOF'
+          # in the repo root for this throwaway test. Same .cjs reasoning as
+          # the spec file above.
+          cat > .ci/playwright.config.cjs <<'EOF'
           module.exports = {
             testDir: '.',
             timeout: 60000,
@@ -257,7 +263,7 @@ jobs:
           };
           EOF
 
-          npx playwright test .ci/install-smoke.spec.js --config=.ci/playwright.config.js
+          npx playwright test .ci/install-smoke.spec.cjs --config=.ci/playwright.config.cjs
         timeout-minutes: 5
 
       # Verify the new ORT/MP version auto-resolution actually picked

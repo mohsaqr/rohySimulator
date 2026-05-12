@@ -49,10 +49,28 @@ describe('proxy budget enforcement', () => {
     let server;
     let llmServer;
     let token;
+    let fakeVoiceFile;
 
     beforeAll(async () => {
         const fakePiper = path.join(os.tmpdir(), `rohy-fake-piper-${process.pid}`);
         fs.writeFileSync(fakePiper, '#!/usr/bin/env node\nprocess.stdout.write(Buffer.alloc(2048));\n', { mode: 0o755 });
+        // The /api/tts piper path checks that the requested voice file lives
+        // under server/data/piper/ before it spawns Piper. CI runs against a
+        // bare Piper directory (no .onnx voices shipped — they're downloaded
+        // by install-piper.sh, opt-in) so the validator rejects the test
+        // voice with 400 "unknown voice" before any budget logic runs.
+        // Drop a stub file at the expected path; remove it in afterAll.
+        const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..');
+        const piperDir = path.join(repoRoot, 'server', 'data', 'piper');
+        fs.mkdirSync(piperDir, { recursive: true });
+        fakeVoiceFile = path.join(piperDir, 'en_US-amy-medium.onnx');
+        if (!fs.existsSync(fakeVoiceFile)) {
+            fs.writeFileSync(fakeVoiceFile, '');
+        } else {
+            // Real voice file already present (local dev). Leave it alone;
+            // null the cleanup so we don't delete the operator's install.
+            fakeVoiceFile = null;
+        }
         llmServer = await startLlmServer();
         server = await startTestServer({
             env: {
@@ -91,6 +109,9 @@ describe('proxy budget enforcement', () => {
     afterAll(async () => {
         if (server) await server.close();
         if (llmServer) await llmServer.close();
+        if (fakeVoiceFile) {
+            try { fs.unlinkSync(fakeVoiceFile); } catch { /* noop */ }
+        }
     });
 
     async function setSetting(key, value) {

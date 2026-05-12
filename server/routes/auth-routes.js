@@ -50,9 +50,20 @@ function authCookieOptions(maxAgeSeconds = 4 * 60 * 60) {
 
 const authLog = logger('auth');
 const radiologyLog = logger('radiology');
+
+// The auth limiters guard the login + registration endpoints against
+// password-guessing brute force. They're hardcoded for production — but
+// in CI, dozens of e2e tests legitimately log in as fresh seeded users
+// in the same wall-clock window from the same runner IP, which trips the
+// 10-per-15-min cap and turns every later test into a 429. We honour an
+// opt-in `ROHY_DISABLE_AUTH_RATE_LIMIT=1` env to scale the windows down
+// to "effectively unlimited" — set only in the e2e workflow (NEVER in
+// production). The cap stays on by default so nothing has to remember
+// to flip it back for prod.
+const RATE_LIMIT_DISABLED = process.env.ROHY_DISABLE_AUTH_RATE_LIMIT === '1';
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10,
+    max: RATE_LIMIT_DISABLED ? 100_000 : 10,
     message: { error: 'Too many authentication attempts. Please try again in 15 minutes.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -61,7 +72,7 @@ const authLimiter = rateLimit({
 
 const registerLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
-    max: 5,
+    max: RATE_LIMIT_DISABLED ? 100_000 : 5,
     message: { error: 'Too many registration attempts. Please try again later.' },
     standardHeaders: true,
     legacyHeaders: false
