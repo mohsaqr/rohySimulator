@@ -3,7 +3,7 @@ import { Edit3, Save, RefreshCw, ChevronDown, ChevronUp, AlertTriangle, Loader2 
 import { useToast } from '../../contexts/ToastContext';
 import { apiFetch, apiPut } from '../../services/apiClient';
 
-const LabValueEditor = ({ sessionId, caseId, onUpdate }) => {
+const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
   const toast = useToast();
   const [availableLabs, setAvailableLabs] = useState([]);
   const [expandedLabs, setExpandedLabs] = useState(new Set());

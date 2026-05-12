@@ -66,7 +66,6 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
     // Update treatment configuration
     const updateTreatmentConfig = (treatment, updates) => {
         setConfiguredTreatments(prev => {
-            const key = `${treatment.treatment_type}:${treatment.treatment_name}`;
             const existing = prev.find(
                 t => t.treatment_name === treatment.treatment_name && t.treatment_type === treatment.treatment_type
             );

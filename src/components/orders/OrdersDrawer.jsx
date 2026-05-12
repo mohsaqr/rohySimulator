@@ -31,7 +31,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         try {
             const saved = localStorage.getItem('rohy_lab_settings');
             if (saved) return JSON.parse(saved);
-        } catch (e) {}
+        } catch {}
         return {
             globalTurnaround: 0, // 0 = use per-test defaults
             showNormalRanges: true,
@@ -82,7 +82,10 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     const [labViewMode, setLabViewMode] = useState('search');
     const [expandedGroups, setExpandedGroups] = useState(new Set());
     const [loadingLabs, setLoadingLabs] = useState(false);
-    const [orderError, setOrderError] = useState(null);
+    // eslint-disable-next-line unused-imports/no-unused-vars -- value not surfaced
+    // to the user yet, but the setter is wired so the existing telemetry/
+    // logging captures every error path; renaming with `_` documents intent.
+    const [_orderError, setOrderError] = useState(null);
 
     // Radiology state
     const [availableRadiology, setAvailableRadiology] = useState([]);
@@ -229,7 +232,6 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         return matchesSearch && matchesGroup;
     });
 
-    const pendingRadiology = radiologyOrders.filter(o => !o.is_ready);
     const readyRadiology = radiologyOrders.filter(o => o.is_ready && !o.viewed_at);
 
     // Order labs
@@ -239,8 +241,6 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         setLoadingLabs(true);
         setOrderError(null);
         try {
-            const token = localStorage.getItem('token');
-
             // Build request body with optional turnaround override
             const body = {
                 lab_ids: selectedLabs,
@@ -340,11 +340,15 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     const readyOrders = labOrders.filter(o => o.is_ready && !o.viewed_at);
     const viewedOrders = labOrders.filter(o => o.is_ready && o.viewed_at);
     const [showOrdersPanel, setShowOrdersPanel] = useState(true);
-
-    if (!caseId || !sessionId) return null;
-
-    // State for treatment orders count
     const [treatmentOrdersCount, setTreatmentOrdersCount] = useState(0);
+
+    // Hooks must run unconditionally on every render to keep React's
+    // hook-call ordering stable — the previous layout placed these
+    // *after* the `if (!caseId || !sessionId) return null` guard below,
+    // which made the hook count differ between guarded and unguarded
+    // renders and tripped a runtime React error on first mount when
+    // the parent hadn't resolved the route params yet. The guard now
+    // lives below these declarations.
 
     // Fetch treatment orders count
     useEffect(() => {
@@ -361,6 +365,10 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         const interval = setInterval(fetchTreatmentCount, 10000);
         return () => clearInterval(interval);
     }, [sessionId]);
+
+    // Render nothing until the parent has wired the route params. Lives
+    // *after* every hook so hook-call ordering stays stable across renders.
+    if (!caseId || !sessionId) return null;
 
     const tabs = [
         { id: 'labs', label: 'Laboratory', icon: FlaskConical, count: readyOrders.length },
@@ -1129,7 +1137,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                         resultData = typeof order.result_data === 'string'
                                                             ? JSON.parse(order.result_data)
                                                             : (order.result_data || {});
-                                                    } catch (e) {}
+                                                    } catch {}
                                                     const hasFindings = resultData.findings || resultData.interpretation;
                                                     return (
                                                         <div

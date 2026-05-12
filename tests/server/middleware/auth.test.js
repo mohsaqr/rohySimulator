@@ -466,19 +466,6 @@ describe('auth middleware — CSRF protection on cookie-auth state-changing requ
     // CSRF token (cookie + matching X-CSRF-Token header). Bearer-auth
     // requests skip the check — see middleware/csrf.js for rationale.
 
-    function csrfReq({ method = 'POST', token, header, extraCookies = '' } = {}) {
-        const cookies = [`rohy_auth=PLACEHOLDER`, extraCookies].filter(Boolean).join('; ');
-        const headers = {};
-        // We override the cookie line below per scenario.
-        if (token !== undefined) {
-            headers.cookie = `rohy_auth=PLACEHOLDER; rohy_csrf=${token}`;
-        } else {
-            headers.cookie = cookies;
-        }
-        if (header !== undefined) headers['x-csrf-token'] = header;
-        return { method, headers };
-    }
-
     it('cookie-auth POST without X-CSRF-Token → 403 "CSRF token missing"', async () => {
         const jwtToken = signToken({ id: 104, role: 'admin' }, { jwtid: 'csrf-missing' });
         await auth.recordActiveSession(jwtToken, { id: 104, tenant_id: 1 });

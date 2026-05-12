@@ -140,7 +140,10 @@ export default function OyonCaptureWidget({ sessionId, caseId } = {}) {
    const [errorMsg, setErrorMsg] = useState(null);
    const [persistOk, setPersistOk] = useState(true);
    const [modelsReady, setModelsReady] = useState(false);
-   const [inferenceMs, setInferenceMs] = useState(null);
+   // eslint-disable-next-line unused-imports/no-unused-vars -- value
+   // currently consumed only by EventLogger via the setter; reserved
+   // for an upcoming "inference latency" badge in the widget.
+   const [_inferenceMs, setInferenceMs] = useState(null);
 
    const sessionRef = useRef(null);
 

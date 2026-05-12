@@ -366,7 +366,7 @@ function EventStatistics({ events }) {
 }
 
 // Main Log Viewer Component
-export default function SessionLogViewer({ sessionId, userId, onClose, showAllSessions = true }) {
+export default function SessionLogViewer({ sessionId, userId, onClose, _showAllSessions = true }) {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);

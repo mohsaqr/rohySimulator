@@ -62,7 +62,7 @@ describe('ClinicalRecordsEditor — History accordion groups', () => {
     });
 
     it('marks fields with content with a filled-indicator dot', () => {
-        const { container } = setup({ history: { hpi: 'Sudden onset...' } });
+        setup({ history: { hpi: 'Sudden onset...' } });
         // Look for the green dot adjacent to the HPI label.
         const hpiLabel = screen.getByText(/History of Present Illness/i);
         const dot = hpiLabel.querySelector('span.text-green-400');

@@ -10,7 +10,7 @@ import LabResultsModal from './components/investigations/LabResultsModal';
 import RadiologyResultsModal from './components/investigations/RadiologyResultsModal';
 import UserProfilePanel from './components/settings/UserProfilePanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { ToastProvider, useToast } from './contexts/ToastContext';
+import { ToastProvider } from './contexts/ToastContext';
 import { VoiceProvider } from './contexts/VoiceContext';
 import { NotificationProvider } from './notifications/NotificationContext';
 import { useNotifications } from './notifications/useNotifications';
@@ -32,7 +32,6 @@ import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
 // those count as exits. We restore whatever the user had whenever the app
 // boots, and never silently wipe based on time-since-last-activity.
 function MainApp() {
-   const [showConfig, setShowConfig] = useState(false);
    const [showFullPageSettings, setShowFullPageSettings] = useState(false);
    const [showUserProfile, setShowUserProfile] = useState(false);
    const [showUserMenu, setShowUserMenu] = useState(false);
@@ -52,7 +51,6 @@ function MainApp() {
    const [settingsInitialStep, setSettingsInitialStep] = useState(1);
    const [caseEnded, setCaseEnded] = useState(false);
    const { user, logout, isAdmin } = useAuth();
-   const toast = useToast();
    const [sessionValidated, setSessionValidated] = useState(false);
    const lastActivityRef = useRef(Date.now());
 
@@ -419,7 +417,6 @@ function MainApp() {
       }
       setActiveCase(caseData);
       setSessionId(null); // Will be set by ChatInterface when session starts
-      setShowConfig(false);
       setShowFullPageSettings(false);
       // Log case loaded event
       EventLogger.caseLoaded(caseData?.id, caseData?.name);

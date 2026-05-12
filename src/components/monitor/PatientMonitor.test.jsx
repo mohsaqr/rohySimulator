@@ -233,20 +233,11 @@ const baseCase = {
     },
 };
 
-// Snapshot with a CLEARLY DIFFERENT scenario than the live caseData.
-function snapshotWithDifferentScenario() {
-    return {
-        scenario: {
-            autoStart: true,
-            timeline: [
-                { time: 0, params: { hr: 60, spo2: 99, rr: 12, bpSys: 110, bpDia: 70 } },
-                { time: 3, params: { hr: 62, spo2: 99, rr: 12, bpSys: 110, bpDia: 70 } },
-            ],
-        },
-    };
-}
-
 // Helper — render PatientMonitor with provider stack.
+// (Previously: a `snapshotWithDifferentScenario()` helper lived here for an
+// engaged-snapshot precedence test that's now superseded by the
+// `session_snapshot` integration test. Removed 2026-05-12; recoverable
+// from git if the precedence assertion needs to come back.)
 function mount(props = {}) {
     return renderWithProviders(
         <PatientMonitor

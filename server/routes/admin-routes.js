@@ -152,7 +152,7 @@ router.get('/admin/database-stats', authenticateToken, requireAdmin, (req, res) 
                 try {
                     const dbStats = fs.statSync(dbPath);
                     stats.database_size_mb = (dbStats.size / (1024 * 1024)).toFixed(2);
-                } catch (e) {
+                } catch {
                     stats.database_size_mb = 'unknown';
                 }
                 res.json({ stats });
@@ -953,16 +953,10 @@ router.post('/admin/seed/body-regions', authenticateToken, requireAdmin, (req, r
     }, 500);
 });
 
-// POST /api/admin/seed/all - Seed all master data
+// POST /api/admin/seed/all - Documentation-only endpoint that lists the
+// per-domain seed routes. Actual seeding is fan-out, run by the operator
+// against the individual endpoints (no per-call results aggregation here).
 router.post('/admin/seed/all', authenticateToken, requireAdmin, async (req, res) => {
-    const results = {
-        exam_techniques: 0,
-        vital_definitions: 0,
-        body_regions: 0,
-        lab_tests: 0
-    };
-
-    // This would trigger all seed operations
     res.json({
         message: 'To seed all data, call individual seed endpoints:',
         endpoints: [
@@ -1002,7 +996,7 @@ router.get('/platform-settings/user-fields', authenticateToken, (req, res) => {
                 try {
                     const config = JSON.parse(row.setting_value);
                     res.json({ config });
-                } catch (e) {
+                } catch {
                     res.json({ config: DEFAULT_USER_FIELD_CONFIG });
                 }
             } else {
@@ -1573,6 +1567,9 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
         for (const k of ['google_tts_api_key', 'openai_tts_api_key']) {
             if (k in body) {
                 const v = body[k];
+                // Intentional control-char filter — rejects API keys that
+                // would smuggle NULs, ESC, etc. through the settings boundary.
+                // eslint-disable-next-line no-control-regex
                 if (v !== null && v !== '' && (typeof v !== 'string' || v.length > 256 || /[\s\x00-\x1f\x7f]/.test(v))) {
                     return res.status(400).json({ error: `${k} must be a printable string ≤ 256 chars or empty to clear` });
                 }
@@ -1642,7 +1639,7 @@ router.put('/platform-settings/avatars', authenticateToken, requireAdmin, async 
             }
         }
         const isSafeGlb   = (v) => typeof v === 'string' && /^[a-zA-Z0-9_-]+\.glb$/.test(v);
-        const isSafeVoice = (v) => typeof v === 'string' && /^[a-zA-Z0-9_.\-]+$/.test(v) && !v.includes('..');
+        const isSafeVoice = (v) => typeof v === 'string' && /^[a-zA-Z0-9_.-]+$/.test(v) && !v.includes('..');
         const inRange = (v, lo, hi) => {
             const n = Number(v);
             return Number.isFinite(n) && n >= lo && n <= hi;

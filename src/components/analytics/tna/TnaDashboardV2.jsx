@@ -116,7 +116,7 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
     const [pruneThreshold, setPruneThreshold] = useState(0.05);
     const [modelType, setModelType] = useState('relative');
     const [graphLayout, setGraphLayout] = useState('circle');
-    const [nodeRadius, setNodeRadius] = useState(25);
+    const [nodeRadius] = useState(25);
     const [nodeSizeMetric, setNodeSizeMetric] = useState('fixed');
     const [showSelfLoops, setShowSelfLoops] = useState(false);
     const [showEdgeLabels, setShowEdgeLabels] = useState(true);
@@ -132,7 +132,7 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
 
     // --- Sequence mode + verb editing ---
     const [sequenceMode, setSequenceMode] = useState('combined');
-    const [interpretations, setInterpretations] = useState({ ...DEFAULT_INTERPRETATIONS });
+    const [interpretations] = useState({ ...DEFAULT_INTERPRETATIONS });
     const [verbRenames, setVerbRenames] = useState({});
     const [verbExcludes, setVerbExcludes] = useState({});
 

@@ -14,7 +14,7 @@ import { ApiError, apiFetch, apiPost, apiPut } from '../../services/apiClient';
  * TreatmentPanel - Main component for ordering treatments
  * Handles medications, IV fluids, oxygen therapy, and nursing interventions
  */
-export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
+export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) {
     const [activeCategory, setActiveCategory] = useState('medication');
     const [treatments, setTreatments] = useState({
         medication: [],
@@ -90,7 +90,6 @@ export default function TreatmentPanel({ sessionId, caseId, onEffectsUpdate }) {
         setOrderingInProgress(true);
 
         try {
-            const token = localStorage.getItem('token');
             const orderData = {
                 treatment_type: selectedTreatment.treatment_type,
                 treatment_name: selectedTreatment.treatment_name,

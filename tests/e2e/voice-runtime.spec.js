@@ -130,7 +130,7 @@ async function installPlaybackRateTrap(page) {
                         stack: (new Error()).stack
                     });
                 } catch { /* never throw inside a setter */ }
-                return origSet.call(this, v);
+                origSet.call(this, v);
             }
         });
     });

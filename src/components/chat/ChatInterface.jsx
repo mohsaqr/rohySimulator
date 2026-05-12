@@ -228,7 +228,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     }, [sessionId, restoredSessionId]);
     const [agentConversations, setAgentConversations] = useState({}); // { agent_type: [...messages] }
     const [agentStates, setAgentStates] = useState({}); // { agent_type: { status, paged_at, ... } }
-    const [pagingTimers, setPagingTimers] = useState({}); // { agent_type: timeoutId }
+    // Map of agent_type → outstanding setTimeout id for the paging guardrail.
+    // The setter is what matters; consumers don't read the map (each agent's
+    // own state already tracks `status: 'paging'`). Prefix-named `_` to
+    // satisfy the unused-vars allowlist while keeping the setter writable.
+    // eslint-disable-next-line unused-imports/no-unused-vars
+    const [_pagingTimers, setPagingTimers] = useState({});
     const [teamLog, setTeamLog] = useState([]);
     const alarmSpeechCooldownRef = useRef(new Map());
     const pendingAlarmSpeechRef = useRef(null);
@@ -1050,7 +1055,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
         VoiceService.startListening({
             lang: voiceSettings.stt_language,
-            onResult: ({ final, interim, isFinal }) => {
+            onResult: ({ final, interim, _isFinal }) => {
                 // Continuous mode (default in voiceService): show whatever's
                 // currently transcribed but DO NOT stop on isFinal — pauses
                 // mid-sentence shouldn't kill the mic. The user explicitly
@@ -1372,7 +1377,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                 }`}>
                                     {activeTab === 'patient' ? (
                                         patientAvatar ? (
-                                            <img src={BASE_PATH + patientAvatar} alt={patientName} className="w-full h-full object-cover" />
+                                            <img src={baseUrl(patientAvatar)} alt={patientName} className="w-full h-full object-cover" />
                                         ) : (
                                             <Bot className="w-5 h-5 text-emerald-400" />
                                         )

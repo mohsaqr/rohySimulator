@@ -166,7 +166,10 @@ function findRiskyLines() {
     let raw;
     try {
         raw = execSync(
-            `grep -rn --include='*.js' -E "(\\\`|'|\\\")(SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)" ${path.join(REPO_ROOT, 'server')} 2>/dev/null || true`,
+            // Wrap the regex in single quotes for bash so we can use a bare
+            // double-quote inside it; backtick is still backslash-escaped to
+            // keep it out of JS template-literal interpolation.
+            `grep -rn --include='*.js' -E '(\\\`|'\\''|")(SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)' ${path.join(REPO_ROOT, 'server')} 2>/dev/null || true`,
             { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }
         );
     } catch {

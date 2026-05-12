@@ -117,11 +117,12 @@ test.beforeAll(async ({ baseURL }) => {
     // 1. Admin context (used to seed everyone else + as the "admin baseline" assertions).
     adminCtx = await apiAsAdmin(baseURL);
 
-    // Capture admin + student ids so we can target their resources without
+    // Capture the student id so we can target their resources without
     // hardcoding (1, 2) — the seeder *currently* assigns those, but the
-    // test should not break if seed order changes.
-    const adminLoginRes = await loginAs(baseURL, 'admin');
-    adminUserId = adminLoginRes.user.id;
+    // test should not break if seed order changes. (Admin id used to be
+    // captured the same way; nothing reads it in this file, so we just
+    // perform the login for its side-effects without retaining the id.)
+    await loginAs(baseURL, 'admin');
     const studentLoginRes = await loginAs(baseURL, 'student');
     studentUserId = studentLoginRes.user.id;
     studentCtx = await authedCtx(baseURL, studentLoginRes.token);

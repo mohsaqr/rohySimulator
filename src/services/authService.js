@@ -44,7 +44,7 @@ export const AuthService = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
             });
-        } catch (err) {
+        } catch {
             throw new Error('Cannot connect to server. Is the backend running?');
         }
 
@@ -56,7 +56,7 @@ export const AuthService = {
         let data;
         try {
             data = JSON.parse(text);
-        } catch (err) {
+        } catch {
             throw new Error(`Invalid server response: ${text.substring(0, 100)}`);
         }
 
@@ -91,7 +91,7 @@ export const AuthService = {
 
             const data = await response.json();
             return data.user;
-        } catch (error) {
+        } catch {
             if (legacyToken) localStorage.removeItem('token');
             return null;
         }

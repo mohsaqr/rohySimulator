@@ -43,7 +43,7 @@ const HISTORY_GROUPS = CANONICAL_HISTORY_GROUPS.map(group => ({
     fields: group.fields.map(f => ({ ...f, ...EDITOR_FIELD_META[f.key] })),
 }));
 
-export default function ClinicalRecordsEditor({ caseData, setCaseData, updateConfig }) {
+export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateConfig }) {
     const [activeTab, setActiveTab] = useState('history');
     const [openHistoryGroups, setOpenHistoryGroups] = useState({
         presentHistory: true,

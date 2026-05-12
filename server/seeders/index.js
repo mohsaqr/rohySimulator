@@ -59,7 +59,7 @@ export async function runSeeders(db) {
  * @returns {Promise<boolean>}
  */
 export function needsSeeding(db) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, _reject) => {
         db.get('SELECT COUNT(*) as count FROM users', (err, row) => {
             if (err) {
                 // Table might not exist yet

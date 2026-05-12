@@ -106,7 +106,8 @@ async function startSessionApi(baseURL, caseId, studentName) {
         }
         return await res.json();
     } finally {
-        
+        /* noop — session-cleanup is best-effort */
+
     }
 }
 
@@ -156,7 +157,8 @@ test.describe('case lifecycle', () => {
             expect(snap.case_id).toBe(theCase.id);
             expect(snap.snapshot_at).toBeTruthy();
         } finally {
-            
+            /* noop — session-cleanup is best-effort */
+
         }
 
         // We don't fail the test if the SPA never POSTed /api/sessions —
@@ -233,7 +235,7 @@ test.describe('case lifecycle', () => {
 
         // Don't leave the session as a permanent zombie row.
         const ctx = await adminCtx(baseURL);
-        try { await ctx.put(`/api/sessions/${session.id}/end`); } finally {  }
+        try { await ctx.put(`/api/sessions/${session.id}/end`); } finally { /* noop — session-cleanup is best-effort */ }
     });
 
     test('3. vitals tick — recorded values are non-stale', async ({ baseURL }) => {
@@ -269,7 +271,8 @@ test.describe('case lifecycle', () => {
             const distinct = new Set(hrs);
             expect(distinct.size).toBeGreaterThanOrEqual(2);
         } finally {
-            
+            /* noop — session-cleanup is best-effort */
+
         }
     });
 
@@ -311,7 +314,8 @@ test.describe('case lifecycle', () => {
             // contract test for the POST itself.
             expect(list.length >= 0).toBeTruthy();
         } finally {
-            
+            /* noop — session-cleanup is best-effort */
+
         }
     });
 
@@ -349,7 +353,8 @@ test.describe('case lifecycle', () => {
             );
             expect(matching.length).toBe(1);
         } finally {
-            
+            /* noop — session-cleanup is best-effort */
+
         }
     });
 
@@ -376,7 +381,8 @@ test.describe('case lifecycle', () => {
             expect(secondJson.duration).toBe(firstDuration);
             expect(secondJson.already_ended).toBe(true);
         } finally {
-            
+            /* noop — session-cleanup is best-effort */
+
         }
     });
 
@@ -436,7 +442,7 @@ test.describe('case lifecycle', () => {
         expect(voices[1]).not.toBe(voices[0]);
 
         const ctx = await adminCtx(baseURL);
-        try { await ctx.put(`/api/sessions/${session.id}/end`); } finally {  }
+        try { await ctx.put(`/api/sessions/${session.id}/end`); } finally { /* noop — session-cleanup is best-effort */ }
     });
 
     test('8. clinical note saved + close', async ({ baseURL }) => {
@@ -466,7 +472,8 @@ test.describe('case lifecycle', () => {
             const closed = await ctx.put(`/api/sessions/${session.id}/end`);
             expect(closed.ok()).toBeTruthy();
         } finally {
-            
+            /* noop — session-cleanup is best-effort */
+
         }
     });
 });

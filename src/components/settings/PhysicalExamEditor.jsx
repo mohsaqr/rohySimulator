@@ -55,57 +55,11 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
         });
     };
 
-    // Upload audio file for auscultation
-    const handleAudioUpload = async (regionId, examType, file) => {
-        if (!file) return;
-
-        setUploading(true);
-        const formData = new FormData();
-        formData.append('photo', file);
-
-        try {
-            const data = await apiFetch('/upload', {
-                method: 'POST',
-                body: formData
-            });
-            if (data.imageUrl) { // Server returns imageUrl for all uploads
-                const existingExam = physicalExam[regionId]?.[examType] || {};
-                updatePhysicalExam(
-                    regionId,
-                    examType,
-                    existingExam.finding || '',
-                    existingExam.abnormal || false,
-                    data.imageUrl
-                );
-            }
-        } catch (err) {
-            console.error('Audio upload failed:', err);
-            toast.error('Failed to upload audio file');
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    // Remove audio from auscultation
-    const removeAudio = (regionId, examType) => {
-        const existingExam = physicalExam[regionId]?.[examType] || {};
-        setCaseData(prev => ({
-            ...prev,
-            config: {
-                ...prev.config,
-                physical_exam: {
-                    ...prev.config?.physical_exam,
-                    [regionId]: {
-                        ...prev.config?.physical_exam?.[regionId],
-                        [examType]: {
-                            ...existingExam,
-                            audioUrl: null
-                        }
-                    }
-                }
-            }
-        }));
-    };
+    // (Note: previously declared `handleAudioUpload` + `removeAudio` helpers
+    // here were scaffolded for a generic per-finding audio attach flow that
+    // never landed — the auscultation-specific `updateAuscultationAudio`
+    // below is the actually-wired path. Removed 2026-05-12; recoverable
+    // from git if the generic flow gets picked back up.)
 
     // Update specific auscultation audio (heartAudio or lungAudio)
     const updateAuscultationAudio = (regionId, examType, audioType, url) => {

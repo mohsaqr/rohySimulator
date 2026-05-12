@@ -190,7 +190,6 @@ function updateUiSetting(key, value) {
 }
 
 function setView(view) {
-  activeView = view;
   for (const tab of els.tabs) {
     tab.setAttribute('aria-selected', String(tab.dataset.view === view));
   }

@@ -288,7 +288,7 @@ test.describe('scenario engine', () => {
     // -----------------------------------------------------------------------
     // 1. Scenario timeline runs
     // -----------------------------------------------------------------------
-    test.skip('SKIP (e2e UI brittle, locked at unit/source level in PatientMonitor.test.jsx): timeline runs — HR converges to last-frame target within 12 s', async ({ page }) => {
+    test.skip('SKIP (e2e UI brittle, locked at unit/source level in PatientMonitor.test.jsx): timeline runs — HR converges to last-frame target within 12 s', async ({ page, baseURL }) => {
         test.slow();
         await _authedGoto(page, baseURL, '/');
 
@@ -326,7 +326,7 @@ test.describe('scenario engine', () => {
     // -----------------------------------------------------------------------
     // 2. Auto-stop after last frame
     // -----------------------------------------------------------------------
-    test.skip('SKIP (e2e UI brittle, locked at unit/source level in PatientMonitor.test.jsx): auto-stop — scenarioPlaying flips false within ~2 s of last keyframe', async ({ page }) => {
+    test.skip('SKIP (e2e UI brittle, locked at unit/source level in PatientMonitor.test.jsx): auto-stop — scenarioPlaying flips false within ~2 s of last keyframe', async ({ page, baseURL }) => {
         test.slow();
         await _authedGoto(page, baseURL, '/');
         // Open the panel so the play/pause button exists in the DOM.
@@ -353,7 +353,7 @@ test.describe('scenario engine', () => {
     // -----------------------------------------------------------------------
     // 3. Override guard — params (HR)
     // -----------------------------------------------------------------------
-    test.skip('SKIP (e2e UI brittle, locked at unit/source level in PatientMonitor.test.jsx): override guard — manual HR survives subsequent engine ticks', async ({ page }) => {
+    test.skip('SKIP (e2e UI brittle, locked at unit/source level in PatientMonitor.test.jsx): override guard — manual HR survives subsequent engine ticks', async ({ page, baseURL }) => {
         test.slow();
         await _authedGoto(page, baseURL, '/');
         await openScenariosPanel(page);
@@ -406,7 +406,7 @@ test.describe('scenario engine', () => {
     // -----------------------------------------------------------------------
     // 4. Override guard — rhythm
     // -----------------------------------------------------------------------
-    test.skip('SKIP (e2e UI brittle, locked at unit/source level in PatientMonitor.test.jsx): override guard — manual rhythm survives subsequent engine ticks', async ({ page }) => {
+    test.skip('SKIP (e2e UI brittle, locked at unit/source level in PatientMonitor.test.jsx): override guard — manual rhythm survives subsequent engine ticks', async ({ page, baseURL }) => {
         test.slow();
         await _authedGoto(page, baseURL, '/');
         await openScenariosPanel(page);
@@ -455,7 +455,7 @@ test.describe('scenario engine', () => {
     // -----------------------------------------------------------------------
     // 5. Override guard — conditions (PVCs)
     // -----------------------------------------------------------------------
-    test.skip('SKIP (e2e UI brittle, locked at unit/source level in PatientMonitor.test.jsx): override guard — manual condition (PVCs) survives subsequent engine ticks', async ({ page }) => {
+    test.skip('SKIP (e2e UI brittle, locked at unit/source level in PatientMonitor.test.jsx): override guard — manual condition (PVCs) survives subsequent engine ticks', async ({ page, baseURL }) => {
         test.slow();
         await _authedGoto(page, baseURL, '/');
         await openScenariosPanel(page);
@@ -515,7 +515,7 @@ test.describe('scenario engine', () => {
     // -----------------------------------------------------------------------
     // 6. Pause / Resume
     // -----------------------------------------------------------------------
-    test.skip('SKIP (e2e UI brittle, locked at unit/source level in PatientMonitor.test.jsx): pause stops ticks; resume re-engages', async ({ page }) => {
+    test.skip('SKIP (e2e UI brittle, locked at unit/source level in PatientMonitor.test.jsx): pause stops ticks; resume re-engages', async ({ page, baseURL }) => {
         test.slow();
         await _authedGoto(page, baseURL, '/');
         await openScenariosPanel(page);

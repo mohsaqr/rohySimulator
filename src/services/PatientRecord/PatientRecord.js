@@ -203,7 +203,7 @@ class PatientRecord {
     });
 
     // Update current state for vitals
-    if (category === 'vital' && this.record.current_state.vitals.hasOwnProperty(parameter)) {
+    if (category === 'vital' && Object.hasOwn(this.record.current_state.vitals, parameter)) {
       this.record.current_state.vitals[parameter] = to;
     }
 
@@ -587,9 +587,10 @@ class PatientRecord {
         return `Asked about ${e.category}. ${e.source ? `Response: ${this._truncate(e.source, 100)}` : e.content}`;
       case 'EXAMINED':
         return `Examined ${e.region} (${e.technique}).${e.detail ? ` ${e.detail}` : ''}`;
-      case 'ELICITED':
+      case 'ELICITED': {
         const prefix = e.abnormal ? 'ABNORMAL: ' : '';
         return `${prefix}${e.finding}`;
+      }
       case 'NOTED':
         return `Noted ${e.item} - ${e.action || 'acknowledged'}`;
       case 'ORDERED':

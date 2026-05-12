@@ -273,13 +273,12 @@ const importSettingsFromJSON = (file, setRhythm, setConditions, setParams) => {
    });
 };
 
-export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmin: isAdminProp = false }) {
+export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdmin: isAdminProp = false }) {
    const toast = useToast();
    const { isAdmin: isAdminAuth } = useAuth();
    const isAdmin = isAdminProp || isAdminAuth();
-   const { noted, changed, setInitialVitals } = usePatientRecord();
+   const { noted, changed } = usePatientRecord();
    // --- Refs for Canvas & Buffers ---
-   const canvasRef = useRef(null);
    const ecgCanvasRef = useRef(null);
    const plethCanvasRef = useRef(null);
    const respCanvasRef = useRef(null);
@@ -292,7 +291,6 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
    
    // --- Simulation State ---
    const [isPlaying, setIsPlaying] = useState(true);
-   const [lastFrameTime, setLastFrameTime] = useState(0);
 
    // Load saved settings on mount
    const savedSettings = loadSavedSettings();
@@ -318,7 +316,6 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
    const [trackOverrides, setTrackOverrides] = useState(true);
 
    // Session timer state
-   const [sessionStartTime] = useState(() => Date.now());
    const [elapsedTime, setElapsedTime] = useState(0);
 
    // Platform settings for monitor visibility
@@ -391,7 +388,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       if (!treatmentEffects.count) return; // No active treatments
 
       const treatmentAggregates = treatmentEffects.aggregate || {};
-      setDisplayVitals(prev => ({
+      setDisplayVitals(_prev => ({
          hr: Math.max(20, Math.min(250, simulationParams.current.hr + (treatmentAggregates.hr || 0))),
          spo2: Math.max(50, Math.min(100, simulationParams.current.spo2 + (treatmentAggregates.spo2 || 0))),
          rr: Math.max(4, Math.min(60, simulationParams.current.rr + (treatmentAggregates.rr || 0))),
@@ -720,14 +717,6 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
       setOverriddenVitals(prev => new Set([...prev, 'rhythm']));
       if (prevRhythm !== newRhythm) {
          changed('vitals', 'Cardiac Rhythm', prevRhythm, newRhythm, 'manual');
-      }
-   };
-
-   // Helper to update conditions with override tracking
-   const updateConditionsWithOverride = (newConditions) => {
-      setConditions(newConditions);
-      if (caseBaselineConditions && trackOverrides) {
-         setOverriddenVitals(prev => new Set([...prev, 'conditions']));
       }
    };
 
@@ -2133,7 +2122,7 @@ export default function PatientMonitor({ caseParams, caseData, sessionId, isAdmi
                      {alarmSystem.snoozedAlarms && alarmSystem.snoozedAlarms.length > 0 && (
                         <div className="space-y-2 mb-6">
                            <h4 className="text-sm font-semibold text-yellow-400">Snoozed Alarms ({alarmSystem.snoozedAlarms.length})</h4>
-                           {alarmSystem.snoozedAlarms.map(({ key, until, remaining }) => (
+                           {alarmSystem.snoozedAlarms.map(({ key, _until, remaining }) => (
                               <div key={key} className="bg-yellow-900/20 border border-yellow-700/50 rounded p-3">
                                  <div className="flex items-center justify-between">
                                     <div>

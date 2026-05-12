@@ -2286,7 +2286,7 @@ function UserManagement() {
                 }
                 loadUsers();
                 setShowBatchUpload(false);
-            } catch (err) {
+            } catch {
                 toast.error('Error processing CSV file');
             }
         };
@@ -2610,7 +2610,8 @@ jane_admin,Jane Smith,jane@example.com,admin456,admin`}
 }
 
 // Lab Investigation Selector Component
-function LabInvestigationSelector({ caseData, onAddLab, patientGender, showAddByGroup = false }) {
+function LabInvestigationSelector({ _caseData, onAddLab, patientGender, showAddByGroup = false }) {
+    const toast = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [selectedGroup, setSelectedGroup] = useState('all');
@@ -2879,7 +2880,7 @@ function PagesEditor({ pages, onChange }) {
     );
 }
 
-function CaseAgentEditor({ caseId, caseData, setCaseData, onOpenPersonaEditor }) {
+function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenPersonaEditor }) {
     const [templates, setTemplates] = useState([]);
     const [caseAgents, setCaseAgents] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -3275,9 +3276,8 @@ function CaseAgentEditor({ caseId, caseData, setCaseData, onOpenPersonaEditor })
 }
 
 // Sub-component for the Wizard to keep code clean
-function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, hasUnsavedChanges, lastSavedAt, initialStep, onStepLoaded, onOpenPersonaEditor, resumedFromStash, onDiscardDraft }) {
+function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, _hasUnsavedChanges, lastSavedAt, initialStep, onStepLoaded, onOpenPersonaEditor, resumedFromStash, onDiscardDraft }) {
     const [step, setStep] = useState(initialStep || 1);
-    const [uploading, setUploading] = useState(false);
     const [publicScenarios, setPublicScenarios] = useState([]);
     const toast = useToast();
 
@@ -3577,7 +3577,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
 
                 {/* Clickable Step Navigation */}
                 <div className="flex gap-1">
-                    {WIZARD_STEPS.map((s, idx) => (
+                    {WIZARD_STEPS.map((s, _idx) => (
                         <button
                             key={s.num}
                             onClick={async () => {

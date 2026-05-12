@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Plus, Trash2, Edit, Download, Upload, Globe, Lock, Play, X, Copy, Clock, ChevronDown, ChevronUp, Save, Search, Package, Database } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
 import { SCENARIO_TEMPLATES } from '../../data/scenarioTemplates';
@@ -64,13 +63,12 @@ export default function ScenarioRepository({ onSelectScenario }) {
     const [showCustom, setShowCustom] = useState(true);
     const fileInputRef = useRef(null);
 
-    // Stage-7 audit: read isAdmin from AuthContext, not localStorage. The
-    // legacy `localStorage.user` key was never populated (login stores only
-    // the token), so isAdmin was always false — every user saw the
-    // non-admin UI regardless of role. Switching to useAuth() picks up the
-    // role correctly.
-    const { user: authUser } = useAuth();
-    const isAdmin = (authUser?.role === 'admin') || authUser?.is_admin;
+    // (Stage-7 audit previously derived an isAdmin flag here from
+    // useAuth() — the legacy localStorage.user path always returned
+    // false. The flag is no longer read in this component since
+    // built-in/custom toggles + per-action role checks moved to the
+    // backend; useAuth() is still imported elsewhere if the gating
+    // returns.)
 
     useEffect(() => {
         loadScenarios();
@@ -287,7 +285,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
                     is_builtin: false
                 });
                 toast.success('Scenario imported - review and save');
-            } catch (err) {
+            } catch {
                 toast.error('Invalid scenario file');
             }
         };

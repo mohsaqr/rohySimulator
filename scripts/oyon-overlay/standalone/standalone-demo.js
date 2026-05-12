@@ -626,7 +626,9 @@ function updateQuality(face) {
     setQualityBanner('bad', 'No face detected — face the camera.');
     return;
   }
-  const ratio = face.quality?.faceAreaRatio ?? (face.bbox?.width * face.bbox?.height) ?? 0;
+  // multiplication never returns nullish, so `??` would be a no-op; fall
+  // back to `||` to also catch 0 / NaN bbox dimensions as "no signal yet".
+  const ratio = face.quality?.faceAreaRatio ?? ((face.bbox?.width * face.bbox?.height) || 0);
   if (ratio < 0.04) {
     setQualityBanner('warn', 'Face is small — move closer to the camera.');
   } else if (face.bbox && (face.bbox.x < 0.05 || face.bbox.x + face.bbox.width > 0.95)) {
@@ -687,28 +689,6 @@ function visibleVideoArea(width, height) {
     width: renderedWidth,
     height: renderedHeight,
   };
-}
-
-function cornerPath(ctx, x, y, length, sx, sy) {
-  ctx.beginPath();
-  ctx.moveTo(x, y + sy * length);
-  ctx.lineTo(x, y);
-  ctx.lineTo(x + sx * length, y);
-  ctx.stroke();
-}
-
-function roundRect(ctx, x, y, width, height, radius) {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
 }
 
 function hexToRgba(hex, alpha) {

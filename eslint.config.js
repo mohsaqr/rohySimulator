@@ -66,6 +66,30 @@ export default defineConfig([
         args: 'after-used',
         argsIgnorePattern: '^_',
       }],
+
+      // The react-hooks v7 "react-compiler" subset describes patterns the
+      // optimizing compiler can't auto-memoize. They're optimization
+      // hints, not bugs — useful to surface in editor + CI summary, but
+      // not gates on the build. Keep `rules-of-hooks` as an error since
+      // that's a real React API contract violation.
+      'react-hooks/set-state-in-effect':         'warn',
+      'react-hooks/purity':                      'warn',
+      'react-hooks/immutability':                'warn',
+      'react-hooks/static-components':           'warn',
+      'react-hooks/preserve-manual-memoization': 'warn',
+      'react-hooks/refs':                        'warn',
+      // `react-refresh/only-export-components` flags non-component exports
+      // from .jsx files. HMR optimization only — production builds don't
+      // care. Worth warning on so we trend toward clean component files,
+      // but not a CI gate.
+      'react-refresh/only-export-components':    'warn',
+      // Empty catch blocks are an idiomatic JS pattern for best-effort
+      // operations that should silently fall back on failure
+      // (JSON.parse from localStorage, optional analytics computation,
+      // pause-may-already-be-paused video cleanup, etc.). If you want
+      // real error handling, write it explicitly — the lint rule
+      // doesn't relax for empty `catch (e)` either, only for `catch {}`.
+      'no-empty': ['error', { allowEmptyCatch: true }],
     },
   },
   // Server-side + build-config files run under Node, not the browser.

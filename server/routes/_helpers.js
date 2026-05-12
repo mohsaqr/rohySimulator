@@ -533,7 +533,7 @@ export function resolveSessionCaseScenario(row) {
         try {
             const snap = JSON.parse(row.case_snapshot);
             if (snap && snap.scenario !== undefined) return snap.scenario;
-        } catch (e) {
+        } catch {
             // already warned in resolveSessionCaseConfig path; stay quiet here
         }
     }

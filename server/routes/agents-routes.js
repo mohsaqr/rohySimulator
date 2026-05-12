@@ -1008,7 +1008,7 @@ router.post('/cases/:caseId/agents/add-defaults', authenticateToken, async (req,
                         }
                     );
                 });
-            } catch (e) {
+            } catch {
                 // Ignore duplicates
             }
         }

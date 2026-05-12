@@ -3,7 +3,7 @@ import { X, Printer, ZoomIn, ZoomOut, Maximize2, FileText, Building2, Stethoscop
 import { apiPut } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
 
-const RadiologyResultsModal = ({ result, sessionId, patientInfo, onClose }) => {
+const RadiologyResultsModal = ({ result, _sessionId, patientInfo, onClose }) => {
   const { elicited } = usePatientRecord();
   const [imageZoom, setImageZoom] = useState(1);
   const [showFullImage, setShowFullImage] = useState(false);
@@ -18,7 +18,6 @@ const RadiologyResultsModal = ({ result, sessionId, patientInfo, onClose }) => {
   // Generate a fake accession number for realism
   const accessionNumber = `RAD-${result.id?.toString().padStart(6, '0') || '000001'}`;
   const reportDate = new Date(result.available_at || Date.now());
-  const orderDate = new Date(result.ordered_at || Date.now());
 
   // Mark as viewed when opened
   useEffect(() => {

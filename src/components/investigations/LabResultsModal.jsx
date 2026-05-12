@@ -3,7 +3,7 @@ import { X, AlertTriangle, TrendingUp, TrendingDown, Minus, Printer, Building2, 
 import { apiPut } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
 
-const LabResultsModal = ({ result, sessionId, patientInfo, onClose }) => {
+const LabResultsModal = ({ result, _sessionId, patientInfo, onClose }) => {
   const { elicited } = usePatientRecord();
   const [showRanges, setShowRanges] = useState(() => {
     const saved = localStorage.getItem('rohy_show_lab_ranges');

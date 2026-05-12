@@ -894,7 +894,7 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, (req, res) 
                 
                 // Build response with all tests
                 const responseLabs = [];
-                Object.entries(uniqueTests).forEach(([testName, variations]) => {
+                Object.entries(uniqueTests).forEach(([testName, _variations]) => {
                     // Check if this test has a configured abnormal value
                     if (configuredMap[testName]) {
                         // Use configured abnormal value

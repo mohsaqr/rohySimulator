@@ -449,7 +449,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                     });
                     toast.success(`Imported ${data.labs.length} lab configurations`);
                 }
-            } catch (err) {
+            } catch {
                 toast.error('Failed to import: Invalid file format');
             }
         };
@@ -1016,7 +1016,7 @@ function LabValueCard({
     onApplyPreset,
     onRemove,
     getValueStatus,
-    getStatusColor,
+    _getStatusColor,
     getStatusBadge
 }) {
     const status = getValueStatus(lab.current_value, lab.min_value, lab.max_value);

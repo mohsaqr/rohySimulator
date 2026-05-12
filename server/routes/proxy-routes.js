@@ -491,7 +491,6 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
 
             const sse = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
 
-            let accText = '';
             let promptTokens = 0;
             let completionTokens = 0;
             let streamInterrupted = false;
@@ -535,7 +534,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                         if (provider === 'anthropic') {
                             if (eventName === 'content_block_delta' && evt?.delta?.type === 'text_delta') {
                                 const t = evt.delta.text || '';
-                                if (t) { accText += t; sse({ delta: t }); }
+                                if (t) { sse({ delta: t }); }
                             } else if (eventName === 'message_delta' && evt?.usage) {
                                 completionTokens = evt.usage.output_tokens || completionTokens;
                             } else if (eventName === 'message_start' && evt?.message?.usage) {
@@ -544,7 +543,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                         } else {
                             // OpenAI / OpenAI-compatible
                             const delta = evt?.choices?.[0]?.delta?.content || '';
-                            if (delta) { accText += delta; sse({ delta }); }
+                            if (delta) { sse({ delta }); }
                             if (evt?.usage) {
                                 promptTokens = evt.usage.prompt_tokens || promptTokens;
                                 completionTokens = evt.usage.completion_tokens || completionTokens;
@@ -732,7 +731,6 @@ router.get('/tts/usage', authenticateToken, async (req, res) => {
         const today = new Date().toISOString().slice(0, 10);
         const monthStart = today.slice(0, 7) + '-01';
         const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
 
         const queryRollup = (whereDate) => new Promise((resolve, reject) => {
             dbAdapter.all(

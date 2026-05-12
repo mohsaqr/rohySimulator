@@ -4,7 +4,6 @@ import {
     Lock, Save, Loader2, Eye, EyeOff, AlertCircle, CheckCircle,
     Bot, Server, Key, Hash
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiFetch, apiPut } from '../../services/apiClient';
 
@@ -12,8 +11,7 @@ import { ApiError, apiFetch, apiPut } from '../../services/apiClient';
  * User Profile Panel
  * Allows users to view and edit their profile information and change password
  */
-export default function UserProfilePanel({ onClose }) {
-    const { user } = useAuth();
+export default function UserProfilePanel({ _onClose }) {
     const toast = useToast();
 
     const [activeTab, setActiveTab] = useState('profile'); // profile, password, ai
@@ -105,7 +103,7 @@ export default function UserProfilePanel({ onClose }) {
             if (typeof llmSettings === 'string') {
                 try {
                     llmSettings = JSON.parse(llmSettings);
-                } catch (e) {
+                } catch {
                     llmSettings = null;
                 }
             }

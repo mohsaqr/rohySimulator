@@ -48,7 +48,6 @@ async function loginAs(server, username, password) {
 describe('POST /api/sessions/:sessionId/administer/:orderId — hardened', () => {
     let server;
     let token;
-    let sessionId;
 
     beforeAll(async () => {
         server = await startTestServer();
