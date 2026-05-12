@@ -88,6 +88,12 @@ jobs:
       # use ALLOW_DEFAULT_USERS=1 only so the seeded `admin` user is
       # present for the optional auth'd browser smoke later — no real
       # secrets ever land in this throwaway container.
+      #
+      # FRONTEND_URL is also required in production mode (entrypoint.sh
+      # bails out before Node starts otherwise — without it browsers see
+      # CORS 500s on every asset). The entrypoint's own help text names
+      # `http://localhost:4000` as the dev-only / throwaway value, which
+      # is exactly what we want for this single-container smoke run.
       - name: Start container (port 4000 → host)
         run: |
           docker run -d \
@@ -95,6 +101,7 @@ jobs:
             -p 4000:4000 \
             -e JWT_SECRET="$(openssl rand -hex 32)" \
             -e NODE_ENV=production \
+            -e FRONTEND_URL=http://localhost:4000 \
             -e ALLOW_DEFAULT_USERS=1 \
             -e OYON_ENABLED=1 \
             rohy:ci
