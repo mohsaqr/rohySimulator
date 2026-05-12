@@ -155,7 +155,7 @@ jobs:
             standalone/vendor/rohy-tna/NetworkGraph.js
             standalone/vendor/rohy-tna/SequencePlots.js
             standalone/vendor/rohy-tna/tnaColors.js
-            standalone/models/face_landmarker.task
+            standalone/models/mediapipe/face_landmarker.task
             standalone/models/emotion/enet_b0_8_va_mtl.onnx
             standalone/models/emotion/mobilevit_va_mtl.onnx
             standalone/models/emotion/mbf_va_mtl.onnx
