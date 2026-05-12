@@ -164,16 +164,41 @@ probe "$BASE_URL/api/ready"   "200" 0 '"status":"ok"' "GET /api/ready"
 probe "$BASE_URL/"            "200" 0 ""              "GET /  (SPA shell)"
 
 # ── 2. Frontend bundle integrity ───────────────────────────────────────────
+# The production deploy is built with `vite build --base=/rohy/` and lives
+# behind a Caddy / nginx layer that strips the /rohy/ prefix. The image
+# itself, when run bare (e.g. by the install-from-scratch CI), serves the
+# same bundle from / with no prefix stripper. We probe both shapes so the
+# audit works in either topology:
+#   - Behind the reverse proxy: BASE_URL ends in /rohy and index.html
+#     references /rohy/assets/... — strip the suffix from BASE_URL once.
+#   - Bare image with --base=/rohy/: BASE_URL has no /rohy suffix, but
+#     index.html still references /rohy/assets/... that the server doesn't
+#     serve. Fall back to the non-prefixed path so the probe matches what
+#     Express actually exposes.
 section "Frontend bundle"
 INDEX_HTML=$(curl $INSECURE_ARG -sS "$BASE_URL/" 2>/dev/null)
 JS_REF=$(echo "$INDEX_HTML" | grep -oE '/(rohy/)?assets/index-[A-Za-z0-9_-]+\.js' | head -1)
 CSS_REF=$(echo "$INDEX_HTML" | grep -oE '/(rohy/)?assets/index-[A-Za-z0-9_-]+\.css' | head -1)
+probe_bundle() {
+    local ref="$1" label="$2"
+    local host_root="${BASE_URL%/rohy}"
+    [[ "$host_root" == "$BASE_URL" ]] && host_root=$(echo "$BASE_URL" | grep -oE 'https?://[^/]+')
+    # Try the prefixed path as-is. If the host doesn't have /rohy/ in its
+    # path but the bundle does (= bare image, no prefix stripper), retry
+    # against the unprefixed asset path the Express static handler serves.
+    local code; code=$(curl $INSECURE_ARG -sS -o /dev/null -w "%{http_code}" "${host_root}${ref}" 2>/dev/null)
+    if [[ "$code" != "200" && "$BASE_URL" != *"/rohy"* && "$ref" == /rohy/* ]]; then
+        code=$(curl $INSECURE_ARG -sS -o /dev/null -w "%{http_code}" "${host_root}${ref#/rohy}" 2>/dev/null)
+    fi
+    if [[ "$code" == "200" ]]; then
+        printf '  %s✓%s %-46s %s%s%s\n' "$GRN" "$CLR" "$label" "$DIM" "200" "$CLR"; PASS=$((PASS+1))
+    else
+        printf '  %s✗%s %-46s got %s, expected 200\n' "$RED" "$CLR" "$label" "$code"; FAIL=$((FAIL+1))
+    fi
+}
 if [[ -n "$JS_REF" ]]; then
-    # The href in index.html is already absolute under the deploy base; resolve against host root.
-    HOST_ROOT="${BASE_URL%/rohy}"
-    [[ "$HOST_ROOT" == "$BASE_URL" ]] && HOST_ROOT=$(echo "$BASE_URL" | grep -oE 'https?://[^/]+')
-    probe "${HOST_ROOT}${JS_REF}"  "200" 0 "" "JS bundle loads"
-    probe "${HOST_ROOT}${CSS_REF}" "200" 0 "" "CSS bundle loads"
+    probe_bundle "$JS_REF"  "JS bundle loads"
+    probe_bundle "$CSS_REF" "CSS bundle loads"
 else
     printf '  %s!%s no JS bundle reference found in index.html\n' "$YEL" "$CLR"; WARN=$((WARN+1))
 fi
