@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, MessageCircle, X, Mic, MicOff, Volume2, Eye, EyeOff } from 'lucide-react';
+import { Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, Mic, MicOff, Volume2, Eye, EyeOff } from 'lucide-react';
 import { LLMService } from '../../services/llmService';
 import { AgentService } from '../../services/AgentService';
 import { buildPersonaBlocks } from '../../utils/personaBlocks';
 import { useAuth } from '../../contexts/AuthContext';
-import { AuthService } from '../../services/authService';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { baseUrl } from '../../config/api';
 import { apiFetch, apiPost } from '../../services/apiClient';

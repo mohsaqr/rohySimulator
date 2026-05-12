@@ -28,11 +28,6 @@ function dbGet(db, sql, params = []) {
         db.get(sql, params, (err, row) => err ? reject(err) : resolve(row || null))
     );
 }
-function dbAll(db, sql, params = []) {
-    return new Promise((resolve, reject) =>
-        db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
-    );
-}
 function dbClose(db) {
     return new Promise((resolve) => db.close(() => resolve()));
 }

@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-    FileText, Download, Filter, Search, Clock, User, FlaskConical,
+    FileText, Download, Filter, Search, Clock, FlaskConical,
     MessageSquare, Bell, Settings, Eye, ChevronDown, ChevronRight,
-    Play, Pause, CheckCircle, AlertCircle, X, RefreshCw, Clipboard,
-    Calendar, Activity, MousePointer, ToggleLeft, BarChart3, AlertTriangle,
-    Info, Bug, Zap, TrendingUp, PieChart, SmilePlus
+    Play, Pause, CheckCircle, AlertCircle, X, RefreshCw, Clipboard, Activity, MousePointer, ToggleLeft, BarChart3, AlertTriangle,
+    Info, Bug, Zap, TrendingUp, SmilePlus
 } from 'lucide-react';
-import { SEVERITY, CATEGORIES } from '../../services/eventLogger';
 import { ApiError, apiFetch } from '../../services/apiClient';
 
 // Icon mapping for different verbs

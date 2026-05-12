@@ -9,7 +9,7 @@
 // Built on TanStack Table v8 (headless). All markup + Tailwind classes
 // are local so the dark theme matches the rest of Settings.
 
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
     useReactTable,
     getCoreRowModel,
@@ -18,8 +18,8 @@ import {
     flexRender,
 } from '@tanstack/react-table';
 import {
-    Loader2, RefreshCw, Search, Download, Eye, EyeOff,
-    ChevronUp, ChevronDown, Rows3, Rows4, Copy, Check,
+    Loader2, RefreshCw, Search, Eye,
+    ChevronUp, ChevronDown, Rows3, Rows4, Check,
 } from 'lucide-react';
 
 const DEFAULT_PAGE_SIZE = 100;

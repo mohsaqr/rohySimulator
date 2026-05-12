@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Upload, Loader2, Scan, Clock, AlertCircle, RefreshCw, PenLine } from 'lucide-react';
+import { Plus, Trash2, Upload, Loader2, Scan, AlertCircle, RefreshCw, PenLine } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 import { useToast } from '../../contexts/ToastContext';
 

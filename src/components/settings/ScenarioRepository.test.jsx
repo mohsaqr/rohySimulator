@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import renderWithProviders from '../../../tests/utils/renderWithProviders.jsx';
 import ScenarioRepository from './ScenarioRepository.jsx';
 

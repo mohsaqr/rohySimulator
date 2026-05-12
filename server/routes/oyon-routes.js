@@ -3,7 +3,6 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateEmotionBatch } from 'oyon/validation';
-import dbAdapter from '../dbAdapter.js';
 import { authenticateToken, hasRoleAtLeast, requireAdmin, ROLE_RANKS } from '../middleware/auth.js';
 import { dbAll, dbGet, dbRun, logAuditAsync, redactRow, tenantId } from './_helpers.js';
 import { logger } from '../logger.js';

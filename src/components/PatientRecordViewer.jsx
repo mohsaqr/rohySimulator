@@ -9,8 +9,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { usePatientRecord } from '../services/PatientRecord';
 import {
     FileText, Clock, Activity, Stethoscope, FlaskConical,
-    Bell, Pill, TrendingUp, MessageCircle, RefreshCw,
-    ChevronDown, ChevronUp, Filter, Download
+    Bell, Pill, TrendingUp, MessageCircle, RefreshCw, Filter, Download
 } from 'lucide-react';
 
 // Verb icon mapping

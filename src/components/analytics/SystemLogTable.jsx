@@ -5,7 +5,7 @@
 // LLM/TTS/emotion). Per-source CSV exports stream from the server
 // via /api/export/system-log/:source — chosen via the dropdown above.
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { apiFetch, ApiError } from '../../services/apiClient';
 import { Download } from 'lucide-react';
 import LogGrid, { CopyableCell } from './LogGrid';
@@ -123,7 +123,7 @@ export default function SystemLogTable() {
         }
     }, [from, to, currentLimit]);
 
-    useEffect(() => { load(DEFAULT_LIMIT); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [from, to]);
+    useEffect(() => { load(DEFAULT_LIMIT);   }, [from, to]);
 
     const downloadSource = useCallback(async () => {
         try {

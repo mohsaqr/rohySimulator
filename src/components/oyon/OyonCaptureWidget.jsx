@@ -203,7 +203,7 @@ export default function OyonCaptureWidget({ sessionId, caseId } = {}) {
          session.stop();
          sessionRef.current = null;
       };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+       
    }, [tenantEnabled, runtimeConfig, sessionId, caseId]);
 
    function handleEvent(event) {

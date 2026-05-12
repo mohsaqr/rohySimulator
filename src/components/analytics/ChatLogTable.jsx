@@ -8,7 +8,7 @@
 // Click any row to expand — full message/content shown verbatim
 // (no truncation), so admins can read what was actually said.
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { apiFetch, ApiError } from '../../services/apiClient';
 import LogGrid, { CopyableCell } from './LogGrid';
 
@@ -140,7 +140,7 @@ export default function ChatLogTable() {
         }
     }, [from, to, sessionFilter, currentLimit]);
 
-    useEffect(() => { load(DEFAULT_LIMIT); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [from, to, sessionFilter]);
+    useEffect(() => { load(DEFAULT_LIMIT);   }, [from, to, sessionFilter]);
 
     const headerExtras = (
         <>

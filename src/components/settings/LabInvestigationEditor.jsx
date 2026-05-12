@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     Search, Plus, Trash2, Loader2, ChevronDown, ChevronUp,
-    AlertTriangle, CheckCircle, ArrowUp, ArrowDown,
+    AlertTriangle, ArrowUp, ArrowDown,
     Layers, FlaskConical, Download, Upload, Eye,
-    Zap, Package, Filter, X, Check, Copy, RotateCcw, Timer
+    Zap, Package, X, Check, RotateCcw, Timer
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { apiFetch } from '../../services/apiClient';
-import { LAB_PANEL_TEMPLATES, getTemplateCategories, getTemplatesByCategory, SEARCH_ALIASES } from '../../data/labPanelTemplates';
+import { LAB_PANEL_TEMPLATES, getTemplateCategories, SEARCH_ALIASES } from '../../data/labPanelTemplates';
 
 /**
  * Enhanced Lab Investigation Editor

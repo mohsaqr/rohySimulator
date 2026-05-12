@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, AlertTriangle, TrendingUp, TrendingDown, Minus, Printer, Building2, FlaskConical } from 'lucide-react';
+import { X, AlertTriangle, TrendingUp, TrendingDown, Minus, Printer, Building2, FlaskConical } from 'lucide-react';
 import { apiPut } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
 

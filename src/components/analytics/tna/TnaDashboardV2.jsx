@@ -25,7 +25,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     ArrowLeft, RefreshCw, Settings2, Users, Activity, Hash, Network, GitBranch,
-    Workflow, Filter, Layers,
+    Workflow, Layers,
 } from 'lucide-react';
 import {
     tna, ftna, ctna, atna,

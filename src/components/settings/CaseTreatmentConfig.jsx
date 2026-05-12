@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Pill, Droplets, Wind, HeartPulse,
-    Search, Plus, X, Save, AlertTriangle,
+    Search, X, Save, AlertTriangle,
     Check, ChevronDown, ChevronUp, Loader2
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';

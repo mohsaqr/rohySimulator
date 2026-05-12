@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Heart, Activity, Wind, Thermometer, Bell, Settings, Play, Pause, AlertCircle, Menu, X, Monitor, User, FileJson, FastForward, Save, Download, Upload, BellOff, Volume2, VolumeX, Pencil, Pill } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Heart, Activity, Bell, Settings, Play, Pause, AlertCircle, X, Monitor, User, FileJson, Save, Download, Upload, Volume2, VolumeX, Pencil, Pill } from 'lucide-react';
 import defaultSettings from '../../settings.json';
 import { useAlarms } from '../../hooks/useAlarms';
 import { useNotifications } from '../../notifications/useNotifications';

@@ -124,7 +124,6 @@ const EMOTION_COLORS = {
   insufficient: '#9ca3af',
 };
 
-let activeView = 'analytics';
 let selectedRecord = null;
 let cache = { logs: [], metrics: [], windows: [], settings: {} };
 let liveTimer = null;

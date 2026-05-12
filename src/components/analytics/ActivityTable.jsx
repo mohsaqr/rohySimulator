@@ -4,7 +4,7 @@
 // so the in-app view and the export are byte-for-byte the same shape.
 // Mounts the unified LogGrid; this file is just the column config + fetch.
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { apiFetch, ApiError } from '../../services/apiClient';
 import { Download } from 'lucide-react';
 import LogGrid, { CopyableCell } from './LogGrid';

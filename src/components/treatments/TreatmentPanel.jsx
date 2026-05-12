@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Pill, Droplets, Wind, HeartPulse,
-    Search, AlertTriangle, Clock, CheckCircle,
+    Search, AlertTriangle, Clock,
     Play, Pause, X, ChevronDown, ChevronUp,
     Loader2, Info
 } from 'lucide-react';

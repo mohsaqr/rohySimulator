@@ -36,7 +36,6 @@
 import { test, expect } from './fixtures/index.js';
 import { request as pwRequest } from '@playwright/test';
 import { loginAs } from './fixtures/auth.js';
-import { apiAsAdmin } from './fixtures/seed.js';
 
 // Shared admin context (avoid /api/auth/login rate limit: 10/15min/IP).
 let _adminCtx;

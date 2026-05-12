@@ -41,12 +41,12 @@ export default function TestVoiceButton({
     // previous voice keeps playing while the user is auditioning a new one.
     useEffect(() => {
         return () => stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, []);
 
     useEffect(() => {
         stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [voice, provider]);
 
     function stop() {

@@ -1,10 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Syringe, Copy, Mic, Camera } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
-import SessionLogViewer from '../analytics/SessionLogViewer';
 import ActivityTable from '../analytics/ActivityTable';
 import SystemLogTable from '../analytics/SystemLogTable';
 import ChatLogTable from '../analytics/ChatLogTable';

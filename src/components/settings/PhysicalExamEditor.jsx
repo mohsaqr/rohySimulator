@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { User, Users, RotateCcw, CheckCircle, AlertCircle, Upload, Volume2, Trash2 } from 'lucide-react';
+import { User, RotateCcw, CheckCircle, AlertCircle, Upload, Volume2, Trash2 } from 'lucide-react';
 import BodyMap from '../examination/BodyMap';
-import { BODY_REGIONS, EXAM_TECHNIQUES, getDefaultFinding } from '../../data/examRegions';
+import { BODY_REGIONS, EXAM_TECHNIQUES } from '../../data/examRegions';
 import { useToast } from '../../contexts/ToastContext';
 import { apiFetch } from '../../services/apiClient';
 

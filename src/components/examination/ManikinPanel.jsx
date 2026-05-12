@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { X, RotateCcw, User, UserCheck, Brain, Download, Users } from 'lucide-react';
+import { X, User, UserCheck, Brain, Download, Users } from 'lucide-react';
 import BodyMap from './BodyMap';
 import ExamTypeSelector from './ExamTypeSelector';
 import FindingDisplay from './FindingDisplay';

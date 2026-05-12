@@ -51,8 +51,6 @@ async function adminCtx(baseURL) {
     }
     return _adminCtx;
 }
-function getAdminToken() { return _adminToken; }
-
 /**
  * Inject the cached admin token into a page's localStorage BEFORE the SPA
  * mounts. Use this instead of the page fixture inside specs that

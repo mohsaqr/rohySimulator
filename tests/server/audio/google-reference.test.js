@@ -45,7 +45,7 @@ const LENGTH_TOLERANCE = 0.10; // ±10 %
 // One-shot diagnostic so it is obvious in CI logs which mode the file ran in.
 // Vitest captures stdout; this only fires once per file.
 beforeAll(() => {
-    // eslint-disable-next-line no-console
+     
     console.log(
         HAS_KEY
             ? '[google-reference] GOOGLE_TTS_API_KEY detected — running LIVE Google TTS calls'

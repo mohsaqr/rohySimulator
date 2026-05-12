@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Activity, TrendingUp, TrendingDown, Minus,
-    Heart, Droplets, Wind, Thermometer,
+    Activity, TrendingUp, TrendingDown,
+    Heart, Wind,
     ChevronDown, ChevronUp, Clock, Pill
 } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';

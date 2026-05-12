@@ -1,33 +1,24 @@
 import express from 'express';
-import { findDefaultAgent } from '../db.js';
 import dbAdapter from '../dbAdapter.js';
-import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import os from 'node:os';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcrypt';
 import rateLimit from 'express-rate-limit';
 import {
     authenticateToken,
-    requireAdmin,
-    requireAuth,
-    requireEducator,
-    requireReviewer,
     generateToken,
     recordActiveSession,
     revokeActiveSessionByHash,
     ROLE_RANKS,
     AUTH_COOKIE_NAME,
     getRoleRank,
-    hasRoleAtLeast,
 } from '../middleware/auth.js';
 import {
     CSRF_COOKIE_NAME,
     csrfCookieOptions,
     generateCsrfToken,
 } from '../middleware/csrf.js';
-import * as labDb from '../services/labDatabase.js';
 
 // Account lockout: after MAX_FAILED_LOGINS consecutive failed attempts the
 // account is locked for LOCKOUT_MINUTES. Restored after the routes.js split
@@ -36,39 +27,15 @@ import * as labDb from '../services/labDatabase.js';
 const MAX_FAILED_LOGINS = 5;
 const LOCKOUT_MINUTES = 15;
 
-import { spawn } from 'node:child_process';
-import { buildWavHeader } from '../services/wav.js';
-import { EvenByteAligner } from '../lib/pcmAlign.js';
-import {
-    REDACTED,
-    redactPlatformSettingRows,
-} from '../redaction.js';
+
+
 import { logger } from '../logger.js';
-import { verifyAuditChain } from '../audit-chain.js';
 import {
-    auditSuccess,
-    buildUserPurgePlan,
-    canManageOwnedResource,
-    canReadAcrossUsers,
-    clampInitialVitals,
-    createCaseVersion,
-    dbGet,
-    dbRun,
-    executeUserPurge,
     isValidRole,
     logAudit,
-    logAuditAsync,
-    mergeScenarioSource,
-    parseAuditJson,
-    redactAuditSetting,
-    redactRow,
-    redactRows,
-    resolveSessionCaseConfig,
-    resolveSessionCaseScenario,
     roleForStorage,
     tenantId,
-    validatePassword,
-    verifySessionOwnership
+    validatePassword
 } from './_helpers.js';
 
 function authCookieOptions(maxAgeSeconds = 4 * 60 * 60) {
@@ -81,15 +48,8 @@ function authCookieOptions(maxAgeSeconds = 4 * 60 * 60) {
     };
 }
 
-const auditLog = logger('audit');
 const authLog = logger('auth');
 const radiologyLog = logger('radiology');
-const routesAuthLog = logger('routes-auth-users-tenants');
-const routesCasesLog = logger('routes-cases-sessions');
-const routesOrdersLog = logger('routes-orders-labs-radiology');
-const routesLlmLog = logger('routes-llm-tts');
-const routesAdminLog = logger('routes-agent-tna-admin');
-
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
@@ -105,15 +65,6 @@ const registerLimiter = rateLimit({
     message: { error: 'Too many registration attempts. Please try again later.' },
     standardHeaders: true,
     legacyHeaders: false
-});
-
-const clientLogLimiter = rateLimit({
-    windowMs: 5 * 60 * 1000,
-    max: 60,
-    message: { error: 'Too many client log batches. Please slow down.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-    keyGenerator: (req) => `${req.user?.tenant_id || 'tenant'}:${req.user?.id || 'user'}`
 });
 
 const __filename = fileURLToPath(import.meta.url);

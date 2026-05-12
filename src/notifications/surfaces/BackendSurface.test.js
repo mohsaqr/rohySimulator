@@ -15,7 +15,6 @@ import {
     getBackendTelemetry,
     _resetBackendTelemetryForTest,
 } from './BackendSurface';
-import { apiPost, apiPut } from '../../services/apiClient';
 
 beforeEach(() => {
     _resetBackendTelemetryForTest();
@@ -32,18 +31,6 @@ beforeEach(() => {
 // catch the rejection, and record failure. We test the recording by
 // re-implementing the wrapper logic inline OR by triggering it through
 // the actual exported flow.
-
-async function fireAlarmLogAndRecordIfFails(body) {
-    try {
-        await apiPost('/alarms/log', body);
-    } catch {
-        // The actual recordFailure is internal; in this test we verify
-        // that calling getBackendTelemetry() reflects what actually
-        // gets recorded by the production sendClinical path. We
-        // exercise that path indirectly by importing the module and
-        // calling its internal helpers via re-export below.
-    }
-}
 
 describe('BackendSurface — backend telemetry counters (audit #20)', () => {
     it('starts at zero failures', () => {

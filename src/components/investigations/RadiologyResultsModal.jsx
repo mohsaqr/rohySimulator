@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Printer, ZoomIn, ZoomOut, Maximize2, FileText, Clock, User, Calendar, Building2, Stethoscope, Play, Pause } from 'lucide-react';
+import { X, Printer, ZoomIn, ZoomOut, Maximize2, FileText, Building2, Stethoscope, Play, Pause } from 'lucide-react';
 import { apiPut } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
 

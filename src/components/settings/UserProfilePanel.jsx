@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     User, Mail, Phone, Building2, MapPin, GraduationCap,
     Lock, Save, Loader2, Eye, EyeOff, AlertCircle, CheckCircle,
-    Bot, Server, Key, Thermometer, Hash
+    Bot, Server, Key, Hash
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';

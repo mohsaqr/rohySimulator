@@ -61,7 +61,6 @@ let legacyUserCtx;
 let reviewerUser;
 let educatorUser;
 let legacyUser;
-let adminUserId;
 let studentUserId;
 
 /**

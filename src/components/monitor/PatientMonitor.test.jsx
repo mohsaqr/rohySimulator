@@ -32,7 +32,7 @@
 
 import React from 'react';
 import { describe, it, expect, beforeAll, afterEach, afterAll, beforeEach, vi } from 'vitest';
-import { waitFor, act } from '@testing-library/react';
+import { waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 

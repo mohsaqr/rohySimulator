@@ -515,7 +515,7 @@ function UsagePanel() {
         }
     };
 
-    useEffect(() => { load('self'); /* eslint-disable-next-line */ }, []);
+    useEffect(() => { load('self');   }, []);
 
     const totalChars = (rows) => (rows || []).reduce((s, r) => s + (r.chars || 0), 0);
     const totalCost  = (rows) => (rows || []).reduce((s, r) => s + (r.cost  || 0), 0);

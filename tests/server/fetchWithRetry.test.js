@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     CircuitBreakerOpenError,
-    FetchTimeoutError,
     _resetBreakerForTest,
     fetchWithRetry,
     getBreakerState,

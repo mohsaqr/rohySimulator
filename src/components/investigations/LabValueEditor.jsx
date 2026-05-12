@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Edit3, Save, RefreshCw, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
+import { Edit3, Save, RefreshCw, ChevronDown, ChevronUp, AlertTriangle, Loader2 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { apiFetch, apiPut } from '../../services/apiClient';
 

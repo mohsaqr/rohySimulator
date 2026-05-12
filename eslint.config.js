@@ -1,7 +1,9 @@
 import js from '@eslint/js'
 import globals from 'globals'
+import react from 'eslint-plugin-react'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
+import unusedImports from 'eslint-plugin-unused-imports'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
@@ -27,6 +29,10 @@ export default defineConfig([
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
     ],
+    plugins: {
+      react,
+      'unused-imports': unusedImports,
+    },
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
@@ -36,8 +42,30 @@ export default defineConfig([
         sourceType: 'module',
       },
     },
+    settings: {
+      react: { version: 'detect' },
+    },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // `react/jsx-uses-vars` + `react/jsx-uses-react` mark JSX-referenced
+      // identifiers as used so the unused-imports auto-fix doesn't strip
+      // `<Component />`-only imports or the React import on files using
+      // the classic JSX transform. Without these rules every component
+      // import looks dead to the analyzer.
+      'react/jsx-uses-vars': 'error',
+      'react/jsx-uses-react': 'error',
+      // `unused-imports` splits the rule in two: `no-unused-imports`
+      // gives us auto-fix removal of dead `import` declarations, while
+      // `no-unused-vars` (the plugin's wrapper around eslint core) keeps
+      // catching dead locals. We keep the same ignore-prefix convention
+      // as before (^[A-Z_] for shouty consts that are intentional API).
+      'no-unused-vars': 'off',
+      'unused-imports/no-unused-imports': 'error',
+      'unused-imports/no-unused-vars': ['error', {
+        vars: 'all',
+        varsIgnorePattern: '^[A-Z_]',
+        args: 'after-used',
+        argsIgnorePattern: '^_',
+      }],
     },
   },
   // Server-side + build-config files run under Node, not the browser.

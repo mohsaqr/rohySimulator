@@ -675,16 +675,6 @@ function drawOverlay() {
   els.faceLabelText.textContent = `${label} ${percent(confidence)}`;
 }
 
-function displayBox(bbox, width, height) {
-  const area = visibleVideoArea(width, height);
-  return {
-    x: area.x + bbox.x * area.width,
-    y: area.y + bbox.y * area.height,
-    width: bbox.width * area.width,
-    height: bbox.height * area.height,
-  };
-}
-
 function visibleVideoArea(width, height) {
   const videoWidth = els.preview.videoWidth || width || 1;
   const videoHeight = els.preview.videoHeight || height || 1;
@@ -699,96 +689,12 @@ function visibleVideoArea(width, height) {
   };
 }
 
-function drawScanGlow(ctx, width, height, tone) {
-  ctx.save();
-  ctx.strokeStyle = hexToRgba(tone, 0.10);
-  ctx.lineWidth = 1;
-  const step = 32;
-  for (let x = 0; x < width; x += step) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-  }
-  for (let y = 0; y < height; y += step) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawFaceBox(ctx, box, tone) {
-  const corner = Math.min(38, box.width * 0.2, box.height * 0.2);
-  ctx.save();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = tone;
-  ctx.shadowColor = hexToRgba(tone, 0.65);
-  ctx.shadowBlur = 12;
-  const x1 = box.x;
-  const y1 = box.y;
-  const x2 = box.x + box.width;
-  const y2 = box.y + box.height;
-  cornerPath(ctx, x1, y1, corner, 1, 1);
-  cornerPath(ctx, x2, y1, corner, -1, 1);
-  cornerPath(ctx, x1, y2, corner, 1, -1);
-  cornerPath(ctx, x2, y2, corner, -1, -1);
-  ctx.restore();
-
-  ctx.save();
-  ctx.strokeStyle = hexToRgba(tone, 0.32);
-  ctx.lineWidth = 1;
-  ctx.strokeRect(box.x, box.y, box.width, box.height);
-  ctx.restore();
-}
-
 function cornerPath(ctx, x, y, length, sx, sy) {
   ctx.beginPath();
   ctx.moveTo(x, y + sy * length);
   ctx.lineTo(x, y);
   ctx.lineTo(x + sx * length, y);
   ctx.stroke();
-}
-
-function drawLandmarkDots(ctx, landmarks, width, height, tone) {
-  if (!landmarks.length) return;
-  const area = visibleVideoArea(width, height);
-  ctx.save();
-  ctx.fillStyle = hexToRgba(tone, 0.7);
-  const every = Math.max(1, Math.floor(landmarks.length / 40));
-  for (let i = 0; i < landmarks.length; i += every) {
-    const point = landmarks[i];
-    ctx.beginPath();
-    ctx.arc(area.x + point.x * area.width, area.y + point.y * area.height, 1.4, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
-function drawBadge(ctx, box, label, confidence, tone, canvasWidth) {
-  const text = `${label} ${percent(confidence)}`;
-  ctx.save();
-  ctx.font = '600 14px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
-  const metrics = ctx.measureText(text);
-  const paddingX = 11;
-  const badgeWidth = metrics.width + paddingX * 2;
-  const badgeHeight = 28;
-  const x = Math.max(8, Math.min(box.x, canvasWidth - badgeWidth - 8));
-  const y = Math.max(8, box.y - badgeHeight - 8);
-
-  ctx.fillStyle = 'rgba(7, 10, 16, 0.86)';
-  roundRect(ctx, x, y, badgeWidth, badgeHeight, 8);
-  ctx.fill();
-
-  ctx.fillStyle = tone;
-  ctx.beginPath();
-  ctx.arc(x + 10, y + badgeHeight / 2, 4, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = '#f4f6fb';
-  ctx.fillText(text, x + 22, y + 19);
-  ctx.restore();
 }
 
 function roundRect(ctx, x, y, width, height, radius) {
@@ -1454,12 +1360,4 @@ function modelConfigFor(profile) {
 // ---------- utils ----------
 function percent(value) {
   return `${Math.round((Number(value) || 0) * 100)}%`;
-}
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
 }

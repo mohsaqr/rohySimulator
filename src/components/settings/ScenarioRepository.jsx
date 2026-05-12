@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, Trash2, Edit, Download, Upload, Globe, Lock, Play, X, Copy, Clock, ChevronDown, ChevronUp, Save, FileText, Search, Filter, Package, Database, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Edit, Download, Upload, Globe, Lock, Play, X, Copy, Clock, ChevronDown, ChevronUp, Save, Search, Package, Database } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';

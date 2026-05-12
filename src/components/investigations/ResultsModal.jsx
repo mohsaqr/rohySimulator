@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ZoomIn, ZoomOut, Download, FileText } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, FileText } from 'lucide-react';
 import { apiPut } from '../../services/apiClient';
 
 const ResultsModal = ({ order, onClose }) => {
