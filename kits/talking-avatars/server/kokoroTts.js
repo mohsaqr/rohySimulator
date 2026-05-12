@@ -101,11 +101,15 @@ export async function* synthesizeKokoroStream({ text, voice, speed }) {
 
 export function listKokoroVoices() {
     if (!_instance) return [];
+    // kokoro-js's frozen voice map ships Title-Case genders ("Female"/"Male").
+    // Lowercase here so any consumer that compares against a lowercase slot
+    // (the convention every other provider in this repo follows) doesn't
+    // silently fall through and re-route every voice to the same fallback.
     return Object.entries(_instance.voices).map(([id, meta]) => ({
         filename: id,
         displayName: meta.name || id,
         language: meta.language || 'en',
-        gender: meta.gender || '',
+        gender: (meta.gender || '').toLowerCase(),
         traits: meta.traits || '',
         sampleRate: 24000
     }));

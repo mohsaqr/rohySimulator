@@ -974,9 +974,15 @@ function inferVoiceGenderFromName(name) {
 }
 
 function voiceGenderMatchesSlot(voiceGender, slot) {
-    if (!voiceGender || voiceGender === 'neutral') return true;
-    if (slot === 'child') return voiceGender === 'child' || voiceGender === 'female';
-    return voiceGender === slot;
+    // Case-insensitive — kokoro-js emits Title-Case ("Female"/"Male") natively;
+    // other providers normalise to lowercase. Lowering both sides keeps any
+    // future provider that forgets to normalise from silently mis-routing
+    // every voice to the hardcoded fallback.
+    const vg = (voiceGender || '').toLowerCase();
+    const sl = (slot || '').toLowerCase();
+    if (!vg || vg === 'neutral') return true;
+    if (sl === 'child') return vg === 'child' || vg === 'female';
+    return vg === sl;
 }
 
 async function providerVoiceGender(provider, voice) {

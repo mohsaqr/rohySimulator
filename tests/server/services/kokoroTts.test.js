@@ -120,9 +120,14 @@ async function loadFreshSUT() {
 }
 
 function defaultVoices() {
+    // Match kokoro-js's real shape: gender is Title-Case ("Female" / "Male")
+    // in the frozen voice map shipped by node_modules/kokoro-js. The previous
+    // lowercase mock hid a deploy bug where every voice fell through the
+    // server's case-sensitive gender check and got rerouted to the hardcoded
+    // af_bella / am_michael fallbacks.
     return {
-        af_bella: { name: 'Bella', language: 'en', gender: 'female', traits: 'warm' },
-        am_adam: { name: 'Adam', language: 'en', gender: 'male' },
+        af_bella: { name: 'Bella', language: 'en', gender: 'Female', traits: 'warm' },
+        am_adam: { name: 'Adam', language: 'en', gender: 'Male' },
         // bare entry — exercises the listKokoroVoices fallbacks
         zz_bare: {},
     };
