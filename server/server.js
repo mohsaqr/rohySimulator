@@ -9,6 +9,7 @@ import db, { dbReady } from './db.js';
 import dbAdapter from './dbAdapter.js';
 import { runSeeders, needsSeeding } from './seeders/index.js';
 import { loadKokoro } from './services/kokoroTts.js';
+import { auditPersonaAndCaseVoices } from './healthChecks/voiceCatalogueAudit.js';
 import { configureSlowQueryThresholdFromDb, instrumentSqliteDb } from './observability.js';
 import requestIdMiddleware from './middleware/requestId.js';
 import requestLoggerMiddleware from './middleware/requestLogger.js';
@@ -23,6 +24,7 @@ const bootLog = logger('server');
 const httpsLog = logger('https');
 const migrationLog = logger('migration');
 const kokoroLog = logger('kokoro');
+const voiceAuditLog = logger('voice-audit');
 
 // Boot-time env validation. Surfaces every configuration problem at once
 // rather than letting them dribble out as silent CORS 500s or DB-in-repo
@@ -286,6 +288,16 @@ async function initializeAndStart() {
     const httpsServer = startHttpsServer(HTTPS_PORT);
     installGracefulShutdown([httpServer, httpsServer].filter(Boolean));
     maybeWarmupKokoro();
+
+    // Fire-and-forget audit of stored case_voice values vs the active
+    // provider's catalogue. Non-fatal; just logs. See
+    // server/healthChecks/voiceCatalogueAudit.js for the full rationale.
+    // Delay so kokoro's warmup has a chance to populate its catalogue
+    // first (Kokoro's voice list loads alongside the model).
+    setTimeout(() => {
+        auditPersonaAndCaseVoices(dbAdapter, voiceAuditLog)
+            .catch((err) => voiceAuditLog.warn('audit failed', { error: err?.message || String(err) }));
+    }, 5000);
 }
 
 // Graceful shutdown.
