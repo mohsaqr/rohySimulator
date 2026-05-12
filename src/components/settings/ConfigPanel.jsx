@@ -27,7 +27,7 @@ import { Bell as BellIcon } from 'lucide-react';
 import CaseAvatarVoicePicker from './CaseAvatarVoicePicker';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
-export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'cases', initialWizardStep = 1, onOpenPersonaEditor }) {
+export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'cases', initialWizardStep = 1, onOpenPersonaEditor, onCaseSaved }) {
     const { isAdmin, user } = useAuth();
     // Educator+ gate for the Learning Analytics tab. Server still enforces the
     // real rule (assertOyonReadAccess); this hides the sidebar item for users
@@ -180,6 +180,14 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             }
 
             setSelectedCaseId(saved.id);
+
+            // Notify the parent (App.jsx) so the in-memory `activeCase`
+            // can be refreshed if the admin just saved the case currently
+            // loaded in the chat tab. Without this, edits to per-case
+            // settings (most importantly `config.voice.case_voice`) stay
+            // invisible to the running session until the admin manually
+            // re-opens the case from the case list.
+            onCaseSaved?.(saved);
 
             // Clear auto-save after successful database save
             clearAutoSave();

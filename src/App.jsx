@@ -492,6 +492,16 @@ function MainApp() {
                initialTab={settingsInitialTab}
                initialWizardStep={settingsInitialStep}
                onOpenPersonaEditor={handleOpenPersonaEditor}
+               onCaseSaved={(savedCase) => {
+                  // If the admin just saved the case that the chat tab has
+                  // open, refresh the in-memory `activeCase` so edits (most
+                  // importantly the patient's `config.voice.case_voice`)
+                  // take effect on the next message without forcing the
+                  // user to "Open case" again from the case list.
+                  if (savedCase && activeCase && savedCase.id === activeCase.id) {
+                     setActiveCase(savedCase);
+                  }
+               }}
             />
          </div>
       );
