@@ -5,7 +5,21 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // Generated / vendored trees we never want to lint. `dist/` is the
+  // Vite build output. `frontend/` is a copy of dist/ that `npm run
+  // build` produces for Express to serve. `OyonR/` is the upstream
+  // submodule-style copy; its lint posture is owned upstream. All
+  // node_modules and coverage outputs are noise.
+  globalIgnores([
+    'dist/**',
+    'frontend/**',
+    'OyonR/**',
+    'coverage/**',
+    'playwright-report/**',
+    'test-results/**',
+    'node_modules/**',
+    '.vitest-cache/**',
+  ]),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
@@ -24,6 +38,34 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+    },
+  },
+  // Server-side + build-config files run under Node, not the browser.
+  // Without this block the default config (browser globals only) flags
+  // every `process`, `__dirname`, `Buffer`, etc. as no-undef. These files
+  // also never get hot-reloaded so the react-refresh rule has nothing to
+  // say about them.
+  {
+    files: [
+      'server/**/*.js',
+      'scripts/**/*.js',
+      'migrations/**/*.js',
+      'bin/**/*.js',
+      'kits/**/server/**/*.js',
+      'deploy/**/*.{js,mjs}',
+      'vite.config.js',
+      'vitest.config.js',
+      'playwright.config.js',
+      'eslint.config.js',
+      'postcss.config.js',
+    ],
+    languageOptions: {
+      globals: { ...globals.node },
+      sourceType: 'module',
+    },
+    rules: {
+      'react-refresh/only-export-components': 'off',
+      'react-hooks/rules-of-hooks': 'off',
     },
   },
   // Test files run under vitest (jsdom for client, node for server).
