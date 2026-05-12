@@ -482,16 +482,30 @@ export async function runDbMigrations() {
 // First-boot seeders. Idempotent (each seeder is INSERT OR IGNORE / NOT
 // EXISTS-guarded). Exported so a one-off job (`node scripts/seed.js`) can
 // invoke it without booting the request-serving process.
-export async function seedDbDefaults() {
+//
+// Each catalogue seeder is wrapped in its own try/catch so one failure
+// doesn't silently abort every downstream seeder. The previous single
+// shared try block meant a treatment_effects.json schema drift could leave
+// the lab DB and pediatric ranges empty even though their own data was
+// fine — the symptom looked like "lab seeder broken" when the real
+// failure was upstream.
+async function runSeeder(name, fn) {
     try {
-        await seedTreatmentEffects(db, { log: () => {} });
-        await seedCuratedMedications(db, { log: () => {} });
-        await seedLabTestsFromJson(db, { log: () => {} });
-        await importLoincMapping(db, { log: () => {} });
-        await seedPediatricRanges(db, { log: () => {} });
+        await fn();
     } catch (err) {
-        dbLog.error('catalogue seeders failed', { error: err.message });
+        dbLog.error('catalogue seeder failed', {
+            seeder: name,
+            error: err.message,
+        });
     }
+}
+
+export async function seedDbDefaults() {
+    await runSeeder('treatment_effects',   () => seedTreatmentEffects(db,   { log: () => {} }));
+    await runSeeder('curated_medications', () => seedCuratedMedications(db, { log: () => {} }));
+    await runSeeder('lab_tests',           () => seedLabTestsFromJson(db,   { log: () => {} }));
+    await runSeeder('loinc_mapping',       () => importLoincMapping(db,     { log: () => {} }));
+    await runSeeder('pediatric_ranges',    () => seedPediatricRanges(db,    { log: () => {} }));
 
     await seedDefaultModelPricing();
     await seedDefaultAgents();

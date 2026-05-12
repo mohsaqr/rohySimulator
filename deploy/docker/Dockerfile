@@ -141,6 +141,13 @@ COPY --from=builder --chown=node:node /workspace/rohy/dist ./dist
 # serves at /oyon/* and /standalone/*; without it those routes 404
 # in the container.
 COPY --from=builder --chown=node:node /workspace/rohy/OyonR ./OyonR
+# Repo-root lab catalogue files. `server/services/labDatabase.js` and
+# `scripts/seed-lab-tests-from-json.js` both read these via
+# `path.resolve(__dirname, '../../Lab_database.json')` / `heart.txt`.
+# They aren't under server/ so the directory-level COPYs above miss them,
+# which used to ship the runtime image with an empty lab table.
+COPY --from=builder --chown=node:node /workspace/rohy/Lab_database.json ./Lab_database.json
+COPY --from=builder --chown=node:node /workspace/rohy/heart.txt ./heart.txt
 COPY --from=builder --chown=node:node /workspace/dynajs /opt/dynajs
 
 # rohy's package.json declares dynajs at "file:../dynajs". Recreate that
