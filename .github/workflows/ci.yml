@@ -231,6 +231,13 @@ jobs:
           tail -100 /tmp/rohy-audit/server.log
           exit 1
       - name: Run audit scripts
+        # Most audit-*.sh scripts hit the API only, but audit-migrations.sh
+        # and audit-schema.sh open the SQLite DB directly. They default to
+        # $ROOT/server/database.sqlite — point them at the same path the
+        # CI server is writing to, otherwise they query a non-existent
+        # file and SQLITE_ERROR no such table.
+        env:
+          ROHY_DB: /tmp/rohy-audit/audit.sqlite
         run: |
           set -e
           shopt -s nullglob
