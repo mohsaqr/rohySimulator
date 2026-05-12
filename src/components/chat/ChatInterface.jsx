@@ -139,6 +139,19 @@ function isAvatarAlarmSpeechForceOff() {
     }
 }
 
+// Merge the patient's voice config: template is the base, the active case
+// overrides field-by-field. Empty/null/undefined values from the case mean
+// "inherit" — they don't clobber the template's value. Used by both the
+// patient chat path and the alarm-speech path so any future edge case
+// (e.g., "rate=0 should still override") lands in one place.
+function mergePatientVoiceConfig(caseVoice, templateVoice) {
+    const out = { ...(templateVoice || {}) };
+    for (const [k, v] of Object.entries(caseVoice || {})) {
+        if (v !== '' && v !== null && v !== undefined) out[k] = v;
+    }
+    return out;
+}
+
 export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, currentVitals, personaRefreshCounter = 0 }) {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -830,11 +843,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             // the chat read only activeCase.config.voice and ignored the
             // template. Admins who set the voice in the persona editor (the
             // discoverable place) saw nothing change.
-            const caseVoiceConfig = activeCase?.config?.voice;
-            const templateVoiceConfig = patientTemplate?.config?.voice;
-            const override = caseVoiceConfig?.case_voice
-                ? caseVoiceConfig
-                : (templateVoiceConfig?.case_voice ? templateVoiceConfig : caseVoiceConfig);
+            const override = mergePatientVoiceConfig(activeCase?.config?.voice, patientTemplate?.config?.voice);
             const rawGender = activeCase?.config?.demographics?.gender;
             const age      = activeCase?.config?.demographics?.age;
             const slotGender = deriveDemographicSlot(rawGender, age);
@@ -981,8 +990,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         if (!voiceMode || activeTab !== 'patient') return false;
         if (prefs.avatarAlarmSpeechEnabled === false || isAvatarAlarmSpeechForceOff()) return false;
         const demographics = activeCase?.config?.demographics || {};
+        const override = mergePatientVoiceConfig(activeCase?.config?.voice, patientTemplate?.config?.voice);
         const r = resolveSpeakerVoice(
-            activeCase?.config?.voice,
+            override,
             demographics.gender,
             demographics.age
         );
@@ -1012,7 +1022,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             }
         });
         return true;
-    }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, activeCase?.config?.voice, activeCase?.config?.demographics, resolveSpeakerVoice, toast, setSpeaking, setVisemes]);
+    }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, activeCase?.config?.voice, activeCase?.config?.demographics, patientTemplate?.config?.voice, resolveSpeakerVoice, toast, setSpeaking, setVisemes]);
 
     useEffect(() => {
         return subscribe((event) => {
