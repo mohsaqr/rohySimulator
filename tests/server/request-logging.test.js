@@ -64,10 +64,17 @@ describe('request logging middleware', () => {
         expect(response.status).toBe(201);
         expect(response.headers['x-request-id']).toBe('client_req_123');
 
-        const access = cap.entries().filter((entry) => entry.component === 'access');
+        // Stage-E9 contract (locked by scripts/audit-observability.sh):
+        // every completed response emits a single observability entry via
+        // `logStructured('info'|'warn'|'error', 'request', { ... })`. The
+        // canonical fields are `event=request`, `bytes_sent`, `bytes_in`,
+        // `duration_ms`, plus request_id + user/tenant correlation. 2xx
+        // responses emit only the `event=request` row; 4xx/5xx ALSO emit
+        // a companion `event=http_error` row (see separate test below).
+        const access = cap.entries().filter((entry) => entry.event === 'request');
         expect(access).toHaveLength(1);
         expect(access[0]).toEqual(expect.objectContaining({
-            msg: 'request completed',
+            event: 'request',
             request_id: 'client_req_123',
             method: 'POST',
             path: '/api/unit?x=1',
@@ -77,8 +84,10 @@ describe('request logging middleware', () => {
         }));
         expect(access[0].duration_ms).toEqual(expect.any(Number));
         expect(access[0].bytes_in).toBeGreaterThan(0);
-        expect(access[0].bytes_out).toBeGreaterThan(0);
+        expect(access[0].bytes_sent).toBeGreaterThan(0);
         expect(access[0]).not.toHaveProperty('body');
+        // 2xx must NOT trigger the http_error companion entry.
+        expect(cap.entries().filter((e) => e.event === 'http_error')).toHaveLength(0);
     });
 
     it('attaches req.log with the same request id for nested route logs', async () => {

@@ -1,9 +1,7 @@
 import {
+    logStructured,
     shouldSkipRequestLog
 } from '../observability.js';
-import { logger } from '../logger.js';
-
-const accessLog = logger('access');
 
 function headerNumber(value) {
     if (Array.isArray(value)) return Number(value[0]) || 0;
@@ -26,6 +24,18 @@ function userFields(req) {
     };
 }
 
+// Stage-E9 observability contract. Every completed response emits a single
+// structured log entry via observability.logStructured so downstream
+// log-shippers can filter on the `event` field (audit-observability.sh
+// locks the contract):
+//
+//   event=request    — every response, regardless of status
+//   event=http_error — additionally emitted for 4xx (warn) and 5xx (error)
+//                      so alerts can match a single field for "anything
+//                      that returned a client/server error this minute"
+//
+// `bytes_sent` is the spelling the audit asserts; we keep `bytes_in`
+// alongside for symmetry on request size.
 export function requestLoggerMiddleware(options = {}) {
     const skipPaths = options.skipPaths;
     return (req, res, next) => {
@@ -46,18 +56,25 @@ export function requestLoggerMiddleware(options = {}) {
         res.on('finish', () => {
             if (shouldSkipRequestLog(req.path, skipPaths)) return;
             const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
-            const entry = {
+            const status = res.statusCode;
+            const fields = {
                 request_id: req.request_id || null,
                 method: req.method,
                 path: req.originalUrl || req.url,
-                status: res.statusCode,
+                status,
                 duration_ms: Number(durationMs.toFixed(3)),
                 bytes_in: bytesIn(req),
-                bytes_out: bytesOut(res, responseBytes),
+                bytes_sent: bytesOut(res, responseBytes),
                 ...userFields(req)
             };
-            const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info';
-            accessLog[level]('request completed', entry);
+            const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
+            logStructured(level, 'request', fields);
+            // Companion 4xx/5xx event so log-shipper alerts can filter on a
+            // single `event=http_error` field instead of `event=request AND
+            // status>=400`. Same fields, different label.
+            if (status >= 400) {
+                logStructured(level, 'http_error', fields);
+            }
         });
         next();
     };
