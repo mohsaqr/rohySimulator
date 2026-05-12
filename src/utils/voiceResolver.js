@@ -98,21 +98,30 @@ export function resolveVoice({
     const slot = deriveSlot(gender, age);
     const { rate, pitch } = deriveRatePitch({ voice, voiceSettings, platformAvatars, slot });
 
-    // Tier 1: explicit per-speaker override.
+    // 2026-05-12 — tier order REVERSED so platform Voice Settings is the
+    // canonical source of truth. Previously case_voice (per-case override)
+    // won over the platform setting, which made the Voice Settings tab
+    // appear broken whenever a case had been seeded with a case_voice —
+    // admin changes the slot, nothing happens, no UI hint why. The new
+    // order matches user expectation: "what I set in Voice Settings is
+    // what plays, unless Voice Settings is blank for this slot, in which
+    // case the per-case override and avatar default act as fallbacks."
+
+    // Tier 1: platform voice slot (Voice Settings tab — canonical).
+    const slotted = voiceSettings?.[`voice_${provider}_${slot}`];
+    if (slotted) {
+        return { file: slotted, provider, rate, pitch, tier: 'voice-slot' };
+    }
+
+    // Tier 2: per-case override (fallback if Voice Settings is blank).
     if (voice?.case_voice) {
         return { file: voice.case_voice, provider, rate, pitch, tier: 'override' };
     }
 
-    // Tier 2: platform persona default for this provider+slot.
+    // Tier 3: platform persona default from the Avatars tab.
     const personaDefault = platformAvatars?.[`default_voice_${provider}_${slot}`];
     if (personaDefault) {
         return { file: personaDefault, provider, rate, pitch, tier: 'platform-default' };
-    }
-
-    // Tier 3: platform voice slot.
-    const slotted = voiceSettings?.[`voice_${provider}_${slot}`];
-    if (slotted) {
-        return { file: slotted, provider, rate, pitch, tier: 'voice-slot' };
     }
 
     // Tier 4: hardcoded provider fallback. Empty string for Piper (no

@@ -33,10 +33,13 @@ const ttsCatalogue = [
     { filename: 'second.onnx',          label: 'Second' }
 ];
 
-// ---- Tier 1: per-speaker case_voice override -----------------------------
+// ---- Tier 1: platform voice slot (Voice Settings) — canonical ------------
+// 2026-05-12 — tier order reversed. Voice Settings is now the canonical
+// source; case_voice and persona defaults are fallbacks when Voice Settings
+// is blank for the requested provider/slot.
 
-describe('resolveVoice — Tier 1: case_voice override', () => {
-    it('case_voice wins over platform persona default', () => {
+describe('resolveVoice — Tier 1: platform voice slot (Voice Settings, canonical)', () => {
+    it('voice slot wins over case_voice override', () => {
         const r = resolveVoice({
             voice: { case_voice: 'override.onnx', tts_provider: 'piper' },
             platformAvatars: platformAvatarsWithMaleDefault,
@@ -44,11 +47,11 @@ describe('resolveVoice — Tier 1: case_voice override', () => {
             gender: 'male',
             age: 40
         });
-        expect(r.tier).toBe('override');
-        expect(r.file).toBe('override.onnx');
+        expect(r.tier).toBe('voice-slot');
+        expect(r.file).toBe('slot-male.onnx');
     });
 
-    it('case_voice wins even when platform + slot + hardcoded all available (kokoro)', () => {
+    it('voice slot wins even when case + persona + hardcoded all available (kokoro)', () => {
         const r = resolveVoice({
             voice: { case_voice: 'override.onnx', tts_provider: 'kokoro' },
             platformAvatars: { default_voice_kokoro_male: 'persona.bin' },
@@ -57,37 +60,41 @@ describe('resolveVoice — Tier 1: case_voice override', () => {
             age: 40,
             ttsVoices: ttsCatalogue
         });
-        expect(r.tier).toBe('override');
-        expect(r.file).toBe('override.onnx');
+        expect(r.tier).toBe('voice-slot');
+        expect(r.file).toBe('slot.bin');
         expect(r.provider).toBe('kokoro');
     });
 });
 
-// ---- Tier 2: platform persona default ------------------------------------
+// ---- Tier 2: per-case case_voice (fallback) ------------------------------
 
-describe('resolveVoice — Tier 2: platform persona default', () => {
-    it('uses default_voice_<provider>_<slot> when no case_voice override', () => {
+describe('resolveVoice — Tier 2: case_voice (fallback when Voice Settings is blank)', () => {
+    it('uses case_voice when no platform voice slot is set', () => {
+        const r = resolveVoice({
+            voice: { case_voice: 'override.onnx', tts_provider: 'piper' },
+            platformAvatars: platformAvatarsWithMaleDefault,
+            voiceSettings: {},          // ← Voice Settings blank
+            gender: 'male',
+            age: 40
+        });
+        expect(r.tier).toBe('override');
+        expect(r.file).toBe('override.onnx');
+    });
+});
+
+// ---- Tier 3: Avatars-tab persona default ---------------------------------
+
+describe('resolveVoice — Tier 3: Avatars-tab persona default (fallback)', () => {
+    it('uses default_voice_<provider>_<slot> when no Voice Settings and no case_voice', () => {
         const r = resolveVoice({
             voice: { tts_provider: 'piper' },
             platformAvatars: platformAvatarsWithMaleDefault,
-            voiceSettings: voiceSettingsWithSlot,
+            voiceSettings: {},          // ← Voice Settings blank
             gender: 'male',
             age: 40
         });
         expect(r.tier).toBe('platform-default');
         expect(r.file).toBe('persona-male.onnx');
-    });
-
-    it('persona default beats voice slot (tier 2 > tier 3)', () => {
-        const r = resolveVoice({
-            voice: { tts_provider: 'piper' },
-            platformAvatars: { default_voice_piper_female: 'persona-f.onnx' },
-            voiceSettings:   { voice_piper_female: 'slot-f.onnx' },
-            gender: 'female',
-            age: 30
-        });
-        expect(r.tier).toBe('platform-default');
-        expect(r.file).toBe('persona-f.onnx');
     });
 });
 

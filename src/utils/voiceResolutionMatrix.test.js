@@ -102,7 +102,11 @@ describe('voice resolution matrix — provider x slot x inheritance mode', () =>
         }
     });
 
-    it.each(PROVIDERS)('case voice override %s wins while provider still inherits when unset', (provider) => {
+    // 2026-05-12 — tier order was reversed so platform Voice Settings is the
+    // canonical source. The two assertions below previously locked the
+    // case_voice-wins / persona-defaults-win semantics; both now invert.
+
+    it.each(PROVIDERS)('platform voice slot %s wins over case_voice override (Voice Settings is canonical)', (provider) => {
         const voiceSettings = makeVoiceSettings(provider);
         for (const slot of SLOTS) {
             const r = resolveVoice({
@@ -116,14 +120,35 @@ describe('voice resolution matrix — provider x slot x inheritance mode', () =>
                 ...DEMOS[slot]
             });
             expect(r.provider, `${provider}/${slot} provider`).toBe(provider);
-            expect(r.file, `${provider}/${slot} file`).toBe(VOICE[provider].override);
-            expect(r.tier, `${provider}/${slot} tier`).toBe('override');
+            // Voice Settings (tier 1) wins; the override is ignored when a
+            // platform slot is set for this provider/slot.
+            expect(r.file, `${provider}/${slot} file`).toBe(VOICE[provider][slot]);
+            expect(r.tier, `${provider}/${slot} tier`).toBe('voice-slot');
+            // rate/pitch from the case still apply — those are independent of
+            // which voice file is picked.
             expect(r.rate).toBe(1.25);
             expect(r.pitch).toBe(3);
         }
     });
 
-    it.each(PROVIDERS)('persona defaults %s beat voice settings for every slot', (provider) => {
+    it.each(PROVIDERS)('case_voice acts as fallback for %s when Voice Settings is blank for that slot', (provider) => {
+        for (const slot of SLOTS) {
+            const r = resolveVoice({
+                voice: {
+                    case_voice: VOICE[provider].override,
+                    tts_provider: provider
+                },
+                voiceSettings: {},               // ← blank Voice Settings
+                platformAvatars: {},
+                ...DEMOS[slot]
+            });
+            expect(r.provider, `${provider}/${slot} provider`).toBe(provider);
+            expect(r.file, `${provider}/${slot} file`).toBe(VOICE[provider].override);
+            expect(r.tier, `${provider}/${slot} tier`).toBe('override');
+        }
+    });
+
+    it.each(PROVIDERS)('platform voice slot %s wins over Avatars persona defaults', (provider) => {
         const voiceSettings = makeVoiceSettings(provider);
         const platformAvatars = makePlatformAvatars();
         for (const slot of SLOTS) {
@@ -134,8 +159,13 @@ describe('voice resolution matrix — provider x slot x inheritance mode', () =>
                 ...DEMOS[slot]
             });
             expect(r.provider, `${provider}/${slot} provider`).toBe(provider);
-            expect(r.file, `${provider}/${slot} file`).toBe(`${VOICE[provider][slot]}-persona`);
-            expect(r.tier, `${provider}/${slot} tier`).toBe('platform-default');
+            // Voice Settings (tier 1) still wins over the Avatars-tab persona
+            // default; the persona default is now a fallback when Voice
+            // Settings is blank for that slot.
+            expect(r.file, `${provider}/${slot} file`).toBe(VOICE[provider][slot]);
+            expect(r.tier, `${provider}/${slot} tier`).toBe('voice-slot');
+            // rate/pitch still inherit from the Avatars-tab persona defaults
+            // — they're independent of which voice file is picked.
             expect(r.rate).toBe(platformAvatars[`default_rate_${slot}`]);
             expect(r.pitch).toBe(platformAvatars[`default_pitch_${slot}`]);
         }

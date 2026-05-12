@@ -133,7 +133,11 @@ describe('exhaustive TTS inherit/override audit', () => {
         }
     });
 
-    it('uses persona defaults before platform voice slots for every provider and slot', () => {
+    // 2026-05-12 — tier order was reversed: platform Voice Settings is now
+    // canonical. The two assertions below previously locked the old
+    // case_voice / persona-defaults-win semantics; both now invert.
+
+    it('platform voice slot wins over Avatars-tab persona defaults for every provider/slot', () => {
         const platformAvatars = personaDefaults();
         for (const provider of PROVIDERS) {
             for (const slot of SLOTS) {
@@ -144,10 +148,14 @@ describe('exhaustive TTS inherit/override audit', () => {
                     ...DEMO[slot],
                 });
 
+                // Voice Settings (tier 1) wins; persona defaults are now a
+                // fallback when Voice Settings is blank. rate/pitch still
+                // inherit from the Avatars persona defaults — they're
+                // independent of which voice *file* gets picked.
                 expect(resolved, `${provider}/${slot}`).toMatchObject({
                     provider,
-                    file: `${VOICE_ID[provider][slot]}::persona`,
-                    tier: 'platform-default',
+                    file: VOICE_ID[provider][slot],
+                    tier: 'voice-slot',
                     rate: platformAvatars[`default_rate_${slot}`],
                     pitch: platformAvatars[`default_pitch_${slot}`],
                 });
@@ -155,7 +163,7 @@ describe('exhaustive TTS inherit/override audit', () => {
         }
     });
 
-    it('case voice, rate, and pitch override every inherited default', () => {
+    it('platform voice slot wins over case_voice; rate+pitch from case still apply', () => {
         for (const provider of PROVIDERS) {
             for (const slot of SLOTS) {
                 const resolved = resolveVoice({
@@ -169,12 +177,37 @@ describe('exhaustive TTS inherit/override audit', () => {
                     ...DEMO[slot],
                 });
 
+                // Voice file comes from Voice Settings (tier 1); case_voice
+                // is ignored when the slot has a platform value. rate/pitch
+                // are independent of which voice file is chosen.
+                expect(resolved, `${provider}/${slot}`).toMatchObject({
+                    provider,
+                    file: VOICE_ID[provider][slot],
+                    tier: 'voice-slot',
+                    rate: 1.23,
+                    pitch: 4.5,
+                });
+            }
+        }
+    });
+
+    it('case_voice acts as fallback when Voice Settings has no value for the slot', () => {
+        for (const provider of PROVIDERS) {
+            for (const slot of SLOTS) {
+                const resolved = resolveVoice({
+                    voice: {
+                        case_voice: VOICE_ID[provider].override,
+                        tts_provider: provider,
+                    },
+                    voiceSettings: {},               // ← blank Voice Settings
+                    platformAvatars: personaDefaults(),
+                    ...DEMO[slot],
+                });
+
                 expect(resolved, `${provider}/${slot}`).toMatchObject({
                     provider,
                     file: VOICE_ID[provider].override,
                     tier: 'override',
-                    rate: 1.23,
-                    pitch: 4.5,
                 });
             }
         }
@@ -227,15 +260,20 @@ describe('Cartesian TTS resolver audit — every inherit and override branch', (
         return out;
     }
 
+    // 2026-05-12 — tier order reversed. New order (highest to lowest):
+    //   1. voice-slot   (Voice Settings tab — canonical)
+    //   2. override     (per-case case_voice)
+    //   3. platform-default (Avatars-tab persona default)
+    //   4. hardcoded
     function expectedTier({ provider, slot, caseVoiceMode, personaMode, voiceSlotMode }) {
+        if (voiceSlotMode === 'matching') {
+            return { file: `voice-slot:${provider}:${slot}`, tier: 'voice-slot' };
+        }
         if (caseVoiceMode === 'set') {
             return { file: `case:${provider}:${slot}`, tier: 'override' };
         }
         if (personaMode === 'matching') {
             return { file: `persona:${provider}:${slot}`, tier: 'platform-default' };
-        }
-        if (voiceSlotMode === 'matching') {
-            return { file: `voice-slot:${provider}:${slot}`, tier: 'voice-slot' };
         }
         const hardcoded = PROVIDER_FALLBACK_VOICE[provider]?.[slot] || null;
         return hardcoded
