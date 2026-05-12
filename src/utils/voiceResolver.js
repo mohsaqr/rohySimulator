@@ -8,20 +8,40 @@
 // enforced it. Centralising here means future drift is impossible — any
 // surface that asks "what voice should we play?" gets the same answer.
 //
-// The chain (highest-precedence first):
-//   1. case_voice override          → tier='override'
-//   2. platform persona default     → tier='platform-default'
-//      (default_voice_<provider>_<slot> in /api/platform-settings/avatars)
-//   3. platform voice slot          → tier='voice-slot'
-//      (voice_<provider>_<slot> in /api/platform-settings/voice)
-//   4. hardcoded provider fallback  → tier='hardcoded'
-//      (PROVIDER_FALLBACK_VOICE — empty for piper today, populated for the
-//      Kokoro and cloud providers)
-//   5. catalog-first (editor only)  → tier='catalog-first'
+// 2026-05-12 — RESOLUTION CHAIN COLLAPSED TO TWO TIERS.
+// Previously the chain reached through three platform-level tiers
+// (case_voice → Avatars-tab persona default → Voice-tab voice slot →
+// hardcoded). Admins reported "I changed the voice in Voice Settings and
+// nothing happened" — five times in two weeks. Two compounding problems:
+//   1. The most prominent admin surface (Voice Settings tab) was tier 3 of
+//      4; case_voice silently won. No UI hinted what was overriding.
+//   2. A flat per-gender platform setting can only carry three voices
+//      total (male / female / child). Discussions with three female
+//      speakers can't sound different from there — making per-character
+//      voice the only level where the *real* per-speaker decision belongs.
+// The fix: collapse to one place. Per-character voice (case_voice from the
+// case config, or from each agent persona) is THE source. Falls through
+// to a hardcoded provider fallback so the first sample-play on a fresh
+// install isn't silent.
+//
+// New chain (highest-precedence first):
+//   1. case_voice                   → tier='override'
+//      Set in CaseAvatarVoicePicker (for the patient) or in
+//      AgentPersonaEditor (for each agent persona). This is THE source.
+//   2. hardcoded provider fallback  → tier='hardcoded'
+//      PROVIDER_FALLBACK_VOICE — kokoro = af_bella/am_michael/af_bella,
+//      openai = nova/onyx/shimmer, google = Neural2-{F,A,F}, piper = empty.
+//   3. catalog-first (editor only)  → tier='catalog-first'
 //      Only used when the caller passes ttsVoices (the loaded provider
 //      catalogue). Picks the first voice the engine actually has installed
 //      so the persona editor's preview button can play *something* on a
-//      fresh install with empty platform slots. The runtime would 503 here.
+//      fresh install. The runtime path leaves ttsVoices=null and prefers
+//      the hardcoded fallback.
+//
+// Platform-level `voice_<provider>_<slot>` and `default_voice_<provider>_<slot>`
+// fields are no longer read at all. The DB rows can stay (no destructive
+// migration); the UI for setting them has been removed from
+// VoiceSettingsTab and AvatarsSettingsTab.
 
 import { PROVIDER_FALLBACK_VOICE } from './voiceFallbacks';
 import { deriveDemographicSlot } from './demographics.js';
@@ -98,43 +118,23 @@ export function resolveVoice({
     const slot = deriveSlot(gender, age);
     const { rate, pitch } = deriveRatePitch({ voice, voiceSettings, platformAvatars, slot });
 
-    // 2026-05-12 — tier order REVERSED so platform Voice Settings is the
-    // canonical source of truth. Previously case_voice (per-case override)
-    // won over the platform setting, which made the Voice Settings tab
-    // appear broken whenever a case had been seeded with a case_voice —
-    // admin changes the slot, nothing happens, no UI hint why. The new
-    // order matches user expectation: "what I set in Voice Settings is
-    // what plays, unless Voice Settings is blank for this slot, in which
-    // case the per-case override and avatar default act as fallbacks."
-
-    // Tier 1: platform voice slot (Voice Settings tab — canonical).
-    const slotted = voiceSettings?.[`voice_${provider}_${slot}`];
-    if (slotted) {
-        return { file: slotted, provider, rate, pitch, tier: 'voice-slot' };
-    }
-
-    // Tier 2: per-case override (fallback if Voice Settings is blank).
+    // Tier 1: per-character case_voice — THE source.
     if (voice?.case_voice) {
         return { file: voice.case_voice, provider, rate, pitch, tier: 'override' };
     }
 
-    // Tier 3: platform persona default from the Avatars tab.
-    const personaDefault = platformAvatars?.[`default_voice_${provider}_${slot}`];
-    if (personaDefault) {
-        return { file: personaDefault, provider, rate, pitch, tier: 'platform-default' };
-    }
-
-    // Tier 4: hardcoded provider fallback. Empty string for Piper (no
-    // baked-in default — admins must configure or rely on tier 5).
+    // Tier 2: hardcoded provider fallback. Empty string for Piper (no
+    // baked-in default — admins must configure case_voice on every Piper
+    // case, or rely on tier 3 in the editor preview path).
     const hardcoded = PROVIDER_FALLBACK_VOICE?.[provider]?.[slot];
     if (hardcoded) {
         return { file: hardcoded, provider, rate, pitch, tier: 'hardcoded' };
     }
 
-    // Tier 5: catalog-first. Only honoured when the caller explicitly passes
-    // ttsVoices — the runtime path leaves it null so it correctly returns
-    // file=null and 503s instead of guessing at a voice the admin didn't
-    // configure.
+    // Tier 3: catalog-first (editor preview only). Honoured only when the
+    // caller explicitly passes ttsVoices. The runtime path leaves it null
+    // so it falls through to file=null and the route layer 503s instead of
+    // guessing at a voice the admin didn't pick.
     if (Array.isArray(ttsVoices) && ttsVoices.length > 0 && ttsVoices[0]?.filename) {
         return { file: ttsVoices[0].filename, provider, rate, pitch, tier: 'catalog-first' };
     }

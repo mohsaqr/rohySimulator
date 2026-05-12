@@ -319,24 +319,31 @@ describe('DiagnosticBar — Play / A-B buttons', () => {
         expect(override).toEqual({});
     });
 
-    it('clicking the "vs. <slot>" button calls auditionWirePayload with the platform slot voice override', async () => {
+    it('clicking the "vs. <slot>" button calls auditionWirePayload with the hardcoded fallback for that slot', async () => {
+        // 2026-05-12 — platform `voice_<provider>_<slot>` fields are no
+        // longer read by the resolver. The A/B compare button now uses
+        // PROVIDER_FALLBACK_VOICE for the wire's gender slot. For piper
+        // the female fallback is the empty string, so the test now uses
+        // kokoro instead (kokoro female → af_bella).
         enableBarForAnon();
-        // Wire has gender='female' → bar should pick voice_piper_female slot.
         const wire = makeWire({
             id: 22,
             voice: 'recorded-voice',
-            provider: 'piper',
+            provider: 'kokoro',
             gender: 'female',
             status: 'ok',
         });
         voiceService.getRecentTtsRequests.mockReturnValue([wire]);
         voiceService.getLastTtsRequest.mockReturnValue(wire);
 
+        // Legacy slot fields are present to prove the resolver / bar do
+        // NOT read them anymore — the click should use af_bella, not
+        // 'legacy-female-voice'.
         const settings = {
-            tts_provider: 'piper',
-            voice_piper_male: 'slot-male-voice',
-            voice_piper_female: 'slot-female-voice',
-            voice_piper_child: 'slot-child-voice',
+            tts_provider: 'kokoro',
+            voice_kokoro_male: 'legacy-male-voice',
+            voice_kokoro_female: 'legacy-female-voice',
+            voice_kokoro_child: 'legacy-child-voice',
         };
 
         renderWithProviders(
@@ -351,11 +358,9 @@ describe('DiagnosticBar — Play / A-B buttons', () => {
             fireEvent.click(screen.getByLabelText(/expand details/i));
         });
 
-        // The A/B button text contains "vs. " + a shortened slot voice name.
-        // Since 'slot-female-voice' has only 3 dash-segments, shortVoice()
-        // returns the full string per the source's `if (parts.length <= 3)`
-        // branch. Find the button by its title attribute, which is stable.
-        const abBtn = screen.getByTitle(/Play same text with slot-female-voice.*A\/B comparison/i);
+        // Button title contains the shortened fallback voice name. af_bella
+        // has no dashes, so shortVoice() returns the full string.
+        const abBtn = screen.getByTitle(/Play same text with af_bella.*A\/B comparison/i);
         await act(async () => {
             fireEvent.click(abBtn);
         });
@@ -363,7 +368,7 @@ describe('DiagnosticBar — Play / A-B buttons', () => {
         expect(voiceService.auditionWirePayload).toHaveBeenCalledTimes(1);
         const [calledWire, override] = voiceService.auditionWirePayload.mock.calls[0];
         expect(calledWire.id).toBe(22);
-        expect(override).toEqual({ voice: 'slot-female-voice' });
+        expect(override).toEqual({ voice: 'af_bella' });
     });
 
     it('disables the Play button when wire.status !== "ok"', async () => {

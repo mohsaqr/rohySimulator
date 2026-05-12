@@ -494,11 +494,17 @@ describe('CaseAvatarVoicePicker — TestVoiceButton wiring', () => {
         expect(stub.getAttribute('data-provider')).toBe('kokoro');
     });
 
-    it('inherits the platform provider, voice slot, rate, and pitch for preview', async () => {
+    it('inherits the platform provider, rate, and pitch — voice slot is no longer read', async () => {
+        // 2026-05-12 — per-gender voice slots in Voice Settings were removed.
+        // The case picker now falls back to the hardcoded PROVIDER_FALLBACK_VOICE
+        // for the gender slot (here: male → en-US-Neural2-A for google), NOT
+        // to the legacy `voice_google_male` setting even when it's still in
+        // the DB. rate/pitch keep inheriting from voiceSettings since those
+        // weren't part of the per-gender voice-file collapse.
         server.use(
             http.get('*/api/platform-settings/voice', () => HttpResponse.json({
                 tts_provider: 'google',
-                voice_google_male: 'en-US-Neural2-J',
+                voice_google_male: 'en-US-Neural2-J', // legacy field; resolver ignores it now
                 tts_rate: 0.9,
                 tts_pitch: 2,
             })),
@@ -511,7 +517,9 @@ describe('CaseAvatarVoicePicker — TestVoiceButton wiring', () => {
         const stub = screen.getByTestId('test-voice-button-stub');
         await waitFor(() => {
             expect(stub.getAttribute('data-provider')).toBe('google');
-            expect(stub.getAttribute('data-voice')).toBe('en-US-Neural2-J');
+            // Hardcoded fallback for google male — defined in
+            // src/utils/voiceFallbacks.js.
+            expect(stub.getAttribute('data-voice')).toBe('en-US-Neural2-A');
             expect(stub.getAttribute('data-rate')).toBe('0.9');
             expect(stub.getAttribute('data-pitch')).toBe('2');
         });

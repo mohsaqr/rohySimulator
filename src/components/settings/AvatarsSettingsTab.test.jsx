@@ -113,7 +113,11 @@ describe('AvatarsSettingsTab apiFetch migration', () => {
         expect(init.headers['Content-Type']).toBeUndefined();
     });
 
-    it('PUTs persona defaults as JSON when saved', async () => {
+    it('PUTs persona defaults as JSON when saved (without default_voice_* fields)', async () => {
+        // 2026-05-12 — `default_voice_<provider>_<gender>` keys were removed
+        // from this tab. The PUT payload now carries only the flat
+        // avatar / rate / pitch defaults; per-character voice belongs in
+        // the case / persona editors.
         renderWithProviders(
             <AvatarsSettingsTab />,
             { withAuth: false, withNotifications: false, withToast: false }
@@ -132,11 +136,15 @@ describe('AvatarsSettingsTab apiFetch migration', () => {
             Authorization: 'Bearer admin-token',
             'Content-Type': 'application/json',
         });
-        expect(JSON.parse(init.body)).toMatchObject({
+        const body = JSON.parse(init.body);
+        expect(body).toMatchObject({
             default_avatar_male: 'male.glb',
-            default_voice_piper_male: '',
             default_rate_child: '',
         });
+        // No default_voice_* fields anymore.
+        for (const key of Object.keys(body)) {
+            expect(key.startsWith('default_voice_')).toBe(false);
+        }
     });
 
     it('surfaces an API error toast when saving defaults fails', async () => {
@@ -170,7 +178,13 @@ describe('AvatarsSettingsTab apiFetch migration', () => {
         await waitFor(() => expect(toast.error).toHaveBeenCalledWith('no access'));
     });
 
-    it('falls back to the Voice tab provider slot when no avatar default voice is set', async () => {
+    it('no longer renders per-persona voice pickers or TestVoiceButton stubs', async () => {
+        // 2026-05-12 — the per-persona voice picker + its "Inherit (...)"
+        // hint and TestVoiceButton companion were removed. Per-character
+        // voice now lives in the case / persona editors. This test previously
+        // asserted that the picker fell back to the Voice tab's
+        // `voice_piper_male` slot when no avatar-level default existed; that
+        // entire flow is gone.
         fetchSpy.mockImplementation((url) => {
             if (typeof url === 'string' && url.endsWith('/avatars/heads/manifest.json')) {
                 return Promise.resolve(jsonResponse({
@@ -179,18 +193,6 @@ describe('AvatarsSettingsTab apiFetch migration', () => {
             }
             if (typeof url === 'string' && url.endsWith('/api/platform-settings/avatars')) {
                 return Promise.resolve(jsonResponse({ default_avatar_male: 'male.glb' }));
-            }
-            if (typeof url === 'string' && url.endsWith('/api/platform-settings/voice')) {
-                return Promise.resolve(jsonResponse({
-                    tts_provider: 'piper',
-                    voice_piper_male: 'amy.onnx',
-                }));
-            }
-            if (typeof url === 'string' && url.endsWith('/api/tts/voices')) {
-                return Promise.resolve(jsonResponse({
-                    provider: 'piper',
-                    voices: [{ filename: 'amy.onnx', displayName: 'Amy', language: 'en-US' }],
-                }));
             }
             return Promise.resolve(jsonResponse({}));
         });
@@ -201,14 +203,10 @@ describe('AvatarsSettingsTab apiFetch migration', () => {
         );
 
         expect(await screen.findByRole('heading', { name: 'Persona defaults' })).toBeInTheDocument();
-        expect(await screen.findByText(/Inherit \(amy\.onnx\)/)).toBeInTheDocument();
-        await waitFor(() => {
-            expect(testVoiceProps).toHaveBeenCalledWith(expect.objectContaining({
-                voice: 'amy.onnx',
-                provider: 'piper',
-                gender: 'male',
-            }));
-        });
+        // The "Inherit (amy.onnx)" hint text no longer appears anywhere.
+        expect(screen.queryByText(/Inherit \(amy\.onnx\)/)).toBeNull();
+        // No TestVoiceButton stub should ever fire from this tab.
+        expect(testVoiceProps).not.toHaveBeenCalled();
     });
 
     it('filters persona avatar dropdowns by the slot each persona controls', async () => {

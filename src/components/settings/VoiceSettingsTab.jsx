@@ -1,11 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Mic, Save, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Mic, Save, RefreshCw, AlertTriangle, Info } from 'lucide-react';
 import { ApiError, apiFetch, apiPut } from '../../services/apiClient.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
-import TestVoiceButton from './TestVoiceButton.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { useVoice } from '../../contexts/VoiceContext.jsx';
-import { voicesForSlot, voiceGenderLabel } from '../../utils/voiceCatalogue.js';
+
+// 2026-05-12 — the per-gender voice pickers that used to live in this tab
+// were removed. Per-character voice now belongs in ONE place: the case
+// editor (patient) and the persona editor (agents). The previous chain
+// had three platform-level fallbacks (Voice tab voice slots, Avatars-tab
+// persona defaults, hardcoded), which made the Voice tab appear broken
+// whenever a case had a `case_voice` set — admin changed the most
+// prominent UI and nothing happened. The collapse to "case_voice or
+// hardcoded fallback, nothing in between" is documented in
+// src/utils/voiceResolver.js. The DB columns
+// (voice_<provider>_<slot>) are no longer read; rows can stay or be
+// cleared with no behaviour change.
 
 // Curated list of locales the browser SpeechRecognition handles reliably.
 // Could be expanded; kept short to avoid choice paralysis.
@@ -19,45 +29,9 @@ const STT_LANGUAGES = [
     { code: 'es-ES', label: 'Spanish' }
 ];
 
-// Voice slots are stored per-provider since voice IDs are provider-specific
-// (a Google "en-US-Neural2-F" can't be played by Kokoro). The four supported
-// catalogue providers; 'browser' speaks via Web Speech API and has no slots.
-const TTS_PROVIDERS = {
-    kokoro: {
-        label: 'Kokoro',
-        emptyHint: 'No Kokoro voices loaded yet. The model loads on first request — try saving and synthesizing once.',
-    },
-    piper: {
-        label: 'Piper',
-        emptyHint: <>No voices installed. Drop <code>.onnx</code> + <code>.onnx.json</code> files into <code>server/data/piper/</code> and refresh.</>,
-    },
-    google: {
-        label: 'Google Cloud TTS',
-        emptyHint: 'No Google voices available — check that the Google TTS API key is a valid Google Cloud key (starts with "AIza"), not an OpenAI/other key.',
-    },
-    openai: {
-        label: 'OpenAI TTS',
-        emptyHint: 'No OpenAI voices available — check that the OpenAI TTS API key is valid (starts with "sk-").',
-    },
-};
-const PROVIDERS = Object.keys(TTS_PROVIDERS);
-const GENDERS = ['male', 'female', 'child'];
-
-function emptyVoiceSlots() {
-    const out = {};
-    for (const p of PROVIDERS) {
-        out[p] = { male: '', female: '', child: '' };
-    }
-    return out;
-}
-
 const blankSettings = {
     voice_mode_enabled: false,
     tts_provider: 'kokoro',
-    // Per-provider voice slots. Switching providers no longer wipes anything;
-    // each provider keeps its own selections. UI shows the current provider's
-    // slots only; save only writes the current provider's three keys.
-    voiceSlots: emptyVoiceSlots(),
     tts_rate: 1.0,
     tts_pitch: 0,
     stt_provider: 'browser',
@@ -80,7 +54,6 @@ export default function VoiceSettingsTab() {
     const toast = useToast();
     const { setVoiceSettings } = useVoice();
     const [settings, setSettings] = useState(blankSettings);
-    const [voices, setVoices] = useState([]);
     const [piperInstalled, setPiperInstalled] = useState(false);
     const [models, setModels] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -94,20 +67,14 @@ export default function VoiceSettingsTab() {
                 apiFetch('/llm/models')
             ]);
             const provider = s.tts_provider || 'kokoro';
-            const v = await apiFetch(`/tts/voices?provider=${provider}`);
-
-            // Hydrate voice slots from the new per-provider keys.
-            const voiceSlots = emptyVoiceSlots();
-            for (const p of PROVIDERS) {
-                for (const g of GENDERS) {
-                    voiceSlots[p][g] = s[`voice_${p}_${g}`] || '';
-                }
-            }
+            // Fetch the provider's voice catalogue only to surface
+            // "Piper is not installed" warnings; we no longer render a
+            // voice picker here.
+            const v = await apiFetch(`/tts/voices?provider=${provider}`).catch(() => ({ piperInstalled: false }));
 
             const hydratedSettings = {
                 voice_mode_enabled: !!s.voice_mode_enabled,
                 tts_provider: provider,
-                voiceSlots,
                 tts_rate: s.tts_rate ?? 1.0,
                 tts_pitch: s.tts_pitch ?? 0,
                 stt_provider: s.stt_provider || 'browser',
@@ -123,7 +90,6 @@ export default function VoiceSettingsTab() {
             };
             setSettings(hydratedSettings);
             setVoiceSettings?.(s);
-            setVoices(v.voices || []);
             setPiperInstalled(v.piperInstalled !== false);
             setModels(m.models || []);
         } catch (err) {
@@ -137,9 +103,11 @@ export default function VoiceSettingsTab() {
     useEffect(() => { loadAll(); }, []);
 
     const refetchVoices = async (provider) => {
+        // Only used to refresh the "Piper not installed" warning when the
+        // admin switches providers. The actual voice catalogue (`v.voices`)
+        // is no longer rendered in this tab.
         try {
             const v = await apiFetch(`/tts/voices?provider=${provider}`);
-            setVoices(v.voices || []);
             setPiperInstalled(v.piperInstalled !== false);
         } catch (err) {
             toast.error?.(`Failed to load ${provider} voices: ${err.message}`);
@@ -148,21 +116,9 @@ export default function VoiceSettingsTab() {
 
     const update = (key, value) => {
         setSettings(prev => ({ ...prev, [key]: value }));
-        // Switching providers no longer wipes anything: each provider keeps
-        // its own voice slots. We just refetch the new provider's catalogue
-        // so the dropdown shows the right options.
+        // Refetch the catalogue when the provider changes — used now only
+        // to refresh the "Piper not installed" warning.
         if (key === 'tts_provider') refetchVoices(value);
-    };
-
-    // Update one voice slot. Mutates the per-provider sub-object immutably.
-    const updateVoiceSlot = (provider, gender, value) => {
-        setSettings(prev => ({
-            ...prev,
-            voiceSlots: {
-                ...prev.voiceSlots,
-                [provider]: { ...prev.voiceSlots[provider], [gender]: value }
-            }
-        }));
     };
 
     const save = async () => {
@@ -179,15 +135,10 @@ export default function VoiceSettingsTab() {
                 avatar_type: settings.avatar_type || null,
                 llm_model_voice: settings.llm_model_voice || null
             };
-            // Save ONLY the current provider's voice slots. Other providers'
-            // slots stay in the database untouched — switching back to them
-            // restores their voices instead of finding empty fields.
-            // 'browser' has no server-side voice catalogue so nothing to save.
-            if (PROVIDERS.includes(provider)) {
-                for (const g of GENDERS) {
-                    payload[`voice_${provider}_${g}`] = settings.voiceSlots[provider][g] || null;
-                }
-            }
+            // Per-gender voice slots are no longer written from this tab —
+            // per-character voice belongs in the case / persona editors.
+            // Existing rows in platform_settings (voice_<provider>_<slot>)
+            // are left untouched here; the resolver ignores them.
             // Only include API key fields when the admin actually entered
             // something — empty input means "leave the existing key alone".
             if (settings.google_tts_api_key.trim()) payload.google_tts_api_key = settings.google_tts_api_key.trim();
@@ -231,9 +182,6 @@ export default function VoiceSettingsTab() {
 
     const isKokoro = settings.tts_provider === 'kokoro';
     const showPiperWarning = settings.tts_provider === 'piper' && !piperInstalled;
-    const providerInfo = TTS_PROVIDERS[settings.tts_provider];
-    const providerLabel = providerInfo?.label ?? settings.tts_provider;
-    const emptyVoicesHint = providerInfo?.emptyHint ?? `No voices available for provider "${settings.tts_provider}".`;
 
     return (
         <div className="space-y-6 max-w-3xl">
@@ -257,6 +205,19 @@ export default function VoiceSettingsTab() {
                     </div>
                 </div>
             )}
+
+            <div className="flex items-start gap-2 p-3 rounded border border-sky-800 bg-sky-950/30 text-sky-200 text-sm">
+                <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <div>
+                    Per-character voices are now configured in the{' '}
+                    <strong>case editor</strong> (patient voice) and the{' '}
+                    <strong>agent persona editor</strong> (each agent).
+                    This tab only sets the engine, the global rate/pitch,
+                    and the API keys for cloud providers. When a case or
+                    persona has no voice set, the engine's default voice
+                    for that gender plays.
+                </div>
+            </div>
 
             {/* TTS provider */}
             <label className="block max-w-md">
@@ -337,54 +298,6 @@ export default function VoiceSettingsTab() {
                     </div>
                 </div>
             </label>
-
-            {/* TTS voices */}
-            <fieldset className="space-y-3">
-                <legend className="text-sm font-bold text-white">
-                    Patient voices ({providerLabel})
-                </legend>
-                {voices.length === 0 ? (
-                    <div className="text-sm text-neutral-500">{emptyVoicesHint}</div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {GENDERS.map(g => {
-                            const label = g === 'male' ? 'Male voice' : g === 'female' ? 'Female voice' : 'Child voice';
-                            const provider = settings.tts_provider;
-                            const value = PROVIDERS.includes(provider) ? settings.voiceSlots[provider][g] : '';
-                            const slotVoices = voicesForSlot(voices, g, value);
-                            return (
-                                <label key={g} className="block">
-                                    <span className="text-xs text-neutral-400 block mb-1">{label}</span>
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <select
-                                            value={value}
-                                            onChange={(e) => updateVoiceSlot(provider, g, e.target.value)}
-                                            className="flex-1 min-w-0 bg-neutral-800 border border-neutral-700 rounded px-2 py-1.5 text-sm text-white"
-                                        >
-                                            <option value="">— none —</option>
-                                            {slotVoices.map(v => {
-                                                const genderLabel = voiceGenderLabel(v);
-                                                return (
-                                                    <option key={v.filename} value={v.filename}>
-                                                        {v.displayName}{genderLabel ? ` (${genderLabel})` : ''} — {v.language}
-                                                    </option>
-                                                );
-                                            })}
-                                        </select>
-                                        <TestVoiceButton
-                                            voice={value}
-                                            provider={provider}
-                                            rate={settings.tts_rate}
-                                            pitch={settings.tts_pitch}
-                                            gender={g}
-                                        />
-                                    </div>
-                                </label>
-                            );
-                        })}
-                    </div>
-                )}
-            </fieldset>
 
             {/* Rate & pitch */}
             <div className="grid grid-cols-2 gap-4">

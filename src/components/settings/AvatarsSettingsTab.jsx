@@ -13,8 +13,6 @@ import { useVoice } from '../../contexts/VoiceContext.jsx';
 import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
 import { parseConfig } from '../../utils/parseConfig.js';
-import TestVoiceButton from './TestVoiceButton.jsx';
-import { voicesForSlot } from '../../utils/voiceCatalogue.js';
 import { avatarsForSlot } from '../../utils/resolveAvatar.js';
 
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
@@ -27,15 +25,14 @@ const PERSONAS = [
     { gender: 'child',  label: 'Child' }
 ];
 
-// Two key shapes:
-//   FLAT (provider-independent): default_avatar_<gender>, default_rate_<gender>, default_pitch_<gender>
-//   PER-PROVIDER (because voice IDs differ between engines):
-//     default_voice_<provider>_<gender>  for piper / kokoro / openai / google
-const TTS_PROVIDERS = ['piper', 'kokoro', 'openai', 'google'];
+// 2026-05-12 — `default_voice_<provider>_<gender>` keys were removed from
+// this tab's UI. Per-character voice now belongs in the case / persona
+// editors only. The existing DB rows are not migrated (no destructive
+// schema change) but the resolver ignores them, so editing them here would
+// be a no-op trap. Keys kept here:
+//   default_avatar_<gender>, default_rate_<gender>, default_pitch_<gender>
 const FLAT_FIELDS = ['avatar', 'rate', 'pitch'];
-const FLAT_KEYS = PERSONAS.flatMap(p => FLAT_FIELDS.map(f => `default_${f}_${p.gender}`));
-const VOICE_KEYS = TTS_PROVIDERS.flatMap(prov => PERSONAS.map(p => `default_voice_${prov}_${p.gender}`));
-const PERSONA_KEYS = [...FLAT_KEYS, ...VOICE_KEYS];
+const PERSONA_KEYS = PERSONAS.flatMap(p => FLAT_FIELDS.map(f => `default_${f}_${p.gender}`));
 
 function emptyDefaults() {
     return Object.fromEntries(PERSONA_KEYS.map(k => [k, '']));
@@ -44,18 +41,12 @@ function emptyDefaults() {
 export default function AvatarsSettingsTab() {
     const toast = useToast();
     const {
-        voiceSettings: ctxVoiceSettings,
-        setVoiceSettings,
         headManifest, setHeadManifest,
         platformAvatars, setPlatformAvatars
     } = useVoice();
 
     const [manifest, setManifestLocal] = useState(headManifest);
     const [defaults, setDefaults] = useState(() => ({ ...emptyDefaults(), ...(platformAvatars || {}) }));
-    const [fetchedVoiceSettings, setFetchedVoiceSettings] = useState(null);
-    const voiceSettings = ctxVoiceSettings || fetchedVoiceSettings;
-    const [voices, setVoices] = useState([]);          // [{ filename, displayName, language }]
-    const [voicesProvider, setVoicesProvider] = useState(null);  // 'piper' | 'kokoro' | 'openai' | 'google'
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(!headManifest || !platformAvatars);
 
@@ -65,20 +56,18 @@ export default function AvatarsSettingsTab() {
             try {
                 // Reuse already-loaded values from VoiceContext when present;
                 // otherwise fetch and write back so other consumers benefit too.
+                // Voice catalogue + platform voice settings are no longer
+                // fetched here — the per-persona voice picker that used them
+                // was removed 2026-05-12.
                 const needManifest = !headManifest;
                 const needDefaults = !platformAvatars;
-                const needVoiceSettings = !ctxVoiceSettings;
-                const [manRes, defRes, platformVoiceRes, voiceRes, ags] = await Promise.allSettled([
+                const [manRes, defRes, ags] = await Promise.allSettled([
                     needManifest
                         ? fetch(baseUrl('/avatars/heads/manifest.json')).then(r => r.json())
                         : Promise.resolve(headManifest),
                     needDefaults
                         ? apiFetch('/platform-settings/avatars')
                         : Promise.resolve(platformAvatars),
-                    needVoiceSettings
-                        ? apiFetch('/platform-settings/voice')
-                        : Promise.resolve(ctxVoiceSettings),
-                    apiFetch('/tts/voices'),
                     AgentService.getTemplates()
                 ]);
                 if (cancelled) return;
@@ -94,14 +83,6 @@ export default function AvatarsSettingsTab() {
                     }
                     setDefaults(merged);
                     if (needDefaults) setPlatformAvatars(merged);
-                }
-                if (platformVoiceRes.status === 'fulfilled' && platformVoiceRes.value) {
-                    setFetchedVoiceSettings(platformVoiceRes.value);
-                    if (needVoiceSettings) setVoiceSettings?.(platformVoiceRes.value);
-                }
-                if (voiceRes.status === 'fulfilled') {
-                    setVoices(voiceRes.value?.voices || []);
-                    setVoicesProvider(voiceRes.value?.provider || null);
                 }
                 if (ags.status === 'fulfilled') setAgents(ags.value || []);
             } catch (err) {
@@ -161,42 +142,22 @@ export default function AvatarsSettingsTab() {
                 </p>
             </header>
 
-            <Section title="Persona defaults" icon={Sliders} description="Pick a coherent face + voice + speech rate + pitch for each gender. Cases that don't set their own override fall back here.">
-                {voicesProvider && (
-                    <div className="text-[11px] text-neutral-500 mb-2">
-                        Voice options below are for the platform's active TTS engine: <span className="font-mono text-neutral-300">{voicesProvider}</span>.
-                        Each provider keeps its own per-gender voice — switching engines never overwrites another's choices.
-                    </div>
-                )}
+            <Section title="Persona defaults" icon={Sliders} description="Pick a default face, speech rate and pitch for each gender. Per-character voice files live in the case / persona editor — not here.">
                 <div className="space-y-4">
-                    {PERSONAS.map(p => {
-                        const voiceKey = voicesProvider ? `default_voice_${voicesProvider}_${p.gender}` : null;
-                        const inheritedVoice = voicesProvider
-                            ? voiceSettings?.[`voice_${voicesProvider}_${p.gender}`] || ''
-                            : '';
-                        return (
-                            <PersonaCard
-                                key={p.gender}
-                                label={p.label}
-                                gender={p.gender}
-                                manifest={manifest}
-                                voices={voices}
-                                voicesProvider={voicesProvider}
-                                avatarId={defaults[`default_avatar_${p.gender}`]}
-                                voiceFile={voiceKey ? defaults[voiceKey] : ''}
-                                inheritedVoiceFile={inheritedVoice}
-                                rate={defaults[`default_rate_${p.gender}`]}
-                                pitch={defaults[`default_pitch_${p.gender}`]}
-                                onChange={(field, v) => {
-                                    if (field === 'voice') {
-                                        if (voiceKey) updateDefault(voiceKey, v);
-                                    } else {
-                                        updateDefault(`default_${field}_${p.gender}`, v);
-                                    }
-                                }}
-                            />
-                        );
-                    })}
+                    {PERSONAS.map(p => (
+                        <PersonaCard
+                            key={p.gender}
+                            label={p.label}
+                            gender={p.gender}
+                            manifest={manifest}
+                            avatarId={defaults[`default_avatar_${p.gender}`]}
+                            rate={defaults[`default_rate_${p.gender}`]}
+                            pitch={defaults[`default_pitch_${p.gender}`]}
+                            onChange={(field, v) => {
+                                updateDefault(`default_${field}_${p.gender}`, v);
+                            }}
+                        />
+                    ))}
                 </div>
                 <div className="flex justify-end pt-2">
                     <button
@@ -263,21 +224,21 @@ function Section({ title, description, icon: Icon, children }) {
 // Per-gender persona row: avatar dropdown + voice dropdown + rate/pitch
 // sliders + live preview. Each control writes one slot of the parent's
 // `defaults` blob via onChange(field, value).
-function PersonaCard({ label, gender, manifest, voices, voicesProvider, avatarId, voiceFile, inheritedVoiceFile, rate, pitch, onChange }) {
+function PersonaCard({ label, gender, manifest, avatarId, rate, pitch, onChange }) {
     const avatars = avatarsForSlot(manifest, gender, avatarId);
-    const voiceOptions = voicesForSlot(voices, gender, voiceFile);
     return (
         <div className="bg-neutral-800/50 rounded-lg border border-neutral-700 p-4">
             <div className="flex items-center justify-between mb-3">
                 <h4 className="text-sm font-bold text-neutral-300">{label}</h4>
                 <span className="text-[10px] text-neutral-500">slot: {gender}</span>
             </div>
-            {/* Stack on narrow viewports; 3 columns on >=lg. The min-w-0 on
-                each grid cell is critical: without it, long voice names
-                (e.g. "en-US-Chirp-HD-O (en-US)") push the <select> wider
-                than its flex slot and adjacent dropdowns visually overlap. */}
+            {/* Stack on narrow viewports; 3 columns on >=lg. min-w-0 on each
+                cell is critical so long labels don't push siblings out. The
+                per-persona voice picker that used to live in column 1 was
+                removed 2026-05-12 — per-character voice now belongs in the
+                case / persona editors only. */}
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px] gap-4 items-start">
-                {/* Column 1: avatar + voice */}
+                {/* Column 1: avatar */}
                 <div className="space-y-2 min-w-0">
                     <label className="text-[10px] text-neutral-500 uppercase tracking-wide">Avatar</label>
                     <select
@@ -290,24 +251,6 @@ function PersonaCard({ label, gender, manifest, voices, voicesProvider, avatarId
                             <option key={a.id} value={a.id}>{a.label}</option>
                         ))}
                     </select>
-                    <label className="text-[10px] text-neutral-500 uppercase tracking-wide pt-1 block">Voice</label>
-                    <div className="flex items-center gap-2 min-w-0">
-                        <select
-                            className="input-dark flex-1 min-w-0"
-                            value={voiceFile || ''}
-                            onChange={e => onChange('voice', e.target.value)}
-                        >
-                            <option value="">
-                                Inherit{inheritedVoiceFile ? ` (${inheritedVoiceFile})` : ' (platform voice slot)'}
-                            </option>
-                            {voiceOptions.map(v => (
-                                <option key={v.filename} value={v.filename}>
-                                    {v.displayName}{v.language ? ` (${v.language})` : ''}
-                                </option>
-                            ))}
-                        </select>
-                        <TestVoiceButton voice={voiceFile || inheritedVoiceFile} provider={voicesProvider} rate={rate} pitch={pitch} gender={gender} />
-                    </div>
                 </div>
 
                 {/* Column 2: rate + pitch */}

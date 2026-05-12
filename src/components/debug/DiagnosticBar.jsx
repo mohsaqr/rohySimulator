@@ -23,6 +23,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { apiFetch } from '../../services/apiClient';
 import EventLogger from '../../services/eventLogger';
 import { resolveVoice } from '../../utils/voiceResolver';
+import { PROVIDER_FALLBACK_VOICE } from '../../utils/voiceFallbacks';
 import { parseConfig } from '../../utils/parseConfig';
 import { getLastTtsRequest, getRecentTtsRequests, auditionWirePayload } from '../../services/voiceService';
 import { getBackendTelemetry } from '../../notifications/surfaces/BackendSurface';
@@ -802,17 +803,19 @@ function TierBadge({ tier }) {
     );
 }
 
-// Find the platform default voice for the active speaker's slot. Used in
-// the one-liner when the speaker has no per-speaker case_voice override.
+// Resolve the hardcoded fallback voice for the given (provider, slot). The
+// platform `voice_<provider>_<slot>` rows are no longer read by the
+// resolver (2026-05-12), so the bar's one-liner shows what the resolver
+// would actually play — the hardcoded fallback, not the legacy slot.
 function activeVoiceSlot(voiceSettings, participant) {
     if (!voiceSettings?.tts_provider) return '';
     const provider = voiceSettings.tts_provider;
     const gender = (participant?.gender || '').toLowerCase();
     const slot = /^f/.test(gender) ? 'female' : (gender === 'child' ? 'child' : 'male');
-    return voiceSettings[`voice_${provider}_${slot}`] || '';
+    return PROVIDER_FALLBACK_VOICE?.[provider]?.[slot] || '';
 }
 
 function pickSlot(voiceSettings, slot) {
     if (!voiceSettings?.tts_provider) return '';
-    return voiceSettings[`voice_${voiceSettings.tts_provider}_${slot}`] || '';
+    return PROVIDER_FALLBACK_VOICE?.[voiceSettings.tts_provider]?.[slot] || '';
 }

@@ -117,7 +117,11 @@ describe('VoiceSettingsTab apiFetch migration', () => {
         expect(init.headers['Content-Type']).toBeUndefined();
     });
 
-    it('PUTs voice settings JSON when saved', async () => {
+    it('PUTs voice settings JSON when saved (without per-gender voice fields)', async () => {
+        // 2026-05-12 — the per-gender voice slot UI was removed; the tab no
+        // longer writes `voice_<provider>_<slot>` fields. The payload now
+        // covers only platform-wide settings: provider, rate/pitch, STT,
+        // voice mode, and API keys.
         renderWithProviders(
             <VoiceSettingsTab />,
             { withAuth: false, withNotifications: false, withToast: false }
@@ -136,13 +140,17 @@ describe('VoiceSettingsTab apiFetch migration', () => {
             Authorization: 'Bearer admin-token',
             'Content-Type': 'application/json',
         });
-        expect(JSON.parse(init.body)).toMatchObject({
+        const body = JSON.parse(init.body);
+        expect(body).toMatchObject({
             voice_mode_enabled: true,
             tts_provider: 'piper',
-            voice_piper_male: 'amy.onnx',
             tts_rate: 1,
             tts_pitch: 0,
         });
+        // Per-gender voice fields must NOT be in the payload anymore.
+        expect(body).not.toHaveProperty('voice_piper_male');
+        expect(body).not.toHaveProperty('voice_piper_female');
+        expect(body).not.toHaveProperty('voice_piper_child');
     });
 
     it('publishes loaded voice settings into VoiceContext so chat uses changed defaults without a reload', async () => {
@@ -167,7 +175,14 @@ describe('VoiceSettingsTab apiFetch migration', () => {
         });
     });
 
-    it('passes each slot gender to the voice preview button', async () => {
+    it('no longer renders per-gender voice preview buttons (moved to case/persona editors)', async () => {
+        // 2026-05-12 — per-gender voice pickers + TestVoiceButton instances
+        // were removed from this tab. The previous version of this test
+        // asserted that selecting a Google voice for each gender fed the
+        // right voice into TestVoiceButton; that wiring no longer exists.
+        // The lock-in for *this* tab is now just "no TestVoiceButton is
+        // rendered." Per-character preview lives in CaseAvatarVoicePicker
+        // and AgentPersonaEditor and is exercised by those test files.
         fetchSpy.mockImplementation((url) => {
             if (typeof url === 'string' && url.endsWith('/api/platform-settings/voice')) {
                 return Promise.resolve(jsonResponse({
@@ -178,21 +193,11 @@ describe('VoiceSettingsTab apiFetch migration', () => {
                     stt_provider: 'browser',
                     stt_language: 'en-US',
                     avatar_type: '3d_head',
-                    voice_google_male: 'en-US-Chirp3-HD-Charon',
-                    voice_google_female: 'en-US-Chirp3-HD-Aoede',
-                    voice_google_child: 'en-US-Chirp3-HD-Leda',
                 }));
             }
             if (typeof url === 'string' && url.endsWith('/api/llm/models')) return Promise.resolve(jsonResponse({ models: [] }));
             if (typeof url === 'string' && url.includes('/api/tts/voices')) {
-                return Promise.resolve(jsonResponse({
-                    provider: 'google',
-                    voices: [
-                        { filename: 'en-US-Chirp3-HD-Charon', displayName: 'Charon', language: 'en-US', gender: 'male' },
-                        { filename: 'en-US-Chirp3-HD-Aoede', displayName: 'Aoede', language: 'en-US', gender: 'female' },
-                        { filename: 'en-US-Chirp3-HD-Leda', displayName: 'Leda', language: 'en-US', gender: 'female' },
-                    ],
-                }));
+                return Promise.resolve(jsonResponse({ provider: 'google', voices: [] }));
             }
             if (typeof url === 'string' && url.includes('/api/tts/usage')) {
                 return Promise.resolve(jsonResponse({ today: [], last_7_days: [], this_month: [], all_time: [] }));
@@ -206,23 +211,11 @@ describe('VoiceSettingsTab apiFetch migration', () => {
         );
 
         expect(await screen.findByText(/Voice & Avatar/i)).toBeInTheDocument();
-        await waitFor(() => {
-            expect(testVoiceProps).toHaveBeenCalledWith(expect.objectContaining({
-                voice: 'en-US-Chirp3-HD-Charon',
-                provider: 'google',
-                gender: 'male',
-            }));
-            expect(testVoiceProps).toHaveBeenCalledWith(expect.objectContaining({
-                voice: 'en-US-Chirp3-HD-Aoede',
-                provider: 'google',
-                gender: 'female',
-            }));
-            expect(testVoiceProps).toHaveBeenCalledWith(expect.objectContaining({
-                voice: 'en-US-Chirp3-HD-Leda',
-                provider: 'google',
-                gender: 'child',
-            }));
-        });
+        // No TestVoiceButton stub should ever be rendered from this tab.
+        expect(testVoiceProps).not.toHaveBeenCalled();
+        // The "Patient voices" fieldset was removed; the title heading
+        // exists nowhere on this page anymore.
+        expect(screen.queryByText(/Patient voices/i)).toBeNull();
     });
 
     it('surfaces an API error toast when saving voice settings fails', async () => {
@@ -265,15 +258,18 @@ describe('VoiceSettingsTab apiFetch migration', () => {
         expect(await screen.findByRole('option', { name: /all users/i })).toBeInTheDocument();
     });
 
-    // Regression lock: 2026-05-08. The legend used `isKokoro ? 'Kokoro' : 'Piper'`
-    // so picking Google or OpenAI fell through to "Piper" — looked like the UI
-    // wasn't switching providers at all.
+    // 2026-05-12 — the "Patient voices (<provider>)" legend was removed
+    // along with the per-gender voice pickers. The test below previously
+    // asserted that picking Google/OpenAI/Kokoro/Piper updated the legend
+    // text; that surface no longer exists. We keep the test but invert it:
+    // the legend MUST be absent for every provider, otherwise it means a
+    // half-removed picker fieldset shipped.
     it.each([
-        ['google', /Patient voices \(Google Cloud TTS\)/i],
-        ['openai', /Patient voices \(OpenAI TTS\)/i],
-        ['kokoro', /Patient voices \(Kokoro\)/i],
-        ['piper',  /Patient voices \(Piper\)/i],
-    ])('legend shows the actual provider name when tts_provider=%s', async (provider, expected) => {
+        'google',
+        'openai',
+        'kokoro',
+        'piper',
+    ])('does NOT render the (removed) "Patient voices (...)" legend for %s', async (provider) => {
         fetchSpy.mockImplementation((url) => {
             if (typeof url === 'string' && url.endsWith('/api/platform-settings/voice')) {
                 return Promise.resolve(jsonResponse({
@@ -294,6 +290,7 @@ describe('VoiceSettingsTab apiFetch migration', () => {
             { withAuth: false, withNotifications: false, withToast: false }
         );
 
-        expect(await screen.findByText(expected)).toBeInTheDocument();
+        expect(await screen.findByText(/Voice & Avatar/i)).toBeInTheDocument();
+        expect(screen.queryByText(/Patient voices/i)).toBeNull();
     });
 });
