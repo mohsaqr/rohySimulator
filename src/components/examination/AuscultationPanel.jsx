@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Volume2, VolumeX, AlertTriangle, CheckCircle, Heart, Wind } from 'lucide-react';
 import EventLogger from '../../services/eventLogger';
+import { baseUrl } from '../../config/api';
 
 /**
  * Auscultation Panel - Zoomed chest view with audio playback
@@ -8,10 +9,14 @@ import EventLogger from '../../services/eventLogger';
  * Uses default normal heart/lung sounds if no custom audio provided
  */
 
-// Default audio files for normal findings
+// Default audio files for normal findings. `baseUrl(...)` prepends the
+// SPA's deploy base (e.g. /rohy/ in production behind nginx) so the
+// absolute path resolves to the same static directory Express serves
+// `frontend/sounds/` from. Hardcoding the bare `/sounds/...` path
+// bypasses the prefix and 404s on every `--base=/rohy/` deploy.
 const DEFAULT_SOUNDS = {
-    heart: '/sounds/normal-heart.mp3',
-    lung: '/sounds/normal-lung.mp3'
+    heart: baseUrl('/sounds/normal-heart.mp3'),
+    lung: baseUrl('/sounds/normal-lung.mp3')
 };
 
 // Auscultation points on the chest (percentage coordinates)
@@ -43,22 +48,36 @@ export default function AuscultationPanel({
     const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
     const audioRef = useRef(null);
 
+    // Normalise any audio URL to the SPA's deploy base. Uploaded audio
+    // arrives as either `./uploads/foo.mp3` (legacy relative) or
+    // `/uploads/foo.mp3` (absolute) — both get rewritten to
+    // `<base>/uploads/foo.mp3`, which is what Express actually serves
+    // once nginx strips the `/rohy/` prefix. Already-absolute http(s)
+    // URLs pass through unchanged.
+    const resolveAudio = (url) => {
+        if (!url) return null;
+        if (/^https?:\/\//i.test(url)) return url;
+        // Strip any leading `./` so baseUrl() doesn't emit `/rohy/./uploads/...`
+        const trimmed = url.replace(/^\.\//, '');
+        return baseUrl(trimmed.startsWith('/') ? trimmed : '/' + trimmed);
+    };
+
     // Get the appropriate audio URL for a point
     const getAudioForPoint = (pointId) => {
         // Priority: specific point audio > type-specific audio > general audio > default
-        if (audioUrls[pointId]) return audioUrls[pointId];
+        if (audioUrls[pointId]) return resolveAudio(audioUrls[pointId]);
 
         const point = AUSCULTATION_POINTS[pointId];
         if (point) {
-            if (point.type === 'heart' && heartAudio) return heartAudio;
-            if (point.type === 'lung' && lungAudio) return lungAudio;
+            if (point.type === 'heart' && heartAudio) return resolveAudio(heartAudio);
+            if (point.type === 'lung' && lungAudio) return resolveAudio(lungAudio);
             // Use defaults for normal findings
             if (!isAbnormal) {
                 return DEFAULT_SOUNDS[point.type];
             }
         }
 
-        return audioUrl || null;
+        return resolveAudio(audioUrl);
     };
 
     const handlePointClick = (pointId) => {
