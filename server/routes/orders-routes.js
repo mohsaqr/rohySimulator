@@ -149,9 +149,12 @@ router.get('/sessions/:id/orders', authenticateToken, (req, res) => {
             (julianday(io.available_at) - julianday('now')) * 24 * 60 as minutes_remaining
         FROM investigation_orders io
         JOIN case_investigations ci ON io.investigation_id = ci.id
-        WHERE io.session_id = ? AND io.tenant_id = ?
+        WHERE io.session_id = ? AND io.tenant_id = ? AND ci.investigation_type = 'lab'
         ORDER BY io.ordered_at DESC
     `;
+    // investigation_type filter mirrors the radiology endpoint (line 1448).
+    // Without it, radiology orders bled into the lab worklist + the legacy
+    // OrdersDrawer's "lab" pane because both share investigation_orders.
 
     dbAdapter.all(sql, [sessionId, tenantId(req)], (err, rows) => {
         if (err) {

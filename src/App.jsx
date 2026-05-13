@@ -20,7 +20,7 @@ import DiagnosticBar from './components/debug/DiagnosticBar';
 import { PatientRecordProvider } from './services/PatientRecord';
 import EventLogger, { COMPONENTS, registerWindowLifecycleLogging } from './services/eventLogger';
 import { ApiError, apiFetch, apiPut } from './services/apiClient';
-import { Settings, X, LogOut, User, ChevronDown, Activity } from 'lucide-react';
+import { Settings, X, LogOut, User, ChevronDown, Activity, StopCircle, AlertTriangle } from 'lucide-react';
 import BodyMapDebug from './components/examination/BodyMapDebug';
 import TnaDashboard from './components/analytics/tna/TnaDashboardV2';
 import DiscussionScreen from './components/discussion/DiscussionScreen';
@@ -74,6 +74,12 @@ function MainApp() {
    // Ending the session also sends the user here (caseEnded=true) but
    // leaving via the nav while the session is live just navigates back.
    const [currentRoom, setCurrentRoom] = useState('chat');
+   // caseEnded sticks once the user explicitly ends the session via the
+   // End & Debrief button. While true, the patient room chrome treats the
+   // case as closed (the End button hides itself) and DiscussionScreen
+   // renders its calm post-debrief strip. Cleared when a new case loads.
+   const [caseEnded, setCaseEnded] = useState(false);
+   const [showEndConfirm, setShowEndConfirm] = useState(false);
    const showExamination = currentRoom === 'examination';
    const showInvestigations = currentRoom === 'lab' || currentRoom === 'radiology';
    const showDiscussion = currentRoom === 'consultant';
@@ -412,6 +418,23 @@ function MainApp() {
       setCurrentRoom(target);
    };
 
+   // Explicit "End & Debrief": stops the server-side session, sets the
+   // sticky caseEnded flag so the patient-room chrome reflects it, and
+   // routes the user straight into the debrief room. Idempotent on the
+   // server (see sessions-routes.js:211), so a stray double-click is safe.
+   const handleEndSession = () => {
+      if (!sessionId) return;
+      EventLogger.log('CLICKED', 'button', {
+         objectId: 'end-session',
+         objectName: 'End & Debrief',
+         component: COMPONENTS.APP,
+      });
+      endSessionOnServer(sessionId);
+      setShowEndConfirm(false);
+      setCaseEnded(true);
+      navigateToRoom('consultant');
+   };
+
    const handleLoadCase = (caseData) => {
       // If a session is already running, end it server-side before loading
       // the new case. Without this the prior session is orphaned with
@@ -430,6 +453,7 @@ function MainApp() {
       }
       setActiveCase(caseData);
       setSessionId(null); // Will be set by ChatInterface when session starts
+      setCaseEnded(false);
       setShowFullPageSettings(false);
       // Log case loaded event
       EventLogger.caseLoaded(caseData?.id, caseData?.name);
@@ -556,6 +580,7 @@ function MainApp() {
          caseId={activeCase?.id}
          patientInfo={patientInfo}
       >
+         <>
          {showExamination ? (
             <PhysicalExamScreen
                activeCase={activeCase}
@@ -574,6 +599,7 @@ function MainApp() {
                   <RoomNavigator
                      currentRoom={currentRoom}
                      onSelectRoom={navigateToRoom}
+                     sessionId={sessionId}
                   />
                }
             />
@@ -587,6 +613,7 @@ function MainApp() {
                   <RoomNavigator
                      currentRoom={currentRoom}
                      onSelectRoom={navigateToRoom}
+                     sessionId={sessionId}
                   />
                }
             />
@@ -594,11 +621,13 @@ function MainApp() {
             <DiscussionScreen
                sessionId={sessionId}
                activeCase={activeCase}
+               caseEnded={caseEnded}
                onClose={() => navigateToRoom('chat')}
                roomNav={
                   <RoomNavigator
                      currentRoom={currentRoom}
                      onSelectRoom={navigateToRoom}
+                     sessionId={sessionId}
                   />
                }
             />
@@ -697,11 +726,22 @@ function MainApp() {
                   </div>
                </div>
 
-               {/* End & Debrief button retired — the bottom RoomNavigator's
-                   Consultant tab is the canonical way to open the debrief
-                   room. Ending the session itself happens on tab close
-                   (pagehide → /sessions/:id/end) or when the user loads a
-                   new case. */}
+               {/* End & Debrief — the explicit way for the learner to close
+                   the case. Tab-close + case-switch still call the same
+                   endpoint as fallbacks, but this is the canonical path:
+                   one click, one confirmation, lands you in the debrief. */}
+               {sessionId && !caseEnded && (
+                  <div className="absolute top-4 right-4 z-10">
+                     <button
+                        onClick={() => setShowEndConfirm(true)}
+                        className="px-3 py-2 bg-red-900/70 hover:bg-red-800/80 backdrop-blur-md rounded-full flex items-center gap-2 text-sm text-red-50 border border-red-700/60 transition-colors"
+                        title="End the current session and open the debrief"
+                     >
+                        <StopCircle className="w-4 h-4" />
+                        <span>End &amp; Debrief</span>
+                     </button>
+                  </div>
+               )}
             </div>
 
             {/* Bottom Left: Chat Interface */}
@@ -728,12 +768,11 @@ function MainApp() {
             />
          </div>
 
-         {/* Orders Drawer (Bottom) — the two floating pills (Physical
-             Exam + Investigations) used to live above the drawer; they
-             were retired when the bottom RoomNavigator went in. The
-             drawer's own tabs (drugs, records, treatments, plus the
-             legacy labs/radiology surfaces) still open from the drawer
-             handle. */}
+         {/* OrdersDrawer mounted at App level so its resting pills can
+             perch on the seam between the chat column and the vitals
+             monitor — anchored to the column boundary, vertically
+             middle, overlapping just slightly into the vitals panel.
+             The drawer's slide-out + backdrop are `fixed` regardless. */}
          {activeCase && sessionId && (
             <OrdersDrawer
                caseId={activeCase.id}
@@ -752,6 +791,7 @@ function MainApp() {
                <RoomNavigator
                   currentRoom={currentRoom}
                   onSelectRoom={navigateToRoom}
+                  sessionId={sessionId}
                />
             </div>
          )}
@@ -809,7 +849,51 @@ function MainApp() {
 
          </div>
          )}
+
+         {showEndConfirm && (
+            <EndSessionConfirm
+               onCancel={() => setShowEndConfirm(false)}
+               onConfirm={handleEndSession}
+            />
+         )}
+         </>
       </PatientRecordProvider>
+   );
+}
+
+function EndSessionConfirm({ onCancel, onConfirm }) {
+   return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+         <div className="bg-neutral-900 border border-red-800/70 rounded-lg shadow-2xl w-full max-w-md">
+            <div className="px-6 py-5 border-b border-neutral-800 flex items-center gap-3">
+               <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+               <h2 className="text-base font-semibold text-white">End this session?</h2>
+            </div>
+            <div className="px-6 py-5 text-sm text-neutral-300 space-y-2">
+               <p>This closes the case for debrief. Once ended:</p>
+               <ul className="list-disc list-inside text-neutral-400 space-y-1 ml-1">
+                  <li>The patient timeline stops advancing.</li>
+                  <li>Orders, exams, and chat are locked.</li>
+                  <li>You can review the transcript in the debrief room but cannot reopen the case.</li>
+               </ul>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-neutral-800">
+               <button
+                  onClick={onCancel}
+                  className="px-4 py-2 text-sm rounded border border-neutral-700 text-neutral-300 hover:text-white"
+               >
+                  Cancel
+               </button>
+               <button
+                  onClick={onConfirm}
+                  className="px-4 py-2 text-sm rounded text-white font-semibold bg-red-700 hover:bg-red-600 flex items-center gap-2"
+               >
+                  <StopCircle className="w-4 h-4" />
+                  End &amp; Debrief
+               </button>
+            </div>
+         </div>
+      </div>
    );
 }
 

@@ -241,7 +241,7 @@ export default function InvestigationsScreen({
                                     <div className="relative z-10 mx-auto max-w-5xl mt-10 space-y-6">
                                         <div className="flex items-center gap-3">
                                             <span className={`text-xs uppercase tracking-widest font-semibold ${theme.accentText}`}>
-                                                Viewed results
+                                                Open reports
                                             </span>
                                             <span className="flex-1 h-px bg-slate-700/60" />
                                             <span className="text-xs text-slate-500">{active.openOrders.length}</span>
@@ -278,7 +278,16 @@ export default function InvestigationsScreen({
                         theme={theme}
                         orders={active.orders}
                         openOrderIds={openOrderIdSets[activeKind]}
-                        onSelectOrder={active.openOrder}
+                        onSelectOrder={(order) => {
+                            // Single-click open: push to the pill stack AND
+                            // expand the viewer. Without the second call the
+                            // row only created a pill chip and the learner
+                            // had to click again to actually read the report.
+                            // The viewer mount fires PUT /orders/:id/view, so
+                            // this also marks the order viewed_at server-side.
+                            active.openOrder(order);
+                            setExpandedId(order.id);
+                        }}
                     />
                 </aside>
             </div>

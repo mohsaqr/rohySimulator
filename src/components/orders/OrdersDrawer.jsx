@@ -115,10 +115,9 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         fetchLabs();
     }, [sessionId]);
 
-    // Track last refresh time
-    const [lastRefresh, setLastRefresh] = useState(null);
-
-    // Fetch lab orders
+    // Fetch lab orders. The lastRefresh timestamp state was retired
+    // alongside the floating mini-window on 2026-05-14 — nothing reads
+    // it now. Re-introduce as state only if a surface needs to show it.
     const fetchLabOrders = async () => {
         if (!sessionId) {
             console.log('[Orders] No sessionId, skipping order fetch');
@@ -130,7 +129,6 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
             const data = await apiFetch(`/sessions/${sessionId}/orders`);
             const orders = data?.orders || [];
             const now = new Date();
-            setLastRefresh(now);
 
             console.log(`[Orders] Session ${sessionId} @ ${now.toISOString()}: ${orders.length} total orders`);
             orders.forEach(o => {
@@ -339,10 +337,14 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     };
 
+    // labOrders kept in state so the drawer's own labs tab can render
+    // pending/ready/viewed splits internally. The on-patient-screen mini
+    // window that used to fan these out was retired 2026-05-14 — the
+    // ambient "results ready" signal is now a small badge on the Lab /
+    // Radiology buttons in the bottom RoomNavigator.
     const pendingOrders = labOrders.filter(o => !o.is_ready);
     const readyOrders = labOrders.filter(o => o.is_ready && !o.viewed_at);
     const viewedOrders = labOrders.filter(o => o.is_ready && o.viewed_at);
-    const [showOrdersPanel, setShowOrdersPanel] = useState(true);
     const [treatmentOrdersCount, setTreatmentOrdersCount] = useState(0);
 
     // Hooks must run unconditionally on every render to keep React's
@@ -384,151 +386,29 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
 
     return (
         <>
-            {/* Orders Status Panel - Only visible when there are orders */}
-            {!isOpen && labOrders.length > 0 && (
-                <div className="fixed bottom-20 right-4 z-40 w-72">
-                    <div className="bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl overflow-hidden">
-                        {/* Header */}
-                        <button
-                            onClick={() => setShowOrdersPanel(!showOrdersPanel)}
-                            className="w-full px-4 py-2 bg-neutral-800 flex items-center justify-between hover:bg-neutral-700 transition-colors"
-                        >
-                            <div className="flex flex-col items-start">
-                                <span className="text-sm font-bold text-white flex items-center gap-2">
-                                    <FlaskConical className="w-4 h-4 text-purple-400" />
-                                    Ordered Tests ({labOrders.length})
-                                </span>
-                                <span className="text-[10px] text-neutral-500">
-                                    {pendingOrders.length > 0 && <span className="text-yellow-500">{pendingOrders.length} pending</span>}
-                                    {pendingOrders.length > 0 && readyOrders.length > 0 && ' • '}
-                                    {readyOrders.length > 0 && <span className="text-green-500">{readyOrders.length} ready</span>}
-                                </span>
-                            </div>
-                            {showOrdersPanel ? <ChevronDown className="w-4 h-4 text-neutral-400" /> : <ChevronUp className="w-4 h-4 text-neutral-400" />}
-                        </button>
-
-                        {/* Orders List */}
-                        {showOrdersPanel && (
-                            <div className="max-h-64 overflow-y-auto">
-                                {/* Ready Results - Most Important */}
-                                {readyOrders.length > 0 && (
-                                    <div className="p-2 bg-green-900/30 border-b border-green-700/50">
-                                        <div className="text-xs font-bold text-green-400 mb-1 flex items-center gap-1">
-                                            <CheckCircle className="w-3 h-3" />
-                                            RESULTS READY ({readyOrders.length})
-                                        </div>
-                                        {readyOrders.map(order => (
-                                            <button
-                                                key={order.id}
-                                                onClick={() => {
-                                                    onViewResult(order);
-                                                }}
-                                                className="w-full text-left px-2 py-1.5 text-sm text-green-100 hover:bg-green-800/30 rounded flex items-center justify-between"
-                                            >
-                                                <span className="truncate">{order.test_name}</span>
-                                                <span className="text-xs text-green-400 ml-2">View</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Pending */}
-                                {pendingOrders.length > 0 && (
-                                    <div className="p-2 border-b border-neutral-700">
-                                        <div className="text-xs font-bold text-yellow-400 mb-1 flex items-center gap-1">
-                                            <Clock className="w-3 h-3 animate-pulse" />
-                                            PENDING ({pendingOrders.length})
-                                        </div>
-                                        {pendingOrders.map(order => (
-                                            <div key={order.id} className="px-2 py-1.5 text-sm text-neutral-300 flex items-center justify-between">
-                                                <span className="truncate flex-1">{order.test_name}</span>
-                                                <span className="text-xs text-yellow-500 ml-2 font-mono min-w-[50px] text-right">
-                                                    {getTimeRemaining(order)}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Debug: Show all orders */}
-                                {labOrders.length > 0 && labOrders.length !== pendingOrders.length + readyOrders.length + viewedOrders.length && (
-                                    <div className="p-2 bg-red-900/30 text-xs text-red-400">
-                                        Warning: Order count mismatch. Total: {labOrders.length}, Pending: {pendingOrders.length}, Ready: {readyOrders.length}, Viewed: {viewedOrders.length}
-                                    </div>
-                                )}
-
-                                {/* Viewed */}
-                                {viewedOrders.length > 0 && (
-                                    <div className="p-2 border-b border-neutral-700">
-                                        <div className="text-xs font-bold text-neutral-500 mb-1 flex items-center gap-1">
-                                            <CheckCircle className="w-3 h-3" />
-                                            VIEWED ({viewedOrders.length})
-                                        </div>
-                                        {viewedOrders.slice(0, 3).map(order => (
-                                            <button
-                                                key={order.id}
-                                                onClick={() => onViewResult(order)}
-                                                className="w-full text-left px-2 py-1 text-xs text-neutral-500 hover:text-neutral-300 truncate"
-                                            >
-                                                {order.test_name}
-                                            </button>
-                                        ))}
-                                        {viewedOrders.length > 3 && (
-                                            <div className="text-xs text-neutral-600 px-2 py-1">
-                                                +{viewedOrders.length - 3} more
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Debug: All orders raw list */}
-                                {labOrders.length > 0 && (
-                                    <details className="border-t border-neutral-800">
-                                        <summary className="px-2 py-1.5 text-[10px] text-neutral-500 cursor-pointer hover:bg-neutral-800">
-                                            Debug: All {labOrders.length} orders (click to expand)
-                                        </summary>
-                                        <div className="px-2 py-1 text-[10px] text-neutral-500 max-h-40 overflow-y-auto bg-neutral-900">
-                                            {labOrders.map(o => (
-                                                <div key={o.id} className="py-0.5 border-b border-neutral-800/50">
-                                                    {o.test_name}: is_ready={String(o.is_ready)}, mins={o.minutes_remaining}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </details>
-                                )}
-
-                                {/* Refresh indicator */}
-                                {lastRefresh && (
-                                    <div className="px-2 py-1 text-[10px] text-neutral-600 border-t border-neutral-800 flex justify-between">
-                                        <span>Auto-refresh: {labSettings.autoRefreshInterval}s</span>
-                                        <span>Updated: {lastRefresh.toLocaleTimeString()}</span>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* Floating Action Buttons. Pushed up to clear the
-                always-visible RoomNavigator (~72px tall) at the
-                bottom of the chat surface. */}
+            {/* Floating Action Buttons — horizontal strip sitting one
+                tier above the RoomNavigator (72px nav + 16px gap = 88px
+                from bottom). Left edge starts at the column seam so the
+                strip lies over the vitals monitor, never the chat. */}
             {!isOpen && (
-                <div className="fixed bottom-24 right-4 z-40 flex gap-2">
+                <div
+                    className="fixed z-40 flex gap-2"
+                    style={{ bottom: '88px', left: 'calc(max(35vw, 350px) + 1rem)' }}
+                >
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => handleDrawerOpen(tab.id)}
-                            className={`relative px-4 py-3 rounded-full flex items-center gap-2 font-bold text-sm shadow-lg transition-all hover:scale-105 ${
+                            className={`relative px-4 py-2.5 rounded-full flex items-center gap-2 font-semibold text-sm shadow-lg ring-1 ring-black/40 transition-all hover:scale-105 ${
                                 tab.id === 'records' ? 'bg-amber-600 hover:bg-amber-500 text-white' :
                                 tab.id === 'memory' ? 'bg-rose-600 hover:bg-rose-500 text-white' :
                                 'bg-neutral-700 hover:bg-neutral-600 text-white'
                             }`}
                         >
-                            <tab.icon className="w-5 h-5" />
+                            <tab.icon className="w-4 h-4" />
                             {tab.label}
                             {tab.count > 0 && (
-                                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
+                                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
                                     {tab.count}
                                 </span>
                             )}
