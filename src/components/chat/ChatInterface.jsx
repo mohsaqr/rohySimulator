@@ -772,6 +772,21 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         return richSystemPrompt;
     };
 
+    // Pre-assemble the patient prompt once the case + (optional) snapshot +
+    // patient template are ready, so the DiagnosticBar inspector has something
+    // to show before the learner sends their first message. buildPatientSystemPrompt
+    // is a pure read of state + props; calling it for the cache side-effect
+    // is safe (the return value is intentionally discarded here).
+    useEffect(() => {
+        if (!activeCase) return;
+        try {
+            buildPatientSystemPrompt();
+        } catch {
+            // Don't let inspector pre-warm failures break the chat surface.
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeCase, caseSnapshot, patientTemplate, sessionId]);
+
     // Schedule the next questionnaire appearance (2 min from now)
     const startQuestionnaireTimer = useCallback(() => {
         if (questionnaireTimerRef.current) clearTimeout(questionnaireTimerRef.current);
