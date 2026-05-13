@@ -23,7 +23,11 @@ import {
     formatVitalsAsMarkdown,
     formatRecentActivityAsMarkdown,
 } from '../../data/aiPromptContext';
-import { buildPatientCaseDesignContext, formatPersonaDemographicsForPrompt } from '../../utils/casePromptContext';
+import {
+    buildPatientCaseDesignContext,
+    formatPersonaDemographicsForPrompt,
+    formatPersonalityForPrompt,
+} from '../../utils/casePromptContext';
 import { setLastPatientPrompt } from '../../utils/lastPatientPrompt';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
@@ -589,6 +593,15 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const demographicsBlock = formatPersonaDemographicsForPrompt(demo);
         if (demographicsBlock) {
             richSystemPrompt += `${demographicsBlock}\n`;
+        }
+
+        // Behavioural sliders the author set on the case (communication style,
+        // emotional state, pain tolerance, cooperativeness, health literacy).
+        // Only non-default values are surfaced — the helper drops defaults so
+        // the prompt stays tight.
+        const personalityBlock = formatPersonalityForPrompt(config.personality);
+        if (personalityBlock) {
+            richSystemPrompt += `\n## PATIENT BEHAVIOUR\n${personalityBlock}\n`;
         }
 
         richSystemPrompt += `\n## INSTRUCTIONS\n`;

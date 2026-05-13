@@ -73,6 +73,86 @@ const DEMOGRAPHIC_FIELDS = [
     { key: 'maritalStatus', label: 'Marital status' },
 ];
 
+// Personality sliders the case editor saves under config.personality. Each
+// entry maps a slider value to a short prose directive the model can act on.
+// `defaultValue` marks the value emitted when the author hasn't touched the
+// slider — those are dropped from the prompt so only intentional choices
+// flow through and the prompt stays tight.
+const PERSONALITY_FIELDS = [
+    {
+        key: 'communicationStyle',
+        label: 'Communication style',
+        defaultValue: 'normal',
+        directives: {
+            verbose: 'verbose — give detailed, sometimes rambling answers',
+            brief: 'brief — keep answers short and to the point',
+            tangential: 'tangential — drift off-topic before circling back',
+            guarded: 'guarded — hesitate before sharing personal details',
+        },
+    },
+    {
+        key: 'emotionalState',
+        label: 'Emotional state',
+        defaultValue: 'neutral',
+        directives: {
+            calm: 'calm — speak steadily and without urgency',
+            anxious: 'anxious — show worry and tension in your words',
+            fearful: 'fearful — sound scared about what is happening',
+            angry: 'angry / frustrated — let irritation show through',
+            sad: 'sad / tearful — sound low and on the edge of tears',
+            stoic: 'stoic — minimise emotional expression even if hurting',
+            distressed: 'distressed — words come out strained and breaking',
+        },
+    },
+    {
+        key: 'painTolerance',
+        label: 'Pain tolerance',
+        defaultValue: 'normal',
+        directives: {
+            high: 'high — minimise how much pain you express',
+            low: 'low — express discomfort readily when relevant',
+            dramatic: 'dramatic — exaggerate pain and discomfort',
+        },
+    },
+    {
+        key: 'cooperativeness',
+        label: 'Cooperativeness',
+        defaultValue: 'cooperative',
+        directives: {
+            very_cooperative: 'very cooperative — answer fully and proactively',
+            neutral: 'neutral — answer when asked but volunteer little',
+            reluctant: 'reluctant — answer with hesitation, occasionally push back',
+            uncooperative: 'uncooperative — resist questions, give partial answers',
+        },
+    },
+    {
+        key: 'healthLiteracy',
+        label: 'Health literacy',
+        defaultValue: 'average',
+        directives: {
+            high: 'high — comfortable with medical terms (has medical background)',
+            low: 'low — ask for plain-language explanations of medical terms',
+        },
+    },
+];
+
+// Build the persona-behaviour block. Emits one directive line per slider
+// the author has set to a non-default value. Returns '' when every slider
+// is at its default — no point telling the model "communication style:
+// normal" twelve cases in a row.
+export function formatPersonalityForPrompt(personality = {}) {
+    if (!personality || typeof personality !== 'object') return '';
+    const lines = [];
+    for (const field of PERSONALITY_FIELDS) {
+        const value = clean(personality[field.key]);
+        if (!value || value === field.defaultValue) continue;
+        const directive = field.directives[value];
+        if (!directive) continue;
+        lines.push(`- ${field.label}: ${directive}`);
+    }
+    return lines.join('\n');
+}
+
 // Build the persona-header demographics block. Emits one line per authored
 // field; absent fields are omitted entirely (no fake defaults).
 export function formatPersonaDemographicsForPrompt(demographics = {}) {

@@ -5,6 +5,7 @@ import {
     formatCaseRadiologyForPrompt,
     formatCaseVitalsForPrompt,
     formatPersonaDemographicsForPrompt,
+    formatPersonalityForPrompt,
     formatStructuredHistoryForPrompt,
 } from './casePromptContext.js';
 
@@ -233,6 +234,59 @@ describe('formatStructuredHistoryForPrompt — allergies fallback', () => {
     it('returns empty string when neither has allergies and structuredHistory is empty', () => {
         expect(formatStructuredHistoryForPrompt(null)).toBe('');
         expect(formatStructuredHistoryForPrompt(null, { demographics: {} })).toBe('');
+    });
+});
+
+describe('formatPersonalityForPrompt', () => {
+    it('emits a directive line for each non-default slider', () => {
+        const out = formatPersonalityForPrompt({
+            communicationStyle: 'brief',
+            emotionalState: 'anxious',
+            painTolerance: 'dramatic',
+            cooperativeness: 'reluctant',
+            healthLiteracy: 'low',
+        });
+        expect(out).toContain('Communication style: brief');
+        expect(out).toContain('Emotional state: anxious');
+        expect(out).toContain('Pain tolerance: dramatic');
+        expect(out).toContain('Cooperativeness: reluctant');
+        expect(out).toContain('Health literacy: low');
+    });
+
+    it('drops sliders left at their default value', () => {
+        const out = formatPersonalityForPrompt({
+            communicationStyle: 'normal',   // default
+            emotionalState: 'anxious',      // non-default
+            painTolerance: 'normal',        // default
+            cooperativeness: 'cooperative', // default
+            healthLiteracy: 'average',      // default
+        });
+        expect(out).toBe('- Emotional state: anxious — show worry and tension in your words');
+    });
+
+    it('returns empty string when every slider is at its default', () => {
+        const out = formatPersonalityForPrompt({
+            communicationStyle: 'normal',
+            emotionalState: 'neutral',
+            painTolerance: 'normal',
+            cooperativeness: 'cooperative',
+            healthLiteracy: 'average',
+        });
+        expect(out).toBe('');
+    });
+
+    it('ignores unrecognised slider values rather than crashing', () => {
+        const out = formatPersonalityForPrompt({
+            emotionalState: 'thoroughly-confused-by-life',
+            communicationStyle: 'verbose',
+        });
+        expect(out).toBe('- Communication style: verbose — give detailed, sometimes rambling answers');
+    });
+
+    it('returns empty string for null / non-object input', () => {
+        expect(formatPersonalityForPrompt(null)).toBe('');
+        expect(formatPersonalityForPrompt(undefined)).toBe('');
+        expect(formatPersonalityForPrompt('nope')).toBe('');
     });
 });
 
