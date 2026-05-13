@@ -13,7 +13,7 @@ import { useVoice } from '../../contexts/VoiceContext';
 import { stripStageDirections } from '../../utils/stageDirections';
 import { parseConfig } from '../../utils/parseConfig';
 import { extractCompleteSentences } from '../../utils/sentenceSplit';
-import { resolveVoice } from '../../utils/voiceResolver';
+import { resolveVoice, isVoiceValidForProvider } from '../../utils/voiceResolver';
 import { useToast } from '../../contexts/ToastContext';
 import { useNotifications } from '../../notifications/useNotifications';
 import { SOURCES, SEVERITY } from '../../notifications/types';
@@ -29,6 +29,7 @@ import {
     formatPersonalityForPrompt,
 } from '../../utils/casePromptContext';
 import { setLastPatientPrompt } from '../../utils/lastPatientPrompt';
+import { pickWaitPhase, formatRemaining, waitProgressPct } from '../../utils/agentWait';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
 // only when a user actually toggles voice mode on for the first time.
@@ -253,13 +254,13 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         return () => { cancelled = true; };
     }, [sessionId, restoredSessionId]);
     const [agentConversations, setAgentConversations] = useState({}); // { agent_type: [...messages] }
-    const [agentStates, setAgentStates] = useState({}); // { agent_type: { status, paged_at, ... } }
-    // Map of agent_type → outstanding setTimeout id for the paging guardrail.
-    // The setter is what matters; consumers don't read the map (each agent's
-    // own state already tracks `status: 'paging'`). Prefix-named `_` to
-    // satisfy the unused-vars allowlist while keeping the setter writable.
-    // eslint-disable-next-line unused-imports/no-unused-vars
-    const [_pagingTimers, setPagingTimers] = useState({});
+    const [agentStates, setAgentStates] = useState({}); // { agent_type: { status, paged_at, arrives_at, ... } }
+    // Drives the "Dr. Chen is on the way — 1:42" countdown. One ticker
+    // for the whole component; UI derives remaining time from each
+    // agent's `arrives_at` (server-anchored, see migration 0024). No
+    // per-agent setTimeout — those used to live here and got dropped
+    // whenever the chat remounted, leaving agents stuck "on the way".
+    const [nowTick, setNowTick] = useState(() => Date.now());
     const [teamLog, setTeamLog] = useState([]);
     const alarmSpeechCooldownRef = useRef(new Map());
     const pendingAlarmSpeechRef = useRef(null);
@@ -339,6 +340,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     states[a.agent_type] = {
                         status: a.status || 'absent',
                         paged_at: a.paged_at,
+                        arrives_at: a.arrives_at,
                         arrived_at: a.arrived_at
                     };
                 });
@@ -424,6 +426,59 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         }
     }, [activeTab, sessionId]);
 
+    // Drive the countdown card. One ticker for the whole component;
+    // the UI derives "Dr. Chen arrives in 1:42" from each agent's
+    // `arrives_at`. The ticker is gated on whether any agent is paged
+    // so we don't burn renders when nothing is in flight.
+    const anyPaged = Object.values(agentStates).some(s => s?.status === 'paged');
+    useEffect(() => {
+        if (!anyPaged) return undefined;
+        const id = setInterval(() => setNowTick(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, [anyPaged]);
+
+    // When any paged agent's ETA passes, refetch the agent list once.
+    // The server flips paged → present on read, so a single GET is
+    // enough to converge — the next tick will see the new status and
+    // stop ticking. The `convergedRef` guards against re-firing the
+    // fetch every second while we wait for the response.
+    const convergedRef = useRef(new Set());
+    useEffect(() => {
+        if (!sessionId) return;
+        const due = Object.entries(agentStates).filter(([type, s]) => {
+            if (s?.status !== 'paged' || !s?.arrives_at) return false;
+            if (convergedRef.current.has(type)) return false;
+            return new Date(s.arrives_at).getTime() <= nowTick;
+        });
+        if (due.length === 0) return;
+
+        due.forEach(([type]) => convergedRef.current.add(type));
+        (async () => {
+            try {
+                const fresh = await AgentService.getSessionAgents(sessionId);
+                setAgentStates(prev => {
+                    const next = { ...prev };
+                    fresh.forEach(a => {
+                        next[a.agent_type] = {
+                            status: a.status || 'absent',
+                            paged_at: a.paged_at,
+                            arrives_at: a.arrives_at,
+                            arrived_at: a.arrived_at
+                        };
+                    });
+                    return next;
+                });
+                // Drop converged entries so a future page cycle isn't
+                // ignored. We only suppress duplicate fetches inside
+                // this single ETA tick.
+                due.forEach(([type]) => convergedRef.current.delete(type));
+            } catch (err) {
+                console.error('[ChatInterface] post-ETA agent refresh failed:', err);
+                due.forEach(([type]) => convergedRef.current.delete(type));
+            }
+        })();
+    }, [nowTick, agentStates, sessionId]);
+
     // Calculate elapsed time since session start
     const getElapsedMinutes = useCallback(() => {
         if (!sessionStartTime) return 0;
@@ -436,36 +491,35 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         return AgentService.getAgentDisplayStatus(agent, elapsedMinutes);
     }, [getElapsedMinutes]);
 
-    // Handle paging an agent
+    // Handle paging an agent.
+    //
+    // The server computes the arrival ETA (clamped to 1–3 min), stamps
+    // `arrives_at` on agent_session_state, and returns it here. We copy
+    // it into local state so the countdown card can render immediately.
+    // We don't schedule a setTimeout to flip the status — the once-per-
+    // second `nowTick` ticker plus the convergence loop below trigger a
+    // refresh when the ETA passes, and the server's read paths flip the
+    // row to 'present' on read. That means refresh / room switch / chat
+    // remount all do the right thing without any extra plumbing.
     const handlePageAgent = async (agentType) => {
         const agent = agents.find(a => a.agent_type === agentType);
         if (!agent) return;
 
         try {
-            await AgentService.pageAgent(sessionId, agentType);
+            const result = await AgentService.pageAgent(sessionId, agentType);
+            const arrivesAt = result?.arrives_at || null;
+            const pagedAt = new Date().toISOString();
 
-            // Update local state
             setAgentStates(prev => ({
                 ...prev,
-                [agentType]: { ...(prev[agentType] || {}), status: 'paged', paged_at: new Date().toISOString() }
+                [agentType]: {
+                    ...(prev[agentType] || {}),
+                    status: 'paged',
+                    paged_at: pagedAt,
+                    arrives_at: arrivesAt,
+                    arrived_at: null
+                }
             }));
-
-            // Calculate wait time and set timer for arrival
-            const waitTime = AgentService.calculateWaitTime(agent);
-            const timerId = setTimeout(async () => {
-                await AgentService.arriveAgent(sessionId, agentType);
-                setAgentStates(prev => ({
-                    ...prev,
-                    [agentType]: { ...(prev[agentType] || {}), status: 'present', arrived_at: new Date().toISOString() }
-                }));
-                setPagingTimers(prev => {
-                    const newTimers = { ...prev };
-                    delete newTimers[agentType];
-                    return newTimers;
-                });
-            }, waitTime * 60 * 1000); // Convert minutes to ms
-
-            setPagingTimers(prev => ({ ...prev, [agentType]: timerId }));
         } catch (err) {
             console.error('Failed to page agent:', err);
         }
@@ -877,9 +931,17 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // shape (file/provider/rate/pitch/tier) lets callers forward the picked
     // engine to the server — without that, /api/tts silently falls back to
     // the platform default tts_provider and learners hear the wrong engine.
+    // Pattern-based validator that rejects cross-provider voice ids
+    // (the root cause of the STEMI "invalid voice" three-week saga:
+    // case stored `en-US-Neural2-J`, platform switched to Kokoro, the
+    // dead string sailed through to /api/tts where the engine rejected
+    // it mid-session). With the validator in place, the resolver
+    // returns `{ file: null, tier: 'invalid' }` and the caller falls
+    // back to the template — silent, clean, no toast.
     const resolveSpeakerVoice = useCallback((override) => resolveVoice({
         voice: override,
-        voiceSettings
+        voiceSettings,
+        isValid: (id) => isVoiceValidForProvider(id, voiceSettings?.tts_provider),
     }), [voiceSettings]);
 
     const handleSendToPatient = async (overrideText) => {
@@ -1379,39 +1441,68 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             </div>
 
             {/* Agent Status Bar (when on agent tab) */}
-            {activeTab !== 'patient' && currentAgent && agentStatus && (
-                <div className={`px-4 py-2 flex items-center justify-between text-sm ${
-                    agentStatus.status === 'present' ? 'bg-green-900/20 border-b border-green-800/50' :
-                    agentStatus.status === 'paged' ? 'bg-amber-900/20 border-b border-amber-800/50' :
-                    agentStatus.status === 'on-call' ? 'bg-blue-900/20 border-b border-blue-800/50' :
-                    'bg-neutral-800/50 border-b border-neutral-700'
-                }`}>
-                    <div className="flex items-center gap-2">
-                        {getAgentIcon(currentAgent.agent_type)}
-                        <span className="font-medium">{currentAgent.name}</span>
-                        <span className="text-neutral-500">• {currentAgent.role_title}</span>
+            {activeTab !== 'patient' && currentAgent && agentStatus && (() => {
+                const liveState = agentStates[currentAgent.agent_type] || {};
+                const arrivesAt = liveState.arrives_at;
+                const pagedAt = liveState.paged_at;
+                const isPaged = agentStatus.status === 'paged';
+                const remaining = isPaged ? formatRemaining(arrivesAt, nowTick) : '';
+                const progress = isPaged ? waitProgressPct(pagedAt, arrivesAt, nowTick) : 0;
+                const phase = isPaged ? pickWaitPhase(currentAgent.agent_type, pagedAt, arrivesAt, nowTick) : '';
+                return (
+                    <div className={`border-b ${
+                        agentStatus.status === 'present' ? 'bg-green-900/20 border-green-800/50' :
+                        isPaged ? 'bg-amber-900/20 border-amber-800/50' :
+                        agentStatus.status === 'on-call' ? 'bg-blue-900/20 border-blue-800/50' :
+                        'bg-neutral-800/50 border-neutral-700'
+                    }`}>
+                        <div className="px-4 py-2 flex items-center justify-between text-sm gap-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                                {getAgentIcon(currentAgent.agent_type)}
+                                <span className="font-medium truncate">{currentAgent.name}</span>
+                                <span className="text-neutral-500 truncate">• {currentAgent.role_title}</span>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                                {isPaged && (
+                                    <span className="hidden sm:inline text-amber-200/80 italic truncate max-w-[14rem]">
+                                        {phase}
+                                    </span>
+                                )}
+                                {isPaged && (
+                                    <span className="flex items-center gap-1.5 text-amber-300 font-semibold tabular-nums">
+                                        <Clock className="w-3.5 h-3.5 animate-pulse" />
+                                        {remaining || '0:00'}
+                                    </span>
+                                )}
+                                {agentStatus.canPage && (
+                                    <button
+                                        onClick={() => handlePageAgent(currentAgent.agent_type)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-md text-xs font-bold shadow-sm"
+                                    >
+                                        <Phone className="w-3.5 h-3.5" /> Call {currentAgent.name.split(' ')[0]}
+                                    </button>
+                                )}
+                                {agentStatus.status === 'present' && (
+                                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-900/40 text-green-300 text-xs font-semibold">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" /> In the room
+                                    </span>
+                                )}
+                                {!agentStatus.canChat && !isPaged && !agentStatus.canPage && (
+                                    <span className="text-neutral-500">{agentStatus.label}</span>
+                                )}
+                            </div>
+                        </div>
+                        {isPaged && (
+                            <div className="h-1 bg-amber-950/40">
+                                <div
+                                    className="h-full bg-amber-400/80 transition-[width] duration-1000 ease-linear"
+                                    style={{ width: `${progress}%` }}
+                                />
+                            </div>
+                        )}
                     </div>
-                    <div className="flex items-center gap-3">
-                        {agentStatus.canPage && (
-                            <button
-                                onClick={() => handlePageAgent(currentAgent.agent_type)}
-                                className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs font-bold"
-                            >
-                                <Phone className="w-3 h-3" /> Page
-                            </button>
-                        )}
-                        {agentStatus.status === 'paged' && (
-                            <span className="flex items-center gap-1 text-amber-400">
-                                <Clock className="w-3 h-3 animate-pulse" />
-                                On the way...
-                            </span>
-                        )}
-                        {!agentStatus.canChat && agentStatus.status !== 'paged' && (
-                            <span className="text-neutral-500">{agentStatus.label}</span>
-                        )}
-                    </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* Chat Messages — curtained in voice mode for immersion. The
                 transcript still streams in the background; the curtain just
@@ -1437,16 +1528,47 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                 <p className="text-neutral-400 text-sm mb-2">Start a conversation with your patient</p>
                                 <p className="text-neutral-600 text-xs">Type a message below to begin taking the patient's history</p>
                             </>
-                        ) : agentStatus?.canChat ? (
+                        ) : agentStatus?.status === 'paged' ? (() => {
+                            const liveState = agentStates[currentAgent.agent_type] || {};
+                            return (
+                                <div className="w-full max-w-sm">
+                                    <p className="text-amber-200 text-sm font-medium mb-1">
+                                        Calling {currentAgent?.name}…
+                                    </p>
+                                    <p className="text-neutral-400 text-xs italic mb-4">
+                                        {pickWaitPhase(currentAgent.agent_type, liveState.paged_at, liveState.arrives_at, nowTick)}
+                                    </p>
+                                    <div className="text-3xl font-bold tabular-nums text-amber-300 mb-3">
+                                        {formatRemaining(liveState.arrives_at, nowTick) || '0:00'}
+                                    </div>
+                                    <div className="h-1.5 bg-amber-950/40 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-amber-400/80 transition-[width] duration-1000 ease-linear"
+                                            style={{ width: `${waitProgressPct(liveState.paged_at, liveState.arrives_at, nowTick)}%` }}
+                                        />
+                                    </div>
+                                    <p className="text-neutral-600 text-[11px] mt-3">
+                                        You can keep working — they'll appear here when they arrive.
+                                    </p>
+                                </div>
+                            );
+                        })() : agentStatus?.canChat ? (
                             <>
                                 <p className="text-neutral-400 text-sm mb-2">Chat with {currentAgent?.name}</p>
                                 <p className="text-neutral-600 text-xs">Type a message to communicate with the {currentAgent?.role_title?.toLowerCase()}</p>
                             </>
                         ) : agentStatus?.canPage ? (
-                            <>
-                                <p className="text-neutral-400 text-sm mb-2">{currentAgent?.name} is on-call</p>
-                                <p className="text-neutral-600 text-xs">Click the "Page" button above to request their presence</p>
-                            </>
+                            <div className="w-full max-w-sm">
+                                <p className="text-neutral-300 text-sm font-medium mb-1">{currentAgent?.name}</p>
+                                <p className="text-neutral-500 text-xs mb-1">{currentAgent?.role_title}</p>
+                                <p className="text-blue-300/80 text-xs mb-4">On-call · responds in 1–3 minutes</p>
+                                <button
+                                    onClick={() => handlePageAgent(currentAgent.agent_type)}
+                                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-bold shadow-md"
+                                >
+                                    <Phone className="w-4 h-4" /> Call {currentAgent.name.split(' ')[0]}
+                                </button>
+                            </div>
                         ) : (
                             <>
                                 <p className="text-neutral-400 text-sm mb-2">{currentAgent?.name} is not available</p>

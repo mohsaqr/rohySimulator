@@ -20,6 +20,7 @@ import {
     redactRow,
     tenantId
 } from './_helpers.js';
+import { toSqliteUtc, sqliteTsToIso } from '../sqliteTime.js';
 
 const radiologyLog = logger('radiology');
 const routesAdminLog = logger('routes-agent-tna-admin');
@@ -1046,13 +1047,29 @@ router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) =>
             return res.status(404).json({ error: 'Session not found' });
         }
 
+        // Converge any paged agents whose ETA already passed before
+        // returning the snapshot. One UPDATE per session — bounded by
+        // the agent count, which is single digits in practice.
+        await new Promise((resolve, reject) => {
+            dbAdapter.run(
+                `UPDATE agent_session_state
+                 SET status = 'present', arrived_at = CURRENT_TIMESTAMP
+                 WHERE session_id = ?
+                   AND status = 'paged' AND arrives_at IS NOT NULL
+                   AND datetime(arrives_at) <= datetime('now')`,
+                [sessionId],
+                (err) => err ? reject(err) : resolve()
+            );
+        });
+
         // Get case agents with current session state
         const agents = await new Promise((resolve, reject) => {
             dbAdapter.all(
                 `SELECT ca.*, at.name as template_name, at.role_title, at.agent_type,
                         at.avatar_url, at.system_prompt as template_system_prompt,
                         at.context_filter, at.communication_style, at.config as template_config,
-                        ass.status as session_status, ass.paged_at, ass.arrived_at, ass.departed_at
+                        ass.status as session_status, ass.paged_at, ass.arrives_at,
+                        ass.arrived_at, ass.departed_at
                  FROM case_agents ca
                  JOIN agent_templates at ON ca.agent_template_id = at.id
                  LEFT JOIN agent_session_state ass ON ass.session_id = ? AND ass.agent_type = at.agent_type
@@ -1084,11 +1101,15 @@ router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) =>
                 ...JSON.parse(a.template_config || '{}'),
                 ...JSON.parse(a.config_override || '{}')
             },
-            // Session state
+            // Session state — timestamps converted to ISO `…Z` so
+            // the client's `new Date()` parses as UTC regardless of
+            // local time zone. SQLite stores them in UTC but without
+            // a `Z`, which V8 interprets as local time.
             status: a.session_status || 'absent',
-            paged_at: a.paged_at,
-            arrived_at: a.arrived_at,
-            departed_at: a.departed_at
+            paged_at: sqliteTsToIso(a.paged_at),
+            arrives_at: sqliteTsToIso(a.arrives_at),
+            arrived_at: sqliteTsToIso(a.arrived_at),
+            departed_at: sqliteTsToIso(a.departed_at)
         }));
 
         res.json({ agents: parsed });
@@ -1099,18 +1120,65 @@ router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) =>
 });
 
 // POST /api/sessions/:sessionId/agents/:agentType/page - Page an agent
+//
+// Computes the arrival ETA server-side and stamps it on the session
+// state row. The client reads `arrives_at` from /agents and drives the
+// countdown from there — meaning a refresh, room switch, or chat
+// remount picks up exactly where it left off, instead of dropping the
+// in-memory setTimeout the way the prior client-side timer did.
+//
+// Wait time is clamped to a 1–3 minute band regardless of what the
+// case author configured. The intent is sim pacing: a real consult
+// takes 20+ minutes, but inside a single training session we want the
+// learner to feel the friction without the case grinding to a halt.
+// Per-case `response_time_min/max` are honoured but capped — admins
+// who want true minutes-long waits can adjust the band here later.
+const PAGE_WAIT_MIN_SEC = 60;          // 1 min floor — feels like a page, not a snap
+const PAGE_WAIT_MAX_SEC = 180;         // 3 min ceiling — keeps the sim moving
+
+// `arrives_at` is stored in SQLite's `YYYY-MM-DD HH:MM:SS` shape so
+// the auto-arrival comparison against CURRENT_TIMESTAMP works under
+// lexicographic ordering — an ISO `T…Z` string sorts after the
+// space-separated form for the same instant, so paged rows never
+// flipped until the date rolled over (the bug Codex caught in
+// review). On the way out the value is converted to ISO so the
+// client's `new Date()` parses as UTC. See server/sqliteTime.js.
+
 router.post('/sessions/:sessionId/agents/:agentType/page', authenticateToken, async (req, res) => {
     try {
         const { sessionId, agentType } = req.params;
 
-        // Upsert the session state
+        // Pull the case-agent's configured response window so we honour
+        // a tighter band (e.g. nurse wants "instant") but never let a
+        // legacy 2–5 minute seed exceed our clamp.
+        const agentRow = await new Promise((resolve, reject) => {
+            dbAdapter.get(
+                `SELECT ca.response_time_min, ca.response_time_max
+                 FROM sessions s
+                 JOIN case_agents ca ON ca.case_id = s.case_id
+                 JOIN agent_templates at ON ca.agent_template_id = at.id
+                 WHERE s.id = ? AND at.agent_type = ?`,
+                [sessionId, agentType],
+                (err, row) => err ? reject(err) : resolve(row)
+            );
+        });
+
+        const configuredMinSec = Math.max(0, (agentRow?.response_time_min || 0) * 60);
+        const configuredMaxSec = Math.max(0, (agentRow?.response_time_max || 0) * 60);
+        const minSec = Math.max(PAGE_WAIT_MIN_SEC, Math.min(PAGE_WAIT_MAX_SEC, configuredMinSec || PAGE_WAIT_MIN_SEC));
+        const maxSec = Math.max(minSec, Math.min(PAGE_WAIT_MAX_SEC, configuredMaxSec || PAGE_WAIT_MAX_SEC));
+        const waitSec = minSec + Math.floor(Math.random() * (maxSec - minSec + 1));
+        const arrivesAtMs = Date.now() + waitSec * 1000;
+        const arrivesAtDb = toSqliteUtc(arrivesAtMs);        // for SQL compare
+        const arrivesAtIso = new Date(arrivesAtMs).toISOString(); // for client
+
         await new Promise((resolve, reject) => {
             dbAdapter.run(
-                `INSERT INTO agent_session_state (session_id, agent_type, status, paged_at)
-                 VALUES (?, ?, 'paged', CURRENT_TIMESTAMP)
+                `INSERT INTO agent_session_state (session_id, agent_type, status, paged_at, arrives_at, arrived_at)
+                 VALUES (?, ?, 'paged', CURRENT_TIMESTAMP, ?, NULL)
                  ON CONFLICT(session_id, agent_type) DO UPDATE SET
-                 status = 'paged', paged_at = CURRENT_TIMESTAMP`,
-                [sessionId, agentType],
+                 status = 'paged', paged_at = CURRENT_TIMESTAMP, arrives_at = excluded.arrives_at, arrived_at = NULL`,
+                [sessionId, agentType, arrivesAtDb],
                 function(err) {
                     if (err) reject(err);
                     else resolve(this.changes);
@@ -1118,12 +1186,37 @@ router.post('/sessions/:sessionId/agents/:agentType/page', authenticateToken, as
             );
         });
 
-        res.json({ success: true, message: `Agent ${agentType} paged` });
+        res.json({
+            success: true,
+            message: `Agent ${agentType} paged`,
+            agent_type: agentType,
+            status: 'paged',
+            arrives_at: arrivesAtIso,
+            wait_seconds: waitSec
+        });
     } catch (err) {
         (req.log || routesAdminLog).error('page agent failed', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
+
+// Server-side auto-arrival: if a row is 'paged' and we're past its
+// arrives_at, flip it to 'present' in-place. Used by the read paths
+// below so the client never has to chase the transition itself —
+// reading /agents is enough to converge state. Idempotent.
+async function autoArriveIfDue(sessionId, agentType) {
+    await new Promise((resolve, reject) => {
+        dbAdapter.run(
+            `UPDATE agent_session_state
+             SET status = 'present', arrived_at = CURRENT_TIMESTAMP
+             WHERE session_id = ? AND agent_type = ?
+               AND status = 'paged' AND arrives_at IS NOT NULL
+               AND datetime(arrives_at) <= datetime('now')`,
+            [sessionId, agentType],
+            (err) => err ? reject(err) : resolve()
+        );
+    });
+}
 
 // POST /api/sessions/:sessionId/agents/:agentType/arrive - Mark agent as arrived
 router.post('/sessions/:sessionId/agents/:agentType/arrive', authenticateToken, async (req, res) => {
@@ -1180,6 +1273,8 @@ router.get('/sessions/:sessionId/agents/:agentType/status', authenticateToken, a
     try {
         const { sessionId, agentType } = req.params;
 
+        await autoArriveIfDue(sessionId, agentType);
+
         const state = await new Promise((resolve, reject) => {
             dbAdapter.get(
                 `SELECT * FROM agent_session_state WHERE session_id = ? AND agent_type = ?`,
@@ -1194,9 +1289,10 @@ router.get('/sessions/:sessionId/agents/:agentType/status', authenticateToken, a
         res.json({
             agent_type: agentType,
             status: state?.status || 'absent',
-            paged_at: state?.paged_at || null,
-            arrived_at: state?.arrived_at || null,
-            departed_at: state?.departed_at || null
+            paged_at: sqliteTsToIso(state?.paged_at),
+            arrives_at: sqliteTsToIso(state?.arrives_at),
+            arrived_at: sqliteTsToIso(state?.arrived_at),
+            departed_at: sqliteTsToIso(state?.departed_at)
         });
     } catch (err) {
         (req.log || routesAdminLog).error('agent status failed', { error: err.message });

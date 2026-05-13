@@ -76,7 +76,10 @@ export default function TestVoiceButton({
             if (gender) body.gender = gender;
             let blob;
             try {
-                blob = await apiFetch(`/tts?provider=${encodeURIComponent(provider)}`, {
+                // Admin preview path — main /tts ignores body.provider so
+                // runtime can't route to the wrong engine. /tts/preview
+                // accepts the override (admin-auth gated).
+                blob = await apiFetch(`/tts/preview?provider=${encodeURIComponent(provider)}`, {
                     method: 'POST',
                     json: body,
                     signal: abort.signal,
