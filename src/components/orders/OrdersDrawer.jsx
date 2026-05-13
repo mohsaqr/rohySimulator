@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     FlaskConical, X, ChevronUp, ChevronDown,
     Search, Clock, CheckCircle, Loader2, List,
-    Eye, FileText, Scan, Stethoscope, Activity, Syringe
+    Eye, FileText, Scan, Activity, Syringe
 } from 'lucide-react';
 import PatientRecordViewer from '../PatientRecordViewer';
 import { useToast } from '../../contexts/ToastContext';
@@ -19,7 +19,7 @@ import { ApiError, apiFetch, apiPost } from '../../services/apiClient';
  * - Radiology Studies
  * - Medications/Drugs
  */
-export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData, onOpenExamination }) {
+export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData }) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('labs'); // labs, radiology, drugs, records
     const [drawerHeight, setDrawerHeight] = useState('50vh'); // 50vh or 80vh
@@ -232,8 +232,6 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         return matchesSearch && matchesGroup;
     });
 
-    const readyRadiology = radiologyOrders.filter(o => o.is_ready && !o.viewed_at);
-
     // Order labs
     const handleOrderLabs = async () => {
         if (selectedLabs.length === 0) return;
@@ -245,7 +243,12 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
             const body = {
                 lab_ids: selectedLabs,
                 turnaround_override: labSettings.instantResults ? 0 :
-                    (labSettings.globalTurnaround > 0 ? labSettings.globalTurnaround : null)
+                    (labSettings.globalTurnaround > 0 ? labSettings.globalTurnaround : null),
+                // Attach the active room so the server-side learning_events
+                // INSERT stamps where this order was placed (typically 'lab'
+                // when ordering from InvestigationsScreen, 'chat' when
+                // ordering from the floating drawer in the patient room).
+                room: EventLogger.getStatus?.()?.room || null,
             };
 
             console.log('[Orders] Submitting order:', {
@@ -370,9 +373,10 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     // *after* every hook so hook-call ordering stays stable across renders.
     if (!caseId || !sessionId) return null;
 
+    // Floating pills cover what the bottom RoomNavigator doesn't —
+    // treatments, records, memory. Labs and Radiology are full rooms now
+    // and switch via the nav at the bottom of the screen.
     const tabs = [
-        { id: 'labs', label: 'Laboratory', icon: FlaskConical, count: readyOrders.length },
-        { id: 'radiology', label: 'Radiology', icon: Scan, count: readyRadiology.length },
         { id: 'treatments', label: 'Treatments', icon: Syringe, count: treatmentOrdersCount },
         { id: 'records', label: 'Records', icon: FileText, count: 0 },
         { id: 'memory', label: 'Memory', icon: Activity, count: 0 }
@@ -506,16 +510,16 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                 </div>
             )}
 
-            {/* Floating Action Buttons */}
+            {/* Floating Action Buttons. Pushed up to clear the
+                always-visible RoomNavigator (~72px tall) at the
+                bottom of the chat surface. */}
             {!isOpen && (
-                <div className="fixed bottom-4 right-4 z-40 flex gap-2">
+                <div className="fixed bottom-24 right-4 z-40 flex gap-2">
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => handleDrawerOpen(tab.id)}
                             className={`relative px-4 py-3 rounded-full flex items-center gap-2 font-bold text-sm shadow-lg transition-all hover:scale-105 ${
-                                tab.id === 'labs' ? 'bg-purple-600 hover:bg-purple-500 text-white' :
-                                tab.id === 'radiology' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' :
                                 tab.id === 'records' ? 'bg-amber-600 hover:bg-amber-500 text-white' :
                                 tab.id === 'memory' ? 'bg-rose-600 hover:bg-rose-500 text-white' :
                                 'bg-neutral-700 hover:bg-neutral-600 text-white'
@@ -528,30 +532,22 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                     {tab.count}
                                 </span>
                             )}
-                            {tab.id === 'labs' && pendingOrders.length > 0 && (
-                                <span className="absolute -top-2 -left-2 bg-yellow-500 text-black text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                                    {pendingOrders.length}
-                                </span>
-                            )}
                         </button>
                     ))}
-                    {/* Physical Examination Button */}
-                    {onOpenExamination && (
-                        <button
-                            onClick={onOpenExamination}
-                            className="relative px-4 py-3 rounded-full flex items-center gap-2 font-bold text-sm shadow-lg transition-all hover:scale-105 bg-cyan-600 hover:bg-cyan-500 text-white"
-                        >
-                            <Stethoscope className="w-5 h-5" />
-                            Physical Exam
-                        </button>
-                    )}
                 </div>
             )}
 
-            {/* Drawer */}
+            {/* Drawer. Open state sits above the bottom RoomNavigator
+                (72px gutter) so the user can still jump rooms while an
+                order surface is expanded — fixes the z-50 drawer covering
+                the z-40 nav. Closed state slides fully off-screen by an
+                extra 72px so the drawer's "Order Entry" header doesn't
+                peek above the nav. The backdrop below uses inset-0 so it
+                still dims the entire screen including under the nav, but
+                the nav itself remains clickable. */}
             <div
-                className={`fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-out ${
-                    isOpen ? 'translate-y-0' : 'translate-y-full'
+                className={`fixed bottom-[72px] left-0 right-0 z-50 transition-transform duration-300 ease-out ${
+                    isOpen ? 'translate-y-0' : 'translate-y-[calc(100%+72px)]'
                 }`}
                 style={{ height: drawerHeight }}
             >

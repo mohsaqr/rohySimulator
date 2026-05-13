@@ -4,8 +4,8 @@
 // returns file:null. Provider is read only from voiceSettings.tts_provider.
 // No slot logic, no per-provider hardcoded map, no catalogue fallback.
 
-import { describe, it, expect } from 'vitest';
-import { resolveVoice, deriveSlot } from './voiceResolver.js';
+import { describe, it, expect, vi } from 'vitest';
+import { resolveVoice, deriveSlot, isVoiceValidForProvider } from './voiceResolver.js';
 
 describe('resolveVoice — tier 1: case_voice override', () => {
     it('returns the voice.case_voice when present', () => {
@@ -127,5 +127,101 @@ describe('deriveSlot — preserved for UI labels (not used by the resolver)', ()
         expect(deriveSlot('female', 30)).toBe('female');
         expect(deriveSlot('male', 30)).toBe('male');
         expect(deriveSlot('female', 8)).toBe('child');
+    });
+});
+
+describe('resolveVoice — isValid validator (cross-provider guard)', () => {
+    // CONTRACT (migration 0022 + companion code): when callers supply an
+    // `isValid` function and it rejects the requested case_voice, the
+    // resolver returns tier='invalid' + file=null. That ends the
+    // three-week saga of stale provider voices reaching /api/tts and
+    // surfacing as runtime toasts — the resolver itself becomes the
+    // gate, so the caller can fall back to the template silently.
+    it('returns tier=override when isValid is omitted (backward compatible)', () => {
+        const r = resolveVoice({
+            voice: { case_voice: 'en-US-Neural2-J' },
+            voiceSettings: { tts_provider: 'kokoro' }
+        });
+        expect(r.file).toBe('en-US-Neural2-J');
+        expect(r.tier).toBe('override');
+    });
+
+    it('returns tier=invalid when isValid rejects the requested voice', () => {
+        const r = resolveVoice({
+            voice: { case_voice: 'en-US-Neural2-J' },
+            voiceSettings: { tts_provider: 'kokoro' },
+            isValid: () => false,
+        });
+        expect(r.file).toBeNull();
+        expect(r.tier).toBe('invalid');
+    });
+
+    it('returns tier=override when isValid approves the voice', () => {
+        const r = resolveVoice({
+            voice: { case_voice: 'am_michael' },
+            voiceSettings: { tts_provider: 'kokoro' },
+            isValid: () => true,
+        });
+        expect(r.file).toBe('am_michael');
+        expect(r.tier).toBe('override');
+    });
+
+    it('isValid is not called when no case_voice is set (no false-positive invalid)', () => {
+        const isValid = vi.fn(() => false);
+        const r = resolveVoice({
+            voice: {},
+            voiceSettings: { tts_provider: 'kokoro' },
+            isValid,
+        });
+        expect(r.file).toBeNull();
+        expect(r.tier).toBeNull();
+        expect(isValid).not.toHaveBeenCalled();
+    });
+});
+
+describe('isVoiceValidForProvider — pattern-based provider check', () => {
+    // CONTRACT: cheap pattern guard so the resolver can reject a Google
+    // voice id under the Kokoro provider without a network round-trip.
+    // Brittle if a provider introduces new id shapes; callers can pass
+    // their own `isValid` to bypass.
+    it('accepts a Kokoro id under kokoro', () => {
+        expect(isVoiceValidForProvider('am_michael', 'kokoro')).toBe(true);
+        expect(isVoiceValidForProvider('af_bella',   'kokoro')).toBe(true);
+        expect(isVoiceValidForProvider('bm_lewis',   'kokoro')).toBe(true);
+        expect(isVoiceValidForProvider('bf_emma',    'kokoro')).toBe(true);
+    });
+
+    it('rejects a Google id under kokoro (the STEMI bug)', () => {
+        expect(isVoiceValidForProvider('en-US-Neural2-J', 'kokoro')).toBe(false);
+        expect(isVoiceValidForProvider('en-US-Neural2-C', 'kokoro')).toBe(false);
+    });
+
+    it('rejects a Piper filename under kokoro', () => {
+        expect(isVoiceValidForProvider('en_US-amy-medium.onnx', 'kokoro')).toBe(false);
+    });
+
+    it('accepts Google ids under google', () => {
+        expect(isVoiceValidForProvider('en-US-Neural2-J',       'google')).toBe(true);
+        expect(isVoiceValidForProvider('en-US-Chirp3-HD-Orus',  'google')).toBe(true);
+    });
+
+    it('accepts Piper .onnx filenames under piper', () => {
+        expect(isVoiceValidForProvider('en_US-amy-medium.onnx', 'piper')).toBe(true);
+    });
+
+    it('accepts known OpenAI voices under openai', () => {
+        expect(isVoiceValidForProvider('alloy', 'openai')).toBe(true);
+        expect(isVoiceValidForProvider('echo',  'openai')).toBe(true);
+        expect(isVoiceValidForProvider('nova',  'openai')).toBe(true);
+    });
+
+    it('returns true (no rejection) for unknown providers — fail open', () => {
+        expect(isVoiceValidForProvider('anything', 'unknown_provider')).toBe(true);
+    });
+
+    it('returns false for empty / null voice ids regardless of provider', () => {
+        expect(isVoiceValidForProvider('',   'kokoro')).toBe(false);
+        expect(isVoiceValidForProvider(null, 'kokoro')).toBe(false);
+        expect(isVoiceValidForProvider(undefined, 'kokoro')).toBe(false);
     });
 });

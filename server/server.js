@@ -196,34 +196,11 @@ function maybeWarmupKokoro() {
     );
 }
 
-// One-shot migration: rename legacy voice keys to per-provider shape.
-// Before this commit, voices were stored as `piper_voice_<gender>` (despite
-// being used for any provider) and `default_voice_<gender>` (provider-flat).
-// Both schemes broke on provider switch — voice IDs are provider-specific.
-// We now store voices under `voice_<provider>_<gender>` and
-// `default_voice_<provider>_<gender>`.
-//
-// On boot, copy each legacy key into its per-provider equivalent under the
-// 'piper' slot (the safest assumption — pre-multi-provider deployments
-// were Piper-only). Idempotent: only copies when destination is empty.
-const LEGACY_VOICE_MIGRATIONS = [
-    ['piper_voice_male',     'voice_piper_male'],
-    ['piper_voice_female',   'voice_piper_female'],
-    ['piper_voice_child',    'voice_piper_child'],
-    ['default_voice_male',   'default_voice_piper_male'],
-    ['default_voice_female', 'default_voice_piper_female'],
-    ['default_voice_child',  'default_voice_piper_child']
-];
-
-function getSetting(key) {
-    return new Promise((resolve, reject) => {
-        dbAdapter.get(
-            'SELECT setting_value FROM platform_settings WHERE setting_key = ?',
-            [key],
-            (err, row) => err ? reject(err) : resolve(row?.setting_value || null)
-        );
-    });
-}
+// The legacy `piper_voice_*` / `default_voice_*` → `voice_*` boot loop
+// used to live here. It was retired alongside the per-provider slot
+// fallback (commit `a33779d`); the rows it created are now deleted by
+// migration 0022. Nothing reads `voice_<provider>_<gender>` keys
+// anymore — voices live on persona + case rows only.
 
 function setSettingIfEmpty(key, value) {
     return new Promise((resolve, reject) => {
@@ -237,23 +214,6 @@ function setSettingIfEmpty(key, value) {
     });
 }
 
-async function runVoiceKeyMigration() {
-    let copied = 0;
-    for (const [oldKey, newKey] of LEGACY_VOICE_MIGRATIONS) {
-        try {
-            const [oldVal, newVal] = await Promise.all([getSetting(oldKey), getSetting(newKey)]);
-            if (oldVal && !newVal) {
-                await setSettingIfEmpty(newKey, oldVal);
-                copied++;
-            }
-        } catch (e) {
-            migrationLog.warn('voice key copy failed', { old_key: oldKey, new_key: newKey, error: e.message });
-        }
-    }
-    if (copied > 0) {
-        migrationLog.info('legacy voice keys copied', { copied });
-    }
-}
 
 // Run seeders if database is empty, then start server
 async function initializeAndStart() {
@@ -273,14 +233,6 @@ async function initializeAndStart() {
         }
     } catch (err) {
         bootLog.error('seeder failed', { error: err.message, fatal: false });
-    }
-
-    // Migrate legacy voice keys before anything reads them. Cheap; logs
-    // only when work was actually done.
-    try {
-        await runVoiceKeyMigration();
-    } catch (e) {
-        migrationLog.warn('voice key migration failed', { error: e.message });
     }
 
     // Default platform tts_provider to kokoro on a fresh install — Kokoro

@@ -13,7 +13,7 @@ import CaseSummaryModal from './CaseSummaryModal';
 
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 
-export default function DiscussionScreen({ sessionId, activeCase, onClose }) {
+export default function DiscussionScreen({ sessionId, activeCase, onClose, roomNav = null }) {
     const { headManifest, platformAvatars, voiceSettings } = useVoice();
     const [discussant, setDiscussant] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -220,6 +220,11 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose }) {
                     onClose={() => setShowTranscript(false)}
                 />
             )}
+
+            {/* Bottom RoomNavigator — same nav as every other in-session
+                surface. Lets the user leave the consultant room without
+                ending the session. */}
+            {roomNav}
         </div>
     );
 }

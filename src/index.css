@@ -38,3 +38,31 @@ body,
     @apply flex items-center gap-2 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded text-xs font-bold transition-colors;
   }
 }
+
+/* Print: when the user hits "Print Report" inside a lab or radiology
+   report view, scope the printed page to just that report. Without this,
+   window.print() captures the entire screen (RoomNavigator, sidebars,
+   floating pills…). The classic visibility-toggle pattern keeps the
+   layout of the report itself intact — Tailwind's `print:hidden`
+   variants on chrome handle the rest. */
+@media print {
+  html, body, #root {
+    overflow: visible !important;
+    height: auto !important;
+    background: white !important;
+    color: black !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .print-area, .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    background: white !important;
+    color: black !important;
+  }
+}

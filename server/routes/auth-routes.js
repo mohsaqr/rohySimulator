@@ -194,8 +194,8 @@ router.post('/auth/login', authLimiter, (req, res) => {
                 [null, username, 'failed_login', ipAddress, userAgent, 1]
             );
             dbAdapter.run(
-                `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id)
-                 VALUES (NULL, 'FAILED_LOGIN', 'auth', ?, 'IMPORTANT', 'SESSION', ?, 1)`,
+                `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room)
+                 VALUES (NULL, 'FAILED_LOGIN', 'auth', ?, 'IMPORTANT', 'SESSION', ?, 1, NULL)`,
                 [username, JSON.stringify({ ip: ipAddress, ua: userAgent, reason: 'unknown_user' })]
             );
             return res.status(401).json({ error: 'Invalid username or password' });
@@ -237,8 +237,8 @@ router.post('/auth/login', authLimiter, (req, res) => {
                     [user.id, username, 'failed_login', ipAddress, userAgent, user.tenant_id || 1]
                 );
                 dbAdapter.run(
-                    `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id)
-                     VALUES (?, 'FAILED_LOGIN', 'auth', ?, 'IMPORTANT', 'SESSION', ?, ?)`,
+                    `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room)
+                     VALUES (?, 'FAILED_LOGIN', 'auth', ?, 'IMPORTANT', 'SESSION', ?, ?, NULL)`,
                     [user.id, username, JSON.stringify({ ip: ipAddress, ua: userAgent, reason: 'bad_password', attempts: newAttempts }), user.tenant_id || 1]
                 );
                 return res.status(401).json({ error: 'Invalid username or password' });
@@ -250,8 +250,8 @@ router.post('/auth/login', authLimiter, (req, res) => {
                 [user.id, username, 'login', ipAddress, userAgent, user.tenant_id || 1]
             );
             dbAdapter.run(
-                `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id)
-                 VALUES (?, 'LOGGED_IN', 'auth', ?, 'INFO', 'SESSION', ?, ?)`,
+                `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room)
+                 VALUES (?, 'LOGGED_IN', 'auth', ?, 'INFO', 'SESSION', ?, ?, NULL)`,
                 [user.id, username, JSON.stringify({ ip: ipAddress, ua: userAgent }), user.tenant_id || 1]
             );
 
@@ -452,10 +452,12 @@ router.post('/auth/logout', authenticateToken, async (req, res) => {
     // browser after logout.
     res.clearCookie(CSRF_COOKIE_NAME, csrfCookieOptions(0));
 
-    // Dual-write: legacy login_logs + canonical learning_events.
+    // Dual-write: legacy login_logs + canonical learning_events. Auth
+    // events never carry a room (logout fires from the menu, not a room);
+    // column included as NULL for parity with the canonical schema.
     dbAdapter.run(
-        `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id)
-         VALUES (?, 'LOGGED_OUT', 'auth', ?, 'INFO', 'SESSION', ?, ?)`,
+        `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room)
+         VALUES (?, 'LOGGED_OUT', 'auth', ?, 'INFO', 'SESSION', ?, ?, NULL)`,
         [req.user.id, req.user.username, JSON.stringify({ ip: ipAddress, ua: userAgent }), tenantId(req)]
     );
 

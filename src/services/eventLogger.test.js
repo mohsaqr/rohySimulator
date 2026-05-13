@@ -272,12 +272,15 @@ describe('eventLogger — component lifecycle events', () => {
 
 describe('eventLogger — getStatus snapshot shape', () => {
     // CONTRACT: getStatus() returns
-    // { sessionId, userId, caseId, isEnabled, preCenterBuffered }.
+    // { sessionId, userId, caseId, room, isEnabled, preCenterBuffered }.
+    // `room` was added so debugging surfaces can show the active
+    // in-session room at a glance — same provenance as the rest of the
+    // singleton context.
     it('returns the documented status shape', async () => {
         const { default: log } = await loadFreshLogger();
         const status = log.getStatus();
         expect(Object.keys(status).sort()).toEqual(
-            ['caseId', 'isEnabled', 'preCenterBuffered', 'sessionId', 'userId'].sort()
+            ['caseId', 'isEnabled', 'preCenterBuffered', 'room', 'sessionId', 'userId'].sort()
         );
         expect(status.isEnabled).toBe(true);
         expect(status.preCenterBuffered).toBe(0);
@@ -426,5 +429,64 @@ describe('eventLogger — payload shape contract', () => {
         expect(counts['OPENED:modal']).toBe(1);
         log.resetEventCounts();
         expect(Object.keys(log.getEventCounts())).toHaveLength(0);
+    });
+});
+
+describe('eventLogger — room context (active in-session room)', () => {
+    // CONTRACT: App.jsx calls EventLogger.roomChanged(currentRoom) on
+    // every nav change. That (a) stamps data.room onto every subsequent
+    // log() and (b) emits one NAVIGATED:room event marking the
+    // transition with from→to in context. clearContext() resets room.
+
+    it('data.room is null before any room has been set', async () => {
+        const notify = mountCenter();
+        const { default: log, VERBS, OBJECT_TYPES } = await loadFreshLogger();
+        log.log(VERBS.CLICKED, OBJECT_TYPES.BUTTON, { objectId: 'b' });
+        expect(notify.mock.calls[0][0].data.room).toBeNull();
+    });
+
+    it('setContext({ room }) stamps every subsequent log with the active room', async () => {
+        const notify = mountCenter();
+        const { default: log, VERBS, OBJECT_TYPES } = await loadFreshLogger();
+        log.setContext({ room: 'lab' });
+        log.log(VERBS.CLICKED, OBJECT_TYPES.LAB_TEST, { objectId: 'cbc' });
+        log.log(VERBS.CLICKED, OBJECT_TYPES.BUTTON, { objectId: 'order' });
+        expect(notify.mock.calls[0][0].data.room).toBe('lab');
+        expect(notify.mock.calls[1][0].data.room).toBe('lab');
+    });
+
+    it('roomChanged emits NAVIGATED:room with from→to and updates context', async () => {
+        const notify = mountCenter();
+        const { default: log, VERBS, OBJECT_TYPES } = await loadFreshLogger();
+        log.setContext({ room: 'chat' });
+        log.roomChanged('lab');
+        const p = notify.mock.calls[0][0];
+        expect(p.data.verb).toBe(VERBS.NAVIGATED);
+        expect(p.data.objectType).toBe(OBJECT_TYPES.ROOM);
+        expect(p.data.objectId).toBe('lab');
+        expect(p.data.context).toMatchObject({ fromRoom: 'chat', toRoom: 'lab' });
+        // The room stamp on this same event is the new room — the
+        // transition is logged as "now in lab", not "still in chat".
+        expect(p.data.room).toBe('lab');
+        // Subsequent logs carry the new room.
+        log.log(VERBS.CLICKED, OBJECT_TYPES.BUTTON, { objectId: 'x' });
+        expect(notify.mock.calls[1][0].data.room).toBe('lab');
+    });
+
+    it('clearContext resets the room to null', async () => {
+        const notify = mountCenter();
+        const { default: log, VERBS, OBJECT_TYPES } = await loadFreshLogger();
+        log.setContext({ room: 'radiology' });
+        log.clearContext();
+        log.log(VERBS.CLICKED, OBJECT_TYPES.BUTTON, { objectId: 'y' });
+        expect(notify.mock.calls[0][0].data.room).toBeNull();
+    });
+
+    it('getStatus() exposes the active room', async () => {
+        mountCenter();
+        const { default: log } = await loadFreshLogger();
+        expect(log.getStatus().room).toBeNull();
+        log.setContext({ room: 'consultant' });
+        expect(log.getStatus().room).toBe('consultant');
     });
 });

@@ -220,18 +220,31 @@ describe('OrdersDrawer — guard render', () => {
         expect(container.querySelector('button')).toBeNull();
     });
 
-    it('renders the five floating tab buttons when caseId+sessionId are set', async () => {
+    it('renders the three remaining floating tab buttons when caseId+sessionId are set', async () => {
+        // Laboratory + Radiology used to render here. They were retired
+        // when the bottom RoomNavigator took over both rooms. The
+        // drawer-internal tabs for labs/rad are still alive in the DOM
+        // (translate-y hidden) so the drawer's data fetching keeps
+        // working until the labs/rad code paths get folded into
+        // InvestigationsScreen entirely. The floating pill cluster only
+        // surfaces Treatments / Records / Memory now.
         renderWithProviders(<OrdersDrawer {...baseProps()} />);
-        // Both floating + drawer-internal buttons render the same labels (the
-        // drawer is hidden via translate-y but still in the DOM). Use
-        // getAllByText so we don't fail on the duplicates.
         await waitFor(() => {
-            expect(screen.getAllByText('Laboratory').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('Treatments').length).toBeGreaterThan(0);
         });
-        expect(screen.getAllByText('Radiology').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('Treatments').length).toBeGreaterThan(0);
         expect(screen.getAllByText('Records').length).toBeGreaterThan(0);
         expect(screen.getAllByText('Memory').length).toBeGreaterThan(0);
+        // No floating Laboratory or Radiology pills (the drawer-internal
+        // tabs may still match the text, so we scope to BUTTON role +
+        // visible-only matchers).
+        const labButtons = screen.queryAllByRole('button', { name: /^Laboratory$/ });
+        const radButtons = screen.queryAllByRole('button', { name: /^Radiology$/ });
+        // The drawer-internal tab buttons may match by name, but the
+        // floating cluster (the only thing visible when drawer is
+        // collapsed) should not. Assert at most the drawer-internal
+        // count (one per modality), not the old floating-pill count.
+        expect(labButtons.length).toBeLessThanOrEqual(1);
+        expect(radButtons.length).toBeLessThanOrEqual(1);
     });
 });
 
@@ -268,7 +281,16 @@ describe('OrdersDrawer — orders list rendering', () => {
     });
 });
 
-describe('OrdersDrawer — POST /order-labs', () => {
+// The drawer-internal labs ordering surface is dead code (no entry
+// point reaches it after the floating Laboratory pill was retired).
+// The canonical surface for lab ordering is now InvestigationsScreen,
+// which has its own POST /order-labs tests. We keep the
+// network-level fixtures wired up above in case the legacy drawer
+// flow is reachable from somewhere we missed, but the click-driven
+// describe blocks are skipped — re-enable by restoring the
+// Laboratory floating pill if the retirement ever needs to be
+// reverted.
+describe.skip('OrdersDrawer — POST /order-labs (retired — covered by InvestigationsScreen.test.jsx)', () => {
     it('clicking "Order N Tests" sends POST with lab_ids in the body', async () => {
         renderWithProviders(<OrdersDrawer {...baseProps()} />);
         await waitFor(() => {
@@ -335,7 +357,9 @@ describe('OrdersDrawer — POST /order-labs', () => {
     });
 });
 
-describe('OrdersDrawer — POST /order-radiology', () => {
+// Same retirement note as POST /order-labs above. The InvestigationsScreen
+// tests cover the radiology ordering POST.
+describe.skip('OrdersDrawer — POST /order-radiology (retired — covered by InvestigationsScreen.test.jsx)', () => {
     it('clicking "Order N Studies" sends POST with radiology_ids in the body', async () => {
         renderWithProviders(<OrdersDrawer {...baseProps()} />);
         await waitFor(() => expect(screen.getAllByText('Radiology').length).toBeGreaterThan(0));
@@ -445,7 +469,9 @@ describe('OrdersDrawer — bulk-delete confirmation (spec divergence)', () => {
         // batched action is "Order N Test(s)". This test pins the absence
         // so a future addition forces an explicit update of this file.
         renderWithProviders(<OrdersDrawer {...baseProps()} />);
-        await waitFor(() => expect(screen.getAllByText('Laboratory').length).toBeGreaterThan(0));
+        // Anchor on Treatments (a still-rendered floating pill) instead
+        // of Laboratory, which was retired with the labs floating pill.
+        await waitFor(() => expect(screen.getAllByText('Treatments').length).toBeGreaterThan(0));
         // No "Delete N selected", "Bulk delete", or "Confirm delete" button.
         expect(screen.queryByText(/Delete \d+ selected/i)).toBeNull();
         expect(screen.queryByText(/Bulk delete/i)).toBeNull();

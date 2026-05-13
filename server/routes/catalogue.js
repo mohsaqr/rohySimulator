@@ -34,6 +34,7 @@ import { searchOpenFda } from '../services/openfdaProxy.js';
 import { searchLoinc } from '../services/loincProxy.js';
 import { logger } from '../logger.js';
 import { appendAuditEntry } from '../audit-chain.js';
+import { DEFAULT_TURNAROUND_MINUTES } from '../lib/turnaround.js';
 
 const router = express.Router();
 const catalogueLog = logger('catalogue');
@@ -403,7 +404,7 @@ router.post('/lab-tests', authenticateToken, asyncHandler(async (req, res) => {
         [
             code, test_name.trim(), test_group || 'Custom', category || 'General', specimen_type || null,
             min_value ?? null, max_value ?? null, unit, critical_low ?? null, critical_high ?? null,
-            JSON.stringify(normal_samples || []), description || null, turnaround_minutes || 30,
+            JSON.stringify(normal_samples || []), description || null, turnaround_minutes || DEFAULT_TURNAROUND_MINUTES,
             loinc_code || null, ucum_unit || unit, external_source || null,
             scope, req.user.tenant_id ?? 1, req.user.id, dataSourceId,
         ]

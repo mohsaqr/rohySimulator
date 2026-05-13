@@ -1003,7 +1003,26 @@ async function pipePcmStream(res, asyncIter) {
 //   - Kokoro (kokoro-js, ~330 MB local model, ~0.7× realtime, natural)
 //   - OpenAI (cloud, lowest latency, native streaming PCM at 24 kHz)
 // based on the `tts_provider` platform setting.
+// Main TTS route: caller cannot specify provider. Provider always comes
+// from platform_settings.tts_provider. This is the runtime path for
+// every patient/discussant/etc. voice playback.
+//
+// The admin preview button uses /tts/preview below, which accepts a
+// provider override on the body so admins can test voices without
+// flipping the platform setting.
 router.post('/tts', authenticateToken, async (req, res) => {
+    return handleTtsSynthesis(req, res, { allowProviderOverride: false });
+});
+
+// Admin preview: same synthesis, but accepts `provider` on the body so
+// the Voice settings tab can preview a voice from any provider without
+// changing the active platform setting. Admin-auth gated because the
+// runtime should never route through this path.
+router.post('/tts/preview', authenticateToken, requireAdmin, async (req, res) => {
+    return handleTtsSynthesis(req, res, { allowProviderOverride: true });
+});
+
+async function handleTtsSynthesis(req, res, { allowProviderOverride }) {
     // `gender` is still accepted on the wire so older clients don't break,
     // but it's no longer consulted — the resolver dropped slot-based logic.
     const { text, voice: requestedVoice, rate, pitch, provider: bodyProvider } = req.body || {};
@@ -1018,20 +1037,24 @@ router.post('/tts', authenticateToken, async (req, res) => {
         return res.status(400).json({ error: 'voice required' });
     }
 
-    // Provider-override lets the settings UI preview a voice without having
-    // to switch the platform's active TTS engine. Accept it from query
-    // (?provider=…) for direct curl/test paths AND from the JSON body for
-    // client SDKs (VoiceService.speak) — neither used to be wired, so all
-    // four providers silently collapsed to the platform default. Only honour
-    // an override that names a known provider.
-    const queryProvider = typeof req.query.provider === 'string' && VOICE_TTS_PROVIDERS.includes(req.query.provider)
-        ? req.query.provider
-        : null;
-    const bodyProviderOverride = typeof bodyProvider === 'string' && VOICE_TTS_PROVIDERS.includes(bodyProvider)
-        ? bodyProvider
-        : null;
-    const providerOverride = queryProvider || bodyProviderOverride;
-    const ttsProvider = providerOverride || (await getPlatformSetting('tts_provider')) || DEFAULT_TTS_PROVIDER;
+    // Provider resolution:
+    //   - Main /tts route → platform setting only. Body/query provider
+    //     fields are silently ignored (older clients still send them).
+    //   - /tts/preview route → body.provider wins, query.provider as
+    //     legacy fallback, else platform setting.
+    let ttsProvider;
+    if (allowProviderOverride) {
+        const queryProvider = typeof req.query.provider === 'string' && VOICE_TTS_PROVIDERS.includes(req.query.provider)
+            ? req.query.provider
+            : null;
+        const bodyProviderOverride = typeof bodyProvider === 'string' && VOICE_TTS_PROVIDERS.includes(bodyProvider)
+            ? bodyProvider
+            : null;
+        const providerOverride = bodyProviderOverride || queryProvider;
+        ttsProvider = providerOverride || (await getPlatformSetting('tts_provider')) || DEFAULT_TTS_PROVIDER;
+    } else {
+        ttsProvider = (await getPlatformSetting('tts_provider')) || DEFAULT_TTS_PROVIDER;
+    }
 
     try {
         await enforceBudget({
@@ -1383,7 +1406,7 @@ router.post('/tts', authenticateToken, async (req, res) => {
         res.write(header);
         res.end(pcm);
     });
-});
+}
 
 // GET /api/llm/usage - Get current user's usage
 router.get('/llm/usage', authenticateToken, async (req, res) => {

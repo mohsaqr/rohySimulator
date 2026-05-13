@@ -213,7 +213,11 @@ describe('TestVoiceButton', () => {
 
         expect(globalThis.fetch).toHaveBeenCalledTimes(1);
         const [url, init] = globalThis.fetch.mock.calls[0];
-        expect(url).toBe('/api/tts?provider=google');
+        // Migrated from /tts → /tts/preview when the runtime route
+        // stopped accepting provider overrides (migration 0022 +
+        // companion code). Preview endpoint is admin-only and accepts
+        // body.provider; runtime /tts ignores it.
+        expect(url).toBe('/api/tts/preview?provider=google');
         expect(init.method).toBe('POST');
         expect(init.headers['Content-Type']).toBe('application/json');
         const body = JSON.parse(init.body);

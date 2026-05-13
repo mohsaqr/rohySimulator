@@ -13,6 +13,7 @@ import {
 
 
 import * as labDb from '../services/labDatabase.js';
+import { DEFAULT_TURNAROUND_MINUTES, resolveTurnaroundMinutes } from '../lib/turnaround.js';
 
 
 import { logger } from '../logger.js';
@@ -64,7 +65,7 @@ router.post('/investigations', authenticateToken, requireEducator, (req, res) =>
     const sql = `INSERT INTO case_investigations (case_id, investigation_type, test_name, result_data, image_url, turnaround_minutes, tenant_id) 
                  VALUES (?, ?, ?, ?, ?, ?, ?)`;
     
-    dbAdapter.run(sql, [case_id, investigation_type, test_name, JSON.stringify(result_data), image_url, turnaround_minutes || 30, tenantId(req)], function(err) {
+    dbAdapter.run(sql, [case_id, investigation_type, test_name, JSON.stringify(result_data), image_url, turnaround_minutes || DEFAULT_TURNAROUND_MINUTES, tenantId(req)], function(err) {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -241,12 +242,16 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
         dbAdapter.run(updateSql, [orderId, tenantId(req)], function(updateErr) {
             if (updateErr) return res.status(500).json({ error: updateErr.message });
 
-            // Log detailed learning event
+            // Log detailed learning event. Pull `room` from the request
+            // body so the lab-result viewer's POST stamps which room the
+            // student was in when they opened the report (typically 'lab'
+            // or 'radiology'); falls back to NULL when the client didn't
+            // attach one.
             const logSql = `
                 INSERT INTO learning_events (
                     session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                    component, result, duration_ms, context, tenant_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    component, result, duration_ms, context, tenant_id, room
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             const context = {
@@ -275,7 +280,8 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
                 resultText,
                 viewDelayMs,
                 JSON.stringify(context),
-                tenantId(req)
+                tenantId(req),
+                req.body?.room || null,
             ]);
 
             res.json({
@@ -644,7 +650,7 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res)
                             lab.gender_category ?? null, lab.min_value ?? null,
                             lab.max_value ?? null, lab.current_value ?? null,
                             lab.unit ?? null, JSON.stringify(lab.normal_samples || []),
-                            lab.is_abnormal ? 1 : 0, lab.turnaround_minutes ?? 30, tenantId(req)
+                            lab.is_abnormal ? 1 : 0, lab.turnaround_minutes ?? DEFAULT_TURNAROUND_MINUTES, tenantId(req)
                         ], (insertErr) => {
                             if (insertErr && !failed) {
                                 failed = true;
@@ -857,7 +863,7 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, (req, res) 
                         unit: lab.unit || '',
                         normal_samples: lab.normal_samples || [],
                         is_abnormal: lab.is_abnormal || false,
-                        turnaround_minutes: lab.turnaround_minutes || 30,
+                        turnaround_minutes: lab.turnaround_minutes || DEFAULT_TURNAROUND_MINUTES,
                         source: 'config'
                     };
                 }
@@ -924,7 +930,7 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, (req, res) 
                                 unit: genderSpecific.unit,
                                 normal_samples: genderSpecific.normal_samples,
                                 is_abnormal: false,
-                                turnaround_minutes: 30,
+                                turnaround_minutes: genderSpecific.turnaround_minutes ?? DEFAULT_TURNAROUND_MINUTES,
                                 source: 'default'
                             });
                         }
@@ -985,38 +991,17 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
             const patientGender = caseConfig.demographics?.gender || 'Male';
             const configJsonLabs = caseConfig.investigations?.labs || [];
 
-            // Get case-level timing settings
-            const caseInstantResults = caseConfig.investigations?.instantResults === true;
-            const caseDefaultTurnaround = caseConfig.investigations?.defaultTurnaround || 0;
+            (req.log || routesOrdersLog).debug('lab order case config loaded', {
+                instant_results: caseConfig.investigations?.instantResults === true,
+                default_turnaround: caseConfig.investigations?.defaultTurnaround || 0,
+                config_lab_count: configJsonLabs.length,
+            });
 
-            (req.log || routesOrdersLog).debug('lab order case config loaded', { instant_results: caseInstantResults, default_turnaround: caseDefaultTurnaround, config_lab_count: configJsonLabs.length });
-
-            // Helper to get turnaround time (priority: instant/override > test default > case default)
-            const getTurnaround = (testDefaultMinutes) => {
-                // Instant results = 0 minutes (from case config)
-                if (caseInstantResults) {
-                    return 0;
-                }
-                // Request-level override (0 means instant, positive means that many minutes)
-                if (turnaround_override !== null && turnaround_override !== undefined) {
-                    if (turnaround_override === 0) {
-                        return 0; // Instant results from request
-                    }
-                    if (turnaround_override > 0) {
-                        return turnaround_override;
-                    }
-                }
-                // Test default takes priority (individual lab turnaround times)
-                if (testDefaultMinutes && testDefaultMinutes > 0) {
-                    return testDefaultMinutes;
-                }
-                // Case-level default as fallback
-                if (caseDefaultTurnaround > 0) {
-                    return caseDefaultTurnaround;
-                }
-                // Final fallback
-                return 30;
-            };
+            const getTurnaround = (testDefaultMinutes) => resolveTurnaroundMinutes({
+                requestOverride: turnaround_override,
+                caseConfig,
+                testDefault: testDefaultMinutes,
+            });
 
             // Process all IDs and create orders
             //
@@ -1089,19 +1074,24 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                     // PLAN_LOGGING.md (one row per ordered lab is more useful than
                     // one summary row anyway).
 
-                    // Log detailed learning events for each ordered lab
+                    // Log detailed learning events for each ordered lab.
+                    // Lab orders almost always originate from the Laboratory
+                    // room; client supplies `req.body.room` so the analytics
+                    // layer can attribute the order to a specific room
+                    // without joining against NAVIGATED events.
                     const logSql = `
                         INSERT INTO learning_events (
                             session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                            component, result, context
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            component, result, context, room
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     `;
+                    const orderRoom = req.body?.room || null;
 
                     orderIds.forEach(order => {
-                        const turnaround = getTurnaround(30);
+                        const turnaround = order.turnaround ?? getTurnaround();
                         const context = {
                             turnaround_minutes: turnaround,
-                            instant_results: caseInstantResults,
+                            instant_results: caseConfig.investigations?.instantResults === true,
                             order_id: order.id
                         };
 
@@ -1115,7 +1105,8 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                             order.test_name,
                             'OrdersDrawer',
                             `Turnaround: ${turnaround} min`,
-                            JSON.stringify(context)
+                            JSON.stringify(context),
+                            orderRoom,
                         ]);
                     });
 
@@ -1302,12 +1293,15 @@ router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireEducato
         // instructor recorded in context.instructor_id for offline auditing.
         const trinity = await resolveSessionTrinity(sessionId, tenantId(req));
         if (trinity.found) {
+            // Instructor lab-value edits happen from the instructor panel,
+            // not a learner room — room stays NULL. Column kept for parity
+            // with the canonical learning_events schema.
             dbAdapter.run(
                 `INSERT INTO learning_events (
                     session_id, user_id, case_id, verb,
                     object_type, object_id, object_name,
-                    component, result, context, severity, category, tenant_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    component, result, context, severity, category, tenant_id, room
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
                 [
                     sessionId,
                     trinity.user_id,
@@ -1405,7 +1399,7 @@ router.get('/sessions/:sessionId/available-radiology', authenticateToken, (req, 
                         name: cr.studyName || 'Custom Study',
                         modality: cr.modality || 'Other',
                         body_region: cr.bodyRegion || '',
-                        turnaround_minutes: cr.turnaroundMinutes || 30,
+                        turnaround_minutes: cr.turnaroundMinutes || DEFAULT_TURNAROUND_MINUTES,
                         common_indications: [],
                         isCustom: true
                     });
@@ -1466,7 +1460,16 @@ router.get('/sessions/:sessionId/radiology-orders', authenticateToken, (req, res
 // POST /api/sessions/:sessionId/order-radiology - Order radiology studies
 router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res) => {
     const { sessionId } = req.params;
-    const { radiology_ids, instant } = req.body;
+    const { radiology_ids, instant, turnaround_override } = req.body;
+    // `instant: true` is a shorthand for "skip the wait" used by the
+    // radiology side of OrdersDrawer. It maps onto the same
+    // turnaround_override=0 path the labs endpoint uses, so both
+    // endpoints go through resolveTurnaroundMinutes with identical
+    // priority semantics. An explicit turnaround_override on the body
+    // (e.g. 0 from the Instant button on InvestigationsScreen) wins.
+    const effectiveOverride = turnaround_override !== undefined && turnaround_override !== null
+        ? turnaround_override
+        : (instant === true ? 0 : null);
 
     if (!Array.isArray(radiology_ids) || radiology_ids.length === 0) {
         return res.status(400).json({ error: 'radiology_ids array is required' });
@@ -1540,11 +1543,14 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
             const testName = study?.name || configuredResult?.studyName || 'Unknown Study';
             const modality = study?.modality || configuredResult?.modality || 'Other';
             const bodyRegion = study?.body_region || configuredResult?.bodyRegion || '';
-            const defaultTurnaround = study?.turnaround_minutes || 30;
-
-            // Use configured turnaround time if available
-            const configuredTurnaround = configuredResult?.turnaroundMinutes;
-            const turnaround = instant ? 0 : (configuredTurnaround ?? defaultTurnaround);
+            // Turnaround through the single resolver. Per-test default is
+            // either the case author's configured turnaround (if they pinned
+            // one on this study) or the radiology master DB value.
+            const turnaround = resolveTurnaroundMinutes({
+                requestOverride: effectiveOverride,
+                caseConfig,
+                testDefault: configuredResult?.turnaroundMinutes ?? study?.turnaround_minutes,
+            });
 
             // Use configured findings/interpretation if available, otherwise use normal defaults from master database
             const findings = configuredResult?.findings || study?.normal_findings || '';

@@ -220,12 +220,15 @@ router.post('/settings/log', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
 
         // Dual-write into learning_events so the unified Activity view sees
-        // settings changes alongside session events.
+        // settings changes alongside session events. Settings changes never
+        // happen inside a room — they're on the settings page — so `room`
+        // is always NULL here, but kept in the INSERT for column parity
+        // with the canonical /learning-events endpoint.
         dbAdapter.run(
             `INSERT INTO learning_events (
                 session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                component, result, context, severity, category, tenant_id
-            ) VALUES (?, ?, ?, 'CHANGED_SETTING', 'setting', ?, ?, 'CONFIG_PANEL', ?, ?, 'INFO', 'CONFIGURATION', ?)`,
+                component, result, context, severity, category, tenant_id, room
+            ) VALUES (?, ?, ?, 'CHANGED_SETTING', 'setting', ?, ?, 'CONFIG_PANEL', ?, ?, 'INFO', 'CONFIGURATION', ?, NULL)`,
             [
                 session_id || null,
                 req.user.id,
@@ -488,7 +491,8 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
         duration_ms,
         context,
         message_content,
-        message_role
+        message_role,
+        room,
     } = req.body;
 
     if (!verb || !LEARNING_VERBS.includes(verb)) {
@@ -526,8 +530,9 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
             object_type, object_id, object_name,
             component, parent_component,
             result, duration_ms, context,
-            message_content, message_role, tenant_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            message_content, message_role, tenant_id,
+            room
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     dbAdapter.run(sql, [
@@ -545,7 +550,8 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
         context ? JSON.stringify(context) : null,
         message_content || null,
         message_role || null,
-        tenantId(req)
+        tenantId(req),
+        room || null,
     ], function(err) {
         if (err) {
             return res.status(500).json({ error: err.message });
@@ -595,9 +601,11 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
             result, duration_ms, context,
             message_content, message_role, timestamp, tenant_id,
             vital_hr, vital_spo2, vital_bp_sys, vital_bp_dia,
-            vital_rr, vital_temp, vital_etco2, vital_rhythm
+            vital_rr, vital_temp, vital_etco2, vital_rhythm,
+            room
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                  ?, ?, ?, ?, ?, ?, ?, ?)
+                  ?, ?, ?, ?, ?, ?, ?, ?,
+                  ?)
     `;
 
     const stmt = dbAdapter.prepare(sql);
@@ -664,6 +672,7 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
                     event.vital_temp ?? null,
                     event.vital_etco2 ?? null,
                     event.vital_rhythm ?? null,
+                    event.room || null,
                 ]).then(() => { inserted++; }, () => {
                     dropped++;
                     droppedReasons.db_error++;
