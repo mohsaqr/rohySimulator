@@ -447,12 +447,12 @@ export default function DiagnosticBar() {
                             <Row k="tts_rate" v={voiceSettings?.tts_rate} />
                             <Row k="tts_pitch" v={voiceSettings?.tts_pitch} />
                             <Row k="voice_mode_enabled" v={String(voiceSettings?.voice_mode_enabled ?? '')} />
-                            {/* Legacy voice_<provider>_<slot> values are no longer read by
-                                the resolver (post 2026-05-13 — one voice per persona).
-                                We still surface what's stored so admins can see / clear them. */}
-                            <Row k="legacy male slot" v={pickSlot(voiceSettings, 'male')} />
-                            <Row k="legacy female slot" v={pickSlot(voiceSettings, 'female')} />
-                            <Row k="legacy child slot" v={pickSlot(voiceSettings, 'child')} />
+                            {/* Legacy voice_<provider>_<slot> rows were removed when
+                                the resolver collapsed to one tier (2026-05-13). If
+                                a deployment still has stored values for those keys
+                                under platform_settings, they are not read by anything
+                                and are not surfaced here either — clean them up via
+                                the catalogue audit log if you want them gone. */}
                         </Section>
                         <Section title="Voice runtime">
                             <Row k="voice mode" v={voiceMode ? 'ON' : 'OFF'} />
@@ -569,12 +569,9 @@ export default function DiagnosticBar() {
                     {/* Live TTS wire history — the literal payloads the runtime
                         last sent to /api/tts (newest first, ring buffer). This
                         is the ground truth: every row above is a static
-                        prediction; these rows are what actually flew. The play
-                        button on each row replays the payload and the [vs.
-                        male slot] button replays the same TEXT through the
-                        platform's `voice_<provider>_male` slot so the user can
-                        do an A/B comparison and confirm whether what they
-                        heard matches the configured voice or a different one. */}
+                        prediction; these rows are what actually flew. The
+                        ▶ button replays the captured payload so admins can
+                        confirm what was sent matches what they heard. */}
                     {wireHistory.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-neutral-800">
                             <div className="flex items-center justify-between mb-2">
@@ -857,10 +854,11 @@ function WireStatusBadge({ wire }) {
     );
 }
 
-// Stable identity for an audition — same row + same voice override means the
-// user is toggling the same playback, so we treat re-clicks as stop. Using
-// id+voice instead of id alone lets the [vs. <slot>] button track separately
-// from the primary [▶] button on the same row.
+// Stable identity for an audition — same row + same voice means the user is
+// toggling the same playback, so we treat re-clicks as stop. `override` is
+// retained on the signature because handleAudition still accepts an optional
+// override (for future A/B features); today only the primary ▶ button on
+// each row drives it.
 function auditionKey(wire, override) {
     if (!wire) return null;
     return `${wire.id}::${override?.voice || wire.voice}`;
@@ -883,14 +881,11 @@ function TierBadge({ tier }) {
     );
 }
 
-// No hardcoded fallback exists post-2026-05-12. When the configured-speakers
-// table has no resolved voice for the active speaker, the bar shows
-// "(no voice)" instead of guessing — that mirrors what the runtime does
-// and makes "I haven't configured a voice yet" visible at a glance.
+// Legacy stub. The diagnostic bar used to display a derived
+// "active voice slot" label when the resolver had a slot tier. That tier
+// was removed in 2026-05-13 ("one voice per persona, no slot fallback").
+// The function is kept exported-but-empty so any old call sites still
+// elsewhere in the codebase return an empty string rather than crash.
 function activeVoiceSlot() {
-    return '';
-}
-
-function pickSlot() {
     return '';
 }

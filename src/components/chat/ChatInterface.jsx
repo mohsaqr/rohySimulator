@@ -355,9 +355,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 //      matches the seed doc that "Default Patient is used
                 //      otherwise" and keeps the patient audible for cases
                 //      that don't slot cleanly into male/female.
-                //   3. Single template available → use it.
-                //   4. Otherwise null and let the chat surface a "no persona"
-                //      error so the admin sees the gap.
+                //   3. Otherwise null. A female-coded case with only male
+                //      templates seeded must NOT silently pick the male one
+                //      — that's a real misconfig the admin needs to see, so
+                //      we surface a loud error instead.
                 const attachedPatient = agentList.find(a => a.agent_type === 'patient' && a.enabled !== 0 && a.enabled !== false);
                 if (attachedPatient) {
                     setPatientTemplate(normalizePatientAgent(attachedPatient));
@@ -378,10 +379,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         const nonFemale = isFemaleCase
                             ? null
                             : patientDefaults.find((t) => templateGender(t).charAt(0) !== 'f');
-                        const fallback =
-                            exact ||
-                            nonFemale ||
-                            (patientDefaults.length === 1 ? patientDefaults[0] : null);
+                        const fallback = exact || nonFemale || null;
                         setPatientTemplate(fallback ? normalizePatientAgent(fallback) : null);
                     } catch {
                         setPatientTemplate(null);
