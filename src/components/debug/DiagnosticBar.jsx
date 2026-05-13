@@ -26,6 +26,7 @@ import { resolveVoice } from '../../utils/voiceResolver';
 import { parseConfig } from '../../utils/parseConfig';
 import { getLastTtsRequest, getRecentTtsRequests, auditionWirePayload } from '../../services/voiceService';
 import { getBackendTelemetry } from '../../notifications/surfaces/BackendSurface';
+import { getLastPatientPrompt } from '../../utils/lastPatientPrompt';
 
 const KEY_PREFIX = 'rohy_diag_bar_enabled_';
 const storageKey = (uid) => `${KEY_PREFIX}${uid ?? 'anon'}`;
@@ -97,6 +98,14 @@ export default function DiagnosticBar() {
     const [backendTelemetry, setBackendTelemetry] = useState(() => getBackendTelemetry());
     const [clientLogs, setClientLogs] = useState([]);
     const [clientLogsError, setClientLogsError] = useState(null);
+    // Patient-prompt inspector: opens a modal that dumps the most recently
+    // assembled patient `system_prompt`. Snapshotted from
+    // utils/lastPatientPrompt — ChatInterface.buildPatientSystemPrompt
+    // writes there on every assembly. Without this, "the model ignored my
+    // case" debates relied on guessing what the model actually saw.
+    const [promptInspectorOpen, setPromptInspectorOpen] = useState(false);
+    const [promptSnapshot, setPromptSnapshot] = useState(null);
+    const [promptCopied, setPromptCopied] = useState(false);
 
     // Subscribe to BackendSurface telemetry events so the panel reflects
     // failures live. Listener is idempotent: re-reads the full snapshot
@@ -500,6 +509,28 @@ export default function DiagnosticBar() {
                             <Row k="default_child" v={platformAvatars?.default_avatar_child} />
                             <Row k="avatar_type" v={voiceSettings?.avatar_type ?? platformAvatars?.avatar_type} />
                         </Section>
+                        <Section title="Patient prompt">
+                            <Row
+                                k="last assembled"
+                                v={(() => {
+                                    const snap = getLastPatientPrompt();
+                                    if (!snap) return '(not yet captured)';
+                                    const chars = snap.prompt.length;
+                                    return `${chars} chars · case ${snap.caseName || snap.caseId || '?'}`;
+                                })()}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPromptSnapshot(getLastPatientPrompt());
+                                    setPromptCopied(false);
+                                    setPromptInspectorOpen(true);
+                                }}
+                                className="mt-1 px-2 py-1 text-[10px] uppercase tracking-wider bg-emerald-900/40 hover:bg-emerald-900/60 text-emerald-300 rounded border border-emerald-800"
+                            >
+                                Show assembled prompt
+                            </button>
+                        </Section>
                     </div>
 
                     {clientLogs.length > 0 && (
@@ -670,6 +701,83 @@ export default function DiagnosticBar() {
                     )}
                 </div>
             )}
+            {promptInspectorOpen && (
+                <PatientPromptInspector
+                    snapshot={promptSnapshot}
+                    copied={promptCopied}
+                    onCopy={() => {
+                        if (!promptSnapshot?.prompt) return;
+                        navigator.clipboard?.writeText(promptSnapshot.prompt)
+                            .then(() => setPromptCopied(true))
+                            .catch(() => setPromptCopied(false));
+                    }}
+                    onClose={() => setPromptInspectorOpen(false)}
+                />
+            )}
+        </div>
+    );
+}
+
+function PatientPromptInspector({ snapshot, copied, onCopy, onClose }) {
+    return (
+        <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Assembled patient prompt"
+            onClick={onClose}
+        >
+            <div
+                onClick={(e) => e.stopPropagation()}
+                className="bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl w-[min(95vw,80rem)] h-[85vh] flex flex-col"
+            >
+                <header className="flex items-center justify-between px-4 py-3 border-b border-neutral-800">
+                    <div className="flex items-center gap-3 text-sm">
+                        <span className="text-emerald-400 font-bold uppercase tracking-wider">
+                            Assembled patient prompt
+                        </span>
+                        {snapshot && (
+                            <span className="text-neutral-500 font-mono text-xs">
+                                {snapshot.prompt.length} chars · case{' '}
+                                {snapshot.caseName || snapshot.caseId || '?'}
+                                {snapshot.sessionId ? ` · session ${snapshot.sessionId}` : ''}
+                                {' · '}
+                                {snapshot.timestamp}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={onCopy}
+                            disabled={!snapshot?.prompt}
+                            className="px-2 py-1 text-xs uppercase tracking-wider bg-emerald-900/40 hover:bg-emerald-900/60 disabled:opacity-40 text-emerald-300 rounded border border-emerald-800"
+                        >
+                            {copied ? 'Copied' : 'Copy'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="text-neutral-400 hover:text-white"
+                            aria-label="Close"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </header>
+                <div className="flex-1 min-h-0 overflow-auto p-4">
+                    {snapshot?.prompt ? (
+                        <pre className="text-xs font-mono text-neutral-200 whitespace-pre-wrap break-words">
+                            {snapshot.prompt}
+                        </pre>
+                    ) : (
+                        <div className="text-sm text-neutral-500 italic">
+                            No patient prompt has been assembled yet in this session.
+                            Send a message to the patient and reopen this inspector.
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
