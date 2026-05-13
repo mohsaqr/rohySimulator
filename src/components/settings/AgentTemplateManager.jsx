@@ -1,12 +1,7 @@
-import React, { lazy, Suspense, useEffect, useState } from 'react';
-import { Plus, Trash2, Edit2, Copy, Users, ChevronDown, ChevronUp, Bot, Zap, Brain, RotateCcw } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Plus, Trash2, Copy, Users, Bot, RotateCcw } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { AgentService } from '../../services/AgentService';
-import { useVoice } from '../../contexts/VoiceContext';
-import { resolveCamera } from '../../utils/avatarFraming';
-
-// Lazy — pulls in three.js / r3f only when admin opens an expanded card.
-const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 
 const AGENT_TYPE_BADGE = {
    patient: 'bg-rose-900/50 text-rose-300',
@@ -25,10 +20,8 @@ const AGENT_TYPE_BADGE = {
 // editable — see HANDOFF for why the previous read-only gating was wrong.
 export default function AgentTemplateManager({ onOpenEditor }) {
    const toast = useToast();
-   const { headManifest } = useVoice();
    const [templates, setTemplates] = useState([]);
    const [loading, setLoading] = useState(true);
-   const [expandedId, setExpandedId] = useState(null);
    const [resetTarget, setResetTarget] = useState(null); // template pending "reset to defaults"
 
    useEffect(() => { loadTemplates(); }, []);
@@ -103,208 +96,107 @@ export default function AgentTemplateManager({ onOpenEditor }) {
       .filter(t => !(t.is_default === 1 || t.is_default === true))
       .sort((a, b) => (a.agent_type || '').localeCompare(b.agent_type || '') || (a.name || '').localeCompare(b.name || ''));
 
+   // Single-click on the row opens the full editor — no expand stage. The
+   // inline label/value grid surfaces the values an admin actually wants
+   // to scan (voice, avatar, dos/donts counts, LLM, context filter) so
+   // they don't have to open each persona to see what's set.
    const renderTemplateCard = (template, { isStandard }) => {
       const cfg = parseConfigField(template.config);
-      const voiceGender = cfg.voice?.gender || cfg.voice?.tts_provider || null;
+      const voiceId = cfg.voice?.case_voice || null;
+      const voiceGender = cfg.voice?.gender || null;
+      const avatarFile = template.avatar_url || null;
       const llmLabel = template.llm_provider
          ? `${template.llm_provider}${template.llm_model ? '/' + template.llm_model : ''}`
          : null;
       const dosCount = Array.isArray(cfg.dos) ? cfg.dos.length : 0;
       const dontsCount = Array.isArray(cfg.donts) ? cfg.donts.length : 0;
+      const ctxFilter = template.context_filter || 'full';
+      const ctxColor =
+         ctxFilter === 'full' ? 'text-green-400' :
+         ctxFilter === 'history' ? 'text-amber-400' :
+         'text-neutral-400';
+
       return (
          <div
             key={template.id}
-            className={`border rounded-lg transition-colors ${
+            onClick={() => handleEdit(template)}
+            className={`border rounded-lg transition-colors px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-neutral-800/40 ${
                isStandard ? 'border-purple-800 bg-purple-950/20' : 'border-neutral-800 bg-neutral-900/50'
             }`}
          >
-            <div
-               className="px-4 py-3 flex items-center justify-between cursor-pointer gap-3"
-               onClick={() => setExpandedId(expandedId === template.id ? null : template.id)}
-            >
-               <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${AGENT_TYPE_BADGE[template.agent_type] || AGENT_TYPE_BADGE.other}`}>
-                     <Users className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0">
-                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium">{template.name}</span>
-                        <span className="px-1.5 py-0.5 rounded text-xs bg-neutral-800 text-neutral-300 capitalize">{template.agent_type}</span>
-                        {isStandard && (
-                           <span className="px-1.5 py-0.5 bg-purple-600/50 text-purple-200 rounded text-xs">Standard</span>
-                        )}
-                     </div>
-                     <div className="text-sm text-neutral-500 truncate">
-                        {template.role_title || template.agent_type} · {template.communication_style || 'standard'}
-                     </div>
-                  </div>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${AGENT_TYPE_BADGE[template.agent_type] || AGENT_TYPE_BADGE.other}`}>
+               <Users className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+               <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium">{template.name}</span>
+                  <span className="px-1.5 py-0.5 rounded text-xs bg-neutral-800 text-neutral-300 capitalize">{template.agent_type}</span>
+                  {isStandard && (
+                     <span className="px-1.5 py-0.5 bg-purple-600/50 text-purple-200 rounded text-xs">Standard</span>
+                  )}
                </div>
-               <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
-                  {template.avatar_url && (
-                     <span className="px-2 py-0.5 rounded text-xs bg-neutral-800 text-neutral-300" title={`Avatar: ${template.avatar_url}`}>
-                        🎭 avatar
-                     </span>
-                  )}
-                  {voiceGender && (
-                     <span className="px-2 py-0.5 rounded text-xs bg-neutral-800 text-neutral-300" title={`Voice slot: ${voiceGender}`}>
-                        🔊 {voiceGender}
-                     </span>
-                  )}
-                  {dosCount > 0 && (
-                     <span className="px-2 py-0.5 rounded text-xs bg-emerald-900/40 text-emerald-300" title={`${dosCount} dos`}>
-                        ✓ {dosCount}
-                     </span>
-                  )}
-                  {dontsCount > 0 && (
-                     <span className="px-2 py-0.5 rounded text-xs bg-rose-900/40 text-rose-300" title={`${dontsCount} don'ts`}>
-                        ✗ {dontsCount}
-                     </span>
-                  )}
-                  {llmLabel && (
-                     <span className="px-2 py-0.5 rounded text-xs bg-amber-900/40 text-amber-300" title="Custom LLM">
-                        ⚡ {llmLabel}
-                     </span>
-                  )}
-                  <span className={`px-2 py-0.5 rounded text-xs ${
-                     template.context_filter === 'full' ? 'bg-green-900/50 text-green-400' :
-                     template.context_filter === 'history' ? 'bg-amber-900/50 text-amber-400' :
-                     'bg-neutral-800 text-neutral-400'
-                  }`}>
-                     {template.context_filter}
-                  </span>
-                  {expandedId === template.id ? <ChevronUp className="w-5 h-5 text-neutral-500" /> : <ChevronDown className="w-5 h-5 text-neutral-500" />}
+               <div className="text-sm text-neutral-500 truncate">
+                  {template.role_title || template.agent_type} · {template.communication_style || 'standard'}
                </div>
             </div>
 
-            {expandedId === template.id && (
-               <div className="px-4 py-3 border-t border-neutral-800">
-                  <div className="grid grid-cols-[160px_minmax(0,1fr)] gap-3 mb-3">
-                     <div className="flex flex-col items-center">
-                        <div className="w-32 h-32 rounded-lg overflow-hidden bg-neutral-950 border border-neutral-800">
-                           <Suspense fallback={<div className="w-full h-full bg-neutral-900" />}>
-                              <PatientAvatar
-                                 patient={{ id: `tpl-${template.id}`, name: template.name, gender: cfg.voice?.gender }}
-                                 avatarId={template.avatar_url}
-                                 headManifest={headManifest}
-                                 // Apply the persona's framing override (or
-                                 // the manifest default) so the list-view
-                                 // thumbnail matches what admins see in the
-                                 // editor and what learners see at runtime.
-                                 cameraOverride={resolveCamera(headManifest, template.avatar_url, cfg.avatar_camera)}
-                              />
-                           </Suspense>
-                        </div>
-                        <div className="text-[11px] text-neutral-500 text-center mt-1 truncate w-full" title={template.avatar_url || 'auto'}>
-                           {template.avatar_url || 'auto by gender'}
-                        </div>
-                     </div>
-                     <div>
-                        <h4 className="text-xs font-medium text-neutral-500 mb-1">System Prompt</h4>
-                        <pre className="text-sm text-neutral-300 whitespace-pre-wrap max-h-40 overflow-y-auto bg-neutral-950 p-2 rounded">
-                           {template.system_prompt}
-                        </pre>
-                     </div>
-                  </div>
+            <div className="hidden md:grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs shrink-0 max-w-[280px]">
+               <span className="text-neutral-500 text-right">voice</span>
+               <span className={voiceId ? 'text-white font-mono truncate' : 'text-neutral-600 italic'} title={voiceId || 'no voice set'}>
+                  {voiceId || 'unset'}{voiceGender ? <span className="text-neutral-500"> · {voiceGender}</span> : null}
+               </span>
+               <span className="text-neutral-500 text-right">avatar</span>
+               <span className={avatarFile ? 'text-white font-mono truncate' : 'text-neutral-600 italic'} title={avatarFile || 'no avatar set'}>
+                  {avatarFile || 'unset'}
+               </span>
+               <span className="text-neutral-500 text-right">do / don&apos;t</span>
+               <span className="text-neutral-300">
+                  <span className={dosCount > 0 ? 'text-emerald-400' : 'text-neutral-600'}>{dosCount}</span>
+                  {' / '}
+                  <span className={dontsCount > 0 ? 'text-rose-400' : 'text-neutral-600'}>{dontsCount}</span>
+               </span>
+               <span className="text-neutral-500 text-right">context</span>
+               <span className={ctxColor}>{ctxFilter}</span>
+               {llmLabel && (
+                  <>
+                     <span className="text-neutral-500 text-right">LLM</span>
+                     <span className="text-amber-300 font-mono truncate" title={llmLabel}>{llmLabel}</span>
+                  </>
+               )}
+            </div>
 
-                  {(dosCount > 0 || dontsCount > 0) && (
-                     <div className="grid md:grid-cols-2 gap-3 mb-3">
-                        {dosCount > 0 && (
-                           <div className="p-2 bg-emerald-950/30 border border-emerald-900/50 rounded">
-                              <div className="text-xs font-medium text-emerald-400 mb-1">DO</div>
-                              <ul className="text-sm text-neutral-300 list-disc pl-4 space-y-0.5">
-                                 {cfg.dos.map((d, i) => <li key={i}>{d}</li>)}
-                              </ul>
-                           </div>
-                        )}
-                        {dontsCount > 0 && (
-                           <div className="p-2 bg-rose-950/30 border border-rose-900/50 rounded">
-                              <div className="text-xs font-medium text-rose-400 mb-1">DON'T</div>
-                              <ul className="text-sm text-neutral-300 list-disc pl-4 space-y-0.5">
-                                 {cfg.donts.map((d, i) => <li key={i}>{d}</li>)}
-                              </ul>
-                           </div>
-                        )}
-                     </div>
-                  )}
-
-                  <div className="grid grid-cols-3 gap-4 text-sm mb-3">
-                     <div>
-                        <span className="text-neutral-500">Availability:</span>{' '}
-                        <span className="text-neutral-300">{cfg.typical_availability || 'present'}</span>
-                     </div>
-                     <div>
-                        <span className="text-neutral-500">Can be paged:</span>{' '}
-                        <span className="text-neutral-300">{cfg.can_be_paged ? 'Yes' : 'No'}</span>
-                     </div>
-                     {cfg.can_be_paged && (
-                        <div>
-                           <span className="text-neutral-500">Response:</span>{' '}
-                           <span className="text-neutral-300">
-                              {cfg.response_time?.min || 0}-{cfg.response_time?.max || 0} min
-                           </span>
-                        </div>
-                     )}
-                  </div>
-
-                  {template.llm_provider && (
-                     <div className="mb-3 p-2 bg-amber-950/30 border border-amber-900/50 rounded text-sm flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-amber-400" />
-                        <span className="text-amber-400">Custom LLM:</span>
-                        <span className="text-neutral-300">{template.llm_provider}</span>
-                        {template.llm_model && <span className="text-neutral-500">/ {template.llm_model}</span>}
-                     </div>
-                  )}
-
-                  {template.memory_access && (() => {
-                     let memAccess = template.memory_access;
-                     if (typeof memAccess === 'string') {
-                        try { memAccess = JSON.parse(memAccess); } catch { memAccess = null; }
-                     }
-                     if (!memAccess) return null;
-                     const restricted = Object.entries(memAccess).filter(([, v]) => v === false).map(([k]) => k);
-                     if (restricted.length === 0) return null;
-                     return (
-                        <div className="mb-3 p-2 bg-cyan-950/30 border border-cyan-900/50 rounded text-sm flex items-center gap-2">
-                           <Brain className="w-4 h-4 text-cyan-400" />
-                           <span className="text-cyan-400">Restricted access:</span>
-                           <span className="text-neutral-300">{restricted.join(', ')}</span>
-                        </div>
-                     );
-                  })()}
-
-                  <div className="flex justify-end gap-2 flex-wrap">
-                     <button
-                        onClick={(e) => { e.stopPropagation(); handleDuplicate(template); }}
-                        className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-sm flex items-center gap-1"
-                     >
-                        <Copy className="w-4 h-4" /> Duplicate
-                     </button>
-                     {isStandard && (
-                        <button
-                           onClick={(e) => { e.stopPropagation(); setResetTarget(template); }}
-                           className="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 rounded text-sm flex items-center gap-1 text-white"
-                           title="Re-apply the shipped baseline values"
-                        >
-                           <RotateCcw className="w-4 h-4" /> Reset to defaults
-                        </button>
-                     )}
-                     <button
-                        onClick={(e) => { e.stopPropagation(); handleEdit(template); }}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm flex items-center gap-1"
-                     >
-                        <Edit2 className="w-4 h-4" /> Edit in full editor
-                     </button>
-                     {!isStandard && (
-                        <button
-                           onClick={(e) => { e.stopPropagation(); handleDelete(template); }}
-                           className="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded text-sm flex items-center gap-1"
-                        >
-                           <Trash2 className="w-4 h-4" /> Delete
-                        </button>
-                     )}
-                  </div>
-               </div>
-            )}
+            <div
+               className="flex items-center gap-1 shrink-0"
+               onClick={(e) => e.stopPropagation()}
+            >
+               <button
+                  onClick={() => handleDuplicate(template)}
+                  className="p-2 rounded hover:bg-neutral-700 text-neutral-300 hover:text-white"
+                  title="Duplicate"
+                  aria-label="Duplicate"
+               >
+                  <Copy className="w-4 h-4" />
+               </button>
+               {isStandard ? (
+                  <button
+                     onClick={() => setResetTarget(template)}
+                     className="p-2 rounded hover:bg-amber-700/50 text-amber-400 hover:text-amber-200"
+                     title="Reset to shipped defaults"
+                     aria-label="Reset to defaults"
+                  >
+                     <RotateCcw className="w-4 h-4" />
+                  </button>
+               ) : (
+                  <button
+                     onClick={() => handleDelete(template)}
+                     className="p-2 rounded hover:bg-red-700/50 text-red-400 hover:text-red-200"
+                     title="Delete"
+                     aria-label="Delete"
+                  >
+                     <Trash2 className="w-4 h-4" />
+                  </button>
+               )}
+            </div>
          </div>
       );
    };
