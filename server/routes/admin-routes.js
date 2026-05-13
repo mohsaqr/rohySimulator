@@ -15,6 +15,7 @@ import {
     redactPlatformSettingRows,
 } from '../redaction.js';
 import { logger } from '../logger.js';
+import { DEFAULT_TURNAROUND_MINUTES } from '../lib/turnaround.js';
 import {
     auditSuccess,
     redactAuditSetting,
@@ -411,7 +412,7 @@ router.post('/master/lab-tests', authenticateToken, requireEducator, (req, res) 
     dbAdapter.run(
         `INSERT INTO lab_tests (test_code, test_name, test_group, category, specimen_type, min_value, max_value, unit, critical_low, critical_high, normal_samples, description, turnaround_minutes)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [test_code, test_name, test_group, category || 'General', specimen_type, min_value, max_value, unit, critical_low, critical_high, JSON.stringify(normal_samples || []), description, turnaround_minutes || 30],
+        [test_code, test_name, test_group, category || 'General', specimen_type, min_value, max_value, unit, critical_low, critical_high, JSON.stringify(normal_samples || []), description, turnaround_minutes || DEFAULT_TURNAROUND_MINUTES],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             auditSuccess(req, {
@@ -1586,8 +1587,8 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
 //
 // The flat `default_voice_<gender>` from before was the source of "switching
 // providers breaks playback" — a Google voice ID can't be synthesized by
-// Kokoro. We migrate the legacy flat key to default_voice_piper_<gender>
-// on server boot (see runVoiceKeyMigration).
+// Kokoro. Those legacy keys are dropped by migration 0022 and no longer
+// recreated on boot.
 const PERSONA_GENDERS = VOICE_GENDERS;
 const PERSONA_FLAT_FIELDS = ['avatar', 'rate', 'pitch'];
 const PERSONA_FLAT_KEYS = PERSONA_GENDERS

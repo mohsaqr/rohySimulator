@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-    Building2, FileText, Maximize2, Pause, Play, Printer,
+    Building2, FileText, Maximize2, Pause, Play,
     Stethoscope, X, ZoomIn, ZoomOut,
 } from 'lucide-react';
 import { apiPut } from '../../services/apiClient';
@@ -29,7 +29,7 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
 
     useEffect(() => {
         if (!result || result.viewed_at) return;
-        apiPut(`/orders/${result.id}/view`).catch((err) => {
+        apiPut(`/orders/${result.id}/view`, { room: 'radiology' }).catch((err) => {
             console.error('Failed to mark as viewed:', err);
         });
         const hasFindings = resultData.findings || resultData.interpretation;
@@ -49,7 +49,6 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
     const hasFindings = !!resultData.findings;
     const hasInterpretation = !!resultData.interpretation;
 
-    const handlePrint = () => window.print();
     const togglePlay = () => {
         if (!videoRef.current) return;
         if (videoRef.current.paused) videoRef.current.play();
@@ -58,7 +57,7 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
 
     return (
         <>
-            <div className="bg-white rounded-lg w-full h-full flex flex-col shadow-2xl overflow-hidden" id="radiology-results-report">
+            <div className="print-area bg-white rounded-lg w-full h-full flex flex-col shadow-2xl overflow-hidden" id="radiology-results-report">
                 <div className="bg-gradient-to-r from-slate-800 to-slate-700 text-white p-6 print:bg-slate-800">
                     <div className="flex items-start justify-between">
                         <div className="flex items-center gap-4">
@@ -261,23 +260,14 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
 
                 <div className="bg-slate-100 border-t border-slate-200 p-4 flex items-center justify-between print:hidden">
                     <div className="text-xs text-slate-500">This report is for educational/simulation purposes only</div>
-                    <div className="flex items-center gap-2">
+                    {onClose && (
                         <button
-                            onClick={handlePrint}
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors"
+                            onClick={onClose}
+                            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-medium transition-colors"
                         >
-                            <Printer className="w-4 h-4" />
-                            Print Report
+                            Close
                         </button>
-                        {onClose && (
-                            <button
-                                onClick={onClose}
-                                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-medium transition-colors"
-                            >
-                                Close
-                            </button>
-                        )}
-                    </div>
+                    )}
                 </div>
             </div>
 

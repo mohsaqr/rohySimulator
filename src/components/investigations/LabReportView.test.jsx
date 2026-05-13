@@ -50,16 +50,13 @@ describe('LabReportView — embed vs modal close affordances', () => {
     it('hides both close affordances when onClose is omitted', () => {
         render(<LabReportView result={baseResult} patientInfo={{}} />);
         expect(screen.queryByRole('button', { name: /Close/ })).toBeNull();
-        // The X button has no accessible name — assert via the Print
-        // button as a sentinel that the footer still rendered.
-        expect(screen.getByRole('button', { name: /Print Report/ })).toBeTruthy();
     });
 });
 
 describe('LabReportView — side effects on mount', () => {
     it('marks the result as viewed when it is not already viewed', async () => {
         render(<LabReportView result={baseResult} patientInfo={{}} />);
-        await waitFor(() => expect(apiPut).toHaveBeenCalledWith('/orders/42/view'));
+        await waitFor(() => expect(apiPut).toHaveBeenCalledWith('/orders/42/view', { room: 'lab' }));
     });
 
     it('does not mark already-viewed results', () => {

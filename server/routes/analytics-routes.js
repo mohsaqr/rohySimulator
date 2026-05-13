@@ -220,12 +220,15 @@ router.post('/settings/log', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
 
         // Dual-write into learning_events so the unified Activity view sees
-        // settings changes alongside session events.
+        // settings changes alongside session events. Settings changes never
+        // happen inside a room — they're on the settings page — so `room`
+        // is always NULL here, but kept in the INSERT for column parity
+        // with the canonical /learning-events endpoint.
         dbAdapter.run(
             `INSERT INTO learning_events (
                 session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                component, result, context, severity, category, tenant_id
-            ) VALUES (?, ?, ?, 'CHANGED_SETTING', 'setting', ?, ?, 'CONFIG_PANEL', ?, ?, 'INFO', 'CONFIGURATION', ?)`,
+                component, result, context, severity, category, tenant_id, room
+            ) VALUES (?, ?, ?, 'CHANGED_SETTING', 'setting', ?, ?, 'CONFIG_PANEL', ?, ?, 'INFO', 'CONFIGURATION', ?, NULL)`,
             [
                 session_id || null,
                 req.user.id,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-    AlertTriangle, Building2, FlaskConical, Minus, Printer,
+    AlertTriangle, Building2, FlaskConical, Minus,
     TrendingDown, TrendingUp, X,
 } from 'lucide-react';
 import { apiPut } from '../../services/apiClient';
@@ -33,7 +33,10 @@ export default function LabReportView({ result, patientInfo, onClose }) {
 
     useEffect(() => {
         if (!result || result.viewed_at) return;
-        apiPut(`/orders/${result.order_id}/view`).catch((err) => {
+        // `room: 'lab'` lets the server-side learning_events INSERT
+        // attribute the VIEWED_LAB_RESULT to the Laboratory room without
+        // joining against NAVIGATED events.
+        apiPut(`/orders/${result.order_id}/view`, { room: 'lab' }).catch((err) => {
             console.error('Failed to mark as viewed:', err);
         });
         const isAbnormal = result.current_value < result.min_value || result.current_value > result.max_value;
@@ -61,10 +64,9 @@ export default function LabReportView({ result, patientInfo, onClose }) {
         setShowFlags(next);
         localStorage.setItem('rohy_show_lab_flags', JSON.stringify(next));
     };
-    const handlePrint = () => window.print();
 
     return (
-        <div className="bg-white rounded-lg w-full h-full flex flex-col shadow-2xl overflow-hidden" id="lab-results-report">
+        <div className="print-area bg-white rounded-lg w-full h-full flex flex-col shadow-2xl overflow-hidden" id="lab-results-report">
             <div className="bg-gradient-to-r from-purple-900 to-purple-800 text-white p-6">
                 <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
@@ -274,23 +276,14 @@ export default function LabReportView({ result, patientInfo, onClose }) {
 
             <div className="bg-slate-100 border-t border-slate-200 p-4 flex items-center justify-between print:hidden">
                 <div className="text-xs text-slate-500">Results verified and released</div>
-                <div className="flex items-center gap-2">
+                {onClose && (
                     <button
-                        onClick={handlePrint}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded-lg text-sm font-medium transition-colors"
+                        onClick={onClose}
+                        className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-medium transition-colors"
                     >
-                        <Printer className="w-4 h-4" />
-                        Print Report
+                        Close
                     </button>
-                    {onClose && (
-                        <button
-                            onClick={onClose}
-                            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-medium transition-colors"
-                        >
-                            Close
-                        </button>
-                    )}
-                </div>
+                )}
             </div>
         </div>
     );

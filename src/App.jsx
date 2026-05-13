@@ -55,7 +55,6 @@ function MainApp() {
    const [personaEditorReturn, setPersonaEditorReturn] = useState(null);
    const [settingsInitialTab, setSettingsInitialTab] = useState('cases');
    const [settingsInitialStep, setSettingsInitialStep] = useState(1);
-   const [caseEnded, setCaseEnded] = useState(false);
    const { user, logout, isAdmin } = useAuth();
    const [sessionValidated, setSessionValidated] = useState(false);
    const lastActivityRef = useRef(Date.now());
@@ -78,7 +77,6 @@ function MainApp() {
    const showExamination = currentRoom === 'examination';
    const showInvestigations = currentRoom === 'lab' || currentRoom === 'radiology';
    const showDiscussion = currentRoom === 'consultant';
-   const [showEndConfirm, setShowEndConfirm] = useState(false);
 
    // Set user context for EventLogger when user logs in
    useEffect(() => {
@@ -93,9 +91,18 @@ function MainApp() {
    // was the learner doing in the Laboratory room?" without joining
    // against navigation events. Also emits one NAVIGATED event for the
    // transition itself so duration-in-room can be computed downstream.
+   //
+   // Guarded two ways: only fire after a session exists (pre-session
+   // room state is meaningless to analytics), and only when the room
+   // actually changed. Without the prev-ref the initial mount would emit
+   // a spurious NAVIGATED:chat with fromRoom=null before any case loaded.
+   const prevRoomRef = useRef(currentRoom);
    useEffect(() => {
-      EventLogger.roomChanged(currentRoom);
-   }, [currentRoom]);
+      if (sessionId != null && prevRoomRef.current !== currentRoom) {
+         EventLogger.roomChanged(currentRoom);
+      }
+      prevRoomRef.current = currentRoom;
+   }, [currentRoom, sessionId]);
 
    useEffect(() => {
       if (!user?.id) return undefined;
@@ -201,14 +208,18 @@ function MainApp() {
    // serialisable blob so we don't end up with N localStorage keys to
    // keep in sync.
    const VIEW_STORAGE_KEY = 'rohy_view';
+   const ROOM_KEYS = ['chat', 'examination', 'lab', 'radiology', 'consultant'];
    const captureView = useCallback(() => {
       let view = 'home';
       if (personaEditorTarget !== null) view = 'persona-editor';
       else if (showFullPageSettings)    view = 'settings';
       else if (showTnaAnalytics)        view = 'tna';
-      else if (showDiscussion)          view = 'discussion';
+      // 'view' tracks full-page surfaces above the in-session UI; the
+      // bottom-nav room is orthogonal and persisted separately so hard
+      // refresh inside Exam/Lab/Rad lands back in the same room, not chat.
       return {
          view,
+         currentRoom,
          settingsTab:  settingsInitialTab,
          settingsStep: settingsInitialStep,
          personaEditorTarget,
@@ -217,7 +228,7 @@ function MainApp() {
       };
    }, [
       personaEditorTarget, personaEditorReturn,
-      showFullPageSettings, showTnaAnalytics, showDiscussion, showUserProfile,
+      showFullPageSettings, showTnaAnalytics, currentRoom, showUserProfile,
       settingsInitialTab, settingsInitialStep,
    ]);
    const applyView = (saved) => {
@@ -229,6 +240,15 @@ function MainApp() {
       if (saved.personaEditorTarget !== undefined) setPersonaEditorTarget(saved.personaEditorTarget);
       if (saved.personaEditorReturn !== undefined) setPersonaEditorReturn(saved.personaEditorReturn);
       if (typeof saved.showUserProfile === 'boolean') setShowUserProfile(saved.showUserProfile);
+      // Room is a first-class field — restore it before the view switch so
+      // a refresh inside Exam/Lab/Rad/Consultant returns to the same room.
+      // Older blobs (pre-room-persistence) used view='discussion' to mean
+      // consultant; honour that for backward compat.
+      if (typeof saved.currentRoom === 'string' && ROOM_KEYS.includes(saved.currentRoom)) {
+         setCurrentRoom(saved.currentRoom);
+      } else if (saved.view === 'discussion') {
+         setCurrentRoom('consultant');
+      }
       switch (saved.view) {
          case 'persona-editor':
             // personaEditorTarget already applied above; that's the trigger
@@ -236,8 +256,8 @@ function MainApp() {
             break;
          case 'settings':    setShowFullPageSettings(true); break;
          case 'tna':         setShowTnaAnalytics(true); break;
-         case 'discussion':  setCurrentRoom('consultant'); break;
          case 'home':
+         case 'discussion':  // handled by the currentRoom restore above
          default: /* no-op — case view */ break;
       }
    };
@@ -383,50 +403,14 @@ function MainApp() {
       }
    }, [activeCase, sessionId, sessionValidated]);
 
-   // End session properly (call backend)
-   const handleEndSession = () => {
-      setShowEndConfirm(true);
+   // Single entry point for every room transition (bottom RoomNavigator
+   // on each screen + DiscussionScreen's "Back to Cases" topbar button)
+   // so room transitions go through one path — keeps logging + future
+   // hooks in one place.
+   const navigateToRoom = (target) => {
+      if (target === currentRoom) return;
+      setCurrentRoom(target);
    };
-
-   const handleEndConfirmed = async () => {
-      setShowEndConfirm(false);
-
-      const sessionStartTime = lastActivityRef.current;
-      const duration = Date.now() - sessionStartTime;
-      EventLogger.sessionEnded(duration);
-
-      await endSessionOnServer(sessionId);
-      // Don't wipe the session yet — flip into "ended" mode and open the
-      // debrief discussion screen. handleCloseDiscussion does the actual
-      // cleanup once the learner is done with the debrief.
-      setCaseEnded(true);
-      setCurrentRoom('consultant');
-   };
-
-   const handleCloseDiscussion = () => {
-      setCurrentRoom('chat');
-      // If the user only opened the discussion mid-case (unlock_trigger='always')
-      // and didn't end the case, leave the session intact.
-      if (caseEnded) {
-         localStorage.removeItem('rohy_active_session');
-         localStorage.removeItem('rohy_chat_history');
-         localStorage.removeItem(VIEW_STORAGE_KEY);
-         // The debrief transcript is keyed per-session and stored separately;
-         // clear it on full session end so the next session on the same case
-         // doesn't show last session's debrief on first open.
-         if (sessionId) {
-            localStorage.removeItem(`rohy_discussion_history_${sessionId}`);
-         }
-         setActiveCase(null);
-         setSessionId(null);
-         setCaseEnded(false);
-      }
-   };
-
-   const handleEndConfirmCancel = () => {
-      setShowEndConfirm(false);
-   };
-
 
    const handleLoadCase = (caseData) => {
       // If a session is already running, end it server-side before loading
@@ -586,11 +570,10 @@ function MainApp() {
                      { gender: activeCase?.config?.demographics?.gender, abnormal: exam.abnormal }
                   );
                }}
-               onClose={() => setCurrentRoom('chat')}
                roomNav={
                   <RoomNavigator
                      currentRoom={currentRoom}
-                     onSelectRoom={setCurrentRoom}
+                     onSelectRoom={navigateToRoom}
                   />
                }
             />
@@ -600,12 +583,10 @@ function MainApp() {
                sessionId={sessionId}
                patientInfo={patientInfo}
                activeKind={currentRoom === 'radiology' ? 'radiology' : 'lab'}
-               onKindChange={(kind) => setCurrentRoom(kind)}
-               onClose={() => setCurrentRoom('chat')}
                roomNav={
                   <RoomNavigator
                      currentRoom={currentRoom}
-                     onSelectRoom={setCurrentRoom}
+                     onSelectRoom={navigateToRoom}
                   />
                }
             />
@@ -613,12 +594,11 @@ function MainApp() {
             <DiscussionScreen
                sessionId={sessionId}
                activeCase={activeCase}
-               onClose={handleCloseDiscussion}
-               caseEnded={caseEnded}
+               onClose={() => navigateToRoom('chat')}
                roomNav={
                   <RoomNavigator
                      currentRoom={currentRoom}
-                     onSelectRoom={setCurrentRoom}
+                     onSelectRoom={navigateToRoom}
                   />
                }
             />
@@ -717,20 +697,11 @@ function MainApp() {
                   </div>
                </div>
 
-               {/* End & Debrief — bottom-left of the avatar tile, out of the
-                   way of the head/face render but easy to reach. Was at the
-                   top by the case banner; moved here per operator request. */}
-
-               {activeCase && (
-                  <button
-                     onClick={handleEndSession}
-                     className="absolute bottom-4 left-4 z-10 px-3 py-1.5 bg-red-900/80 hover:bg-red-800 backdrop-blur border border-red-500/30 rounded text-xs font-bold text-red-100 flex items-center gap-1 transition-colors"
-                     title="End simulation session"
-                  >
-                     <X className="w-3 h-3" />
-                     End & Debrief
-                  </button>
-               )}
+               {/* End & Debrief button retired — the bottom RoomNavigator's
+                   Consultant tab is the canonical way to open the debrief
+                   room. Ending the session itself happens on tab close
+                   (pagehide → /sessions/:id/end) or when the user loads a
+                   new case. */}
             </div>
 
             {/* Bottom Left: Chat Interface */}
@@ -780,7 +751,7 @@ function MainApp() {
             <div className="fixed bottom-0 left-0 right-0 z-40">
                <RoomNavigator
                   currentRoom={currentRoom}
-                  onSelectRoom={setCurrentRoom}
+                  onSelectRoom={navigateToRoom}
                />
             </div>
          )}
@@ -819,44 +790,6 @@ function MainApp() {
              precedence (caseSnapshot.config.physical_exam → activeCase)
              is preserved in the screen's prop wiring above so admin edits
              mid-session still don't bleed into the running session. */}
-
-         {/* End Session — Confirmation Dialog */}
-         {showEndConfirm && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-               <div className="bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl w-full max-w-md flex flex-col">
-                  <div className="px-6 py-5 border-b border-neutral-700">
-                     <h2 className="text-base font-semibold text-white">End Simulation Session?</h2>
-                  </div>
-                  <div className="px-6 py-5 space-y-3">
-                     <p className="text-sm text-neutral-300">
-                        Are you sure you want to end this session?
-                     </p>
-                     <p className="text-sm text-amber-400 font-medium">
-                        Once you proceed, you will not be able to return to or resume this simulation.
-                     </p>
-                     <p className="text-sm text-neutral-400">
-                        You will be asked to complete a short reflection questionnaire before the session is closed.
-                     </p>
-                  </div>
-                  <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-neutral-700">
-                     <button
-                        type="button"
-                        onClick={handleEndConfirmCancel}
-                        className="px-4 py-2 text-sm rounded border border-neutral-600 text-neutral-300 hover:text-white hover:border-neutral-500 transition-colors"
-                     >
-                        Go Back
-                     </button>
-                     <button
-                        type="button"
-                        onClick={handleEndConfirmed}
-                        className="px-4 py-2 text-sm rounded bg-red-700 hover:bg-red-600 text-white font-semibold transition-colors"
-                     >
-                        Yes, End Session
-                     </button>
-                  </div>
-               </div>
-            </div>
-         )}
 
          {/* User Profile Modal */}
          {showUserProfile && (

@@ -1,15 +1,19 @@
 import { CheckCircle, ChevronRight, Clock, Eye, Inbox } from 'lucide-react';
 
-// Center worklist used by InvestigationsScreen. Splits orders into
+// Right-rail worklist used by InvestigationsScreen. Splits orders into
 // Pending / Ready / Viewed cards so historical results stay reachable.
-// Pure display — the parent owns polling and selection state.
+// Pure display — the parent owns polling and the open-stack state.
+// `openOrderIds` is the Set of order ids currently shown as cards in
+// the center column; rows for those orders render with the "selected"
+// highlight so the student can see which ones are already on-screen.
 export default function InvestigationWorklist({
     kind,
     theme,
     orders,
-    selectedOrderId,
+    openOrderIds,
     onSelectOrder,
 }) {
+    const isOpen = (id) => openOrderIds?.has?.(id) ?? false;
     const pending = orders.filter((o) => !o.is_ready);
     const ready = orders.filter((o) => o.is_ready && !o.viewed_at);
     const viewed = orders.filter((o) => o.is_ready && o.viewed_at);
@@ -40,7 +44,7 @@ export default function InvestigationWorklist({
                             <ReadyRow
                                 key={order.id}
                                 order={order}
-                                selected={selectedOrderId === order.id}
+                                selected={isOpen(order.id)}
                                 theme={theme}
                                 onSelect={() => onSelectOrder(order)}
                             />
@@ -62,7 +66,7 @@ export default function InvestigationWorklist({
                             <ViewedRow
                                 key={order.id}
                                 order={order}
-                                selected={selectedOrderId === order.id}
+                                selected={isOpen(order.id)}
                                 onSelect={() => onSelectOrder(order)}
                             />
                         ))}

@@ -1,4 +1,4 @@
-import { Check, Filter, Loader2, Plus, Search } from 'lucide-react';
+import { Check, Filter, Loader2, Plus, Search, Zap } from 'lucide-react';
 
 // Left-rail catalogue used by InvestigationsScreen for both labs and
 // radiology. Pure display — fetching, polling, and the actual order
@@ -18,6 +18,7 @@ export default function InvestigationCatalogue({
     onGroupFilterChange,
     loading,
     onSubmit,
+    onSubmitInstant,
 }) {
     const filtered = items.filter((item) => {
         const matchesSearch = !searchQuery
@@ -101,7 +102,7 @@ export default function InvestigationCatalogue({
             </div>
 
             {selectedIds.length > 0 && (
-                <div className="p-3 border-t border-slate-800 bg-slate-900/80">
+                <div className="p-3 border-t border-slate-800 bg-slate-900/80 flex flex-col gap-2">
                     <button
                         onClick={onSubmit}
                         disabled={loading}
@@ -119,6 +120,17 @@ export default function InvestigationCatalogue({
                             </>
                         )}
                     </button>
+                    {onSubmitInstant && (
+                        <button
+                            onClick={onSubmitInstant}
+                            disabled={loading}
+                            title="Skip the wait — results land in the worklist immediately"
+                            className="w-full px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-700/50 disabled:cursor-not-allowed text-slate-200 border border-slate-700 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                        >
+                            <Zap className="w-3.5 h-3.5 text-amber-300" />
+                            Order instantly
+                        </button>
+                    )}
                 </div>
             )}
         </div>

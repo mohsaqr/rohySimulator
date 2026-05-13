@@ -45,7 +45,6 @@ describe('RadiologyReportView — embed vs modal close affordances', () => {
     it('hides both close affordances when onClose is omitted', () => {
         render(<RadiologyReportView result={baseResult} patientInfo={{}} />);
         expect(screen.queryByRole('button', { name: /Close/ })).toBeNull();
-        expect(screen.getByRole('button', { name: /Print Report/ })).toBeTruthy();
     });
 });
 
@@ -77,7 +76,7 @@ describe('RadiologyReportView — content', () => {
 describe('RadiologyReportView — side effects on mount', () => {
     it('marks the result as viewed', async () => {
         render(<RadiologyReportView result={baseResult} patientInfo={{}} />);
-        await waitFor(() => expect(apiPut).toHaveBeenCalledWith('/orders/81/view'));
+        await waitFor(() => expect(apiPut).toHaveBeenCalledWith('/orders/81/view', { room: 'radiology' }));
     });
 
     it('reports has_image=true to PatientRecord when image_url is present', async () => {

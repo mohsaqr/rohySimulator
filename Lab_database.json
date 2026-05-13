@@ -3,19 +3,29 @@
     "test_name": "Hemoglobin",
     "group": "Hematology (CBC)",
     "category": "Female",
-    "min_value": 12.0,
-    "max_value": 16.0,
+    "min_value": 12,
+    "max_value": 16,
     "unit": "g/dL",
-    "normal_samples": [12.5, 14.5, 13.8]
+    "normal_samples": [
+      12.5,
+      14.5,
+      13.8
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Hemoglobin",
     "group": "Hematology (CBC)",
     "category": "Male",
-    "min_value": 14.0,
-    "max_value": 18.0,
+    "min_value": 14,
+    "max_value": 18,
     "unit": "g/dL",
-    "normal_samples": [14.5, 16.5, 15.5]
+    "normal_samples": [
+      14.5,
+      16.5,
+      15.5
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Hematocrit",
@@ -24,7 +34,12 @@
     "min_value": 36,
     "max_value": 44,
     "unit": "%",
-    "normal_samples": [38, 42, 40]
+    "normal_samples": [
+      38,
+      42,
+      40
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Hematocrit",
@@ -33,25 +48,40 @@
     "min_value": 40,
     "max_value": 54,
     "unit": "%",
-    "normal_samples": [42, 50, 46]
+    "normal_samples": [
+      42,
+      50,
+      46
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Red Blood Cell Count (RBC)",
     "group": "Hematology (CBC)",
     "category": "Female",
-    "min_value": 4.0,
+    "min_value": 4,
     "max_value": 5.5,
     "unit": "x10^6/µL",
-    "normal_samples": [4.2, 5.0, 4.6]
+    "normal_samples": [
+      4.2,
+      5,
+      4.6
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Red Blood Cell Count (RBC)",
     "group": "Hematology (CBC)",
     "category": "Male",
     "min_value": 4.5,
-    "max_value": 6.0,
+    "max_value": 6,
     "unit": "x10^6/µL",
-    "normal_samples": [4.8, 5.5, 5.2]
+    "normal_samples": [
+      4.8,
+      5.5,
+      5.2
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "White Blood Cell Count (WBC)",
@@ -60,7 +90,12 @@
     "min_value": 4000,
     "max_value": 11000,
     "unit": "/µL",
-    "normal_samples": [5500, 9000, 7200]
+    "normal_samples": [
+      5500,
+      9000,
+      7200
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Platelet Count",
@@ -69,7 +104,12 @@
     "min_value": 150000,
     "max_value": 400000,
     "unit": "/µL",
-    "normal_samples": [180000, 350000, 250000]
+    "normal_samples": [
+      180000,
+      350000,
+      250000
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Mean Corpuscular Volume (MCV)",
@@ -78,7 +118,12 @@
     "min_value": 80,
     "max_value": 100,
     "unit": "fL",
-    "normal_samples": [85, 95, 90]
+    "normal_samples": [
+      85,
+      95,
+      90
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Mean Corpuscular Hemoglobin (MCH)",
@@ -87,7 +132,12 @@
     "min_value": 27,
     "max_value": 33,
     "unit": "pg",
-    "normal_samples": [28, 32, 30]
+    "normal_samples": [
+      28,
+      32,
+      30
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Mean Corpuscular Hemoglobin Concentration (MCHC)",
@@ -96,7 +146,12 @@
     "min_value": 32,
     "max_value": 36,
     "unit": "g/dL",
-    "normal_samples": [33, 35, 34]
+    "normal_samples": [
+      33,
+      35,
+      34
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Red Cell Distribution Width (RDW)",
@@ -105,7 +160,12 @@
     "min_value": 11.5,
     "max_value": 14.5,
     "unit": "%",
-    "normal_samples": [12, 14, 13]
+    "normal_samples": [
+      12,
+      14,
+      13
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Neutrophils, Absolute",
@@ -114,7 +174,12 @@
     "min_value": 1500,
     "max_value": 8000,
     "unit": "/µL",
-    "normal_samples": [2500, 6500, 4500]
+    "normal_samples": [
+      2500,
+      6500,
+      4500
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Neutrophils, Percentage",
@@ -123,7 +188,12 @@
     "min_value": 40,
     "max_value": 70,
     "unit": "%",
-    "normal_samples": [50, 65, 58]
+    "normal_samples": [
+      50,
+      65,
+      58
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Lymphocytes, Absolute",
@@ -132,7 +202,12 @@
     "min_value": 1000,
     "max_value": 4800,
     "unit": "/µL",
-    "normal_samples": [1500, 3500, 2500]
+    "normal_samples": [
+      1500,
+      3500,
+      2500
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Lymphocytes, Percentage",
@@ -141,7 +216,12 @@
     "min_value": 20,
     "max_value": 40,
     "unit": "%",
-    "normal_samples": [25, 35, 30]
+    "normal_samples": [
+      25,
+      35,
+      30
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Monocytes, Absolute",
@@ -150,7 +230,12 @@
     "min_value": 200,
     "max_value": 800,
     "unit": "/µL",
-    "normal_samples": [300, 600, 450]
+    "normal_samples": [
+      300,
+      600,
+      450
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Monocytes, Percentage",
@@ -159,7 +244,12 @@
     "min_value": 2,
     "max_value": 8,
     "unit": "%",
-    "normal_samples": [4, 7, 5]
+    "normal_samples": [
+      4,
+      7,
+      5
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Eosinophils, Absolute",
@@ -168,7 +258,12 @@
     "min_value": 0,
     "max_value": 500,
     "unit": "/µL",
-    "normal_samples": [100, 350, 200]
+    "normal_samples": [
+      100,
+      350,
+      200
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Eosinophils, Percentage",
@@ -177,7 +272,12 @@
     "min_value": 1,
     "max_value": 4,
     "unit": "%",
-    "normal_samples": [1.5, 3, 2]
+    "normal_samples": [
+      1.5,
+      3,
+      2
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Basophils, Absolute",
@@ -186,7 +286,12 @@
     "min_value": 0,
     "max_value": 200,
     "unit": "/µL",
-    "normal_samples": [20, 100, 50]
+    "normal_samples": [
+      20,
+      100,
+      50
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Basophils, Percentage",
@@ -195,7 +300,12 @@
     "min_value": 0,
     "max_value": 1,
     "unit": "%",
-    "normal_samples": [0.3, 0.8, 0.5]
+    "normal_samples": [
+      0.3,
+      0.8,
+      0.5
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Reticulocyte Count",
@@ -204,7 +314,12 @@
     "min_value": 0.5,
     "max_value": 2.5,
     "unit": "%",
-    "normal_samples": [0.8, 2.0, 1.2]
+    "normal_samples": [
+      0.8,
+      2,
+      1.2
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Sodium, serum",
@@ -213,16 +328,26 @@
     "min_value": 136,
     "max_value": 145,
     "unit": "mEq/L",
-    "normal_samples": [138, 143, 140]
+    "normal_samples": [
+      138,
+      143,
+      140
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Potassium, serum",
     "group": "Basic Metabolic Panel",
     "category": "General",
     "min_value": 3.5,
-    "max_value": 5.0,
+    "max_value": 5,
     "unit": "mEq/L",
-    "normal_samples": [3.8, 4.6, 4.2]
+    "normal_samples": [
+      3.8,
+      4.6,
+      4.2
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Chloride, serum",
@@ -231,7 +356,12 @@
     "min_value": 98,
     "max_value": 106,
     "unit": "mEq/L",
-    "normal_samples": [100, 104, 102]
+    "normal_samples": [
+      100,
+      104,
+      102
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Bicarbonate (CO2), serum",
@@ -240,7 +370,12 @@
     "min_value": 22,
     "max_value": 29,
     "unit": "mEq/L",
-    "normal_samples": [24, 27, 25]
+    "normal_samples": [
+      24,
+      27,
+      25
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Blood Urea Nitrogen (BUN)",
@@ -249,7 +384,12 @@
     "min_value": 7,
     "max_value": 20,
     "unit": "mg/dL",
-    "normal_samples": [10, 18, 14]
+    "normal_samples": [
+      10,
+      18,
+      14
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Creatinine, serum",
@@ -258,7 +398,12 @@
     "min_value": 0.5,
     "max_value": 1.1,
     "unit": "mg/dL",
-    "normal_samples": [0.6, 1.0, 0.8]
+    "normal_samples": [
+      0.6,
+      1,
+      0.8
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Creatinine, serum",
@@ -267,7 +412,12 @@
     "min_value": 0.7,
     "max_value": 1.3,
     "unit": "mg/dL",
-    "normal_samples": [0.8, 1.2, 1.0]
+    "normal_samples": [
+      0.8,
+      1.2,
+      1
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Glucose, fasting",
@@ -276,7 +426,12 @@
     "min_value": 70,
     "max_value": 100,
     "unit": "mg/dL",
-    "normal_samples": [75, 95, 85]
+    "normal_samples": [
+      75,
+      95,
+      85
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Glucose, random",
@@ -285,7 +440,12 @@
     "min_value": 70,
     "max_value": 140,
     "unit": "mg/dL",
-    "normal_samples": [85, 120, 100]
+    "normal_samples": [
+      85,
+      120,
+      100
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Calcium, serum",
@@ -294,7 +454,12 @@
     "min_value": 8.5,
     "max_value": 10.5,
     "unit": "mg/dL",
-    "normal_samples": [9.0, 10.0, 9.5]
+    "normal_samples": [
+      9,
+      10,
+      9.5
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Calcium, ionized",
@@ -303,7 +468,12 @@
     "min_value": 4.5,
     "max_value": 5.3,
     "unit": "mg/dL",
-    "normal_samples": [4.6, 5.1, 4.9]
+    "normal_samples": [
+      4.6,
+      5.1,
+      4.9
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Magnesium, serum",
@@ -312,7 +482,12 @@
     "min_value": 1.7,
     "max_value": 2.2,
     "unit": "mg/dL",
-    "normal_samples": [1.8, 2.1, 1.95]
+    "normal_samples": [
+      1.8,
+      2.1,
+      1.95
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Phosphorus, serum",
@@ -321,7 +496,12 @@
     "min_value": 2.5,
     "max_value": 4.5,
     "unit": "mg/dL",
-    "normal_samples": [3.0, 4.0, 3.5]
+    "normal_samples": [
+      3,
+      4,
+      3.5
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Anion Gap",
@@ -330,7 +510,12 @@
     "min_value": 8,
     "max_value": 12,
     "unit": "mEq/L",
-    "normal_samples": [9, 11, 10]
+    "normal_samples": [
+      9,
+      11,
+      10
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "eGFR (Estimated GFR)",
@@ -339,7 +524,12 @@
     "min_value": 90,
     "max_value": 120,
     "unit": "mL/min/1.73m²",
-    "normal_samples": [95, 115, 105]
+    "normal_samples": [
+      95,
+      115,
+      105
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "GFR (estimated)",
@@ -348,7 +538,12 @@
     "min_value": 90,
     "max_value": 120,
     "unit": "mL/min/1.73m²",
-    "normal_samples": [95, 115, 105]
+    "normal_samples": [
+      95,
+      115,
+      105
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "BUN/Creatinine Ratio",
@@ -357,61 +552,96 @@
     "min_value": 10,
     "max_value": 20,
     "unit": "ratio",
-    "normal_samples": [12, 18, 15]
+    "normal_samples": [
+      12,
+      18,
+      15
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Uric Acid, serum",
     "group": "Renal Function",
     "category": "Female",
     "min_value": 2.5,
-    "max_value": 7.0,
+    "max_value": 7,
     "unit": "mg/dL",
-    "normal_samples": [3.5, 6.0, 4.8]
+    "normal_samples": [
+      3.5,
+      6,
+      4.8
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Uric Acid, serum",
     "group": "Renal Function",
     "category": "Male",
     "min_value": 3.5,
-    "max_value": 8.0,
+    "max_value": 8,
     "unit": "mg/dL",
-    "normal_samples": [4.5, 7.0, 5.8]
+    "normal_samples": [
+      4.5,
+      7,
+      5.8
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Total Protein, serum",
     "group": "Liver Function",
     "category": "General",
-    "min_value": 6.0,
+    "min_value": 6,
     "max_value": 8.3,
     "unit": "g/dL",
-    "normal_samples": [6.5, 7.8, 7.2]
+    "normal_samples": [
+      6.5,
+      7.8,
+      7.2
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Albumin, serum",
     "group": "Liver Function",
     "category": "General",
     "min_value": 3.5,
-    "max_value": 5.0,
+    "max_value": 5,
     "unit": "g/dL",
-    "normal_samples": [3.8, 4.8, 4.3]
+    "normal_samples": [
+      3.8,
+      4.8,
+      4.3
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Globulin, serum",
     "group": "Liver Function",
     "category": "General",
-    "min_value": 2.0,
+    "min_value": 2,
     "max_value": 3.5,
     "unit": "g/dL",
-    "normal_samples": [2.3, 3.2, 2.8]
+    "normal_samples": [
+      2.3,
+      3.2,
+      2.8
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Albumin/Globulin Ratio",
     "group": "Liver Function",
     "category": "General",
-    "min_value": 1.0,
+    "min_value": 1,
     "max_value": 2.5,
     "unit": "ratio",
-    "normal_samples": [1.2, 2.0, 1.5]
+    "normal_samples": [
+      1.2,
+      2,
+      1.5
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Bilirubin, Total",
@@ -420,16 +650,26 @@
     "min_value": 0.1,
     "max_value": 1.2,
     "unit": "mg/dL",
-    "normal_samples": [0.3, 1.0, 0.6]
+    "normal_samples": [
+      0.3,
+      1,
+      0.6
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Bilirubin, Direct",
     "group": "Liver Function",
     "category": "General",
-    "min_value": 0.0,
+    "min_value": 0,
     "max_value": 0.3,
     "unit": "mg/dL",
-    "normal_samples": [0.05, 0.2, 0.1]
+    "normal_samples": [
+      0.05,
+      0.2,
+      0.1
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Bilirubin, Indirect",
@@ -438,7 +678,12 @@
     "min_value": 0.1,
     "max_value": 0.9,
     "unit": "mg/dL",
-    "normal_samples": [0.2, 0.7, 0.5]
+    "normal_samples": [
+      0.2,
+      0.7,
+      0.5
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "AST (SGOT)",
@@ -447,7 +692,12 @@
     "min_value": 10,
     "max_value": 40,
     "unit": "U/L",
-    "normal_samples": [15, 35, 25]
+    "normal_samples": [
+      15,
+      35,
+      25
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "ALT (SGPT)",
@@ -456,7 +706,12 @@
     "min_value": 7,
     "max_value": 56,
     "unit": "U/L",
-    "normal_samples": [15, 45, 30]
+    "normal_samples": [
+      15,
+      45,
+      30
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Alkaline Phosphatase (ALP)",
@@ -465,7 +720,12 @@
     "min_value": 44,
     "max_value": 147,
     "unit": "U/L",
-    "normal_samples": [60, 120, 90]
+    "normal_samples": [
+      60,
+      120,
+      90
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Gamma-Glutamyl Transferase (GGT)",
@@ -474,7 +734,12 @@
     "min_value": 9,
     "max_value": 36,
     "unit": "U/L",
-    "normal_samples": [12, 30, 22]
+    "normal_samples": [
+      12,
+      30,
+      22
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Gamma-Glutamyl Transferase (GGT)",
@@ -483,7 +748,12 @@
     "min_value": 12,
     "max_value": 64,
     "unit": "U/L",
-    "normal_samples": [18, 50, 35]
+    "normal_samples": [
+      18,
+      50,
+      35
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Lactate Dehydrogenase (LDH)",
@@ -492,7 +762,12 @@
     "min_value": 140,
     "max_value": 280,
     "unit": "U/L",
-    "normal_samples": [160, 250, 200]
+    "normal_samples": [
+      160,
+      250,
+      200
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Prothrombin Time (PT)",
@@ -501,7 +776,12 @@
     "min_value": 11,
     "max_value": 13.5,
     "unit": "seconds",
-    "normal_samples": [11.5, 13, 12.2]
+    "normal_samples": [
+      11.5,
+      13,
+      12.2
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "INR",
@@ -510,7 +790,12 @@
     "min_value": 0.8,
     "max_value": 1.1,
     "unit": "ratio",
-    "normal_samples": [0.9, 1.05, 1.0]
+    "normal_samples": [
+      0.9,
+      1.05,
+      1
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Partial Thromboplastin Time (PTT)",
@@ -519,7 +804,12 @@
     "min_value": 25,
     "max_value": 35,
     "unit": "seconds",
-    "normal_samples": [27, 33, 30]
+    "normal_samples": [
+      27,
+      33,
+      30
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Activated PTT (aPTT)",
@@ -528,7 +818,12 @@
     "min_value": 30,
     "max_value": 40,
     "unit": "seconds",
-    "normal_samples": [32, 38, 35]
+    "normal_samples": [
+      32,
+      38,
+      35
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Fibrinogen",
@@ -537,7 +832,12 @@
     "min_value": 200,
     "max_value": 400,
     "unit": "mg/dL",
-    "normal_samples": [250, 350, 300]
+    "normal_samples": [
+      250,
+      350,
+      300
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "D-dimer, plasma",
@@ -546,7 +846,12 @@
     "min_value": 0,
     "max_value": 500,
     "unit": "ng/mL FEU",
-    "normal_samples": [120, 350, 220]
+    "normal_samples": [
+      120,
+      350,
+      220
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Bleeding Time",
@@ -555,7 +860,12 @@
     "min_value": 2,
     "max_value": 7,
     "unit": "minutes",
-    "normal_samples": [3, 6, 4.5]
+    "normal_samples": [
+      3,
+      6,
+      4.5
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Thrombin Time",
@@ -564,16 +874,26 @@
     "min_value": 14,
     "max_value": 19,
     "unit": "seconds",
-    "normal_samples": [15, 18, 16.5]
+    "normal_samples": [
+      15,
+      18,
+      16.5
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "TSH",
     "group": "Thyroid Function",
     "category": "General",
     "min_value": 0.4,
-    "max_value": 4.0,
+    "max_value": 4,
     "unit": "mIU/L",
-    "normal_samples": [1.0, 3.5, 2.2]
+    "normal_samples": [
+      1,
+      3.5,
+      2.2
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Free T4, serum",
@@ -582,7 +902,12 @@
     "min_value": 0.8,
     "max_value": 1.8,
     "unit": "ng/dL",
-    "normal_samples": [0.9, 1.6, 1.2]
+    "normal_samples": [
+      0.9,
+      1.6,
+      1.2
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Free T3, serum",
@@ -591,16 +916,26 @@
     "min_value": 2.3,
     "max_value": 4.2,
     "unit": "pg/mL",
-    "normal_samples": [2.6, 3.9, 3.1]
+    "normal_samples": [
+      2.6,
+      3.9,
+      3.1
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Total T4",
     "group": "Thyroid Function",
     "category": "General",
-    "min_value": 5.0,
-    "max_value": 12.0,
+    "min_value": 5,
+    "max_value": 12,
     "unit": "µg/dL",
-    "normal_samples": [6.0, 10.0, 8.0]
+    "normal_samples": [
+      6,
+      10,
+      8
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Total T3",
@@ -609,7 +944,12 @@
     "min_value": 80,
     "max_value": 200,
     "unit": "ng/dL",
-    "normal_samples": [100, 180, 140]
+    "normal_samples": [
+      100,
+      180,
+      140
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Thyroglobulin",
@@ -618,7 +958,12 @@
     "min_value": 0,
     "max_value": 55,
     "unit": "ng/mL",
-    "normal_samples": [10, 40, 25]
+    "normal_samples": [
+      10,
+      40,
+      25
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Anti-TPO Antibodies",
@@ -627,7 +972,12 @@
     "min_value": 0,
     "max_value": 35,
     "unit": "IU/mL",
-    "normal_samples": [5, 25, 15]
+    "normal_samples": [
+      5,
+      25,
+      15
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "pO2, arterial blood",
@@ -636,7 +986,12 @@
     "min_value": 80,
     "max_value": 100,
     "unit": "mmHg",
-    "normal_samples": [85, 95, 92]
+    "normal_samples": [
+      85,
+      95,
+      92
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "pCO2, arterial blood",
@@ -645,7 +1000,12 @@
     "min_value": 35,
     "max_value": 45,
     "unit": "mmHg",
-    "normal_samples": [38, 42, 40]
+    "normal_samples": [
+      38,
+      42,
+      40
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "pH, arterial blood",
@@ -654,7 +1014,12 @@
     "min_value": 7.35,
     "max_value": 7.45,
     "unit": "",
-    "normal_samples": [7.38, 7.42, 7.40]
+    "normal_samples": [
+      7.38,
+      7.42,
+      7.4
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Bicarbonate (HCO3), arterial",
@@ -663,7 +1028,12 @@
     "min_value": 22,
     "max_value": 26,
     "unit": "mEq/L",
-    "normal_samples": [23, 25, 24]
+    "normal_samples": [
+      23,
+      25,
+      24
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Oxygen Saturation (SaO2)",
@@ -672,7 +1042,12 @@
     "min_value": 95,
     "max_value": 100,
     "unit": "%",
-    "normal_samples": [96, 99, 98]
+    "normal_samples": [
+      96,
+      99,
+      98
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Base Excess",
@@ -681,7 +1056,12 @@
     "min_value": -2,
     "max_value": 2,
     "unit": "mEq/L",
-    "normal_samples": [-1, 1, 0]
+    "normal_samples": [
+      -1,
+      1,
+      0
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Lactate, plasma",
@@ -690,7 +1070,12 @@
     "min_value": 0.5,
     "max_value": 2.2,
     "unit": "mmol/L",
-    "normal_samples": [0.8, 1.8, 1.2]
+    "normal_samples": [
+      0.8,
+      1.8,
+      1.2
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Troponin I, cardiac",
@@ -699,7 +1084,12 @@
     "min_value": 0,
     "max_value": 0.04,
     "unit": "ng/mL",
-    "normal_samples": [0.01, 0.03, 0.02]
+    "normal_samples": [
+      0.01,
+      0.03,
+      0.02
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Troponin T, cardiac",
@@ -708,7 +1098,12 @@
     "min_value": 0,
     "max_value": 0.01,
     "unit": "ng/mL",
-    "normal_samples": [0.003, 0.008, 0.005]
+    "normal_samples": [
+      0.003,
+      0.008,
+      0.005
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "High-Sensitivity Troponin I",
@@ -717,7 +1112,12 @@
     "min_value": 0,
     "max_value": 15,
     "unit": "ng/L",
-    "normal_samples": [5, 12, 8]
+    "normal_samples": [
+      5,
+      12,
+      8
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "High-Sensitivity Troponin I",
@@ -726,7 +1126,12 @@
     "min_value": 0,
     "max_value": 20,
     "unit": "ng/L",
-    "normal_samples": [8, 18, 12]
+    "normal_samples": [
+      8,
+      18,
+      12
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "High-Sensitivity Troponin T",
@@ -735,7 +1140,12 @@
     "min_value": 0,
     "max_value": 14,
     "unit": "ng/L",
-    "normal_samples": [5, 12, 8]
+    "normal_samples": [
+      5,
+      12,
+      8
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Creatine Kinase (CK), Total",
@@ -744,7 +1154,12 @@
     "min_value": 30,
     "max_value": 135,
     "unit": "U/L",
-    "normal_samples": [50, 110, 80]
+    "normal_samples": [
+      50,
+      110,
+      80
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Creatine Kinase (CK), Total",
@@ -753,7 +1168,12 @@
     "min_value": 55,
     "max_value": 170,
     "unit": "U/L",
-    "normal_samples": [70, 150, 110]
+    "normal_samples": [
+      70,
+      150,
+      110
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Creatine Kinase-MB (CK-MB)",
@@ -762,7 +1182,12 @@
     "min_value": 0,
     "max_value": 5,
     "unit": "ng/mL",
-    "normal_samples": [1, 3.5, 2]
+    "normal_samples": [
+      1,
+      3.5,
+      2
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "CK-MB Index",
@@ -771,7 +1196,12 @@
     "min_value": 0,
     "max_value": 3,
     "unit": "%",
-    "normal_samples": [0.5, 2, 1.5]
+    "normal_samples": [
+      0.5,
+      2,
+      1.5
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Myoglobin, serum",
@@ -780,7 +1210,12 @@
     "min_value": 0,
     "max_value": 90,
     "unit": "ng/mL",
-    "normal_samples": [25, 65, 45]
+    "normal_samples": [
+      25,
+      65,
+      45
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "BNP (B-type Natriuretic Peptide)",
@@ -789,7 +1224,12 @@
     "min_value": 0,
     "max_value": 100,
     "unit": "pg/mL",
-    "normal_samples": [20, 70, 45]
+    "normal_samples": [
+      20,
+      70,
+      45
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "NT-proBNP",
@@ -798,7 +1238,12 @@
     "min_value": 0,
     "max_value": 300,
     "unit": "pg/mL",
-    "normal_samples": [50, 200, 125]
+    "normal_samples": [
+      50,
+      200,
+      125
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "CRP, serum",
@@ -807,7 +1252,12 @@
     "min_value": 0,
     "max_value": 10,
     "unit": "mg/L",
-    "normal_samples": [1.5, 5, 3]
+    "normal_samples": [
+      1.5,
+      5,
+      3
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "High-Sensitivity CRP (hs-CRP)",
@@ -816,7 +1266,12 @@
     "min_value": 0,
     "max_value": 3,
     "unit": "mg/L",
-    "normal_samples": [0.5, 2, 1.2]
+    "normal_samples": [
+      0.5,
+      2,
+      1.2
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "ESR, blood",
@@ -825,7 +1280,12 @@
     "min_value": 0,
     "max_value": 20,
     "unit": "mm/hr",
-    "normal_samples": [5, 15, 10]
+    "normal_samples": [
+      5,
+      15,
+      10
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "ESR, blood",
@@ -834,7 +1294,12 @@
     "min_value": 0,
     "max_value": 15,
     "unit": "mm/hr",
-    "normal_samples": [3, 12, 7]
+    "normal_samples": [
+      3,
+      12,
+      7
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Procalcitonin, serum",
@@ -843,7 +1308,12 @@
     "min_value": 0,
     "max_value": 0.5,
     "unit": "ng/mL",
-    "normal_samples": [0.05, 0.3, 0.1]
+    "normal_samples": [
+      0.05,
+      0.3,
+      0.1
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Interleukin-6 (IL-6)",
@@ -852,7 +1322,12 @@
     "min_value": 0,
     "max_value": 7,
     "unit": "pg/mL",
-    "normal_samples": [1, 5, 3]
+    "normal_samples": [
+      1,
+      5,
+      3
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Ferritin, serum",
@@ -861,7 +1336,12 @@
     "min_value": 12,
     "max_value": 150,
     "unit": "ng/mL",
-    "normal_samples": [30, 120, 65]
+    "normal_samples": [
+      30,
+      120,
+      65
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Ferritin, serum",
@@ -870,7 +1350,12 @@
     "min_value": 12,
     "max_value": 300,
     "unit": "ng/mL",
-    "normal_samples": [50, 250, 140]
+    "normal_samples": [
+      50,
+      250,
+      140
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Iron, serum",
@@ -879,7 +1364,12 @@
     "min_value": 60,
     "max_value": 170,
     "unit": "µg/dL",
-    "normal_samples": [80, 150, 110]
+    "normal_samples": [
+      80,
+      150,
+      110
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "TIBC (Total Iron Binding Capacity)",
@@ -888,7 +1378,12 @@
     "min_value": 250,
     "max_value": 370,
     "unit": "µg/dL",
-    "normal_samples": [280, 350, 310]
+    "normal_samples": [
+      280,
+      350,
+      310
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Transferrin Saturation",
@@ -897,7 +1392,12 @@
     "min_value": 20,
     "max_value": 50,
     "unit": "%",
-    "normal_samples": [25, 45, 35]
+    "normal_samples": [
+      25,
+      45,
+      35
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Transferrin, serum",
@@ -906,7 +1406,12 @@
     "min_value": 200,
     "max_value": 360,
     "unit": "mg/dL",
-    "normal_samples": [240, 330, 280]
+    "normal_samples": [
+      240,
+      330,
+      280
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Vitamin B12, serum",
@@ -915,7 +1420,12 @@
     "min_value": 200,
     "max_value": 900,
     "unit": "pg/mL",
-    "normal_samples": [300, 700, 500]
+    "normal_samples": [
+      300,
+      700,
+      500
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Folate, serum",
@@ -924,7 +1434,12 @@
     "min_value": 3,
     "max_value": 17,
     "unit": "ng/mL",
-    "normal_samples": [5, 14, 9]
+    "normal_samples": [
+      5,
+      14,
+      9
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Folate, RBC",
@@ -933,7 +1448,12 @@
     "min_value": 140,
     "max_value": 628,
     "unit": "ng/mL",
-    "normal_samples": [200, 550, 380]
+    "normal_samples": [
+      200,
+      550,
+      380
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Vitamin D, 25-Hydroxy",
@@ -942,7 +1462,12 @@
     "min_value": 30,
     "max_value": 100,
     "unit": "ng/mL",
-    "normal_samples": [40, 70, 55]
+    "normal_samples": [
+      40,
+      70,
+      55
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Vitamin D, 1,25-Dihydroxy",
@@ -951,7 +1476,12 @@
     "min_value": 18,
     "max_value": 72,
     "unit": "pg/mL",
-    "normal_samples": [30, 60, 45]
+    "normal_samples": [
+      30,
+      60,
+      45
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Total Cholesterol",
@@ -960,7 +1490,12 @@
     "min_value": 0,
     "max_value": 200,
     "unit": "mg/dL",
-    "normal_samples": [150, 190, 170]
+    "normal_samples": [
+      150,
+      190,
+      170
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "LDL Cholesterol",
@@ -969,7 +1504,12 @@
     "min_value": 0,
     "max_value": 100,
     "unit": "mg/dL",
-    "normal_samples": [70, 95, 85]
+    "normal_samples": [
+      70,
+      95,
+      85
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "HDL Cholesterol",
@@ -978,7 +1518,12 @@
     "min_value": 50,
     "max_value": 100,
     "unit": "mg/dL",
-    "normal_samples": [55, 80, 65]
+    "normal_samples": [
+      55,
+      80,
+      65
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "HDL Cholesterol",
@@ -987,7 +1532,12 @@
     "min_value": 40,
     "max_value": 100,
     "unit": "mg/dL",
-    "normal_samples": [45, 70, 55]
+    "normal_samples": [
+      45,
+      70,
+      55
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Triglycerides",
@@ -996,7 +1546,12 @@
     "min_value": 0,
     "max_value": 150,
     "unit": "mg/dL",
-    "normal_samples": [80, 130, 100]
+    "normal_samples": [
+      80,
+      130,
+      100
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "VLDL Cholesterol",
@@ -1005,7 +1560,12 @@
     "min_value": 5,
     "max_value": 40,
     "unit": "mg/dL",
-    "normal_samples": [10, 30, 20]
+    "normal_samples": [
+      10,
+      30,
+      20
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Non-HDL Cholesterol",
@@ -1014,16 +1574,26 @@
     "min_value": 0,
     "max_value": 130,
     "unit": "mg/dL",
-    "normal_samples": [90, 120, 105]
+    "normal_samples": [
+      90,
+      120,
+      105
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "HbA1c (Glycated Hemoglobin)",
     "group": "Diabetes",
     "category": "General",
-    "min_value": 4.0,
+    "min_value": 4,
     "max_value": 5.6,
     "unit": "%",
-    "normal_samples": [4.5, 5.4, 5.0]
+    "normal_samples": [
+      4.5,
+      5.4,
+      5
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Fasting Insulin",
@@ -1032,7 +1602,12 @@
     "min_value": 2.6,
     "max_value": 24.9,
     "unit": "µIU/mL",
-    "normal_samples": [5, 18, 10]
+    "normal_samples": [
+      5,
+      18,
+      10
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "C-Peptide",
@@ -1041,7 +1616,12 @@
     "min_value": 0.8,
     "max_value": 3.9,
     "unit": "ng/mL",
-    "normal_samples": [1.2, 3.0, 2.0]
+    "normal_samples": [
+      1.2,
+      3,
+      2
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "HOMA-IR",
@@ -1050,7 +1630,12 @@
     "min_value": 0,
     "max_value": 2.5,
     "unit": "index",
-    "normal_samples": [0.8, 2.0, 1.4]
+    "normal_samples": [
+      0.8,
+      2,
+      1.4
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Fructosamine",
@@ -1059,7 +1644,12 @@
     "min_value": 200,
     "max_value": 285,
     "unit": "µmol/L",
-    "normal_samples": [220, 270, 245]
+    "normal_samples": [
+      220,
+      270,
+      245
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Ammonia, plasma",
@@ -1068,7 +1658,12 @@
     "min_value": 15,
     "max_value": 45,
     "unit": "µg/dL",
-    "normal_samples": [20, 40, 30]
+    "normal_samples": [
+      20,
+      40,
+      30
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Osmolality, serum",
@@ -1077,7 +1672,12 @@
     "min_value": 275,
     "max_value": 295,
     "unit": "mOsm/kg",
-    "normal_samples": [280, 292, 286]
+    "normal_samples": [
+      280,
+      292,
+      286
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Osmolality, urine",
@@ -1086,25 +1686,40 @@
     "min_value": 300,
     "max_value": 900,
     "unit": "mOsm/kg",
-    "normal_samples": [400, 800, 600]
+    "normal_samples": [
+      400,
+      800,
+      600
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Specific Gravity, urine",
     "group": "Urinalysis",
     "category": "General",
     "min_value": 1.005,
-    "max_value": 1.030,
+    "max_value": 1.03,
     "unit": "",
-    "normal_samples": [1.010, 1.025, 1.018]
+    "normal_samples": [
+      1.01,
+      1.025,
+      1.018
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "pH, urine",
     "group": "Urinalysis",
     "category": "General",
     "min_value": 4.5,
-    "max_value": 8.0,
+    "max_value": 8,
     "unit": "",
-    "normal_samples": [5.5, 7.0, 6.0]
+    "normal_samples": [
+      5.5,
+      7,
+      6
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Protein, urine (qualitative)",
@@ -1113,7 +1728,12 @@
     "min_value": 0,
     "max_value": 0,
     "unit": "mg/dL",
-    "normal_samples": [0, 0, 0]
+    "normal_samples": [
+      0,
+      0,
+      0
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Protein, urine (24-hour)",
@@ -1122,7 +1742,12 @@
     "min_value": 0,
     "max_value": 150,
     "unit": "mg/24hr",
-    "normal_samples": [50, 100, 75]
+    "normal_samples": [
+      50,
+      100,
+      75
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Microalbumin, urine",
@@ -1131,7 +1756,12 @@
     "min_value": 0,
     "max_value": 30,
     "unit": "mg/L",
-    "normal_samples": [5, 20, 12]
+    "normal_samples": [
+      5,
+      20,
+      12
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Albumin/Creatinine Ratio, urine",
@@ -1140,7 +1770,12 @@
     "min_value": 0,
     "max_value": 30,
     "unit": "mg/g",
-    "normal_samples": [5, 20, 12]
+    "normal_samples": [
+      5,
+      20,
+      12
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Creatinine, urine (24-hour)",
@@ -1149,7 +1784,12 @@
     "min_value": 600,
     "max_value": 1800,
     "unit": "mg/24hr",
-    "normal_samples": [800, 1500, 1100]
+    "normal_samples": [
+      800,
+      1500,
+      1100
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Creatinine, urine (24-hour)",
@@ -1158,7 +1798,12 @@
     "min_value": 800,
     "max_value": 2000,
     "unit": "mg/24hr",
-    "normal_samples": [1000, 1800, 1400]
+    "normal_samples": [
+      1000,
+      1800,
+      1400
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Creatinine Clearance",
@@ -1167,7 +1812,12 @@
     "min_value": 80,
     "max_value": 125,
     "unit": "mL/min",
-    "normal_samples": [90, 115, 100]
+    "normal_samples": [
+      90,
+      115,
+      100
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Creatinine Clearance",
@@ -1176,7 +1826,12 @@
     "min_value": 90,
     "max_value": 140,
     "unit": "mL/min",
-    "normal_samples": [100, 130, 115]
+    "normal_samples": [
+      100,
+      130,
+      115
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Amylase, serum",
@@ -1185,7 +1840,12 @@
     "min_value": 28,
     "max_value": 100,
     "unit": "U/L",
-    "normal_samples": [40, 85, 60]
+    "normal_samples": [
+      40,
+      85,
+      60
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Lipase, serum",
@@ -1194,7 +1854,12 @@
     "min_value": 0,
     "max_value": 160,
     "unit": "U/L",
-    "normal_samples": [30, 120, 75]
+    "normal_samples": [
+      30,
+      120,
+      75
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Cortisol, AM",
@@ -1203,7 +1868,12 @@
     "min_value": 6,
     "max_value": 23,
     "unit": "µg/dL",
-    "normal_samples": [10, 20, 15]
+    "normal_samples": [
+      10,
+      20,
+      15
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Cortisol, PM",
@@ -1212,7 +1882,12 @@
     "min_value": 3,
     "max_value": 16,
     "unit": "µg/dL",
-    "normal_samples": [5, 12, 8]
+    "normal_samples": [
+      5,
+      12,
+      8
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "ACTH",
@@ -1221,7 +1896,12 @@
     "min_value": 7,
     "max_value": 63,
     "unit": "pg/mL",
-    "normal_samples": [15, 50, 30]
+    "normal_samples": [
+      15,
+      50,
+      30
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Aldosterone, serum",
@@ -1230,16 +1910,26 @@
     "min_value": 3,
     "max_value": 16,
     "unit": "ng/dL",
-    "normal_samples": [5, 12, 8]
+    "normal_samples": [
+      5,
+      12,
+      8
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Renin Activity, plasma",
     "group": "Adrenal Function",
     "category": "General",
     "min_value": 0.5,
-    "max_value": 4.0,
+    "max_value": 4,
     "unit": "ng/mL/hr",
-    "normal_samples": [1.0, 3.0, 2.0]
+    "normal_samples": [
+      1,
+      3,
+      2
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "DHEA-S",
@@ -1248,7 +1938,12 @@
     "min_value": 35,
     "max_value": 430,
     "unit": "µg/dL",
-    "normal_samples": [80, 350, 200]
+    "normal_samples": [
+      80,
+      350,
+      200
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "DHEA-S",
@@ -1257,7 +1952,12 @@
     "min_value": 80,
     "max_value": 560,
     "unit": "µg/dL",
-    "normal_samples": [150, 450, 300]
+    "normal_samples": [
+      150,
+      450,
+      300
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Testosterone, Total",
@@ -1266,7 +1966,12 @@
     "min_value": 15,
     "max_value": 70,
     "unit": "ng/dL",
-    "normal_samples": [25, 55, 40]
+    "normal_samples": [
+      25,
+      55,
+      40
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Testosterone, Total",
@@ -1275,7 +1980,12 @@
     "min_value": 270,
     "max_value": 1070,
     "unit": "ng/dL",
-    "normal_samples": [400, 850, 600]
+    "normal_samples": [
+      400,
+      850,
+      600
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Testosterone, Free",
@@ -1284,7 +1994,12 @@
     "min_value": 50,
     "max_value": 210,
     "unit": "pg/mL",
-    "normal_samples": [80, 180, 130]
+    "normal_samples": [
+      80,
+      180,
+      130
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Estradiol",
@@ -1293,7 +2008,12 @@
     "min_value": 15,
     "max_value": 350,
     "unit": "pg/mL",
-    "normal_samples": [50, 250, 150]
+    "normal_samples": [
+      50,
+      250,
+      150
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Estradiol",
@@ -1302,7 +2022,12 @@
     "min_value": 10,
     "max_value": 40,
     "unit": "pg/mL",
-    "normal_samples": [15, 35, 25]
+    "normal_samples": [
+      15,
+      35,
+      25
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Progesterone",
@@ -1311,7 +2036,12 @@
     "min_value": 0.1,
     "max_value": 25,
     "unit": "ng/mL",
-    "normal_samples": [0.5, 15, 5]
+    "normal_samples": [
+      0.5,
+      15,
+      5
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "FSH",
@@ -1320,7 +2050,12 @@
     "min_value": 1.5,
     "max_value": 12,
     "unit": "mIU/mL",
-    "normal_samples": [3, 10, 6]
+    "normal_samples": [
+      3,
+      10,
+      6
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "FSH",
@@ -1329,16 +2064,26 @@
     "min_value": 1.5,
     "max_value": 12,
     "unit": "mIU/mL",
-    "normal_samples": [2, 8, 5]
+    "normal_samples": [
+      2,
+      8,
+      5
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "LH",
     "group": "Reproductive Hormones",
     "category": "Female",
-    "min_value": 1.0,
+    "min_value": 1,
     "max_value": 18,
     "unit": "mIU/mL",
-    "normal_samples": [2, 12, 6]
+    "normal_samples": [
+      2,
+      12,
+      6
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "LH",
@@ -1347,7 +2092,12 @@
     "min_value": 1.5,
     "max_value": 9,
     "unit": "mIU/mL",
-    "normal_samples": [2, 7, 4]
+    "normal_samples": [
+      2,
+      7,
+      4
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Prolactin",
@@ -1356,7 +2106,12 @@
     "min_value": 4,
     "max_value": 23,
     "unit": "ng/mL",
-    "normal_samples": [8, 20, 14]
+    "normal_samples": [
+      8,
+      20,
+      14
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Prolactin",
@@ -1365,7 +2120,12 @@
     "min_value": 4,
     "max_value": 15,
     "unit": "ng/mL",
-    "normal_samples": [6, 12, 9]
+    "normal_samples": [
+      6,
+      12,
+      9
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Beta-hCG",
@@ -1374,25 +2134,40 @@
     "min_value": 0,
     "max_value": 5,
     "unit": "mIU/mL",
-    "normal_samples": [0, 2, 1]
+    "normal_samples": [
+      0,
+      2,
+      1
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "PSA, Total",
     "group": "Tumor Markers",
     "category": "Male",
     "min_value": 0,
-    "max_value": 4.0,
+    "max_value": 4,
     "unit": "ng/mL",
-    "normal_samples": [0.5, 3.0, 1.5]
+    "normal_samples": [
+      0.5,
+      3,
+      1.5
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "PSA, Free",
     "group": "Tumor Markers",
     "category": "Male",
     "min_value": 0,
-    "max_value": 1.0,
+    "max_value": 1,
     "unit": "ng/mL",
-    "normal_samples": [0.2, 0.8, 0.5]
+    "normal_samples": [
+      0.2,
+      0.8,
+      0.5
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "CA-125",
@@ -1401,7 +2176,12 @@
     "min_value": 0,
     "max_value": 35,
     "unit": "U/mL",
-    "normal_samples": [5, 25, 15]
+    "normal_samples": [
+      5,
+      25,
+      15
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "CA 19-9",
@@ -1410,16 +2190,26 @@
     "min_value": 0,
     "max_value": 37,
     "unit": "U/mL",
-    "normal_samples": [5, 30, 18]
+    "normal_samples": [
+      5,
+      30,
+      18
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "CEA (Carcinoembryonic Antigen)",
     "group": "Tumor Markers",
     "category": "General",
     "min_value": 0,
-    "max_value": 3.0,
+    "max_value": 3,
     "unit": "ng/mL",
-    "normal_samples": [0.5, 2.5, 1.5]
+    "normal_samples": [
+      0.5,
+      2.5,
+      1.5
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "AFP (Alpha-Fetoprotein)",
@@ -1428,7 +2218,12 @@
     "min_value": 0,
     "max_value": 10,
     "unit": "ng/mL",
-    "normal_samples": [2, 8, 5]
+    "normal_samples": [
+      2,
+      8,
+      5
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "PTH (Parathyroid Hormone)",
@@ -1437,7 +2232,12 @@
     "min_value": 15,
     "max_value": 65,
     "unit": "pg/mL",
-    "normal_samples": [25, 55, 40]
+    "normal_samples": [
+      25,
+      55,
+      40
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Calcitonin",
@@ -1446,7 +2246,12 @@
     "min_value": 0,
     "max_value": 10,
     "unit": "pg/mL",
-    "normal_samples": [2, 8, 5]
+    "normal_samples": [
+      2,
+      8,
+      5
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "IgA",
@@ -1455,7 +2260,12 @@
     "min_value": 70,
     "max_value": 400,
     "unit": "mg/dL",
-    "normal_samples": [120, 350, 220]
+    "normal_samples": [
+      120,
+      350,
+      220
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "IgG",
@@ -1464,7 +2274,12 @@
     "min_value": 700,
     "max_value": 1600,
     "unit": "mg/dL",
-    "normal_samples": [900, 1400, 1150]
+    "normal_samples": [
+      900,
+      1400,
+      1150
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "IgM",
@@ -1473,7 +2288,12 @@
     "min_value": 40,
     "max_value": 230,
     "unit": "mg/dL",
-    "normal_samples": [70, 180, 120]
+    "normal_samples": [
+      70,
+      180,
+      120
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "IgE, Total",
@@ -1482,7 +2302,12 @@
     "min_value": 0,
     "max_value": 100,
     "unit": "IU/mL",
-    "normal_samples": [20, 70, 45]
+    "normal_samples": [
+      20,
+      70,
+      45
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Complement C3",
@@ -1491,7 +2316,12 @@
     "min_value": 90,
     "max_value": 180,
     "unit": "mg/dL",
-    "normal_samples": [110, 160, 135]
+    "normal_samples": [
+      110,
+      160,
+      135
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Complement C4",
@@ -1500,7 +2330,12 @@
     "min_value": 10,
     "max_value": 40,
     "unit": "mg/dL",
-    "normal_samples": [15, 35, 25]
+    "normal_samples": [
+      15,
+      35,
+      25
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "ANA (Antinuclear Antibodies)",
@@ -1509,7 +2344,12 @@
     "min_value": 0,
     "max_value": 1,
     "unit": "titer",
-    "normal_samples": [0, 0, 0]
+    "normal_samples": [
+      0,
+      0,
+      0
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Rheumatoid Factor",
@@ -1518,7 +2358,12 @@
     "min_value": 0,
     "max_value": 14,
     "unit": "IU/mL",
-    "normal_samples": [3, 10, 6]
+    "normal_samples": [
+      3,
+      10,
+      6
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Anti-CCP Antibodies",
@@ -1527,7 +2372,12 @@
     "min_value": 0,
     "max_value": 20,
     "unit": "U/mL",
-    "normal_samples": [3, 15, 8]
+    "normal_samples": [
+      3,
+      15,
+      8
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Anti-dsDNA",
@@ -1536,7 +2386,12 @@
     "min_value": 0,
     "max_value": 25,
     "unit": "IU/mL",
-    "normal_samples": [5, 20, 12]
+    "normal_samples": [
+      5,
+      20,
+      12
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Homocysteine",
@@ -1545,7 +2400,12 @@
     "min_value": 5,
     "max_value": 15,
     "unit": "µmol/L",
-    "normal_samples": [7, 12, 9]
+    "normal_samples": [
+      7,
+      12,
+      9
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Lipoprotein(a)",
@@ -1554,7 +2414,12 @@
     "min_value": 0,
     "max_value": 30,
     "unit": "mg/dL",
-    "normal_samples": [5, 25, 15]
+    "normal_samples": [
+      5,
+      25,
+      15
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Apolipoprotein A1",
@@ -1563,7 +2428,12 @@
     "min_value": 120,
     "max_value": 180,
     "unit": "mg/dL",
-    "normal_samples": [130, 170, 150]
+    "normal_samples": [
+      130,
+      170,
+      150
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Apolipoprotein B",
@@ -1572,7 +2442,12 @@
     "min_value": 50,
     "max_value": 130,
     "unit": "mg/dL",
-    "normal_samples": [70, 110, 90]
+    "normal_samples": [
+      70,
+      110,
+      90
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Copper, serum",
@@ -1581,7 +2456,12 @@
     "min_value": 70,
     "max_value": 140,
     "unit": "µg/dL",
-    "normal_samples": [85, 125, 105]
+    "normal_samples": [
+      85,
+      125,
+      105
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Zinc, serum",
@@ -1590,7 +2470,12 @@
     "min_value": 60,
     "max_value": 120,
     "unit": "µg/dL",
-    "normal_samples": [75, 110, 90]
+    "normal_samples": [
+      75,
+      110,
+      90
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Ceruloplasmin",
@@ -1599,7 +2484,12 @@
     "min_value": 20,
     "max_value": 60,
     "unit": "mg/dL",
-    "normal_samples": [30, 50, 40]
+    "normal_samples": [
+      30,
+      50,
+      40
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Lead, blood",
@@ -1608,7 +2498,12 @@
     "min_value": 0,
     "max_value": 5,
     "unit": "µg/dL",
-    "normal_samples": [1, 3, 2]
+    "normal_samples": [
+      1,
+      3,
+      2
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Mercury, blood",
@@ -1617,7 +2512,12 @@
     "min_value": 0,
     "max_value": 10,
     "unit": "µg/L",
-    "normal_samples": [2, 6, 4]
+    "normal_samples": [
+      2,
+      6,
+      4
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Arsenic, urine",
@@ -1626,7 +2526,12 @@
     "min_value": 0,
     "max_value": 50,
     "unit": "µg/L",
-    "normal_samples": [10, 35, 22]
+    "normal_samples": [
+      10,
+      35,
+      22
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Ethanol, blood",
@@ -1635,7 +2540,12 @@
     "min_value": 0,
     "max_value": 0,
     "unit": "mg/dL",
-    "normal_samples": [0, 0, 0]
+    "normal_samples": [
+      0,
+      0,
+      0
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Acetaminophen, serum",
@@ -1644,16 +2554,26 @@
     "min_value": 10,
     "max_value": 30,
     "unit": "µg/mL",
-    "normal_samples": [15, 25, 20]
+    "normal_samples": [
+      15,
+      25,
+      20
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Digoxin, serum",
     "group": "Drug Levels",
     "category": "General",
     "min_value": 0.8,
-    "max_value": 2.0,
+    "max_value": 2,
     "unit": "ng/mL",
-    "normal_samples": [1.0, 1.8, 1.4]
+    "normal_samples": [
+      1,
+      1.8,
+      1.4
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Lithium, serum",
@@ -1662,7 +2582,12 @@
     "min_value": 0.6,
     "max_value": 1.2,
     "unit": "mEq/L",
-    "normal_samples": [0.7, 1.1, 0.9]
+    "normal_samples": [
+      0.7,
+      1.1,
+      0.9
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Phenytoin, serum",
@@ -1671,7 +2596,12 @@
     "min_value": 10,
     "max_value": 20,
     "unit": "µg/mL",
-    "normal_samples": [12, 18, 15]
+    "normal_samples": [
+      12,
+      18,
+      15
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Valproic Acid, serum",
@@ -1680,7 +2610,12 @@
     "min_value": 50,
     "max_value": 100,
     "unit": "µg/mL",
-    "normal_samples": [60, 90, 75]
+    "normal_samples": [
+      60,
+      90,
+      75
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Vancomycin, trough",
@@ -1689,7 +2624,12 @@
     "min_value": 10,
     "max_value": 20,
     "unit": "µg/mL",
-    "normal_samples": [12, 18, 15]
+    "normal_samples": [
+      12,
+      18,
+      15
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Gentamicin, peak",
@@ -1698,7 +2638,12 @@
     "min_value": 5,
     "max_value": 10,
     "unit": "µg/mL",
-    "normal_samples": [6, 9, 7.5]
+    "normal_samples": [
+      6,
+      9,
+      7.5
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Gentamicin, trough",
@@ -1707,7 +2652,12 @@
     "min_value": 0,
     "max_value": 2,
     "unit": "µg/mL",
-    "normal_samples": [0.5, 1.5, 1.0]
+    "normal_samples": [
+      0.5,
+      1.5,
+      1
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Theophylline, serum",
@@ -1716,7 +2666,12 @@
     "min_value": 10,
     "max_value": 20,
     "unit": "µg/mL",
-    "normal_samples": [12, 18, 15]
+    "normal_samples": [
+      12,
+      18,
+      15
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Salicylate, serum",
@@ -1725,7 +2680,12 @@
     "min_value": 15,
     "max_value": 30,
     "unit": "mg/dL",
-    "normal_samples": [18, 28, 22]
+    "normal_samples": [
+      18,
+      28,
+      22
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "CSF Glucose",
@@ -1734,7 +2694,12 @@
     "min_value": 40,
     "max_value": 70,
     "unit": "mg/dL",
-    "normal_samples": [50, 65, 58]
+    "normal_samples": [
+      50,
+      65,
+      58
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "CSF Protein",
@@ -1743,7 +2708,12 @@
     "min_value": 15,
     "max_value": 45,
     "unit": "mg/dL",
-    "normal_samples": [25, 40, 32]
+    "normal_samples": [
+      25,
+      40,
+      32
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "CSF WBC Count",
@@ -1752,7 +2722,12 @@
     "min_value": 0,
     "max_value": 5,
     "unit": "/µL",
-    "normal_samples": [1, 3, 2]
+    "normal_samples": [
+      1,
+      3,
+      2
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "CSF RBC Count",
@@ -1761,7 +2736,12 @@
     "min_value": 0,
     "max_value": 0,
     "unit": "/µL",
-    "normal_samples": [0, 0, 0]
+    "normal_samples": [
+      0,
+      0,
+      0
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Pleural Fluid pH",
@@ -1770,7 +2750,12 @@
     "min_value": 7.4,
     "max_value": 7.6,
     "unit": "",
-    "normal_samples": [7.45, 7.55, 7.50]
+    "normal_samples": [
+      7.45,
+      7.55,
+      7.5
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Pleural Fluid LDH",
@@ -1779,16 +2764,26 @@
     "min_value": 0,
     "max_value": 200,
     "unit": "U/L",
-    "normal_samples": [50, 150, 100]
+    "normal_samples": [
+      50,
+      150,
+      100
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Pleural Fluid Protein",
     "group": "Body Fluids",
     "category": "General",
     "min_value": 0,
-    "max_value": 3.0,
+    "max_value": 3,
     "unit": "g/dL",
-    "normal_samples": [1.0, 2.5, 1.8]
+    "normal_samples": [
+      1,
+      2.5,
+      1.8
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Ascitic Fluid Albumin",
@@ -1797,7 +2792,12 @@
     "min_value": 0,
     "max_value": 1.5,
     "unit": "g/dL",
-    "normal_samples": [0.5, 1.2, 0.8]
+    "normal_samples": [
+      0.5,
+      1.2,
+      0.8
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "SAAG (Serum-Ascites Albumin Gradient)",
@@ -1806,7 +2806,12 @@
     "min_value": 0,
     "max_value": 1.1,
     "unit": "g/dL",
-    "normal_samples": [0.5, 0.9, 0.7]
+    "normal_samples": [
+      0.5,
+      0.9,
+      0.7
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Growth Hormone",
@@ -1815,7 +2820,12 @@
     "min_value": 0,
     "max_value": 5,
     "unit": "ng/mL",
-    "normal_samples": [0.5, 3, 1.5]
+    "normal_samples": [
+      0.5,
+      3,
+      1.5
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "IGF-1 (Insulin-like Growth Factor)",
@@ -1824,7 +2834,12 @@
     "min_value": 100,
     "max_value": 300,
     "unit": "ng/mL",
-    "normal_samples": [150, 260, 200]
+    "normal_samples": [
+      150,
+      260,
+      200
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "ADH (Antidiuretic Hormone)",
@@ -1833,16 +2848,26 @@
     "min_value": 1,
     "max_value": 5,
     "unit": "pg/mL",
-    "normal_samples": [2, 4, 3]
+    "normal_samples": [
+      2,
+      4,
+      3
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Cystatin C",
     "group": "Renal Function",
     "category": "General",
     "min_value": 0.6,
-    "max_value": 1.0,
+    "max_value": 1,
     "unit": "mg/L",
-    "normal_samples": [0.7, 0.95, 0.82]
+    "normal_samples": [
+      0.7,
+      0.95,
+      0.82
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Beta-2 Microglobulin",
@@ -1851,7 +2876,12 @@
     "min_value": 0.8,
     "max_value": 2.2,
     "unit": "mg/L",
-    "normal_samples": [1.0, 2.0, 1.5]
+    "normal_samples": [
+      1,
+      2,
+      1.5
+    ],
+    "turnaround_minutes": 1
   },
   {
     "test_name": "Haptoglobin",
@@ -1860,7 +2890,12 @@
     "min_value": 30,
     "max_value": 200,
     "unit": "mg/dL",
-    "normal_samples": [60, 180, 120]
+    "normal_samples": [
+      60,
+      180,
+      120
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Direct Coombs Test",
@@ -1869,7 +2904,12 @@
     "min_value": 0,
     "max_value": 0,
     "unit": "qualitative",
-    "normal_samples": [0, 0, 0]
+    "normal_samples": [
+      0,
+      0,
+      0
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Indirect Coombs Test",
@@ -1878,7 +2918,12 @@
     "min_value": 0,
     "max_value": 0,
     "unit": "qualitative",
-    "normal_samples": [0, 0, 0]
+    "normal_samples": [
+      0,
+      0,
+      0
+    ],
+    "turnaround_minutes": 3
   },
   {
     "test_name": "Protein S Activity",
@@ -1887,7 +2932,12 @@
     "min_value": 60,
     "max_value": 150,
     "unit": "%",
-    "normal_samples": [75, 130, 100]
+    "normal_samples": [
+      75,
+      130,
+      100
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Protein C Activity",
@@ -1896,7 +2946,12 @@
     "min_value": 70,
     "max_value": 140,
     "unit": "%",
-    "normal_samples": [85, 125, 105]
+    "normal_samples": [
+      85,
+      125,
+      105
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Antithrombin III",
@@ -1905,7 +2960,12 @@
     "min_value": 80,
     "max_value": 120,
     "unit": "%",
-    "normal_samples": [90, 115, 100]
+    "normal_samples": [
+      90,
+      115,
+      100
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Factor V Leiden",
@@ -1914,7 +2974,12 @@
     "min_value": 0,
     "max_value": 0,
     "unit": "qualitative",
-    "normal_samples": [0, 0, 0]
+    "normal_samples": [
+      0,
+      0,
+      0
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Anti-Cardiolipin IgG",
@@ -1923,7 +2988,12 @@
     "min_value": 0,
     "max_value": 15,
     "unit": "GPL",
-    "normal_samples": [3, 12, 7]
+    "normal_samples": [
+      3,
+      12,
+      7
+    ],
+    "turnaround_minutes": 5
   },
   {
     "test_name": "Lupus Anticoagulant",
@@ -1932,6 +3002,11 @@
     "min_value": 0,
     "max_value": 0,
     "unit": "qualitative",
-    "normal_samples": [0, 0, 0]
+    "normal_samples": [
+      0,
+      0,
+      0
+    ],
+    "turnaround_minutes": 5
   }
 ]

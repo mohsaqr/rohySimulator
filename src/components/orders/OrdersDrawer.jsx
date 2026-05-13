@@ -232,8 +232,6 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         return matchesSearch && matchesGroup;
     });
 
-    const readyRadiology = radiologyOrders.filter(o => o.is_ready && !o.viewed_at);
-
     // Order labs
     const handleOrderLabs = async () => {
         if (selectedLabs.length === 0) return;
@@ -245,7 +243,12 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
             const body = {
                 lab_ids: selectedLabs,
                 turnaround_override: labSettings.instantResults ? 0 :
-                    (labSettings.globalTurnaround > 0 ? labSettings.globalTurnaround : null)
+                    (labSettings.globalTurnaround > 0 ? labSettings.globalTurnaround : null),
+                // Attach the active room so the server-side learning_events
+                // INSERT stamps where this order was placed (typically 'lab'
+                // when ordering from InvestigationsScreen, 'chat' when
+                // ordering from the floating drawer in the patient room).
+                room: EventLogger.getStatus?.()?.room || null,
             };
 
             console.log('[Orders] Submitting order:', {
@@ -370,13 +373,9 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     // *after* every hook so hook-call ordering stays stable across renders.
     if (!caseId || !sessionId) return null;
 
-    // Labs + Radiology used to live in this tab list as floating pills.
-    // They were retired when the bottom RoomNavigator went in — the nav
-    // owns both rooms now. The drawer's internal labs/radiology tabs
-    // are still wired up in case the operator opens the drawer some
-    // other way, but no entry point surfaces them. Remaining pills
-    // (treatments, records, memory) are functions the new nav doesn't
-    // cover yet.
+    // Floating pills cover what the bottom RoomNavigator doesn't —
+    // treatments, records, memory. Labs and Radiology are full rooms now
+    // and switch via the nav at the bottom of the screen.
     const tabs = [
         { id: 'treatments', label: 'Treatments', icon: Syringe, count: treatmentOrdersCount },
         { id: 'records', label: 'Records', icon: FileText, count: 0 },
@@ -535,20 +534,20 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                             )}
                         </button>
                     ))}
-                    {/* The Physical Exam and Investigations floating
-                        pills used to live here. They were retired when
-                        the bottom RoomNavigator went in — the nav owns
-                        every room entry point now. The drawer's own
-                        labs/radiology tabs above still work as a legacy
-                        ordering surface until they get folded into the
-                        Investigations screen. */}
                 </div>
             )}
 
-            {/* Drawer */}
+            {/* Drawer. Open state sits above the bottom RoomNavigator
+                (72px gutter) so the user can still jump rooms while an
+                order surface is expanded — fixes the z-50 drawer covering
+                the z-40 nav. Closed state slides fully off-screen by an
+                extra 72px so the drawer's "Order Entry" header doesn't
+                peek above the nav. The backdrop below uses inset-0 so it
+                still dims the entire screen including under the nav, but
+                the nav itself remains clickable. */}
             <div
-                className={`fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-out ${
-                    isOpen ? 'translate-y-0' : 'translate-y-full'
+                className={`fixed bottom-[72px] left-0 right-0 z-50 transition-transform duration-300 ease-out ${
+                    isOpen ? 'translate-y-0' : 'translate-y-[calc(100%+72px)]'
                 }`}
                 style={{ height: drawerHeight }}
             >

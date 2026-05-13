@@ -2,12 +2,13 @@
 // examination screen that replaced the old modal mount in App.jsx.
 //
 // What we verify here:
-//   1. Topbar shows the case title + Back + Notes buttons.
+//   1. Topbar shows the case title + Notes button — no Back button. The
+//      always-visible bottom RoomNavigator is the canonical exit; a
+//      duplicate topbar Back was retired when the nav went in.
 //   2. ManikinPanel is mounted with `embedded` true (drops the modal chrome)
 //      and receives the physicalExam / patientGender / onExamPerformed props.
 //   3. Notes drawer starts hidden; clicking the Notes button opens it.
-//   4. Back button invokes onClose.
-//   5. EventLogger.examPanelOpened() fires on mount and examPanelClosed()
+//   4. EventLogger.examPanelOpened() fires on mount and examPanelClosed()
 //      on unmount — preserves the old logging contract from the modal.
 //
 // ManikinPanel is stubbed because its internals (BodyMap + ExamTypeSelector +
@@ -77,7 +78,6 @@ const baseCase = {
 };
 
 function renderScreen(overrides = {}) {
-    const onClose = overrides.onClose ?? vi.fn();
     const onExamPerformed = overrides.onExamPerformed ?? vi.fn();
     const utils = render(
         <PhysicalExamScreen
@@ -86,10 +86,9 @@ function renderScreen(overrides = {}) {
             physicalExam={overrides.physicalExam ?? baseCase.config.physical_exam}
             patientGender={overrides.patientGender ?? 'male'}
             onExamPerformed={onExamPerformed}
-            onClose={onClose}
         />
     );
-    return { ...utils, onClose, onExamPerformed };
+    return { ...utils, onExamPerformed };
 }
 
 beforeEach(() => {
@@ -161,11 +160,10 @@ describe('PhysicalExamScreen — notes drawer', () => {
     });
 });
 
-describe('PhysicalExamScreen — Back button + lifecycle logging', () => {
-    it('invokes onClose when Back is clicked', () => {
-        const { onClose } = renderScreen();
-        fireEvent.click(screen.getByRole('button', { name: /^Back$/i }));
-        expect(onClose).toHaveBeenCalledTimes(1);
+describe('PhysicalExamScreen — no topbar Back + lifecycle logging', () => {
+    it('does not render a topbar Back button (RoomNavigator owns exit)', () => {
+        renderScreen();
+        expect(screen.queryByRole('button', { name: /^Back$/i })).toBeNull();
     });
 
     it('fires examPanelOpened on mount and examPanelClosed on unmount', () => {

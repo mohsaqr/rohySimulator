@@ -59,4 +59,5 @@ describe('RoomNavigator', () => {
         fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }));
         expect(onSelectRoom).toHaveBeenCalledWith(expected);
     });
+
 });
