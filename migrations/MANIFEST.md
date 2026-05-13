@@ -95,6 +95,7 @@ migration also requires adding a row here**.
 | 0018 | `0018_learning_events_vitals.sql` | additive | New columns. |
 | 0019 | `0019_oyon_lower_min_valid_frames.sql` | additive | Default change only — backfills legacy 6 → 3 so analytics stop dropping windows on normal blinks. |
 | 0020 | `0020_clear_orus_patient_template_default.sql` | additive | Data fixup — removes the stale `en-US-Chirp3-HD-Orus` `case_voice` override from `is_default=1` patient templates. Targeted: only matches that exact value, so admin-picked voices are preserved. Idempotent (zero-row no-op on already-clean installs). |
+| 0021 | `0021_learning_events_room.sql` | additive | New `room` column on learning_events + partial index. Pairs with the RoomNavigator: every event carries the active in-session room ('chat', 'examination', 'lab', 'radiology', 'consultant'). Pre-migration rows + pre-room events stay NULL. |
 
 **To add a new migration**: append a row above. ID + filename match the SQL
 file. Set `Type` per the policy. `Notes` is freeform — what changed and why

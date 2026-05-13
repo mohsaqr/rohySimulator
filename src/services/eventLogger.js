@@ -181,6 +181,7 @@ export const OBJECT_TYPES = {
     PHYSICAL_EXAM: 'physical_exam', TREATMENT: 'treatment', MEDICATION: 'medication',
     IV_FLUID: 'iv_fluid', OXYGEN_THERAPY: 'oxygen_therapy',
     NURSING_INTERVENTION: 'nursing_intervention', EMOTION: 'emotion',
+    ROOM: 'room',
 };
 
 export const COMPONENTS = {
@@ -190,7 +191,7 @@ export const COMPONENTS = {
     CASE_EDITOR: 'CaseEditor', SCENARIO_REPOSITORY: 'ScenarioRepository',
     LOGIN_PAGE: 'LoginPage', APP: 'App',
     MANIKIN_PANEL: 'ManikinPanel', AUSCULTATION_PANEL: 'AuscultationPanel',
-    INVESTIGATION_PANEL: 'InvestigationPanel', PATIENT_INFO_PANEL: 'PatientInfoPanel',
+    PATIENT_INFO_PANEL: 'PatientInfoPanel',
     MEDICATION_PANEL: 'MedicationPanel', TREATMENT_PANEL: 'TreatmentPanel',
     SESSION_LOG_VIEWER: 'SessionLogViewer', VITAL_TRENDS: 'VitalTrends',
     DISCUSSION_SCREEN: 'DiscussionScreen',
@@ -203,6 +204,12 @@ class EventLoggerService {
         this.sessionId = null;
         this.userId = null;
         this.caseId = null;
+        // Room context. Set by App.jsx whenever the bottom RoomNavigator
+        // changes the active room. Every subsequent log() call stamps
+        // this onto data.room so the analytics layer can answer "what
+        // was the learner doing in the Laboratory room?" without
+        // joining against a separate navigation table.
+        this.room = null;
         this.isEnabled = true;
         this.minimumSeverity = SEVERITY.DEBUG;
         this.performanceMarks = new Map();
@@ -237,12 +244,13 @@ class EventLoggerService {
         return order.indexOf(severity) >= order.indexOf(this.minimumSeverity);
     }
 
-    setContext({ sessionId, userId, caseId }) {
+    setContext({ sessionId, userId, caseId, room }) {
         if (sessionId !== undefined) this.sessionId = sessionId;
         if (userId !== undefined) this.userId = userId;
         if (caseId !== undefined) this.caseId = caseId;
+        if (room !== undefined) this.room = room;
     }
-    clearContext() { this.sessionId = null; this.caseId = null; }
+    clearContext() { this.sessionId = null; this.caseId = null; this.room = null; }
     setEnabled(enabled) { this.isEnabled = enabled; }
 
     startTiming(mark) { this.performanceMarks.set(mark, performance.now()); }
@@ -288,6 +296,11 @@ class EventLoggerService {
                 sessionId: this.sessionId,
                 userId: this.userId,
                 caseId: this.caseId,
+                // Active room when this event fired. Set by App.jsx via
+                // setContext({ room }) on every RoomNavigator change.
+                // Null means "no in-session room" (login screen,
+                // settings, persona editor, etc.).
+                room: this.room,
                 objectId: options.objectId || null,
                 objectName: options.objectName || null,
                 component: options.component || null,
@@ -330,9 +343,27 @@ class EventLoggerService {
             sessionId: this.sessionId,
             userId: this.userId,
             caseId: this.caseId,
+            room: this.room,
             isEnabled: this.isEnabled,
             preCenterBuffered: this.preCenterBuffer.length,
         };
+    }
+
+    // Called by App.jsx whenever the bottom RoomNavigator switches the
+    // active room. Stamps the new room into the singleton so every
+    // subsequent log() carries it, and emits one NAVIGATED event marking
+    // the transition itself (from-room → to-room) so the analytics
+    // layer can compute room durations and traversal paths without
+    // joining against application state.
+    roomChanged(toRoom) {
+        const fromRoom = this.room;
+        this.setContext({ room: toRoom });
+        this.log(VERBS.NAVIGATED, OBJECT_TYPES.ROOM, {
+            objectId: String(toRoom),
+            objectName: toRoom,
+            component: COMPONENTS.APP,
+            context: { fromRoom, toRoom },
+        });
     }
 
     // ---- convenience methods (preserved API) ----

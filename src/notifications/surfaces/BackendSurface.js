@@ -245,6 +245,7 @@ function defaultVerbFor(n) {
     return 'VIEWED';
 }
 
+
 function sendTelemetry(events, immediate) {
     // Trinity (user_id, case_id) is server-derived from session_id —
     // we deliberately do not send them. The server reads the sessions
@@ -266,6 +267,12 @@ function sendTelemetry(events, immediate) {
                 result: n.data?.result || n.message || null,
                 duration_ms: n.data?.durationMs || null,
                 context: n.data?.context || null,
+                // Active in-session room (chat | examination | lab |
+                // radiology | consultant). Server persists into the
+                // dedicated learning_events.room column (migration
+                // 0021). Null when no room is active (settings,
+                // persona editor, pre-login).
+                room: n.data?.room || null,
                 message_content: n.data?.messageContent || null,
                 message_role: n.data?.messageRole || null,
                 // Wide vitals snapshot — null when no monitor has reported

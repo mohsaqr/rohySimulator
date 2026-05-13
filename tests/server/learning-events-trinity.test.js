@@ -174,6 +174,36 @@ describe('learning-events trinity invariant (server-enforced)', () => {
         } finally { await closeDb(db); }
     });
 
+    it('persists the room column when supplied as a top-level field', async () => {
+        // CONTRACT (migration 0021): clients send `room` as a peer of
+        // verb/object_type — not nested in context — and the server
+        // writes it into learning_events.room. Null when omitted.
+        const res = await fetch(`${server.baseUrl}/api/learning-events/batch`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+                events: [
+                    { session_id: sessionId, verb: 'VIEWED', object_type: 'COMPONENT', room: 'lab' },
+                    { session_id: sessionId, verb: 'VIEWED', object_type: 'COMPONENT', room: 'radiology' },
+                    { session_id: sessionId, verb: 'VIEWED', object_type: 'COMPONENT' /* no room */ },
+                ],
+            }),
+        });
+        expect(res.status).toBe(200);
+
+        const db = await openDb(server.dbPath);
+        try {
+            const rows = await pAll(db,
+                `SELECT room FROM learning_events WHERE session_id = ? AND verb = 'VIEWED' ORDER BY id DESC LIMIT 3`,
+                [sessionId]);
+            // Last 3 inserted by this test (DESC), reverse for chronological:
+            const chrono = rows.reverse();
+            expect(chrono[0].room).toBe('lab');
+            expect(chrono[1].room).toBe('radiology');
+            expect(chrono[2].room).toBeNull();
+        } finally { await closeDb(db); }
+    });
+
     it('returns deterministic dropped_reasons accounting for missing required fields', async () => {
         const res = await fetch(`${server.baseUrl}/api/learning-events/batch`, {
             method: 'POST',
