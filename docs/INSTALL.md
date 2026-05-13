@@ -386,6 +386,7 @@ openssl rand -hex 32
 
 ## Next
 
+- **Got the binary running, now configure it?** → [ADMIN_FIRST_RUN.md](ADMIN_FIRST_RUN.md) — LLM provider, TTS provider + voice slots, default personas, diagnostic bar, smoke session.
 - **Going to production?** → [DEPLOY.md](DEPLOY.md) — TLS, reverse proxy, security checklist, env reference, monitoring.
 - **Already running, want to upgrade?** → [UPDATING.md](UPDATING.md) — `rohy-update`, rollback, off-site backups.
 - **Embedding Oyon into another app?** → [`OyonR/INSTALL.md`](../OyonR/INSTALL.md).

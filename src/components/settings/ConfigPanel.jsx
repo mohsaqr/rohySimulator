@@ -1569,7 +1569,7 @@ function LLMConfiguration() {
                             className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none font-mono text-xs"
                             placeholder="Instructions sent with every conversation (e.g., 'You are a simulated patient...')"
                         />
-                        <p className="text-xs text-neutral-500 mt-1">This prompt is prepended to every conversation. Case-specific details are added automatically.</p>
+                        <p className="text-xs text-neutral-500 mt-1">Optional. Appended <em>after</em> the case-specific persona/instructions as a trailing reminder. Leave empty to use only the per-case content. (Previously prepended, which shadowed each case persona.)</p>
                     </div>
 
                     {/* Action Buttons */}

@@ -1,4 +1,4 @@
-// Tests for src/utils/voiceResolver.js — the post-2026-05-12 contract.
+// Tests for src/utils/voiceResolver.js — the post-2026-05-13 contract.
 //
 // The resolver has exactly one tier: voice.case_voice → file. Anything else
 // returns file:null. Provider is read only from voiceSettings.tts_provider.
@@ -51,16 +51,20 @@ describe('resolveVoice — no fallback below tier 1', () => {
         expect(r.provider).toBe('kokoro');
     });
 
-    it('extra args from older callsites (gender / age / platformAvatars / ttsVoices) are ignored', () => {
+    it('extra args (gender / age / platformAvatars / ttsVoices) are ignored — no slot lookup', () => {
         const r = resolveVoice({
             voice: {},
-            voiceSettings: { tts_provider: 'kokoro' },
+            voiceSettings: { tts_provider: 'google', voice_google_female: 'en-US-Neural2-F' },
             gender: 'female',
-            age: 8,
+            age: 35,
             platformAvatars: { default_voice_kokoro_child: 'af_bella' },
             ttsVoices: [{ filename: 'whatever' }]
         });
+        // Tier 2 was tried briefly on 2026-05-13 and reverted the same day —
+        // shipped personas now carry their own case_voice; the slot mechanism
+        // is deliberately not consulted.
         expect(r.file).toBeNull();
+        expect(r.tier).toBeNull();
     });
 });
 

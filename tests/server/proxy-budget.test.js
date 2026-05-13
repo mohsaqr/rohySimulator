@@ -95,7 +95,10 @@ describe('proxy budget enforcement', () => {
             TEST_JWT_SECRET,
             { expiresIn: '1h' }
         );
-        await dbRun(db, `INSERT INTO platform_settings (setting_key, setting_value) VALUES
+        // INSERT OR REPLACE so the test always wins on keys that the server
+        // may pre-seed (e.g. tts_provider, which the boot path now writes
+        // 'kokoro' into via setSettingIfEmpty on first run).
+        await dbRun(db, `INSERT OR REPLACE INTO platform_settings (setting_key, setting_value) VALUES
             ('llm_enabled', 'true'),
             ('llm_provider', 'custom'),
             ('llm_base_url', ?),

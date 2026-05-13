@@ -23,7 +23,12 @@ import {
     formatVitalsAsMarkdown,
     formatRecentActivityAsMarkdown,
 } from '../../data/aiPromptContext';
-import { buildPatientCaseDesignContext } from '../../utils/casePromptContext';
+import {
+    buildPatientCaseDesignContext,
+    formatPersonaDemographicsForPrompt,
+    formatPersonalityForPrompt,
+} from '../../utils/casePromptContext';
+import { setLastPatientPrompt } from '../../utils/lastPatientPrompt';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
 // only when a user actually toggles voice mode on for the first time.
@@ -340,16 +345,41 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 setAgentStates(states);
 
                 // Patient template resolution: prefer per-case attached row;
-                // fall back to platform default; null if neither exists. The
-                // patient prompt builder appends the resolved persona/dos/
-                // donts on top of case.config so legacy cases still work.
+                // otherwise pick a platform-default patient template by gender.
+                // Order tried:
+                //   1. Exact match — first-letter of case demographics.gender
+                //      matches a template's config.voice.gender.
+                //   2. For non-female cases (including empty gender, "Other",
+                //      "Non-binary", anything that doesn't start with 'f'),
+                //      fall back to the first NON-female template. This
+                //      matches the seed doc that "Default Patient is used
+                //      otherwise" and keeps the patient audible for cases
+                //      that don't slot cleanly into male/female.
+                //   3. Otherwise null. A female-coded case with only male
+                //      templates seeded must NOT silently pick the male one
+                //      — that's a real misconfig the admin needs to see, so
+                //      we surface a loud error instead.
                 const attachedPatient = agentList.find(a => a.agent_type === 'patient' && a.enabled !== 0 && a.enabled !== false);
                 if (attachedPatient) {
                     setPatientTemplate(normalizePatientAgent(attachedPatient));
                 } else {
                     try {
                         const templates = await AgentService.getTemplates();
-                        const fallback = (templates || []).find(t => t.agent_type === 'patient' && (t.is_default === 1 || t.is_default === true));
+                        const patientDefaults = (templates || []).filter(t =>
+                            t.agent_type === 'patient' && (t.is_default === 1 || t.is_default === true)
+                        );
+                        const caseGender = (activeCase?.config?.demographics?.gender || '').toLowerCase();
+                        const firstLetter = caseGender.charAt(0);
+                        const isFemaleCase = firstLetter === 'f';
+                        const templateGender = (t) =>
+                            (parseConfig(t.config)?.voice?.gender || '').toLowerCase();
+                        const exact = patientDefaults.find((t) =>
+                            firstLetter && templateGender(t).charAt(0) === firstLetter
+                        );
+                        const nonFemale = isFemaleCase
+                            ? null
+                            : patientDefaults.find((t) => templateGender(t).charAt(0) !== 'f');
+                        const fallback = exact || nonFemale || null;
                         setPatientTemplate(fallback ? normalizePatientAgent(fallback) : null);
                     } catch {
                         setPatientTemplate(null);
@@ -370,7 +400,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         // agents list. Without it, the chat tab keeps the pre-edit copy and
         // an admin who just changed the patient persona's voice still hears
         // the old voice — exactly the bug that triggered today's session.
-    }, [sessionId, activeCase?.id, personaRefreshCounter]);
+    }, [sessionId, activeCase?.id, activeCase?.config?.demographics?.gender, personaRefreshCounter]);
 
     // Load agent conversations when switching tabs
     useEffect(() => {
@@ -574,15 +604,38 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const config = sourceConfig;
         const demo = config.demographics || {};
 
+        // Case-specific persona ALWAYS leads. The role/name/demographics block
+        // is the model's first anchor — everything below (template baseline,
+        // shared dos/donts, case design context) reads as supporting context.
+        // Absent fields are omitted rather than filled with "Unknown" so the
+        // model can't latch onto fake values.
+        const trimOrEmpty = (v) => (v == null ? '' : String(v).trim());
+        const personaRole = trimOrEmpty(config.persona_type) || 'Patient';
+        const personaName = trimOrEmpty(config.patient_name) || trimOrEmpty(sourceName) || 'Patient';
         let richSystemPrompt = `## PERSONA\n`;
-        richSystemPrompt += `Role: ${config.persona_type || 'Patient'}\n`;
-        richSystemPrompt += `Name: ${config.patient_name || sourceName}\n`;
-        richSystemPrompt += `Demographics: ${demo.age || 'Unknown'} year old ${demo.gender || 'Unknown'}\n`;
+        richSystemPrompt += `Role: ${personaRole}\n`;
+        richSystemPrompt += `Name: ${personaName}\n`;
+        const demographicsBlock = formatPersonaDemographicsForPrompt(demo);
+        if (demographicsBlock) {
+            richSystemPrompt += `${demographicsBlock}\n`;
+        }
 
-        // If a patient persona template is attached/seeded, lead with its
-        // baseline persona — this is the shared "how a patient should behave"
-        // ruleset that applies across cases. The case's own instructions and
-        // clinical records still apply on top.
+        // Behavioural sliders the author set on the case (communication style,
+        // emotional state, pain tolerance, cooperativeness, health literacy).
+        // Only non-default values are surfaced — the helper drops defaults so
+        // the prompt stays tight.
+        const personalityBlock = formatPersonalityForPrompt(config.personality);
+        if (personalityBlock) {
+            richSystemPrompt += `\n## PATIENT BEHAVIOUR\n${personalityBlock}\n`;
+        }
+
+        richSystemPrompt += `\n## INSTRUCTIONS\n`;
+        richSystemPrompt += `${sourceSystemPrompt || 'You are a patient.'}\n`;
+        richSystemPrompt += `\nSpeak only what the patient would say aloud. Never use stage directions, narration, or asterisk-wrapped action descriptors (e.g. "*nods*", "*clutches chest*", "*sighs*"). Express feelings through words alone.\n`;
+
+        // Patient agent template prose runs AFTER the case-specific persona +
+        // instructions so the case anchors first and the template reads as
+        // shared behavioral guidance — not a competing persona definition.
         if (patientTemplate?.systemPrompt) {
             richSystemPrompt += `\n## PATIENT PERSONA (from template "${patientTemplate.name}")\n`;
             richSystemPrompt += `${patientTemplate.systemPrompt}\n`;
@@ -591,10 +644,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         if (personaBlocks) {
             richSystemPrompt += personaBlocks;
         }
-
-        richSystemPrompt += `\n## INSTRUCTIONS\n`;
-        richSystemPrompt += `${sourceSystemPrompt || 'You are a patient.'}\n`;
-        richSystemPrompt += `\nSpeak only what the patient would say aloud. Never use stage directions, narration, or asterisk-wrapped action descriptors (e.g. "*nods*", "*clutches chest*", "*sighs*"). Express feelings through words alone.\n`;
 
         richSystemPrompt += buildPatientCaseDesignContext({
             ...activeCase,
@@ -736,8 +785,37 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             richSystemPrompt += `\nDo not repeat answers to questions that were already obtained above. Acknowledge prior actions when relevant.\n`;
         }
 
+        // Stash for the DiagnosticBar "show assembled prompt" inspector.
+        // Bounded to a single value — only the most recent assembly is kept.
+        setLastPatientPrompt({
+            prompt: richSystemPrompt,
+            caseId: activeCase?.id ?? null,
+            caseName: sourceName ?? null,
+            sessionId: sessionId ?? null,
+        });
+
         return richSystemPrompt;
     };
+
+    // Pre-assemble the patient prompt once the case + (optional) snapshot +
+    // patient template are ready, so the DiagnosticBar inspector has
+    // something to show before the learner sends their first message.
+    // buildPatientSystemPrompt reads state + props and writes the module
+    // cache via setLastPatientPrompt (the "pre-warm" side effect we want);
+    // the returned string is intentionally discarded here. Live vitals and
+    // session events are deliberately NOT in the dep list — including them
+    // would re-stash the prompt on every monitor tick, churning the cache
+    // for no inspector benefit. The cache is refreshed for real on each
+    // outgoing patient message anyway.
+    useEffect(() => {
+        if (!activeCase) return;
+        try {
+            buildPatientSystemPrompt();
+        } catch {
+            // Don't let inspector pre-warm failures break the chat surface.
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeCase, caseSnapshot, patientTemplate, sessionId]);
 
     // Schedule the next questionnaire appearance (2 min from now)
     const startQuestionnaireTimer = useCallback(() => {

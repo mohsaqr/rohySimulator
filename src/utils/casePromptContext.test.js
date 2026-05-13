@@ -4,6 +4,8 @@ import {
     buildPatientCaseDesignContext,
     formatCaseRadiologyForPrompt,
     formatCaseVitalsForPrompt,
+    formatPersonaDemographicsForPrompt,
+    formatPersonalityForPrompt,
     formatStructuredHistoryForPrompt,
 } from './casePromptContext.js';
 
@@ -148,5 +150,156 @@ describe('case prompt context surfaces', () => {
         expect(vitals).toContain('Initial Vitals');
         expect(vitals).not.toContain('History of Present Illness');
         expect(vitals).not.toContain('Expected diagnosis');
+    });
+});
+
+describe('formatPersonaDemographicsForPrompt', () => {
+    it('emits one line per authored field with humanised labels', () => {
+        const out = formatPersonaDemographicsForPrompt({
+            age: 62,
+            gender: 'Male',
+            weight: '85 kg',
+            height: '175 cm',
+            bloodType: 'A+',
+            language: 'English',
+            ethnicity: 'White',
+            occupation: 'Mechanic',
+            maritalStatus: 'Married',
+            mrn: 'MRN-001',
+            dob: '1963-04-12',
+        });
+        expect(out).toContain('- Age: 62 years old');
+        expect(out).toContain('- Gender: Male');
+        expect(out).toContain('- Weight: 85 kg');
+        expect(out).toContain('- Height: 175 cm');
+        expect(out).toContain('- Blood type: A+');
+        expect(out).toContain('- Preferred language: English');
+        expect(out).toContain('- Ethnicity: White');
+        expect(out).toContain('- Occupation: Mechanic');
+        expect(out).toContain('- Marital status: Married');
+        expect(out).toContain('- MRN: MRN-001');
+        expect(out).toContain('- Date of birth: 1963-04-12');
+    });
+
+    it('omits fields that are missing or blank instead of emitting Unknown', () => {
+        const out = formatPersonaDemographicsForPrompt({ age: 30, gender: '   ', height: '' });
+        expect(out).toBe('- Age: 30 years old');
+    });
+
+    it('surfaces demographics.allergies as "Known allergies"', () => {
+        const out = formatPersonaDemographicsForPrompt({ age: 40, allergies: 'Penicillin' });
+        expect(out).toContain('- Known allergies: Penicillin');
+    });
+
+    it('joins emergencyContact when at least one sub-field is set', () => {
+        const out = formatPersonaDemographicsForPrompt({
+            age: 40,
+            emergencyContact: { name: 'Jane Doe', relationship: 'Spouse', phone: '555-1234' },
+        });
+        expect(out).toContain('- Emergency contact: Jane Doe · Spouse · 555-1234');
+    });
+
+    it('returns an empty string for null / non-object input', () => {
+        expect(formatPersonaDemographicsForPrompt(null)).toBe('');
+        expect(formatPersonaDemographicsForPrompt(undefined)).toBe('');
+        expect(formatPersonaDemographicsForPrompt('nope')).toBe('');
+    });
+});
+
+describe('formatStructuredHistoryForPrompt — allergies fallback', () => {
+    it('falls back to demographics.allergies when structuredHistory.allergies is empty', () => {
+        const out = formatStructuredHistoryForPrompt(
+            { chiefComplaint: 'Headache' },
+            { demographics: { allergies: 'Sulfa drugs' } }
+        );
+        expect(out).toContain('- Allergies: Sulfa drugs');
+    });
+
+    it('prefers structuredHistory.allergies when both are set', () => {
+        const out = formatStructuredHistoryForPrompt(
+            { allergies: 'NKDA' },
+            { demographics: { allergies: 'Sulfa drugs' } }
+        );
+        expect(out).toContain('- Allergies: NKDA');
+        expect(out).not.toContain('Sulfa drugs');
+    });
+
+    it('returns allergies-only line when structuredHistory is empty but demographics has allergies', () => {
+        const out = formatStructuredHistoryForPrompt(null, {
+            demographics: { allergies: 'Latex' },
+        });
+        expect(out).toBe('- Allergies: Latex');
+    });
+
+    it('returns empty string when neither has allergies and structuredHistory is empty', () => {
+        expect(formatStructuredHistoryForPrompt(null)).toBe('');
+        expect(formatStructuredHistoryForPrompt(null, { demographics: {} })).toBe('');
+    });
+});
+
+describe('formatPersonalityForPrompt', () => {
+    it('emits a directive line for each non-default slider', () => {
+        const out = formatPersonalityForPrompt({
+            communicationStyle: 'brief',
+            emotionalState: 'anxious',
+            painTolerance: 'dramatic',
+            // wording check: directive should not encourage exaggeration
+            cooperativeness: 'reluctant',
+            healthLiteracy: 'low',
+        });
+        expect(out).toContain('Communication style: brief');
+        expect(out).toContain('Emotional state: anxious');
+        expect(out).toContain('Pain tolerance: dramatic');
+        expect(out).toContain('Cooperativeness: reluctant');
+        expect(out).toContain('Health literacy: low');
+    });
+
+    it('drops sliders left at their default value', () => {
+        const out = formatPersonalityForPrompt({
+            communicationStyle: 'normal',   // default
+            emotionalState: 'anxious',      // non-default
+            painTolerance: 'normal',        // default
+            cooperativeness: 'cooperative', // default
+            healthLiteracy: 'average',      // default
+        });
+        expect(out).toBe('- Emotional state: anxious — show worry and tension in your words');
+    });
+
+    it('returns empty string when every slider is at its default', () => {
+        const out = formatPersonalityForPrompt({
+            communicationStyle: 'normal',
+            emotionalState: 'neutral',
+            painTolerance: 'normal',
+            cooperativeness: 'cooperative',
+            healthLiteracy: 'average',
+        });
+        expect(out).toBe('');
+    });
+
+    it('ignores unrecognised slider values rather than crashing', () => {
+        const out = formatPersonalityForPrompt({
+            emotionalState: 'thoroughly-confused-by-life',
+            communicationStyle: 'verbose',
+        });
+        expect(out).toBe('- Communication style: verbose — give detailed, sometimes rambling answers');
+    });
+
+    it('returns empty string for null / non-object input', () => {
+        expect(formatPersonalityForPrompt(null)).toBe('');
+        expect(formatPersonalityForPrompt(undefined)).toBe('');
+        expect(formatPersonalityForPrompt('nope')).toBe('');
+    });
+});
+
+describe('buildPatientCaseDesignContext — allergies fallback wiring', () => {
+    it('surfaces demographics.allergies in case design when structuredHistory.allergies is empty', () => {
+        const out = buildPatientCaseDesignContext({
+            name: 'Case',
+            config: {
+                demographics: { age: 50, gender: 'Female', allergies: 'Peanut' },
+                structuredHistory: { chiefComplaint: 'Cough' },
+            },
+        });
+        expect(out).toContain('Allergies: Peanut');
     });
 });

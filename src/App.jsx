@@ -21,10 +21,10 @@ import { PatientRecordProvider } from './services/PatientRecord';
 import EventLogger, { COMPONENTS, registerWindowLifecycleLogging } from './services/eventLogger';
 import { ApiError, apiFetch, apiPut } from './services/apiClient';
 import { Settings, X, LogOut, User, ChevronDown, Activity } from 'lucide-react';
-import ManikinPanel from './components/examination/ManikinPanel';
 import BodyMapDebug from './components/examination/BodyMapDebug';
 import TnaDashboard from './components/analytics/tna/TnaDashboardV2';
 import DiscussionScreen from './components/discussion/DiscussionScreen';
+import PhysicalExamScreen from './components/exam/PhysicalExamScreen';
 import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
 
 // Persistence rule: a session ends ONLY through the Exit or End buttons
@@ -533,7 +533,12 @@ function MainApp() {
       );
    }
 
-   // Prepare patient info for PatientRecord
+   // Prepare patient info for PatientRecord. Must live above the
+   // showExamination branch below: PhysicalExamScreen embeds ManikinPanel,
+   // which calls usePatientRecord() to log exam findings. Outside the
+   // provider the hook returns no-op stubs and findings silently vanish —
+   // hoisting the provider keeps exam state captured regardless of which
+   // top-level surface is showing.
    const patientInfo = activeCase ? {
       name: activeCase.config?.patient_name || activeCase.name || 'Unknown Patient',
       age: activeCase.config?.demographics?.age || null,
@@ -548,6 +553,23 @@ function MainApp() {
          caseId={activeCase?.id}
          patientInfo={patientInfo}
       >
+         {showExamination ? (
+            <PhysicalExamScreen
+               activeCase={activeCase}
+               sessionId={sessionId}
+               physicalExam={caseSnapshot?.config?.physical_exam ?? activeCase?.config?.physical_exam ?? null}
+               patientGender={(caseSnapshot?.config?.demographics?.gender ?? activeCase?.config?.demographics?.gender)?.toLowerCase() || 'male'}
+               onExamPerformed={(exam) => {
+                  EventLogger.physicalExamPerformed(
+                     exam.regionId,
+                     exam.examType,
+                     exam.finding,
+                     { gender: activeCase?.config?.demographics?.gender, abnormal: exam.abnormal }
+                  );
+               }}
+               onClose={() => setShowExamination(false)}
+            />
+         ) : (
          <div className="flex h-screen w-screen bg-neutral-950 text-white overflow-hidden">
 
          {/* Multi-tab warning banner. Shown when another tab on this origin
@@ -719,30 +741,13 @@ function MainApp() {
             )
          )}
 
-         {/* Physical Examination Panel
-             Stage-6 audit: physicalExam now reads from caseSnapshot.config first
-             (frozen at session start), falling back to live activeCase only if
-             the snapshot fetch hasn't landed. Pre-fix this read live state, so
-             admin edits to physical_exam mid-session bled into the running
-             session — same pattern as Stage-4 chat and Stage-5 scenario fixes. */}
-         <ManikinPanel
-            isOpen={showExamination}
-            onClose={() => {
-               setShowExamination(false);
-               EventLogger.examPanelClosed();
-            }}
-            physicalExam={caseSnapshot?.config?.physical_exam ?? activeCase?.config?.physical_exam ?? null}
-            patientGender={(caseSnapshot?.config?.demographics?.gender ?? activeCase?.config?.demographics?.gender)?.toLowerCase() || 'male'}
-            onExamPerformed={(exam) => {
-               // Log exam to system
-               EventLogger.physicalExamPerformed(
-                  exam.regionId,
-                  exam.examType,
-                  exam.finding,
-                  { gender: activeCase?.config?.demographics?.gender, abnormal: exam.abnormal }
-               );
-            }}
-         />
+         {/* Physical Examination is now a full-page screen — see the
+             `if (showExamination)` branch above the main return. The
+             previous ManikinPanel modal mount was removed 2026-05-13 as
+             part of the exam-as-screen refactor. The same case-snapshot
+             precedence (caseSnapshot.config.physical_exam → activeCase)
+             is preserved in the screen's prop wiring above so admin edits
+             mid-session still don't bleed into the running session. */}
 
          {/* End Session — Confirmation Dialog */}
          {showEndConfirm && (
@@ -799,6 +804,7 @@ function MainApp() {
          )}
 
          </div>
+         )}
       </PatientRecordProvider>
    );
 }

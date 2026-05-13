@@ -26,6 +26,7 @@ import { resolveVoice } from '../../utils/voiceResolver';
 import { parseConfig } from '../../utils/parseConfig';
 import { getLastTtsRequest, getRecentTtsRequests, auditionWirePayload } from '../../services/voiceService';
 import { getBackendTelemetry } from '../../notifications/surfaces/BackendSurface';
+import { getLastPatientPrompt } from '../../utils/lastPatientPrompt';
 
 const KEY_PREFIX = 'rohy_diag_bar_enabled_';
 const storageKey = (uid) => `${KEY_PREFIX}${uid ?? 'anon'}`;
@@ -97,6 +98,14 @@ export default function DiagnosticBar() {
     const [backendTelemetry, setBackendTelemetry] = useState(() => getBackendTelemetry());
     const [clientLogs, setClientLogs] = useState([]);
     const [clientLogsError, setClientLogsError] = useState(null);
+    // Patient-prompt inspector: opens a modal that dumps the most recently
+    // assembled patient `system_prompt`. Snapshotted from
+    // utils/lastPatientPrompt — ChatInterface.buildPatientSystemPrompt
+    // writes there on every assembly. Without this, "the model ignored my
+    // case" debates relied on guessing what the model actually saw.
+    const [promptInspectorOpen, setPromptInspectorOpen] = useState(false);
+    const [promptSnapshot, setPromptSnapshot] = useState(null);
+    const [promptCopied, setPromptCopied] = useState(false);
 
     // Subscribe to BackendSurface telemetry events so the panel reflects
     // failures live. Listener is idempotent: re-reads the full snapshot
@@ -438,9 +447,12 @@ export default function DiagnosticBar() {
                             <Row k="tts_rate" v={voiceSettings?.tts_rate} />
                             <Row k="tts_pitch" v={voiceSettings?.tts_pitch} />
                             <Row k="voice_mode_enabled" v={String(voiceSettings?.voice_mode_enabled ?? '')} />
-                            <Row k="voice_*_male slot" v={pickSlot(voiceSettings, 'male')} />
-                            <Row k="voice_*_female slot" v={pickSlot(voiceSettings, 'female')} />
-                            <Row k="voice_*_child slot" v={pickSlot(voiceSettings, 'child')} />
+                            {/* Legacy voice_<provider>_<slot> rows were removed when
+                                the resolver collapsed to one tier (2026-05-13). If
+                                a deployment still has stored values for those keys
+                                under platform_settings, they are not read by anything
+                                and are not surfaced here either — clean them up via
+                                the catalogue audit log if you want them gone. */}
                         </Section>
                         <Section title="Voice runtime">
                             <Row k="voice mode" v={voiceMode ? 'ON' : 'OFF'} />
@@ -500,6 +512,28 @@ export default function DiagnosticBar() {
                             <Row k="default_child" v={platformAvatars?.default_avatar_child} />
                             <Row k="avatar_type" v={voiceSettings?.avatar_type ?? platformAvatars?.avatar_type} />
                         </Section>
+                        <Section title="Patient prompt">
+                            <Row
+                                k="last assembled"
+                                v={(() => {
+                                    const snap = getLastPatientPrompt();
+                                    if (!snap) return '(not yet captured)';
+                                    const chars = snap.prompt.length;
+                                    return `${chars} chars · case ${snap.caseName || snap.caseId || '?'}`;
+                                })()}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPromptSnapshot(getLastPatientPrompt());
+                                    setPromptCopied(false);
+                                    setPromptInspectorOpen(true);
+                                }}
+                                className="mt-1 px-2 py-1 text-[10px] uppercase tracking-wider bg-emerald-900/40 hover:bg-emerald-900/60 text-emerald-300 rounded border border-emerald-800"
+                            >
+                                Show assembled prompt
+                            </button>
+                        </Section>
                     </div>
 
                     {clientLogs.length > 0 && (
@@ -535,12 +569,9 @@ export default function DiagnosticBar() {
                     {/* Live TTS wire history — the literal payloads the runtime
                         last sent to /api/tts (newest first, ring buffer). This
                         is the ground truth: every row above is a static
-                        prediction; these rows are what actually flew. The play
-                        button on each row replays the payload and the [vs.
-                        male slot] button replays the same TEXT through the
-                        platform's `voice_<provider>_male` slot so the user can
-                        do an A/B comparison and confirm whether what they
-                        heard matches the configured voice or a different one. */}
+                        prediction; these rows are what actually flew. The
+                        ▶ button replays the captured payload so admins can
+                        confirm what was sent matches what they heard. */}
                     {wireHistory.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-neutral-800">
                             <div className="flex items-center justify-between mb-2">
@@ -561,16 +592,12 @@ export default function DiagnosticBar() {
                                         <th className="pr-3 py-1 font-normal">rate</th>
                                         <th className="pr-3 py-1 font-normal">status</th>
                                         <th className="pr-3 py-1 font-normal">text preview</th>
-                                        <th className="pr-2 py-1 font-normal">A/B</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {wireHistory.map(w => {
                                         const playKey = auditionKey(w);
-                                        const altVoice = pickSlot(voiceSettings, deriveSlotForGender(w.gender));
-                                        const altKey = altVoice ? auditionKey(w, { voice: altVoice }) : null;
                                         const isPlayingPrimary = auditionId === playKey;
-                                        const isPlayingAlt = altKey && auditionId === altKey;
                                         return (
                                             <tr key={w.id} className="border-b border-neutral-900/50 hover:bg-neutral-900/40">
                                                 <td className="pr-2 py-1">
@@ -599,18 +626,6 @@ export default function DiagnosticBar() {
                                                 <td className="pr-3 py-1 text-neutral-300 truncate max-w-[18ch]" title={w.textPreview}>
                                                     {w.textPreview || ''}
                                                 </td>
-                                                <td className="pr-2 py-1">
-                                                    {altVoice && altVoice !== w.voice ? (
-                                                        <button
-                                                            onClick={() => handleAudition(w, { voice: altVoice })}
-                                                            disabled={w.status !== 'ok'}
-                                                            title={`Play same text with ${altVoice} (platform male slot) for A/B comparison`}
-                                                            className="text-[10px] px-1.5 py-0.5 rounded border border-amber-800 bg-amber-900/30 text-amber-300 hover:bg-amber-900/60 disabled:opacity-30"
-                                                        >
-                                                            {isPlayingAlt ? '■ stop' : `vs. ${shortVoice(altVoice)}`}
-                                                        </button>
-                                                    ) : null}
-                                                </td>
                                             </tr>
                                         );
                                     })}
@@ -618,18 +633,18 @@ export default function DiagnosticBar() {
                             </table>
                             <div className="mt-2 text-[10px] text-neutral-600">
                                 <strong>Re-play</strong> (▶) re-fires the same /api/tts payload so you hear the captured voice.{' '}
-                                <strong>vs. &lt;voice&gt;</strong> sends the same TEXT through the platform's male/female/child slot so you can A/B compare.{' '}
-                                If the original (▶) sounds the same as what you heard during runtime, the wiring is correct.
+                                If it sounds the same as what played at runtime, the wiring is correct.
                             </div>
                         </div>
                     )}
 
                     {/* Configured speakers — patient + every agent attached to
                         the case, with the voice each one would actually play
-                        right now. Shows tier so you can see whether a row is
-                        using a per-speaker case_voice override or falling
-                        through to the platform slot. This is the canonical
-                        view for "the setting says X but I hear Y" questions. */}
+                        right now. Resolution is one-tier today: case_voice on
+                        the case (or the agent persona) is "override"; anything
+                        else is "no voice" — there are no platform fallbacks.
+                        This is the canonical view for "the setting says X but
+                        I hear Y" questions. */}
                     {configuredSpeakers.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-neutral-800">
                             <div className="text-emerald-400 font-bold tracking-wider uppercase mb-2">
@@ -662,14 +677,89 @@ export default function DiagnosticBar() {
                                 </tbody>
                             </table>
                             <div className="mt-2 text-[10px] text-neutral-600">
-                                <code>override</code> = per-speaker <code>case_voice</code> set;{' '}
-                                <code>platform-default</code> = persona default in /platform-settings/avatars;{' '}
-                                <code>voice-slot</code> = falls through to <code>voice_&lt;provider&gt;_&lt;slot&gt;</code>.
+                                <code>override</code> = per-speaker <code>case_voice</code> set on either the case or the agent persona. Anything else shows <code>no voice</code> — there are no implicit fallbacks; pick a voice on the persona row.
                             </div>
                         </div>
                     )}
                 </div>
             )}
+            {promptInspectorOpen && (
+                <PatientPromptInspector
+                    snapshot={promptSnapshot}
+                    copied={promptCopied}
+                    onCopy={() => {
+                        if (!promptSnapshot?.prompt) return;
+                        navigator.clipboard?.writeText(promptSnapshot.prompt)
+                            .then(() => setPromptCopied(true))
+                            .catch(() => setPromptCopied(false));
+                    }}
+                    onClose={() => setPromptInspectorOpen(false)}
+                />
+            )}
+        </div>
+    );
+}
+
+function PatientPromptInspector({ snapshot, copied, onCopy, onClose }) {
+    return (
+        <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Assembled patient prompt"
+            onClick={onClose}
+        >
+            <div
+                onClick={(e) => e.stopPropagation()}
+                className="bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl w-[min(95vw,80rem)] h-[85vh] flex flex-col"
+            >
+                <header className="flex items-center justify-between px-4 py-3 border-b border-neutral-800">
+                    <div className="flex items-center gap-3 text-sm">
+                        <span className="text-emerald-400 font-bold uppercase tracking-wider">
+                            Assembled patient prompt
+                        </span>
+                        {snapshot && (
+                            <span className="text-neutral-500 font-mono text-xs">
+                                {snapshot.prompt.length} chars · case{' '}
+                                {snapshot.caseName || snapshot.caseId || '?'}
+                                {snapshot.sessionId ? ` · session ${snapshot.sessionId}` : ''}
+                                {' · '}
+                                {snapshot.timestamp}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={onCopy}
+                            disabled={!snapshot?.prompt}
+                            className="px-2 py-1 text-xs uppercase tracking-wider bg-emerald-900/40 hover:bg-emerald-900/60 disabled:opacity-40 text-emerald-300 rounded border border-emerald-800"
+                        >
+                            {copied ? 'Copied' : 'Copy'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="text-neutral-400 hover:text-white"
+                            aria-label="Close"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </header>
+                <div className="flex-1 min-h-0 overflow-auto p-4">
+                    {snapshot?.prompt ? (
+                        <pre className="text-xs font-mono text-neutral-200 whitespace-pre-wrap break-words">
+                            {snapshot.prompt}
+                        </pre>
+                    ) : (
+                        <div className="text-sm text-neutral-500 italic">
+                            No patient prompt has been assembled yet in this session.
+                            Send a message to the patient and reopen this inspector.
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
@@ -764,40 +854,24 @@ function WireStatusBadge({ wire }) {
     );
 }
 
-// Stable identity for an audition — same row + same voice override means the
-// user is toggling the same playback, so we treat re-clicks as stop. Using
-// id+voice instead of id alone lets the [vs. <slot>] button track separately
-// from the primary [▶] button on the same row.
+// Stable identity for an audition — same row + same voice means the user is
+// toggling the same playback, so we treat re-clicks as stop. `override` is
+// retained on the signature because handleAudition still accepts an optional
+// override (for future A/B features); today only the primary ▶ button on
+// each row drives it.
 function auditionKey(wire, override) {
     if (!wire) return null;
     return `${wire.id}::${override?.voice || wire.voice}`;
 }
 
-// Map a wire's gender field to the slot key used in voice_*_<slot> platform
-// settings. Mirrors voiceResolver.deriveSlot but without age (the wire never
-// captures age — it's already been resolved out by the time we record).
-function deriveSlotForGender(gender) {
-    if (gender === 'child') return 'child';
-    return /^f/i.test(gender || '') ? 'female' : 'male';
-}
-
-// Shorten a long voice name for the inline A/B button. Prefers the trailing
-// distinctive segment (e.g. "Charon" or "Neural2-D") over the full string.
-function shortVoice(voice) {
-    if (!voice) return '?';
-    const parts = voice.split('-');
-    if (parts.length <= 3) return voice;
-    return parts.slice(-2).join('-');
-}
-
 function TierBadge({ tier }) {
     if (!tier) return <span className="text-neutral-600 italic">no voice</span>;
+    // Only `override` is reachable from voiceResolver today; the others are
+    // kept as styling hooks in case a legacy log line surfaces an old tier
+    // name in audit history. New tiers should be added to voiceResolver
+    // first, then mirrored here.
     const palette = {
         'override': 'bg-emerald-900/40 text-emerald-300 border-emerald-800',
-        'platform-default': 'bg-blue-900/30 text-blue-300 border-blue-800',
-        'voice-slot': 'bg-amber-900/30 text-amber-300 border-amber-800',
-        'hardcoded': 'bg-orange-900/30 text-orange-300 border-orange-800',
-        'catalog-first': 'bg-neutral-800 text-neutral-300 border-neutral-700'
     };
     const cls = palette[tier] || 'bg-neutral-800 text-neutral-300 border-neutral-700';
     return (
@@ -807,14 +881,11 @@ function TierBadge({ tier }) {
     );
 }
 
-// No hardcoded fallback exists post-2026-05-12. When the configured-speakers
-// table has no resolved voice for the active speaker, the bar shows
-// "(no voice)" instead of guessing — that mirrors what the runtime does
-// and makes "I haven't configured a voice yet" visible at a glance.
+// Legacy stub. The diagnostic bar used to display a derived
+// "active voice slot" label when the resolver had a slot tier. That tier
+// was removed in 2026-05-13 ("one voice per persona, no slot fallback").
+// The function is kept exported-but-empty so any old call sites still
+// elsewhere in the codebase return an empty string rather than crash.
 function activeVoiceSlot() {
-    return '';
-}
-
-function pickSlot() {
     return '';
 }

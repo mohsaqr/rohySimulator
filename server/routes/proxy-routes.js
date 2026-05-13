@@ -15,6 +15,7 @@ import {
 import { spawn } from 'node:child_process';
 import { buildWavHeader } from '../services/wav.js';
 import { EvenByteAligner } from '../lib/pcmAlign.js';
+import { assembleSystemPrompt } from '../services/systemPromptAssembly.js';
 
 
 import { logger } from '../logger.js';
@@ -389,14 +390,9 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             requested: requestedTokens
         });
 
-        // 8. Build system prompt
-        let fullSystemPrompt = '';
-        if (systemPromptTemplate) {
-            fullSystemPrompt = systemPromptTemplate;
-        }
-        if (system_prompt) {
-            fullSystemPrompt += (fullSystemPrompt ? '\n\n---\n\n' : '') + system_prompt;
-        }
+        // 8. Build system prompt. See assembleSystemPrompt for the ordering
+        // invariant — case content leads, platform template trails.
+        let fullSystemPrompt = assembleSystemPrompt({ system_prompt, systemPromptTemplate });
 
         // 9. Build request based on provider type
         let llmHeaders = { 'Content-Type': 'application/json' };

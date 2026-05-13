@@ -10,6 +10,11 @@ export default function DiscussionNotes({ sessionId }) {
     const [status, setStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
     const dirtyRef = useRef(false);
     const saveTimerRef = useRef(null);
+    // Captures the latest typed text so the unmount-flush below can save it
+    // even when state/text closures have already torn down.
+    const latestTextRef = useRef('');
+    const sessionIdRef = useRef(sessionId);
+    useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
 
     useEffect(() => {
         if (!sessionId) return;
@@ -21,6 +26,7 @@ export default function DiscussionNotes({ sessionId }) {
     }, [sessionId]);
 
     useEffect(() => {
+        latestTextRef.current = text;
         if (!sessionId || !dirtyRef.current) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(async () => {
@@ -36,6 +42,24 @@ export default function DiscussionNotes({ sessionId }) {
         }, SAVE_DEBOUNCE_MS);
         return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
     }, [text, sessionId]);
+
+    // Unmount-only: if a debounced save is still pending when the user
+    // closes the drawer / screen, flush it synchronously (fire-and-forget)
+    // so the last few characters typed aren't dropped. Without this, the
+    // cleanup on the debounce effect cancels the timer without saving.
+    useEffect(() => {
+        return () => {
+            if (!dirtyRef.current) return;
+            const sid = sessionIdRef.current;
+            if (!sid) return;
+            // No await — we're in a synchronous cleanup. The promise runs
+            // in the background; failures are logged like the debounced path.
+            saveSessionNote(sid, latestTextRef.current).catch((err) => {
+                console.error('[DiscussionNotes] unmount flush failed:', err);
+            });
+            dirtyRef.current = false;
+        };
+    }, []);
 
     const handleChange = (e) => {
         dirtyRef.current = true;

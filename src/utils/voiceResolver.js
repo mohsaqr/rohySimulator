@@ -1,14 +1,10 @@
-// Single source of truth for voice resolution. Two tiers, no hidden fallbacks.
+// Single source of truth for voice resolution. ONE tier, no fallbacks.
 //
 // 2026-05-12 — RESOLUTION CHAIN COLLAPSED TO ONE EXPLICIT SOURCE.
-// Previously the chain reached through hardcoded provider maps, per-gender
-// platform slots, and an editor-only "first installed voice" tier. Each
-// fallback was added to keep the runtime audible, but the aggregate made it
-// impossible for an admin to tell what was authoritative — admins set the
-// voice in one place and the runtime quietly played something from another.
-// After three weeks of chasing "I changed it and nothing happens" we strip
-// every silent fallback: if no voice is configured, callers raise a visible
-// error instead of guessing.
+// 2026-05-13 — Re-confirmed after a brief tier-2 experiment: every shipped
+//              persona row carries its own `case_voice` (set in
+//              server/db.js DEFAULT_AGENTS). No demographic-slot fallback,
+//              no per-provider hardcoded map, no catalogue scan.
 //
 // Chain (highest-precedence first):
 //   1. voice.case_voice            → tier='override'
