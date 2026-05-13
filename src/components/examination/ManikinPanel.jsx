@@ -11,9 +11,18 @@ import { usePatientRecord } from '../../services/PatientRecord';
 /**
  * Manikin Panel - Main Physical Examination Interface
  *
+ * Renders in two modes:
+ *   - Modal (default): fixed full-screen overlay with backdrop and close button.
+ *                      Controlled by `isOpen` / `onClose`. Legacy usage.
+ *   - Embedded: fills its parent container, no backdrop, no close button.
+ *                      `isOpen` is ignored; the parent screen controls visibility
+ *                      and exposes its own back affordance. Used by
+ *                      PhysicalExamScreen (2026-05-13 — exam-as-screen refactor).
+ *
  * Props:
- * - isOpen: boolean to control visibility
- * - onClose: function to close the panel
+ * - isOpen: modal-only; ignored when `embedded` is true.
+ * - onClose: modal-only; ignored when `embedded` is true.
+ * - embedded: boolean, default false. Switches to the inline rendering mode.
  * - physicalExam: object containing configured findings for each region/exam type
  *                 Format: { regionId: { examType: { finding, abnormal } } }
  * - onExamPerformed: callback when an exam is performed (for logging/analytics)
@@ -22,6 +31,7 @@ import { usePatientRecord } from '../../services/PatientRecord';
 export default function ManikinPanel({
     isOpen,
     onClose,
+    embedded = false,
     physicalExam = null, // If null, uses default findings
     onExamPerformed,
     patientGender = 'male'
@@ -212,11 +222,18 @@ export default function ManikinPanel({
         URL.revokeObjectURL(url);
     }, [examLog]);
 
-    if (!isOpen) return null;
+    // In modal mode, parent controls visibility via `isOpen`. In embedded
+    // mode the screen wrapper decides whether to mount this at all, so
+    // `isOpen` is irrelevant — always render the workspace.
+    if (!embedded && !isOpen) return null;
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col">
+    // Workspace body is identical in both modes; only the outer chrome
+    // differs. We render the body once and wrap it in either a fixed
+    // modal overlay or a parent-filling card. Inlining the conditional
+    // here (rather than defining a wrapper component) keeps the JSX tree
+    // stable across renders.
+    const body = (
+        <>
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 bg-slate-800/50">
                     <div className="flex items-center gap-3">
@@ -233,12 +250,16 @@ export default function ManikinPanel({
                                 Export
                             </button>
                         )}
-                        <button
-                            onClick={onClose}
-                            className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
+                        {/* Close button is modal-only — the screen wrapper
+                            provides its own Back affordance. */}
+                        {!embedded && (
+                            <button
+                                onClick={onClose}
+                                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -394,6 +415,20 @@ export default function ManikinPanel({
                         </div>
                     </div>
                 </div>
+        </>
+    );
+
+    if (embedded) {
+        return (
+            <div className="w-full h-full flex flex-col bg-slate-900 rounded-xl border border-slate-700 overflow-hidden">
+                {body}
+            </div>
+        );
+    }
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div className="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col">
+                {body}
             </div>
         </div>
     );
