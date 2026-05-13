@@ -296,9 +296,9 @@ If the learner asks meta-questions ("are you a real patient?", "what should I as
             // this one when case demographics.gender starts with "f"; the
             // generic "Default Patient" above is used otherwise. Both are
             // is_default=1; the seeder dedups on (agent_type, name) so the
-            // pair can coexist. Voice config carries gender='female' so
-            // resolveVoice's tier 2 falls through to voice_<provider>_female
-            // when no per-case override is set.
+            // pair can coexist. Voice config carries gender='female' (used
+            // by ChatInterface to route female cases here) and an explicit
+            // case_voice (the only voice source the resolver reads).
             agent_type: 'patient',
             name: 'Default Female Patient',
             role_title: 'Female Simulated Patient',

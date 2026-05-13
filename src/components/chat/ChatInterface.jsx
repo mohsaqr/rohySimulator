@@ -345,11 +345,19 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 setAgentStates(states);
 
                 // Patient template resolution: prefer per-case attached row;
-                // otherwise pick a platform-default patient template whose
-                // `config.voice.gender` exactly matches the case demographics
-                // gender (case-insensitive first letter); if no exact match,
-                // null. No gender-blind fallback — picking arbitrarily is
-                // worse than asking the admin to wire a per-case persona.
+                // otherwise pick a platform-default patient template by gender.
+                // Order tried:
+                //   1. Exact match — first-letter of case demographics.gender
+                //      matches a template's config.voice.gender.
+                //   2. For non-female cases (including empty gender, "Other",
+                //      "Non-binary", anything that doesn't start with 'f'),
+                //      fall back to the first NON-female template. This
+                //      matches the seed doc that "Default Patient is used
+                //      otherwise" and keeps the patient audible for cases
+                //      that don't slot cleanly into male/female.
+                //   3. Single template available → use it.
+                //   4. Otherwise null and let the chat surface a "no persona"
+                //      error so the admin sees the gap.
                 const attachedPatient = agentList.find(a => a.agent_type === 'patient' && a.enabled !== 0 && a.enabled !== false);
                 if (attachedPatient) {
                     setPatientTemplate(normalizePatientAgent(attachedPatient));
@@ -361,10 +369,19 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         );
                         const caseGender = (activeCase?.config?.demographics?.gender || '').toLowerCase();
                         const firstLetter = caseGender.charAt(0);
-                        const fallback = patientDefaults.find((t) => {
-                            const tg = (parseConfig(t.config)?.voice?.gender || '').toLowerCase();
-                            return firstLetter && tg.charAt(0) === firstLetter;
-                        }) || (patientDefaults.length === 1 ? patientDefaults[0] : null);
+                        const isFemaleCase = firstLetter === 'f';
+                        const templateGender = (t) =>
+                            (parseConfig(t.config)?.voice?.gender || '').toLowerCase();
+                        const exact = patientDefaults.find((t) =>
+                            firstLetter && templateGender(t).charAt(0) === firstLetter
+                        );
+                        const nonFemale = isFemaleCase
+                            ? null
+                            : patientDefaults.find((t) => templateGender(t).charAt(0) !== 'f');
+                        const fallback =
+                            exact ||
+                            nonFemale ||
+                            (patientDefaults.length === 1 ? patientDefaults[0] : null);
                         setPatientTemplate(fallback ? normalizePatientAgent(fallback) : null);
                     } catch {
                         setPatientTemplate(null);

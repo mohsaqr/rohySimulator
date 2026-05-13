@@ -447,9 +447,12 @@ export default function DiagnosticBar() {
                             <Row k="tts_rate" v={voiceSettings?.tts_rate} />
                             <Row k="tts_pitch" v={voiceSettings?.tts_pitch} />
                             <Row k="voice_mode_enabled" v={String(voiceSettings?.voice_mode_enabled ?? '')} />
-                            <Row k="voice_*_male slot" v={pickSlot(voiceSettings, 'male')} />
-                            <Row k="voice_*_female slot" v={pickSlot(voiceSettings, 'female')} />
-                            <Row k="voice_*_child slot" v={pickSlot(voiceSettings, 'child')} />
+                            {/* Legacy voice_<provider>_<slot> values are no longer read by
+                                the resolver (post 2026-05-13 — one voice per persona).
+                                We still surface what's stored so admins can see / clear them. */}
+                            <Row k="legacy male slot" v={pickSlot(voiceSettings, 'male')} />
+                            <Row k="legacy female slot" v={pickSlot(voiceSettings, 'female')} />
+                            <Row k="legacy child slot" v={pickSlot(voiceSettings, 'child')} />
                         </Section>
                         <Section title="Voice runtime">
                             <Row k="voice mode" v={voiceMode ? 'ON' : 'OFF'} />
@@ -592,16 +595,12 @@ export default function DiagnosticBar() {
                                         <th className="pr-3 py-1 font-normal">rate</th>
                                         <th className="pr-3 py-1 font-normal">status</th>
                                         <th className="pr-3 py-1 font-normal">text preview</th>
-                                        <th className="pr-2 py-1 font-normal">A/B</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {wireHistory.map(w => {
                                         const playKey = auditionKey(w);
-                                        const altVoice = pickSlot(voiceSettings, deriveSlotForGender(w.gender));
-                                        const altKey = altVoice ? auditionKey(w, { voice: altVoice }) : null;
                                         const isPlayingPrimary = auditionId === playKey;
-                                        const isPlayingAlt = altKey && auditionId === altKey;
                                         return (
                                             <tr key={w.id} className="border-b border-neutral-900/50 hover:bg-neutral-900/40">
                                                 <td className="pr-2 py-1">
@@ -630,18 +629,6 @@ export default function DiagnosticBar() {
                                                 <td className="pr-3 py-1 text-neutral-300 truncate max-w-[18ch]" title={w.textPreview}>
                                                     {w.textPreview || ''}
                                                 </td>
-                                                <td className="pr-2 py-1">
-                                                    {altVoice && altVoice !== w.voice ? (
-                                                        <button
-                                                            onClick={() => handleAudition(w, { voice: altVoice })}
-                                                            disabled={w.status !== 'ok'}
-                                                            title={`Play same text with ${altVoice} (platform male slot) for A/B comparison`}
-                                                            className="text-[10px] px-1.5 py-0.5 rounded border border-amber-800 bg-amber-900/30 text-amber-300 hover:bg-amber-900/60 disabled:opacity-30"
-                                                        >
-                                                            {isPlayingAlt ? '■ stop' : `vs. ${shortVoice(altVoice)}`}
-                                                        </button>
-                                                    ) : null}
-                                                </td>
                                             </tr>
                                         );
                                     })}
@@ -649,18 +636,18 @@ export default function DiagnosticBar() {
                             </table>
                             <div className="mt-2 text-[10px] text-neutral-600">
                                 <strong>Re-play</strong> (▶) re-fires the same /api/tts payload so you hear the captured voice.{' '}
-                                <strong>vs. &lt;voice&gt;</strong> sends the same TEXT through the platform's male/female/child slot so you can A/B compare.{' '}
-                                If the original (▶) sounds the same as what you heard during runtime, the wiring is correct.
+                                If it sounds the same as what played at runtime, the wiring is correct.
                             </div>
                         </div>
                     )}
 
                     {/* Configured speakers — patient + every agent attached to
                         the case, with the voice each one would actually play
-                        right now. Shows tier so you can see whether a row is
-                        using a per-speaker case_voice override or falling
-                        through to the platform slot. This is the canonical
-                        view for "the setting says X but I hear Y" questions. */}
+                        right now. Resolution is one-tier today: case_voice on
+                        the case (or the agent persona) is "override"; anything
+                        else is "no voice" — there are no platform fallbacks.
+                        This is the canonical view for "the setting says X but
+                        I hear Y" questions. */}
                     {configuredSpeakers.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-neutral-800">
                             <div className="text-emerald-400 font-bold tracking-wider uppercase mb-2">
@@ -879,31 +866,14 @@ function auditionKey(wire, override) {
     return `${wire.id}::${override?.voice || wire.voice}`;
 }
 
-// Map a wire's gender field to the slot key used in voice_*_<slot> platform
-// settings. Mirrors voiceResolver.deriveSlot but without age (the wire never
-// captures age — it's already been resolved out by the time we record).
-function deriveSlotForGender(gender) {
-    if (gender === 'child') return 'child';
-    return /^f/i.test(gender || '') ? 'female' : 'male';
-}
-
-// Shorten a long voice name for the inline A/B button. Prefers the trailing
-// distinctive segment (e.g. "Charon" or "Neural2-D") over the full string.
-function shortVoice(voice) {
-    if (!voice) return '?';
-    const parts = voice.split('-');
-    if (parts.length <= 3) return voice;
-    return parts.slice(-2).join('-');
-}
-
 function TierBadge({ tier }) {
     if (!tier) return <span className="text-neutral-600 italic">no voice</span>;
+    // Only `override` is reachable from voiceResolver today; the others are
+    // kept as styling hooks in case a legacy log line surfaces an old tier
+    // name in audit history. New tiers should be added to voiceResolver
+    // first, then mirrored here.
     const palette = {
         'override': 'bg-emerald-900/40 text-emerald-300 border-emerald-800',
-        'platform-default': 'bg-blue-900/30 text-blue-300 border-blue-800',
-        'voice-slot': 'bg-amber-900/30 text-amber-300 border-amber-800',
-        'hardcoded': 'bg-orange-900/30 text-orange-300 border-orange-800',
-        'catalog-first': 'bg-neutral-800 text-neutral-300 border-neutral-700'
     };
     const cls = palette[tier] || 'bg-neutral-800 text-neutral-300 border-neutral-700';
     return (

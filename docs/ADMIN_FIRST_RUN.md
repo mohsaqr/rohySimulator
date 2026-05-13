@@ -160,17 +160,17 @@ Bottom of the screen, hidden by default. Enable via the floating
 What's there:
 
 - **Voice runtime** — which voice the active speaker is *currently*
-  resolving to, with the tier (`override` / `platform-slot` / `null`).
-  If this doesn't match what you expected, you've got an override
-  somewhere.
+  resolving to, with the tier. Resolution is one-tier today: `override`
+  (a `case_voice` set on either the case or the agent persona) or
+  `null` (nothing set — patient stays mute). If this doesn't match what
+  you expected, you've got an override somewhere.
 - **Patient prompt** → **Show assembled prompt** — opens the literal
   system prompt the LLM is about to receive, with copy-to-clipboard.
   Use this when "the model is ignoring my case" — odds are something
   upstream is shadowing what you authored.
 - **TTS wire history** — last 20 `/api/tts` payloads with voice id,
-  status, and an A/B play button (replays the request next to the
-  configured platform slot for the same gender, so you can hear
-  whether the wire matches the configured voice).
+  status, and a replay button (re-fires the captured payload so you
+  can confirm what was actually sent matches what you heard).
 
 ---
 

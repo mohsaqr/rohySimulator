@@ -120,53 +120,63 @@ export default function AgentTemplateManager({ onOpenEditor }) {
          <div
             key={template.id}
             onClick={() => handleEdit(template)}
-            className={`border rounded-lg transition-colors px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-neutral-800/40 ${
+            className={`border rounded-lg transition-colors px-4 py-3 flex flex-col md:flex-row md:items-center gap-3 cursor-pointer hover:bg-neutral-800/40 ${
                isStandard ? 'border-purple-800 bg-purple-950/20' : 'border-neutral-800 bg-neutral-900/50'
             }`}
          >
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${AGENT_TYPE_BADGE[template.agent_type] || AGENT_TYPE_BADGE.other}`}>
-               <Users className="w-5 h-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-               <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium">{template.name}</span>
-                  <span className="px-1.5 py-0.5 rounded text-xs bg-neutral-800 text-neutral-300 capitalize">{template.agent_type}</span>
-                  {isStandard && (
-                     <span className="px-1.5 py-0.5 bg-purple-600/50 text-purple-200 rounded text-xs">Standard</span>
-                  )}
+            <div className="flex items-center gap-3 min-w-0 md:flex-1">
+               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${AGENT_TYPE_BADGE[template.agent_type] || AGENT_TYPE_BADGE.other}`}>
+                  <Users className="w-5 h-5" />
                </div>
-               <div className="text-sm text-neutral-500 truncate">
-                  {template.role_title || template.agent_type} · {template.communication_style || 'standard'}
+               <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                     <span className="font-medium">{template.name}</span>
+                     <span className="px-1.5 py-0.5 rounded text-xs bg-neutral-800 text-neutral-300 capitalize">{template.agent_type}</span>
+                     {isStandard && (
+                        <span className="px-1.5 py-0.5 bg-purple-600/50 text-purple-200 rounded text-xs">Standard</span>
+                     )}
+                  </div>
+                  <div className="text-sm text-neutral-500 truncate">
+                     {template.role_title || template.agent_type} · {template.communication_style || 'standard'}
+                  </div>
                </div>
             </div>
 
-            <div className="hidden md:grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs shrink-0 max-w-[280px]">
-               <span className="text-neutral-500 text-right">voice</span>
+            {/* Value grid. On md+ screens it sits to the right of the name
+                column with right-aligned labels; on narrow screens (mobile,
+                side panels) it stacks vertically under the name as a single
+                column of "label: value" lines so the info doesn't disappear. */}
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs shrink-0 md:max-w-[280px] w-full md:w-auto">
+               <span className="text-neutral-500 md:text-right">voice</span>
                <span className={voiceId ? 'text-white font-mono truncate' : 'text-neutral-600 italic'} title={voiceId || 'no voice set'}>
                   {voiceId || 'unset'}{voiceGender ? <span className="text-neutral-500"> · {voiceGender}</span> : null}
                </span>
-               <span className="text-neutral-500 text-right">avatar</span>
+               <span className="text-neutral-500 md:text-right">avatar</span>
                <span className={avatarFile ? 'text-white font-mono truncate' : 'text-neutral-600 italic'} title={avatarFile || 'no avatar set'}>
                   {avatarFile || 'unset'}
                </span>
-               <span className="text-neutral-500 text-right">do / don&apos;t</span>
+               <span className="text-neutral-500 md:text-right">do / don&apos;t</span>
                <span className="text-neutral-300">
                   <span className={dosCount > 0 ? 'text-emerald-400' : 'text-neutral-600'}>{dosCount}</span>
                   {' / '}
                   <span className={dontsCount > 0 ? 'text-rose-400' : 'text-neutral-600'}>{dontsCount}</span>
                </span>
-               <span className="text-neutral-500 text-right">context</span>
+               <span className="text-neutral-500 md:text-right">context</span>
                <span className={ctxColor}>{ctxFilter}</span>
                {llmLabel && (
                   <>
-                     <span className="text-neutral-500 text-right">LLM</span>
+                     <span className="text-neutral-500 md:text-right">LLM</span>
                      <span className="text-amber-300 font-mono truncate" title={llmLabel}>{llmLabel}</span>
                   </>
                )}
             </div>
 
+            {/* Action buttons. Stop propagation so clicks don't trigger the
+                row's open-editor handler. Reset is intentionally text+icon
+                because RotateCcw alone reads as "undo" and we don't want
+                anyone touching a shipped standard by mistake. */}
             <div
-               className="flex items-center gap-1 shrink-0"
+               className="flex items-center gap-1 shrink-0 self-end md:self-auto"
                onClick={(e) => e.stopPropagation()}
             >
                <button
@@ -180,11 +190,12 @@ export default function AgentTemplateManager({ onOpenEditor }) {
                {isStandard ? (
                   <button
                      onClick={() => setResetTarget(template)}
-                     className="p-2 rounded hover:bg-amber-700/50 text-amber-400 hover:text-amber-200"
+                     className="px-2 py-1.5 rounded hover:bg-amber-700/50 text-amber-400 hover:text-amber-200 flex items-center gap-1 text-xs"
                      title="Reset to shipped defaults"
                      aria-label="Reset to defaults"
                   >
                      <RotateCcw className="w-4 h-4" />
+                     <span>Reset</span>
                   </button>
                ) : (
                   <button
