@@ -89,7 +89,7 @@ You have access to the patient's current vitals, recent events, and can see what
                 typical_availability: 'present',
                 can_be_paged: false,
                 response_time: { min: 0, max: 0 },
-                voice: { gender: 'female' },
+                voice: { gender: 'female', case_voice: 'af_sky' },
                 dos: [
                     'Be clear and professional with nursing terminology',
                     'Speak up if an order seems unsafe',
@@ -137,7 +137,7 @@ You have access to the patient's full record. Base your assessment on the actual
                 typical_availability: 'on-call',
                 can_be_paged: true,
                 response_time: { min: 2, max: 5 },
-                voice: { gender: 'male' },
+                voice: { gender: 'male', case_voice: 'am_liam' },
                 dos: [
                     'Ask clarifying questions about the presentation',
                     'Explain reasoning and differential diagnoses',
@@ -186,7 +186,7 @@ Respond based on the patient information available. If specific family relations
                 typical_availability: 'present',
                 can_be_paged: false,
                 response_time: { min: 0, max: 0 },
-                voice: { gender: 'female' },
+                voice: { gender: 'female', case_voice: 'af_nicole' },
                 dos: [
                     'Use lay terms — you\'re not medically trained',
                     'Express genuine worry and ask for explanation',
@@ -235,7 +235,7 @@ You are a tutor, not a judge. The goal is learning, not assessment.`,
                 can_be_paged: false,
                 response_time: { min: 0, max: 0 },
                 unlock_trigger: 'after_case_ended',
-                voice: { gender: 'male' },
+                voice: { gender: 'male', case_voice: 'bm_lewis' },
                 dos: [
                     'Ask before you tell — favour open-ended questions',
                     'Anchor questions in the specific decisions the learner made',
@@ -276,7 +276,7 @@ If the learner asks meta-questions ("are you a real patient?", "what should I as
                 typical_availability: 'present',
                 can_be_paged: false,
                 response_time: { min: 0, max: 0 },
-                voice: { gender: 'male' },
+                voice: { gender: 'male', case_voice: 'am_michael' },
                 dos: [
                     'Stay in character throughout',
                     'Use lay terms unless asked otherwise',
@@ -325,7 +325,7 @@ If the learner asks meta-questions ("are you a real patient?", "what should I as
                 typical_availability: 'present',
                 can_be_paged: false,
                 response_time: { min: 0, max: 0 },
-                voice: { gender: 'female' },
+                voice: { gender: 'female', case_voice: 'af_bella' },
                 dos: [
                     'Stay in character throughout',
                     'Use lay terms unless asked otherwise',
@@ -415,11 +415,12 @@ async function seedDefaultAgents() {
     // before this feature landed. Uses SQLite JSON1 json_patch so existing
     // keys are preserved. Each patch only fires if the target keys are absent.
     const configPatches = [
-        { type: 'nurse', name: 'Sarah Mitchell', voice: { gender: 'female' }, dos: ['Be clear and professional with nursing terminology', 'Speak up if an order seems unsafe', 'Report observations factually'], donts: ['Do the doctor\'s diagnostic work for them', 'Volunteer interpretations beyond your scope', 'Skip clarifying unclear orders'] },
-        { type: 'consultant', name: 'Dr. James Chen', voice: { gender: 'male' }, dos: ['Ask clarifying questions about the presentation', 'Explain reasoning and differential diagnoses', 'Suggest evidence-based next steps'], donts: ['Take over the case from the learner', 'Skip the differential when one is warranted', 'Give recommendations without reviewing the data'] },
-        { type: 'relative', name: 'Family Member', voice: { gender: 'female' }, dos: ['Use lay terms — you\'re not medically trained', 'Express genuine worry and ask for explanation', 'Share what you know about the patient\'s daily life'], donts: ['Use medical jargon you wouldn\'t actually know', 'Stay calm if a learner ignores you for long stretches', 'Speak for the patient about clinical details you don\'t know'] },
-        { type: 'discussant', name: 'Default Discussant', voice: { gender: 'male' }, dos: ['Ask before you tell — favour open-ended questions', 'Anchor questions in the specific decisions the learner made', 'Validate effort, then surface gaps clearly', 'Keep replies conversational and concise'], donts: ['Lecture when a question would teach more', 'Paper over real errors with reassurance', 'Run past the learner\'s pace — pause and listen', 'Treat the debrief as assessment'] },
-        { type: 'patient', name: 'Default Patient', voice: { gender: 'male' }, dos: ['Stay in character throughout', 'Use lay terms unless asked otherwise', 'Answer truthfully when asked directly', 'Express emotion alongside symptoms'], donts: ['Volunteer differential diagnoses', 'Use medical jargon unprompted', 'Break character even if the learner asks meta questions', 'Reveal information the patient wouldn\'t actually know'] },
+        { type: 'nurse', name: 'Sarah Mitchell', voice: { gender: 'female', case_voice: 'af_sky' }, dos: ['Be clear and professional with nursing terminology', 'Speak up if an order seems unsafe', 'Report observations factually'], donts: ['Do the doctor\'s diagnostic work for them', 'Volunteer interpretations beyond your scope', 'Skip clarifying unclear orders'] },
+        { type: 'consultant', name: 'Dr. James Chen', voice: { gender: 'male', case_voice: 'am_liam' }, dos: ['Ask clarifying questions about the presentation', 'Explain reasoning and differential diagnoses', 'Suggest evidence-based next steps'], donts: ['Take over the case from the learner', 'Skip the differential when one is warranted', 'Give recommendations without reviewing the data'] },
+        { type: 'relative', name: 'Family Member', voice: { gender: 'female', case_voice: 'af_nicole' }, dos: ['Use lay terms — you\'re not medically trained', 'Express genuine worry and ask for explanation', 'Share what you know about the patient\'s daily life'], donts: ['Use medical jargon you wouldn\'t actually know', 'Stay calm if a learner ignores you for long stretches', 'Speak for the patient about clinical details you don\'t know'] },
+        { type: 'discussant', name: 'Default Discussant', voice: { gender: 'male', case_voice: 'bm_lewis' }, dos: ['Ask before you tell — favour open-ended questions', 'Anchor questions in the specific decisions the learner made', 'Validate effort, then surface gaps clearly', 'Keep replies conversational and concise'], donts: ['Lecture when a question would teach more', 'Paper over real errors with reassurance', 'Run past the learner\'s pace — pause and listen', 'Treat the debrief as assessment'] },
+        { type: 'patient', name: 'Default Patient', voice: { gender: 'male', case_voice: 'am_michael' }, dos: ['Stay in character throughout', 'Use lay terms unless asked otherwise', 'Answer truthfully when asked directly', 'Express emotion alongside symptoms'], donts: ['Volunteer differential diagnoses', 'Use medical jargon unprompted', 'Break character even if the learner asks meta questions', 'Reveal information the patient wouldn\'t actually know'] },
+        { type: 'patient', name: 'Default Female Patient', voice: { gender: 'female', case_voice: 'af_bella' }, dos: ['Stay in character throughout', 'Use lay terms unless asked otherwise', 'Answer truthfully when asked directly', 'Express emotion alongside symptoms', 'Acknowledge worry or discomfort when relevant rather than minimising'], donts: ['Volunteer differential diagnoses', 'Use medical jargon unprompted', 'Break character even if the learner asks meta questions', 'Reveal information the patient wouldn\'t actually know'] },
     ];
     for (const p of configPatches) {
         // Patch dos/donts if missing

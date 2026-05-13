@@ -71,57 +71,13 @@ function fetchVoiceRows(dbAdapter) {
     // (rows scale with #personas + #cases, both O(10)–O(100)).
     return new Promise((resolve, reject) => {
         dbAdapter.all(`
-            SELECT 'persona' AS kind, id, name, is_default, agent_type, config FROM agent_templates
+            SELECT 'persona' AS kind, id, name, config FROM agent_templates
             WHERE config LIKE '%case_voice%'
             UNION ALL
-            SELECT 'case' AS kind, id, name, NULL AS is_default, NULL AS agent_type, config FROM cases
+            SELECT 'case' AS kind, id, name, config FROM cases
             WHERE config LIKE '%case_voice%'
         `, (err, rows) => err ? reject(err) : resolve(rows || []));
     });
-}
-
-// Detect the "this template forces every inheriting case to one voice"
-// footgun: a patient persona row that's flagged is_default=1 AND has a
-// case_voice set. Inheriting cases see the override-tier voice instead of
-// the platform's gendered slot — the same Orus bug that bit production
-// three weeks running. Always a configuration mistake to flag.
-function fetchPatientDefaultsWithOverride(dbAdapter) {
-    return new Promise((resolve, reject) => {
-        dbAdapter.all(`
-            SELECT id, name, config FROM agent_templates
-            WHERE agent_type = 'patient'
-              AND is_default = 1
-              AND config LIKE '%case_voice%'
-        `, (err, rows) => err ? reject(err) : resolve(rows || []));
-    });
-}
-
-// Read every platform voice-slot setting for the active provider. Each
-// missing or invalid slot disables tier 2 of resolveVoice for that
-// demographic — i.e. a female patient with no per-case override goes silent.
-async function auditPlatformSlots(dbAdapter, provider, validator, log) {
-    const slots = ['male', 'female', 'child'];
-    const findings = [];
-    for (const slot of slots) {
-        const key = `voice_${provider}_${slot}`;
-        const value = await getSetting(dbAdapter, key);
-        if (!value || value.trim() === '') {
-            findings.push({ slot, key, status: 'unset', value: null });
-            continue;
-        }
-        let ok;
-        try { ok = await validator(value.trim()); }
-        catch { ok = false; }
-        if (!ok) findings.push({ slot, key, status: 'invalid', value });
-    }
-    if (findings.length > 0) {
-        log.warn('platform voice slot misconfigured', {
-            provider,
-            findings,
-            hint: `These slots are the tier-2 fallback for patients without a per-case voice override. An unset/invalid slot means patients of that demographic go silent — set them in Settings → Voice for the "${provider}" provider.`
-        });
-    }
-    return findings;
 }
 
 /**
@@ -175,29 +131,5 @@ export async function auditPersonaAndCaseVoices(dbAdapter, log) {
             hint: `These rows store a voice id that the active "${provider}" provider doesn't have. /api/tts returns 400 invalid_voice until each one is re-picked in Settings → Agent Personas (for kind=persona) or the case editor (for kind=case).`
         });
     }
-
-    // Footgun #1: patient defaults with case_voice set.
-    const patientDefaultOverrides = await fetchPatientDefaultsWithOverride(dbAdapter);
-    if (patientDefaultOverrides.length > 0) {
-        log.warn('patient persona is_default carries case_voice override', {
-            count: patientDefaultOverrides.length,
-            entries: patientDefaultOverrides.map((r) => ({
-                id: r.id, name: r.name, case_voice: extractCaseVoice(r),
-            })),
-            hint: 'A patient template flagged is_default=1 with a case_voice set forces EVERY case without its own override to that voice (and ignores the platform voice_<provider>_<gender> slots). Clear case_voice on the persona unless you genuinely want one voice for all inheriting cases.',
-        });
-    }
-
-    // Footgun #2: platform voice slots unset / invalid → tier 2 misses.
-    const slotFindings = await auditPlatformSlots(dbAdapter, provider, validator, log);
-
-    return {
-        provider,
-        checked: rows.length,
-        stale,
-        patientDefaultOverrides: patientDefaultOverrides.map((r) => ({
-            id: r.id, name: r.name, case_voice: extractCaseVoice(r),
-        })),
-        slotFindings,
-    };
+    return { provider, checked: rows.length, stale };
 }

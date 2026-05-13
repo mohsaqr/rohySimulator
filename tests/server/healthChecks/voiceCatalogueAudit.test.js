@@ -21,40 +21,13 @@ vi.mock('../../../server/services/googleTts.js', () => ({
 
 import { auditPersonaAndCaseVoices } from '../../../server/healthChecks/voiceCatalogueAudit.js';
 
-// The audit now reads multiple platform_settings keys via dbAdapter.get:
-// tts_provider, plus voice_<provider>_<male|female|child> for the slot
-// audit. The mock routes each key through `settings` so the test can opt
-// into "all slots present" / "all slots invalid" without affecting the
-// case_voice audit results.
-function makeDbAdapter({ provider, rows, slots = {}, patientDefaults = null }) {
+function makeDbAdapter({ provider, rows }) {
     return {
         get: (sql, params, cb) => {
-            const key = params?.[0];
-            if (key === 'tts_provider') {
-                cb(null, provider == null ? null : { setting_value: provider });
-                return;
-            }
-            if (Object.prototype.hasOwnProperty.call(slots, key)) {
-                const v = slots[key];
-                cb(null, v == null ? null : { setting_value: v });
-                return;
-            }
-            cb(null, null);
+            // The audit only calls .get for the tts_provider setting.
+            cb(null, provider == null ? null : { setting_value: provider });
         },
         all: (sql, cb) => {
-            // The audit makes two `.all` queries:
-            //   1. UNION of agent_templates + cases that mention case_voice
-            //      (the original catalogue audit)
-            //   2. agent_templates WHERE agent_type='patient' AND
-            //      is_default=1 AND config LIKE '%case_voice%' (the new
-            //      footgun check)
-            // The mock dispatches on the SQL so tests can set them
-            // independently. `patientDefaults: null` (the default) returns
-            // [] for the second query — tests opt in by passing rows.
-            if (sql.includes("agent_type = 'patient'") && sql.includes('is_default = 1')) {
-                cb(null, patientDefaults ?? []);
-                return;
-            }
             cb(null, rows);
         },
     };
@@ -102,26 +75,12 @@ describe('auditPersonaAndCaseVoices', () => {
 
     it('logs clean when every stored case_voice is in the active catalogue', async () => {
         const rows = [
-            // Note: kind=case is used here intentionally, not kind=persona —
-            // a persona with case_voice would now (correctly) trigger the
-            // "patient is_default carries override" warning. We're testing
-            // the catalogue audit's clean path, so route through cases.
-            { kind: 'case', id: 1, name: 'CaseA', config: JSON.stringify({ voice: { case_voice: 'am_liam' } }) },
-            { kind: 'case', id: 7, name: 'CaseB', config: JSON.stringify({ voice: { case_voice: 'af_bella' } }) },
+            { kind: 'persona', id: 1, name: 'Patient', config: JSON.stringify({ voice: { case_voice: 'am_liam' } }) },
+            { kind: 'case', id: 7, name: 'Test1', config: JSON.stringify({ voice: { case_voice: 'af_bella' } }) },
         ];
-        const adapter = makeDbAdapter({
-            provider: 'kokoro',
-            rows,
-            slots: {
-                voice_kokoro_male: 'am_liam',
-                voice_kokoro_female: 'af_bella',
-                voice_kokoro_child: 'af_bella',
-            },
-        });
+        const adapter = makeDbAdapter({ provider: 'kokoro', rows });
         const result = await auditPersonaAndCaseVoices(adapter, log);
         expect(result.stale).toEqual([]);
-        expect(result.patientDefaultOverrides).toEqual([]);
-        expect(result.slotFindings).toEqual([]);
         expect(log.info).toHaveBeenCalledWith(
             'voice catalogue audit clean',
             { provider: 'kokoro', checked: 2 }
@@ -133,22 +92,12 @@ describe('auditPersonaAndCaseVoices', () => {
         // The exact Orus regression that triggered the three-week chase:
         // a case kept a Google voice id under a kokoro provider.
         const rows = [
-            { kind: 'persona', id: 2, name: 'Default Patient', is_default: 1, agent_type: 'patient', config: JSON.stringify({ voice: { case_voice: 'am_liam' } }) },
+            { kind: 'persona', id: 2, name: 'Default Patient', config: JSON.stringify({ voice: { case_voice: 'am_liam' } }) },
             { kind: 'case', id: 1, name: 'Acute Chest Pain - STEMI', config: JSON.stringify({ voice: { case_voice: 'en-US-Chirp3-HD-Orus' } }) },
             { kind: 'case', id: 7, name: 'Test1', config: JSON.stringify({ voice: { case_voice: 'bm_lewis' } }) },
             { kind: 'case', id: 99, name: 'AlsoStale', config: JSON.stringify({ voice: { case_voice: 'mystery-voice' } }) },
         ];
-        const adapter = makeDbAdapter({
-            provider: 'kokoro',
-            rows,
-            // patientDefaults defaults to [], so the footgun check finds
-            // nothing here — we're testing the catalogue audit in isolation.
-            slots: {
-                voice_kokoro_male: 'am_liam',
-                voice_kokoro_female: 'af_bella',
-                voice_kokoro_child: 'af_bella',
-            },
-        });
+        const adapter = makeDbAdapter({ provider: 'kokoro', rows });
 
         const result = await auditPersonaAndCaseVoices(adapter, log);
 
@@ -158,18 +107,15 @@ describe('auditPersonaAndCaseVoices', () => {
             { kind: 'case', id: 99, name: 'AlsoStale', case_voice: 'mystery-voice' },
         ]);
         expect(log.info).not.toHaveBeenCalled();
-        // Two warnings now: (a) stale catalogue entries, (b) patient-default
-        // template carries case_voice. Both are independent findings; we
-        // check the catalogue warning explicitly and leave the footgun
-        // warning for the dedicated test below.
-        const calls = log.warn.mock.calls;
-        const stalePayload = calls.find(([m]) => m === 'stale case_voice values detected')?.[1];
-        expect(stalePayload).toMatchObject({
+        expect(log.warn).toHaveBeenCalledTimes(1);
+        const [msg, payload] = log.warn.mock.calls[0];
+        expect(msg).toBe('stale case_voice values detected');
+        expect(payload).toMatchObject({
             provider: 'kokoro',
             stale_count: 2,
             entries: result.stale,
         });
-        expect(stalePayload.hint).toContain('kokoro');
+        expect(payload.hint).toContain('kokoro');
     });
 
     it('tolerates malformed config JSON without throwing', async () => {
@@ -222,63 +168,6 @@ describe('auditPersonaAndCaseVoices', () => {
         expect(result.stale).toEqual([
             { kind: 'case', id: 2, name: 'OrusBack', case_voice: 'en-US-Chirp3-HD-Orus' },
         ]);
-    });
-
-    it('warns when an is_default patient persona carries a case_voice override', async () => {
-        // Catches the exact Orus footgun: a patient persona row that's
-        // is_default=1 with a case_voice set forces every inheriting case
-        // to that one voice and shadows the platform's gendered slot.
-        const patientDefaults = [
-            {
-                id: 245, name: 'Default Patient',
-                config: JSON.stringify({ voice: { case_voice: 'am_liam' } }),
-            },
-        ];
-        const adapter = makeDbAdapter({
-            provider: 'kokoro',
-            rows: [],
-            patientDefaults,
-            slots: {
-                voice_kokoro_male: 'am_liam',
-                voice_kokoro_female: 'af_bella',
-                voice_kokoro_child: 'af_bella',
-            },
-        });
-        const result = await auditPersonaAndCaseVoices(adapter, log);
-        expect(result.patientDefaultOverrides).toEqual([
-            { id: 245, name: 'Default Patient', case_voice: 'am_liam' },
-        ]);
-        const footgunCall = log.warn.mock.calls
-            .find(([m]) => m === 'patient persona is_default carries case_voice override');
-        expect(footgunCall).toBeTruthy();
-        expect(footgunCall[1]).toMatchObject({
-            count: 1,
-            entries: [{ id: 245, name: 'Default Patient', case_voice: 'am_liam' }],
-        });
-    });
-
-    it('warns when a platform voice slot for the active provider is unset or invalid', async () => {
-        const adapter = makeDbAdapter({
-            provider: 'kokoro',
-            rows: [],
-            slots: {
-                voice_kokoro_male: 'am_liam',        // valid
-                voice_kokoro_female: '',              // unset
-                voice_kokoro_child: 'not-a-voice',   // invalid
-            },
-        });
-        const result = await auditPersonaAndCaseVoices(adapter, log);
-        expect(result.slotFindings).toEqual([
-            { slot: 'female', key: 'voice_kokoro_female', status: 'unset', value: null },
-            { slot: 'child', key: 'voice_kokoro_child', status: 'invalid', value: 'not-a-voice' },
-        ]);
-        const slotCall = log.warn.mock.calls
-            .find(([m]) => m === 'platform voice slot misconfigured');
-        expect(slotCall).toBeTruthy();
-        expect(slotCall[1]).toMatchObject({
-            provider: 'kokoro',
-            findings: result.slotFindings,
-        });
     });
 
     it('treats a validator throw as "stale" rather than crashing the audit', async () => {

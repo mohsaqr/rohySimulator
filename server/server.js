@@ -283,6 +283,19 @@ async function initializeAndStart() {
         migrationLog.warn('voice key migration failed', { error: e.message });
     }
 
+    // Default platform tts_provider to kokoro on a fresh install — Kokoro
+    // is the offline default and the shipped persona case_voice values
+    // (am_michael, af_bella, etc. in server/db.js DEFAULT_AGENTS) are
+    // Kokoro voice ids. Without this, a fresh boot has no tts_provider
+    // set and the runtime refuses to play. setSettingIfEmpty is idempotent
+    // and ON CONFLICT DO NOTHING — admins who picked another provider
+    // through the UI are not overwritten.
+    try {
+        await setSettingIfEmpty('tts_provider', 'kokoro');
+    } catch (e) {
+        migrationLog.warn('default tts_provider seed failed', { error: e.message });
+    }
+
     // Start the server, then trigger TTS warmup async.
     const httpServer = startServer(PORT);
     const httpsServer = startHttpsServer(HTTPS_PORT);
