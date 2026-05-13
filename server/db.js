@@ -431,7 +431,10 @@ async function seedDefaultAgents() {
                AND json_extract(COALESCE(config, '{}'), '$.dos') IS NULL`,
             [JSON.stringify({ dos: p.dos, donts: p.donts }), p.type, p.name]
         );
-        // Patch voice slot if missing
+        // Patch the entire voice block if missing. Existing rows that
+        // already have `voice` set (e.g. from earlier seeds with just
+        // gender) skip this and fall through to the case_voice-specific
+        // patch below.
         await runDb(
             `UPDATE agent_templates
              SET config = json_patch(COALESCE(config, '{}'), ?)
@@ -439,6 +442,20 @@ async function seedDefaultAgents() {
                AND json_extract(COALESCE(config, '{}'), '$.voice') IS NULL`,
             [JSON.stringify({ voice: p.voice }), p.type, p.name]
         );
+        // Patch case_voice when the voice block exists but the case_voice
+        // field inside it is missing — covers rows seeded before
+        // 2026-05-13 (which had `voice: { gender: 'X' }` only). json_set
+        // adds the field without touching gender / tts_rate / tts_pitch.
+        // No-op if case_voice is already set (admin-picked value wins).
+        if (p.voice?.case_voice) {
+            await runDb(
+                `UPDATE agent_templates
+                 SET config = json_set(COALESCE(config, '{}'), '$.voice.case_voice', ?)
+                 WHERE agent_type = ? AND name = ? AND is_default = 1
+                   AND json_extract(COALESCE(config, '{}'), '$.voice.case_voice') IS NULL`,
+                [p.voice.case_voice, p.type, p.name]
+            );
+        }
     }
 }
 
