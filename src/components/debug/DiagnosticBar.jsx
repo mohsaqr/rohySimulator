@@ -290,7 +290,9 @@ export default function DiagnosticBar() {
                 }
                 const patientResolved = resolveVoice({
                     voice: mergedPatientVoice,
-                    voiceSettings
+                    voiceSettings,
+                    gender: caseConfig?.demographics?.gender ?? null,
+                    age: caseConfig?.demographics?.age ?? null,
                 });
                 speakers.push({
                     role: 'patient',
@@ -694,8 +696,7 @@ export default function DiagnosticBar() {
                             </table>
                             <div className="mt-2 text-[10px] text-neutral-600">
                                 <code>override</code> = per-speaker <code>case_voice</code> set;{' '}
-                                <code>platform-default</code> = persona default in /platform-settings/avatars;{' '}
-                                <code>voice-slot</code> = falls through to <code>voice_&lt;provider&gt;_&lt;slot&gt;</code>.
+                                <code>platform-slot</code> = falls through to <code>voice_&lt;provider&gt;_&lt;slot&gt;</code> for the speaker's gender/age.
                             </div>
                         </div>
                     )}
@@ -902,6 +903,7 @@ function TierBadge({ tier }) {
     if (!tier) return <span className="text-neutral-600 italic">no voice</span>;
     const palette = {
         'override': 'bg-emerald-900/40 text-emerald-300 border-emerald-800',
+        'platform-slot': 'bg-sky-900/40 text-sky-300 border-sky-800',
         'platform-default': 'bg-blue-900/30 text-blue-300 border-blue-800',
         'voice-slot': 'bg-amber-900/30 text-amber-300 border-amber-800',
         'hardcoded': 'bg-orange-900/30 text-orange-300 border-orange-800',

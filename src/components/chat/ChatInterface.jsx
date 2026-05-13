@@ -345,16 +345,32 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 setAgentStates(states);
 
                 // Patient template resolution: prefer per-case attached row;
-                // fall back to platform default; null if neither exists. The
-                // patient prompt builder appends the resolved persona/dos/
-                // donts on top of case.config so legacy cases still work.
+                // otherwise pick a platform-default patient template whose
+                // `config.voice.gender` matches the case demographics; fall
+                // back to any is_default=1 patient template; null if none.
+                // The gender-aware pick lets us ship "Default Patient" and
+                // "Default Female Patient" as siblings — see server/db.js
+                // DEFAULT_AGENTS — without forcing every case author to
+                // wire personas by hand.
                 const attachedPatient = agentList.find(a => a.agent_type === 'patient' && a.enabled !== 0 && a.enabled !== false);
                 if (attachedPatient) {
                     setPatientTemplate(normalizePatientAgent(attachedPatient));
                 } else {
                     try {
                         const templates = await AgentService.getTemplates();
-                        const fallback = (templates || []).find(t => t.agent_type === 'patient' && (t.is_default === 1 || t.is_default === true));
+                        const patientDefaults = (templates || []).filter(t =>
+                            t.agent_type === 'patient' && (t.is_default === 1 || t.is_default === true)
+                        );
+                        const caseGender = activeCase?.config?.demographics?.gender;
+                        const wantsFemale = /^f/i.test(caseGender || '');
+                        const matchByGender = (t) => {
+                            const tg = parseConfig(t.config)?.voice?.gender;
+                            return wantsFemale ? /^f/i.test(tg || '') : !/^f/i.test(tg || '');
+                        };
+                        const fallback =
+                            patientDefaults.find(matchByGender) ||
+                            patientDefaults[0] ||
+                            null;
                         setPatientTemplate(fallback ? normalizePatientAgent(fallback) : null);
                     } catch {
                         setPatientTemplate(null);
@@ -852,9 +868,17 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // shape (file/provider/rate/pitch/tier) lets callers forward the picked
     // engine to the server — without that, /api/tts silently falls back to
     // the platform default tts_provider and learners hear the wrong engine.
-    const resolveSpeakerVoice = useCallback((override) => resolveVoice({
+    //
+    // `demographics` (optional) lets the resolver fall through to the
+    // platform's gendered voice slot (voice_<provider>_<male|female|child>)
+    // when no case_voice is set on either the case or the persona. Without
+    // it tier 2 is skipped and the resolver returns null for personas that
+    // never set a case_voice.
+    const resolveSpeakerVoice = useCallback((override, demographics = null) => resolveVoice({
         voice: override,
-        voiceSettings
+        voiceSettings,
+        gender: demographics?.gender ?? null,
+        age: demographics?.age ?? null,
     }), [voiceSettings]);
 
     const handleSendToPatient = async (overrideText) => {
@@ -902,14 +926,16 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             // template. Admins who set the voice in the persona editor (the
             // discoverable place) saw nothing change.
             const override = mergePatientVoiceConfig(activeCase?.config?.voice, patientTemplate?.config?.voice);
-            const r = resolveSpeakerVoice(override);
+            const r = resolveSpeakerVoice(override, activeCase?.config?.demographics);
             if (!r.file) {
                 // No silent fallback by design (see voiceResolver.js header).
-                // If neither the case nor the Patient persona has a
-                // case_voice set, the patient stays mute and the admin gets
-                // a loud toast pointing at the two places they can fix it.
+                // Tier 2 (platform slot) already attempted using the case
+                // demographics; reaching here means neither an override nor
+                // a platform-slot voice exists for this provider+gender. The
+                // admin gets a loud toast pointing at the three places they
+                // can fix it.
                 console.warn('[voice] no voice resolved for case', { provider: r.provider });
-                toast?.error?.('No voice configured. Set a Case voice in the Case editor, or a default voice on the Patient persona.');
+                toast?.error?.('No voice configured. Set a Case voice, a default voice on the Patient persona, or configure the platform voice slot for this provider + gender.');
                 voiceErrored = true;
             } else {
                 speech = VoiceService.beginSpeechSession({
@@ -1037,7 +1063,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         if (!voiceMode || activeTab !== 'patient') return false;
         if (prefs.avatarAlarmSpeechEnabled === false || isAvatarAlarmSpeechForceOff()) return false;
         const override = mergePatientVoiceConfig(activeCase?.config?.voice, patientTemplate?.config?.voice);
-        const r = resolveSpeakerVoice(override);
+        const r = resolveSpeakerVoice(override, activeCase?.config?.demographics);
         const spokenText = stripStageDirections(text);
         if (!spokenText || !r.file) return false;
 

@@ -1,8 +1,10 @@
-// Tests for src/utils/voiceResolver.js — the post-2026-05-12 contract.
+// Tests for src/utils/voiceResolver.js — the post-2026-05-13 contract.
 //
-// The resolver has exactly one tier: voice.case_voice → file. Anything else
-// returns file:null. Provider is read only from voiceSettings.tts_provider.
-// No slot logic, no per-provider hardcoded map, no catalogue fallback.
+// The resolver has TWO named tiers:
+//   1. voice.case_voice                         → tier='override'
+//   2. voiceSettings.voice_<provider>_<slot>    → tier='platform-slot'
+// Tier 2 only fires when gender/age are supplied. Anything else returns
+// file:null. Provider is read only from voiceSettings.tts_provider.
 
 import { describe, it, expect } from 'vitest';
 import { resolveVoice, deriveSlot } from './voiceResolver.js';
@@ -38,29 +40,102 @@ describe('resolveVoice — tier 1: case_voice override', () => {
     });
 });
 
-describe('resolveVoice — no fallback below tier 1', () => {
-    it('returns file:null when nothing matches — no hardcoded provider voice', () => {
+describe('resolveVoice — tier 2: platform slot for the speaker demographic', () => {
+    it('picks voice_<provider>_<slot> when no case_voice is set and gender is supplied', () => {
         const r = resolveVoice({
             voice: {},
-            voiceSettings: { tts_provider: 'kokoro' }
+            voiceSettings: {
+                tts_provider: 'google',
+                voice_google_female: 'en-US-Neural2-F',
+                voice_google_male: 'en-US-Chirp3-HD-Charon',
+            },
+            gender: 'female',
+            age: 35,
+        });
+        expect(r.file).toBe('en-US-Neural2-F');
+        expect(r.tier).toBe('platform-slot');
+        expect(r.slot).toBe('female');
+    });
+
+    it('child slot wins over gender when age < 13', () => {
+        const r = resolveVoice({
+            voice: {},
+            voiceSettings: {
+                tts_provider: 'google',
+                voice_google_female: 'en-US-Neural2-F',
+                voice_google_child: 'en-US-Chirp-HD-O',
+            },
+            gender: 'female',
+            age: 8,
+        });
+        expect(r.file).toBe('en-US-Chirp-HD-O');
+        expect(r.slot).toBe('child');
+    });
+
+    it('case_voice override beats the platform slot', () => {
+        const r = resolveVoice({
+            voice: { case_voice: 'en-US-Casey' },
+            voiceSettings: {
+                tts_provider: 'google',
+                voice_google_female: 'en-US-Neural2-F',
+            },
+            gender: 'female',
+            age: 35,
+        });
+        expect(r.file).toBe('en-US-Casey');
+        expect(r.tier).toBe('override');
+    });
+
+    it('returns file:null when the slot for that demographic is unset', () => {
+        const r = resolveVoice({
+            voice: {},
+            voiceSettings: {
+                tts_provider: 'google',
+                voice_google_male: 'en-US-Charon',
+                // voice_google_female intentionally missing
+            },
+            gender: 'female',
+            age: 35,
         });
         expect(r.file).toBeNull();
         expect(r.tier).toBeNull();
-        // Provider is still surfaced so the caller can build a helpful error
-        // ("No voice configured for provider X. Set one in …").
-        expect(r.provider).toBe('kokoro');
+        expect(r.slot).toBe('female');
     });
 
-    it('extra args from older callsites (gender / age / platformAvatars / ttsVoices) are ignored', () => {
+    it('returns file:null when the slot is set to an empty string', () => {
         const r = resolveVoice({
             voice: {},
-            voiceSettings: { tts_provider: 'kokoro' },
-            gender: 'female',
-            age: 8,
-            platformAvatars: { default_voice_kokoro_child: 'af_bella' },
-            ttsVoices: [{ filename: 'whatever' }]
+            voiceSettings: { tts_provider: 'kokoro', voice_kokoro_male: '   ' },
+            gender: 'male',
+            age: 40,
         });
         expect(r.file).toBeNull();
+        expect(r.tier).toBeNull();
+    });
+
+    it('does NOT attempt tier 2 when caller omits gender and age', () => {
+        const r = resolveVoice({
+            voice: {},
+            voiceSettings: {
+                tts_provider: 'google',
+                voice_google_male: 'en-US-Charon',
+                voice_google_female: 'en-US-Neural2-F',
+            },
+        });
+        expect(r.file).toBeNull();
+        expect(r.tier).toBeNull();
+        expect(r.slot).toBeNull();
+    });
+
+    it('does NOT attempt tier 2 when provider is unset, even if gender is given', () => {
+        const r = resolveVoice({
+            voice: {},
+            voiceSettings: { voice_google_female: 'en-US-Neural2-F' },
+            gender: 'female',
+            age: 35,
+        });
+        expect(r.file).toBeNull();
+        expect(r.tier).toBeNull();
     });
 });
 

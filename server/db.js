@@ -290,6 +290,56 @@ If the learner asks meta-questions ("are you a real patient?", "what should I as
                     'Reveal information the patient wouldn\'t actually know'
                 ]
             })
+        },
+        {
+            // Sibling patient persona for female cases. ChatInterface picks
+            // this one when case demographics.gender starts with "f"; the
+            // generic "Default Patient" above is used otherwise. Both are
+            // is_default=1; the seeder dedups on (agent_type, name) so the
+            // pair can coexist. Voice config carries gender='female' so
+            // resolveVoice's tier 2 falls through to voice_<provider>_female
+            // when no per-case override is set.
+            agent_type: 'patient',
+            name: 'Default Female Patient',
+            role_title: 'Female Simulated Patient',
+            avatar_url: 'rb_female_adult_01.glb',
+            system_prompt: `You are the patient in this simulation. You stay in character throughout the conversation.
+
+Your role:
+- Answer the learner's questions truthfully when they're asked, the way a real patient would.
+- Use lay language unless the learner specifically asks for medical detail.
+- Describe symptoms in your own words; if asked about pain, use a 0–10 scale.
+- Express how you're feeling emotionally as well as physically — worried, tired, in pain, relieved — when relevant.
+- It's fine to be uncertain ("I'm not sure", "I think it started yesterday") rather than perfectly accurate.
+- Communication style: tend toward more context and hedging than minimum-word answers ("it's been bothering me since..."), and acknowledge concern more readily when present.
+
+What you know:
+- Your demographics, current symptoms, recent history, past medical history, current medications, and allergies are provided in the case context.
+- You do NOT know your diagnosis, lab values, or what the doctor is thinking. Don't volunteer differentials or medical reasoning.
+
+If the learner asks meta-questions ("are you a real patient?", "what should I ask?"), gently redirect — stay in character.`,
+            context_filter: 'history',
+            communication_style: 'concise',
+            is_default: 1,
+            config: JSON.stringify({
+                typical_availability: 'present',
+                can_be_paged: false,
+                response_time: { min: 0, max: 0 },
+                voice: { gender: 'female' },
+                dos: [
+                    'Stay in character throughout',
+                    'Use lay terms unless asked otherwise',
+                    'Answer truthfully when asked directly',
+                    'Express emotion alongside symptoms',
+                    'Acknowledge worry or discomfort when relevant rather than minimising'
+                ],
+                donts: [
+                    'Volunteer differential diagnoses',
+                    'Use medical jargon unprompted',
+                    'Break character even if the learner asks meta questions',
+                    'Reveal information the patient wouldn\'t actually know'
+                ]
+            })
         }
 ];
 
@@ -304,11 +354,14 @@ export function findDefaultAgent(agentType, name) {
 // Seed default agent personas
 async function seedDefaultAgents() {
     // Insert a shipped standard ONLY if no is_default=1 row exists for its
-    // agent_type yet. Standards are now admin-editable (including renamable),
-    // so we can't dedupe on (agent_type, name) — that would re-insert the
-    // shipped baseline next boot under its original name and collide with
-    // the renamed admin row at reset time. agent_type IS the immutable
-    // identity for shipped rows; PUT also locks it for is_default=1 rows.
+    // (agent_type, name) yet. This relaxation (2026-05-13) was needed to ship
+    // sibling defaults like "Default Patient" + "Default Female Patient" —
+    // dedup on agent_type alone blocked the second one. The trade-off: if an
+    // admin renames a shipped default (e.g. "Default Patient" → "Acme
+    // Patient") and the server restarts, the seeder re-creates the original
+    // "Default Patient" alongside the renamed copy. We accept that one-time
+    // duplicate as the cost of allowing multiple defaults per agent_type.
+    // findDefaultAgent() still resolves by name for reset-to-defaults.
     for (const agent of DEFAULT_AGENTS) {
         try {
             await runDb(
@@ -316,7 +369,7 @@ async function seedDefaultAgents() {
                  (agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style, is_default, config)
                  SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
                  WHERE NOT EXISTS (
-                   SELECT 1 FROM agent_templates WHERE is_default = 1 AND agent_type = ? LIMIT 1
+                   SELECT 1 FROM agent_templates WHERE is_default = 1 AND agent_type = ? AND name = ? LIMIT 1
                  )`,
                 [
                     agent.agent_type,
@@ -328,11 +381,12 @@ async function seedDefaultAgents() {
                     agent.communication_style,
                     agent.is_default,
                     agent.config,
-                    agent.agent_type
+                    agent.agent_type,
+                    agent.name
                 ]
             );
         } catch (err) {
-            dbLog.warn('default agent seed failed', { agent_type: agent.agent_type, error: err.message });
+            dbLog.warn('default agent seed failed', { agent_type: agent.agent_type, name: agent.name, error: err.message });
         }
     }
 
@@ -346,6 +400,7 @@ async function seedDefaultAgents() {
         { type: 'relative', name: 'Family Member', avatar: 'rb_female_adult_05.glb' },
         { type: 'discussant', name: 'Default Discussant', avatar: 'rb_medical_male_03.glb' },
         { type: 'patient', name: 'Default Patient', avatar: 'rb_male_adult_03.glb' },
+        { type: 'patient', name: 'Default Female Patient', avatar: 'rb_female_adult_01.glb' },
     ];
     for (const p of avatarPatches) {
         await runDb(
