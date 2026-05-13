@@ -773,10 +773,15 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     };
 
     // Pre-assemble the patient prompt once the case + (optional) snapshot +
-    // patient template are ready, so the DiagnosticBar inspector has something
-    // to show before the learner sends their first message. buildPatientSystemPrompt
-    // is a pure read of state + props; calling it for the cache side-effect
-    // is safe (the return value is intentionally discarded here).
+    // patient template are ready, so the DiagnosticBar inspector has
+    // something to show before the learner sends their first message.
+    // buildPatientSystemPrompt reads state + props and writes the module
+    // cache via setLastPatientPrompt (the "pre-warm" side effect we want);
+    // the returned string is intentionally discarded here. Live vitals and
+    // session events are deliberately NOT in the dep list — including them
+    // would re-stash the prompt on every monitor tick, churning the cache
+    // for no inspector benefit. The cache is refreshed for real on each
+    // outgoing patient message anyway.
     useEffect(() => {
         if (!activeCase) return;
         try {

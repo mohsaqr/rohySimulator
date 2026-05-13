@@ -14,6 +14,16 @@
 
 const SEPARATOR = '\n\n---\n\n';
 
+// Coerce route-body inputs to a trimmed string. system_prompt and
+// systemPromptTemplate can technically arrive as anything (object, number,
+// null) from req.body if a buggy client / test sends them that way — fall
+// back to '' rather than crashing in .trim().
+function toTrimmedString(value) {
+    if (value == null) return '';
+    if (typeof value === 'string') return value.trim();
+    return String(value).trim();
+}
+
 /**
  * Assemble the final system prompt sent to the LLM.
  *
@@ -23,8 +33,8 @@ const SEPARATOR = '\n\n---\n\n';
  * @returns {string}
  */
 export function assembleSystemPrompt({ system_prompt = '', systemPromptTemplate = '' } = {}) {
-    const leading = (system_prompt || '').trim();
-    const trailing = (systemPromptTemplate || '').trim();
+    const leading = toTrimmedString(system_prompt);
+    const trailing = toTrimmedString(systemPromptTemplate);
     if (leading && trailing) return `${leading}${SEPARATOR}${trailing}`;
     if (leading) return leading;
     if (trailing) return trailing;

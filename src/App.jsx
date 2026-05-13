@@ -533,36 +533,12 @@ function MainApp() {
       );
    }
 
-   // Show full-page physical exam screen. Same shape as the discussion
-   // branch above — early-returns the main layout so the exam workspace
-   // gets the whole viewport. Triggered by `showExamination`, which was
-   // formerly the toggle for the old ManikinPanel modal (mount removed
-   // below). Existing callers like OrdersDrawer.onOpenExamination still
-   // call setShowExamination(true) unchanged.
-   if (showExamination) {
-      return (
-         <PhysicalExamScreen
-            activeCase={activeCase}
-            sessionId={sessionId}
-            physicalExam={caseSnapshot?.config?.physical_exam ?? activeCase?.config?.physical_exam ?? null}
-            patientGender={(caseSnapshot?.config?.demographics?.gender ?? activeCase?.config?.demographics?.gender)?.toLowerCase() || 'male'}
-            onExamPerformed={(exam) => {
-               EventLogger.physicalExamPerformed(
-                  exam.regionId,
-                  exam.examType,
-                  exam.finding,
-                  { gender: activeCase?.config?.demographics?.gender, abnormal: exam.abnormal }
-               );
-            }}
-            onClose={() => {
-               setShowExamination(false);
-               EventLogger.examPanelClosed();
-            }}
-         />
-      );
-   }
-
-   // Prepare patient info for PatientRecord
+   // Prepare patient info for PatientRecord. Must live above the
+   // showExamination branch below: PhysicalExamScreen embeds ManikinPanel,
+   // which calls usePatientRecord() to log exam findings. Outside the
+   // provider the hook returns no-op stubs and findings silently vanish —
+   // hoisting the provider keeps exam state captured regardless of which
+   // top-level surface is showing.
    const patientInfo = activeCase ? {
       name: activeCase.config?.patient_name || activeCase.name || 'Unknown Patient',
       age: activeCase.config?.demographics?.age || null,
@@ -577,6 +553,23 @@ function MainApp() {
          caseId={activeCase?.id}
          patientInfo={patientInfo}
       >
+         {showExamination ? (
+            <PhysicalExamScreen
+               activeCase={activeCase}
+               sessionId={sessionId}
+               physicalExam={caseSnapshot?.config?.physical_exam ?? activeCase?.config?.physical_exam ?? null}
+               patientGender={(caseSnapshot?.config?.demographics?.gender ?? activeCase?.config?.demographics?.gender)?.toLowerCase() || 'male'}
+               onExamPerformed={(exam) => {
+                  EventLogger.physicalExamPerformed(
+                     exam.regionId,
+                     exam.examType,
+                     exam.finding,
+                     { gender: activeCase?.config?.demographics?.gender, abnormal: exam.abnormal }
+                  );
+               }}
+               onClose={() => setShowExamination(false)}
+            />
+         ) : (
          <div className="flex h-screen w-screen bg-neutral-950 text-white overflow-hidden">
 
          {/* Multi-tab warning banner. Shown when another tab on this origin
@@ -811,6 +804,7 @@ function MainApp() {
          )}
 
          </div>
+         )}
       </PatientRecordProvider>
    );
 }

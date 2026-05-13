@@ -243,6 +243,7 @@ describe('formatPersonalityForPrompt', () => {
             communicationStyle: 'brief',
             emotionalState: 'anxious',
             painTolerance: 'dramatic',
+            // wording check: directive should not encourage exaggeration
             cooperativeness: 'reluctant',
             healthLiteracy: 'low',
         });

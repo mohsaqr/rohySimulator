@@ -111,7 +111,7 @@ const PERSONALITY_FIELDS = [
         directives: {
             high: 'high — minimise how much pain you express',
             low: 'low — express discomfort readily when relevant',
-            dramatic: 'dramatic — exaggerate pain and discomfort',
+            dramatic: 'dramatic — express pain intensely when clinically relevant',
         },
     },
     {

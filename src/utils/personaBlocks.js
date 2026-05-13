@@ -2,9 +2,11 @@
 // agent's system prompt at LLM-call time.
 //
 // Each agent template stores `config.dos` and `config.donts` as arrays of
-// short strings (one bullet each). The send pipeline calls this helper after
-// the base system_prompt and before the case context, so the dos/donts read
-// as direct instructions to the model.
+// short strings (one bullet each). For the patient prompt, these are emitted
+// immediately after the patient agent template's systemPrompt, which itself
+// trails the case-specific `## INSTRUCTIONS` (the ordering was reversed in
+// the 2026-05 patient-prompt pass — case content anchors first, template
+// baseline + dos/donts read as the shared behavioural reminder).
 
 function pickArray(value) {
     if (Array.isArray(value)) {

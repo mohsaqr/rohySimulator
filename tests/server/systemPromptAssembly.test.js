@@ -39,6 +39,15 @@ describe('assembleSystemPrompt', () => {
         expect(assembleSystemPrompt({ system_prompt: '   ', systemPromptTemplate: '\n\n' })).toBe('');
     });
 
+    it('coerces non-string inputs without throwing', () => {
+        expect(assembleSystemPrompt({ system_prompt: {}, systemPromptTemplate: '' })).toBe('[object Object]');
+        expect(assembleSystemPrompt({ system_prompt: 42, systemPromptTemplate: undefined })).toBe('42');
+        expect(assembleSystemPrompt({ system_prompt: null, systemPromptTemplate: null })).toBe('');
+        // The point: a malformed client payload should not 500 the route. We
+        // intentionally accept the coerced string (even if odd) rather than
+        // crash inside the proxy handler.
+    });
+
     it('regression: platform template is never prepended in front of the case prompt', () => {
         const out = assembleSystemPrompt({
             system_prompt: '## PERSONA\nname: X',
