@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     FlaskConical, X, ChevronUp, ChevronDown,
     Search, Clock, CheckCircle, Loader2, List,
-    Eye, FileText, Scan, Stethoscope, Activity, Syringe
+    Eye, FileText, Scan, Activity, Syringe
 } from 'lucide-react';
 import PatientRecordViewer from '../PatientRecordViewer';
 import { useToast } from '../../contexts/ToastContext';
@@ -19,7 +19,7 @@ import { ApiError, apiFetch, apiPost } from '../../services/apiClient';
  * - Radiology Studies
  * - Medications/Drugs
  */
-export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData, onOpenExamination }) {
+export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData }) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('labs'); // labs, radiology, drugs, records
     const [drawerHeight, setDrawerHeight] = useState('50vh'); // 50vh or 80vh
@@ -370,9 +370,14 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     // *after* every hook so hook-call ordering stays stable across renders.
     if (!caseId || !sessionId) return null;
 
+    // Labs + Radiology used to live in this tab list as floating pills.
+    // They were retired when the bottom RoomNavigator went in — the nav
+    // owns both rooms now. The drawer's internal labs/radiology tabs
+    // are still wired up in case the operator opens the drawer some
+    // other way, but no entry point surfaces them. Remaining pills
+    // (treatments, records, memory) are functions the new nav doesn't
+    // cover yet.
     const tabs = [
-        { id: 'labs', label: 'Laboratory', icon: FlaskConical, count: readyOrders.length },
-        { id: 'radiology', label: 'Radiology', icon: Scan, count: readyRadiology.length },
         { id: 'treatments', label: 'Treatments', icon: Syringe, count: treatmentOrdersCount },
         { id: 'records', label: 'Records', icon: FileText, count: 0 },
         { id: 'memory', label: 'Memory', icon: Activity, count: 0 }
@@ -506,16 +511,16 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                 </div>
             )}
 
-            {/* Floating Action Buttons */}
+            {/* Floating Action Buttons. Pushed up to clear the
+                always-visible RoomNavigator (~72px tall) at the
+                bottom of the chat surface. */}
             {!isOpen && (
-                <div className="fixed bottom-4 right-4 z-40 flex gap-2">
+                <div className="fixed bottom-24 right-4 z-40 flex gap-2">
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => handleDrawerOpen(tab.id)}
                             className={`relative px-4 py-3 rounded-full flex items-center gap-2 font-bold text-sm shadow-lg transition-all hover:scale-105 ${
-                                tab.id === 'labs' ? 'bg-purple-600 hover:bg-purple-500 text-white' :
-                                tab.id === 'radiology' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' :
                                 tab.id === 'records' ? 'bg-amber-600 hover:bg-amber-500 text-white' :
                                 tab.id === 'memory' ? 'bg-rose-600 hover:bg-rose-500 text-white' :
                                 'bg-neutral-700 hover:bg-neutral-600 text-white'
@@ -528,23 +533,15 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                     {tab.count}
                                 </span>
                             )}
-                            {tab.id === 'labs' && pendingOrders.length > 0 && (
-                                <span className="absolute -top-2 -left-2 bg-yellow-500 text-black text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                                    {pendingOrders.length}
-                                </span>
-                            )}
                         </button>
                     ))}
-                    {/* Physical Examination Button */}
-                    {onOpenExamination && (
-                        <button
-                            onClick={onOpenExamination}
-                            className="relative px-4 py-3 rounded-full flex items-center gap-2 font-bold text-sm shadow-lg transition-all hover:scale-105 bg-cyan-600 hover:bg-cyan-500 text-white"
-                        >
-                            <Stethoscope className="w-5 h-5" />
-                            Physical Exam
-                        </button>
-                    )}
+                    {/* The Physical Exam and Investigations floating
+                        pills used to live here. They were retired when
+                        the bottom RoomNavigator went in — the nav owns
+                        every room entry point now. The drawer's own
+                        labs/radiology tabs above still work as a legacy
+                        ordering surface until they get folded into the
+                        Investigations screen. */}
                 </div>
             )}
 

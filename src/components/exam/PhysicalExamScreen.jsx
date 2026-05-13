@@ -22,6 +22,7 @@ export default function PhysicalExamScreen({
     patientGender,
     onExamPerformed,
     onClose,
+    roomNav,
 }) {
     const [showNotes, setShowNotes] = useState(false);
 
@@ -75,6 +76,11 @@ export default function PhysicalExamScreen({
                     onExamPerformed={onExamPerformed}
                 />
             </div>
+
+            {/* Bottom RoomNavigator — rendered by App.jsx and passed in
+                so the nav stays consistent across rooms while keeping
+                this screen's layout self-contained. */}
+            {roomNav}
 
             {/* Side notes drawer */}
             <ExamNotesDrawer

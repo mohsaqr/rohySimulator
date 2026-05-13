@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Keyboard, GraduationCap, MessagesSquare, NotebookPen, Play } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Keyboard, GraduationCap, MessagesSquare, NotebookPen, Play } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
 import { fetchDiscussantForCase } from '../../services/discussionService';
 import { useDiscussionEngine } from '../../hooks/useDiscussionEngine';
@@ -13,7 +13,7 @@ import CaseSummaryModal from './CaseSummaryModal';
 
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 
-export default function DiscussionScreen({ sessionId, activeCase, onClose }) {
+export default function DiscussionScreen({ sessionId, activeCase, onClose, caseEnded = false, roomNav = null }) {
     const { headManifest, platformAvatars, voiceSettings } = useVoice();
     const [discussant, setDiscussant] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -114,6 +114,26 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose }) {
                     </button>
                 </div>
             </header>
+
+            {/* Mid-case warning. Shown when the user reached this room
+                via the bottom RoomNavigator without ending the session.
+                The consultant is designed for the post-case debrief, so
+                visiting mid-case is allowed but worth a heads-up. When
+                caseEnded is true (came in via End & Debrief) we render
+                a calmer "session ended" strip instead. */}
+            {!caseEnded ? (
+                <div className="flex items-start gap-3 px-6 py-2.5 bg-amber-500/10 border-b border-amber-500/30 text-amber-100">
+                    <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-300 flex-shrink-0" />
+                    <div className="text-xs leading-relaxed flex-1">
+                        <span className="font-semibold">Heads-up — this is the debrief room.</span>{' '}
+                        The consultant is meant for after you finish with the patient. You can talk now, but they may respond as if the case is closed. Use <span className="font-semibold text-amber-200">End &amp; Debrief</span> in the patient room when you're ready to close the case for real.
+                    </div>
+                </div>
+            ) : (
+                <div className="px-6 py-2 bg-indigo-500/10 border-b border-indigo-500/30 text-indigo-100 text-xs">
+                    <span className="font-semibold">Session ended.</span> This is your debrief with the consultant.
+                </div>
+            )}
 
             {/* Body — two-column: patient (left) + discussant (right). Notes in drawer. */}
             <div className="flex-1 min-h-0 grid grid-cols-[minmax(280px,1fr)_minmax(0,2fr)] gap-6 p-6">
@@ -220,6 +240,11 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose }) {
                     onClose={() => setShowTranscript(false)}
                 />
             )}
+
+            {/* Bottom RoomNavigator — same nav as every other in-session
+                surface. Lets the user leave the consultant room without
+                ending the session. */}
+            {roomNav}
         </div>
     );
 }

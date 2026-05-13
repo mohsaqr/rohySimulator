@@ -25,6 +25,8 @@ import BodyMapDebug from './components/examination/BodyMapDebug';
 import TnaDashboard from './components/analytics/tna/TnaDashboardV2';
 import DiscussionScreen from './components/discussion/DiscussionScreen';
 import PhysicalExamScreen from './components/exam/PhysicalExamScreen';
+import InvestigationsScreen from './components/investigations/InvestigationsScreen';
+import RoomNavigator from './components/common/RoomNavigator';
 import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
 
 // Persistence rule: a session ends ONLY through the Exit or End buttons
@@ -36,7 +38,6 @@ function MainApp() {
    const [showUserProfile, setShowUserProfile] = useState(false);
    const [showUserMenu, setShowUserMenu] = useState(false);
    const [showTnaAnalytics, setShowTnaAnalytics] = useState(false);
-   const [showDiscussion, setShowDiscussion] = useState(false);
    // Agent persona editor full-page route. null = closed; 'new' = create;
    // <number> = edit by template id. Setting this hides ConfigPanel so the
    // editor gets the entire viewport. On close we reopen ConfigPanel with
@@ -63,7 +64,20 @@ function MainApp() {
    const [activeCase, setActiveCase] = useState(null);
    const [sessionId, setSessionId] = useState(null);
    const [selectedResult, setSelectedResult] = useState(null);
-   const [showExamination, setShowExamination] = useState(false);
+   // currentRoom drives the in-session bottom navigator. One of:
+   //   'chat'        — main patient-chat UI (default)
+   //   'examination' — PhysicalExamScreen
+   //   'lab'         — InvestigationsScreen, Laboratory active
+   //   'radiology'   — InvestigationsScreen, Radiology active
+   //   'consultant'  — DiscussionScreen (debrief room)
+   // All five are peers. Visiting the consultant does NOT end the
+   // session — that's the End & Debrief button in the patient room.
+   // Ending the session also sends the user here (caseEnded=true) but
+   // leaving via the nav while the session is live just navigates back.
+   const [currentRoom, setCurrentRoom] = useState('chat');
+   const showExamination = currentRoom === 'examination';
+   const showInvestigations = currentRoom === 'lab' || currentRoom === 'radiology';
+   const showDiscussion = currentRoom === 'consultant';
    const [showEndConfirm, setShowEndConfirm] = useState(false);
 
    // Set user context for EventLogger when user logs in
@@ -72,6 +86,16 @@ function MainApp() {
          EventLogger.setContext({ userId: user.id });
       }
    }, [user?.id]);
+
+   // Stamp the active room onto EventLogger whenever the bottom
+   // RoomNavigator changes the current room. Every subsequent log()
+   // call carries data.room so the analytics layer can answer "what
+   // was the learner doing in the Laboratory room?" without joining
+   // against navigation events. Also emits one NAVIGATED event for the
+   // transition itself so duration-in-room can be computed downstream.
+   useEffect(() => {
+      EventLogger.roomChanged(currentRoom);
+   }, [currentRoom]);
 
    useEffect(() => {
       if (!user?.id) return undefined;
@@ -212,7 +236,7 @@ function MainApp() {
             break;
          case 'settings':    setShowFullPageSettings(true); break;
          case 'tna':         setShowTnaAnalytics(true); break;
-         case 'discussion':  setShowDiscussion(true); break;
+         case 'discussion':  setCurrentRoom('consultant'); break;
          case 'home':
          default: /* no-op — case view */ break;
       }
@@ -376,11 +400,11 @@ function MainApp() {
       // debrief discussion screen. handleCloseDiscussion does the actual
       // cleanup once the learner is done with the debrief.
       setCaseEnded(true);
-      setShowDiscussion(true);
+      setCurrentRoom('consultant');
    };
 
    const handleCloseDiscussion = () => {
-      setShowDiscussion(false);
+      setCurrentRoom('chat');
       // If the user only opened the discussion mid-case (unlock_trigger='always')
       // and didn't end the case, leave the session intact.
       if (caseEnded) {
@@ -522,16 +546,11 @@ function MainApp() {
       );
    }
 
-   // Show full-page discussion screen
-   if (showDiscussion) {
-      return (
-         <DiscussionScreen
-            sessionId={sessionId}
-            activeCase={activeCase}
-            onClose={handleCloseDiscussion}
-         />
-      );
-   }
+   // The consultant room (DiscussionScreen) is rendered inside the
+   // PatientRecordProvider conditional tree below so it gets the same
+   // bottom RoomNavigator as the other rooms. Leaving the consultant
+   // via the nav routes back to the chat without ending the session;
+   // ending the session uses the patient room's End & Debrief button.
 
    // Prepare patient info for PatientRecord. Must live above the
    // showExamination branch below: PhysicalExamScreen embeds ManikinPanel,
@@ -567,10 +586,48 @@ function MainApp() {
                      { gender: activeCase?.config?.demographics?.gender, abnormal: exam.abnormal }
                   );
                }}
-               onClose={() => setShowExamination(false)}
+               onClose={() => setCurrentRoom('chat')}
+               roomNav={
+                  <RoomNavigator
+                     currentRoom={currentRoom}
+                     onSelectRoom={setCurrentRoom}
+                  />
+               }
+            />
+         ) : showInvestigations ? (
+            <InvestigationsScreen
+               activeCase={activeCase}
+               sessionId={sessionId}
+               patientInfo={patientInfo}
+               activeKind={currentRoom === 'radiology' ? 'radiology' : 'lab'}
+               onKindChange={(kind) => setCurrentRoom(kind)}
+               onClose={() => setCurrentRoom('chat')}
+               roomNav={
+                  <RoomNavigator
+                     currentRoom={currentRoom}
+                     onSelectRoom={setCurrentRoom}
+                  />
+               }
+            />
+         ) : showDiscussion ? (
+            <DiscussionScreen
+               sessionId={sessionId}
+               activeCase={activeCase}
+               onClose={handleCloseDiscussion}
+               caseEnded={caseEnded}
+               roomNav={
+                  <RoomNavigator
+                     currentRoom={currentRoom}
+                     onSelectRoom={setCurrentRoom}
+                  />
+               }
             />
          ) : (
-         <div className="flex h-screen w-screen bg-neutral-950 text-white overflow-hidden">
+         /* h-[calc(100vh-72px)] reserves the bottom 72px for the
+            always-visible RoomNavigator. PhysicalExamScreen and
+            InvestigationsScreen do this implicitly by rendering the nav
+            as their last flex-col child. */
+         <div className="flex h-[calc(100vh-72px)] w-screen bg-neutral-950 text-white overflow-hidden">
 
          {/* Multi-tab warning banner. Shown when another tab on this origin
              writes to rohy_active_session. last-write-wins applies.
@@ -700,18 +757,32 @@ function MainApp() {
             />
          </div>
 
-         {/* Orders Drawer (Bottom) */}
+         {/* Orders Drawer (Bottom) — the two floating pills (Physical
+             Exam + Investigations) used to live above the drawer; they
+             were retired when the bottom RoomNavigator went in. The
+             drawer's own tabs (drugs, records, treatments, plus the
+             legacy labs/radiology surfaces) still open from the drawer
+             handle. */}
          {activeCase && sessionId && (
             <OrdersDrawer
                caseId={activeCase.id}
                sessionId={sessionId}
                onViewResult={handleViewResult}
                caseData={activeCase}
-               onOpenExamination={() => {
-                  setShowExamination(true);
-                  EventLogger.examPanelOpened();
-               }}
             />
+         )}
+
+         {/* Bottom RoomNavigator on the main chat surface. Same
+             component renders inside PhysicalExamScreen and
+             InvestigationsScreen so the bar is consistent across every
+             in-session view. */}
+         {activeCase && sessionId && (
+            <div className="fixed bottom-0 left-0 right-0 z-40">
+               <RoomNavigator
+                  currentRoom={currentRoom}
+                  onSelectRoom={setCurrentRoom}
+               />
+            </div>
          )}
 
          {/* Lab/Radiology Results Modal - renders based on result type */}
