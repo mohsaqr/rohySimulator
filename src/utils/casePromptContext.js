@@ -32,17 +32,64 @@ const STRUCTURED_FIELDS = [
     { key: 'additionalNotes', label: 'Additional Notes for AI', aliases: ['additionalNotes', 'aiNotes'] },
 ];
 
-export function formatStructuredHistoryForPrompt(structuredHistory, { omitMirroredHistory = null } = {}) {
-    if (!structuredHistory || typeof structuredHistory !== 'object') return '';
+// Allergies are authored in two places — the demographics tab and the
+// structured-history tab. Historically only the structured-history value
+// reached the prompt, so demographics-tab entries were silently dropped.
+// Pass `demographics` here and structuredHistory wins, demographics fills in.
+export function formatStructuredHistoryForPrompt(structuredHistory, { omitMirroredHistory = null, demographics = null } = {}) {
+    if (!structuredHistory || typeof structuredHistory !== 'object') {
+        const fallbackAllergies = clean(demographics?.allergies);
+        return fallbackAllergies ? `- Allergies: ${fallbackAllergies}` : '';
+    }
     const lines = [];
     for (const field of STRUCTURED_FIELDS) {
-        const value = firstValue(structuredHistory, field.aliases);
+        let value = firstValue(structuredHistory, field.aliases);
+        if (field.key === 'allergies' && !value) {
+            value = clean(demographics?.allergies);
+        }
         if (!value) continue;
         if (omitMirroredHistory && field.clinicalKey && sameText(value, omitMirroredHistory[field.clinicalKey])) {
             continue;
         }
         lines.push(`- ${field.label}: ${value}`);
     }
+    return lines.join('\n');
+}
+
+// Demographic fields the case editor lets authors fill in. The persona
+// header emits one line per non-empty field — no `Unknown` placeholders
+// so the model can't latch onto fake data.
+const DEMOGRAPHIC_FIELDS = [
+    { key: 'age',           label: 'Age',             format: (v) => `${v} years old` },
+    { key: 'gender',        label: 'Gender' },
+    { key: 'dob',           label: 'Date of birth' },
+    { key: 'mrn',           label: 'MRN' },
+    { key: 'weight',        label: 'Weight' },
+    { key: 'height',        label: 'Height' },
+    { key: 'bloodType',     label: 'Blood type' },
+    { key: 'language',      label: 'Preferred language' },
+    { key: 'ethnicity',     label: 'Ethnicity' },
+    { key: 'occupation',    label: 'Occupation' },
+    { key: 'maritalStatus', label: 'Marital status' },
+];
+
+// Build the persona-header demographics block. Emits one line per authored
+// field; absent fields are omitted entirely (no fake defaults).
+export function formatPersonaDemographicsForPrompt(demographics = {}) {
+    if (!demographics || typeof demographics !== 'object') return '';
+    const lines = [];
+    for (const field of DEMOGRAPHIC_FIELDS) {
+        const raw = demographics[field.key];
+        const value = clean(raw);
+        if (!value) continue;
+        const display = field.format ? field.format(value) : value;
+        lines.push(`- ${field.label}: ${display}`);
+    }
+    const allergies = clean(demographics.allergies);
+    if (allergies) lines.push(`- Known allergies: ${allergies}`);
+    const ec = demographics.emergencyContact || {};
+    const ecParts = [clean(ec.name), clean(ec.relationship), clean(ec.phone)].filter(Boolean);
+    if (ecParts.length) lines.push(`- Emergency contact: ${ecParts.join(' · ')}`);
     return lines.join('\n');
 }
 
@@ -215,7 +262,10 @@ export function buildPatientCaseDesignContext(activeCase) {
     const sections = [['Case Summary', caseSummary(activeCase)]];
     const mirroredHistory = cfg.clinicalRecords?.history || null;
 
-    const structured = formatStructuredHistoryForPrompt(cfg.structuredHistory, { omitMirroredHistory: mirroredHistory });
+    const structured = formatStructuredHistoryForPrompt(cfg.structuredHistory, {
+        omitMirroredHistory: mirroredHistory,
+        demographics: cfg.demographics,
+    });
     if (structured) sections.push(['Structured Patient Story', structured]);
 
     const vitals = formatCaseVitalsForPrompt(cfg);
@@ -243,7 +293,7 @@ export function buildDiscussionCaseContext(activeCase, contextFilter = 'full') {
     const cfg = activeCase.config || {};
     const sections = [['Summary', caseSummary(activeCase)]];
 
-    const structured = formatStructuredHistoryForPrompt(cfg.structuredHistory);
+    const structured = formatStructuredHistoryForPrompt(cfg.structuredHistory, { demographics: cfg.demographics });
     if (structured && ['history', 'full'].includes(contextFilter)) {
         sections.push(['Structured History', structured]);
     } else if (cfg.structuredHistory?.chiefComplaint) {

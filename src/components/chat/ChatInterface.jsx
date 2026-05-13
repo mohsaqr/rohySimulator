@@ -23,7 +23,8 @@ import {
     formatVitalsAsMarkdown,
     formatRecentActivityAsMarkdown,
 } from '../../data/aiPromptContext';
-import { buildPatientCaseDesignContext } from '../../utils/casePromptContext';
+import { buildPatientCaseDesignContext, formatPersonaDemographicsForPrompt } from '../../utils/casePromptContext';
+import { setLastPatientPrompt } from '../../utils/lastPatientPrompt';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
 // only when a user actually toggles voice mode on for the first time.
@@ -574,15 +575,29 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const config = sourceConfig;
         const demo = config.demographics || {};
 
+        // Case-specific persona ALWAYS leads. The role/name/demographics block
+        // is the model's first anchor — everything below (template baseline,
+        // shared dos/donts, case design context) reads as supporting context.
+        // Absent fields are omitted rather than filled with "Unknown" so the
+        // model can't latch onto fake values.
+        const trimOrEmpty = (v) => (v == null ? '' : String(v).trim());
+        const personaRole = trimOrEmpty(config.persona_type) || 'Patient';
+        const personaName = trimOrEmpty(config.patient_name) || trimOrEmpty(sourceName) || 'Patient';
         let richSystemPrompt = `## PERSONA\n`;
-        richSystemPrompt += `Role: ${config.persona_type || 'Patient'}\n`;
-        richSystemPrompt += `Name: ${config.patient_name || sourceName}\n`;
-        richSystemPrompt += `Demographics: ${demo.age || 'Unknown'} year old ${demo.gender || 'Unknown'}\n`;
+        richSystemPrompt += `Role: ${personaRole}\n`;
+        richSystemPrompt += `Name: ${personaName}\n`;
+        const demographicsBlock = formatPersonaDemographicsForPrompt(demo);
+        if (demographicsBlock) {
+            richSystemPrompt += `${demographicsBlock}\n`;
+        }
 
-        // If a patient persona template is attached/seeded, lead with its
-        // baseline persona — this is the shared "how a patient should behave"
-        // ruleset that applies across cases. The case's own instructions and
-        // clinical records still apply on top.
+        richSystemPrompt += `\n## INSTRUCTIONS\n`;
+        richSystemPrompt += `${sourceSystemPrompt || 'You are a patient.'}\n`;
+        richSystemPrompt += `\nSpeak only what the patient would say aloud. Never use stage directions, narration, or asterisk-wrapped action descriptors (e.g. "*nods*", "*clutches chest*", "*sighs*"). Express feelings through words alone.\n`;
+
+        // Patient agent template prose runs AFTER the case-specific persona +
+        // instructions so the case anchors first and the template reads as
+        // shared behavioral guidance — not a competing persona definition.
         if (patientTemplate?.systemPrompt) {
             richSystemPrompt += `\n## PATIENT PERSONA (from template "${patientTemplate.name}")\n`;
             richSystemPrompt += `${patientTemplate.systemPrompt}\n`;
@@ -591,10 +606,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         if (personaBlocks) {
             richSystemPrompt += personaBlocks;
         }
-
-        richSystemPrompt += `\n## INSTRUCTIONS\n`;
-        richSystemPrompt += `${sourceSystemPrompt || 'You are a patient.'}\n`;
-        richSystemPrompt += `\nSpeak only what the patient would say aloud. Never use stage directions, narration, or asterisk-wrapped action descriptors (e.g. "*nods*", "*clutches chest*", "*sighs*"). Express feelings through words alone.\n`;
 
         richSystemPrompt += buildPatientCaseDesignContext({
             ...activeCase,
@@ -735,6 +746,15 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             richSystemPrompt += `\n---\n## SESSION ACTIVITY SO FAR (clinician's actions this encounter)\n${recentActivity}\n`;
             richSystemPrompt += `\nDo not repeat answers to questions that were already obtained above. Acknowledge prior actions when relevant.\n`;
         }
+
+        // Stash for the DiagnosticBar "show assembled prompt" inspector.
+        // Bounded to a single value — only the most recent assembly is kept.
+        setLastPatientPrompt({
+            prompt: richSystemPrompt,
+            caseId: activeCase?.id ?? null,
+            caseName: sourceName ?? null,
+            sessionId: sessionId ?? null,
+        });
 
         return richSystemPrompt;
     };
