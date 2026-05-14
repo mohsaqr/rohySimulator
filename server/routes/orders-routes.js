@@ -126,8 +126,9 @@ router.post('/sessions/:id/order', authenticateToken, async (req, res) => {
 // under req.log or routes-orders-labs-radiology.
 // ---------------------------------------------------------------------------
 // GET /api/sessions/:id/orders - Get all orders for session
-router.get('/sessions/:id/orders', authenticateToken, (req, res) => {
+router.get('/sessions/:id/orders', authenticateToken, async (req, res) => {
     const sessionId = req.params.id;
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     // Calculate is_ready directly in SQLite to avoid timezone issues
     const sql = `
@@ -812,14 +813,16 @@ router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, 
 });
 
 // GET /api/sessions/:sessionId/available-labs - Get available labs for session's case
-router.get('/sessions/:sessionId/available-labs', authenticateToken, (req, res) => {
+router.get('/sessions/:sessionId/available-labs', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
-    
-    // Get session + case_snapshot (preferred) + live config (fallback for
-    // sessions written before the snapshot column existed).
-    const sessionSql = `SELECT s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?`;
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
-    dbAdapter.get(sessionSql, [sessionId], (err, session) => {
+    // Get session + case_snapshot (preferred) + live config (fallback for
+    // sessions written before the snapshot column existed). Tenant-scoped so
+    // a session id from another tenant can't leak its case config.
+    const sessionSql = `SELECT s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id AND c.tenant_id = s.tenant_id WHERE s.id = ? AND s.tenant_id = ?`;
+
+    dbAdapter.get(sessionSql, [sessionId, tenantId(req)], (err, session) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -1373,13 +1376,14 @@ router.get('/radiology-database', authenticateToken, (req, res) => {
 });
 
 // GET /api/sessions/:sessionId/available-radiology - Get available radiology studies
-router.get('/sessions/:sessionId/available-radiology', authenticateToken, (req, res) => {
+router.get('/sessions/:sessionId/available-radiology', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     // Get case config (snapshot-preferred) to include custom studies.
     dbAdapter.get(
-        'SELECT s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ?',
-        [sessionId],
+        'SELECT s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id AND c.tenant_id = s.tenant_id WHERE s.id = ? AND s.tenant_id = ?',
+        [sessionId, tenantId(req)],
         (err, row) => {
             if (err) {
                 (req.log || routesOrdersLog).error('case config fetch failed', { error: err.message });
@@ -1422,8 +1426,9 @@ router.get('/sessions/:sessionId/available-radiology', authenticateToken, (req, 
 });
 
 // GET /api/sessions/:sessionId/radiology-orders - Get radiology orders for session
-router.get('/sessions/:sessionId/radiology-orders', authenticateToken, (req, res) => {
+router.get('/sessions/:sessionId/radiology-orders', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     const sql = `
         SELECT
@@ -1448,11 +1453,11 @@ router.get('/sessions/:sessionId/radiology-orders', authenticateToken, (req, res
             END as minutes_remaining
         FROM investigation_orders io
         JOIN case_investigations ci ON io.investigation_id = ci.id
-        WHERE io.session_id = ? AND ci.investigation_type = 'radiology'
+        WHERE io.session_id = ? AND io.tenant_id = ? AND ci.investigation_type = 'radiology'
         ORDER BY io.ordered_at DESC
     `;
 
-    dbAdapter.all(sql, [sessionId], (err, orders) => {
+    dbAdapter.all(sql, [sessionId, tenantId(req)], (err, orders) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -2033,16 +2038,17 @@ router.put('/sessions/:sessionId/discontinue/:orderId', authenticateToken, (req,
 });
 
 // GET /api/sessions/:sessionId/treatment-orders - Get all treatment orders for session
-router.get('/sessions/:sessionId/treatment-orders', authenticateToken, (req, res) => {
+router.get('/sessions/:sessionId/treatment-orders', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     const { status } = req.query;
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
-    dbAdapter.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
+    dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
-        let sql = `SELECT * FROM treatment_orders WHERE session_id = ?`;
-        const params = [sessionId];
+        let sql = `SELECT * FROM treatment_orders WHERE session_id = ? AND tenant_id = ?`;
+        const params = [sessionId, tenantId(req)];
         if (status) {
             sql += ` AND status = ?`;
             params.push(status);
@@ -2058,10 +2064,11 @@ router.get('/sessions/:sessionId/treatment-orders', authenticateToken, (req, res
 });
 
 // GET /api/sessions/:sessionId/active-effects - Get current active treatment effects
-router.get('/sessions/:sessionId/active-effects', authenticateToken, (req, res) => {
+router.get('/sessions/:sessionId/active-effects', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
-    dbAdapter.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
+    dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
@@ -2074,11 +2081,11 @@ router.get('/sessions/:sessionId/active-effects', authenticateToken, (req, res) 
             FROM active_treatments at
             JOIN treatment_orders t ON at.treatment_order_id = t.id
             LEFT JOIN treatment_effects te ON at.effect_id = te.id
-            WHERE at.session_id = ? AND at.phase != 'expired'
+            WHERE at.session_id = ? AND at.tenant_id = ? AND at.phase != 'expired'
             ORDER BY at.started_at DESC
         `;
 
-        dbAdapter.all(sql, [sessionId], (err, activeEffects) => {
+        dbAdapter.all(sql, [sessionId, tenantId(req)], (err, activeEffects) => {
             if (err) return res.status(500).json({ error: err.message });
 
             const now = new Date();

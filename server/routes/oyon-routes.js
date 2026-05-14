@@ -354,6 +354,10 @@ router.get('/analytics/students', authenticateToken, async (req, res) => {
               WHERE r2.tenant_id = r.tenant_id
                 AND ((r2.user_id IS NULL AND r.user_id IS NULL) OR r2.user_id = r.user_id)
                 AND r2.dominant_emotion IS NOT NULL
+                -- Honour row-level visibility for the caller's role; otherwise
+                -- the "top emotion" could be computed from records the caller
+                -- isn't permitted to see in the main query.
+                AND ${rowVisibilityColumn(req.user) ? rowVisibilityColumn(req.user).replace(/^r\./, 'r2.') + ' = 1' : '1 = 0'}
               GROUP BY r2.dominant_emotion
               ORDER BY COUNT(*) DESC, r2.dominant_emotion ASC
               LIMIT 1) AS top_dominant_estimate
@@ -453,11 +457,26 @@ router.get('/analytics/session/:sessionId', authenticateToken, async (req, res) 
     // window so researchers can combine Oyon output with Rohy's session/case
     // data offline (CSV/JSON export, or external joins). This keeps the live
     // path read-light: one indexed query per session.
+    const visCol = rowVisibilityColumn(req.user);
+    if (!visCol) {
+        return res.json({
+            session: {
+                id: session.id,
+                user_id: session.user_id,
+                case_id: session.case_id,
+                start_time: session.start_time,
+                end_time: session.end_time,
+                student_name: session.student_name,
+                case_title: session.live_case_name,
+            },
+            oyon_windows: [],
+        });
+    }
     const windows = await dbAll(
         `SELECT r.*, u.username, u.role AS user_role
          FROM oyon_emotion_records r
          LEFT JOIN users u ON CAST(r.user_id AS INTEGER) = u.id AND u.tenant_id = r.tenant_id
-         WHERE r.tenant_id = ? AND r.session_id = ?
+         WHERE r.tenant_id = ? AND r.session_id = ? AND ${visCol} = 1
          ORDER BY r.window_start ASC, r.id ASC`,
         [tenantId(req), String(session.id)]
     );
@@ -521,17 +540,25 @@ router.get('/admin/live', authenticateToken, async (req, res) => {
     const settings = await ensureSettings(tenantId(req));
     if (!assertOyonReadAccess(req, res, settings)) return;
 
+    // Honour the per-row visibility flag for the caller's role. The
+    // previous `(admin_can_view = 1 OR educator_can_view = 1)` let an
+    // educator see admin-only rows (and vice versa) — that OR was the
+    // bug. assertOyonReadAccess upstream guarantees educator/admin only.
+    const visCol = rowVisibilityColumn(req.user);
+    if (!visCol) return res.json({ records: [] });
+    const visColBare = visCol.replace(/^r\./, '');
+
     const rows = await dbAll(
         `SELECT r.*
          FROM oyon_emotion_records r
          JOIN (
            SELECT session_id, MAX(window_start) AS latest_window
            FROM oyon_emotion_records
-           WHERE tenant_id = ? AND (admin_can_view = 1 OR educator_can_view = 1)
+           WHERE tenant_id = ? AND ${visColBare} = 1
            GROUP BY session_id
          ) latest
            ON latest.session_id = r.session_id AND latest.latest_window = r.window_start
-         WHERE r.tenant_id = ?
+         WHERE r.tenant_id = ? AND ${visCol} = 1
          ORDER BY r.window_start DESC, r.id DESC
          LIMIT ?`,
         [tenantId(req), tenantId(req), limit(req.query.limit, 100)]
@@ -866,9 +893,32 @@ const ALLOWED_ROLES = new Set(['student', 'reviewer', 'educator', 'admin']);
  * already-escaped values; `dominant` and `role` are filtered against fixed
  * allowlists. Returns { whereSql, params }.
  */
+// Row-level visibility column for a given caller. Records carry frozen
+// per-role visibility flags at insert time (student_can_view /
+// educator_can_view / admin_can_view). Reads must honour the *row's*
+// flag for the caller's role — otherwise a record captured while a role
+// was disallowed becomes visible the moment that role's tenant toggle
+// flips back on. assertOyonReadAccess upstream guarantees the caller is
+// educator or admin; anything else is a defensive default that yields
+// no rows.
+function rowVisibilityColumn(user) {
+    if (hasRoleAtLeast(user, ROLE_RANKS.admin)) return 'r.admin_can_view';
+    if (hasRoleAtLeast(user, ROLE_RANKS.educator)) return 'r.educator_can_view';
+    return null;
+}
+
 function buildEmotionRecordsWhere(req, { session = null } = {}) {
     const params = [tenantId(req)];
     const parts = ['r.tenant_id = ?'];
+
+    const visCol = rowVisibilityColumn(req.user);
+    if (visCol) {
+        parts.push(`${visCol} = 1`);
+    } else {
+        // No role match → no rows. Encoded as an always-false predicate so
+        // the parameterised SQL still binds cleanly.
+        parts.push('1 = 0');
+    }
 
     if (session) {
         parts.push('r.session_id = ?');

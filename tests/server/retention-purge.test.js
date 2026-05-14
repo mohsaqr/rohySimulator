@@ -308,7 +308,7 @@ describe('Oyon purge + retention contract', () => {
         });
         if (res.status !== 200) {
             const body = await res.text();
-             
+
             console.error('purge failed:', res.status, body);
         }
         expect(res.status).toBe(200);

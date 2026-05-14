@@ -84,9 +84,13 @@ export const LLMService = {
      * accumulated full text on completion. Falls back to non-streaming if the
      * server doesn't return text/event-stream.
      */
-    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal } = {}) {
+    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false } = {}) {
         const lastMsg = messages[messages.length - 1];
-        if (lastMsg?.role === 'user') {
+        // `silent` lets callers (e.g. the discussion opening turn) suppress
+        // the user-side /interactions write so meta-prompts and sentinels
+        // don't show up labelled as learner utterances in audit / review.
+        // The assistant turn at the end is still logged either way.
+        if (!silent && lastMsg?.role === 'user') {
             this.logInteraction(sessionId, 'user', lastMsg.content);
         }
 

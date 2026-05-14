@@ -206,7 +206,7 @@ export default function OyonCaptureWidget({ sessionId, caseId } = {}) {
          session.stop();
          sessionRef.current = null;
       };
-       
+
    }, [tenantEnabled, runtimeConfig, sessionId, caseId]);
 
    function handleEvent(event) {

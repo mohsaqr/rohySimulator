@@ -23,4 +23,3 @@ import { LocalEmotionTransport } from '../src/transport/LocalEmotionTransport.js
 }
 
 console.log('local-transport.test.js passed');
-

@@ -29,4 +29,3 @@ export const EMOTIEFF_MOBILEVIT_MTL_CONFIG = {
     'Default standalone profile for stronger valence/arousal-capable inference.',
   ],
 };
-

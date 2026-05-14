@@ -62,4 +62,3 @@ const validEvent = {
 }
 
 console.log('validation.test.js passed');
-

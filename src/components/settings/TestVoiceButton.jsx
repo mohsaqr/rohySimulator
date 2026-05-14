@@ -41,12 +41,12 @@ export default function TestVoiceButton({
     // previous voice keeps playing while the user is auditioning a new one.
     useEffect(() => {
         return () => stop();
-     
+
     }, []);
 
     useEffect(() => {
         stop();
-     
+
     }, [voice, provider]);
 
     function stop() {

@@ -47,7 +47,7 @@ export default async function globalSetup(config) {
             const student = await login(baseURL, 'student');
             const tokens = { admin, student, baseURL, mintedAt: new Date().toISOString() };
             fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokens, null, 2));
-             
+
             console.log(`[globalSetup] minted tokens at ${TOKEN_FILE}`);
             return;
         } catch (err) {

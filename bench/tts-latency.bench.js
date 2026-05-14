@@ -132,7 +132,7 @@ describe('google', () => {
         // Reading the first chunk and breaking gives us the same number we
         // would see on the wire as `time-to-first-PCM-frame` from the route.
         const t0 = performance.now();
-         
+
         for await (const _chunk of iter) {
             const fb = performance.now() - t0;
             record('google.first-byte', { firstByteMs: fb });
@@ -168,7 +168,7 @@ describe('openai', () => {
             speed: 1,
         });
         const t0 = performance.now();
-         
+
         for await (const _chunk of iter) {
             const fb = performance.now() - t0;
             record('openai.first-byte', { firstByteMs: fb });
@@ -176,7 +176,7 @@ describe('openai', () => {
             // ReadableStream attached to the underlying socket; otherwise the
             // bench's next iteration could hit a stalled connection.
             try {
-                 
+
                 for await (const _rest of iter) { /* drain */ }
             } catch { /* ignore drain errors */ }
             return;
@@ -222,7 +222,7 @@ describe('kokoro', () => {
             // versions), fall through — the actual bench will pick whatever
             // is loaded.
         }
-         
+
         console.log(`[kokoro-bench] warmup in ${(performance.now() - t0).toFixed(0)}ms`);
     }, 60_000);
 
@@ -233,7 +233,7 @@ describe('kokoro', () => {
             speed: 1,
         });
         const t0 = performance.now();
-         
+
         for await (const _chunk of iter) {
             const fb = performance.now() - t0;
             record('kokoro.first-byte', { firstByteMs: fb });

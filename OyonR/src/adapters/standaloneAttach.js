@@ -35,4 +35,3 @@ function defaultContextProvider() {
     tenant_id: 'standalone',
   };
 }
-

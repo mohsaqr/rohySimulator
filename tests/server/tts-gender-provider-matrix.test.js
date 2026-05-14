@@ -184,17 +184,15 @@ describe('POST /api/tts matrix — provider override and gender fallback', () =>
         expect(logs).toContain('tts voice rejected');
     });
 
-    it('routes OpenAI by body.provider even when platform default is Google', async () => {
-        const res = await postTts(server, token, {
-            provider: 'openai',
-            text: 'openai provider override',
-            voice: 'onyx',
-            gender: 'male',
-        });
-        expect([200, 502]).toContain(res.status);
-        // The server should not try to validate OpenAI voice IDs as Google
-        // just because the platform default is google. A 502 here would mean
-        // outbound fake setup changed; a 400 would be the routing regression.
-        expect(res.status).not.toBe(400);
-    });
+    // "routes OpenAI by body.provider even when platform default is
+    // Google" was removed 2026-05-14. Commit a33779d ("voice: strip
+    // every fallback tier; case_voice + platform provider are the only
+    // sources") deliberately retired body.provider override on the
+    // main /api/tts route — body/query provider fields are silently
+    // ignored there per proxy-routes.js:1041-1044. The only path that
+    // honours body.provider is /tts/preview, gated by requireAdmin, and
+    // its override behaviour is covered by /tts/preview tests. The
+    // removed assertion locked the pre-a33779d behaviour and produced a
+    // 400 invalid_voice because Google's catalogue (the platform
+    // default the test sets) does not contain "onyx".
 });

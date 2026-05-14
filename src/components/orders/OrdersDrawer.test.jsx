@@ -248,38 +248,12 @@ describe('OrdersDrawer — guard render', () => {
     });
 });
 
-describe('OrdersDrawer — orders list rendering', () => {
-    it('renders the floating "Ordered Tests" panel with seeded orders', async () => {
-        labOrdersFixture = [
-            {
-                id: 'o1',
-                investigation_id: 'lab-cbc-wbc',
-                test_name: 'WBC',
-                is_ready: true,
-                viewed_at: null,
-                minutes_remaining: 0,
-                available_at: new Date(Date.now() - 60000).toISOString(),
-            },
-            {
-                id: 'o2',
-                investigation_id: 'lab-bmp-na',
-                test_name: 'Sodium',
-                is_ready: false,
-                viewed_at: null,
-                minutes_remaining: 5,
-                available_at: new Date(Date.now() + 5 * 60000).toISOString(),
-            },
-        ];
-        renderWithProviders(<OrdersDrawer {...baseProps()} />);
-        // The panel header reads "Ordered Tests (2)".
-        await waitFor(() => {
-            expect(screen.getByText(/Ordered Tests \(2\)/)).toBeInTheDocument();
-        });
-        // Both order names appear.
-        expect(screen.getAllByText('WBC').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('Sodium').length).toBeGreaterThan(0);
-    });
-});
+// "OrdersDrawer — orders list rendering" describe removed 2026-05-14:
+// the floating "Ordered Tests (N)" panel was retired in commit ab266a4
+// ("chat surface tidy + … room badges") in favour of RoomNavigator
+// badge dots — see RoomNavigator.jsx:24. The remaining assertion
+// scanned for text that no longer exists. The new badge surface has
+// its own coverage in RoomNavigator tests.
 
 // The drawer-internal labs ordering surface is dead code (no entry
 // point reaches it after the floating Laboratory pill was retired).

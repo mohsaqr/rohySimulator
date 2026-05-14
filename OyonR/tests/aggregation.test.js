@@ -61,4 +61,3 @@ function probs(label, value = 0.7) {
 }
 
 console.log('aggregation.test.js passed');
-

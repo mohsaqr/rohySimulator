@@ -330,11 +330,15 @@ describe('normalizeAgent (via fetchDiscussantForCase) — discussant-voice contr
     it('uses sensible defaults for missing top-level fields', async () => {
         // CONTRACT: when name/role/etc are absent, the normalized shape
         // still has predictable values (used by the UI without guards).
+        // systemPrompt specifically must NEVER be empty — an empty system
+        // prompt was the root cause of the 2026-05-14 echo bug, so it falls
+        // back to a baked-in clinician-educator role anchor when both the
+        // override and the template column are blank.
         setCase(9, { id: 9 });
         const result = await fetchDiscussantForCase(9);
         expect(result.name).toBe('Discussant');
         expect(result.roleTitle).toBe('Case Debrief Tutor');
-        expect(result.systemPrompt).toBe('');
+        expect(result.systemPrompt).toMatch(/senior clinician-educator/);
         expect(result.contextFilter).toBe('full');
         expect(result.unlockTrigger).toBe('after_case_ended');
         expect(result.avatarUrl).toBeNull();

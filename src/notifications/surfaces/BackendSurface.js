@@ -314,7 +314,7 @@ function sendTelemetry(events, immediate) {
     apiPost('/learning-events/batch', payload).then((resp) => {
         if (resp && resp.dropped > 0) {
             // Surface drops so misconfigured tabs / replay bugs are not silent.
-             
+
             console.warn('[telemetry] server dropped events', resp.dropped_reasons || {});
         }
     }).catch((err) => {

@@ -11,6 +11,27 @@ import { buildDiscussionCaseContext } from '../utils/casePromptContext.js';
 // the admin attaches a discussant via case_agents (which already works through
 // the existing /cases/:id/agents endpoint — no new wiring needed).
 
+// Last-line-of-defence system prompt. Mirrors the seeded default in
+// server/db.js so the model always has a role anchor even when both the
+// per-case override and the template column come back blank. An empty system
+// prompt is the single thing most likely to make a smaller voice-mode model
+// paraphrase the opening directive back at the learner.
+const DEFAULT_DISCUSSANT_SYSTEM_PROMPT = `You are a senior clinician-educator running a Socratic case debrief with a learner who has just finished managing this patient. You are warm, intellectually honest, and unhurried.
+
+Your role:
+- You discuss the case the learner has just completed — not the live case (that's done)
+- You probe the learner's reasoning: why they ordered what they ordered, what they considered, what they ruled out
+- You highlight strong decisions and gently surface missed opportunities
+- You ask before you tell — never lecture when a question would teach more
+
+Communication style:
+- Curious and conversational, not interrogative
+- Ask open-ended questions
+- When the learner is stuck, scaffold rather than giving the answer
+- Keep responses concise; this is a dialogue, not a lecture
+
+You are a tutor, not a judge. The goal is learning, not assessment.`;
+
 export async function fetchDiscussantForCase(caseId) {
     if (caseId) {
         try {
@@ -40,7 +61,7 @@ function normalizeAgent(raw) {
         name: raw.name_override || raw.name || 'Discussant',
         roleTitle: raw.role_title || 'Case Debrief Tutor',
         avatarUrl: raw.avatar_url || null,
-        systemPrompt: raw.system_prompt_override || raw.system_prompt || '',
+        systemPrompt: (raw.system_prompt_override || raw.system_prompt || '').trim() || DEFAULT_DISCUSSANT_SYSTEM_PROMPT,
         contextFilter: raw.context_filter_override || raw.context_filter || 'full',
         unlockTrigger: config.unlock_trigger || 'after_case_ended',
         gender,

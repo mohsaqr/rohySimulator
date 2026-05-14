@@ -18,7 +18,8 @@ import {
     auditSuccess,
     logAudit,
     redactRow,
-    tenantId
+    tenantId,
+    verifySessionOwnership
 } from './_helpers.js';
 import { toSqliteUtc, sqliteTsToIso } from '../sqliteTime.js';
 
@@ -790,7 +791,7 @@ router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
 });
 
 // POST /api/cases/:caseId/agents - Add agent to case
-router.post('/cases/:caseId/agents', authenticateToken, async (req, res) => {
+router.post('/cases/:caseId/agents', authenticateToken, requireEducator, async (req, res) => {
     try {
         const { caseId } = req.params;
         const {
@@ -811,6 +812,18 @@ router.post('/cases/:caseId/agents', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'agent_template_id is required' });
         }
 
+        // Case must belong to caller's tenant; otherwise educators in
+        // tenant A could attach agents to tenant B's cases.
+        const caseRow = await new Promise((resolve, reject) => {
+            dbAdapter.get('SELECT id FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [caseId, tenantId(req)], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+        if (!caseRow) {
+            return res.status(404).json({ error: 'Case not found' });
+        }
+
         // Check if template exists
         const template = await new Promise((resolve, reject) => {
             dbAdapter.get('SELECT id FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [agent_template_id, tenantId(req)], (err, row) => {
@@ -826,12 +839,12 @@ router.post('/cases/:caseId/agents', authenticateToken, async (req, res) => {
         const result = await new Promise((resolve, reject) => {
             dbAdapter.run(
                 `INSERT INTO case_agents
-                 (case_id, agent_template_id, enabled, name_override, system_prompt_override,
+                 (case_id, tenant_id, agent_template_id, enabled, name_override, system_prompt_override,
                   availability_type, available_from_minute, auto_arrive_minute, depart_at_minute,
                   response_time_min, response_time_max, config_override)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
-                    caseId, agent_template_id, enabled ? 1 : 0, name_override, system_prompt_override,
+                    caseId, tenantId(req), agent_template_id, enabled ? 1 : 0, name_override, system_prompt_override,
                     availability_type, available_from_minute, auto_arrive_minute, depart_at_minute,
                     response_time_min, response_time_max, config_override ? JSON.stringify(config_override) : null
                 ],
@@ -857,7 +870,7 @@ router.post('/cases/:caseId/agents', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/cases/:caseId/agents/:agentId - Update case agent config
-router.put('/cases/:caseId/agents/:agentId', authenticateToken, async (req, res) => {
+router.put('/cases/:caseId/agents/:agentId', authenticateToken, requireEducator, async (req, res) => {
     try {
         const { caseId, agentId } = req.params;
         const {
@@ -892,7 +905,7 @@ router.put('/cases/:caseId/agents/:agentId', authenticateToken, async (req, res)
         }
 
         const existing = await new Promise((resolve, reject) => {
-            dbAdapter.get('SELECT * FROM case_agents WHERE id = ? AND case_id = ?', [agentId, caseId], (err, row) => {
+            dbAdapter.get('SELECT * FROM case_agents WHERE id = ? AND case_id = ? AND tenant_id = ?', [agentId, caseId, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -901,11 +914,11 @@ router.put('/cases/:caseId/agents/:agentId', authenticateToken, async (req, res)
             return res.status(404).json({ error: 'Case agent not found' });
         }
 
-        params.push(agentId, caseId);
+        params.push(agentId, caseId, tenantId(req));
 
         await new Promise((resolve, reject) => {
             dbAdapter.run(
-                `UPDATE case_agents SET ${updates.join(', ')} WHERE id = ? AND case_id = ?`,
+                `UPDATE case_agents SET ${updates.join(', ')} WHERE id = ? AND case_id = ? AND tenant_id = ?`,
                 params,
                 function(err) {
                     if (err) reject(err);
@@ -930,12 +943,12 @@ router.put('/cases/:caseId/agents/:agentId', authenticateToken, async (req, res)
 });
 
 // DELETE /api/cases/:caseId/agents/:agentId - Remove agent from case
-router.delete('/cases/:caseId/agents/:agentId', authenticateToken, async (req, res) => {
+router.delete('/cases/:caseId/agents/:agentId', authenticateToken, requireEducator, async (req, res) => {
     try {
         const { caseId, agentId } = req.params;
 
         const existing = await new Promise((resolve, reject) => {
-            dbAdapter.get('SELECT * FROM case_agents WHERE id = ? AND case_id = ?', [agentId, caseId], (err, row) => {
+            dbAdapter.get('SELECT * FROM case_agents WHERE id = ? AND case_id = ? AND tenant_id = ?', [agentId, caseId, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -946,8 +959,8 @@ router.delete('/cases/:caseId/agents/:agentId', authenticateToken, async (req, r
 
         await new Promise((resolve, reject) => {
             dbAdapter.run(
-                'DELETE FROM case_agents WHERE id = ? AND case_id = ?',
-                [agentId, caseId],
+                'DELETE FROM case_agents WHERE id = ? AND case_id = ? AND tenant_id = ?',
+                [agentId, caseId, tenantId(req)],
                 function(err) {
                     if (err) reject(err);
                     else resolve(this.changes);
@@ -970,9 +983,20 @@ router.delete('/cases/:caseId/agents/:agentId', authenticateToken, async (req, r
 });
 
 // POST /api/cases/:caseId/agents/add-defaults - Add all default agents to case
-router.post('/cases/:caseId/agents/add-defaults', authenticateToken, async (req, res) => {
+router.post('/cases/:caseId/agents/add-defaults', authenticateToken, requireEducator, async (req, res) => {
     try {
         const { caseId } = req.params;
+
+        // Case must belong to caller's tenant.
+        const caseRow = await new Promise((resolve, reject) => {
+            dbAdapter.get('SELECT id FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [caseId, tenantId(req)], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+        if (!caseRow) {
+            return res.status(404).json({ error: 'Case not found' });
+        }
 
         // Get all default templates
         const defaults = await new Promise((resolve, reject) => {
@@ -990,11 +1014,12 @@ router.post('/cases/:caseId/agents/add-defaults', authenticateToken, async (req,
                 await new Promise((resolve, reject) => {
                     dbAdapter.run(
                         `INSERT OR IGNORE INTO case_agents
-                         (case_id, agent_template_id, enabled, availability_type, available_from_minute,
+                         (case_id, tenant_id, agent_template_id, enabled, availability_type, available_from_minute,
                           response_time_min, response_time_max)
-                         VALUES (?, ?, 1, ?, 0, ?, ?)`,
+                         VALUES (?, ?, ?, 1, ?, 0, ?, ?)`,
                         [
                             caseId,
+                            tenantId(req),
                             template.id,
                             config.typical_availability || 'present',
                             config.response_time?.min || 0,
@@ -1034,10 +1059,11 @@ router.post('/cases/:caseId/agents/add-defaults', authenticateToken, async (req,
 router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) => {
     try {
         const { sessionId } = req.params;
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
-        // Get session to find case_id
+        // Get session to find case_id (tenant-scoped)
         const session = await new Promise((resolve, reject) => {
-            dbAdapter.get('SELECT case_id FROM sessions WHERE id = ?', [sessionId], (err, row) => {
+            dbAdapter.get('SELECT case_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -1054,10 +1080,10 @@ router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) =>
             dbAdapter.run(
                 `UPDATE agent_session_state
                  SET status = 'present', arrived_at = CURRENT_TIMESTAMP
-                 WHERE session_id = ?
+                 WHERE session_id = ? AND tenant_id = ?
                    AND status = 'paged' AND arrives_at IS NOT NULL
                    AND datetime(arrives_at) <= datetime('now')`,
-                [sessionId],
+                [sessionId, tenantId(req)],
                 (err) => err ? reject(err) : resolve()
             );
         });
@@ -1072,10 +1098,10 @@ router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) =>
                         ass.arrived_at, ass.departed_at
                  FROM case_agents ca
                  JOIN agent_templates at ON ca.agent_template_id = at.id
-                 LEFT JOIN agent_session_state ass ON ass.session_id = ? AND ass.agent_type = at.agent_type
-                 WHERE ca.case_id = ? AND ca.enabled = 1
+                 LEFT JOIN agent_session_state ass ON ass.session_id = ? AND ass.agent_type = at.agent_type AND ass.tenant_id = ?
+                 WHERE ca.case_id = ? AND ca.tenant_id = ? AND at.tenant_id = ? AND ca.enabled = 1
                  ORDER BY at.agent_type ASC`,
-                [sessionId, session.case_id],
+                [sessionId, tenantId(req), session.case_id, tenantId(req), tenantId(req)],
                 (err, rows) => {
                     if (err) reject(err);
                     else resolve(rows || []);
@@ -1147,6 +1173,7 @@ const PAGE_WAIT_MAX_SEC = 180;         // 3 min ceiling — keeps the sim moving
 router.post('/sessions/:sessionId/agents/:agentType/page', authenticateToken, async (req, res) => {
     try {
         const { sessionId, agentType } = req.params;
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
         // Pull the case-agent's configured response window so we honour
         // a tighter band (e.g. nurse wants "instant") but never let a
@@ -1155,10 +1182,10 @@ router.post('/sessions/:sessionId/agents/:agentType/page', authenticateToken, as
             dbAdapter.get(
                 `SELECT ca.response_time_min, ca.response_time_max
                  FROM sessions s
-                 JOIN case_agents ca ON ca.case_id = s.case_id
-                 JOIN agent_templates at ON ca.agent_template_id = at.id
-                 WHERE s.id = ? AND at.agent_type = ?`,
-                [sessionId, agentType],
+                 JOIN case_agents ca ON ca.case_id = s.case_id AND ca.tenant_id = s.tenant_id
+                 JOIN agent_templates at ON ca.agent_template_id = at.id AND at.tenant_id = s.tenant_id
+                 WHERE s.id = ? AND s.tenant_id = ? AND at.agent_type = ?`,
+                [sessionId, tenantId(req), agentType],
                 (err, row) => err ? reject(err) : resolve(row)
             );
         });
@@ -1174,11 +1201,11 @@ router.post('/sessions/:sessionId/agents/:agentType/page', authenticateToken, as
 
         await new Promise((resolve, reject) => {
             dbAdapter.run(
-                `INSERT INTO agent_session_state (session_id, agent_type, status, paged_at, arrives_at, arrived_at)
-                 VALUES (?, ?, 'paged', CURRENT_TIMESTAMP, ?, NULL)
+                `INSERT INTO agent_session_state (session_id, tenant_id, agent_type, status, paged_at, arrives_at, arrived_at)
+                 VALUES (?, ?, ?, 'paged', CURRENT_TIMESTAMP, ?, NULL)
                  ON CONFLICT(session_id, agent_type) DO UPDATE SET
                  status = 'paged', paged_at = CURRENT_TIMESTAMP, arrives_at = excluded.arrives_at, arrived_at = NULL`,
-                [sessionId, agentType, arrivesAtDb],
+                [sessionId, tenantId(req), agentType, arrivesAtDb],
                 function(err) {
                     if (err) reject(err);
                     else resolve(this.changes);
@@ -1204,15 +1231,15 @@ router.post('/sessions/:sessionId/agents/:agentType/page', authenticateToken, as
 // arrives_at, flip it to 'present' in-place. Used by the read paths
 // below so the client never has to chase the transition itself —
 // reading /agents is enough to converge state. Idempotent.
-async function autoArriveIfDue(sessionId, agentType) {
+async function autoArriveIfDue(sessionId, agentType, tenant_id) {
     await new Promise((resolve, reject) => {
         dbAdapter.run(
             `UPDATE agent_session_state
              SET status = 'present', arrived_at = CURRENT_TIMESTAMP
-             WHERE session_id = ? AND agent_type = ?
+             WHERE session_id = ? AND tenant_id = ? AND agent_type = ?
                AND status = 'paged' AND arrives_at IS NOT NULL
                AND datetime(arrives_at) <= datetime('now')`,
-            [sessionId, agentType],
+            [sessionId, tenant_id, agentType],
             (err) => err ? reject(err) : resolve()
         );
     });
@@ -1222,14 +1249,15 @@ async function autoArriveIfDue(sessionId, agentType) {
 router.post('/sessions/:sessionId/agents/:agentType/arrive', authenticateToken, async (req, res) => {
     try {
         const { sessionId, agentType } = req.params;
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
         await new Promise((resolve, reject) => {
             dbAdapter.run(
-                `INSERT INTO agent_session_state (session_id, agent_type, status, arrived_at)
-                 VALUES (?, ?, 'present', CURRENT_TIMESTAMP)
+                `INSERT INTO agent_session_state (session_id, tenant_id, agent_type, status, arrived_at)
+                 VALUES (?, ?, ?, 'present', CURRENT_TIMESTAMP)
                  ON CONFLICT(session_id, agent_type) DO UPDATE SET
                  status = 'present', arrived_at = CURRENT_TIMESTAMP`,
-                [sessionId, agentType],
+                [sessionId, tenantId(req), agentType],
                 function(err) {
                     if (err) reject(err);
                     else resolve(this.changes);
@@ -1248,12 +1276,13 @@ router.post('/sessions/:sessionId/agents/:agentType/arrive', authenticateToken, 
 router.post('/sessions/:sessionId/agents/:agentType/depart', authenticateToken, async (req, res) => {
     try {
         const { sessionId, agentType } = req.params;
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
         await new Promise((resolve, reject) => {
             dbAdapter.run(
                 `UPDATE agent_session_state SET status = 'departed', departed_at = CURRENT_TIMESTAMP
-                 WHERE session_id = ? AND agent_type = ?`,
-                [sessionId, agentType],
+                 WHERE session_id = ? AND tenant_id = ? AND agent_type = ?`,
+                [sessionId, tenantId(req), agentType],
                 function(err) {
                     if (err) reject(err);
                     else resolve(this.changes);
@@ -1272,13 +1301,14 @@ router.post('/sessions/:sessionId/agents/:agentType/depart', authenticateToken, 
 router.get('/sessions/:sessionId/agents/:agentType/status', authenticateToken, async (req, res) => {
     try {
         const { sessionId, agentType } = req.params;
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
-        await autoArriveIfDue(sessionId, agentType);
+        await autoArriveIfDue(sessionId, agentType, tenantId(req));
 
         const state = await new Promise((resolve, reject) => {
             dbAdapter.get(
-                `SELECT * FROM agent_session_state WHERE session_id = ? AND agent_type = ?`,
-                [sessionId, agentType],
+                `SELECT * FROM agent_session_state WHERE session_id = ? AND tenant_id = ? AND agent_type = ?`,
+                [sessionId, tenantId(req), agentType],
                 (err, row) => {
                     if (err) reject(err);
                     else resolve(row);
@@ -1306,13 +1336,14 @@ router.get('/sessions/:sessionId/agents/:agentType/status', authenticateToken, a
 router.get('/sessions/:sessionId/agents/:agentType/conversation', authenticateToken, async (req, res) => {
     try {
         const { sessionId, agentType } = req.params;
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
         const messages = await new Promise((resolve, reject) => {
             dbAdapter.all(
                 `SELECT * FROM agent_conversations
-                 WHERE session_id = ? AND agent_type = ?
+                 WHERE session_id = ? AND tenant_id = ? AND agent_type = ?
                  ORDER BY created_at ASC`,
-                [sessionId, agentType],
+                [sessionId, tenantId(req), agentType],
                 (err, rows) => {
                     if (err) reject(err);
                     else resolve(rows || []);
@@ -1336,12 +1367,13 @@ router.post('/sessions/:sessionId/agents/:agentType/conversation', authenticateT
         if (!role || !content) {
             return res.status(400).json({ error: 'role and content are required' });
         }
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
         const result = await new Promise((resolve, reject) => {
             dbAdapter.run(
-                `INSERT INTO agent_conversations (session_id, agent_type, role, content)
-                 VALUES (?, ?, ?, ?)`,
-                [sessionId, agentType, role, content],
+                `INSERT INTO agent_conversations (session_id, tenant_id, agent_type, role, content)
+                 VALUES (?, ?, ?, ?, ?)`,
+                [sessionId, tenantId(req), agentType, role, content],
                 function(err) {
                     if (err) reject(err);
                     else resolve({ id: this.lastID });
@@ -1360,11 +1392,12 @@ router.post('/sessions/:sessionId/agents/:agentType/conversation', authenticateT
 router.delete('/sessions/:sessionId/agents/:agentType/conversation', authenticateToken, async (req, res) => {
     try {
         const { sessionId, agentType } = req.params;
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
         await new Promise((resolve, reject) => {
             dbAdapter.run(
-                `DELETE FROM agent_conversations WHERE session_id = ? AND agent_type = ?`,
-                [sessionId, agentType],
+                `DELETE FROM agent_conversations WHERE session_id = ? AND tenant_id = ? AND agent_type = ?`,
+                [sessionId, tenantId(req), agentType],
                 function(err) {
                     if (err) reject(err);
                     else resolve(this.changes);
@@ -1385,13 +1418,14 @@ router.delete('/sessions/:sessionId/agents/:agentType/conversation', authenticat
 router.get('/sessions/:sessionId/team-communications', authenticateToken, async (req, res) => {
     try {
         const { sessionId } = req.params;
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
         const log = await new Promise((resolve, reject) => {
             dbAdapter.all(
                 `SELECT * FROM team_communications_log
-                 WHERE session_id = ?
+                 WHERE session_id = ? AND tenant_id = ?
                  ORDER BY created_at DESC`,
-                [sessionId],
+                [sessionId, tenantId(req)],
                 (err, rows) => {
                     if (err) reject(err);
                     else resolve(rows || []);
@@ -1415,12 +1449,13 @@ router.post('/sessions/:sessionId/team-communications', authenticateToken, async
         if (!agent_type || !key_points) {
             return res.status(400).json({ error: 'agent_type and key_points are required' });
         }
+        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
         const result = await new Promise((resolve, reject) => {
             dbAdapter.run(
-                `INSERT INTO team_communications_log (session_id, agent_type, key_points)
-                 VALUES (?, ?, ?)`,
-                [sessionId, agent_type, key_points],
+                `INSERT INTO team_communications_log (session_id, tenant_id, agent_type, key_points)
+                 VALUES (?, ?, ?, ?)`,
+                [sessionId, tenantId(req), agent_type, key_points],
                 function(err) {
                     if (err) reject(err);
                     else resolve({ id: this.lastID });

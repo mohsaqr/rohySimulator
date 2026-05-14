@@ -38,4 +38,3 @@ export class LocalEmotionTransport {
     this.options.storage?.setItem(this.options.storageKey, JSON.stringify(this.memoryEvents));
   }
 }
-

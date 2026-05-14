@@ -308,20 +308,36 @@ describe('useDiscussionEngine — message state & silentUser', () => {
         expect(VoiceService.beginSpeechSession).toHaveBeenCalledTimes(1);
     });
 
-    it('startConversation kicks off a silent-user opener', async () => {
+    it('startConversation puts the opening directive in the system prompt, not the user role', async () => {
+        // CONTRACT: the kickoff "your first reply opens the debrief" must
+        // live in the system prompt. Putting it in the user role caused
+        // smaller voice-mode models to echo it back verbatim instead of
+        // executing it (the 2026-05-14 debrief-echo bug). The user turn for
+        // this opener is a benign sentinel.
         let capturedMessages;
-        LLMService.streamMessage.mockImplementation(async (_s, msgs, _sp, _mo, { onDelta }) => {
+        let capturedSystemPrompt;
+        let capturedOpts;
+        LLMService.streamMessage.mockImplementation(async (_s, msgs, sp, _mo, opts) => {
             capturedMessages = msgs;
-            onDelta('Hi, welcome to the debrief.');
+            capturedSystemPrompt = sp;
+            capturedOpts = opts;
+            opts.onDelta('Hi, welcome to the debrief.');
             return 'Hi, welcome to the debrief.';
         });
         const { result } = renderHook(() => useDiscussionEngine(makeProps()));
         await act(async () => { await result.current.startConversation(); });
 
-        // The kickoff prompt was sent to the LLM as a user turn...
+        // The opening directive is in the SYSTEM prompt, not the user turn.
+        expect(capturedSystemPrompt).toMatch(/OPENING TURN/);
+        expect(capturedSystemPrompt).toMatch(/Do NOT restate/);
+        // The user turn is a benign sentinel — not a paraphrasable directive.
         expect(capturedMessages.at(-1).role).toBe('user');
-        expect(capturedMessages.at(-1).content).toMatch(/Begin the debrief/);
-        // ...but the visible transcript only shows the assistant reply.
+        expect(capturedMessages.at(-1).content).toBe('Hello.');
+        expect(capturedSystemPrompt).not.toMatch(/Begin the debrief now/);
+        // `silent: true` is passed through so the sentinel is not written to
+        // /interactions as a learner utterance.
+        expect(capturedOpts.silent).toBe(true);
+        // The visible transcript only shows the assistant reply.
         expect(result.current.messages).toHaveLength(1);
         expect(result.current.messages[0].role).toBe('assistant');
     });

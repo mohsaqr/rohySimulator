@@ -71,7 +71,13 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
     // something to respond to) but is NOT added to the visible transcript.
     // Used by `startConversation` so the discussant *opens* the dialogue
     // instead of replying — the learner sees only the discussant's greeting.
-    const sendMessage = useCallback(async (text, { silentUser = false } = {}) => {
+    //
+    // `openingDirective`: extra text appended to the system prompt for this
+    // turn only. Used by `startConversation` to tell the model "your first
+    // reply opens the debrief" without putting that meta-instruction in the
+    // user role, where smaller voice-mode models tend to paraphrase it back
+    // instead of executing it.
+    const sendMessage = useCallback(async (text, { silentUser = false, openingDirective = '' } = {}) => {
         const trimmed = text?.trim();
         if (!trimmed || busy || !sessionId || !discussant) return;
 
@@ -96,7 +102,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
         // config — same shape used by every other agent type so the LLM call
         // path stays uniform.
         const personaBlocks = buildPersonaBlocks(discussant.rawConfig || discussant.config);
-        const systemPrompt = `${discussant.systemPrompt}${personaBlocks}${caseContext}`;
+        const systemPrompt = `${discussant.systemPrompt}${personaBlocks}${caseContext}${openingDirective}`;
 
         let speech = null;
         if (voiceMode) {
@@ -131,6 +137,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
                 voiceMode ? 'voice' : 'discussion',
                 {
                     signal: controller.signal,
+                    silent: silentUser,
                     onDelta: (delta) => {
                         acc += delta;
                         setMessages(prev => prev.map(m =>
@@ -184,11 +191,14 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
     }, [sessionId, activeCase, discussant, voiceMode, voiceSettings, busy, messages]);
 
     const startConversation = useCallback(() => {
-        // The kick-off prompt is treated as a user turn at the LLM layer (so
-        // the model has something to respond to) but is hidden from the
-        // transcript, so the screen shows the discussant opening the dialogue.
-        const kickoff = 'Begin the debrief now. Greet me warmly, briefly mention the case we just finished, and ask me your first open-ended question to start the discussion. Keep it under three sentences.';
-        return sendMessage(kickoff, { silentUser: true });
+        // Opening turn: the instruction "your first reply opens the debrief"
+        // goes in the system prompt (where the model reads it as direction)
+        // and a benign sentinel goes in the user role (so the messages array
+        // is well-formed for every provider). Putting the directive in the
+        // user role — as we used to — let smaller voice-mode models echo it
+        // back verbatim instead of executing it.
+        const openingDirective = '\n\n## OPENING TURN\nThis is the very first turn of the debrief. Your reply must: (1) greet the learner warmly, (2) briefly name the case just finished, (3) ask one open-ended question to open the discussion. Keep it under three sentences. Do NOT restate, paraphrase, or quote this directive — just do it.';
+        return sendMessage('Hello.', { silentUser: true, openingDirective });
     }, [sendMessage]);
 
     return { messages, busy, speaking, visemes, sendMessage, startConversation };

@@ -573,4 +573,65 @@ describe('LLMService.streamMessage', () => {
         expect(result).toBe('fallback text');
         expect(seen).toEqual(['fallback text']);
     });
+
+    // --- 11. silent: true suppresses user-side /interactions write ------
+    it('skips logInteraction for the user turn when silent: true', async () => {
+        // CONTRACT: discussion openings + meta-prompt sentinels are sent
+        // to the model but should NOT appear in the audit/review trail
+        // labelled as learner utterances. `silent: true` suppresses the
+        // user-side /interactions POST while still sending the prompt
+        // through to /proxy/llm. The assistant-turn log still fires.
+        fetchMock.mockImplementation((url) => {
+            if (!String(url).includes('/proxy/llm')) {
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            }
+            return Promise.resolve(sseResponse([
+                'data: {"delta":"answer"}\n\n',
+                'data: [DONE]\n\n',
+            ]));
+        });
+
+        await LLMService.streamMessage(
+            SESSION_ID, MESSAGES, SYSTEM_PROMPT, null,
+            { onDelta: () => {}, silent: true }
+        );
+
+        const interactionCalls = fetchMock.mock.calls.filter(
+            ([u]) => String(u).includes('/interactions')
+        );
+        // No user-turn write under silent. The assistant log path is
+        // async and fire-and-forget, but if it fires it would be the
+        // only /interactions call — and its body would be role:'assistant'.
+        for (const [, init] of interactionCalls) {
+            const body = init?.body ? JSON.parse(init.body) : {};
+            expect(body.role).not.toBe('user');
+        }
+    });
+
+    it('still logs the user turn (role:"user") when silent is omitted', async () => {
+        // CONTRACT counterpart: default behaviour must log. This locks
+        // the regression direction — if the default flipped to silent,
+        // every normal chat message would silently drop out of audit.
+        fetchMock.mockImplementation((url) => {
+            if (!String(url).includes('/proxy/llm')) {
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            }
+            return Promise.resolve(sseResponse([
+                'data: {"delta":"answer"}\n\n',
+                'data: [DONE]\n\n',
+            ]));
+        });
+
+        await LLMService.streamMessage(
+            SESSION_ID, MESSAGES, SYSTEM_PROMPT, null,
+            { onDelta: () => {} }
+        );
+
+        const userTurnCall = fetchMock.mock.calls.find(([u, init]) => {
+            if (!String(u).includes('/interactions')) return false;
+            try { return JSON.parse(init?.body || '{}').role === 'user'; }
+            catch { return false; }
+        });
+        expect(userTurnCall).toBeDefined();
+    });
 });

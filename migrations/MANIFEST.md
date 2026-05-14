@@ -35,6 +35,17 @@ means: previous-version code can still run against the new schema. Concretely:
   satisfied today)
 - Adding a NOT NULL column without a default
 - Adding a unique index on a column that already has duplicates
+- `DELETE FROM <table>` of existing rows by predicate, *unless* the predicate is
+  provably zero-row in every operator DB (e.g. matches a known-stale schema slot
+  that no operator ever populated). Pattern-based row deletes against
+  user-authored tables (`cases`, `agent_templates`, etc.) are always
+  destructive even if the author "knows" no operator has those rows —
+  knowing requires guarding the predicate with `WHERE NOT EXISTS (SELECT 1
+  FROM <referencing-table> WHERE …)`, not asserting.
+- `UPDATE <table> SET …` that overwrites existing user data (as opposed
+  to default-changes that touch NULLs or known-stale values). When in
+  doubt, add a `WHERE` clause that only matches rows whose value is the
+  stale sentinel.
 
 ### How to ship a destructive change anyway
 
@@ -96,7 +107,7 @@ migration also requires adding a row here**.
 | 0019 | `0019_oyon_lower_min_valid_frames.sql` | additive | Default change only — backfills legacy 6 → 3 so analytics stop dropping windows on normal blinks. |
 | 0020 | `0020_clear_orus_patient_template_default.sql` | additive | Data fixup — removes the stale `en-US-Chirp3-HD-Orus` `case_voice` override from `is_default=1` patient templates. Targeted: only matches that exact value, so admin-picked voices are preserved. Idempotent (zero-row no-op on already-clean installs). |
 | 0021 | `0021_learning_events_room.sql` | additive | New `room` column on learning_events + partial index. Pairs with the RoomNavigator: every event carries the active in-session room ('chat', 'examination', 'lab', 'radiology', 'consultant'). Pre-migration rows + pre-room events stay NULL. |
-| 0022 | `0022_voice_surface_collapse.sql` | additive | Data-only cleanup. (a) Deletes zombie `voice_*`/`piper_voice_*`/`default_voice_*` settings rows from platform_settings — already unread in code (no fallback tier reads them). (b) Strips `tts_provider`/`tts_rate`/`tts_pitch` from `cases.config.voice` and `tts_provider` from `agent_templates.config.voice` — those live on platform_settings now. (c) Clears non-Kokoro `case_voice` values so stale provider voices don't ship to Kokoro. (d) Assigns distinct Kokoro voices to shipped cases 1–6. (e) Removes ~55 test-fixture cases that leaked from non-isolated test runs. No schema changes — only JSON mutations + DELETEs. |
+| 0022 | `0022_voice_surface_collapse.sql` | destructive | Reclassified from `additive` (2026-05-14 audit): the migration deletes rows from `platform_settings` and `cases` and overwrites `cases.config` / `agent_templates.config` for shipped cases. Predicate-based DELETE on user-authored tables without an FK guard is destructive per the policy above, even when the author believes "no operator has those rows." Operators on a version that already applied this migration are unaffected (data is gone); operators upgrading past it now go through the `--allow-destructive` gate. Concretely: (a) Deletes zombie `voice_*`/`piper_voice_*`/`default_voice_*` settings rows from platform_settings. (b) Strips `tts_provider`/`tts_rate`/`tts_pitch` from `cases.config.voice` and `tts_provider` from `agent_templates.config.voice`. (c) Clears non-Kokoro `case_voice` values. (d) Overwrites Kokoro voices on shipped cases 1–6. (e) Removes ~55 test-fixture cases by name pattern with no `WHERE NOT EXISTS (SELECT 1 FROM sessions WHERE case_id = cases.id)` guard. |
 | 0023 | `0023_clamp_turnaround_to_5min.sql` | additive | Data-only normalisation. Clamps `case_investigations.turnaround_minutes` to the 1–5 minute band the sim uses after the turnaround cleanup (kills 30 / 60 / 240 / 2880 / 10080 minute waits seeded before the clamp). Schema unchanged — old code can still read these rows; only the column values move. Authors who deliberately need a longer wait can re-set via the case wizard. |
 | 0024 | `0024_agent_arrives_at.sql` | additive | New nullable `arrives_at` column on `agent_session_state`. Anchors the paged → present timer on the server clock so the wait survives refreshes / room hops; pairs with the 1–3 minute clamp in the page handler. Old code that doesn't read this column keeps working — null on every row at migration time. |
 
