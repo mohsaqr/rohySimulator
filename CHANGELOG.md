@@ -9,6 +9,43 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.1.0] — 2026-05-14
+
+Minor release. Per-persona LLM routing and a global version badge.
+
+### Added
+
+- **Per-persona LLM routing.** Patient, discussant, and every agent
+  (nurse, consultant, family, etc.) now route through the LLM
+  configured on their `agent_template` row (`llm_provider`,
+  `llm_model`, `llm_api_key`, `llm_endpoint`, `llm_temperature`,
+  `llm_max_tokens`). Resolution is two-tier: template → platform
+  default. No per-case, per-session, or per-user overlay — the voice
+  5-tier resolver taught us what that costs.
+  - `LLMService.streamMessage` accepts a new `agentTemplateId` option;
+    when set, the body carries `agent_llm_config: { agent_template_id }`.
+  - Patient chat (`ChatInterface.handleSendToPatient`) and discussant
+    (`useDiscussionEngine.sendMessage`) now both forward their
+    `patientTemplate.templateId` / `discussant.templateId`.
+  - `AgentService.sendAgentMessage` consolidated to send the same
+    minimal `{agent_template_id}` payload instead of the previous
+    bigger payload that included the client-redacted `llm_api_key`
+    (which would have triggered the server's "trust client config"
+    branch and called the LLM with the literal string `'[redacted]'`).
+- **Global version badge.** A small centred "Rohy <major>.<minor>"
+  pill sits at the top of every screen — login, chat, exam,
+  investigations, debrief, settings, persona editor. Reads the
+  version from `package.json` so `npm version` is the only place a
+  release number lives. Mounted once at the entry point
+  (`src/main.jsx`) alongside `<App />`.
+
+### Changed
+
+- **`AgentService.sendAgentMessage` payload.** No longer forwards
+  `provider`, `model`, `api_key`, or `endpoint` from the client.
+  Sends `{agent_template_id}` only; server reads the rest from the
+  database. Same shape as the patient and discussant paths now use.
+
 ## [2.0.0] — 2026-05-14
 
 Second major release. Three feature platforms land at once — voice, on-device
@@ -126,5 +163,6 @@ Initial public release. Virtual-patient text chat with case-bound system
 prompts, basic monitor, single-room layout, session persistence, admin
 case editor, multi-tenant auth.
 
+[2.1.0]: https://github.com/mohsaqr/rohySimulator/releases/tag/v2.1.0
 [2.0.0]: https://github.com/mohsaqr/rohySimulator/releases/tag/v2.0.0
 [1.0.0]: https://github.com/mohsaqr/rohySimulator/releases/tag/v1.0.0
