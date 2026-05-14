@@ -13,11 +13,13 @@
 //   1. login()         — POSTs JSON to /api/auth/login, persists token, throws on failure paths
 //   2. register()      — POSTs JSON to /api/auth/register, persists token, throws on failure
 //   3. verifyToken()   — sends Bearer auth, returns user, clears token on 401/network error
-//   4. getProfile()    — sends Bearer auth, returns user, throws on !ok
-//   5. logout()        — clears 'token' from localStorage
-//   6. getToken()      — reads 'token' from localStorage
-//   7. authHeaders()   — returns { Authorization: 'Bearer <t>' } when token present, {} otherwise
-//   8. isAuthenticated() — boolean form of token-presence check
+//   4. logout()        — clears 'token' from localStorage
+//   5. getToken()      — reads 'token' from localStorage
+//   6. authHeaders()   — returns { Authorization: 'Bearer <t>' } when token present, {} otherwise
+//   7. isAuthenticated() — boolean form of token-presence check
+//
+// getProfile() was removed in the F-013 fix — it was localStorage-only in
+// a cookie-auth world and had no production callers. Use apiGet('/auth/verify').
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { AuthService } from './authService.js';
@@ -228,39 +230,6 @@ describe('AuthService.verifyToken', () => {
 
         expect(user).toBeNull();
         expect(localStorage.getItem('token')).toBeNull();
-    });
-});
-
-describe('AuthService.getProfile', () => {
-    it('returns null without calling fetch when there is no token', async () => {
-        const profile = await AuthService.getProfile();
-        expect(profile).toBeNull();
-        expect(fetchSpy).not.toHaveBeenCalled();
-    });
-
-    it('sends Bearer token and returns the user payload on success', async () => {
-        localStorage.setItem('token', 'tok-profile');
-        fetchSpy.mockResolvedValueOnce(makeResponse({
-            ok: true,
-            body: { user: { id: 9, username: 'dora' } },
-        }));
-
-        const user = await AuthService.getProfile();
-
-        const [url, init] = fetchSpy.mock.calls[0];
-        expect(url).toContain('/api/auth/profile');
-        expect(init.headers).toEqual({ Authorization: 'Bearer tok-profile' });
-        expect(user).toEqual({ id: 9, username: 'dora' });
-    });
-
-    it('throws "Failed to fetch profile" when the response is not ok', async () => {
-        localStorage.setItem('token', 'tok-profile');
-        fetchSpy.mockResolvedValueOnce(makeResponse({ ok: false, status: 500, body: {} }));
-
-        await expect(AuthService.getProfile()).rejects.toThrow('Failed to fetch profile');
-        // getProfile does NOT clear the token on failure (unlike verifyToken).
-        // Locking that asymmetry intentionally — callers rely on it.
-        expect(localStorage.getItem('token')).toBe('tok-profile');
     });
 });
 

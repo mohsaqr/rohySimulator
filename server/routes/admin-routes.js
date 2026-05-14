@@ -1,5 +1,6 @@
 import express from 'express';
 import dbAdapter from '../dbAdapter.js';
+import { dbPath } from '../db.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -7,6 +8,8 @@ import {
     authenticateToken,
     requireAdmin,
     requireEducator,
+    hasRoleAtLeast,
+    ROLE_RANKS,
 } from '../middleware/auth.js';
 
 
@@ -148,8 +151,10 @@ router.get('/admin/database-stats', authenticateToken, requireAdmin, (req, res) 
             stats[table] = err ? 'error' : row.count;
             completed++;
             if (completed === tables.length) {
-                // Get database file size
-                const dbPath = path.join(__dirname, '../database.sqlite');
+                // Use the resolved db path (`ROHY_DB` overrides the default).
+                // Pre-F-015 this was hardcoded to `server/database.sqlite`,
+                // so deploys that pointed ROHY_DB elsewhere reported
+                // "unknown" or stale sizes.
                 try {
                     const dbStats = fs.statSync(dbPath);
                     stats.database_size_mb = (dbStats.size / (1024 * 1024)).toFixed(2);
@@ -1147,7 +1152,9 @@ router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
             settings[key] = await getPlatformSetting(key);
         }
 
-        // Build response with defaults
+        // Runtime fields the DiagnosticBar and other authenticated UI
+        // surfaces need to render. The base URL is a vendor public endpoint
+        // (e.g. https://api.openai.com/v1), so it's not treated as secret.
         const response = {
             provider: settings.llm_provider || DEFAULT_LLM_SETTINGS.provider,
             model: settings.llm_model || DEFAULT_LLM_SETTINGS.model,
@@ -1156,9 +1163,17 @@ router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
             apiKeySet: !!settings.llm_api_key,
             enabled: settings.llm_enabled !== 'false',
             maxOutputTokens: settings.llm_max_output_tokens || '',
-            temperature: settings.llm_temperature || '',
-            systemPromptTemplate: settings.llm_system_prompt_template || DEFAULT_LLM_SETTINGS.systemPromptTemplate
+            temperature: settings.llm_temperature || ''
         };
+
+        // F-008: the system-prompt template is rubric framing / pedagogy
+        // policy — students must not see it. Gate behind educator+ so the
+        // admin LLM settings page (also educator-gated by the same role
+        // wall in the SPA) still loads, but the per-session DiagnosticBar
+        // call from a student account returns the template field omitted.
+        if (hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
+            response.systemPromptTemplate = settings.llm_system_prompt_template || DEFAULT_LLM_SETTINGS.systemPromptTemplate;
+        }
 
         res.json(response);
     } catch (err) {

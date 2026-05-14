@@ -197,7 +197,17 @@ export async function apiFetch(path, options = {}) {
     const clientRequestId = generateClientRequestId();
     headers[REQUEST_ID_HEADER] = clientRequestId;
 
-    if (auth) {
+    // F-012: absolute URLs (http(s)://, blob:) bypass apiUrl() and point
+    // off our app. Our bearer token + CSRF double-submit value have no
+    // business going to a third-party host — pre-fix a future caller
+    // passing an attacker-controlled URL would leak the localStorage
+    // token in an Authorization header. We suppress both credential
+    // headers for absolute URLs. (No production caller currently relies
+    // on this — only the apiClient unit test exercises absolute URLs,
+    // and that test only asserts URL pass-through, not auth headers.)
+    const isAbsoluteUrl = /^(https?:|blob:)/i.test(path);
+
+    if (auth && !isAbsoluteUrl) {
         const token = readToken();
         if (token) headers['Authorization'] = `Bearer ${token}`;
     }
@@ -214,7 +224,7 @@ export async function apiFetch(path, options = {}) {
     // bearer-auth requests, so the header is harmless on those, and
     // saying "always set when available" keeps the client from having
     // to know which auth mode it's on.
-    if (auth && STATE_CHANGING_METHODS.has(method.toUpperCase())) {
+    if (auth && !isAbsoluteUrl && STATE_CHANGING_METHODS.has(method.toUpperCase())) {
         const csrf = readCsrfToken();
         if (csrf) headers['X-CSRF-Token'] = csrf;
     }

@@ -134,7 +134,7 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
         // Insert user
         const defaultTenantId = 1;
         const sql = `INSERT INTO users (username, name, email, password_hash, role, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`;
-        dbAdapter.run(sql, [username, name || null, email, password_hash, finalRole, defaultTenantId], function (err) {
+        dbAdapter.run(sql, [username, name || null, email, password_hash, finalRole, defaultTenantId], async function (err) {
             if (err) {
                 if (err.message.includes('UNIQUE')) {
                     return res.status(409).json({ error: 'Username or email already exists' });
@@ -144,6 +144,29 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
 
             const user = { id: this.lastID, username, name, email, role: finalRole, tenant_id: defaultTenantId };
             const token = generateToken(user);
+            const ipAddress = req.ip || req.connection?.remoteAddress;
+            const userAgent = req.headers['user-agent'];
+
+            // F-004: previously register issued a JWT but never recorded
+            // an active_sessions row or set the auth/CSRF cookies. The
+            // legacy compat at middleware/auth.js L144 ("missing row =
+            // allow through") meant the token worked, but logout /
+            // admin-revoke couldn't touch it. Now we mirror login's
+            // session-issuance path so register-issued sessions are
+            // first-class: revocable, cookie-aware, CSRF-paired. Failure
+            // is non-fatal — the JSON token in the response body is
+            // still valid; the user just isn't server-revocable.
+            try {
+                await recordActiveSession(token, user, { ipAddress, userAgent });
+            } catch (e) {
+                (req.log || authLog).warn('register active session record failed', {
+                    user_id: user.id,
+                    tenant_id: defaultTenantId,
+                    error: e.message
+                });
+            }
+            res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
+            res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
 
             logAudit({
                 userId: user.id,
@@ -154,8 +177,8 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                 resourceName: username,
                 newValue: { username, email, role: finalRole, tenant_id: defaultTenantId },
                 tenantId: defaultTenantId,
-                ipAddress: req.ip || req.connection?.remoteAddress,
-                userAgent: req.headers['user-agent']
+                ipAddress,
+                userAgent
             });
 
             res.status(201).json({

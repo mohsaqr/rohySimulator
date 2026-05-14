@@ -1,3 +1,11 @@
+// F-018: load server/.env BEFORE any module that reads process.env at
+// import time (db.js → ROHY_DB; middleware/auth.js → JWT_SECRET). ESM
+// imports evaluate in source order, so making this the first import
+// guarantees env is materialized before anything else loads. Without
+// this, the working order relies on the accident that routes.js (which
+// transitively imports auth.js's dotenv.config) currently appears before
+// db.js — reorder these imports and the wrong DB opens.
+import './bootstrap-env.js';
 import express from 'express';
 import cors from 'cors';
 import https from 'https';

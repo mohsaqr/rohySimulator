@@ -113,11 +113,15 @@ describe('buildCorsOptions — development is permissive (the audit-flagged drif
 });
 
 describe('buildCorsOptions — header allowlist + credentials', () => {
-    it('exposes credentials and the request-id header trio', () => {
+    it('exposes credentials and the request-id + CSRF header set', () => {
         const opts = buildCorsOptions({ nodeEnv: 'production', frontendUrl: 'https://x' });
         expect(opts.credentials).toBe(true);
-        expect(opts.allowedHeaders).toEqual(['Content-Type', 'Authorization', 'X-Request-Id']);
+        // X-CSRF-Token is the double-submit pair for the rohy_auth cookie
+        // (F-006). Without it on the preflight allowlist, split-origin
+        // cookie-auth state-changing requests get blocked client-side
+        // before they ever reach the CSRF middleware.
+        expect(opts.allowedHeaders).toEqual(['Content-Type', 'Authorization', 'X-Request-Id', 'X-CSRF-Token']);
         expect(opts.exposedHeaders).toEqual(['X-Request-Id']);
-        expect(opts.methods).toEqual(['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']);
+        expect(opts.methods).toEqual(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
     });
 });

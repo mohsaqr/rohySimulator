@@ -31,6 +31,13 @@ server/database.sqlite-shm
 server/database.sqlite-wal
 server/database.sqlite.backup-*
 server/database.sqlite.bak.*
+# Any local SQLite files under server/ (rohy.db, etc). The tracked empty
+# `server/rohy.db` was a deployment-path footgun — see F-014. Leave the
+# existing tracked placeholder alone until git rm is explicitly approved,
+# but stop new ones from being added.
+server/*.db
+server/*.db-shm
+server/*.db-wal
 
 # Local scratch — screenshots, dumps, etc.
 tmp/

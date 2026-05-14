@@ -51,8 +51,12 @@ export function buildCorsOptions({ nodeEnv, frontendUrl, logger = console } = {}
             return callback(new Error('Not allowed by CORS'));
         },
         credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        // X-CSRF-Token is the double-submit value paired with the rohy_auth
+        // cookie. Without it in the preflight allowlist, split-origin
+        // cookie-auth state-changing requests get blocked by the browser
+        // before reaching the CSRF middleware (F-006).
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-CSRF-Token'],
         exposedHeaders: ['X-Request-Id'],
     };
 }

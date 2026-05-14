@@ -97,24 +97,12 @@ export const AuthService = {
         }
     },
 
-    // Get current user profile
-    async getProfile() {
-        const token = localStorage.getItem('token');
-        if (!token) return null;
-
-        const response = await fetch(apiUrl(`/auth/profile`), {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch profile');
-        }
-
-        const data = await response.json();
-        return data.user;
-    },
+    // F-013: getProfile() was retired. It was localStorage-token-only and
+    // silently returned null for cookie-auth users, drifting from the
+    // newer HttpOnly cookie session model. No production code called it
+    // (only its own test file did). Use apiGet('/auth/verify') instead —
+    // that path rides credentials:'include' and works under both auth
+    // modes.
 
     // Refresh the current session's JWT. The server rotates the
     // active_sessions row server-side; on the client, if there's a

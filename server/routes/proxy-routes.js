@@ -65,6 +65,15 @@ const DEFAULT_RATE_LIMITS = {
 
 const VOICE_TTS_PROVIDERS = ['piper', 'kokoro', 'openai', 'google', 'browser'];
 
+// F-005: upstream LLM fetches were unbounded. /proxy/llm is intentionally
+// excluded from the global routeTimeout middleware (streaming responses can
+// legitimately run long), but the upstream call itself needs its own cap or
+// a slow/malicious endpoint can pin a server connection forever. Connect /
+// non-stream cap is 60s; the stream branch additionally enforces a 5-minute
+// total upper bound and aborts the upstream when the client disconnects.
+const LLM_UPSTREAM_CONNECT_MS = 60_000;
+const LLM_STREAM_MAX_MS = 5 * 60_000;
+
 const extractUpstreamError = (errText) => {
     try {
         const parsed = JSON.parse(errText);
@@ -227,21 +236,24 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // used session/platform values regardless of the editor's settings.
         let agentTemperature = null;
         let agentMaxTokens = null;
-        if (agent_llm_config && agent_llm_config.provider) {
-            agentProvider = agent_llm_config.provider;
-            agentModel = agent_llm_config.model;
-            agentApiKey = agent_llm_config.api_key;
-            agentEndpoint = agent_llm_config.endpoint;
-            if (agent_llm_config.temperature !== undefined && agent_llm_config.temperature !== null && agent_llm_config.temperature !== '') {
-                agentTemperature = parseFloat(agent_llm_config.temperature);
-                if (!Number.isFinite(agentTemperature)) agentTemperature = null;
-            }
-            if (agent_llm_config.max_tokens !== undefined && agent_llm_config.max_tokens !== null && agent_llm_config.max_tokens !== '') {
-                agentMaxTokens = parseInt(agent_llm_config.max_tokens, 10);
-                if (!Number.isFinite(agentMaxTokens)) agentMaxTokens = null;
-            }
-            (req.log || routesLlmLog).info('using agent-specific llm config', { provider: agentProvider, model: agentModel || null, temperature: agentTemperature ?? null, max_tokens: agentMaxTokens ?? null });
-        } else if (agent_llm_config?.agent_template_id) {
+        // F-001: previously this route trusted client-supplied
+        // `agent_llm_config.{provider,endpoint,api_key}` outright, which let
+        // any authenticated user point the server at a custom endpoint AND
+        // fall back to the platform API key (SSRF + key exfiltration). The
+        // current React client only ever sends `{ agent_template_id }`
+        // (see src/services/AgentService.js & llmService.js), so we now
+        // ignore inline raw routing fields and require the
+        // `agent_template_id` indirection. Admins still configure agent
+        // routing via the agent_templates table, which is server-trusted.
+        if (agent_llm_config && (agent_llm_config.provider || agent_llm_config.endpoint || agent_llm_config.api_key)) {
+            (req.log || routesLlmLog).warn('ignored client-supplied agent llm routing fields', {
+                user_id: userId,
+                had_provider: !!agent_llm_config.provider,
+                had_endpoint: !!agent_llm_config.endpoint,
+                had_api_key: !!agent_llm_config.api_key
+            });
+        }
+        if (agent_llm_config?.agent_template_id) {
             // Try to fetch agent template LLM config from DB
             const agentTemplate = await new Promise((resolve, reject) => {
                 dbAdapter.get('SELECT llm_provider, llm_model, llm_api_key, llm_endpoint, llm_temperature, llm_max_tokens FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
@@ -302,8 +314,35 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             }
             apiKey = agentApiKey || platformApiKey;
         } else if (sessionLlmSettings?.baseUrl && sessionLlmSettings.baseUrl.trim()) {
-            baseUrl = sessionLlmSettings.baseUrl.trim();
-            apiKey = (sessionLlmSettings?.apiKey && sessionLlmSettings.apiKey.trim()) || platformApiKey;
+            // F-002: session-level baseUrl is reachable from
+            // /users/preferences (any authenticated user can set it).
+            // Pre-fix we paired the user-supplied URL with the platform
+            // API key, which let any account exfiltrate the platform key
+            // by pointing baseUrl at an attacker-controlled host. Now:
+            // a custom session baseUrl is only honored when it ships with
+            // its own apiKey. Otherwise we fall through to the platform
+            // baseUrl + platform key (still server-trusted).
+            const sessionBase = sessionLlmSettings.baseUrl.trim();
+            const sessionKey = (sessionLlmSettings?.apiKey && sessionLlmSettings.apiKey.trim()) || null;
+            // Normalize trailing slashes so an operator setting the same
+            // URL with/without a trailing `/` doesn't silently fall into
+            // the "custom URL → drop platform key" branch.
+            const stripSlash = (u) => (u || '').replace(/\/+$/, '');
+            if (stripSlash(sessionBase) === stripSlash(platformBaseUrl)) {
+                // Same endpoint as platform — safe to reuse platform key.
+                apiKey = sessionKey || platformApiKey;
+            } else if (sessionKey) {
+                baseUrl = sessionBase;
+                apiKey = sessionKey;
+            } else {
+                (req.log || routesLlmLog).warn('refusing custom session baseUrl without session-supplied apiKey', {
+                    user_id: userId,
+                    session_id: session_id ?? null
+                });
+                // Drop the custom baseUrl; keep the rest of the request
+                // flowing on the platform endpoint+key.
+                apiKey = platformApiKey;
+            }
         } else {
             apiKey = (sessionLlmSettings?.apiKey && sessionLlmSettings.apiKey.trim()) || platformApiKey;
         }
@@ -466,12 +505,37 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             || (req.headers.accept || '').includes('text/event-stream');
         if (wantStream) {
             const streamPayload = { ...requestPayload, stream: true };
-            const upstream = await fetch(endpoint, {
-                method: 'POST',
-                headers: llmHeaders,
-                body: JSON.stringify(streamPayload)
+            // F-005: bound upstream. Connect timeout caps how long we'll
+            // wait for the upstream's first response; the max-duration
+            // timer caps a slow/never-ending stream; the req 'close'
+            // handler aborts upstream the moment the client goes away.
+            const streamController = new AbortController();
+            const connectTimer = setTimeout(() => streamController.abort(new Error('upstream_connect_timeout')), LLM_UPSTREAM_CONNECT_MS);
+            const overallTimer = setTimeout(() => streamController.abort(new Error('upstream_stream_max_duration')), LLM_STREAM_MAX_MS);
+            // The accounting-flag siblings (streamInterrupted /
+            // streamErrMessage) live further down, attached AFTER the
+            // upstream connects — they only matter once we're committed
+            // to sending SSE. This handler is the safety-critical half:
+            // it has to fire even if the upstream never responds, so it
+            // attaches now and dedupes on signal.aborted.
+            req.on('close', () => {
+                if (!streamController.signal.aborted) {
+                    try { streamController.abort(new Error('client_disconnected')); } catch { /* noop */ }
+                }
             });
+            let upstream;
+            try {
+                upstream = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: llmHeaders,
+                    body: JSON.stringify(streamPayload),
+                    signal: streamController.signal
+                });
+            } finally {
+                clearTimeout(connectTimer);
+            }
             if (!upstream.ok) {
+                clearTimeout(overallTimer);
                 const errText = await upstream.text();
                 (req.log || routesLlmLog).error('llm stream upstream error', { status: upstream.status, error: errText.slice(0, 200) });
                 dbAdapter.run('INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms) VALUES (?, ?, ?, ?, ?, ?)',
@@ -494,10 +558,13 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             const decoder = new TextDecoder();
             let buffered = '';
 
-            // If the client goes away mid-stream we want the same accounting
-            // path (treat as an incomplete stream). Express's `req` emits
-            // 'close' for both clean ends and disconnects, so we additionally
-            // gate on `!res.writableEnded` to distinguish.
+            // Accounting-flag sibling to the abort handler above. Express's
+            // `req` emits 'close' for both clean ends and disconnects, so
+            // we gate on `!res.writableEnded` to distinguish. Two separate
+            // handlers (rather than one combined) because the abort half
+            // must fire even before the stream is committed to writing
+            // SSE, while these flags only matter once we're already
+            // streaming. Both run on every 'close', the gates dedupe.
             req.on('close', () => {
                 if (!res.writableEnded) {
                     streamInterrupted = true;
@@ -551,6 +618,8 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 (req.log || routesLlmLog).error('llm stream interrupted', { error: streamErr.message });
                 streamInterrupted = true;
                 streamErrMessage = streamErr?.message?.slice(0, 500) || 'stream_error';
+            } finally {
+                clearTimeout(overallTimer);
             }
 
             // Final usage + log
@@ -597,23 +666,52 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             return;
         }
 
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: llmHeaders,
-            body: JSON.stringify(requestPayload)
+        // F-005: non-stream upstream had no timeout — a slow or never-
+        // returning endpoint pinned the server connection indefinitely.
+        // 60s is generous for non-stream completion latencies; client
+        // disconnects also abort the upstream so resources are released
+        // promptly.
+        const nonStreamController = new AbortController();
+        const nonStreamTimer = setTimeout(
+            () => nonStreamController.abort(new Error('upstream_timeout')),
+            LLM_UPSTREAM_CONNECT_MS
+        );
+        req.on('close', () => {
+            if (!nonStreamController.signal.aborted) {
+                try { nonStreamController.abort(new Error('client_disconnected')); } catch { /* noop */ }
+            }
         });
+        // Keep the timer alive through both fetch() AND body parse — a
+        // slow-trickle upstream body would otherwise pin the connection
+        // past the 60s cap. The outer try/finally covers every exit path
+        // (success, !ok branch, body-parse throw, fetch throw); the route
+        // handler's outer catch handles any rethrow.
+        let response;
+        let rawData;
+        try {
+            response = await fetch(endpoint, {
+                method: 'POST',
+                headers: llmHeaders,
+                body: JSON.stringify(requestPayload),
+                signal: nonStreamController.signal
+            });
 
-        const responseTime = Date.now() - startTime;
+            const responseTime = Date.now() - startTime;
 
-        if (!response.ok) {
-            const errText = await response.text();
-            (req.log || routesLlmLog).error('llm upstream error', { status: response.status, error: errText });
-            dbAdapter.run('INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms) VALUES (?, ?, ?, ?, ?, ?)',
-                [userId, session_id, model, 'error', errText.substring(0, 500), responseTime]);
-            return res.status(response.status).json({ error: extractUpstreamError(errText) });
+            if (!response.ok) {
+                const errText = await response.text();
+                (req.log || routesLlmLog).error('llm upstream error', { status: response.status, error: errText });
+                dbAdapter.run('INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms) VALUES (?, ?, ?, ?, ?, ?)',
+                    [userId, session_id, model, 'error', errText.substring(0, 500), responseTime]);
+                return res.status(response.status).json({ error: extractUpstreamError(errText) });
+            }
+
+            rawData = await response.json();
+        } finally {
+            clearTimeout(nonStreamTimer);
         }
 
-        const rawData = await response.json();
+        const responseTime = Date.now() - startTime;
 
         // 11. Normalize response format (Anthropic vs OpenAI)
         let data;

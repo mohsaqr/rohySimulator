@@ -111,13 +111,17 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = async () => {
-        // Log logout event to backend
-        if (AuthService.getToken()) {
-            try {
-                await apiPost('/auth/logout');
-            } catch (error) {
-                console.error('Failed to log logout:', error);
-            }
+        // Always hit /auth/logout — the server needs to revoke the
+        // active_sessions row and clear the HttpOnly rohy_auth cookie.
+        // Cookie-only users have no localStorage token, so a token-gated
+        // call (the pre-F-003 shape) silently skipped the server side and
+        // left the cookie alive: refresh would re-authenticate, and on a
+        // shared machine a second user could resume the prior session.
+        // apiPost rides credentials:'include' so the cookie path still works.
+        try {
+            await apiPost('/auth/logout');
+        } catch (error) {
+            console.error('Failed to log logout:', error);
         }
 
         // Logout is an explicit exit (per the persistence rule), so we
