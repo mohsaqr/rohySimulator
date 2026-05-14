@@ -23,7 +23,7 @@ describe('VersionBadge', () => {
         // Tailwind utilities contain `/` and `-` which are tricky for regex
         // word-boundaries; assert exact class presence instead.
         expect(classes).toContain('fixed');
-        expect(classes).toContain('top-2');
+        expect(classes).toContain('top-3');
         expect(classes).toContain('left-1/2');
         expect(classes).toContain('-translate-x-1/2');
         expect(classes).toContain('z-[9999]');
