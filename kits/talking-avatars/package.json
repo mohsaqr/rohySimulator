@@ -1,6 +1,6 @@
 {
   "name": "talking-avatars-kit",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Talking head avatars with real-time lipsync — GLBs, FFT-based viseme detector, multi-provider TTS (Kokoro local, Google cloud), and the conversion pipeline.",
   "private": true,
   "type": "module",
