@@ -1061,6 +1061,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             richSystemPrompt,
             voiceMode ? 'voice' : undefined,
             {
+                agentTemplateId: patientTemplate?.templateId || null,
                 onDelta: (delta) => {
                     acc += delta;
                     const display = stripStageDirections(acc);

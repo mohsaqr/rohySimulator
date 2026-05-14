@@ -178,6 +178,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
                 {
                     signal: controller.signal,
                     silent: silentUser,
+                    agentTemplateId: discussant.templateId || null,
                     onDelta: (delta) => {
                         acc += delta;
                         setMessages(prev => prev.map(m =>

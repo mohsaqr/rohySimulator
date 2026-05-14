@@ -84,7 +84,7 @@ export const LLMService = {
      * accumulated full text on completion. Falls back to non-streaming if the
      * server doesn't return text/event-stream.
      */
-    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false } = {}) {
+    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null } = {}) {
         const lastMsg = messages[messages.length - 1];
         // `silent` lets callers (e.g. the discussion opening turn) suppress
         // the user-side /interactions write so meta-prompts and sentinels
@@ -123,6 +123,16 @@ export const LLMService = {
                 stream: true
             };
             if (sessionMode) body.session_mode = sessionMode;
+            // Per-persona LLM routing. When the caller (patient chat,
+            // discussant, any agent) passes a template id, the server reads
+            // that template's llm_provider / llm_model / llm_api_key /
+            // llm_endpoint and uses them in place of the platform defaults.
+            // Resolution is intentionally two-tier — template → platform —
+            // with no per-case, per-session, or per-user overlay. The voice
+            // 5-tier resolver taught us what that costs.
+            if (agentTemplateId) {
+                body.agent_llm_config = { agent_template_id: agentTemplateId };
+            }
 
             armWatchdog();
             const response = await apiFetch('/proxy/llm?stream=1', {

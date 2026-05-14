@@ -305,6 +305,61 @@ describe('LLMService.streamMessage', () => {
         expect(sentBody).not.toHaveProperty('provider');
     });
 
+    it('forwards agent_llm_config.agent_template_id when caller passes agentTemplateId', async () => {
+        // CONTRACT (post-v2.1.0): per-persona LLM routing. When the caller
+        // (patient chat, discussant, any agent path) sends an
+        // agentTemplateId, the body includes the canonical minimal payload
+        // `agent_llm_config: { agent_template_id }`. The server reads the
+        // template by id and applies its LLM fields server-side. The client
+        // never forwards provider/model/api_key/endpoint.
+        fetchMock.mockImplementation((url) => {
+            if (!String(url).includes('/proxy/llm')) {
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            }
+            return Promise.resolve(sseResponse(['data: [DONE]\n\n']));
+        });
+
+        await LLMService.streamMessage(
+            SESSION_ID, MESSAGES, SYSTEM_PROMPT, 'voice',
+            { onDelta: () => {}, agentTemplateId: 42 }
+        );
+
+        const proxyCall = fetchMock.mock.calls.find(
+            ([u]) => String(u).includes('/proxy/llm')
+        );
+        const sentBody = JSON.parse(proxyCall[1].body);
+        expect(sentBody.agent_llm_config).toEqual({ agent_template_id: 42 });
+        // Minimal payload — no client-side provider/model/api_key/endpoint.
+        expect(sentBody.agent_llm_config).not.toHaveProperty('provider');
+        expect(sentBody.agent_llm_config).not.toHaveProperty('model');
+        expect(sentBody.agent_llm_config).not.toHaveProperty('api_key');
+        expect(sentBody.agent_llm_config).not.toHaveProperty('endpoint');
+    });
+
+    it('omits agent_llm_config entirely when no agentTemplateId is passed', async () => {
+        // CONTRACT: a falsy/null agentTemplateId means "use the platform
+        // default LLM" — the field is absent from the body, not present
+        // with a null value. Server treats absence as platform-default
+        // resolution.
+        fetchMock.mockImplementation((url) => {
+            if (!String(url).includes('/proxy/llm')) {
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            }
+            return Promise.resolve(sseResponse(['data: [DONE]\n\n']));
+        });
+
+        await LLMService.streamMessage(
+            SESSION_ID, MESSAGES, SYSTEM_PROMPT, 'voice',
+            { onDelta: () => {} }
+        );
+
+        const proxyCall = fetchMock.mock.calls.find(
+            ([u]) => String(u).includes('/proxy/llm')
+        );
+        const sentBody = JSON.parse(proxyCall[1].body);
+        expect(sentBody).not.toHaveProperty('agent_llm_config');
+    });
+
     it('omits session_mode entirely when caller does not pass one', async () => {
         // CONTRACT: falsy session_mode → field is not present at all
         // (server uses its default), not sent as null/undefined.

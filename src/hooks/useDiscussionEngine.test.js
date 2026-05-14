@@ -408,6 +408,45 @@ describe('useDiscussionEngine — message state & silentUser', () => {
         }
     });
 
+    it('forwards discussant.templateId as agentTemplateId to LLMService.streamMessage (per-persona LLM)', async () => {
+        // CONTRACT (post-v2.1.0): the discussant routes to its template's
+        // LLM, not the platform default. The hook forwards
+        // discussant.templateId via opts.agentTemplateId; LLMService then
+        // includes `agent_llm_config: { agent_template_id }` in the body.
+        let capturedOpts;
+        LLMService.streamMessage.mockImplementation(async (_s, _m, _sp, _mo, opts) => {
+            capturedOpts = opts;
+            opts.onDelta('ok.');
+            return 'ok.';
+        });
+        const props = makeProps({
+            discussant: {
+                systemPrompt: 'You are a clinical educator.',
+                voice: { gender: 'male' },
+                rawConfig: {},
+                contextFilter: null,
+                _caseId: 'case-1',
+                templateId: 'tpl-discussant-7',
+            },
+        });
+        const { result } = renderHook(() => useDiscussionEngine(props));
+        await act(async () => { await result.current.sendMessage('hi'); });
+        expect(capturedOpts.agentTemplateId).toBe('tpl-discussant-7');
+    });
+
+    it('passes null agentTemplateId when discussant has no templateId (falls back to platform default)', async () => {
+        let capturedOpts;
+        LLMService.streamMessage.mockImplementation(async (_s, _m, _sp, _mo, opts) => {
+            capturedOpts = opts;
+            opts.onDelta('ok.');
+            return 'ok.';
+        });
+        // makeProps default discussant has no templateId field.
+        const { result } = renderHook(() => useDiscussionEngine(makeProps()));
+        await act(async () => { await result.current.sendMessage('hi'); });
+        expect(capturedOpts.agentTemplateId).toBe(null);
+    });
+
     it('refuses to send when discussant has no _caseId stamp (strict guard, no implicit pass)', async () => {
         // CONTRACT: the guard is strict-equal. A stampless discussant means
         // an unknown producer constructed it (not the canonical

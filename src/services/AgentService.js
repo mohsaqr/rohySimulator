@@ -355,14 +355,17 @@ export const AgentService = {
         system_prompt: systemPrompt
       };
 
-      if (agent.llm_provider || agent.agent_template_id) {
-        requestBody.agent_llm_config = {
-          agent_template_id: agent.agent_template_id || agent.id,
-          provider: agent.llm_provider,
-          model: agent.llm_model,
-          api_key: agent.llm_api_key,
-          endpoint: agent.llm_endpoint
-        };
+      // Per-persona LLM routing — send only the template id. The server
+      // (proxy-routes.js) reads the template by id and applies its LLM
+      // fields server-side; the client never forwards keys or endpoints.
+      // Previously this block also passed provider/model/api_key/endpoint
+      // from the client, but the agents API redacts api_key to "[redacted]"
+      // before it reaches the browser, so the server would have made the
+      // LLM call with that literal string — a latent failure mode if any
+      // future code path ever populated `agent.llm_provider` client-side.
+      const agentTemplateId = agent.agent_template_id || agent.id;
+      if (agentTemplateId) {
+        requestBody.agent_llm_config = { agent_template_id: agentTemplateId };
       }
 
       let aiContent;

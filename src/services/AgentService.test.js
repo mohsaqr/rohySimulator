@@ -886,13 +886,34 @@ describe('AgentService.sendAgentMessage', () => {
             { role: 'assistant', content: 'previous reply' },
             { role: 'user', content: 'BP is rising' },
         ]);
-        // Agent override config should be forwarded since llm_provider is set.
-        expect(llmReq.body.agent_llm_config).toMatchObject({
-            agent_template_id: 'tpl-1',
-            provider: 'openai',
-            model: 'gpt-4o-mini',
-        });
+        // Per-persona LLM routing (post-v2.1.0): only the template id is
+        // forwarded. The server reads the template's llm_provider /
+        // llm_model / llm_api_key / llm_endpoint from the DB. The client
+        // never sends those fields — see the comment in
+        // AgentService.sendAgentMessage for the security reason.
+        expect(llmReq.body.agent_llm_config).toEqual({ agent_template_id: 'tpl-1' });
+        expect(llmReq.body.agent_llm_config).not.toHaveProperty('provider');
+        expect(llmReq.body.agent_llm_config).not.toHaveProperty('model');
+        expect(llmReq.body.agent_llm_config).not.toHaveProperty('api_key');
+        expect(llmReq.body.agent_llm_config).not.toHaveProperty('endpoint');
         expect(llmReq.headers.authorization).toBe(`Bearer ${BEARER}`);
+    });
+
+    it('falls back to agent.id when agent_template_id is missing', async () => {
+        // CONTRACT: case_agents rows expose agent_template_id; raw templates
+        // expose only `id`. Either way, the dispatched payload carries one
+        // resolvable id so the server can look up the LLM config.
+        const agent = {
+            id: 'tpl-bare',
+            agent_type: 'consultant',
+            name: 'Dr. Lin',
+            system_prompt: 'You are a consultant.',
+        };
+        await AgentService.sendAgentMessage(
+            'sess-1', agent, 'hi', null, [], null, [],
+        );
+        const llmReq = lastRequest({ method: 'POST', pathEndsWith: '/api/proxy/llm' });
+        expect(llmReq.body.agent_llm_config).toEqual({ agent_template_id: 'tpl-bare' });
     });
 
     it('LLM API failure: returns user-facing error string (does not throw)', async () => {
