@@ -16,7 +16,8 @@ export default function VersionBadge() {
     return (
         <div
             aria-hidden="true"
-            className="fixed top-3 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none select-none px-5 py-2 rounded-full bg-neutral-900/80 backdrop-blur-md border border-neutral-700/60 text-neutral-100 text-base font-semibold uppercase tracking-[0.14em] shadow-lg"
+            className="fixed top-3 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none select-none text-3xl font-bold tracking-tight text-teal-300"
+            style={{ textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}
         >
             {LABEL}
         </div>
