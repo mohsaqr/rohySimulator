@@ -330,6 +330,76 @@
             html { scroll-behavior: auto; }
         }
 
+        /* CRETIC research-context band */
+        .cretic { padding: 48px 0 24px; }
+        .cretic-card {
+            display: grid;
+            grid-template-columns: 168px 1fr;
+            gap: 36px;
+            align-items: center;
+            padding: 36px 40px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(225, 29, 72, 0.07), transparent 60%),
+                radial-gradient(circle at 100% 100%, rgba(34, 211, 238, 0.04), transparent 60%),
+                var(--bg-elev);
+        }
+        .cretic-icon { display: flex; align-items: center; justify-content: center; }
+        .cretic-icon img {
+            width: 148px; height: auto;
+            filter: drop-shadow(0 10px 28px rgba(225, 29, 72, 0.28));
+        }
+        .cretic-body span.eyebrow { margin-bottom: 10px; }
+        .cretic-body h2 {
+            margin-bottom: 14px;
+            font-size: clamp(24px, 3vw, 32px);
+        }
+        .cretic-body p {
+            font-size: 16px;
+            color: var(--text-dim);
+            margin-bottom: 12px;
+            line-height: 1.65;
+        }
+        .cretic-body p strong { color: var(--text); font-weight: 600; }
+        .cretic-pi {
+            font-size: 14px !important;
+            color: var(--text-dimmer) !important;
+            margin-top: 8px;
+            margin-bottom: 0 !important;
+        }
+        .cretic-pi a {
+            color: var(--cyan);
+            font-weight: 500;
+        }
+        .cretic-pi a:hover { text-decoration: underline; }
+        .cretic-meta {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            color: var(--text-dimmer);
+        }
+        .cretic-meta::before {
+            content: "";
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--cyan);
+            box-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
+        }
+        @media (max-width: 760px) {
+            .cretic-card {
+                grid-template-columns: 1fr;
+                gap: 24px;
+                padding: 28px 24px;
+                text-align: center;
+            }
+            .cretic-icon img { width: 120px; }
+            .cretic-meta { justify-content: center; display: inline-flex; }
+        }
+
         /* install & update grids */
         .install-h3 {
             font-size: 11px;
@@ -513,6 +583,41 @@
             <span class="item">Real-time affect</span>
             <span class="item">Transition network analytics</span>
             <span class="item">Vital-enriched event log</span>
+        </div>
+    </div>
+</section>
+
+<!-- ── CRETIC research context ───────────────────────────────── -->
+<section class="cretic" id="cretic">
+    <div class="wrap reveal">
+        <div class="cretic-card">
+            <div class="cretic-icon">
+                <img src="assets/cretic-icon.png" alt="CRETIC project emblem — a red heart with an inscribed ECG trace.">
+            </div>
+            <div class="cretic-body">
+                <span class="eyebrow accent">RESEARCH CONTEXT</span>
+                <h2>Built for CRETIC. Useful everywhere.</h2>
+                <p>
+                    Rohy is engineered to support
+                    <strong>CRETIC — Optimizing Clinical Reasoning in
+                    Time-Critical Scenarios: A data-driven multimodal
+                    approach</strong>, a Research Council of Finland project that
+                    develops an innovative gamified platform combining virtual
+                    patients and educational-escape-room elements to simulate
+                    clinical emergencies for healthcare students and trainees.
+                </p>
+                <p>
+                    The platform is built to serve that research agenda — but is
+                    deliberately general. Every component above works in a
+                    non-CRETIC simulation context.
+                </p>
+                <p class="cretic-pi">
+                    Project led by
+                    <a href="https://uefconnect.uef.fi/en/sonsoles.lopez-pernas" target="_blank" rel="noopener">Sonsoles López-Pernas →</a>
+                    · School of Computing, University of Eastern Finland.
+                </p>
+                <span class="cretic-meta">FUNDED BY THE RESEARCH COUNCIL OF FINLAND</span>
+            </div>
         </div>
     </div>
 </section>
