@@ -508,7 +508,7 @@ router.post('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res
         unit,
         normal_samples,
         is_abnormal,
-        turnaround_minutes = 30
+        turnaround_minutes = DEFAULT_TURNAROUND_MINUTES
     } = req.body;
 
     if (!test_name) {

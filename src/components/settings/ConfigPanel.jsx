@@ -9,6 +9,7 @@ import SystemLogTable from '../analytics/SystemLogTable';
 import ChatLogTable from '../analytics/ChatLogTable';
 import SessionsTable from '../analytics/SessionsTable';
 import ScenarioRepository from './ScenarioRepository';
+import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
 import LabInvestigationEditor from './LabInvestigationEditor';
 import RadiologyEditor from './RadiologyEditor';
 import ClinicalRecordsEditor from './ClinicalRecordsEditor';
@@ -2679,7 +2680,7 @@ function LabInvestigationSelector({ _caseData, onAddLab, patientGender, showAddB
             unit: selectedTest.unit,
             normal_samples: selectedTest.normal_samples,
             is_abnormal: false,
-            turnaround_minutes: 30
+            turnaround_minutes: DEFAULT_TURNAROUND_MINUTES
         };
 
         onAddLab(labData);

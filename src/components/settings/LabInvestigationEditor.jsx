@@ -8,6 +8,7 @@ import {
 import { useToast } from '../../contexts/ToastContext';
 import { apiFetch } from '../../services/apiClient';
 import { LAB_PANEL_TEMPLATES, getTemplateCategories, SEARCH_ALIASES } from '../../data/labPanelTemplates';
+import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
 
 /**
  * Enhanced Lab Investigation Editor
@@ -132,7 +133,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
             unit: selectedTest.unit,
             normal_samples: selectedTest.normal_samples,
             is_abnormal: presetType !== 'normal',
-            turnaround_minutes: 30,
+            turnaround_minutes: DEFAULT_TURNAROUND_MINUTES,
             preset: presetType
         };
 
@@ -189,7 +190,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                     unit: selectedTest.unit,
                     normal_samples: selectedTest.normal_samples,
                     is_abnormal: false,
-                    turnaround_minutes: 30,
+                    turnaround_minutes: DEFAULT_TURNAROUND_MINUTES,
                     preset: 'normal',
                     panel_group: groupName // Mark as part of panel
                 });
@@ -283,7 +284,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                             unit: selectedTest.unit,
                             normal_samples: selectedTest.normal_samples,
                             is_abnormal: testConfig.preset !== 'normal',
-                            turnaround_minutes: 30,
+                            turnaround_minutes: DEFAULT_TURNAROUND_MINUTES,
                             preset: testConfig.preset || 'abnormal',
                             template_source: templateKey
                         });
@@ -1187,6 +1188,26 @@ function LabValueCard({
                         Immediate
                     </button>
                     <button
+                        onClick={() => onUpdateValue('turnaround_minutes', 1)}
+                        className={`px-2 py-1.5 rounded text-xs font-bold transition-colors ${
+                            lab.turnaround_minutes === 1
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                        }`}
+                    >
+                        1 min
+                    </button>
+                    <button
+                        onClick={() => onUpdateValue('turnaround_minutes', 3)}
+                        className={`px-2 py-1.5 rounded text-xs font-bold transition-colors ${
+                            lab.turnaround_minutes === 3
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                        }`}
+                    >
+                        3 min
+                    </button>
+                    <button
                         onClick={() => onUpdateValue('turnaround_minutes', 5)}
                         className={`px-2 py-1.5 rounded text-xs font-bold transition-colors ${
                             lab.turnaround_minutes === 5
@@ -1196,33 +1217,13 @@ function LabValueCard({
                     >
                         5 min
                     </button>
-                    <button
-                        onClick={() => onUpdateValue('turnaround_minutes', 15)}
-                        className={`px-2 py-1.5 rounded text-xs font-bold transition-colors ${
-                            lab.turnaround_minutes === 15
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
-                        }`}
-                    >
-                        15 min
-                    </button>
-                    <button
-                        onClick={() => onUpdateValue('turnaround_minutes', 30)}
-                        className={`px-2 py-1.5 rounded text-xs font-bold transition-colors ${
-                            lab.turnaround_minutes === 30
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
-                        }`}
-                    >
-                        30 min
-                    </button>
                 </div>
                 <div className="flex items-center gap-2 mt-2">
                     <span className="text-xs text-neutral-500">Custom:</span>
                     <input
                         type="number"
                         min="0"
-                        value={lab.turnaround_minutes || 30}
+                        value={lab.turnaround_minutes ?? DEFAULT_TURNAROUND_MINUTES}
                         onChange={(e) => onUpdateValue('turnaround_minutes', parseInt(e.target.value) || 0)}
                         className="w-16 px-2 py-1 bg-neutral-900 border border-neutral-700 rounded text-white text-xs focus:border-purple-500 focus:outline-none"
                     />

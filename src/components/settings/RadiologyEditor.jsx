@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Upload, Loader2, Scan, AlertCircle, RefreshCw, PenLine } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 import { useToast } from '../../contexts/ToastContext';
+import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
 
 // Default modalities for custom studies
 const MODALITIES = ['X-Ray', 'CT', 'MRI', 'Ultrasound', 'Nuclear Medicine', 'Fluoroscopy', 'Cardiac', 'Other'];
@@ -25,7 +26,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
         name: '',
         modality: 'X-Ray',
         bodyRegion: '',
-        turnaroundMinutes: 30
+        turnaroundMinutes: DEFAULT_TURNAROUND_MINUTES
     });
 
     // Get radiology config with safety check
@@ -103,7 +104,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
             studyName: study.name || 'Unknown Study',
             modality: study.modality || 'Unknown',
             bodyRegion: study.body_region || '',
-            turnaroundMinutes: study.turnaround_minutes || 30,
+            turnaroundMinutes: study.turnaround_minutes ?? DEFAULT_TURNAROUND_MINUTES,
             imageUrl: '',
             videoUrl: '',
             findings: study.normal_findings || '',
@@ -130,7 +131,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
             isCustom: true
         };
         updateRadiology([...radiology, newStudy]);
-        setCustomStudy({ name: '', modality: 'X-Ray', bodyRegion: '', turnaroundMinutes: 30 });
+        setCustomStudy({ name: '', modality: 'X-Ray', bodyRegion: '', turnaroundMinutes: DEFAULT_TURNAROUND_MINUTES });
         setShowCustomForm(false);
     };
 
@@ -410,7 +411,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                             <div className="max-h-[450px] overflow-y-auto divide-y divide-neutral-800">
                                 {radiology.map((study, idx) => {
                                     if (!study) return null;
-                                    const turnaround = study.turnaroundMinutes ?? 30;
+                                    const turnaround = study.turnaroundMinutes ?? DEFAULT_TURNAROUND_MINUTES;
                                     // Master DB defaults — used for the editor placeholder + "Use default"
                                     // affordance so cases saved before this fix (where findings/interpretation
                                     // were stored empty and the server filled in normal_* at order time) still
@@ -463,9 +464,9 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                                     <div className="flex gap-1">
                                                         {[
                                                             { value: 0, label: 'Instant', color: 'green' },
-                                                            { value: 15, label: '15m' },
-                                                            { value: 30, label: '30m' },
-                                                            { value: 60, label: '1h' }
+                                                            { value: 1, label: '1m' },
+                                                            { value: 3, label: '3m' },
+                                                            { value: 5, label: '5m' }
                                                         ].map(preset => (
                                                             <button
                                                                 key={preset.value}
