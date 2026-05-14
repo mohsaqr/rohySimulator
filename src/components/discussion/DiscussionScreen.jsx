@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Keyboard, GraduationCap, MessagesSquare, NotebookPen, Play } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
 import { fetchDiscussantForCase } from '../../services/discussionService';
@@ -21,6 +21,13 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
     const [showSummary, setShowSummary] = useState(false);
     const [showTranscript, setShowTranscript] = useState(false);
     const [showNotes, setShowNotes] = useState(false);
+    // Subtitle state — mirrors ChatInterface's pattern. `listening`/`interim`
+    // are mirrored up from VoiceControl via onListeningChange. `subtitleReady`
+    // gates the discussant's TTS caption by ~30% of the estimated audio
+    // length so the trainee hears the start of the line before reading it.
+    const [listening, setListening] = useState(false);
+    const [interim, setInterim] = useState('');
+    const [subtitleReady, setSubtitleReady] = useState(false);
     // Seeded from prior history so reloading mid-debrief skips the Start gate.
     const [started, setStarted] = useState(() => {
         if (!sessionId) return false;
@@ -73,6 +80,30 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
         return null;
     }, [messages]);
 
+    // 30% reveal lag for the discussant's TTS. Same heuristic as
+    // ChatInterface: estimated duration ≈ chars/15 ×1000ms, lag = 30% of
+    // that, floored at 300ms and capped at 4s. The lastAssistant snapshot is
+    // read synchronously inside the effect so a streaming-delta append
+    // during TTS doesn't restart the timer.
+    useEffect(() => {
+        if (!speaking) {
+            setSubtitleReady(false);
+            return undefined;
+        }
+        const text = lastAssistant || '';
+        const estimatedMs = Math.max(1000, (text.length / 15) * 1000);
+        const lagMs = Math.min(estimatedMs * 0.30, 4000);
+        const t = setTimeout(() => setSubtitleReady(true), lagMs);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [speaking]);
+
+    // Stable callback for VoiceControl so its useEffect dep doesn't churn.
+    const handleListeningChange = useCallback((isListening, currentInterim) => {
+        setListening(isListening);
+        setInterim(currentInterim || '');
+    }, []);
+
     const sttLang = voiceSettings?.stt_language || 'en-US';
 
     return (
@@ -92,6 +123,16 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                         <span className="font-semibold text-slate-100">Case Debrief</span>
                         {activeCase?.name && (
                             <span className="text-slate-400">· {activeCase.name}</span>
+                        )}
+                        {/* Discussant identity lives here so the centre column
+                            stays free for the avatar + cinema subtitle band. */}
+                        {discussant?.name && (
+                            <span className="text-slate-400">
+                                · <span className="text-indigo-200">{discussant.name}</span>
+                                {discussant.roleTitle && (
+                                    <span className="text-slate-500 ml-1">({discussant.roleTitle})</span>
+                                )}
+                            </span>
                         )}
                     </div>
                 </div>
@@ -141,19 +182,10 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                                 />
                             </Suspense>
                         </div>
-                        <div className="text-center">
-                            <div className="text-lg font-semibold text-slate-100">
-                                {loading ? '…' : (discussant?.name || 'Discussant')}
-                            </div>
-                            <div className="text-sm text-slate-400">
-                                {discussant?.roleTitle || 'Case Debrief Tutor'}
-                            </div>
-                        </div>
-                        {lastAssistant && (
-                            <div className="max-w-xl px-5 py-3 rounded-xl bg-indigo-950/60 border border-indigo-800/60 text-sm text-slate-100 whitespace-pre-wrap">
-                                {lastAssistant}
-                            </div>
-                        )}
+                        {/* Discussant name + inline message bubble moved out:
+                            the name now lives in the topbar; the spoken line
+                            renders via the cinema subtitle band (below) so
+                            the central column stays uncluttered. */}
                     </div>
 
                     <div className="w-full flex flex-col items-center gap-3 mt-6">
@@ -177,6 +209,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                                 busy={busy}
                                 speaking={speaking}
                                 sttLang={sttLang}
+                                onListeningChange={handleListeningChange}
                             />
                         )}
                         {started && (
@@ -193,6 +226,62 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                 </main>
 
             </div>
+
+            {/* Cinema subtitle band — mirrors the ChatInterface
+                implementation. Captures BOTH speakers (user STT via the
+                `listening` mirror from VoiceControl; discussant TTS via
+                `speaking` + 30% lag gate). Pixel-anchored under the 256px
+                discussant avatar (topbar ~52px + body pt-6 ~24px + main p-8
+                ~32px + avatar 256px ≈ 364px → top: 23rem gives a small
+                breathing gap). No speaker label; the topbar already
+                identifies the discussant. Renders nothing when neither
+                speaker is active. Click anywhere on the haze to open the
+                full transcript. */}
+            {!showTranscript && started && (() => {
+                let line = null;
+                if (listening && interim) {
+                    line = interim;
+                } else if (speaking && subtitleReady && lastAssistant) {
+                    line = lastAssistant;
+                }
+                if (!line) return null;
+                const hazeMask = 'radial-gradient(ellipse 50% 60% at 50% 50%, rgba(0,0,0,1) 25%, rgba(0,0,0,0) 90%)';
+                return (
+                    <button
+                        type="button"
+                        onClick={() => setShowTranscript(true)}
+                        aria-label="Show full transcript"
+                        // Span only the right 2/3 of the viewport so flex
+                        // centering lands on the discussant column's geometric
+                        // centre, not the viewport's. The body grid is
+                        // `1fr_2fr` with a 24px gap and 24px outer padding —
+                        // the algebra works out to right-column-centre = 2W/3
+                        // exactly (independent of viewport width). So
+                        // `left-1/3 right-0 + flex justify-center` centres on
+                        // 66.67% = the column centre.
+                        className="fixed left-1/3 right-0 z-40 flex justify-center items-center px-6 py-8 text-center group"
+                        style={{ top: '23rem', background: 'transparent' }}
+                    >
+                        <div
+                            aria-hidden
+                            className="absolute inset-0 backdrop-blur-sm"
+                            style={{
+                                backgroundColor: 'rgba(0,0,0,0.30)',
+                                WebkitMaskImage: hazeMask,
+                                maskImage: hazeMask,
+                            }}
+                        />
+                        <div
+                            className="relative max-w-2xl pointer-events-none"
+                            style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 18px rgba(0,0,0,0.75)' }}
+                        >
+                            <p className="text-xl md:text-2xl font-medium text-white leading-snug whitespace-pre-wrap break-words">
+                                {line}
+                            </p>
+                        </div>
+                    </button>
+                );
+            })()}
 
             <NotesDrawer
                 open={showNotes}

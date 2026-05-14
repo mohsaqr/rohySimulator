@@ -5,7 +5,11 @@ import { VoiceService } from '../../services/voiceService';
 // Voice-first input. Tap-to-toggle: press to start listening, press again to
 // stop. Speech-recognition final result auto-sends. While the discussant is
 // speaking back, the mic is suppressed so we don't capture our own audio.
-export default function VoiceControl({ onSend, busy, speaking, sttLang = 'en-US' }) {
+//
+// onListeningChange (optional): emitted whenever the listening flag or live
+// interim transcript changes. Parent can use this to drive a subtitle band
+// that captures both speakers (the user's live STT + the discussant's TTS).
+export default function VoiceControl({ onSend, busy, speaking, sttLang = 'en-US', onListeningChange }) {
     const [listening, setListening] = useState(false);
     const [interim, setInterim] = useState('');
     const [supported] = useState(() => VoiceService.isSttSupported());
@@ -19,6 +23,12 @@ export default function VoiceControl({ onSend, busy, speaking, sttLang = 'en-US'
             VoiceService.stopListening();
         }
     }, [speaking, listening]);
+
+    // Mirror listening + interim to the parent so the subtitle band can show
+    // the user's words while they dictate.
+    useEffect(() => {
+        onListeningChange?.(listening, interim);
+    }, [listening, interim, onListeningChange]);
 
     const start = () => {
         if (!supported || busy || speaking) return;
@@ -76,36 +86,33 @@ export default function VoiceControl({ onSend, busy, speaking, sttLang = 'en-US'
                 : 'Tap to talk';
 
     return (
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-2">
             <button
                 type="button"
                 onClick={listening ? stop : start}
                 disabled={busy || speaking}
-                className={`relative w-28 h-28 rounded-full flex items-center justify-center transition-all duration-200 shadow-lg ${
+                className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 shadow-lg ${
                     listening
-                        ? 'bg-rose-500 hover:bg-rose-600 text-white ring-8 ring-rose-200 animate-pulse'
+                        ? 'bg-rose-500 hover:bg-rose-600 text-white ring-4 ring-rose-200 animate-pulse'
                         : speaking
                             ? 'bg-indigo-300 text-white cursor-wait'
                             : busy
                                 ? 'bg-slate-300 text-slate-500 cursor-wait'
-                                : 'bg-indigo-600 hover:bg-indigo-700 text-white ring-4 ring-indigo-100 hover:ring-indigo-200'
+                                : 'bg-indigo-600 hover:bg-indigo-700 text-white ring-2 ring-indigo-100 hover:ring-indigo-200'
                 }`}
                 aria-label={listening ? 'Stop listening' : 'Start listening'}
             >
                 {listening
-                    ? <Square className="w-10 h-10" />
+                    ? <Square className="w-7 h-7" />
                     : speaking
-                        ? <MicOff className="w-12 h-12" />
-                        : <Mic className="w-12 h-12" />}
+                        ? <MicOff className="w-8 h-8" />
+                        : <Mic className="w-8 h-8" />}
             </button>
-            <div className={`text-sm font-medium ${listening ? 'text-rose-300' : 'text-slate-300'}`}>
+            <div className={`text-xs font-medium ${listening ? 'text-rose-300' : 'text-slate-400'}`}>
                 {status}
             </div>
-            {interim && (
-                <div className="max-w-md px-4 py-2 rounded-lg bg-slate-700/60 border border-slate-600 text-slate-100 text-sm italic text-center">
-                    "{interim}"
-                </div>
-            )}
+            {/* Interim transcript intentionally not rendered here — the
+                DiscussionScreen subtitle band shows the live STT text. */}
         </div>
     );
 }

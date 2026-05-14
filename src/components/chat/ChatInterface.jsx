@@ -183,6 +183,14 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // hide it by default behind a clickable curtain; users can reveal it
     // explicitly when they want to review what was said.
     const [showTranscript, setShowTranscript] = useState(true);
+    // Subtitle reveal gate. The subtitle band is tied to the TTS playback
+    // window: it must not appear before the audio starts (or trainees read
+    // ahead and tune the voice out), and it must disappear when audio ends.
+    // True word-boundary streaming isn't available across all four TTS
+    // providers, so we hold the caption back for ~30% of the estimated
+    // utterance duration after `speaking` flips true — close enough to give
+    // the audio a head start without going noticeably out of sync.
+    const [subtitleReady, setSubtitleReady] = useState(false);
 
     // Recurring emotion questionnaire
     const [showQuestionnaire, setShowQuestionnaire] = useState(false);
@@ -1222,6 +1230,26 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         speakPatientAlarm(pending);
     }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, loading, listening, speaking, speakPatientAlarm]);
 
+    // Drives the subtitle reveal gate. When TTS starts, hold the caption
+    // back for ~30% of the estimated audio length so the trainee hears the
+    // first beat of voice before the line shows up on screen. When TTS ends,
+    // hide it immediately. We read the latest assistant message
+    // synchronously inside the effect (no deps on currentMessages) so a
+    // mid-utterance message append doesn't restart the lag timer.
+    useEffect(() => {
+        if (!speaking) {
+            setSubtitleReady(false);
+            return undefined;
+        }
+        const latest = currentMessages[currentMessages.length - 1];
+        const text = latest?.role === 'assistant' ? (latest.content || '') : '';
+        const estimatedMs = Math.max(1000, (text.length / 15) * 1000);
+        const lagMs = Math.min(estimatedMs * 0.30, 4000);
+        const t = setTimeout(() => setSubtitleReady(true), lagMs);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [speaking]);
+
     const startVoiceTurn = () => {
         if (!VoiceService.isSttSupported()) {
             toast?.error?.('Speech recognition is not supported in this browser. Use Chrome or Edge over HTTPS.');
@@ -1699,47 +1727,75 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 <div ref={messagesEndRef} />
                 </div>
 
-                {/* Subtitle overlay — replaces the full transcript in voice
-                    mode with a cinema-style caption band showing only the
-                    most recent line. Clicking anywhere reveals the full
-                    transcript (preserves the previous curtain's affordance).
-                    The latest message is read directly from currentMessages
-                    so it tracks streaming deltas in real time. */}
+                {/* Subtitle layer — caption + localized radial haze.
+                    Captures BOTH speakers:
+                      - User STT: while `listening`, show the live interim
+                        transcript (no lag — natural to see your own words
+                        form as you say them).
+                      - Agent TTS: while `speaking` AND the 30% reveal gate
+                        has fired, show the latest assistant line.
+                    Visual treatment: NOT a full-viewport scrim. Instead a
+                    feathered ellipse of `bg-black/30` is masked behind the
+                    caption with `radial-gradient` so it dims the area
+                    immediately around the text and fades out toward the
+                    edges of the screen. Pixel-anchored under the RESP
+                    waveform (see top:29rem below). The whole layer is a
+                    single button → click anywhere on the haze to bring the
+                    transcript back. No speaker label — the caption is the
+                    only content. */}
                 {voiceMode && !showTranscript && (() => {
-                    const latest = currentMessages[currentMessages.length - 1] || null;
-                    const speakerLabel = !latest
-                        ? null
-                        : latest.role === 'user'
-                            ? chatSettings.doctorName || 'You'
-                            : activeTab === 'patient'
-                                ? patientName
-                                : currentAgent?.name || 'Agent';
+                    let line = null;
+                    if (listening && input) {
+                        line = input;
+                    } else if (speaking && subtitleReady) {
+                        const latest = currentMessages[currentMessages.length - 1] || null;
+                        if (latest?.role === 'assistant' && latest.content) {
+                            line = latest.content;
+                        }
+                    }
+                    if (!line) return null;
+                    // Haze: a feathered ellipse of dim+blur sitting only
+                    // behind the caption, fading to fully transparent at the
+                    // edges — never a full-screen scrim. Mask-image is the
+                    // mechanism: it controls where the dim/blur layer is
+                    // visible, with a soft radial falloff.
+                    const hazeMask = 'radial-gradient(ellipse 50% 60% at 50% 50%, rgba(0,0,0,1) 25%, rgba(0,0,0,0) 90%)';
                     return (
                         <button
                             type="button"
                             onClick={() => setShowTranscript(true)}
                             aria-label="Show full transcript"
-                            className="absolute inset-0 flex items-end justify-center bg-neutral-900/70 backdrop-blur-md hover:bg-neutral-900/60 transition-colors group pb-10 px-6"
+                            // Anchored pixel-wise to the bottom edge of the
+                            // resp waveform: PatientMonitor.jsx stacks three
+                            // 128px canvases (ECG / PLETH / RESP) below a
+                            // ~64px header, so the resp line ends at ~448px.
+                            // Base anchor 29rem (464px) + 1cm breathing gap
+                            // per user feedback so the caption sits clearly
+                            // below the waveform rather than abutting it.
+                            // Pixel anchor (not vh) so the position stays
+                            // glued to the waveform stack regardless of
+                            // viewport height. No speaker label per prior
+                            // user request.
+                            className="fixed inset-x-0 z-40 flex justify-center items-center px-6 py-8 text-center group"
+                            style={{ top: 'calc(29rem + 1cm)', background: 'transparent' }}
                         >
-                            {latest ? (
-                                <div
-                                    className="max-w-[92%] rounded-2xl bg-black/55 backdrop-blur-xl border border-white/10 shadow-2xl px-6 py-4 text-center pointer-events-none"
-                                    style={{ textShadow: '0 2px 6px rgba(0,0,0,0.85)' }}
-                                >
-                                    <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-white/55 mb-2">
-                                        {speakerLabel}
-                                    </p>
-                                    <p className="text-2xl md:text-3xl font-medium text-white leading-snug whitespace-pre-wrap break-words">
-                                        {latest.content || (loading ? '…' : '')}
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center gap-2 pb-6 text-white/45 pointer-events-none">
-                                    <Eye className="w-5 h-5" />
-                                    <p className="text-sm tracking-wide">Subtitles will appear here</p>
-                                    <p className="text-xs text-white/30">Click anywhere to show the full transcript</p>
-                                </div>
-                            )}
+                            <div
+                                aria-hidden
+                                className="absolute inset-0 backdrop-blur-sm"
+                                style={{
+                                    backgroundColor: 'rgba(0,0,0,0.30)',
+                                    WebkitMaskImage: hazeMask,
+                                    maskImage: hazeMask,
+                                }}
+                            />
+                            <div
+                                className="relative max-w-2xl pointer-events-none"
+                                style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 18px rgba(0,0,0,0.75)' }}
+                            >
+                                <p className="text-xl md:text-2xl font-medium text-white leading-snug whitespace-pre-wrap break-words">
+                                    {line}
+                                </p>
+                            </div>
                         </button>
                     );
                 })()}
