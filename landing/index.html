@@ -329,6 +329,132 @@
             .reveal { opacity: 1; transform: none; transition: none; }
             html { scroll-behavior: auto; }
         }
+
+        /* install & update grids */
+        .install-h3 {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin: 40px 0 16px;
+        }
+        .install-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+        }
+        .install-card {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 22px 24px;
+            background: var(--bg-elev);
+            position: relative;
+        }
+        .install-card.recommended {
+            border-color: rgba(34, 211, 238, 0.3);
+            background: linear-gradient(180deg, rgba(34, 211, 238, 0.04), var(--bg-elev) 50%);
+        }
+        .install-card .tag-rec {
+            position: absolute;
+            top: 14px; right: 16px;
+            font-size: 9px; font-weight: 800; letter-spacing: 0.14em;
+            padding: 3px 8px; border-radius: 999px;
+            background: rgba(34, 211, 238, 0.12);
+            color: var(--cyan);
+            border: 1px solid rgba(34, 211, 238, 0.3);
+        }
+        .install-card h4 {
+            margin: 0 0 6px;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.005em;
+        }
+        .install-card p {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin: 0 0 14px;
+            line-height: 1.55;
+        }
+        .install-card .code-block {
+            margin-top: 0;
+            padding: 12px 14px;
+            font-size: 13px;
+            line-height: 1.5;
+            background: var(--bg);
+        }
+        .install-link {
+            margin-top: 32px;
+            font-size: 14px;
+            color: var(--text-dim);
+        }
+        .install-link a { color: var(--cyan); }
+        .install-link a:hover { text-decoration: underline; }
+        @media (max-width: 760px) {
+            .install-grid { grid-template-columns: 1fr; }
+        }
+
+        /* lightbox — click any screenshot to zoom */
+        .pillar-shot img, .hero-shot img {
+            cursor: zoom-in;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+        .pillar-shot img:hover, .hero-shot img:hover {
+            opacity: 0.92;
+        }
+        .lightbox {
+            position: fixed; inset: 0; z-index: 1000;
+            background: rgba(0, 0, 0, 0.94);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            display: none;
+            align-items: center; justify-content: center;
+            padding: 24px;
+            cursor: zoom-out;
+            animation: lb-fade-in 0.18s ease;
+        }
+        .lightbox.open { display: flex; }
+        .lightbox img {
+            max-width: 96vw;
+            max-height: 92vh;
+            object-fit: contain;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8);
+            cursor: default;
+            user-select: none;
+        }
+        .lightbox-close {
+            position: fixed; top: 18px; right: 22px;
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: rgba(24, 24, 27, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: white;
+            font-size: 22px; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .lightbox-close:hover {
+            background: rgba(39, 39, 42, 0.9);
+            border-color: rgba(255, 255, 255, 0.25);
+        }
+        .lightbox-hint {
+            position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+            font-size: 12px; color: rgba(255, 255, 255, 0.55);
+            letter-spacing: 0.06em;
+            pointer-events: none;
+        }
+        body.no-scroll { overflow: hidden; }
+        @keyframes lb-fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .lightbox { animation: none; }
+            .pillar-shot img, .hero-shot img { transition: none; }
+        }
     </style>
 </head>
 <body>
@@ -344,9 +470,9 @@
             <a href="#agents">Agents</a>
             <a href="#monitor">Monitor</a>
             <a href="#scenarios">Scenarios</a>
-            <a href="#multimodal">Multimodal</a>
             <a href="#labs">Lab &amp; Radiology</a>
             <a href="#analytics">Affect &amp; Analytics</a>
+            <a href="#install">Install</a>
             <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
         </nav>
     </div>
@@ -667,24 +793,91 @@
     </div>
 </section>
 
-<!-- ── Get started ───────────────────────────────────────────── -->
-<section class="tight">
+<!-- ── Install & update ──────────────────────────────────────── -->
+<section id="install">
     <div class="wrap reveal">
         <div class="single">
-            <span class="eyebrow">GET STARTED</span>
-            <h2>Three commands.</h2>
+            <span class="eyebrow">INSTALL &amp; UPDATE</span>
+            <h2>Install in the shape that fits the site.</h2>
+            <p class="lead">
+                Four install paths and two upgrade paths cover the realistic deployment
+                surface — from a single classroom laptop to an air-gapped institutional
+                host. The same operator tool handles in-place upgrades with snapshot
+                and automatic rollback on failure.
+            </p>
 
-            <div class="code-block">
-                <div><span class="comment"># Clone, install, run.</span></div>
-                <div><span class="cmd">git clone</span> https://github.com/mohsaqr/rohySimulator.git &amp;&amp; <span class="cmd">cd</span> rohySimulator</div>
-                <div><span class="cmd">npm install</span></div>
-                <div><span class="cmd">npm run dev</span></div>
+            <div class="install-h3">Install</div>
+            <div class="install-grid">
+
+                <div class="install-card recommended">
+                    <span class="tag-rec">RECOMMENDED</span>
+                    <h4>Published Docker image</h4>
+                    <p>Multi-arch image, smoke-tested against the release tag before it ships. Migrations auto-run on first boot.</p>
+                    <div class="code-block">
+                        <div><span class="cmd">docker pull</span> ghcr.io/mohsaqr/rohy:v1.0.0</div>
+                        <div><span class="cmd">docker compose</span> -f deploy/docker/compose.yml up -d</div>
+                    </div>
+                </div>
+
+                <div class="install-card">
+                    <h4>Linux + systemd from source</h4>
+                    <p>Full production install — bootstrap script wires up <code>rohy.service</code>, nginx, certbot, and the operator user.</p>
+                    <div class="code-block">
+                        <div><span class="cmd">sudo</span> deploy/bootstrap.sh \</div>
+                        <div>  --frontend-url=https://your-host/rohy</div>
+                    </div>
+                </div>
+
+                <div class="install-card">
+                    <h4>Single-machine</h4>
+                    <p>Personal devbox, classroom lab, demo box. No systemd, no nginx — runs directly under your user account.</p>
+                    <div class="code-block">
+                        <div><span class="cmd">bash</span> deploy/local-install.sh</div>
+                    </div>
+                </div>
+
+                <div class="install-card">
+                    <h4>Air-gapped</h4>
+                    <p>Self-contained source tarball plus a Docker image tarball, both sha256-verified. Documented operator path for sites without internet.</p>
+                    <div class="code-block">
+                        <div><span class="cmd">bash</span> deploy/bundle-airgap.sh</div>
+                        <div><span class="comment"># transfer + install per docs</span></div>
+                    </div>
+                </div>
             </div>
 
-            <p style="margin-top:24px;font-size:15px;">
-                Production paths — published Docker image, Linux + systemd, or air-gapped —
-                are documented in
-                <a style="color:var(--cyan);" href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">docs/INSTALL.md</a>.
+            <div class="install-h3">Update</div>
+            <div class="install-grid">
+
+                <div class="install-card">
+                    <h4>Source / systemd</h4>
+                    <p>Snapshot the DB, run the pre-flight, apply, verify with smoke and the 27-check tech-test; automatic rollback on failure.</p>
+                    <div class="code-block">
+                        <div><span class="cmd">sudo</span> rohy-update check</div>
+                        <div><span class="cmd">sudo</span> rohy-update apply</div>
+                        <div><span class="cmd">sudo</span> rohy-update rollback   <span class="comment"># if you need it</span></div>
+                    </div>
+                </div>
+
+                <div class="install-card">
+                    <h4>Docker</h4>
+                    <p>Bump the image tag. Migrations auto-run on the new container's first boot; rollback is a pull of the previous tag.</p>
+                    <div class="code-block">
+                        <div><span class="cmd">docker compose pull</span> rohy</div>
+                        <div><span class="cmd">docker compose</span> up -d</div>
+                    </div>
+                </div>
+            </div>
+
+            <p class="install-link">
+                Full operator manual:
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">docs/INSTALL.md</a>
+                ·
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/DEPLOY.md" target="_blank" rel="noopener">docs/DEPLOY.md</a>
+                ·
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATING.md" target="_blank" rel="noopener">docs/UPDATING.md</a>
+                ·
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/migrations/MANIFEST.md" target="_blank" rel="noopener">migrations/MANIFEST.md</a>
             </p>
         </div>
     </div>
@@ -726,7 +919,15 @@
     </div>
 </footer>
 
+<!-- ── Lightbox (screenshot zoom) ────────────────────────────── -->
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot viewer" hidden>
+    <button class="lightbox-close" id="lightbox-close" type="button" aria-label="Close screenshot viewer">×</button>
+    <img id="lightbox-img" alt="">
+    <div class="lightbox-hint">Click outside or press Esc to close</div>
+</div>
+
 <script>
+    // Smooth scroll for in-page anchors.
     document.querySelectorAll('a[href^="#"]').forEach(a => {
         a.addEventListener('click', (e) => {
             const id = a.getAttribute('href').slice(1);
@@ -740,6 +941,7 @@
         });
     });
 
+    // Reveal on scroll.
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!reduceMotion && 'IntersectionObserver' in window) {
         const io = new IntersectionObserver((entries) => {
@@ -754,6 +956,68 @@
     } else {
         document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
     }
+
+    // Lightbox — click any screenshot to view it full-screen. Backdrop /
+    // close button / Escape all dismiss. Keyboard-accessible: each shot
+    // takes focus and Enter / Space opens it like a real button.
+    (function setupLightbox() {
+        const lb = document.getElementById('lightbox');
+        const lbImg = document.getElementById('lightbox-img');
+        const lbClose = document.getElementById('lightbox-close');
+        let lastFocus = null;
+
+        function open(src, alt) {
+            lastFocus = document.activeElement;
+            lbImg.src = src;
+            lbImg.alt = alt || '';
+            lb.hidden = false;
+            // Force a reflow before adding .open so the fade-in keyframe runs.
+            void lb.offsetWidth;
+            lb.classList.add('open');
+            document.body.classList.add('no-scroll');
+            lbClose.focus();
+        }
+        function close() {
+            lb.classList.remove('open');
+            lb.hidden = true;
+            document.body.classList.remove('no-scroll');
+            // Drop the src so a long-poll on the cached file isn't sitting
+            // in memory while the page scrolls on.
+            lbImg.removeAttribute('src');
+            if (lastFocus && typeof lastFocus.focus === 'function') {
+                lastFocus.focus();
+                lastFocus = null;
+            }
+        }
+
+        document.querySelectorAll('.pillar-shot img, .hero-shot img').forEach(img => {
+            img.setAttribute('role', 'button');
+            img.setAttribute('tabindex', '0');
+            img.setAttribute('aria-haspopup', 'dialog');
+            img.addEventListener('click', () => open(img.currentSrc || img.src, img.alt));
+            img.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    open(img.currentSrc || img.src, img.alt);
+                }
+            });
+        });
+
+        // Click anywhere on the backdrop closes; clicks on the inner image
+        // don't bubble (so the picture itself doesn't dismiss).
+        lb.addEventListener('click', (e) => {
+            if (e.target === lb) close();
+        });
+        lbImg.addEventListener('click', (e) => e.stopPropagation());
+        lbClose.addEventListener('click', close);
+
+        document.addEventListener('keydown', (e) => {
+            if (!lb.hidden && e.key === 'Escape') {
+                e.preventDefault();
+                close();
+            }
+        });
+    })();
 </script>
 
 </body>
