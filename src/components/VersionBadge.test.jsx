@@ -4,30 +4,36 @@ import VersionBadge from './VersionBadge.jsx';
 import pkg from '../../package.json';
 
 describe('VersionBadge', () => {
-    it('renders "Rohy <major>.<minor>" from package.json', () => {
+    it('renders "Rohy <full version>" from package.json', () => {
         const { container } = render(<VersionBadge />);
-        const [major, minor] = pkg.version.split('.');
-        expect(container.textContent).toBe(`Rohy ${major}.${minor}`);
+        // Full version now (including patch) — patch bumps like 2.1.1 →
+        // 2.1.2 used to disappear because the badge truncated to
+        // major.minor; the truncation is intentionally gone.
+        expect(container.textContent).toBe(`Rohy ${pkg.version}`);
     });
 
-    it('drops the patch version from the label', () => {
+    it('includes the patch version in the label', () => {
         const { container } = render(<VersionBadge />);
-        // Even if pkg.version is "2.1.5", the label is "Rohy 2.1".
-        expect(container.textContent).not.toMatch(/\.\d+\.\d+/);
+        expect(container.textContent).toMatch(/^Rohy \d+\.\d+\.\d+$/);
     });
 
-    it('is fixed, top-centred, high z-index, and click-through', () => {
+    it('renders as a click-through wordmark with no fixed positioning of its own', () => {
         const { container } = render(<VersionBadge />);
         const el = container.firstChild;
         const classes = el.className.split(/\s+/);
-        // Tailwind utilities contain `/` and `-` which are tricky for regex
-        // word-boundaries; assert exact class presence instead.
-        expect(classes).toContain('fixed');
-        expect(classes).toContain('top-3');
-        expect(classes).toContain('left-1/2');
-        expect(classes).toContain('-translate-x-1/2');
-        expect(classes).toContain('z-[9999]');
-        expect(classes).toContain('pointer-events-none');
+
+        // Aria-hidden + click-through — purely decorative.
         expect(el.getAttribute('aria-hidden')).toBe('true');
+        expect(classes).toContain('pointer-events-none');
+        expect(classes).toContain('select-none');
+
+        // Bold teal wordmark — the look the project has used since launch.
+        expect(classes).toContain('font-bold');
+        expect(classes).toContain('text-teal-300');
+
+        // No more `fixed` / `top-3` / `left-1/2`. Positioning lives in the
+        // caller (PatientMonitor) so the badge can be re-mounted anywhere.
+        expect(classes).not.toContain('fixed');
+        expect(classes).not.toContain('left-1/2');
     });
 });

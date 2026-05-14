@@ -12,6 +12,7 @@ import { useAuth } from '../../contexts/AuthContext';
 // here. Imports and audio init click-handler removed below.
 import LabValueEditor from '../investigations/LabValueEditor';
 import OyonCaptureWidget from '../oyon/OyonCaptureWidget';
+import VersionBadge from '../VersionBadge';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { apiFetch, apiPost } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
@@ -1229,6 +1230,10 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
             <OyonCaptureWidget sessionId={sessionId} caseId={caseData?.id} />
 
             <div className="flex items-center gap-3">
+               {/* Rohy version stamp — sits beside the session timer.
+                   Moved here from the global top-centre mount so it stops
+                   colliding with the Oyon widget and the patient name. */}
+               <VersionBadge />
                {/* Session Timer */}
                {monitorSettings.showTimer && (
                   <div className="text-center mr-2 px-3 py-1 bg-neutral-800 rounded-lg">

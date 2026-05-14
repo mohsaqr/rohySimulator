@@ -1,22 +1,22 @@
 import pkg from '../../package.json';
 
-// Centred "Rohy <major>.<minor>" badge that sits at the top of every
-// screen. Mounted once at the entry point (src/main.jsx) so it covers
-// every App render path — login, main chat, full-page settings, persona
-// editor, exam / investigations / debrief surfaces, all of them.
+// "Rohy <version>" wordmark. Bold teal with a soft drop-shadow — the
+// embossed / 3D-printed look the project has used since launch. Mounted
+// inline inside the PatientMonitor header next to the session timer
+// (see monitor/PatientMonitor.jsx); positioning is the caller's job so the
+// badge can be re-used elsewhere without inheriting hard-coded coordinates.
 //
-// Version string is derived from package.json so a `npm version` bump is
-// the only place a release number lives. The badge displays major.minor
-// only (patch revs don't earn a UI mention).
+// Shows the FULL pkg.version (major.minor.patch). The previous truncation
+// to major.minor meant patch bumps (2.1.0 → 2.1.1 → 2.1.2) silently failed
+// to surface in the UI.
 
-const [major, minor] = pkg.version.split('.');
-const LABEL = `Rohy ${major}.${minor}`;
+const LABEL = `Rohy ${pkg.version}`;
 
 export default function VersionBadge() {
     return (
         <div
             aria-hidden="true"
-            className="fixed top-3 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none select-none text-3xl font-bold tracking-tight text-teal-300"
+            className="pointer-events-none select-none text-2xl font-bold tracking-tight text-teal-300"
             style={{ textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}
         >
             {LABEL}
