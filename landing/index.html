@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Rohy — AI-driven virtual patient for clinical reasoning research</title>
+    <meta name="description" content="A multimodal AI-driven virtual patient platform: multi-agent care team, real rhythm engine, emergency-driven scenarios, real-time affect capture, and process / sequence / transition-network analytics — every event enriched with vital signs.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Rohy — AI-driven virtual patient for clinical reasoning research">
+    <meta property="og:description" content="A multimodal AI-driven virtual patient platform: multi-agent care team, real rhythm engine, emergency-driven scenarios, real-time affect capture, and process / sequence / transition-network analytics — every event enriched with vital signs.">
+    <meta property="og:image" content="assets/hero-chat.png">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #09090b;
+            --bg-elev: #18181b;
+            --bg-elev-2: #1f1f23;
+            --border: #27272a;
+            --border-bright: #3f3f46;
+            --text: #fafafa;
+            --text-dim: #a1a1aa;
+            --text-dimmer: #71717a;
+            --indigo: #818cf8;
+            --indigo-600: #6366f1;
+            --indigo-700: #4f46e5;
+            --cyan: #22d3ee;
+            --emerald: #10b981;
+            --rose: #fb7185;
+            --amber: #fbbf24;
+            --content-w: 1180px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-size: 18px;
+            line-height: 1.6;
+            font-weight: 400;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            font-feature-settings: 'ss01', 'cv11';
+            overflow-x: hidden;
+        }
+        a { color: inherit; text-decoration: none; }
+        h1, h2, h3, p { margin: 0; }
+        img { display: block; max-width: 100%; height: auto; }
+        code {
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+            font-size: 0.9em;
+            color: var(--cyan);
+            background: rgba(34, 211, 238, 0.06);
+            padding: 1px 6px;
+            border-radius: 4px;
+        }
+
+        .wrap { max-width: var(--content-w); margin: 0 auto; padding: 0 24px; }
+        .eyebrow {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 18px;
+        }
+        .eyebrow.accent { color: var(--cyan); }
+        h1 { font-size: clamp(40px, 6vw, 64px); font-weight: 900; letter-spacing: -0.02em; line-height: 1.05; }
+        h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 800; letter-spacing: -0.01em; line-height: 1.12; }
+        h3 { font-size: 19px; font-weight: 700; letter-spacing: -0.005em; }
+        p { color: var(--text-dim); }
+        p.lead { color: var(--text); font-size: 19px; }
+
+        .nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+            background: rgba(9, 9, 11, 0.78);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(39, 39, 42, 0.6);
+        }
+        .nav .wrap {
+            display: flex; align-items: center; justify-content: space-between;
+            height: 60px;
+        }
+        .brand {
+            font-weight: 900; letter-spacing: -0.02em; font-size: 20px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .brand-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--cyan), var(--indigo));
+            box-shadow: 0 0 12px rgba(34, 211, 238, 0.5);
+        }
+        .nav-links { display: flex; gap: 26px; align-items: center; }
+        .nav-links a {
+            font-size: 14px; color: var(--text-dim);
+            transition: color 0.15s;
+        }
+        .nav-links a:hover { color: var(--text); }
+        .nav-cta {
+            font-size: 14px; font-weight: 600;
+            padding: 8px 14px; border-radius: 8px;
+            background: var(--indigo-600); color: white;
+            transition: background 0.15s;
+        }
+        .nav-cta:hover { background: var(--indigo-700); }
+        @media (max-width: 880px) {
+            .nav-links a:not(.nav-cta) { display: none; }
+        }
+
+        .hero {
+            position: relative;
+            padding: 160px 0 96px;
+            text-align: center;
+            overflow: hidden;
+        }
+        .hero::before {
+            content: "";
+            position: absolute;
+            top: -200px; left: 50%; transform: translateX(-50%);
+            width: 1000px; height: 700px;
+            background:
+                radial-gradient(circle at 30% 40%, rgba(34, 211, 238, 0.12), transparent 50%),
+                radial-gradient(circle at 70% 60%, rgba(129, 140, 248, 0.10), transparent 55%);
+            filter: blur(40px);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .hero-inner { position: relative; z-index: 1; }
+        .hero h1 { max-width: 19ch; margin: 0 auto 24px; }
+        .hero h1 .accent {
+            background: linear-gradient(110deg, var(--cyan) 10%, var(--indigo) 70%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .hero .sub {
+            max-width: 70ch; margin: 0 auto 36px;
+            font-size: 19px; color: var(--text-dim);
+            line-height: 1.6;
+        }
+        .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 64px; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            font-size: 15px; font-weight: 600;
+            padding: 12px 22px; border-radius: 10px;
+            transition: transform 0.12s, background 0.15s, border-color 0.15s;
+        }
+        .btn-primary {
+            background: var(--indigo-600); color: white;
+            border: 1px solid var(--indigo-600);
+        }
+        .btn-primary:hover { background: var(--indigo-700); border-color: var(--indigo-700); }
+        .btn-ghost {
+            background: transparent; color: var(--text);
+            border: 1px solid var(--border-bright);
+        }
+        .btn-ghost:hover { border-color: var(--text-dim); }
+        .btn .arrow { transition: transform 0.15s; }
+        .btn:hover .arrow { transform: translateX(3px); }
+
+        .hero-shot {
+            position: relative; z-index: 1;
+            max-width: 1180px;
+            margin: 0 auto;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            background: var(--bg-elev);
+            box-shadow:
+                0 30px 60px -20px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(34, 211, 238, 0.03);
+        }
+        .hero-shot img { width: 100%; display: block; }
+
+        /* capability strip — replaces the marketing number strip */
+        .capabilities {
+            margin: 56px 0 0;
+            padding: 18px 28px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: rgba(24, 24, 27, 0.5);
+            display: flex; gap: 8px 28px; justify-content: center; flex-wrap: wrap;
+            font-size: 13px;
+        }
+        .capabilities .item { color: var(--text); font-weight: 500; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+        .capabilities .item::before {
+            content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--cyan);
+            box-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
+        }
+        @media (max-width: 720px) {
+            .capabilities { border-radius: 16px; padding: 16px 20px; gap: 10px 18px; }
+        }
+
+        section { padding: 96px 0; position: relative; }
+        section.tight { padding: 64px 0; }
+        section.band {
+            background: linear-gradient(180deg, transparent, rgba(99, 102, 241, 0.04), transparent);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* pillar — text + image rows */
+        .pillar {
+            display: grid; grid-template-columns: 1fr 1.2fr; gap: 56px;
+            align-items: center;
+        }
+        .pillar.reverse { direction: rtl; }
+        .pillar.reverse > * { direction: ltr; }
+        .pillar.text-only { grid-template-columns: 1fr; max-width: 820px; }
+        .pillar-text h2 { margin-bottom: 18px; }
+        .pillar-text p { font-size: 17px; margin-bottom: 14px; line-height: 1.65; }
+        .pillar-list { padding: 0; margin: 18px 0 0; list-style: none; display: grid; gap: 12px; }
+        .pillar-list li {
+            color: var(--text); font-size: 15px; line-height: 1.55;
+            padding-left: 22px; position: relative;
+        }
+        .pillar-list li::before {
+            content: "";
+            position: absolute; left: 0; top: 8px;
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--cyan);
+            box-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
+        }
+        .pillar-shot {
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            background: var(--bg-elev);
+            box-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.6);
+            margin: 0;
+        }
+        @media (max-width: 980px) {
+            .pillar { grid-template-columns: 1fr; gap: 36px; }
+            .pillar.reverse { direction: ltr; }
+        }
+
+        /* single-column section with body + bullet list */
+        .single { max-width: 860px; }
+        .single h2 { margin-bottom: 18px; }
+        .single p.lead { margin-bottom: 24px; }
+
+        /* infra band */
+        .infra {
+            background:
+                radial-gradient(800px 400px at 50% -100px, rgba(129, 140, 248, 0.08), transparent),
+                radial-gradient(800px 400px at 50% 120%, rgba(34, 211, 238, 0.06), transparent);
+        }
+        .infra-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+        .infra h2 { margin-bottom: 18px; }
+        .infra p { font-size: 17px; margin-bottom: 14px; }
+        .infra-tags {
+            display: flex; flex-wrap: wrap; gap: 8px;
+            margin-top: 12px;
+        }
+        .tag {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 12px; font-size: 13px; font-weight: 500;
+            border: 1px solid var(--border); border-radius: 999px;
+            background: rgba(24, 24, 27, 0.4);
+            color: var(--text-dim);
+        }
+        .tag .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--emerald); }
+        .tag.local .dot { background: var(--cyan); }
+        .tag.cloud .dot { background: var(--indigo); }
+        .infra-col-title {
+            font-size: 11px; font-weight: 800; letter-spacing: 0.18em;
+            color: var(--text-dimmer); margin-bottom: 10px;
+        }
+        @media (max-width: 880px) { .infra-grid { grid-template-columns: 1fr; gap: 28px; } }
+
+        /* get started code block */
+        .code-block {
+            margin-top: 28px;
+            background: var(--bg-elev);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px 22px;
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+            font-size: 14px;
+            line-height: 1.7;
+            overflow-x: auto;
+        }
+        .code-block .comment { color: var(--text-dimmer); }
+        .code-block .cmd { color: var(--cyan); }
+
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 56px 0 64px;
+            background: var(--bg);
+        }
+        .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 48px; }
+        .footer-brand p { font-size: 14px; margin-top: 8px; max-width: 38ch; }
+        .footer-col h4 {
+            font-size: 11px; font-weight: 800; letter-spacing: 0.18em;
+            text-transform: uppercase; color: var(--text-dimmer);
+            margin: 0 0 14px;
+        }
+        .footer-col a { display: block; font-size: 14px; color: var(--text-dim); margin-bottom: 8px; }
+        .footer-col a:hover { color: var(--text); }
+        .footer-bottom {
+            margin-top: 48px; padding-top: 24px;
+            border-top: 1px solid var(--border);
+            display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+            font-size: 13px; color: var(--text-dimmer);
+        }
+        @media (max-width: 720px) {
+            .footer-grid { grid-template-columns: 1fr; gap: 32px; }
+        }
+
+        .reveal {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.7s ease, transform 0.7s ease;
+            will-change: opacity, transform;
+        }
+        .reveal.in { opacity: 1; transform: none; }
+        @media (prefers-reduced-motion: reduce) {
+            .reveal { opacity: 1; transform: none; transition: none; }
+            html { scroll-behavior: auto; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── Fixed nav ─────────────────────────────────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="#top">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links">
+            <a href="#agents">Agents</a>
+            <a href="#monitor">Monitor</a>
+            <a href="#scenarios">Scenarios</a>
+            <a href="#multimodal">Multimodal</a>
+            <a href="#labs">Lab &amp; Radiology</a>
+            <a href="#analytics">Affect &amp; Analytics</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">ARTIFICIAL-INTELLIGENCE-DRIVEN · CLINICAL REASONING RESEARCH</span>
+        <h1>A virtual patient<br>built for <span class="accent">clinical reasoning research.</span></h1>
+        <p class="sub">
+            A multimodal AI-driven simulation environment. A multi-agent care team
+            converses with the trainee; a real-rhythm physiologic monitor runs against
+            emergency-driven scenarios with down-going trajectories; real-time affect
+            capture and live process / sequence / transition-network analytics turn the
+            session into a research-grade learning-analytics stream — every event row
+            enriched with the contemporary vital signs.
+        </p>
+        <div class="cta-row">
+            <a class="btn btn-primary" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">
+                View on GitHub <span class="arrow">→</span>
+            </a>
+            <a class="btn btn-ghost" href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">
+                Read the docs
+            </a>
+        </div>
+
+        <div class="hero-shot reveal">
+            <img src="assets/hero-chat.png" alt="Rohy in voice mode — a 3D patient avatar with a cinema-style subtitle overlay reading 'I feel dizzy and lightheaded', live multi-lead ECG and plethysmograph, a vital-sign panel showing tachycardia and hypoxia, and an alarm banner for low diastolic pressure.">
+        </div>
+
+        <div class="capabilities reveal">
+            <span class="item">AI-driven</span>
+            <span class="item">Multi-agent</span>
+            <span class="item">Multimodal</span>
+            <span class="item">Real rhythm engine</span>
+            <span class="item">Emergency scenarios</span>
+            <span class="item">Real-time affect</span>
+            <span class="item">Transition network analytics</span>
+            <span class="item">Vital-enriched event log</span>
+        </div>
+    </div>
+</section>
+
+<!-- ── Multi-agent platform ──────────────────────────────────── -->
+<section id="agents">
+    <div class="wrap reveal">
+        <div class="single">
+            <span class="eyebrow">MULTI-AGENT PLATFORM</span>
+            <h2>A care team, not a chatbot.</h2>
+            <p class="lead">
+                The trainee converses with the patient and with the surrounding team —
+                family members, nurses, consultants, and a post-case discussant — each
+                a distinct AI agent with its own persona, voice, memory-access scope, and
+                avatar. Multi-chat routing keeps every conversation in a single transcript;
+                per-case rosters script who is present, who arrives later, and on what
+                cue.
+            </p>
+            <ul class="pillar-list">
+                <li>Patient, family, nurse, consultant, and Socratic debrief discussant — each editable end-to-end (prompt, voice, avatar, communication style, memory-access matrix).</li>
+                <li>Local LLM backends (LM Studio, Ollama) are first-class; cloud providers are optional. Runtime model switching with per-user usage tracking.</li>
+                <li>Page/Call flow with a server-anchored arrival time that survives refreshes and room hops; auto-arrival converges on every read.</li>
+                <li>What each agent <em>knows</em> about the case is admin-controlled per agent — the patient does not know the consultant's chart, the family does not know the labs.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- ── Real monitor, real rhythm engine ──────────────────────── -->
+<section id="monitor" class="band">
+    <div class="wrap reveal">
+        <div class="single">
+            <span class="eyebrow">PATIENT MONITOR</span>
+            <h2>A real monitor, with a real rhythm engine.</h2>
+            <p class="lead">
+                Sum-of-Gaussians waveform synthesis renders morphologically correct
+                PQRST-T at any heart rate. Rhythms compose with modifier overlays — ST
+                elevation, ST depression, electrolyte derangements, conduction blocks,
+                ectopic beats, signal noise — so a single engine can drive the full
+                continuum from physiological baseline through pathological extreme.
+            </p>
+            <ul class="pillar-list">
+                <li>Heart rate, SpO₂, NIBP, respiratory rate, temperature, and EtCO₂ as independent channels with admin-editable display ranges and alarm thresholds.</li>
+                <li>A pharmacokinetically curated treatment-effects engine with explicit onset, peak, and duration parameters; time-decaying changes propagate to the relevant vitals automatically.</li>
+                <li>Manually pinned vitals and rhythm states survive engine ticks — the override is the educator's intent, not a transient.</li>
+                <li>Snapshot binding: admin edits to a case during a running session do not bleed into the running monitor.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- ── Emergency scenarios ───────────────────────────────────── -->
+<section id="scenarios">
+    <div class="wrap reveal">
+        <div class="single">
+            <span class="eyebrow">EMERGENCY-DRIVEN SCENARIOS</span>
+            <h2>Designed to deteriorate.</h2>
+            <p class="lead">
+                Cases run on a time-keyframed scenario engine with explicit down-going
+                trajectories. Vitals drift toward decompensation unless the trainee
+                intervenes appropriately. Alarms cross severity thresholds, banners
+                surface, audio escalates; acknowledgement and snooze route the alarm
+                through audit history rather than silencing it.
+            </p>
+            <ul class="pillar-list">
+                <li>Time-keyframed vital trajectories with interpolation between frames; the engine ticks until trainee action redirects the course.</li>
+                <li>Severity-bounded alarms — urgent, beep, chime, silent — routed simultaneously to banner, toast, audio, and audit surfaces.</li>
+                <li>A central notification dispatcher with one routing matrix per role; no parallel toast/banner/alarm paths to silently disagree.</li>
+                <li>Cross-case acknowledgement clearing — case A's acknowledged alarms never silence brand-new alarms in case B.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- ── Multimodal ────────────────────────────────────────────── -->
+<section id="multimodal" class="band">
+    <div class="wrap reveal">
+        <div class="single">
+            <span class="eyebrow">MULTIMODAL CAPABILITIES</span>
+            <h2>Text. Voice. 3D talking head.</h2>
+            <p class="lead">
+                The trainee can type to the patient or speak. A 3D talking head responds
+                with viseme-driven lipsync; in voice mode, a glassy cinema-style subtitle
+                overlay renders the current line as the model streams it. Sentence-level
+                pre-fetching keeps time-to-first-audio sub-second on local engines.
+            </p>
+            <ul class="pillar-list">
+                <li>Browser STT for input, continuous mode with auto-pause when the assistant speaks — no round-trip to a cloud transcription service required.</li>
+                <li>Local TTS backends (Kokoro in-process ONNX, Piper subprocess) ship by default; cloud TTS (Google, OpenAI) is optional.</li>
+                <li>Viseme-driven lipsync over the canonical morph-target ordering; every cross-platform avatar in the library conforms to the same rig.</li>
+                <li>Cinema-style subtitle overlay updates token-by-token during a streaming reply; click anywhere to reveal the full transcript.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- ── Laboratory & Radiology ────────────────────────────────── -->
+<section id="labs">
+    <div class="wrap reveal">
+        <div class="pillar">
+            <div class="pillar-text">
+                <span class="eyebrow">LABORATORY &amp; RADIOLOGY ROOMS</span>
+                <h2>Order. Wait. Read.</h2>
+                <p>
+                    Laboratory and Radiology are first-class rooms in the simulation, not
+                    modal popups. A worklist tracks pending orders and ready reports;
+                    clicking a ready row opens the hospital-style report inline and adds
+                    it to a dismissible pill stack. Reference ranges are gender-specific
+                    where it clinically matters; flags surface high/low/abnormal
+                    automatically.
+                </p>
+                <ul class="pillar-list">
+                    <li>Searchable lab catalogue grouped by clinical category, with panel templates for common workups (Acute MI, DKA, Sepsis, Stroke, PE, …).</li>
+                    <li>Radiology suite covering X-ray, CT, MRI, ultrasound, cardiac (12-lead ECG, echocardiogram), nuclear medicine, and fluoroscopy.</li>
+                    <li>Realistic turnaround band so the wait pattern is felt without grinding a teaching slot to a halt.</li>
+                    <li>Per-case admin editor for abnormal reports; image and video upload for case-attached findings.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/investigations.png" alt="Laboratory Investigations screen — a searchable test catalogue on the left, a hospital-style Laboratory Report in the centre showing a Hematocrit result with reference range and flagging, and a worklist on the right with READY and VIEWED sections. The Laboratory room carries a numeric badge dot in the bottom navigator.">
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── Physical examination ──────────────────────────────────── -->
+<section class="band">
+    <div class="wrap reveal">
+        <div class="pillar reverse">
+            <div class="pillar-text">
+                <span class="eyebrow">PHYSICAL EXAMINATION</span>
+                <h2>Where you tap matters. So does how.</h2>
+                <p>
+                    An anatomically accurate body silhouette with invisible polygon hit
+                    regions surfaces named exam areas. Each region accepts inspection,
+                    palpation, percussion, and auscultation as discrete techniques;
+                    auscultation includes audio playback at the relevant location.
+                </p>
+                <ul class="pillar-list">
+                    <li>Anterior, posterior, and lateral views; gender-specific.</li>
+                    <li>Cranial nerves, motor, sensory, reflexes, and coordination as discrete examinables alongside the regional map.</li>
+                    <li>Idempotent recording keyed on (session, region, technique) — retries do not duplicate findings.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/examination.png" alt="Physical Examination screen — an Anterior/Posterior body silhouette with the chest region highlighted, an examination-technique chooser with Auscultation selected, and a clinical narrative reading 'Vesicular breath sounds are heard throughout all lung zones with no added sounds…'.">
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── Affect + Analytics ────────────────────────────────────── -->
+<section id="analytics">
+    <div class="wrap reveal">
+        <div class="pillar">
+            <div class="pillar-text">
+                <span class="eyebrow accent">REAL-TIME AFFECT &amp; ANALYTICS</span>
+                <h2>Process, sequence, valence — in real time.</h2>
+                <p>
+                    Camera-side emotion analytics runs entirely in the browser; only
+                    aggregated windows leave the device. On the analytics side, every
+                    trainee action is encoded as a verb-typed event and surfaced as a
+                    process map, an ordered sequence, and a live transition network.
+                    Affect and behaviour share the same time base, the same session, and
+                    the same active room — they can be analysed jointly without an
+                    offline join.
+                </p>
+                <ul class="pillar-list">
+                    <li>Browser-only inference (MediaPipe face landmarker + ONNX Runtime Web). Multi-task affect models produce dominant-emotion estimates and valence/arousal regression at a configurable sample rate.</li>
+                    <li>Real-time Transition Network Analysis of trainee action sequences via the <code>tnaj</code> library — directed weighted graph, in-strength centrality, Levenshtein + Ward's-D2 clustering of behaviour.</li>
+                    <li>Process and sequence analytics: ordered trajectories per session, frequency, sequence-index plots, per-cluster sub-views.</li>
+                    <li>Aggregated affect only — raw frames and raw landmarks never leave the device. The server validator rejects either at the wire.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/oyon.png" alt="Real-time affect analytics dashboard. Top-left: capture timeline with valence and arousal traces. Top-right: emotion-distribution bar chart across six states. A statistics strip below shows analyzed windows, latest state, instability, and phase. Bottom: a circular transition-network graph with weighted edges between emotion nodes and self-loops on most nodes.">
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── Learning analytics enriched with vitals ──────────────── -->
+<section class="band">
+    <div class="wrap reveal">
+        <div class="single">
+            <span class="eyebrow">LEARNING-ANALYTICS STREAM</span>
+            <h2>Every event row carries the patient's vitals.</h2>
+            <p class="lead">
+                The session is not a black box. Every navigation, examination, order,
+                treatment, message, and alarm response is captured as a verb-typed event;
+                each row is enriched server-side with the active room and the
+                contemporary vital signs — heart rate, blood pressure, SpO₂,
+                respiratory rate, temperature, EtCO₂ — at the moment the action
+                occurred.
+            </p>
+            <ul class="pillar-list">
+                <li>Verb-coded action stream (xAPI-style) merged into clinical labels for downstream analysis.</li>
+                <li>Each row stamped with the active room (Patient · Examination · Laboratory · Radiology · Consultant) so behavioural trajectories can be segregated by setting.</li>
+                <li>Vital-sign columns on every event let behavioural sequences correlate directly with physiologic state — no offline merge required.</li>
+                <li>Cohort export in CSV or JSON: login logs, chat logs, complete-session bundles, questionnaire responses.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- ── Case debrief ──────────────────────────────────────────── -->
+<section>
+    <div class="wrap reveal">
+        <div class="pillar reverse">
+            <div class="pillar-text">
+                <span class="eyebrow">CASE DEBRIEF</span>
+                <h2>A tutor, not a judge.</h2>
+                <p>
+                    The End &amp; Debrief button hands the finished case to a Socratic
+                    discussant — a senior clinician-educator persona with its own voice,
+                    avatar, and LLM, separate from the patient. The opening turn is sent
+                    as a silent LLM call so meta-prompts never appear in the
+                    learner-utterance audit trail; the debrief itself probes reasoning,
+                    scaffolds answers, and asks before telling.
+                </p>
+                <ul class="pillar-list">
+                    <li>Separate persona, voice, avatar, and LLM from the patient; per-case overrides are first-class.</li>
+                    <li>Captures structured feedback into session notes for cohort export.</li>
+                    <li>Same multimodal infrastructure as the patient — text or voice, lipsync, subtitle overlay.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/debrief.png" alt="Case Debrief landing screen — patient portrait and chief complaint on the left, a Default Discussant persona labelled 'Case Debrief Tutor' on the right with a Start debrief button. The Consultant room is active in the bottom navigator.">
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── Runs on your infra ────────────────────────────────────── -->
+<section class="infra">
+    <div class="wrap reveal">
+        <div class="infra-grid">
+            <div>
+                <span class="eyebrow accent">YOUR INFRASTRUCTURE</span>
+                <h2>Local-first. Cloud optional.</h2>
+                <p>
+                    Local LLMs and local TTS are first-class. Cloud providers are
+                    optional. The default install path puts a local voice in the
+                    patient's mouth and routes inference through a local model server
+                    on the same host. Air-gapped installation is a documented operator
+                    path.
+                </p>
+                <p>
+                    Multi-tenant ready, role-hierarchy aware, audit-logged,
+                    soft-deleted with right-to-erasure purge, instrumented with
+                    structured observability.
+                </p>
+            </div>
+            <div>
+                <div>
+                    <div class="infra-col-title">LOCAL</div>
+                    <div class="infra-tags">
+                        <span class="tag local"><span class="dot"></span>Kokoro TTS</span>
+                        <span class="tag local"><span class="dot"></span>Piper TTS</span>
+                        <span class="tag local"><span class="dot"></span>LM Studio</span>
+                        <span class="tag local"><span class="dot"></span>Ollama</span>
+                        <span class="tag local"><span class="dot"></span>MediaPipe</span>
+                        <span class="tag local"><span class="dot"></span>ONNX Runtime Web</span>
+                    </div>
+                </div>
+                <div style="margin-top: 24px;">
+                    <div class="infra-col-title">CLOUD (OPTIONAL)</div>
+                    <div class="infra-tags">
+                        <span class="tag cloud"><span class="dot"></span>Anthropic Claude</span>
+                        <span class="tag cloud"><span class="dot"></span>OpenAI</span>
+                        <span class="tag cloud"><span class="dot"></span>Google Gemini</span>
+                        <span class="tag cloud"><span class="dot"></span>Google Cloud TTS</span>
+                        <span class="tag cloud"><span class="dot"></span>OpenAI TTS</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── Get started ───────────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap reveal">
+        <div class="single">
+            <span class="eyebrow">GET STARTED</span>
+            <h2>Three commands.</h2>
+
+            <div class="code-block">
+                <div><span class="comment"># Clone, install, run.</span></div>
+                <div><span class="cmd">git clone</span> https://github.com/mohsaqr/rohySimulator.git &amp;&amp; <span class="cmd">cd</span> rohySimulator</div>
+                <div><span class="cmd">npm install</span></div>
+                <div><span class="cmd">npm run dev</span></div>
+            </div>
+
+            <p style="margin-top:24px;font-size:15px;">
+                Production paths — published Docker image, Linux + systemd, or air-gapped —
+                are documented in
+                <a style="color:var(--cyan);" href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">docs/INSTALL.md</a>.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ── Footer ────────────────────────────────────────────────── -->
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <div class="brand">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </div>
+                <p>
+                    AI-driven virtual patient platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr — Professor of Computer
+                    Science, University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">Install</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/DEPLOY.md" target="_blank" rel="noopener">Deploy</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATING.md" target="_blank" rel="noopener">Updating</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · MIT · <a href="https://www.saqr.me" target="_blank" rel="noopener" style="color:inherit;">saqr.me</a></span>
+            <span>Built for clinical reasoning research.</span>
+        </div>
+    </div>
+</footer>
+
+<script>
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+        a.addEventListener('click', (e) => {
+            const id = a.getAttribute('href').slice(1);
+            if (!id) return;
+            const target = document.getElementById(id);
+            if (target) {
+                e.preventDefault();
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                history.replaceState(null, '', '#' + id);
+            }
+        });
+    });
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduceMotion && 'IntersectionObserver' in window) {
+        const io = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('in');
+                    io.unobserve(entry.target);
+                }
+            }
+        }, { rootMargin: '0px 0px -10% 0px', threshold: 0.05 });
+        document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+    } else {
+        document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
+    }
+</script>
+
+</body>
+</html>
