@@ -1669,26 +1669,50 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 <div ref={messagesEndRef} />
                 </div>
 
-                {/* Curtain — covers the transcript in voice mode. Clicking
-                    anywhere on the curtain reveals the transcript (matches
-                    the toggle button in the header). */}
-                {voiceMode && !showTranscript && (
-                    <button
-                        type="button"
-                        onClick={() => setShowTranscript(true)}
-                        className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-900/85 backdrop-blur-md hover:bg-neutral-900/75 transition-colors group"
-                    >
-                        <div className="w-12 h-12 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center mb-3 group-hover:bg-neutral-700 transition-colors">
-                            <Eye className="w-5 h-5 text-neutral-400 group-hover:text-purple-300" />
-                        </div>
-                        <p className="text-sm text-neutral-400 group-hover:text-neutral-200 font-medium">
-                            Transcript hidden
-                        </p>
-                        <p className="text-xs text-neutral-600 mt-1">
-                            Click anywhere to show what's been said
-                        </p>
-                    </button>
-                )}
+                {/* Subtitle overlay — replaces the full transcript in voice
+                    mode with a cinema-style caption band showing only the
+                    most recent line. Clicking anywhere reveals the full
+                    transcript (preserves the previous curtain's affordance).
+                    The latest message is read directly from currentMessages
+                    so it tracks streaming deltas in real time. */}
+                {voiceMode && !showTranscript && (() => {
+                    const latest = currentMessages[currentMessages.length - 1] || null;
+                    const speakerLabel = !latest
+                        ? null
+                        : latest.role === 'user'
+                            ? chatSettings.doctorName || 'You'
+                            : activeTab === 'patient'
+                                ? patientName
+                                : currentAgent?.name || 'Agent';
+                    return (
+                        <button
+                            type="button"
+                            onClick={() => setShowTranscript(true)}
+                            aria-label="Show full transcript"
+                            className="absolute inset-0 flex items-end justify-center bg-neutral-900/70 backdrop-blur-md hover:bg-neutral-900/60 transition-colors group pb-10 px-6"
+                        >
+                            {latest ? (
+                                <div
+                                    className="max-w-[92%] rounded-2xl bg-black/55 backdrop-blur-xl border border-white/10 shadow-2xl px-6 py-4 text-center pointer-events-none"
+                                    style={{ textShadow: '0 2px 6px rgba(0,0,0,0.85)' }}
+                                >
+                                    <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-white/55 mb-2">
+                                        {speakerLabel}
+                                    </p>
+                                    <p className="text-2xl md:text-3xl font-medium text-white leading-snug whitespace-pre-wrap break-words">
+                                        {latest.content || (loading ? '…' : '')}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center gap-2 pb-6 text-white/45 pointer-events-none">
+                                    <Eye className="w-5 h-5" />
+                                    <p className="text-sm tracking-wide">Subtitles will appear here</p>
+                                    <p className="text-xs text-white/30">Click anywhere to show the full transcript</p>
+                                </div>
+                            )}
+                        </button>
+                    );
+                })()}
             </div>
 
             {/* Recurring Emotion Questionnaire — appears every 2 minutes */}
