@@ -3,6 +3,7 @@ import { Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users,
 import { LLMService } from '../../services/llmService';
 import { AgentService } from '../../services/AgentService';
 import { buildPersonaBlocks } from '../../utils/personaBlocks';
+import { roleAnchor } from '../../utils/roleAnchor';
 import { useAuth } from '../../contexts/AuthContext';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { baseUrl } from '../../config/api';
@@ -327,7 +328,19 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
     // Load agents for this case/session
     useEffect(() => {
-        if (!sessionId || !activeCase) return;
+        // Defensive clear: during a case switch, App.jsx sets sessionId to
+        // null before the new session starts. Without this, patientTemplate
+        // and the agents list keep the previous case's values for the
+        // ~100-400ms window between cases, and any send during that window
+        // mixes case B's persona block with case A's template prose. The
+        // case-id stamp inside normalizePatientAgent is the second line of
+        // defence; this clear is the first.
+        if (!sessionId || !activeCase) {
+            setPatientTemplate(null);
+            setAgents([]);
+            setAgentStates({});
+            return;
+        }
 
         const loadAgents = async () => {
             try {
@@ -363,7 +376,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 //      we surface a loud error instead.
                 const attachedPatient = agentList.find(a => a.agent_type === 'patient' && a.enabled !== 0 && a.enabled !== false);
                 if (attachedPatient) {
-                    setPatientTemplate(normalizePatientAgent(attachedPatient));
+                    setPatientTemplate(normalizePatientAgent(attachedPatient, activeCase.id));
                 } else {
                     try {
                         const templates = await AgentService.getTemplates();
@@ -382,7 +395,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                             ? null
                             : patientDefaults.find((t) => templateGender(t).charAt(0) !== 'f');
                         const fallback = exact || nonFemale || null;
-                        setPatientTemplate(fallback ? normalizePatientAgent(fallback) : null);
+                        setPatientTemplate(fallback ? normalizePatientAgent(fallback, activeCase.id) : null);
                     } catch {
                         setPatientTemplate(null);
                     }
@@ -664,9 +677,16 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         // Absent fields are omitted rather than filled with "Unknown" so the
         // model can't latch onto fake values.
         const trimOrEmpty = (v) => (v == null ? '' : String(v).trim());
-        const personaRole = trimOrEmpty(config.persona_type) || 'Patient';
+        const personaRole = trimOrEmpty(config.persona_type) || 'the patient';
         const personaName = trimOrEmpty(config.patient_name) || trimOrEmpty(sourceName) || 'Patient';
-        let richSystemPrompt = `## PERSONA\n`;
+        // Role anchor leads. See src/utils/roleAnchor.js. Without this,
+        // the admin-authored case.system_prompt (which follows in the
+        // INSTRUCTIONS block) can outweigh the PERSONA header alone —
+        // especially when authored in third-person clinical voice
+        // ("Patient presents with crushing chest pain") which the model
+        // reads as instruction to BE the clinician describing the case.
+        let richSystemPrompt = roleAnchor({ role: personaRole, name: personaName });
+        richSystemPrompt += `## PERSONA\n`;
         richSystemPrompt += `Role: ${personaRole}\n`;
         richSystemPrompt += `Name: ${personaName}\n`;
         const demographicsBlock = formatPersonaDemographicsForPrompt(demo);
@@ -690,11 +710,20 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         // Patient agent template prose runs AFTER the case-specific persona +
         // instructions so the case anchors first and the template reads as
         // shared behavioral guidance — not a competing persona definition.
-        if (patientTemplate?.systemPrompt) {
-            richSystemPrompt += `\n## PATIENT PERSONA (from template "${patientTemplate.name}")\n`;
-            richSystemPrompt += `${patientTemplate.systemPrompt}\n`;
+        //
+        // Cross-case guard: only include the template block if it was
+        // resolved for the case currently in focus. During a case switch,
+        // patientTemplate may briefly hold the previous case's template
+        // before the agents loader catches up; in that window, omit the
+        // block rather than glue case B's persona to case A's template.
+        const templateForThisCase = patientTemplate && patientTemplate._caseId === activeCase?.id
+            ? patientTemplate
+            : null;
+        if (templateForThisCase?.systemPrompt) {
+            richSystemPrompt += `\n## PATIENT PERSONA (from template "${templateForThisCase.name}")\n`;
+            richSystemPrompt += `${templateForThisCase.systemPrompt}\n`;
         }
-        const personaBlocks = patientTemplate ? buildPersonaBlocks(patientTemplate.config) : '';
+        const personaBlocks = templateForThisCase ? buildPersonaBlocks(templateForThisCase.config) : '';
         if (personaBlocks) {
             richSystemPrompt += personaBlocks;
         }
@@ -1826,7 +1855,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 // a raw template row (from /agents/templates) into a uniform shape. Per-case
 // rows carry name_override / system_prompt_override / config_override which
 // take precedence; raw templates supply the underlying defaults.
-function normalizePatientAgent(raw) {
+function normalizePatientAgent(raw, caseId = null) {
     if (!raw) return null;
     const config = parseConfigSafe(raw.config) || parseConfigSafe(raw.config_override) || {};
     return {
@@ -1837,6 +1866,14 @@ function normalizePatientAgent(raw) {
         systemPrompt: raw.system_prompt_override || raw.system_prompt || '',
         contextFilter: raw.context_filter_override || raw.context_filter || 'history',
         config,
+        // Stamp the case this template was resolved for. The agents loader
+        // is gated on `sessionId && activeCase`, so during a case switch
+        // there is a window where sessionId is briefly null and the loader
+        // is suspended; without this stamp, patientTemplate retains case
+        // A's value while activeCase is already B and buildPatientSystemPrompt
+        // happily glues B's persona to A's template prose. See the
+        // _caseId guard in buildPatientSystemPrompt for the consumer side.
+        _caseId: caseId,
     };
 }
 

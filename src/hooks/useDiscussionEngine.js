@@ -5,6 +5,7 @@ import { apiPost } from '../services/apiClient';
 import { buildCaseContext } from '../services/discussionService';
 import { resolveVoice } from '../utils/voiceResolver';
 import { buildPersonaBlocks } from '../utils/personaBlocks';
+import { roleAnchor } from '../utils/roleAnchor';
 import EventLogger, { COMPONENTS } from '../services/eventLogger';
 
 // Discussant voice — same shared resolver the patient chat uses. No slot
@@ -43,23 +44,41 @@ async function logTurn(sessionId, role, content) {
 //   - viseme + speaking state for the avatar
 //   - lifecycle cleanup so leaving mid-stream cancels everything
 export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMode, voiceSettings }) {
-    const [messages, setMessages] = useState(() => {
-        try {
-            const saved = sessionId ? localStorage.getItem(STORAGE_KEY(sessionId)) : null;
-            return saved ? JSON.parse(saved) : [];
-        } catch { return []; }
-    });
+    const [messages, setMessages] = useState([]);
     const [busy, setBusy] = useState(false);
     const [speaking, setSpeaking] = useState(false);
     const [visemes, setVisemes] = useState({ viseme_sil: 1 });
+    // `hydrated` gates the save effect so the empty initial render doesn't
+    // overwrite a localStorage entry before the hydration effect has had a
+    // chance to read it. Pre-fix the lazy-init pattern ran once at mount
+    // with whatever sessionId was at that instant and never refreshed when
+    // sessionId arrived later — so a fresh debrief that should have been
+    // empty silently inherited messages from the previously-mounted session.
+    const [hydrated, setHydrated] = useState(false);
 
     const abortRef = useRef(null);
     const speechRef = useRef(null);
 
     useEffect(() => {
-        if (!sessionId) return;
+        setHydrated(false);
+        if (!sessionId) {
+            setMessages([]);
+            setHydrated(true);
+            return;
+        }
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY(sessionId));
+            setMessages(saved ? JSON.parse(saved) : []);
+        } catch {
+            setMessages([]);
+        }
+        setHydrated(true);
+    }, [sessionId]);
+
+    useEffect(() => {
+        if (!sessionId || !hydrated) return;
         try { localStorage.setItem(STORAGE_KEY(sessionId), JSON.stringify(messages)); } catch { /* quota */ }
-    }, [messages, sessionId]);
+    }, [messages, sessionId, hydrated]);
 
     useEffect(() => () => {
         abortRef.current?.abort();
@@ -80,6 +99,22 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
     const sendMessage = useCallback(async (text, { silentUser = false, openingDirective = '' } = {}) => {
         const trimmed = text?.trim();
         if (!trimmed || busy || !sessionId || !discussant) return;
+
+        // Cross-case guard: refuse to send unless the discussant was
+        // resolved for exactly the case currently in focus. Strict equality
+        // — a missing `_caseId` stamp also fails the check, because any
+        // discussant reaching this hook from the canonical path
+        // (fetchDiscussantForCase → normalizeAgent) carries a stamp. A
+        // stampless discussant means an unknown producer constructed it,
+        // and we'd rather refuse the send than emit a prompt we can't
+        // attribute to a case.
+        if (activeCase?.id && discussant._caseId !== activeCase.id) {
+            console.warn('[useDiscussionEngine] discussant._caseId does not match activeCase.id — skipping send to avoid cross-case role bleed', {
+                discussantCaseId: discussant._caseId,
+                activeCaseId: activeCase.id,
+            });
+            return;
+        }
 
         // Tag the placeholder with a stable id and locate it that way during
         // streaming. Index-based addressing is unsafe under React 19 concurrent
@@ -102,7 +137,12 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
         // config — same shape used by every other agent type so the LLM call
         // path stays uniform.
         const personaBlocks = buildPersonaBlocks(discussant.rawConfig || discussant.config);
-        const systemPrompt = `${discussant.systemPrompt}${personaBlocks}${caseContext}${openingDirective}`;
+        // Role anchor leads — see src/utils/roleAnchor.js for rationale.
+        const anchor = roleAnchor({
+            role: discussant.roleTitle || 'case debrief tutor',
+            name: discussant.name,
+        });
+        const systemPrompt = `${anchor}\n${discussant.systemPrompt}${personaBlocks}${caseContext}${openingDirective}`;
 
         let speech = null;
         if (voiceMode) {
@@ -193,12 +233,14 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
     const startConversation = useCallback(() => {
         // Opening turn: the instruction "your first reply opens the debrief"
         // goes in the system prompt (where the model reads it as direction)
-        // and a benign sentinel goes in the user role (so the messages array
-        // is well-formed for every provider). Putting the directive in the
-        // user role — as we used to — let smaller voice-mode models echo it
-        // back verbatim instead of executing it.
+        // and a bracketed system-style sentinel goes in the user role (so
+        // the messages array is well-formed for every provider). Pre-fix
+        // the user content was the bare literal "Hello." which smaller
+        // voice-mode models read as a learner greeting and mirrored back
+        // as if THEY were the learner. The bracketed "[System ...]" form
+        // is unambiguous: the model parses it as instruction, not chat.
         const openingDirective = '\n\n## OPENING TURN\nThis is the very first turn of the debrief. Your reply must: (1) greet the learner warmly, (2) briefly name the case just finished, (3) ask one open-ended question to open the discussion. Keep it under three sentences. Do NOT restate, paraphrase, or quote this directive — just do it.';
-        return sendMessage('Hello.', { silentUser: true, openingDirective });
+        return sendMessage('[System: open the case debrief now.]', { silentUser: true, openingDirective });
     }, [sendMessage]);
 
     return { messages, busy, speaking, visemes, sendMessage, startConversation };

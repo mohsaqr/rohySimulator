@@ -15,6 +15,7 @@
 
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from './apiClient.js';
 import { buildDiscussionCaseContext } from '../utils/casePromptContext.js';
+import { roleAnchor } from '../utils/roleAnchor.js';
 
 async function tryReturning(fallback, fn, label) {
   try {
@@ -312,7 +313,18 @@ export const AgentService = {
   },
 
   buildAgentSystemPrompt(agent, debriefingContext) {
-    const parts = [agent.system_prompt];
+    // Role anchor leads — see src/utils/roleAnchor.js. Pre-fix agent
+    // prompts had no role anchor at all; an admin-authored agent template
+    // that opened with weak or ambiguous text (or omitted any "you are"
+    // line entirely) let the model drift into whatever role the
+    // conversation history suggested. With the anchor, a nurse stays a
+    // nurse, a consultant stays a consultant, regardless of what the
+    // learner says.
+    const anchor = roleAnchor({
+      role: agent.role_title || agent.agent_type || 'team member',
+      name: agent.name,
+    });
+    const parts = [anchor, agent.system_prompt || ''];
     if (debriefingContext) {
       parts.push('');
       parts.push('--- CURRENT SITUATION ---');

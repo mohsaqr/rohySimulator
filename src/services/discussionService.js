@@ -37,7 +37,7 @@ export async function fetchDiscussantForCase(caseId) {
         try {
             const data = await apiFetch(`/cases/${caseId}/agents`);
             const attached = (data?.agents || []).find(a => a.agent_type === 'discussant' && a.enabled !== 0);
-            if (attached) return normalizeAgent(attached);
+            if (attached) return normalizeAgent(attached, caseId);
         } catch (err) {
             console.warn('[discussionService] failed to load case agents:', err.message);
         }
@@ -46,10 +46,15 @@ export async function fetchDiscussantForCase(caseId) {
     const fallback =
         templates.find(t => t.agent_type === 'discussant' && t.is_default) ||
         templates.find(t => t.agent_type === 'discussant');
-    return fallback ? normalizeAgent(fallback) : null;
+    return fallback ? normalizeAgent(fallback, caseId) : null;
 }
 
-function normalizeAgent(raw) {
+// `_caseId` stamps the resolved discussant with the case it was resolved for.
+// Callers (useDiscussionEngine.sendMessage) MUST verify the stamp matches the
+// current activeCase.id before assembling a prompt — otherwise a stale
+// discussant from the previous case can be sent with the new case's context,
+// producing the cross-case role bleed audited 2026-05-14.
+function normalizeAgent(raw, caseId = null) {
     const config = parseConfig(raw.config) || parseConfig(raw.config_override) || {};
     // Admin UI stores agent gender at config.gender (top-level); voice settings
     // may also carry their own gender override at config.voice.gender. Surface
@@ -67,6 +72,7 @@ function normalizeAgent(raw) {
         gender,
         voice: config.voice ? { ...config.voice, gender: gender || config.voice.gender } : (gender ? { gender } : null),
         rawConfig: config,
+        _caseId: caseId,
     };
 }
 

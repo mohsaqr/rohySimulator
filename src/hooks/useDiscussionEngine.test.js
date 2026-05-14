@@ -105,6 +105,11 @@ function makeProps(overrides = {}) {
             voice: { gender: 'male' },
             rawConfig: { dos: ['Be kind'], donts: ['No insults'] },
             contextFilter: null,
+            // Stamp matches activeCase.id — the canonical happy-path shape
+            // that fetchDiscussantForCase → normalizeAgent produces. The
+            // cross-case-guard test below overrides this to demonstrate
+            // the refusal path.
+            _caseId: 'case-1',
         },
         voiceMode: true,
         voiceSettings: { provider: 'google' },
@@ -168,11 +173,30 @@ describe('useDiscussionEngine — initial state', () => {
         expect(result.current.visemes).toEqual({ viseme_sil: 1 });
     });
 
-    it('hydrates messages from localStorage for the given sessionId', () => {
+    it('hydrates messages from localStorage for the given sessionId', async () => {
+        // CONTRACT (post-2026-05-14 enterprise-fix): hydration moved from a
+        // lazy useState initializer (fires once at mount) to an effect that
+        // re-runs on sessionId change. The lazy init was unreliable when
+        // sessionId arrived in a later render than mount, and the save
+        // effect would then clobber the new sessionId's localStorage key
+        // with the initial-empty messages.
         const stored = [{ role: 'user', content: 'hi' }];
         window.localStorage.setItem('rohy_discussion_history_session-1', JSON.stringify(stored));
         const { result } = renderHook(() => useDiscussionEngine(makeProps()));
-        expect(result.current.messages).toEqual(stored);
+        await waitFor(() => expect(result.current.messages).toEqual(stored));
+    });
+
+    it('rehydrates from localStorage when sessionId changes (no cross-session bleed)', async () => {
+        window.localStorage.setItem('rohy_discussion_history_session-A', JSON.stringify([{ role: 'user', content: 'A-msg' }]));
+        window.localStorage.setItem('rohy_discussion_history_session-B', JSON.stringify([{ role: 'user', content: 'B-msg' }]));
+        const { result, rerender } = renderHook(
+            (props) => useDiscussionEngine(props),
+            { initialProps: makeProps({ sessionId: 'session-A' }) }
+        );
+        await waitFor(() => expect(result.current.messages).toEqual([{ role: 'user', content: 'A-msg' }]));
+
+        rerender(makeProps({ sessionId: 'session-B' }));
+        await waitFor(() => expect(result.current.messages).toEqual([{ role: 'user', content: 'B-msg' }]));
     });
 });
 
@@ -308,12 +332,14 @@ describe('useDiscussionEngine — message state & silentUser', () => {
         expect(VoiceService.beginSpeechSession).toHaveBeenCalledTimes(1);
     });
 
-    it('startConversation puts the opening directive in the system prompt, not the user role', async () => {
-        // CONTRACT: the kickoff "your first reply opens the debrief" must
-        // live in the system prompt. Putting it in the user role caused
-        // smaller voice-mode models to echo it back verbatim instead of
-        // executing it (the 2026-05-14 debrief-echo bug). The user turn for
-        // this opener is a benign sentinel.
+    it('startConversation puts the opening directive in the system prompt with a bracketed system-style user sentinel', async () => {
+        // CONTRACT (post-2026-05-14 enterprise-fix): the kickoff directive
+        // lives in the SYSTEM prompt (so smaller models don't paraphrase
+        // it back). The user-role content is a BRACKETED system-style
+        // sentinel ("[System: ...]"), NOT a bare greeting. The previous
+        // sentinel "Hello." was misread by small voice-mode models as a
+        // learner greeting, prompting them to greet back as if they were
+        // the learner — that's the cross-case role-bleed bug.
         let capturedMessages;
         let capturedSystemPrompt;
         let capturedOpts;
@@ -330,16 +356,83 @@ describe('useDiscussionEngine — message state & silentUser', () => {
         // The opening directive is in the SYSTEM prompt, not the user turn.
         expect(capturedSystemPrompt).toMatch(/OPENING TURN/);
         expect(capturedSystemPrompt).toMatch(/Do NOT restate/);
-        // The user turn is a benign sentinel — not a paraphrasable directive.
+        // The user turn is a bracketed system-style sentinel — unambiguous
+        // for small models: parsed as instruction, not as a greeting.
         expect(capturedMessages.at(-1).role).toBe('user');
-        expect(capturedMessages.at(-1).content).toBe('Hello.');
-        expect(capturedSystemPrompt).not.toMatch(/Begin the debrief now/);
+        expect(capturedMessages.at(-1).content).toBe('[System: open the case debrief now.]');
+        expect(capturedMessages.at(-1).content).not.toMatch(/^Hello\.?$/i);
+        // Role-anchor block must lead the system prompt — see roleAnchor.js.
+        expect(capturedSystemPrompt).toMatch(/## ROLE/);
+        expect(capturedSystemPrompt).toMatch(/Respond ONLY as/);
         // `silent: true` is passed through so the sentinel is not written to
         // /interactions as a learner utterance.
         expect(capturedOpts.silent).toBe(true);
         // The visible transcript only shows the assistant reply.
         expect(result.current.messages).toHaveLength(1);
         expect(result.current.messages[0].role).toBe('assistant');
+    });
+
+    it('refuses to send when discussant._caseId does not match activeCase.id (cross-case guard)', async () => {
+        // CONTRACT (post-2026-05-14 enterprise-fix): the discussant carries
+        // a `_caseId` stamp set by discussionService when it was resolved.
+        // If activeCase has moved on but the discussant hasn't been refetched
+        // yet, sending would mix case B's context with case A's discussant
+        // prompt. The hook refuses the send instead.
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            const props = makeProps({
+                activeCase: { id: 'case-NEW' },
+                discussant: {
+                    systemPrompt: 'You are a clinical educator.',
+                    voice: { gender: 'male' },
+                    rawConfig: {},
+                    contextFilter: null,
+                    _caseId: 'case-OLD',
+                },
+            });
+            const { result } = renderHook(() => useDiscussionEngine(props));
+            await act(async () => { await result.current.sendMessage('anything'); });
+
+            // Positive assertions: no LLM call, no TTS session, no messages
+            // landed, and the guard warned.
+            expect(LLMService.streamMessage).not.toHaveBeenCalled();
+            expect(VoiceService.beginSpeechSession).not.toHaveBeenCalled();
+            expect(result.current.messages).toEqual([]);
+            expect(result.current.busy).toBe(false);
+            expect(warnSpy).toHaveBeenCalledWith(
+                expect.stringContaining('cross-case role bleed'),
+                expect.objectContaining({ discussantCaseId: 'case-OLD', activeCaseId: 'case-NEW' }),
+            );
+        } finally {
+            warnSpy.mockRestore();
+        }
+    });
+
+    it('refuses to send when discussant has no _caseId stamp (strict guard, no implicit pass)', async () => {
+        // CONTRACT: the guard is strict-equal. A stampless discussant means
+        // an unknown producer constructed it (not the canonical
+        // fetchDiscussantForCase → normalizeAgent path), so the send is
+        // refused. Without strict equality a future code path that forgets
+        // to stamp would silently bypass the cross-case protection.
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            const props = makeProps({
+                activeCase: { id: 'case-NEW' },
+                discussant: {
+                    systemPrompt: 'You are a clinical educator.',
+                    voice: { gender: 'male' },
+                    rawConfig: {},
+                    contextFilter: null,
+                    // no _caseId stamp
+                },
+            });
+            const { result } = renderHook(() => useDiscussionEngine(props));
+            await act(async () => { await result.current.sendMessage('anything'); });
+            expect(LLMService.streamMessage).not.toHaveBeenCalled();
+            expect(result.current.messages).toEqual([]);
+        } finally {
+            warnSpy.mockRestore();
+        }
     });
 });
 

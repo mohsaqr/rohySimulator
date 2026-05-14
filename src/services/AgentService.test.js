@@ -697,11 +697,38 @@ describe('AgentService.buildAgentSystemPrompt', () => {
     });
 
     it('omits the situation header when no debriefing context is supplied', () => {
+        // Post-2026-05-14 enterprise-fix: the prompt now leads with a
+        // role-anchor block (see src/utils/roleAnchor.js) before the
+        // agent's authored system_prompt. The original assertion checked
+        // an exact-equality "plain" — that was locking the absence of any
+        // structural framing, which was the prior weakness. We now assert
+        // both the anchor and the unchanged authored prose are present
+        // and that the SITUATION header is still absent.
         const out = AgentService.buildAgentSystemPrompt(
             { system_prompt: 'plain' },
             '',
         );
-        expect(out).toBe('plain');
+        expect(out).toMatch(/## ROLE/);
+        expect(out).toMatch(/Respond ONLY as/);
+        expect(out).toContain('plain');
+        expect(out).not.toContain('--- CURRENT SITUATION ---');
+    });
+
+    it('uses agent.role_title and agent.name in the role anchor when provided', () => {
+        const out = AgentService.buildAgentSystemPrompt(
+            { system_prompt: 'You are stoic.', role_title: 'Bedside nurse', name: 'Nurse Beth' },
+            '',
+        );
+        expect(out).toMatch(/You are: Bedside nurse\./);
+        expect(out).toMatch(/Your name: Nurse Beth\./);
+    });
+
+    it('falls back to agent.agent_type when role_title is missing', () => {
+        const out = AgentService.buildAgentSystemPrompt(
+            { system_prompt: '', agent_type: 'consultant' },
+            '',
+        );
+        expect(out).toMatch(/You are: consultant\./);
     });
 });
 
