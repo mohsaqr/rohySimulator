@@ -48,4 +48,6 @@ Current screenshots and what each illustrates:
 | `examination.png` | Physical Examination — body silhouette + technique chooser + clinical narrative | Physical Examination pillar |
 | `investigations.png` | Laboratory catalogue + report modal + worklist with READY / VIEWED pills | Investigations pillar |
 | `debrief.png` | Case Debrief landing screen with patient + discussant + Start debrief CTA | Case Debrief pillar |
-| `oyon.png` | Oyon analytics — capture timeline + emotion distribution + transition network | Oyon pillar |
+| `analytics-clusters.png` | Research-grade learning-analytics dashboard — sequence/event/state stats, three clusters with state distributions, transition networks, and temporal proportion plots | Analytics pillar |
+| `oyon.png` | Real-time emotion-capture dashboard — capture timeline (valence + arousal), emotion distribution, transition network | Affect pillar |
+| `cretic-icon.png` | CRETIC project emblem — red heart with inscribed ECG trace | CRETIC research-context band |

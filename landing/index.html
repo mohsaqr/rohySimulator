@@ -775,54 +775,86 @@
     </div>
 </section>
 
-<!-- ── Affect + Analytics ────────────────────────────────────── -->
+<!-- ── Research-grade analytics dashboard ────────────────────── -->
 <section id="analytics">
     <div class="wrap reveal">
         <div class="pillar">
             <div class="pillar-text">
-                <span class="eyebrow accent">REAL-TIME AFFECT &amp; ANALYTICS</span>
-                <h2>Process, sequence, valence — in real time.</h2>
+                <span class="eyebrow accent">RESEARCH-GRADE LEARNING ANALYTICS</span>
+                <h2>Clustering, pattern mining, transition networks — in real time.</h2>
                 <p>
-                    Camera-side emotion analytics runs entirely in the browser; only
-                    aggregated windows leave the device. On the analytics side, every
-                    trainee action is encoded as a verb-typed event and surfaced as a
-                    process map, an ordered sequence, and a live transition network.
-                    Affect and behaviour share the same time base, the same session, and
-                    the same active room — they can be analysed jointly without an
-                    offline join.
+                    A research-grade learning-analytics dashboard runs against the
+                    live session. Every trainee action is encoded as a verb-typed
+                    event, fed through unsupervised clustering, sequence and process
+                    mining, and surfaced as state distributions, directed weighted
+                    transition networks, and temporal proportion plots — per cluster
+                    and per session. The pipeline is the same one a learning-analytics
+                    researcher would build by hand. It runs while the case is still in
+                    progress.
                 </p>
                 <ul class="pillar-list">
-                    <li>Browser-only inference (MediaPipe face landmarker + ONNX Runtime Web). Multi-task affect models produce dominant-emotion estimates and valence/arousal regression at a configurable sample rate.</li>
-                    <li>Real-time Transition Network Analysis of trainee action sequences via the <code>tnaj</code> library — directed weighted graph, in-strength centrality, Levenshtein + Ward's-D2 clustering of behaviour.</li>
-                    <li>Process and sequence analytics: ordered trajectories per session, frequency, sequence-index plots, per-cluster sub-views.</li>
-                    <li>Aggregated affect only — raw frames and raw landmarks never leave the device. The server validator rejects either at the wire.</li>
+                    <li><strong>Real-time clustering</strong> of trainee action sequences via unsupervised machine learning. Silhouette score, average sequence length per cluster, and per-cluster state-distribution histograms are all reported on the same dashboard.</li>
+                    <li><strong>Sequence and process mining</strong> — ordered trajectories per session, state frequencies, density, edge counts, temporal stacked plots showing how state proportions evolve across the timesteps of the case.</li>
+                    <li><strong>Transition-network analytics</strong> — directed weighted graphs with edge probabilities, in-strength centrality, and a per-cluster network so behavioural archetypes can be compared side-by-side.</li>
+                    <li><strong>Pattern mining</strong> over the verb-coded action stream surfaces recurring micro-sequences (communicating → regulating → examining → treating, …) that distinguish a cluster from the cohort baseline.</li>
                 </ul>
             </div>
             <figure class="pillar-shot">
-                <img src="assets/oyon.png" alt="Real-time affect analytics dashboard. Top-left: capture timeline with valence and arousal traces. Top-right: emotion-distribution bar chart across six states. A statistics strip below shows analyzed windows, latest state, instability, and phase. Bottom: a circular transition-network graph with weighted edges between emotion nodes and self-loops on most nodes.">
+                <img src="assets/analytics-clusters.png" alt="Research-grade learning-analytics dashboard. A top strip shows session-level statistics — 65 sequences, 783 events, 10 states, 45.0% density, 45 edges — alongside '3 clusters found, silhouette score 0.393'. Below, three columns for Cluster 1 (7 sequences, 11%, avg length 35.6), Cluster 2 (44 sequences, 68%, avg length 6.6), and Cluster 3 (14 sequences, 22%, avg length 17.1), each with a horizontal state-distribution bar chart (communicating, navigating, regulating, examining, treating, …), a circular directed-weighted transition network, and a stacked-bar temporal proportion plot showing how state mix evolves across the timesteps of each cluster.">
             </figure>
         </div>
     </div>
 </section>
 
-<!-- ── Learning analytics enriched with vitals ──────────────── -->
-<section class="band">
+<!-- ── Real-time emotion capture ─────────────────────────────── -->
+<section id="affect" class="band">
+    <div class="wrap reveal">
+        <div class="pillar reverse">
+            <div class="pillar-text">
+                <span class="eyebrow accent">REAL-TIME EMOTION CAPTURE</span>
+                <h2>Affect on-device. Joined to the action stream.</h2>
+                <p>
+                    Camera-side emotion analytics runs entirely in the browser.
+                    Multi-task affect models produce dominant-emotion estimates and
+                    valence/arousal regression at a configurable sample rate; only
+                    aggregated windows leave the device. The affect stream shares the
+                    session, the time base, and the active room with the action
+                    stream — so behavioural trajectories and affective trajectories
+                    can be analysed jointly without an offline join.
+                </p>
+                <ul class="pillar-list">
+                    <li>Browser-only inference (MediaPipe face landmarker + ONNX Runtime Web). Aggregated windows only — raw frames and landmarks never leave the device; the server validator rejects either at the wire.</li>
+                    <li>Valence and arousal as time series; dominant emotion as a categorical estimate; a transition network on the affect side mirrors the one on the action side.</li>
+                    <li>Per-tenant capture configuration: window length, sample interval, minimum valid frames, smoothing alpha, hold time, switch confidence.</li>
+                    <li>Frozen-at-write row-visibility flags — flipping a tenant toggle never retroactively exposes data captured under stricter rules.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/oyon.png" alt="Real-time emotion-capture dashboard. Top-left: capture timeline with valence and arousal traces over hundreds of windows. Top-right: emotion-distribution bar chart across six states. A statistics strip below reports analyzed windows, latest state, instability, and phase. Bottom: a circular transition-network graph with weighted edges between emotion nodes and self-loops on most nodes.">
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── Learning-analytics stream enriched with vitals ────────── -->
+<section>
     <div class="wrap reveal">
         <div class="single">
-            <span class="eyebrow">LEARNING-ANALYTICS STREAM</span>
-            <h2>Every event row carries the patient's vitals.</h2>
+            <span class="eyebrow">VITAL-ENRICHED EVENT STREAM</span>
+            <h2>Every event row carries the patient's vitals — and the trainee's affect.</h2>
             <p class="lead">
                 The session is not a black box. Every navigation, examination, order,
                 treatment, message, and alarm response is captured as a verb-typed event;
-                each row is enriched server-side with the active room and the
-                contemporary vital signs — heart rate, blood pressure, SpO₂,
-                respiratory rate, temperature, EtCO₂ — at the moment the action
-                occurred.
+                each row is enriched server-side with the active room, the contemporary
+                vital signs — heart rate, blood pressure, SpO₂, respiratory rate,
+                temperature, EtCO₂ — and the corresponding affect window at the moment
+                the action occurred.
             </p>
             <ul class="pillar-list">
-                <li>Verb-coded action stream (xAPI-style) merged into clinical labels for downstream analysis.</li>
-                <li>Each row stamped with the active room (Patient · Examination · Laboratory · Radiology · Consultant) so behavioural trajectories can be segregated by setting.</li>
+                <li>Verb-coded action stream merged into clinical labels for downstream analysis.</li>
+                <li>Each row stamped with the active room (Patient · Examination · Laboratory · Radiology · Consultant) so behavioural trajectories segregate by setting.</li>
                 <li>Vital-sign columns on every event let behavioural sequences correlate directly with physiologic state — no offline merge required.</li>
+                <li>Affect columns on every event row (valence, arousal, dominant emotion) close the loop on multimodal analysis.</li>
                 <li>Cohort export in CSV or JSON: login logs, chat logs, complete-session bundles, questionnaire responses.</li>
             </ul>
         </div>
