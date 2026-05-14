@@ -629,18 +629,24 @@
             <span class="eyebrow">MULTI-AGENT PLATFORM</span>
             <h2>A care team, not a chatbot.</h2>
             <p class="lead">
-                The trainee converses with the patient and with the surrounding team —
-                family members, nurses, consultants, and a post-case discussant — each
-                a distinct AI agent with its own persona, voice, memory-access scope, and
-                avatar. Multi-chat routing keeps every conversation in a single transcript;
-                per-case rosters script who is present, who arrives later, and on what
-                cue.
+                Real clinical encounters are not a single back-and-forth with one
+                person. A trainee — alone or working as part of a team — moves
+                between the patient, the patient's family when the patient cannot
+                give a history themselves, the bedside nurse who holds the
+                medication record and the recent vitals, and the on-call consultant
+                brought in for a second opinion. Each interlocutor is a distinct
+                AI agent with its own persona, voice, knowledge scope, and arrival
+                cue. Conversations branch and reconverge in a single session
+                transcript, with the dialogue fidelity an actual clinical
+                interview demands.
             </p>
             <ul class="pillar-list">
-                <li>Patient, family, nurse, consultant, and Socratic debrief discussant — each editable end-to-end (prompt, voice, avatar, communication style, memory-access matrix).</li>
+                <li><strong>Patient interview</strong> — natural-language history-taking from a model that holds the case's clinical narrative, stays in role, and only volunteers what a patient at this stage of the encounter would plausibly volunteer.</li>
+                <li><strong>Family or surrogate</strong> — for the patient who cannot speak for themselves (unconscious, intoxicated, paediatric, post-arrest, dementia, aphasia), the family agent carries the collateral history. They know the home medications and what happened on the way to the ED; they do not know the labs.</li>
+                <li><strong>Bedside nurse and on-call consultant</strong> — the nurse holds the running medication record, the most recent set of vitals, and what was tried in the last few minutes. The consultant is paged in with a 1–3 minute server-anchored arrival and brings the broader differential. Per-case rosters script who is present from the start and who arrives on what cue.</li>
+                <li><strong>Solo or team problem-solving</strong> — a single trainee orchestrates the whole team in one session; cohort or team training reviews and analyses the same transcript exactly as the dialogue happened. Sessions are recorded turn-by-turn for replay and debrief.</li>
+                <li><strong>Knowledge scope is admin-controlled per agent, per case</strong> — the patient does not know the consultant's notes, the family does not know the labs, the nurse does not hold the post-discharge plan. The information asymmetry is the realism.</li>
                 <li>Local LLM backends (LM Studio, Ollama) are first-class; cloud providers are optional. Runtime model switching with per-user usage tracking.</li>
-                <li>Page/Call flow with a server-anchored arrival time that survives refreshes and room hops; auto-arrival converges on every read.</li>
-                <li>What each agent <em>knows</em> about the case is admin-controlled per agent — the patient does not know the consultant's chart, the family does not know the labs.</li>
             </ul>
         </div>
     </div>
