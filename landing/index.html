@@ -3,12 +3,12 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Rohy — AI-driven virtual patient for clinical reasoning research</title>
-    <meta name="description" content="A multimodal AI-driven virtual patient platform: multi-agent care team, real rhythm engine, emergency-driven scenarios, real-time affect capture, and process / sequence / transition-network analytics — every event enriched with vital signs.">
+    <title>Rohy — Artificial Intelligence for clinical reasoning research</title>
+    <meta name="description" content="An Artificial-Intelligence virtual patient platform for clinical reasoning research and education: multi-agent care team, real rhythm engine, emergency-driven scenarios, real-time emotion capture, and research-grade learning analytics with clustering, sequence/process mining, and transition-network analytics.">
     <meta name="theme-color" content="#09090b">
 
-    <meta property="og:title" content="Rohy — AI-driven virtual patient for clinical reasoning research">
-    <meta property="og:description" content="A multimodal AI-driven virtual patient platform: multi-agent care team, real rhythm engine, emergency-driven scenarios, real-time affect capture, and process / sequence / transition-network analytics — every event enriched with vital signs.">
+    <meta property="og:title" content="Rohy — Artificial Intelligence for clinical reasoning research">
+    <meta property="og:description" content="An Artificial-Intelligence virtual patient platform for clinical reasoning research and education: multi-agent care team, real rhythm engine, emergency-driven scenarios, real-time emotion capture, and research-grade learning analytics with clustering, sequence/process mining, and transition-network analytics.">
     <meta property="og:image" content="assets/hero-chat.png">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
@@ -400,6 +400,61 @@
             .cretic-meta { justify-content: center; display: inline-flex; }
         }
 
+        /* about the author card — bookends the page with the CRETIC card */
+        .author { padding: 64px 0; }
+        .author-card {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 44px 52px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background:
+                radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.06), transparent 60%),
+                radial-gradient(circle at 0% 100%, rgba(129, 140, 248, 0.04), transparent 60%),
+                var(--bg-elev);
+        }
+        .author-card .eyebrow { margin-bottom: 12px; }
+        .author-card h2 {
+            margin-bottom: 22px;
+            font-size: clamp(26px, 3.2vw, 34px);
+        }
+        .author-quote {
+            margin: 0 0 26px;
+            padding: 18px 24px;
+            border-left: 3px solid var(--cyan);
+            background: rgba(34, 211, 238, 0.04);
+            border-radius: 0 8px 8px 0;
+            font-size: 18px;
+            color: var(--text);
+            font-style: italic;
+            line-height: 1.6;
+        }
+        .author-body {
+            font-size: 16px;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+            line-height: 1.7;
+        }
+        .author-body strong { color: var(--text); font-weight: 600; }
+        .author-meta {
+            margin: 28px 0 0;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            color: var(--text-dimmer);
+            display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+        }
+        .author-meta a {
+            color: var(--cyan);
+            font-weight: 600;
+        }
+        .author-meta a:hover { text-decoration: underline; }
+        .author-meta .dot { color: var(--text-dimmer); }
+        @media (max-width: 760px) {
+            .author-card { padding: 32px 24px; }
+            .author-quote { padding: 16px 18px; font-size: 16px; }
+        }
+
         /* install & update grids */
         .install-h3 {
             font-size: 11px;
@@ -551,8 +606,8 @@
 <!-- ── Hero ──────────────────────────────────────────────────── -->
 <section class="hero" id="top">
     <div class="wrap hero-inner">
-        <span class="eyebrow accent">ARTIFICIAL-INTELLIGENCE-DRIVEN · CLINICAL REASONING RESEARCH</span>
-        <h1>A virtual patient<br>built for <span class="accent">clinical reasoning research.</span></h1>
+        <span class="eyebrow accent">VIRTUAL PATIENT · CRETIC PROJECT</span>
+        <h1>Artificial Intelligence<br>for <span class="accent">clinical reasoning research.</span></h1>
         <p class="sub">
             A multimodal AI-driven simulation environment. A multi-agent care team
             converses with the trainee; a real-rhythm physiologic monitor runs against
@@ -1022,6 +1077,54 @@
                 ·
                 <a href="https://github.com/mohsaqr/rohySimulator/blob/main/migrations/MANIFEST.md" target="_blank" rel="noopener">migrations/MANIFEST.md</a>
             </p>
+        </div>
+    </div>
+</section>
+
+<!-- ── About the author ──────────────────────────────────────── -->
+<section class="author" id="author">
+    <div class="wrap reveal">
+        <div class="author-card">
+            <span class="eyebrow accent">ABOUT THE AUTHOR</span>
+            <h2>Built by Professor Mohammed Saqr.</h2>
+
+            <blockquote class="author-quote">
+                “As a computer scientist now — who was a medical doctor before
+                — I was thinking of how to link computer science, analytics,
+                clinical reasoning, and medicine.”
+            </blockquote>
+
+            <p class="author-body">
+                <strong>Mohammed Saqr</strong> is a Professor of Computer Science at
+                the University of Eastern Finland. He trained as a medical
+                doctor at the <strong>Faculty of Medicine, University of
+                Alexandria</strong> — graduated, completed his residency, and
+                specialised in <strong>Neurology</strong> — and practised at
+                the university's flagship teaching hospital. He taught clinical
+                reasoning to medical students and residents, and has researched
+                medicine, medical education, learning analytics, and
+                problem-based learning extensively over the years.
+            </p>
+
+            <p class="author-body">
+                Rohy is the product of that joint perspective. The clinical
+                surfaces — symptom-led interview, alarm-bounded vitals,
+                family-as-surrogate when the patient cannot speak, a consultant
+                page that takes time — reflect what a neurologist would want a
+                trainee to actually encounter. The analytics surfaces —
+                verb-coded events, real-time clustering, sequence and process
+                mining, transition networks, vital- and affect-enriched logs —
+                are what a learning-analytics researcher would expect to find.
+                Both halves were built by the same person.
+            </p>
+
+            <div class="author-meta">
+                <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me →</a>
+                <span class="dot">·</span>
+                <span>Professor of Computer Science · University of Eastern Finland</span>
+                <span class="dot">·</span>
+                <span>Trained neurologist · Alexandria Faculty of Medicine</span>
+            </div>
         </div>
     </div>
 </section>
