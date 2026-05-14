@@ -5,7 +5,7 @@
 ![Stack](https://img.shields.io/badge/stack-React%2019%20%7C%20Node%20%7C%20SQLite-blue)
 ![Tests](https://img.shields.io/badge/tests-vitest%20%2B%20playwright-success)
 
-A comprehensive medical simulation platform for clinical education. Trainees converse with an AI-driven virtual patient — by text **or by voice with an animated 3D avatar** — interpret a live multi-parameter monitor with physiologically accurate ECG, order labs and imaging from a 225-test database with gender-specific normal ranges and 32 lab panels, perform structured physical examinations on a clickable anatomical body map across 67 named regions, administer 33 default treatments (18 medications + IV fluids + oxygen delivery + positioning) that produce time-decaying changes to vitals, debrief afterwards with an AI discussant, and have every action analysed in a Transition Network Analysis dashboard.
+A comprehensive medical simulation platform for clinical education. Trainees converse with an AI-driven virtual patient — by text **or by voice with an animated 3D avatar** — interpret a live multi-parameter monitor with physiologically accurate ECG, order labs and imaging from a 225-test database with gender-specific normal ranges and 32 lab panels, perform structured physical examinations on a clickable anatomical body map across 67 named regions, administer 33 default treatments (18 medications + IV fluids + oxygen delivery + positioning) that produce time-decaying changes to vitals, navigate between five peer rooms (Patient · Examination · Laboratory · Radiology · Consultant) with badge dots signalling ready labs, ready imaging, and a present consultant, page on-call agents with a 1–3 minute server-anchored Call flow that survives refreshes and room hops, debrief afterwards with an AI discussant via a dedicated end-of-case "End & Debrief" button, and have every action — stamped with the active room — analysed in a Transition Network Analysis dashboard.
 
 Everything runs on your own infrastructure. Local TTS (Piper, Kokoro) and local LLMs (LM Studio, Ollama) are first-class — cloud providers (Anthropic, OpenAI, Google) are optional. Multi-tenant ready, role-hierarchy aware (5 ranks), audit-logged, soft-deleted with right-to-erasure purge, and instrumented with structured-NDJSON observability.
 
@@ -84,8 +84,9 @@ docker compose up -d         # apply
 - **5 multi-provider LLM backends** — Anthropic Claude, OpenAI, Google Gemini, LM Studio (local), Ollama (local). Per-platform API keys, runtime model switching, server-side streaming via `/api/proxy/llm`, 5-tier resolver precedence (platform → case → agent → session → user), per-user and platform-wide token usage tracking with admin-editable pricing tables.
 - **5 default agent personas, fully editable** — Patient, Nurse (Sarah Mitchell), Consultant (Dr. James Chen), Family Member, Discussant. Each with its own persona prompt, dos/don'ts list, voice slot, avatar, communication style, memory access matrix, and LLM override.
 - **Per-case agent rosters** — Assign any agents to a case with arrival/departure scripting, override their name and prompt per-case via `case_agents.config_override`, and route between them via the chat UI's tab system.
-- **Discussant debrief flow** — Post-session AI-driven debrief with its own dedicated screen, voice, avatar, and LLM. Captures performance feedback and stores it in session notes.
-- **Team communications log** — Cross-agent message history per session, queryable for analytics.
+- **Page / Call flow with server-anchored ETA** — Paging an agent (Consultant, Nurse, etc.) computes a 1–3 minute arrival time server-side and stamps it on `agent_session_state.arrives_at` (migration 0024). The client drives the countdown from the row, so a browser refresh, room hop, or chat remount picks up exactly where it left off — the old in-memory `setTimeout` could drop the timer. Auto-arrival is convergent: any read of `/sessions/:id/agents` flips overdue paged agents to `present` in a single bounded UPDATE.
+- **Discussant debrief flow** — Trainees end a case via a dedicated **End & Debrief** button that unlocks a separate `DiscussionScreen` with its own voice, avatar, LLM, and persona. The discussant's opening turn is sent as a `silent: true` LLM call so the meta-prompt never appears in the learner-utterance audit trail. Per-case attached discussants override the platform default; the resolver guarantees the patient's case voice does not leak into the discussant's playback (regression-locked at unit + component + e2e since 2026-05-06). Captures performance feedback and stores it in session notes.
+- **Team communications log** — Cross-agent message history per session, queryable for analytics. Tenant-scoped reads + writes since the May-2026 audit hardening.
 - **Stage-direction stripping** — `*nods*`-style annotations are removed from both the rendered transcript and the TTS request body (locked end-to-end with regression tests).
 
 ### Voice Mode (4 TTS providers, 28 avatars, viseme-driven lipsync)
@@ -124,6 +125,8 @@ docker compose up -d         # apply
 - **Laboratory** — **225 lab test entries across 33 groups** (196 unique tests in `Lab_database.json` plus 10 cardiac-crisis tests merged in from `heart.txt` at runtime via `server/services/labDatabase.js`). Categories include Hematology (CBC, Differential), Basic Metabolic Panel, Renal Function, Liver Function, Coagulation, Thyroid, Blood Gases, Cardiac Markers, Cardiology Crisis, Inflammatory Markers, Iron Studies, Vitamins, Lipid Panel, Diabetes, Metabolic, Urinalysis, Pancreatic, Adrenal, Reproductive Hormones, Tumor Markers, Drug Levels, Body Fluids, CSF, Autoimmune, Cardiovascular Risk, Toxicology, Trace Elements, Pituitary, Hemolysis Markers, Thrombophilia, Immunoglobulins, Parathyroid. **Gender-specific reference ranges where clinically relevant** (44 entries split by Male / Female: Hemoglobin 12-16 g/dL female / 14-18 g/dL male, Hematocrit, Iron, Testosterone, Estradiol, …). Search by test name or panel; admin can bulk-import additional tests via `POST /api/master/lab-tests`.
 - **32 lab panel templates** — Acute MI Panel, Heart Failure, Unstable Angina, **Diabetic Ketoacidosis (DKA)**, Hyperosmolar Hyperglycemic State, Sepsis, Stroke Workup, Pulmonary Embolism, Acute Pancreatitis, Liver Failure, Renal Failure, … Each panel pins specific tests with `value_multiplier` or `custom_value` overrides for case-specific abnormal results.
 - **Radiology** — **74 pre-loaded studies** spanning X-Ray, CT, MRI, Ultrasound, Cardiac (12-lead ECG, echocardiogram), Nuclear Medicine, Fluoroscopy, Mammography. Normal-report database for each study; per-case admin editor for abnormal reports; image / video upload + display for case-attached findings.
+- **Investigations screen — pill-stack viewer** — When a lab or radiology order is ready, clicking the worklist row both adds it to the persistent pill stack (newest on top, dismissible via the per-pill X) *and* expands the full report in the right pane (single-click flow since `ab266a4`; the previous two-step "click row → pill, click pill → expand" was retired). Re-opening a previously viewed report from the stack flips the same pane back to the full report; closing returns to the welcome card + pill row. Orders that were already `viewed_at` on first poll auto-populate the stack so refreshing mid-session doesn't lose your scratch-pad.
+- **1–5 minute turnaround band** — `case_investigations.turnaround_minutes` is clamped to the 1–5 minute simulation band (migration 0023 normalised legacy 30 / 60 / 240 / 2880 minute waits seeded before the clamp). Case authors who want longer waits adjust through the case wizard; the band keeps a single session tractable inside a teaching slot.
 - **Physical Examination** — Two parallel surfaces:
   - **BodyMap**: anatomically accurate SVG silhouette with **invisible polygon hit regions** keyed to **67 named exam regions** (head/face/neck, chest, abdomen, back, extremities, perineum) across anterior + posterior + lateral views, gender-specific.
   - **ManikinPanel**: structured grid of region × exam-type (auscultation, palpation, percussion, inspection, special tests). Cranial nerves, motor, sensory, reflexes, coordination as discrete examinable items.
@@ -141,6 +144,13 @@ Replaced 4 parallel notification systems (Toast, useAlarms, EventLogger, native 
 - **Mute hierarchy** — `acked → snoozed → DND → minSeverity → source/surface mutes`. Critical clinical alarms bypass DND but still respect ack and snooze.
 - **Cross-case ack clearing** — `clearTransient(reason)` is called on every `sessionId` change so case A's acked alarms don't silence brand-new alarms in case B.
 - **Audio resume** — Globally listens for click/keydown/touchstart to unblock the AudioContext (fixes the "alarms silent until you click PatientMonitor first" legacy bug).
+
+### Room Navigation & Room-Aware State
+
+- **Bottom RoomNavigator with five peer rooms** — Patient, Examination, Laboratory, Radiology, Consultant. Single source of truth on `App.jsx`'s `currentRoom` (consolidated from three floating-pill booleans). Each room is a peer, not a modal — switching rooms preserves the running session, the patient monitor, active treatment effects, and the chat transcript.
+- **Badge dots on every room button** — A small unread dot signals per-room state the trainee needs to attend to: ready labs awaiting review, ready radiology awaiting review, and a paged consultant who has arrived. Replaces the retired floating "Ordered Tests (N)" panel that used to overlap the chat surface.
+- **Every event carries the active room** — `learning_events.room` (migration 0021) stamps the room name (`chat` / `examination` / `lab` / `radiology` / `consultant`) on every event row server-side. TNA reads now segregate "the trainee paged the consultant from the lab room" from "from the patient room," which previously collapsed.
+- **No back button on room screens** — Rooms exit through the RoomNavigator, not via in-screen Back affordances. The old inline "Switch room" / `[ ]` hotkey hint inside InvestigationsScreen was removed.
 
 ### Authoring (case wizard + scenario repository + agent editor)
 
@@ -180,6 +190,12 @@ Replaced 4 parallel notification systems (Toast, useAlarms, EventLogger, native 
 | **E7** | Soft-delete + retention | `deleted_at` on user-authored tables, retention sweep cron (`scripts/retention-sweep.js`), GDPR-aligned purge endpoint with dry-run |
 | **E8** | Connection pooling + portability | Promise-based `dbAdapter.js` shim; SQL fragment helpers (`now()`, `upsert()`); Postgres readiness inventory |
 | **E9** | Observability hooks | NDJSON request logging with request-id propagation, slow-query threshold, error tracker; configurable via `ROHY_LOG_LEVEL`, `ROHY_SLOW_QUERY_MS`, `ROHY_LOG_SKIP_PATHS` |
+
+**May-2026 audit follow-up cycle** — Targeted hardening of gaps E3/E5/E6 found in a second-pass review:
+- **Agent + session route ownership.** `POST/PUT/DELETE /cases/:id/agents` now require educator+ (`requireEducator`). Every session-scoped runtime endpoint (`/sessions/:id/agents`, `/page`, `/arrive`, `/depart`, `/status`, `/conversation`, `/team-communications`) goes through `verifySessionOwnership` so students can't read/write across each other's sessions by guessing the integer id. Every INSERT into `case_agents` / `agent_conversations` / `agent_session_state` / `team_communications_log` now stamps `tenant_id` (rows used to silently default to tenant 1 after migration 0004).
+- **Orders/labs/radiology/treatment reads.** `/sessions/:id/orders`, `available-labs`, `available-radiology`, `radiology-orders`, `treatment-orders`, `active-effects` are now session-ownership-gated and tenant-filtered. Treatment endpoints used to `SELECT user_id FROM sessions` but never compared it to the caller — that fake-defence pattern is gone.
+- **Oyon row-level visibility.** `oyon_emotion_records` carry frozen-at-write `student_can_view` / `educator_can_view` / `admin_can_view` flags. Reads now honour those flags via a caller-role-keyed predicate (`buildEmotionRecordsWhere`, `/admin/live`, `/analytics/session`, `/analytics/students`). Flipping a tenant toggle can no longer retroactively expose data captured under stricter rules; an educator cannot see admin-only rows.
+- **Migration 0022 reclassified `destructive`** in `MANIFEST.md`. Predicate-based row DELETEs on user-authored tables (`cases`, `platform_settings`) without an FK guard are destructive per the contract; future operators upgrading past 0022 go through the `--allow-destructive` gate. The policy section now explicitly covers `DELETE FROM <table>` and `UPDATE <table> SET …` that overwrites user data.
 
 ### Oyon — Local-Browser Emotion Capture & Analytics
 
@@ -234,7 +250,7 @@ rohySimulator/
 │   │   └── errorHandler.js            # Last-mile error tracker
 │   ├── seeders/                       # Default users, 6 acute cases, 5 agent personas
 │   └── services/                      # Lab DB, googleTts, openaiTts, kokoroTts, voiceFallbacks, wav
-├── migrations/                        # 19 versioned SQL migrations + MANIFEST.md (additive-only policy)
+├── migrations/                        # 24 versioned SQL migrations + MANIFEST.md (additive-by-default, destructive opt-in via --allow-destructive)
 ├── OyonR/                             # Local-browser emotion capture (MediaPipe + ONNX-Web)
 │   ├── src/                           # Camera, face tracker, classifier, aggregator,
 │   │                                  # validator, transports, settings, model configs
@@ -290,7 +306,7 @@ rohySimulator/
 └── server/data/radiology_database.json  # 74 radiology studies
 ```
 
-### Database (65+ tables, 19 versioned migrations)
+### Database (65+ tables, 24 versioned migrations)
 
 Core: `users`, `cases`, `sessions`, `interactions`, `event_log`, `case_versions`, `system_audit_log`.
 
