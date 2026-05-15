@@ -48,8 +48,8 @@ describe('CohortReports — RosterView + StudentDetail', () => {
                         { id: 2, case_id: 'c2', case_name: null, status: null, completed: false, start_time: null },
                     ],
                     events: [
-                        { id: 50, timestamp: '2026-05-01T10:05:00Z', verb: 'opened', object_name: 'Monitor', room: 'patient' },
-                        { id: 51, timestamp: null, verb: 'ordered', object_type: 'lab' },
+                        { id: 50, session_id: 1, timestamp: '2026-05-01T10:05:00Z', verb: 'opened', object_name: 'Monitor', room: 'patient' },
+                        { id: 51, session_id: 2, timestamp: null, verb: 'ordered', object_type: 'lab' },
                     ],
                 }));
             }
@@ -72,12 +72,14 @@ describe('CohortReports — RosterView + StudentDetail', () => {
         fireEvent.click(screen.getByText('Stu'));
         await waitFor(() =>
             expect(screen.getByText('Back to roster')).toBeTruthy());
-        // Session rows: named + fallback "Case c2"
+        // Activity grouped per case/session: named + fallback "Case c2".
         expect(screen.getByText('Chest pain')).toBeTruthy();
         expect(screen.getByText('Case c2')).toBeTruthy();
-        // Timeline verbs
+        // First group is open by default → its event verb is visible.
         expect(screen.getByText('opened')).toBeTruthy();
-        expect(screen.getByText('ordered')).toBeTruthy();
+        // Second group is collapsed → expand it, then its verb shows.
+        fireEvent.click(screen.getByText('Case c2'));
+        await waitFor(() => expect(screen.getByText('ordered')).toBeTruthy());
 
         fireEvent.click(screen.getByText('Back to roster'));
         await waitFor(() =>
@@ -104,8 +106,7 @@ describe('CohortReports — RosterView + StudentDetail', () => {
         await waitFor(() => expect(screen.getByText('Stu Dent')).toBeTruthy());
         fireEvent.click(screen.getByText('Stu Dent'));
         await waitFor(() =>
-            expect(screen.getByText('No sessions yet.')).toBeTruthy());
-        expect(screen.getByText('No activity recorded.')).toBeTruthy();
+            expect(screen.getByText('No activity yet.')).toBeTruthy());
     });
 
     it('toasts when the roster request fails', async () => {

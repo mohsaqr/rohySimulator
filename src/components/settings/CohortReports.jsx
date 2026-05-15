@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Loader2, ArrowLeft, Download, RefreshCw, Activity,
-    LayoutGrid, ListChecks, Check, Circle,
+    LayoutGrid, ListChecks, Check, Circle, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError } from '../../services/apiClient';
@@ -152,6 +152,69 @@ function RosterView({ cohortId }) {
     );
 }
 
+// One collapsible card = one session (= one attempt at a case). Its
+// events are the actions the student took during that session. Grouping
+// the flat event log under its session is what turns a log dump into
+// "their activity, per case" — no new endpoint; events already carry
+// session_id from the existing /cohorts/:id/student/:userId payload.
+function SessionGroup({ group, defaultOpen }) {
+    const [open, setOpen] = useState(defaultOpen);
+    const { session: s, events } = group;
+    return (
+        <div className="border border-neutral-800 rounded bg-neutral-800/40">
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                className="w-full flex items-center gap-3 p-2 text-left hover:bg-neutral-800/70 transition-colors"
+            >
+                {open
+                    ? <ChevronDown className="w-4 h-4 text-neutral-500 shrink-0" />
+                    : <ChevronRight className="w-4 h-4 text-neutral-500 shrink-0" />}
+                <span className="flex-1 text-sm text-white truncate">{group.title}</span>
+                {s && (s.completed
+                    ? <Check className="w-4 h-4 text-green-400 shrink-0" title="Debrief completed" />
+                    : <Circle className="w-3 h-3 text-neutral-600 shrink-0" title="Not completed" />)}
+                {s?.status && <span className="text-xs text-neutral-500 shrink-0">{s.status}</span>}
+                <span className="text-xs text-neutral-500 shrink-0">
+                    {events.length} action{events.length === 1 ? '' : 's'}
+                </span>
+                {s?.start_time && (
+                    <span className="text-xs text-neutral-500 whitespace-nowrap shrink-0">
+                        {fmtTime(s.start_time)}
+                    </span>
+                )}
+            </button>
+            {open && (
+                events.length === 0 ? (
+                    <p className="text-xs text-neutral-500 px-3 pb-2 pt-1">
+                        No recorded actions in this session.
+                    </p>
+                ) : (
+                    <ul className="px-3 pb-2 pt-1 space-y-0.5">
+                        {events.map((ev) => (
+                            <li
+                                key={ev.id}
+                                className="flex items-baseline gap-2 text-xs py-1 border-b border-neutral-800/60 last:border-0"
+                            >
+                                <span className="text-neutral-500 whitespace-nowrap w-36 shrink-0">
+                                    {fmtTime(ev.timestamp)}
+                                </span>
+                                <span className="text-purple-300 font-medium">{ev.verb}</span>
+                                <span className="text-neutral-300 flex-1 truncate">
+                                    {ev.object_name || ev.object_type || ''}
+                                </span>
+                                {ev.room && (
+                                    <span className="text-neutral-500 shrink-0">{ev.room}</span>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                )
+            )}
+        </div>
+    );
+}
+
 function StudentDetail({ cohortId, userId, onBack }) {
     const toast = useToast();
     const [loading, setLoading] = useState(true);
@@ -195,59 +258,49 @@ function StudentDetail({ cohortId, userId, onBack }) {
                         {data.student?.role ? ` · ${roleLabel(data.student.role)}` : ''}
                     </p>
 
-                    <h5 className="text-sm font-bold text-neutral-200 mb-2">
-                        Sessions ({data.sessions?.length || 0})
-                    </h5>
-                    {(!data.sessions || data.sessions.length === 0) ? (
-                        <p className="text-sm text-neutral-500 mb-6">No sessions yet.</p>
-                    ) : (
-                        <div className="space-y-1 mb-6">
-                            {data.sessions.map((s) => (
-                                <div
-                                    key={s.id}
-                                    className="flex items-center gap-3 p-2 bg-neutral-800/50 border border-neutral-800 rounded text-sm"
-                                >
-                                    <span className="flex-1 text-white truncate">
-                                        {s.case_name || `Case ${s.case_id}`}
-                                    </span>
-                                    <span className="text-xs text-neutral-500">{s.status || '—'}</span>
-                                    {s.completed
-                                        ? <Check className="w-4 h-4 text-green-400" title="Debrief completed" />
-                                        : <Circle className="w-3 h-3 text-neutral-600" title="Not completed" />}
-                                    <span className="text-xs text-neutral-500 whitespace-nowrap">
-                                        {fmtTime(s.start_time)}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    <h5 className="text-sm font-bold text-neutral-200 mb-2">
-                        Activity timeline ({data.events?.length || 0})
-                    </h5>
-                    {(!data.events || data.events.length === 0) ? (
-                        <p className="text-sm text-neutral-500">No activity recorded.</p>
-                    ) : (
-                        <ul className="space-y-0.5">
-                            {data.events.map((ev) => (
-                                <li
-                                    key={ev.id}
-                                    className="flex items-baseline gap-2 text-xs py-1 border-b border-neutral-800/60"
-                                >
-                                    <span className="text-neutral-500 whitespace-nowrap w-36 shrink-0">
-                                        {fmtTime(ev.timestamp)}
-                                    </span>
-                                    <span className="text-purple-300 font-medium">{ev.verb}</span>
-                                    <span className="text-neutral-300 flex-1 truncate">
-                                        {ev.object_name || ev.object_type || ''}
-                                    </span>
-                                    {ev.room && (
-                                        <span className="text-neutral-500 shrink-0">{ev.room}</span>
-                                    )}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                    {(() => {
+                        const sessions = data.sessions || [];
+                        const events = data.events || [];
+                        if (sessions.length === 0 && events.length === 0) {
+                            return <p className="text-sm text-neutral-500">No activity yet.</p>;
+                        }
+                        // Bucket events under their session (events carry
+                        // session_id). Events with no/unknown session land
+                        // in an "Other activity" group so nothing is hidden.
+                        const bySession = new Map();
+                        for (const ev of events) {
+                            const k = ev.session_id == null ? '__none__' : ev.session_id;
+                            if (!bySession.has(k)) bySession.set(k, []);
+                            bySession.get(k).push(ev);
+                        }
+                        const groups = sessions.map(s => ({
+                            key: s.id,
+                            title: s.case_name || `Case ${s.case_id}`,
+                            session: s,
+                            events: bySession.get(s.id) || [],
+                        }));
+                        const orphan = bySession.get('__none__') || [];
+                        return (
+                            <div className="space-y-2">
+                                <h5 className="text-sm font-bold text-neutral-200 mb-1">
+                                    Activity by case ({sessions.length} session{sessions.length === 1 ? '' : 's'}, {events.length} action{events.length === 1 ? '' : 's'})
+                                </h5>
+                                {groups.length === 0 && orphan.length === 0 && (
+                                    <p className="text-sm text-neutral-500">No sessions yet.</p>
+                                )}
+                                {groups.map((g, i) => (
+                                    <SessionGroup key={g.key} group={g} defaultOpen={i === 0} />
+                                ))}
+                                {orphan.length > 0 && (
+                                    <SessionGroup
+                                        key="__none__"
+                                        group={{ key: '__none__', title: 'Other activity (no session)', session: null, events: orphan }}
+                                        defaultOpen={groups.length === 0}
+                                    />
+                                )}
+                            </div>
+                        );
+                    })()}
                 </>
             )}
         </div>
