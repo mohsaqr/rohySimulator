@@ -31,10 +31,54 @@ function generateJoinCode() {
     return out;
 }
 
-// Owner or admin within the caller's tenant. Returns the cohort row, or
-// sends the response and returns null. 404 (not 403) when the cohort is
-// another owner's / another tenant's so existence doesn't leak — mirrors
-// the ownership pattern in orders-routes.js / _helpers verifySessionOwnership.
+// Allocate a join_code on `cohort`, retrying on a partial-unique collision
+// against another live cohort's code. Returns the code on success, or null
+// if every retry collided (the caller decides how to surface that). This is
+// the single owner of join-code generation — both POST /cohorts (create
+// with join_code) and POST /cohorts/:id/join-code call it so the retry /
+// alphabet logic lives in exactly one place.
+async function allocateJoinCode(cohortId) {
+    let lastErr = null;
+    for (let attempt = 0; attempt < JOIN_CODE_MAX_RETRIES; attempt++) {
+        const code = generateJoinCode();
+        try {
+            await dbAdapter.run(`UPDATE cohorts SET join_code = ? WHERE id = ?`, [code, cohortId]);
+            return code;
+        } catch (err) {
+            // Partial-unique collision on a live join_code — retry with a
+            // fresh code. Any other error is fatal.
+            if (/UNIQUE constraint/i.test(err.message)) {
+                lastErr = err;
+                continue;
+            }
+            throw err;
+        }
+    }
+    cohortsLog.error('join code generation exhausted retries', {
+        cohort_id: cohortId,
+        error: lastErr?.message,
+    });
+    return null;
+}
+
+// WHY this access rule (the security chokepoint — read before touching).
+//
+// Every management AND every Phase-4 reporting endpoint calls
+// loadOwnedCohort(); it is the ONLY place the access boundary is decided,
+// so widening it here widens it everywhere consistently and nowhere else.
+//
+// Phase-8 widens "owner OR admin" to also admit a CO-TEACHER: a caller who
+// has a LIVE cohort_members row in THIS cohort with member_role='teacher'.
+// All three branches stay inside tenant_id = tenantId(req); failure is 404
+// (never 403) so a wrong-owner / wrong-tenant / non-member can't even
+// confirm the cohort exists (no existence leak — same as before).
+//
+// member_role='teacher' only decides WHICH cohorts an *already
+// educator-rank* caller may reach. It NEVER elevates a student: every
+// route still sits behind requireEducator, which rejects sub-educator rank
+// before this helper ever runs. A member_role='student' row grants nothing
+// here — only 'teacher' (or owner/admin) does — so an educator-rank user
+// enrolled as a plain student of someone else's cohort still gets 404.
 async function loadOwnedCohort(req, res) {
     const cohort = await dbAdapter.get(
         `SELECT * FROM cohorts WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
@@ -44,11 +88,47 @@ async function loadOwnedCohort(req, res) {
         res.status(404).json({ error: 'Cohort not found' });
         return null;
     }
-    if (cohort.owner_user_id !== req.user.id && !isAdmin(req)) {
-        res.status(404).json({ error: 'Cohort not found' });
-        return null;
+    if (cohort.owner_user_id === req.user.id || isAdmin(req)) {
+        return cohort;
     }
-    return cohort;
+    const teacherMembership = await dbAdapter.get(
+        `SELECT 1 FROM cohort_members
+          WHERE cohort_id = ? AND user_id = ?
+            AND member_role = 'teacher' AND deleted_at IS NULL
+          LIMIT 1`,
+        [cohort.id, req.user.id]
+    );
+    if (teacherMembership) {
+        return cohort;
+    }
+    res.status(404).json({ error: 'Cohort not found' });
+    return null;
+}
+
+// ISO-8601-ish date acceptance. Accepts a string parseable by Date and
+// returns its normalised value (the original string is stored as-is into
+// the DATETIME column — SQLite is typeless and the rest of the schema
+// stores ISO strings / CURRENT_TIMESTAMP text). Returns undefined for
+// null/'' (caller treats that as "clear"), or false for an invalid value.
+function parseDateInput(v) {
+    if (v == null || v === '') return undefined;
+    if (typeof v !== 'string') return false;
+    const t = Date.parse(v);
+    if (Number.isNaN(t)) return false;
+    return v;
+}
+
+function isPlainObject(v) {
+    return v != null && typeof v === 'object' && !Array.isArray(v);
+}
+
+// Resolve a username/email to a live user in the caller's tenant.
+async function resolveTenantUser(identifier, req) {
+    return dbAdapter.get(
+        `SELECT id, username, name, role FROM users
+          WHERE (username = ? OR email = ?) AND tenant_id = ? AND deleted_at IS NULL`,
+        [identifier, identifier, tenantId(req)]
+    );
 }
 
 async function memberCount(cohortId) {
@@ -65,18 +145,99 @@ router.post('/cohorts', authenticateToken, requireEducator, async (req, res, nex
         if (!name) {
             return res.status(400).json({ error: 'name is required' });
         }
+        const body = req.body || {};
+
+        const description = typeof body.description === 'string' ? body.description : null;
+
+        const startsAt = parseDateInput(body.starts_at);
+        if (startsAt === false) {
+            return res.status(400).json({ error: 'starts_at must be an ISO 8601 date' });
+        }
+        const endsAt = parseDateInput(body.ends_at);
+        if (endsAt === false) {
+            return res.status(400).json({ error: 'ends_at must be an ISO 8601 date' });
+        }
+        if (startsAt && endsAt && Date.parse(startsAt) > Date.parse(endsAt)) {
+            return res.status(400).json({ error: 'starts_at must be on or before ends_at' });
+        }
+
+        let settingsJson = null;
+        if (body.settings !== undefined && body.settings !== null) {
+            if (!isPlainObject(body.settings)) {
+                return res.status(400).json({ error: 'settings must be a plain object' });
+            }
+            settingsJson = JSON.stringify(body.settings);
+        }
+
+        // Validate case_ids / coteacher_identifiers BEFORE the insert so a
+        // bad request never leaves a half-built cohort behind.
+        let caseIds = [];
+        if (body.case_ids !== undefined) {
+            if (!Array.isArray(body.case_ids)) {
+                return res.status(400).json({ error: 'case_ids must be an array' });
+            }
+            caseIds = [...new Set(body.case_ids.map(Number).filter(n => Number.isInteger(n) && n > 0))];
+            if (caseIds.length) {
+                const placeholders = caseIds.map(() => '?').join(',');
+                const found = await dbAdapter.all(
+                    `SELECT id FROM cases WHERE id IN (${placeholders}) AND tenant_id = ? AND deleted_at IS NULL`,
+                    [...caseIds, tenantId(req)]
+                );
+                if (found.length !== caseIds.length) {
+                    return res.status(400).json({ error: 'one or more case_ids are not valid cases in this tenant' });
+                }
+            }
+        }
+
+        let coteachers = [];
+        if (body.coteacher_identifiers !== undefined) {
+            if (!Array.isArray(body.coteacher_identifiers)) {
+                return res.status(400).json({ error: 'coteacher_identifiers must be an array' });
+            }
+            for (const raw of body.coteacher_identifiers) {
+                const identifier = typeof raw === 'string' ? raw.trim() : '';
+                if (!identifier) continue;
+                const u = await resolveTenantUser(identifier, req);
+                if (!u) {
+                    return res.status(400).json({ error: `co-teacher not found in this tenant: ${identifier}` });
+                }
+                coteachers.push(u);
+            }
+        }
+
         const result = await dbAdapter.run(
-            `INSERT INTO cohorts (name, owner_user_id, tenant_id) VALUES (?, ?, ?)`,
-            [name, req.user.id, tenantId(req)]
+            `INSERT INTO cohorts (name, owner_user_id, tenant_id, description, starts_at, ends_at, settings)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [name, req.user.id, tenantId(req), description, startsAt ?? null, endsAt ?? null, settingsJson]
         );
-        const cohort = await dbAdapter.get(`SELECT * FROM cohorts WHERE id = ?`, [result.lastID]);
+        const cohortId = result.lastID;
+
+        let joinCode = null;
+        if (body.join_code === true || body.join_code === 'generate' || body.generate_join_code === true) {
+            joinCode = await allocateJoinCode(cohortId);
+            if (joinCode == null) {
+                return res.status(500).json({ error: 'Could not allocate a unique join code' });
+            }
+        }
+
+        for (const cid of caseIds) {
+            await dbAdapter.run(
+                `INSERT INTO cohort_cases (cohort_id, case_id) VALUES (?, ?)`,
+                [cohortId, cid]
+            );
+        }
+        for (const u of coteachers) {
+            await upsertMember(cohortId, u.id, 'teacher');
+        }
+
+        const cohort = await dbAdapter.get(`SELECT * FROM cohorts WHERE id = ?`, [cohortId]);
         auditSuccess(req, {
             action: 'cohort.create',
             resourceType: 'cohort',
             resourceId: cohort.id,
             resourceName: cohort.name,
         });
-        res.status(201).json({ cohort: { ...cohort, member_count: 0 } });
+        res.status(201).json({ cohort: { ...cohort, member_count: coteachers.length } });
     } catch (err) {
         next(err);
     }
@@ -109,17 +270,32 @@ router.get('/cohorts/:id', authenticateToken, requireEducator, async (req, res, 
     try {
         const cohort = await loadOwnedCohort(req, res);
         if (!cohort) return;
-        const members = await dbAdapter.all(
-            `SELECT u.id, u.username, u.name, u.role
+        const allMembers = await dbAdapter.all(
+            `SELECT u.id, u.username, u.name, u.role, m.member_role
                FROM cohort_members m
                JOIN users u ON u.id = m.user_id
               WHERE m.cohort_id = ? AND m.deleted_at IS NULL
               ORDER BY u.username ASC`,
             [cohort.id]
         );
+        const students = allMembers.filter(m => m.member_role !== 'teacher');
+        const teachers = allMembers.filter(m => m.member_role === 'teacher');
+        const cases = await dbAdapter.all(
+            `SELECT cc.case_id AS id, c.name AS name, cc.created_at AS assigned_at
+               FROM cohort_cases cc
+               JOIN cases c ON c.id = cc.case_id
+              WHERE cc.cohort_id = ? AND cc.deleted_at IS NULL
+              ORDER BY c.name ASC, cc.case_id ASC`,
+            [cohort.id]
+        );
         res.json({
-            cohort: { ...cohort, member_count: members.length },
-            members,
+            cohort: { ...cohort, member_count: allMembers.length },
+            // `members` retained for backward compatibility (all live
+            // members, both roles) — existing callers/tests unchanged.
+            members: allMembers,
+            students,
+            teachers,
+            cases,
         });
     } catch (err) {
         next(err);
@@ -130,11 +306,59 @@ router.patch('/cohorts/:id', authenticateToken, requireEducator, async (req, res
     try {
         const cohort = await loadOwnedCohort(req, res);
         if (!cohort) return;
-        const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+        const body = req.body || {};
+
+        // name stays required & non-empty (unchanged contract). All other
+        // fields are optional patches; settings is REPLACE not merge —
+        // simpler & predictable: PATCH sends the full settings object you
+        // want, and it overwrites the stored JSON wholesale.
+        const name = typeof body.name === 'string' ? body.name.trim() : '';
         if (!name) {
             return res.status(400).json({ error: 'name is required' });
         }
-        await dbAdapter.run(`UPDATE cohorts SET name = ? WHERE id = ?`, [name, cohort.id]);
+
+        const sets = ['name = ?'];
+        const params = [name];
+
+        if ('description' in body) {
+            sets.push('description = ?');
+            params.push(body.description == null ? null : String(body.description));
+        }
+
+        let nextStarts = cohort.starts_at;
+        let nextEnds = cohort.ends_at;
+        if ('starts_at' in body) {
+            const v = parseDateInput(body.starts_at);
+            if (v === false) return res.status(400).json({ error: 'starts_at must be an ISO 8601 date' });
+            nextStarts = v ?? null;
+            sets.push('starts_at = ?');
+            params.push(nextStarts);
+        }
+        if ('ends_at' in body) {
+            const v = parseDateInput(body.ends_at);
+            if (v === false) return res.status(400).json({ error: 'ends_at must be an ISO 8601 date' });
+            nextEnds = v ?? null;
+            sets.push('ends_at = ?');
+            params.push(nextEnds);
+        }
+        if (nextStarts && nextEnds && Date.parse(nextStarts) > Date.parse(nextEnds)) {
+            return res.status(400).json({ error: 'starts_at must be on or before ends_at' });
+        }
+
+        if ('settings' in body) {
+            if (body.settings == null) {
+                sets.push('settings = ?');
+                params.push(null);
+            } else if (!isPlainObject(body.settings)) {
+                return res.status(400).json({ error: 'settings must be a plain object' });
+            } else {
+                sets.push('settings = ?');
+                params.push(JSON.stringify(body.settings));
+            }
+        }
+
+        params.push(cohort.id);
+        await dbAdapter.run(`UPDATE cohorts SET ${sets.join(', ')} WHERE id = ?`, params);
         auditSuccess(req, {
             action: 'cohort.rename',
             resourceType: 'cohort',
@@ -173,29 +397,58 @@ router.delete('/cohorts/:id', authenticateToken, requireEducator, async (req, re
     }
 });
 
-async function addMember(cohortId, userId) {
+// Revive-aware add/upsert of a membership at `role` ('student' | 'teacher').
+//
+// The partial-unique on live (cohort_id, user_id) means a user has at most
+// one live row, so we never duplicate: an existing LIVE row is reused, and
+// `promoted` flags the case where a live 'student' row is asked to become
+// 'teacher' (it is promoted in place, not duplicated). To avoid an
+// accidental teacher→student demotion, a live 'teacher' row is left as
+// 'teacher' even when role='student' is requested; the caller is told via
+// `unchangedRole` so it can signal the no-op to the client.
+async function upsertMember(cohortId, userId, role = 'student') {
     const existing = await dbAdapter.get(
         `SELECT * FROM cohort_members WHERE cohort_id = ? AND user_id = ?
           ORDER BY (deleted_at IS NULL) DESC, id DESC LIMIT 1`,
         [cohortId, userId]
     );
     if (existing && existing.deleted_at == null) {
-        return { membership: existing, created: false, revived: false };
+        if (existing.member_role === role) {
+            return { membership: existing, created: false, revived: false, promoted: false, unchangedRole: false };
+        }
+        if (role === 'teacher' && existing.member_role === 'student') {
+            await dbAdapter.run(
+                `UPDATE cohort_members SET member_role = 'teacher' WHERE id = ?`,
+                [existing.id]
+            );
+            const promotedRow = await dbAdapter.get(`SELECT * FROM cohort_members WHERE id = ?`, [existing.id]);
+            return { membership: promotedRow, created: false, revived: false, promoted: true, unchangedRole: false };
+        }
+        // role='student' requested for a live 'teacher' — do NOT demote.
+        return { membership: existing, created: false, revived: false, promoted: false, unchangedRole: true };
     }
     if (existing) {
         await dbAdapter.run(
-            `UPDATE cohort_members SET deleted_at = NULL, joined_at = ${dbAdapter.now()} WHERE id = ?`,
-            [existing.id]
+            `UPDATE cohort_members SET deleted_at = NULL, joined_at = ${dbAdapter.now()}, member_role = ? WHERE id = ?`,
+            [role, existing.id]
         );
         const revived = await dbAdapter.get(`SELECT * FROM cohort_members WHERE id = ?`, [existing.id]);
-        return { membership: revived, created: false, revived: true };
+        return { membership: revived, created: false, revived: true, promoted: false, unchangedRole: false };
     }
     const result = await dbAdapter.run(
-        `INSERT INTO cohort_members (cohort_id, user_id) VALUES (?, ?)`,
-        [cohortId, userId]
+        `INSERT INTO cohort_members (cohort_id, user_id, member_role) VALUES (?, ?, ?)`,
+        [cohortId, userId, role]
     );
     const membership = await dbAdapter.get(`SELECT * FROM cohort_members WHERE id = ?`, [result.lastID]);
-    return { membership, created: true, revived: false };
+    return { membership, created: true, revived: false, promoted: false, unchangedRole: false };
+}
+
+// Back-compat shim: the original helper added a default-role (student)
+// membership and returned { membership, created, revived }. The student
+// /members and /join paths keep that exact shape.
+async function addMember(cohortId, userId) {
+    const r = await upsertMember(cohortId, userId, 'student');
+    return { membership: r.membership, created: r.created, revived: r.revived, unchangedRole: r.unchangedRole };
 }
 
 router.post('/cohorts/:id/members', authenticateToken, requireEducator, async (req, res, next) => {
@@ -206,15 +459,11 @@ router.post('/cohorts/:id/members', authenticateToken, requireEducator, async (r
         if (!identifier) {
             return res.status(400).json({ error: 'identifier is required' });
         }
-        const target = await dbAdapter.get(
-            `SELECT id, username, name, role FROM users
-              WHERE (username = ? OR email = ?) AND tenant_id = ? AND deleted_at IS NULL`,
-            [identifier, identifier, tenantId(req)]
-        );
+        const target = await resolveTenantUser(identifier, req);
         if (!target) {
             return res.status(404).json({ error: 'User not found in this tenant' });
         }
-        const { membership, created, revived } = await addMember(cohort.id, target.id);
+        const { membership, created, revived, unchangedRole } = await addMember(cohort.id, target.id);
         if (created || revived) {
             auditSuccess(req, {
                 action: 'cohort.member.add',
@@ -224,6 +473,12 @@ router.post('/cohorts/:id/members', authenticateToken, requireEducator, async (r
                 targetId: target.id,
                 metadata: { revived },
             });
+        }
+        // Edge: adding-as-student a user who is already a live co-teacher.
+        // We do NOT silently demote them. 200 with already_teacher:true so
+        // the caller knows the request was understood but role unchanged.
+        if (unchangedRole) {
+            return res.status(200).json({ membership, member: target, already_teacher: true });
         }
         res.status(created ? 201 : 200).json({ membership, member: target });
     } catch (err) {
@@ -256,39 +511,183 @@ router.delete('/cohorts/:id/members/:userId', authenticateToken, requireEducator
     }
 });
 
+// ---------------------------------------------------------------------------
+// Phase 8 — case assignment + co-teacher roster management.
+// All inherit the widened loadOwnedCohort() chokepoint (owner / admin /
+// teacher-member), stay inside the caller's tenant, and write ONLY to
+// cohort_cases / cohort_members (never cases / users / sessions).
+// ---------------------------------------------------------------------------
+
+// Bulk-assign cases to a cohort. Idempotent + revive-aware against the
+// partial-unique on live (cohort_id, case_id). Tenant-checked: every case
+// must be a live case in the caller's tenant or the whole request 400s.
+router.post('/cohorts/:id/cases', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const raw = req.body?.case_ids;
+        if (!Array.isArray(raw)) {
+            return res.status(400).json({ error: 'case_ids must be an array' });
+        }
+        const caseIds = [...new Set(raw.map(Number).filter(n => Number.isInteger(n) && n > 0))];
+        if (caseIds.length === 0) {
+            return res.status(400).json({ error: 'case_ids must contain at least one valid case id' });
+        }
+        const placeholders = caseIds.map(() => '?').join(',');
+        const found = await dbAdapter.all(
+            `SELECT id FROM cases WHERE id IN (${placeholders}) AND tenant_id = ? AND deleted_at IS NULL`,
+            [...caseIds, tenantId(req)]
+        );
+        if (found.length !== caseIds.length) {
+            return res.status(400).json({ error: 'one or more case_ids are not valid cases in this tenant' });
+        }
+        let createdCount = 0;
+        for (const cid of caseIds) {
+            const existing = await dbAdapter.get(
+                `SELECT * FROM cohort_cases WHERE cohort_id = ? AND case_id = ?
+                  ORDER BY (deleted_at IS NULL) DESC, id DESC LIMIT 1`,
+                [cohort.id, cid]
+            );
+            if (existing && existing.deleted_at == null) continue;
+            if (existing) {
+                await dbAdapter.run(
+                    `UPDATE cohort_cases SET deleted_at = NULL WHERE id = ?`,
+                    [existing.id]
+                );
+            } else {
+                await dbAdapter.run(
+                    `INSERT INTO cohort_cases (cohort_id, case_id) VALUES (?, ?)`,
+                    [cohort.id, cid]
+                );
+            }
+            createdCount++;
+        }
+        auditSuccess(req, {
+            action: 'cohort.cases.assign',
+            resourceType: 'cohort',
+            resourceId: cohort.id,
+            metadata: { case_ids: caseIds, applied: createdCount },
+        });
+        const cases = await dbAdapter.all(
+            `SELECT cc.case_id AS id, c.name AS name, cc.created_at AS assigned_at
+               FROM cohort_cases cc
+               JOIN cases c ON c.id = cc.case_id
+              WHERE cc.cohort_id = ? AND cc.deleted_at IS NULL
+              ORDER BY c.name ASC, cc.case_id ASC`,
+            [cohort.id]
+        );
+        res.status(createdCount > 0 ? 201 : 200).json({ cases });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Soft-delete a single case assignment (revivable via re-POST).
+router.delete('/cohorts/:id/cases/:caseId', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const caseId = Number.parseInt(req.params.caseId, 10);
+        const result = await dbAdapter.run(
+            `UPDATE cohort_cases SET deleted_at = ${dbAdapter.now()}
+              WHERE cohort_id = ? AND case_id = ? AND deleted_at IS NULL`,
+            [cohort.id, caseId]
+        );
+        if (!result.changes) {
+            return res.status(404).json({ error: 'Case assignment not found' });
+        }
+        auditSuccess(req, {
+            action: 'cohort.cases.unassign',
+            resourceType: 'cohort',
+            resourceId: cohort.id,
+            metadata: { case_id: caseId },
+        });
+        res.json({ removed: true });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Add (or revive, or promote-from-student) a co-teacher. Same tenant. The
+// partial-unique on live (cohort_id, user_id) means a user has one live
+// membership row, so an existing live 'student' membership is PROMOTED to
+// 'teacher' in place rather than duplicated.
+router.post('/cohorts/:id/teachers', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const identifier = typeof req.body?.identifier === 'string' ? req.body.identifier.trim() : '';
+        if (!identifier) {
+            return res.status(400).json({ error: 'identifier is required' });
+        }
+        const target = await resolveTenantUser(identifier, req);
+        if (!target) {
+            return res.status(404).json({ error: 'User not found in this tenant' });
+        }
+        const { membership, created, revived, promoted } = await upsertMember(cohort.id, target.id, 'teacher');
+        if (created || revived || promoted) {
+            auditSuccess(req, {
+                action: 'cohort.teacher.add',
+                resourceType: 'cohort',
+                resourceId: cohort.id,
+                targetType: 'user',
+                targetId: target.id,
+                metadata: { revived, promoted },
+            });
+        }
+        res.status(created ? 201 : 200).json({ membership, member: target, promoted });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Remove a co-teacher. SEMANTICS: soft-delete the membership row (symmetry
+// with DELETE /members/:userId — a removed co-teacher is fully off the
+// roster, not demoted to student). Re-adding revives. The cohort OWNER is
+// not a cohort_members row and must never be removable this way → 400.
+router.delete('/cohorts/:id/teachers/:userId', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const userId = Number.parseInt(req.params.userId, 10);
+        if (userId === cohort.owner_user_id) {
+            return res.status(400).json({ error: 'The cohort owner cannot be removed as a teacher' });
+        }
+        const result = await dbAdapter.run(
+            `UPDATE cohort_members SET deleted_at = ${dbAdapter.now()}
+              WHERE cohort_id = ? AND user_id = ? AND member_role = 'teacher' AND deleted_at IS NULL`,
+            [cohort.id, userId]
+        );
+        if (!result.changes) {
+            return res.status(404).json({ error: 'Co-teacher membership not found' });
+        }
+        auditSuccess(req, {
+            action: 'cohort.teacher.remove',
+            resourceType: 'cohort',
+            resourceId: cohort.id,
+            targetType: 'user',
+            targetId: userId,
+        });
+        res.json({ removed: true });
+    } catch (err) {
+        next(err);
+    }
+});
+
 router.post('/cohorts/:id/join-code', authenticateToken, requireEducator, async (req, res, next) => {
     try {
         const cohort = await loadOwnedCohort(req, res);
         if (!cohort) return;
-        let lastErr = null;
-        for (let attempt = 0; attempt < JOIN_CODE_MAX_RETRIES; attempt++) {
-            const code = generateJoinCode();
-            try {
-                await dbAdapter.run(
-                    `UPDATE cohorts SET join_code = ? WHERE id = ?`,
-                    [code, cohort.id]
-                );
-                auditSuccess(req, {
-                    action: 'cohort.join_code.set',
-                    resourceType: 'cohort',
-                    resourceId: cohort.id,
-                });
-                return res.json({ join_code: code });
-            } catch (err) {
-                // Partial-unique collision on a live join_code — retry with
-                // a fresh code. Any other error is fatal.
-                if (/UNIQUE constraint/i.test(err.message)) {
-                    lastErr = err;
-                    continue;
-                }
-                throw err;
-            }
+        const code = await allocateJoinCode(cohort.id);
+        if (code == null) {
+            return res.status(500).json({ error: 'Could not allocate a unique join code' });
         }
-        cohortsLog.error('join code generation exhausted retries', {
-            cohort_id: cohort.id,
-            error: lastErr?.message,
+        auditSuccess(req, {
+            action: 'cohort.join_code.set',
+            resourceType: 'cohort',
+            resourceId: cohort.id,
         });
-        res.status(500).json({ error: 'Could not allocate a unique join code' });
+        res.json({ join_code: code });
     } catch (err) {
         next(err);
     }
