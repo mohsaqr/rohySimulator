@@ -340,4 +340,337 @@ router.post('/cohorts/join', authenticateToken, requireStudent, async (req, res,
     }
 });
 
+// ---------------------------------------------------------------------------
+// Phase 4 — teacher-facing reporting read-models (SELECT only).
+//
+// Strictly additive: these are NEW endpoints scoped to the caller's own
+// cohorts (admin = all). The existing flat analytics endpoints in
+// analytics-routes.js are intentionally left untouched — admins keep the
+// firehose, teachers get these scoped views.
+//
+// SECURITY BOUNDARY — every student-data query is restricted to the live
+// members of the resolved (owned) cohort AND the caller's tenant. The
+// reusable WHERE fragment is:
+//
+//   s.tenant_id = ?
+//   AND s.user_id IN (
+//       SELECT m.user_id FROM cohort_members m
+//        WHERE m.cohort_id = ? AND m.deleted_at IS NULL
+//   )
+//
+// The cohort id itself is only ever the one returned by loadOwnedCohort()
+// (404 on wrong-owner / wrong-tenant / missing — no existence leak), so a
+// teacher can never name another teacher's cohort id and the member
+// sub-select can never reach another tenant's students.
+//
+// COMPLETED signal — a session is "completed" when the student reached the
+// debrief. DiscussionScreen.jsx (the debrief screen) fires, on mount,
+// `EventLogger.componentOpened(COMPONENTS.DISCUSSION_SCREEN, 'Discussion')`,
+// which resolves (eventLogger.js) to a learning_events row with
+// verb='OPENED', object_type='component', component='DiscussionScreen'.
+// We key on (verb='OPENED' AND component='DiscussionScreen') joined back
+// to the session — the most reliable end-of-case marker, since the debrief
+// is the terminal screen of every run and is logged unconditionally on open.
+// ---------------------------------------------------------------------------
+
+const DEBRIEF_COMPLETED_SQL = `
+    EXISTS (
+        SELECT 1 FROM learning_events le
+         WHERE le.session_id = s.id
+           AND le.tenant_id = s.tenant_id
+           AND le.verb = 'OPENED'
+           AND le.component = 'DiscussionScreen'
+    )`;
+
+// Live members of an owned cohort, with stable ordering. Reused by every
+// reporting endpoint so the member set is defined in exactly one place.
+async function liveMembers(cohortId) {
+    return dbAdapter.all(
+        `SELECT u.id, u.username, u.name, u.role
+           FROM cohort_members m
+           JOIN users u ON u.id = m.user_id
+          WHERE m.cohort_id = ? AND m.deleted_at IS NULL
+          ORDER BY u.username ASC`,
+        [cohortId]
+    );
+}
+
+const FEED_DEFAULT_LIMIT = 50;
+const FEED_MAX_LIMIT = 200;
+const STUDENT_EVENTS_DEFAULT_LIMIT = 100;
+const STUDENT_EVENTS_MAX_LIMIT = 500;
+
+function clampLimit(raw, def, max) {
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isFinite(n) || n <= 0) return def;
+    return Math.min(n, max);
+}
+
+// 1. Roster — members + per-student rollup.
+router.get('/cohorts/:id/roster', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const members = await liveMembers(cohort.id);
+        if (members.length === 0) {
+            return res.json({ cohort: { id: cohort.id, name: cohort.name }, roster: [] });
+        }
+        const placeholders = members.map(() => '?').join(',');
+        // Per (user) rollup over their sessions in this tenant, restricted to
+        // the live member set. completed = a debrief OPENED event exists for
+        // any session of that (user, case).
+        const rows = await dbAdapter.all(
+            `SELECT s.user_id AS user_id,
+                    COUNT(*) AS session_count,
+                    COUNT(DISTINCT s.case_id) AS cases_attempted,
+                    COUNT(DISTINCT CASE WHEN ${DEBRIEF_COMPLETED_SQL} THEN s.case_id END) AS cases_completed,
+                    MAX(COALESCE(s.end_time, s.start_time)) AS last_activity
+               FROM sessions s
+              WHERE s.tenant_id = ?
+                AND s.deleted_at IS NULL
+                AND s.user_id IN (${placeholders})
+              GROUP BY s.user_id`,
+            [tenantId(req), ...members.map(m => m.id)]
+        );
+        const byUser = new Map(rows.map(r => [r.user_id, r]));
+        const roster = members.map(m => {
+            const r = byUser.get(m.id);
+            return {
+                id: m.id,
+                username: m.username,
+                name: m.name,
+                role: m.role,
+                session_count: r ? Number(r.session_count) : 0,
+                cases_attempted: r ? Number(r.cases_attempted) : 0,
+                cases_completed: r ? Number(r.cases_completed) : 0,
+                last_activity: r ? r.last_activity : null,
+            };
+        });
+        res.json({ cohort: { id: cohort.id, name: cohort.name }, roster });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// 2. Grid — students × cases matrix.
+router.get('/cohorts/:id/grid', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const members = await liveMembers(cohort.id);
+        const students = members.map(m => ({ id: m.id, username: m.username, name: m.name }));
+        if (members.length === 0) {
+            return res.json({ cohort: { id: cohort.id, name: cohort.name }, students: [], cases: [], cells: {} });
+        }
+        const placeholders = members.map(() => '?').join(',');
+        // One row per (user, case): did they attempt it, did any session of
+        // that pair reach the debrief, and the latest activity timestamp.
+        const rows = await dbAdapter.all(
+            `SELECT s.user_id AS user_id,
+                    s.case_id AS case_id,
+                    c.name AS case_name,
+                    MAX(${DEBRIEF_COMPLETED_SQL}) AS completed,
+                    MAX(COALESCE(s.end_time, s.start_time)) AS last_activity
+               FROM sessions s
+               LEFT JOIN cases c ON c.id = s.case_id
+              WHERE s.tenant_id = ?
+                AND s.deleted_at IS NULL
+                AND s.user_id IN (${placeholders})
+              GROUP BY s.user_id, s.case_id`,
+            [tenantId(req), ...members.map(m => m.id)]
+        );
+        const caseMap = new Map();
+        const cells = {};
+        for (const m of members) cells[m.id] = {};
+        for (const r of rows) {
+            if (r.case_id == null) continue;
+            if (!caseMap.has(r.case_id)) {
+                caseMap.set(r.case_id, { id: r.case_id, name: r.case_name || `Case ${r.case_id}` });
+            }
+            cells[r.user_id][r.case_id] = {
+                attempted: true,
+                completed: !!r.completed,
+                last_activity: r.last_activity,
+            };
+        }
+        const cases = [...caseMap.values()].sort(
+            (a, b) => String(a.name).localeCompare(String(b.name)) || a.id - b.id
+        );
+        res.json({ cohort: { id: cohort.id, name: cohort.name }, students, cases, cells });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// 3. Single student detail — sessions + chronological events. Student MUST
+// be a live member of this cohort, else 404 (no existence leak).
+router.get('/cohorts/:id/student/:userId', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const studentId = Number.parseInt(req.params.userId, 10);
+        const member = await dbAdapter.get(
+            `SELECT u.id, u.username, u.name, u.role
+               FROM cohort_members m
+               JOIN users u ON u.id = m.user_id
+              WHERE m.cohort_id = ? AND m.user_id = ? AND m.deleted_at IS NULL`,
+            [cohort.id, studentId]
+        );
+        if (!member) {
+            return res.status(404).json({ error: 'Student not found in this cohort' });
+        }
+        const sessions = await dbAdapter.all(
+            `SELECT s.id,
+                    s.case_id,
+                    c.name AS case_name,
+                    s.start_time,
+                    s.end_time,
+                    s.status,
+                    ${DEBRIEF_COMPLETED_SQL} AS completed
+               FROM sessions s
+               LEFT JOIN cases c ON c.id = s.case_id
+              WHERE s.tenant_id = ?
+                AND s.deleted_at IS NULL
+                AND s.user_id = ?
+              ORDER BY s.start_time DESC, s.id DESC`,
+            [tenantId(req), studentId]
+        );
+        const limit = clampLimit(req.query.limit, STUDENT_EVENTS_DEFAULT_LIMIT, STUDENT_EVENTS_MAX_LIMIT);
+        const events = await dbAdapter.all(
+            `SELECT le.id, le.session_id, le.case_id, le.timestamp, le.verb,
+                    le.object_type, le.object_id, le.object_name, le.component,
+                    le.result, le.duration_ms, le.room, le.severity, le.category
+               FROM learning_events le
+              WHERE le.tenant_id = ?
+                AND le.user_id = ?
+              ORDER BY le.timestamp DESC, le.id DESC
+              LIMIT ?`,
+            [tenantId(req), studentId, limit]
+        );
+        res.json({
+            cohort: { id: cohort.id, name: cohort.name },
+            student: member,
+            sessions: sessions.map(s => ({ ...s, completed: !!s.completed })),
+            events,
+        });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// 4. Activity feed — recent events for live members, newest first.
+// `since` cursor: the learning_events.id of the last seen row (numeric,
+// monotonic, collision-free — preferred over timestamp which can tie at
+// millisecond granularity). Only events with id > since are returned.
+router.get('/cohorts/:id/feed', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const members = await liveMembers(cohort.id);
+        if (members.length === 0) {
+            return res.json({ cohort: { id: cohort.id, name: cohort.name }, events: [], next_since: null });
+        }
+        const placeholders = members.map(() => '?').join(',');
+        const limit = clampLimit(req.query.limit, FEED_DEFAULT_LIMIT, FEED_MAX_LIMIT);
+        const params = [tenantId(req), ...members.map(m => m.id)];
+        let sinceClause = '';
+        const sinceRaw = req.query.since;
+        if (sinceRaw != null && sinceRaw !== '') {
+            const sinceId = Number.parseInt(sinceRaw, 10);
+            if (Number.isFinite(sinceId) && sinceId > 0) {
+                sinceClause = ' AND le.id > ?';
+                params.push(sinceId);
+            }
+        }
+        params.push(limit);
+        const events = await dbAdapter.all(
+            `SELECT le.id, le.session_id, le.user_id, le.case_id, le.timestamp,
+                    le.verb, le.object_type, le.object_id, le.object_name,
+                    le.component, le.result, le.duration_ms, le.room,
+                    le.severity, le.category
+               FROM learning_events le
+              WHERE le.tenant_id = ?
+                AND le.user_id IN (${placeholders})${sinceClause}
+              ORDER BY le.id DESC
+              LIMIT ?`,
+            params
+        );
+        const nextSince = events.length > 0 ? events[0].id : (sinceRaw != null ? Number.parseInt(sinceRaw, 10) || null : null);
+        res.json({ cohort: { id: cohort.id, name: cohort.name }, events, next_since: nextSince });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// CSV-safe cell: quote-wrap, double internal quotes, and neutralise
+// spreadsheet formula injection by prefixing a leading =,+,-,@ with a
+// single quote. Standard RFC-4180 escaping otherwise.
+function csvCell(value) {
+    if (value == null) return '';
+    let s = String(value);
+    if (/^[=+\-@]/.test(s)) s = `'${s}`;
+    return `"${s.replace(/"/g, '""')}"`;
+}
+
+// 5. Export — flattened roster × case rows for grading/LMS.
+router.get('/cohorts/:id/export', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const members = await liveMembers(cohort.id);
+        const format = req.query.format === 'csv' ? 'csv' : 'json';
+        let rows = [];
+        if (members.length > 0) {
+            const placeholders = members.map(() => '?').join(',');
+            const raw = await dbAdapter.all(
+                `SELECT s.user_id AS user_id,
+                        s.case_id AS case_id,
+                        c.name AS case_name,
+                        MAX(${DEBRIEF_COMPLETED_SQL}) AS completed,
+                        MAX(COALESCE(s.end_time, s.start_time)) AS last_activity
+                   FROM sessions s
+                   LEFT JOIN cases c ON c.id = s.case_id
+                  WHERE s.tenant_id = ?
+                    AND s.deleted_at IS NULL
+                    AND s.user_id IN (${placeholders})
+                  GROUP BY s.user_id, s.case_id`,
+                [tenantId(req), ...members.map(m => m.id)]
+            );
+            const byUser = new Map(members.map(m => [m.id, m]));
+            rows = raw
+                .filter(r => r.case_id != null)
+                .map(r => {
+                    const m = byUser.get(r.user_id);
+                    return {
+                        cohort_id: cohort.id,
+                        cohort_name: cohort.name,
+                        user_id: r.user_id,
+                        username: m ? m.username : null,
+                        name: m ? m.name : null,
+                        case_id: r.case_id,
+                        case_name: r.case_name || `Case ${r.case_id}`,
+                        attempted: true,
+                        completed: !!r.completed,
+                        last_activity: r.last_activity,
+                    };
+                });
+        }
+        if (format === 'csv') {
+            const cols = [
+                'cohort_id', 'cohort_name', 'user_id', 'username', 'name',
+                'case_id', 'case_name', 'attempted', 'completed', 'last_activity',
+            ];
+            const lines = [cols.join(',')];
+            for (const r of rows) lines.push(cols.map(c => csvCell(r[c])).join(','));
+            const filename = `cohort-${cohort.id}-export.csv`;
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            return res.send(lines.join('\r\n') + '\r\n');
+        }
+        res.json({ cohort: { id: cohort.id, name: cohort.name }, rows });
+    } catch (err) {
+        next(err);
+    }
+});
+
 export default router;
