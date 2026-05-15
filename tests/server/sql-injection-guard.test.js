@@ -140,6 +140,21 @@ const ALLOWLIST = [
         lineSubstring: 'WHERE ${clauses.join(\' AND \')}',
         why: 'TNA filter helper — clauses[] entries are hardcoded SQL fragments with ? placeholders; values go through params[].',
     },
+    {
+        file: 'server/routes/cohorts-routes.js',
+        lineSubstring: 'SET deleted_at = ${dbAdapter.now()} WHERE id = ?',
+        why: 'dbAdapter.now() returns the constant literal "datetime(\'now\')" (dbAdapter.js:200) — no user input; cohort id parameterised via ?.',
+    },
+    {
+        file: 'server/routes/cohorts-routes.js',
+        lineSubstring: 'SET deleted_at = ${dbAdapter.now()} WHERE cohort_id = ?',
+        why: 'dbAdapter.now() is the constant literal "datetime(\'now\')"; cohort_id parameterised via ?.',
+    },
+    {
+        file: 'server/routes/cohorts-routes.js',
+        lineSubstring: 'SET deleted_at = NULL, joined_at = ${dbAdapter.now()} WHERE id = ?',
+        why: 'dbAdapter.now() is the constant literal "datetime(\'now\')"; membership id parameterised via ?.',
+    },
 ];
 
 function isAllowlisted(filePath, line) {
