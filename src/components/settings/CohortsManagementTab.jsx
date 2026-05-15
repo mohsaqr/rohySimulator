@@ -10,6 +10,7 @@ import {
     listCohorts, getCohort, createCohort, renameCohort, deleteCohort,
     addCohortMember, removeCohortMember, rotateJoinCode, disableJoinCode,
 } from '../../services/cohortsService';
+import CohortReports from './CohortReports';
 
 // Teacher / admin cohort ("class") management. Teachers manage their own
 // cohorts; admins see all (server enforces — this UI just renders whatever
@@ -182,6 +183,7 @@ function CohortRoster({ cohortId, onBack }) {
     const [adding, setAdding] = useState(false);
     const [copied, setCopied] = useState(false);
     const [busyCode, setBusyCode] = useState(false);
+    const [section, setSection] = useState('manage'); // 'manage' | 'reports'
 
     const errMsg = (e, fallback) =>
         e instanceof ApiError ? (e.message || fallback) : fallback;
@@ -287,8 +289,36 @@ function CohortRoster({ cohortId, onBack }) {
                 <p className="text-sm text-neutral-500">Class not found.</p>
             ) : (
                 <>
-                    <h3 className="text-lg font-bold mb-6">{cohort.name}</h3>
+                    <h3 className="text-lg font-bold mb-4">{cohort.name}</h3>
 
+                    {/* Manage (Phase-3b) vs read-only Reports (Phase-5). The
+                        management body below is unchanged — it just no longer
+                        renders while the Reports section is active. */}
+                    <div className="flex gap-1 mb-6">
+                        {[
+                            { id: 'manage', label: 'Manage' },
+                            { id: 'reports', label: 'Reports' },
+                        ].map((s) => (
+                            <button
+                                key={s.id}
+                                onClick={() => setSection(s.id)}
+                                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                    section === s.id
+                                        ? 'bg-neutral-700 text-white'
+                                        : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                                }`}
+                            >
+                                {s.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {section === 'reports' && (
+                        <CohortReports cohortId={cohortId} />
+                    )}
+
+                    {section === 'manage' && (
+                    <>
                     {/* Join code — semi-sensitive: only shown to the owner/admin
                         the API returned it to. Sharing it lets students self-join. */}
                     <div className="p-4 bg-neutral-800/50 border border-neutral-700 rounded-lg mb-8">
@@ -394,6 +424,8 @@ function CohortRoster({ cohortId, onBack }) {
                                 </div>
                             ))}
                         </div>
+                    )}
+                    </>
                     )}
                 </>
             )}
