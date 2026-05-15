@@ -10,6 +10,7 @@ import ChatLogTable from '../analytics/ChatLogTable';
 import SessionsTable from '../analytics/SessionsTable';
 import ScenarioRepository from './ScenarioRepository';
 import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
+import { roleLabel } from '../../constants/roleLabels';
 import LabInvestigationEditor from './LabInvestigationEditor';
 import RadiologyEditor from './RadiologyEditor';
 import ClinicalRecordsEditor from './ClinicalRecordsEditor';
@@ -2417,8 +2418,9 @@ student1,Student One,student1@school.edu,stud123,user`;
                             onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                         >
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
+                            <option value="user">{roleLabel('user')}</option>
+                            <option value="educator">{roleLabel('educator')}</option>
+                            <option value="admin">{roleLabel('admin')}</option>
                         </select>
                     </div>
                     <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded font-bold">
@@ -2488,8 +2490,9 @@ student1,Student One,student1@school.edu,stud123,user`;
                             onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                         >
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
+                            <option value="user">{roleLabel('user')}</option>
+                            <option value="educator">{roleLabel('educator')}</option>
+                            <option value="admin">{roleLabel('admin')}</option>
                         </select>
                     </div>
                     <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded font-bold">
@@ -2583,7 +2586,10 @@ jane_admin,Jane Smith,jane@example.com,admin456,admin`}
                                     {user.username}
                                     {user.name && <span className="text-neutral-500 font-normal text-sm">({user.name})</span>}
                                     {user.role === 'admin' && (
-                                        <span className="px-2 py-0.5 bg-purple-600 text-white text-xs rounded">Admin</span>
+                                        <span className="px-2 py-0.5 bg-purple-600 text-white text-xs rounded">{roleLabel('admin')}</span>
+                                    )}
+                                    {user.role === 'educator' && (
+                                        <span className="px-2 py-0.5 bg-teal-600 text-white text-xs rounded">{roleLabel('educator')}</span>
                                     )}
                                 </div>
                                 <div className="text-xs text-neutral-400 mt-1">
