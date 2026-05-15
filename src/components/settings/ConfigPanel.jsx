@@ -24,6 +24,7 @@ import AvatarsSettingsTab from './AvatarsSettingsTab';
 import NotificationsSettingsTab from './NotificationsSettingsTab';
 import OyonSettingsTab from './OyonSettingsTab';
 import OyonLearningAnalyticsTab from './OyonLearningAnalyticsTab';
+import CohortsManagementTab from './CohortsManagementTab';
 import TnaDashboardV2 from '../analytics/tna/TnaDashboardV2';
 import { Bell as BellIcon } from 'lucide-react';
 import CaseAvatarVoicePicker from './CaseAvatarVoicePicker';
@@ -35,6 +36,10 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
     // real rule (assertOyonReadAccess); this hides the sidebar item for users
     // who couldn't reach the page anyway.
     const canSeeOyonAnalytics = user?.role === 'educator' || user?.role === 'admin';
+    // Same educator+/admin gate as Oyon analytics. Server enforces the real
+    // rule on /cohorts; this only hides the sidebar item. Teachers see/manage
+    // their own cohorts, admins see all (the API decides which rows return).
+    const canManageCohorts = user?.role === 'educator' || user?.role === 'admin';
     const toast = useToast();
     // Default to 'cases' tab for all users; the parent can pass `initialTab`
     // to land directly on a specific tab — used when the persona editor
@@ -358,6 +363,15 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                             className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'oyon-analytics' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                         >
                             <Activity className="w-4 h-4" /> Oyon — Learning Analytics
+                        </button>
+                    )}
+                    {/* Classes — cohort management for teachers/admins. */}
+                    {canManageCohorts && (
+                        <button
+                            onClick={() => setActiveTab('cohorts')}
+                            className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'cohorts' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                        >
+                            <Users className="w-4 h-4" /> Classes
                         </button>
                     )}
                 </div>
@@ -889,6 +903,11 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     {/* --- OYON LEARNING ANALYTICS (educator+ only; server enforces tenant view setting) --- */}
                     {activeTab === 'oyon-analytics' && canSeeOyonAnalytics && (
                         <OyonLearningAnalyticsTab />
+                    )}
+
+                    {/* --- CLASSES (educator+ only; server enforces ownership/tenant) --- */}
+                    {activeTab === 'cohorts' && canManageCohorts && (
+                        <CohortsManagementTab />
                     )}
 
                 </div>
