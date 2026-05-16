@@ -432,6 +432,14 @@ function MainApp() {
          component: COMPONENTS.APP,
       });
       endSessionOnServer(sessionId);
+      // Bug 7 (16.5.2026): clinical alarms latch until acked, and the
+      // AudioSurface keeps beeping any active alarm. Ending the case is an
+      // explicit "I'm done with the patient" — acknowledge outstanding
+      // alarms so the ICU tone doesn't keep sounding through the debrief.
+      // (Done here, not on consultant-room entry: the consultant is a peer
+      // room that does NOT end the session, so visiting it mid-case must
+      // not silence live alarms.)
+      notifications.ackAll?.();
       setShowEndConfirm(false);
       setCaseEnded(true);
       navigateToRoom('consultant');

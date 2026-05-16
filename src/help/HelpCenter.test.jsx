@@ -39,15 +39,18 @@ describe('HelpCenter', () => {
     });
     renderWithProviders(<HelpCenter open onClose={() => {}} />);
     fireEvent.click(screen.getByRole('tab', { name: "What's new" }));
-    await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/help/release-notes'));
+    // Path must be WITHOUT the /api prefix — apiUrl() prepends it. Passing
+    // '/api/...' here resolves to /api/api/... → 404 (the Stage-4 regression).
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/help/release-notes'));
     expect(await screen.findByText('2.1.0')).toBeTruthy();
     expect(screen.getByText('A thing.')).toBeTruthy();
   });
 
-  it('surfaces an error if diagnostics fail to load', async () => {
+  it('requests diagnostics on the un-prefixed path and surfaces load errors', async () => {
     apiGet.mockRejectedValueOnce(new Error('nope'));
     renderWithProviders(<HelpCenter open onClose={() => {}} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Support' }));
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/help/diagnostics'));
     expect(await screen.findByRole('alert')).toHaveTextContent('nope');
   });
 

@@ -32,6 +32,13 @@ export default defineConfig({
       '/oyon': {
         target: 'http://localhost:3000',
         changeOrigin: true
+      },
+      // Help & Support article links point at DOCS_BASE (/rohy/docs/...).
+      // In dev the docs are served by the Express backend, not Vite, so
+      // proxy them through or every Help link hits Vite's SPA fallback.
+      '/rohy/docs': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
       }
     }
   }

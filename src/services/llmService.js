@@ -84,13 +84,20 @@ export const LLMService = {
      * accumulated full text on completion. Falls back to non-streaming if the
      * server doesn't return text/event-stream.
      */
-    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null } = {}) {
+    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null, persistInteractions = true } = {}) {
         const lastMsg = messages[messages.length - 1];
         // `silent` lets callers (e.g. the discussion opening turn) suppress
         // the user-side /interactions write so meta-prompts and sentinels
         // don't show up labelled as learner utterances in audit / review.
-        // The assistant turn at the end is still logged either way.
-        if (!silent && lastMsg?.role === 'user') {
+        //
+        // `persistInteractions=false` skips the /interactions writes entirely
+        // (both user and assistant). The `interactions` table is the PATIENT
+        // chat thread and carries no agent discriminator, so the debrief
+        // discussant must not write there — it owns its own transcript via
+        // agent_conversations (useDiscussionEngine.logTurn). Writing both
+        // made the discussant conversation reappear in the patient chat on
+        // restore (Bug 8, 16.5.2026 report).
+        if (persistInteractions && !silent && lastMsg?.role === 'user') {
             this.logInteraction(sessionId, 'user', lastMsg.content);
         }
 
@@ -202,7 +209,9 @@ export const LLMService = {
             disarmWatchdog();
 
             console.log(`[LLMService] full response in ${Math.round(performance.now() - t0)}ms (${acc.length} chars)`);
-            this.logInteraction(sessionId, 'assistant', acc);
+            if (persistInteractions) {
+                this.logInteraction(sessionId, 'assistant', acc);
+            }
             return acc;
         } catch (err) {
             disarmWatchdog();

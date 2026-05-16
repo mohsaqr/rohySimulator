@@ -1028,9 +1028,28 @@ Functional Assessment:
     }
 };
 
+// Bug 2 (16.5.2026 report): the posterior body map (src/utils/defaultRegions.js)
+// emits region ids `upperBack` / `lowerBack` / `buttocks`, but BODY_REGIONS
+// keys them `backUpper` / `backLower` / `buttockLeft|buttockRight`. Clicking
+// those posterior regions therefore resolved to nothing — ExamTypeSelector
+// showed "Unknown region selected" and the raw key. Rather than risk a
+// rename of the shared map ids (saved exams / scenario configs reference
+// them), alias the map ids onto the canonical exam definitions. `alias:true`
+// keeps them out of view-derived region lists so nothing is double-counted.
+BODY_REGIONS.upperBack = { ...BODY_REGIONS.backUpper, alias: true };
+BODY_REGIONS.lowerBack = { ...BODY_REGIONS.backLower, alias: true };
+// The map has one midline buttock region; the canonical data is split L/R
+// with identical findings — present it as a single "Buttocks" region.
+BODY_REGIONS.buttocks = {
+    ...BODY_REGIONS.buttockLeft,
+    id: 'buttocks',
+    name: 'Buttocks',
+    alias: true,
+};
+
 // Get regions by view
 export function getRegionsByView(view) {
-    return Object.values(BODY_REGIONS).filter(r => r.view === view);
+    return Object.values(BODY_REGIONS).filter(r => r.view === view && !r.alias);
 }
 
 // Get available exam types for a region

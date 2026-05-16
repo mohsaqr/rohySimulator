@@ -1017,9 +1017,13 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
             // row. Investigation_orders has no UNIQUE constraint (would
             // require a SQLite table rebuild) so the check lives here.
             const processOrders = () => {
+                // tenant_id is explicit: investigation_orders.tenant_id has a
+                // column DEFAULT 1, and GET /orders filters io.tenant_id =
+                // <session tenant>. Omitting it stranded every non-default-
+                // tenant session's results in the void (Bug 6).
                 const insertSql = `
-                    INSERT INTO investigation_orders (session_id, investigation_id, ordered_at, available_at)
-                    VALUES (?, ?, datetime('now'), datetime('now', '+' || ? || ' minutes'))
+                    INSERT INTO investigation_orders (session_id, investigation_id, ordered_at, available_at, tenant_id)
+                    VALUES (?, ?, datetime('now'), datetime('now', '+' || ? || ' minutes'), ?)
                 `;
                 const existsSql = `SELECT id FROM investigation_orders WHERE session_id = ? AND investigation_id = ? LIMIT 1`;
 
@@ -1053,7 +1057,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                                     return;
                                 }
                                 (req.log || routesOrdersLog).debug('ordering lab', { test_name: lab.test_name, turnaround_minutes: turnaround });
-                                dbAdapter.run(insertSql, [sessionId, lab.id, turnaround], function(insertErr) {
+                                dbAdapter.run(insertSql, [sessionId, lab.id, turnaround, tenantId(req)], function(insertErr) {
                                     if (!insertErr) {
                                         orderIds.push({ id: this.lastID, test_name: lab.test_name, turnaround });
                                         inserted++;
@@ -1128,8 +1132,8 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                 INSERT INTO case_investigations (
                     case_id, investigation_type, test_name, test_group, gender_category,
                     min_value, max_value, current_value, unit, normal_samples,
-                    is_abnormal, turnaround_minutes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    is_abnormal, turnaround_minutes, tenant_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             let pendingOps = 0;
@@ -1169,7 +1173,8 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                             configLab.unit || '',
                             JSON.stringify(configLab.normal_samples || []),
                             configLab.is_abnormal ? 1 : 0,
-                            getTurnaround(configLab.turnaround_minutes)
+                            getTurnaround(configLab.turnaround_minutes),
+                            tenantId(req)
                         ], function(err) {
                             completedOps++;
                             if (!err) {
@@ -1206,7 +1211,16 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                             genderSpecific.unit,
                             JSON.stringify(genderSpecific.normal_samples),
                             0,
-                            getTurnaround(30)
+                            // Default-database labs must follow the documented
+                            // compressed-pacing default (DEFAULT_TURNAROUND_MINUTES,
+                            // or the educator's case-level / instant override) —
+                            // NOT a hardcoded 30, which made every default lab
+                            // take 30 wall-clock minutes and appear to "never
+                            // arrive" unless ordered instantly. Passing no
+                            // per-test value lets the resolver fall through to
+                            // the case default / DEFAULT_TURNAROUND_MINUTES.
+                            getTurnaround(),
+                            tenantId(req)
                         ], function(err) {
                             completedOps++;
                             if (!err) {
@@ -1592,8 +1606,8 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
                 const insertStudySql = `
                     INSERT INTO case_investigations (
                         case_id, investigation_type, test_name, test_group,
-                        image_url, result_data, turnaround_minutes
-                    ) VALUES (?, 'radiology', ?, ?, ?, ?, ?)
+                        image_url, result_data, turnaround_minutes, tenant_id
+                    ) VALUES (?, 'radiology', ?, ?, ?, ?, ?, ?)
                 `;
 
                 dbAdapter.run(insertStudySql, [
@@ -1602,7 +1616,8 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
                     modality,
                     imageUrl,
                     JSON.stringify(resultData),
-                    turnaround
+                    turnaround,
+                    tenantId(req)
                 ], function(err) {
                     if (err) {
                         (req.log || routesOrdersLog).error('radiology study insert failed', { error: err.message });
@@ -1615,11 +1630,11 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
 
                     // Now create the order
                     const orderSql = `
-                        INSERT INTO investigation_orders (session_id, investigation_id, available_at)
-                        VALUES (?, ?, datetime('now', '+' || ? || ' minutes'))
+                        INSERT INTO investigation_orders (session_id, investigation_id, available_at, tenant_id)
+                        VALUES (?, ?, datetime('now', '+' || ? || ' minutes'), ?)
                     `;
 
-                    dbAdapter.run(orderSql, [sessionId, investigationId, turnaround], function(orderErr) {
+                    dbAdapter.run(orderSql, [sessionId, investigationId, turnaround, tenantId(req)], function(orderErr) {
                         pending--;
                         if (!orderErr) {
                             inserted++;

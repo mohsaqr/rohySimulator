@@ -21,6 +21,16 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 
+// PhysicalExamScreen calls useAuth() to pick the student-safe vs authoring
+// case label (Bug 9). These topbar tests mount the screen in isolation
+// (no AuthProvider) and assert the authoring title — i.e. the privileged-
+// viewer view — so mock a privileged user. The role gate itself is locked
+// separately in src/utils/caseDisplayLabel.test.js.
+vi.mock('../../contexts/AuthContext', () => ({
+    useAuth: () => ({ user: { role: 'admin' }, isAdmin: () => true }),
+    AuthProvider: ({ children }) => children,
+}));
+
 // --- Mock the embedded exam workspace + side-notes drawer ------------------
 vi.mock('../examination/ManikinPanel', () => ({
     default: function ManikinPanelStub(props) {

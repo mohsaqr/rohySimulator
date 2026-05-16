@@ -3,6 +3,8 @@ import { NotebookPen, Stethoscope } from 'lucide-react';
 import ManikinPanel from '../examination/ManikinPanel';
 import ExamNotesDrawer from './ExamNotesDrawer';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
+import { useAuth } from '../../contexts/AuthContext';
+import { caseDisplayLabel } from '../../utils/caseDisplayLabel';
 
 // Full-screen Physical Examination page. Mirrors DiscussionScreen's layout
 // shape — topbar (title + Notes button), main embedded workspace occupying
@@ -25,6 +27,7 @@ export default function PhysicalExamScreen({
     roomNav,
 }) {
     const [showNotes, setShowNotes] = useState(false);
+    const { user } = useAuth();
 
     useEffect(() => {
         EventLogger.componentOpened(COMPONENTS.MANIKIN_PANEL, 'PhysicalExamScreen');
@@ -35,7 +38,8 @@ export default function PhysicalExamScreen({
         };
     }, []);
 
-    const caseTitle = activeCase?.name || activeCase?.config?.patient_name || 'Patient';
+    // Students must not see the authoring title (it names the diagnosis).
+    const caseTitle = caseDisplayLabel(activeCase, user);
 
     return (
         <div className="h-screen w-screen bg-gradient-to-br from-slate-700 to-slate-900 text-slate-100 flex flex-col overflow-hidden">

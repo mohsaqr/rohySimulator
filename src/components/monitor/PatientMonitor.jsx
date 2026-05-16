@@ -7,6 +7,7 @@ import { SOURCES } from '../../notifications/types';
 import { useTreatmentEffects } from '../../hooks/useTreatmentEffects';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { canSeeCaseTitle } from '../../utils/caseDisplayLabel';
 // Audio for alarms is owned by the central NotificationCenter's AudioSurface
 // (mounted in App.jsx); the legacy alarmAudio helpers are no longer needed
 // here. Imports and audio init click-handler removed below.
@@ -276,7 +277,7 @@ const importSettingsFromJSON = (file, setRhythm, setConditions, setParams) => {
 
 export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdmin: isAdminProp = false }) {
    const toast = useToast();
-   const { isAdmin: isAdminAuth } = useAuth();
+   const { isAdmin: isAdminAuth, user } = useAuth();
    const isAdmin = isAdminProp || isAdminAuth();
    const { noted, changed } = usePatientRecord();
    // --- Refs for Canvas & Buffers ---
@@ -1212,7 +1213,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                </div>
                <div>
                   <h1 className="text-lg font-bold tracking-tight text-white leading-tight">
-                     {caseData?.patient_name || caseData?.config?.patient_name || caseData?.name || 'ICU MONITOR'}
+                     {caseData?.patient_name || caseData?.config?.patient_name || (canSeeCaseTitle(user) ? caseData?.name : null) || 'ICU MONITOR'}
                   </h1>
                   <div className="flex items-center gap-2 text-xs text-neutral-400">
                      <User className="w-3 h-3" />

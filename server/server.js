@@ -133,6 +133,20 @@ app.get('/', (req, res) => {
 });
 
 app.use('/uploads', express.static(path.join(__dirname, "..", "public","uploads")));
+
+// VitePress documentation site (Stage 4 — Help & Support links here).
+// The build emits cleanUrls (trainee/getting-started.html served at
+// /trainee/getting-started), so `extensions: ['html']` is required for the
+// in-app Help article links to resolve. Mounted at /rohy/docs to match
+// DOCS_BASE in src/help/helpContent.js, and BEFORE the SPA static so docs
+// URLs don't fall through to the React app's index.html.
+const docsDist = path.join(__dirname, "..", "docs", ".vitepress", "dist");
+if (fs.existsSync(docsDist)) {
+    app.use('/rohy/docs', express.static(docsDist, { extensions: ['html'] }));
+} else {
+    bootLog.warn('docs site not built — Help article links will 404', { docs_dist: docsDist });
+}
+
 app.use('/', express.static(path.join(__dirname, "..", "frontend")));
 app.use(errorHandler);
 

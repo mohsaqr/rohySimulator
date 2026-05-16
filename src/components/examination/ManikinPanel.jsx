@@ -88,7 +88,7 @@ export default function ManikinPanel({
     }, []);
 
     // Handle exam type selection - this performs the exam
-    const handleExamTypeSelect = useCallback((examType) => {
+    const handleExamTypeSelect = useCallback((examType, specialTestName = null) => {
         if (!selectedRegion) return;
 
         setSelectedExamType(examType);
@@ -117,27 +117,27 @@ export default function ManikinPanel({
 
         setCurrentFinding({ finding, abnormal, audioUrl, audioUrls, heartAudio, lungAudio });
 
-        // Add to exam log
+        // Add to exam log. specialTestName (Bug 3) records WHICH special
+        // test the learner ran; the finding itself is the region's combined
+        // `special` result since that is all the data model carries.
         const logEntry = {
             regionId: selectedRegion,
             examType: examType,
-            finding: finding,
+            specialTest: specialTestName || null,
+            finding: specialTestName ? `${specialTestName}: ${finding}` : finding,
             abnormal: abnormal,
             timestamp: new Date().toISOString()
         };
 
         setExamLog(prev => {
             // Check if already performed (avoid duplicates)
-            const exists = prev.some(e =>
-                e.regionId === selectedRegion && e.examType === examType
-            );
-            if (exists) {
-                // Update existing entry
-                return prev.map(e =>
-                    e.regionId === selectedRegion && e.examType === examType
-                        ? logEntry
-                        : e
-                );
+            const sameExam = (e) =>
+                e.regionId === selectedRegion &&
+                e.examType === examType &&
+                (e.specialTest || null) === (specialTestName || null);
+            if (prev.some(sameExam)) {
+                // Update existing entry (per region+type+special test)
+                return prev.map(e => (sameExam(e) ? logEntry : e));
             }
             return [...prev, logEntry];
         });

@@ -36,7 +36,7 @@ export default function HelpCenter({ open, onClose }) {
   useEffect(() => {
     if (!open) return;
     if (tab === 'whatsnew' && releases === null) {
-      apiGet('/api/help/release-notes')
+      apiGet('/help/release-notes')
         .then((r) => {
           setReleases(r.releases || []);
           setError(null);
@@ -44,7 +44,7 @@ export default function HelpCenter({ open, onClose }) {
         .catch((e) => setError(e.message || 'Could not load release notes.'));
     }
     if (tab === 'support' && diag === null) {
-      apiGet('/api/help/diagnostics')
+      apiGet('/help/diagnostics')
         .then((d) => {
           setDiag(d);
           setError(null);

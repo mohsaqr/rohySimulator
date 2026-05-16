@@ -6,14 +6,22 @@ import { resolveAvatarId } from '../../utils/resolveAvatar.js';
 import { resolveCamera } from '../../utils/avatarFraming.js';
 import { VISEME_KEYS } from '../../utils/visemes.js';
 
-function CameraAim({ pos, lookY }) {
+export function CameraAim({ pos, lookY, fov }) {
     const { camera } = useThree();
     const [px, py, pz] = pos;
     useEffect(() => {
         camera.position.set(px, py, pz);
         camera.lookAt(0, lookY, 0);
+        // Bug 12 (16.5.2026): R3F applies the `camera={{ fov }}` prop only
+        // at initial Canvas mount. Later FOV-slider changes re-render but
+        // never reach the live camera, so the preview ignored FOV while a
+        // fresh sim mount (new camera) appeared to honour it. Apply fov
+        // here so the preview tracks the slider.
+        if (typeof fov === 'number' && camera.fov !== fov) {
+            camera.fov = fov;
+        }
         camera.updateProjectionMatrix();
-    }, [camera, px, py, pz, lookY]);
+    }, [camera, px, py, pz, lookY, fov]);
     return null;
 }
 
@@ -154,7 +162,7 @@ export default function PatientAvatar({
             }}
         >
             <Canvas camera={{ position: cam.pos, fov: cam.fov }}>
-                <CameraAim pos={cam.pos} lookY={cam.lookY} />
+                <CameraAim pos={cam.pos} lookY={cam.lookY} fov={cam.fov} />
                 <ambientLight intensity={1.0} />
                 <directionalLight position={[2, 3, 2]} intensity={1.2} />
                 <Suspense fallback={null}>

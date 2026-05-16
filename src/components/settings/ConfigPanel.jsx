@@ -11,6 +11,7 @@ import SessionsTable from '../analytics/SessionsTable';
 import ScenarioRepository from './ScenarioRepository';
 import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
 import { roleLabel } from '../../constants/roleLabels';
+import BodyMapDebug from '../examination/BodyMapDebug';
 import LabInvestigationEditor from './LabInvestigationEditor';
 import RadiologyEditor from './RadiologyEditor';
 import ClinicalRecordsEditor from './ClinicalRecordsEditor';
@@ -29,6 +30,67 @@ import TnaDashboardV2 from '../analytics/tna/TnaDashboardV2';
 import { Bell as BellIcon } from 'lucide-react';
 import CaseAvatarVoicePicker from './CaseAvatarVoicePicker';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
+
+// Bug 1 (16.5.2026): the old "Open Body Map Editor" button linked out to
+// /?debug=bodymap, an auth-bypassing branch deliberately gated to
+// import.meta.env.DEV (App.jsx) — so in any production build it just
+// reloaded the app and the editor never opened. This inline editor runs
+// the same BodyMapDebug surface INSIDE the already-admin-gated settings
+// tab, so it works in production without re-exposing the unauthenticated
+// URL flag. Self-contained so its hooks don't perturb ConfigPanel's
+// top-level hook order.
+export function InlineBodyMapEditor() {
+    const [open, setOpen] = useState(false);
+    const [gender, setGender] = useState('male');
+    const [view, setView] = useState('anterior');
+
+    if (!open) {
+        return (
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded transition-colors"
+            >
+                <Image className="w-4 h-4" />
+                Open Body Map Editor
+            </button>
+        );
+    }
+
+    return (
+        <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+                <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className="bg-neutral-900 text-white p-2 rounded border border-neutral-700"
+                >
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                </select>
+                <select
+                    value={view}
+                    onChange={(e) => setView(e.target.value)}
+                    className="bg-neutral-900 text-white p-2 rounded border border-neutral-700"
+                >
+                    <option value="anterior">Front (Anterior)</option>
+                    <option value="posterior">Back (Posterior)</option>
+                </select>
+                <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-neutral-700 hover:bg-neutral-600 text-white rounded transition-colors"
+                >
+                    <X className="w-4 h-4" />
+                    Close editor
+                </button>
+            </div>
+            <div className="bg-slate-900 rounded-lg overflow-hidden">
+                <BodyMapDebug gender={gender} view={view} />
+            </div>
+        </div>
+    );
+}
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'cases', initialWizardStep = 1, onOpenPersonaEditor, onCaseSaved }) {
     const { isAdmin, user } = useAuth();
@@ -784,14 +846,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                         Open the interactive editor to drag and adjust body region polygons.
                                         Click regions to select them, then drag vertices to reshape.
                                     </p>
-                                    <a
-                                        href="/?debug=bodymap"
-                                        target="_blank"
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded transition-colors"
-                                    >
-                                        <Image className="w-4 h-4" />
-                                        Open Body Map Editor
-                                    </a>
+                                    <InlineBodyMapEditor />
                                 </div>
 
                                 <div className="bg-neutral-800 rounded-lg p-4">
