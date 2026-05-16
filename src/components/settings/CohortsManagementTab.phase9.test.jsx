@@ -16,7 +16,6 @@ const svc = {
     listCohorts: vi.fn(),
     getCohort: vi.fn(),
     createCohort: vi.fn(),
-    renameCohort: vi.fn(),
     deleteCohort: vi.fn(),
     addCohortMember: vi.fn(),
     removeCohortMember: vi.fn(),
@@ -33,7 +32,7 @@ const svc = {
 vi.mock('../../services/cohortsService', () => {
     const proxy = {};
     for (const k of [
-        'listCohorts', 'getCohort', 'createCohort', 'renameCohort',
+        'listCohorts', 'getCohort', 'createCohort',
         'deleteCohort', 'addCohortMember', 'removeCohortMember',
         'rotateJoinCode', 'disableJoinCode', 'updateCohort',
         'assignCohortCases', 'unassignCohortCase', 'addCohortTeacher',
@@ -140,7 +139,7 @@ describe('Phase-9 Settings sub-nav', () => {
         svc.updateCohort.mockResolvedValue({});
         const nameInput = await screen.findByDisplayValue('Cardio');
         fireEvent.change(nameInput, { target: { value: 'Cardio II' } });
-        fireEvent.click(screen.getByRole('button', { name: /Save details/i }));
+        fireEvent.click(screen.getByRole('button', { name: /Save class settings/i }));
         await waitFor(() =>
             expect(svc.updateCohort).toHaveBeenCalledWith(
                 1,

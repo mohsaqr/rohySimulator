@@ -10,6 +10,15 @@ import {
 } from '../middleware/auth.js';
 import { logger } from '../logger.js';
 import { auditSuccess, tenantId } from './_helpers.js';
+import {
+    buildEventFilter,
+    summary as aggSummary,
+    hourlyCounts as aggHourlyCounts,
+    timelineSeries as aggTimelineSeries,
+    stats as aggStats,
+    topResources as aggTopResources,
+    tnaSequences as aggTnaSequences,
+} from '../lib/learningEventAggregates.js';
 
 const router = express.Router();
 const cohortsLog = logger('routes-cohorts');
@@ -1067,6 +1076,172 @@ router.get('/cohorts/:id/export', authenticateToken, requireEducator, async (req
             return res.send(lines.join('\r\n') + '\r\n');
         }
         res.json({ cohort: { id: cohort.id, name: cohort.name }, rows });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Phase 10 — cohort-scoped analytics. The teacher dashboard's Analytics
+// tab embeds TnaDashboardV2 with analyticsBase=`/cohorts/:id`, so these
+// endpoints MUST mirror the exact response contract of the admin
+// /api/analytics/* endpoints (locked by analytics-tna.test.js) — the
+// same SVG charts consume both. The ONLY differences vs the admin scope:
+//
+//   - authz: loadOwnedCohort() (owner / admin / co-teacher), never
+//     requireAdmin. A teacher only ever sees their own cohort.
+//   - data scope: a memberIds[] IN-list pins every aggregation to the
+//     cohort's LIVE members. Because buildEventFilter() AND-s that list
+//     with any caller-supplied user_id / session_id, a teacher passing
+//     a non-member id (or another cohort's session) simply gets zero
+//     rows — there is no cross-member or cross-tenant leak and no
+//     existence oracle (same 404-not-403 boundary as loadOwnedCohort).
+//
+// Scope levels the dashboard drives via query params (all optional):
+//   whole-class  → no user_id (memberIds only)
+//   per-student  → user_id=<member>
+//   per-session  → user_id=<member>&session_id=<their session>
+//
+// The shared aggregation SQL + TNA pipeline live in
+// server/lib/learningEventAggregates.js (one source of truth for both
+// scopes); these handlers are thin authz+scope wrappers around it.
+// ---------------------------------------------------------------------------
+
+// Resolve the owned cohort + its live member id-set and build the scoped
+// event filter from this request's query. Returns null (response already
+// sent) if cohort access is denied. `alias` is a server-passed constant
+// ('le.' for the joined TNA query, '' otherwise) — never a request value.
+async function cohortEventFilter(req, res, { alias = '' } = {}) {
+    const cohort = await loadOwnedCohort(req, res);
+    if (!cohort) return null;
+    const members = await liveMembers(cohort.id);
+    const filter = buildEventFilter({
+        tenantId: tenantId(req),
+        caseId: req.query.case_id,
+        userId: req.query.user_id,
+        sessionId: req.query.session_id,
+        memberIds: members.map(m => m.id),
+        startDate: req.query.start_date,
+        endDate: req.query.end_date,
+        alias,
+    });
+    return { cohort, filter };
+}
+
+// GET /api/cohorts/:id/analytics/filter-options — cohort roster + the
+// cases its members actually have sessions in (data-driven, so the
+// dashboard's case dropdown only offers cases with activity). Mirrors
+// /api/analytics/filter-options shape: { cases:[{id,title}], users:[…] }.
+router.get('/cohorts/:id/analytics/filter-options', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const members = await liveMembers(cohort.id);
+        const users = await dbAdapter.all(
+            `SELECT u.id, u.username, u.name AS fullname, u.email
+               FROM cohort_members m
+               JOIN users u ON u.id = m.user_id
+              WHERE m.cohort_id = ? AND m.deleted_at IS NULL
+              ORDER BY u.username ASC`,
+            [cohort.id]
+        );
+        let cases = [];
+        if (members.length > 0) {
+            // Member IN-list on its own physical line (markers only) — the
+            // same parameterised shape the roster/grid endpoints use.
+            const placeholders = members.map(() => '?').join(',');
+            cases = await dbAdapter.all(
+                `SELECT DISTINCT c.id, c.name AS title
+                   FROM sessions s
+                   JOIN cases c ON c.id = s.case_id
+                  WHERE s.tenant_id = ?
+                    AND s.deleted_at IS NULL
+                    AND c.deleted_at IS NULL
+                    AND s.user_id IN (${placeholders})
+                  ORDER BY c.name ASC`,
+                [tenantId(req), ...members.map(m => m.id)]
+            );
+        }
+        res.json({ cases, users });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /api/cohorts/:id/analytics/summary
+router.get('/cohorts/:id/analytics/summary', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const scoped = await cohortEventFilter(req, res);
+        if (!scoped) return;
+        res.json(await aggSummary(dbAdapter, scoped.filter));
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /api/cohorts/:id/analytics/timeline-series
+router.get('/cohorts/:id/analytics/timeline-series', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const scoped = await cohortEventFilter(req, res);
+        if (!scoped) return;
+        res.json(await aggTimelineSeries(dbAdapter, scoped.filter));
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /api/cohorts/:id/analytics/hourly-counts
+router.get('/cohorts/:id/analytics/hourly-counts', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const scoped = await cohortEventFilter(req, res);
+        if (!scoped) return;
+        res.json(await aggHourlyCounts(dbAdapter, scoped.filter));
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /api/cohorts/:id/analytics/stats
+router.get('/cohorts/:id/analytics/stats', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const scoped = await cohortEventFilter(req, res);
+        if (!scoped) return;
+        res.json(await aggStats(dbAdapter, scoped.filter));
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /api/cohorts/:id/analytics/top-resources
+router.get('/cohorts/:id/analytics/top-resources', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const scoped = await cohortEventFilter(req, res);
+        if (!scoped) return;
+        res.json(await aggTopResources(dbAdapter, scoped.filter, req.query.limit));
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /api/cohorts/:id/analytics/tna-sequences — alias 'le.' because the
+// pipeline joins cases for the title.
+router.get('/cohorts/:id/analytics/tna-sequences', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const scoped = await cohortEventFilter(req, res, { alias: 'le.' });
+        if (!scoped) return;
+        const {
+            min_sequence_length = '2',
+            min_verb_pct = '0.05',
+            skip_merges,
+            group_by = 'actor-session',
+        } = req.query;
+        const result = await aggTnaSequences(dbAdapter, scoped.filter, {
+            minLen: Math.max(2, parseInt(min_sequence_length, 10) || 2),
+            minVerbPct: Math.max(0, parseFloat(min_verb_pct) || 0),
+            skipMerges: String(skip_merges) === 'true',
+            grouping: group_by === 'actor' ? 'actor' : 'actor-session',
+        });
+        res.json(result);
     } catch (err) {
         next(err);
     }

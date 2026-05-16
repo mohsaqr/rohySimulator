@@ -15,35 +15,43 @@ vi.mock('../../contexts/ToastContext', async (importActual) => {
     return { ...actual, useToast: () => toast };
 });
 
-// The Reports child does its own fetching — stub it so this suite stays
-// focused on the management/roster behaviour.
+// The Reports + Pickers children do their own fetching — stub them so this
+// suite stays focused on the management/roster/settings-wiring behaviour.
 vi.mock('./CohortReports', () => ({
     default: ({ cohortId }) => <div data-testid="reports-stub">reports:{cohortId}</div>,
+}));
+vi.mock('./CohortPickers', () => ({
+    CasePicker: () => <div data-testid="case-picker" />,
+    PeoplePicker: () => <div data-testid="people-picker" />,
 }));
 
 const svc = {
     listCohorts: vi.fn(),
     getCohort: vi.fn(),
     createCohort: vi.fn(),
-    renameCohort: vi.fn(),
     deleteCohort: vi.fn(),
     addCohortMember: vi.fn(),
     removeCohortMember: vi.fn(),
     rotateJoinCode: vi.fn(),
     disableJoinCode: vi.fn(),
+    updateCohort: vi.fn(),
+    assignCohortCases: vi.fn(),
+    unassignCohortCase: vi.fn(),
+    addCohortTeacher: vi.fn(),
+    removeCohortTeacher: vi.fn(),
 };
 
-vi.mock('../../services/cohortsService', () => ({
-    listCohorts: (...a) => svc.listCohorts(...a),
-    getCohort: (...a) => svc.getCohort(...a),
-    createCohort: (...a) => svc.createCohort(...a),
-    renameCohort: (...a) => svc.renameCohort(...a),
-    deleteCohort: (...a) => svc.deleteCohort(...a),
-    addCohortMember: (...a) => svc.addCohortMember(...a),
-    removeCohortMember: (...a) => svc.removeCohortMember(...a),
-    rotateJoinCode: (...a) => svc.rotateJoinCode(...a),
-    disableJoinCode: (...a) => svc.disableJoinCode(...a),
-}));
+vi.mock('../../services/cohortsService', () => {
+    const proxy = {};
+    for (const k of [
+        'listCohorts', 'getCohort', 'createCohort',
+        'deleteCohort', 'addCohortMember', 'removeCohortMember',
+        'rotateJoinCode', 'disableJoinCode', 'updateCohort',
+        'assignCohortCases', 'unassignCohortCase', 'addCohortTeacher',
+        'removeCohortTeacher',
+    ]) proxy[k] = (...a) => svc[k](...a);
+    return proxy;
+});
 
 beforeEach(() => {
     Object.values(toast).forEach((f) => f.mockReset());
@@ -111,37 +119,29 @@ describe('CohortsManagementTab — list view', () => {
         await waitFor(() => expect(toast.error).toHaveBeenCalledWith('dup name'));
     });
 
-    it('renames a class via window.prompt', async () => {
+    it('pen icon opens the full class settings module (not a rename prompt)', async () => {
         svc.listCohorts.mockResolvedValue({
             cohorts: [{ id: 1, name: 'Old', member_count: 0 }],
         });
-        svc.renameCohort.mockResolvedValue({});
-        const promptSpy = vi
-            .spyOn(window, 'prompt')
-            .mockReturnValue('New Name');
+        svc.getCohort.mockResolvedValue({
+            cohort: { id: 1, name: 'Old', description: 'desc' },
+            members: [], students: [], teachers: [], cases: [],
+        });
+        const promptSpy = vi.spyOn(window, 'prompt');
         renderWithProviders(<CohortsManagementTab />);
         await waitFor(() => expect(screen.getByText('Old')).toBeTruthy());
 
-        fireEvent.click(screen.getByTitle('Rename'));
+        fireEvent.click(screen.getByTitle('Class settings'));
+
+        // Drills straight into the Settings section — the editable name
+        // field (the rename home) and the new educational fields render,
+        // and no window.prompt is used.
         await waitFor(() =>
-            expect(svc.renameCohort).toHaveBeenCalledWith(1, 'New Name'));
-        expect(toast.success).toHaveBeenCalledWith('Class renamed');
-        promptSpy.mockRestore();
-    });
-
-    it('skips rename when prompt is cancelled or unchanged', async () => {
-        svc.listCohorts.mockResolvedValue({
-            cohorts: [{ id: 1, name: 'Same', member_count: 0 }],
-        });
-        const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue(null);
-        renderWithProviders(<CohortsManagementTab />);
-        await waitFor(() => expect(screen.getByText('Same')).toBeTruthy());
-        fireEvent.click(screen.getByTitle('Rename'));
-        await waitFor(() => expect(svc.renameCohort).not.toHaveBeenCalled());
-
-        promptSpy.mockReturnValue('Same'); // unchanged → no-op
-        fireEvent.click(screen.getByTitle('Rename'));
-        await waitFor(() => expect(svc.renameCohort).not.toHaveBeenCalled());
+            expect(screen.getByText('Back to classes')).toBeTruthy());
+        expect(await screen.findByDisplayValue('Old')).toBeTruthy();
+        expect(screen.getByText('Classroom policy')).toBeTruthy();
+        expect(screen.getByText('Learning objectives')).toBeTruthy();
+        expect(promptSpy).not.toHaveBeenCalled();
         promptSpy.mockRestore();
     });
 

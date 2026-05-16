@@ -18,10 +18,10 @@ export const createCohort = (nameOrPayload) =>
         ? { name: nameOrPayload }
         : nameOrPayload);
 
-export const renameCohort = (id, name) => apiPatch(`/cohorts/${id}`, { name });
-
 // Phase-8 full update (name required by the server; everything else is an
 // optional patch — settings is a wholesale REPLACE per the route contract).
+// This is also the rename path now — the class Settings module edits the
+// name field through here; there is no separate rename wrapper.
 export const updateCohort = (id, patch) => apiPatch(`/cohorts/${id}`, patch);
 
 // Phase-8 case assignment. Bulk-assign is idempotent + revive-aware

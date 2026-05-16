@@ -1,5 +1,15 @@
 import express from 'express';
 import dbAdapter from '../dbAdapter.js';
+import {
+    buildEventFilter,
+    summary as aggSummary,
+    dailyCounts as aggDailyCounts,
+    hourlyCounts as aggHourlyCounts,
+    timelineSeries as aggTimelineSeries,
+    stats as aggStats,
+    topResources as aggTopResources,
+    tnaSequences as aggTnaSequences,
+} from '../lib/learningEventAggregates.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -2244,121 +2254,23 @@ router.post('/alarms/config', authenticateToken, requireAdmin, (req, res) => {
 
 // GET /api/cases/:caseId/versions - Get version history for a case
 
-const TNA_VERB_MERGE_MAP = {
-    // Navigation
-    'VIEWED': 'NAVIGATION',
-    'OPENED': 'NAVIGATION',
-    'CLOSED': 'NAVIGATION',
-    'NAVIGATED': 'NAVIGATION',
-    'SWITCHED_TAB': 'NAVIGATION',
-    'CLICKED': 'NAVIGATION',
-    'SELECTED': 'NAVIGATION',
-    'DESELECTED': 'NAVIGATION',
-    'TOGGLED': 'NAVIGATION',
-    'EXPANDED': 'NAVIGATION',
-    'COLLAPSED': 'NAVIGATION',
-    'SCROLLED': 'NAVIGATION',
-    // Lab/Investigation
-    'ORDERED_LAB': 'ORDERED_LAB',
-    'SEARCHED_LABS': 'ORDERED_LAB',
-    'FILTERED_LABS': 'ORDERED_LAB',
-    'CANCELLED_LAB': 'ORDERED_LAB',
-    // Lab results
-    'VIEWED_LAB_RESULT': 'VIEWED_LAB_RESULT',
-    'LAB_RESULT_READY': 'VIEWED_LAB_RESULT',
-    // Treatment
-    'ORDERED_MEDICATION': 'TREATMENT',
-    'ADMINISTERED_MEDICATION': 'TREATMENT',
-    'CANCELLED_MEDICATION': 'TREATMENT',
-    'ORDERED_TREATMENT': 'TREATMENT',
-    'PERFORMED_INTERVENTION': 'TREATMENT',
-    'ORDERED_IV_FLUID': 'TREATMENT',
-    'STARTED_OXYGEN': 'TREATMENT',
-    'STOPPED_OXYGEN': 'TREATMENT',
-    'ORDERED_NURSING': 'TREATMENT',
-    'DISCONTINUED_TREATMENT': 'TREATMENT',
-    'CONTRAINDICATED_TREATMENT_ORDERED': 'TREATMENT',
-    'EXPECTED_TREATMENT_GIVEN': 'TREATMENT',
-    'EXPECTED_TREATMENT_MISSED': 'TREATMENT',
-    // Examination
-    'PERFORMED_PHYSICAL_EXAM': 'EXAMINATION',
-    'OPENED_EXAM_PANEL': 'EXAMINATION',
-    'CLOSED_EXAM_PANEL': 'EXAMINATION',
-    // Communication
-    'SENT_MESSAGE': 'SENT_MESSAGE',
-    'RECEIVED_MESSAGE': 'RECEIVED_MESSAGE',
-    'COPIED_MESSAGE': 'SENT_MESSAGE',
-    'EDITED_MESSAGE': 'SENT_MESSAGE',
-    // Monitoring
-    'ADJUSTED_VITAL': 'MONITORING',
-    'VIEWED_TRENDS': 'MONITORING',
-    // Alarm response
-    'ACKNOWLEDGED_ALARM': 'ALARM_RESPONSE',
-    'SILENCED_ALARM': 'ALARM_RESPONSE',
-    'ALARM_TRIGGERED': 'ALARM_RESPONSE',
-    // Patient records
-    'VIEWED_PATIENT_SUMMARY': 'REVIEWED_RECORDS',
-    'VIEWED_HISTORY': 'REVIEWED_RECORDS',
-    'VIEWED_MEDICATIONS': 'REVIEWED_RECORDS',
-    'VIEWED_ALLERGIES': 'REVIEWED_RECORDS',
-    'VIEWED_PATIENT_INFO': 'REVIEWED_RECORDS',
-    'VIEWED_RECORDS': 'REVIEWED_RECORDS',
-    // System/config verbs excluded (mapped to null)
-    'STARTED_SESSION': null,
-    'ENDED_SESSION': null,
-    'RESUMED_SESSION': null,
-    'IDLE_TIMEOUT': null,
-    'CHANGED_SETTING': null,
-    'SAVED_SETTING': null,
-    'RESET_SETTING': null,
-    'LOADED_CASE': null,
-    'STARTED_SCENARIO': null,
-    'PAUSED_SCENARIO': null,
-    'RESUMED_SCENARIO': null,
-    'SUBMITTED': null,
-    'ANSWERED': null,
-    'ATTEMPTED': null,
-    'TREATMENT_EFFECT_STARTED': null,
-    'TREATMENT_EFFECT_PEAKED': null,
-    'TREATMENT_EFFECT_ENDED': null,
-};
-
-function isDateOnly(value) {
-    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
+// Maps this request's query params onto the shared buildEventFilter().
+// The aggregation SQL + the TNA pipeline + the verb-merge map now live in
+// server/lib/learningEventAggregates.js so the teacher cohort scope can
+// serve byte-identical shapes through its own authz boundary. This
+// wrapper only exists to keep the admin endpoints reading from req.query
+// exactly as before — behaviour is unchanged (regression-locked by
+// tests/server/analytics-tna.test.js).
 function buildLearningEventWhere(req, { alias = '', includeUser = true } = {}) {
     const { case_id, user_id, start_date, end_date } = req.query || {};
-    const prefix = alias && alias.endsWith('.') ? alias : alias ? `${alias}.` : '';
-    const column = (name) => `${prefix}${name}`;
-    const clauses = [`${column('tenant_id')} = ?`];
-    const params = [tenantId(req)];
-
-    if (case_id) {
-        clauses.push(`${column('case_id')} = ?`);
-        params.push(case_id);
-    }
-    if (includeUser && user_id) {
-        clauses.push(`${column('user_id')} = ?`);
-        params.push(user_id);
-    }
-    if (start_date) {
-        clauses.push(`${column('timestamp')} >= ?`);
-        params.push(start_date);
-    }
-    if (end_date) {
-        if (isDateOnly(end_date)) {
-            clauses.push(`${column('timestamp')} < date(?, '+1 day')`);
-        } else {
-            clauses.push(`${column('timestamp')} <= ?`);
-        }
-        params.push(end_date);
-    }
-
-    return {
-        where: `WHERE ${clauses.join(' AND ')}`,
-        params,
-    };
+    return buildEventFilter({
+        tenantId: tenantId(req),
+        caseId: case_id,
+        userId: includeUser ? user_id : undefined,
+        startDate: start_date,
+        endDate: end_date,
+        alias,
+    });
 }
 
 // GET /api/analytics/tna-sequences — LAILA-shaped TNA sequence builder
@@ -2378,7 +2290,7 @@ function buildLearningEventWhere(req, { alias = '', includeUser = true } = {}) {
 //   6. P95 chunking: split sequences longer than the 95th-percentile length
 //      into non-overlapping chunks (prevents one runaway tab from blowing up
 //      the distance matrix in the Clusters tab)
-router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, (req, res) => {
+router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, async (req, res) => {
     const {
         min_sequence_length = '2',
         min_verb_pct = '0.05',
@@ -2389,275 +2301,81 @@ router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, (req, re
     const minVerbPct = Math.max(0, parseFloat(min_verb_pct) || 0);
     const skipMerges = String(skip_merges) === 'true';
     const grouping = group_by === 'actor' ? 'actor' : 'actor-session';
-    const filters = buildLearningEventWhere(req, { alias: 'le.' });
-
-    let sql = `
-        SELECT le.user_id, le.session_id, le.verb, le.object_type, le.timestamp,
-               c.name AS case_title
-          FROM learning_events le
-          LEFT JOIN cases c ON c.id = le.case_id AND c.tenant_id = le.tenant_id
-          ${filters.where}
-         ORDER BY le.user_id ASC, le.session_id ASC, le.timestamp ASC, le.id ASC
-         LIMIT 50000`;
-
-    dbAdapter.all(sql, filters.params, (err, rows) => {
-        if (err) {
-            (req.log || routesAdminLog).error('tna sequences query failed', { error: err.message });
-            return res.status(500).json({ error: err.message });
-        }
-        if (!rows || rows.length === 0) {
-            return res.json({
-                sequences: [], objectTypeSequences: [],
-                metadata: {
-                    totalSequences: 0, totalEvents: 0, groupBy: grouping,
-                    uniqueVerbs: [], uniqueObjectTypes: [],
-                    caseTitle: null, dateRange: null,
-                },
-            });
-        }
-
-        // 1. Apply verb merge unless skipped. Null mapping means "drop event".
-        const merged = [];
-        for (const row of rows) {
-            let v = row.verb;
-            if (!skipMerges && Object.prototype.hasOwnProperty.call(TNA_VERB_MERGE_MAP, v)) {
-                v = TNA_VERB_MERGE_MAP[v];
-                if (v === null) continue;
-            }
-            merged.push({ ...row, verb: v });
-        }
-
-        // 2. Rare-verb collapsing.
-        const verbCounts = Object.create(null);
-        for (const m of merged) verbCounts[m.verb] = (verbCounts[m.verb] || 0) + 1;
-        const totalEvents = merged.length;
-        const rareVerbs = new Set();
-        if (minVerbPct > 0 && totalEvents > 0) {
-            for (const [v, count] of Object.entries(verbCounts)) {
-                if (count / totalEvents < minVerbPct) rareVerbs.add(v);
-            }
-        }
-
-        // 3. Group into sequences. session_id may be null for events logged
-        //    outside a session — fall back to actor for those.
-        const seqMap = Object.create(null);
-        const objMap = Object.create(null);
-        for (const m of merged) {
-            const key = grouping === 'actor-session' && m.session_id
-                ? `${m.user_id}::${m.session_id}`
-                : String(m.user_id);
-            if (!seqMap[key]) { seqMap[key] = []; objMap[key] = []; }
-            seqMap[key].push(rareVerbs.has(m.verb) ? 'OTHER' : m.verb);
-            objMap[key].push(m.object_type || '');
-        }
-
-        // 4. Min-length filter.
-        const rawSeqs = [];
-        const rawObjSeqs = [];
-        for (const key of Object.keys(seqMap)) {
-            if (seqMap[key].length >= minLen) {
-                rawSeqs.push(seqMap[key]);
-                rawObjSeqs.push(objMap[key]);
-            }
-        }
-
-        // 5. P95 chunking. The cap = max(p95Length, 2 × minLen) so we don't
-        //    chop normal sessions just because one user left a tab open.
-        const sequences = [];
-        const objectTypeSequences = [];
-        if (rawSeqs.length > 0) {
-            const lens = rawSeqs.map((s) => s.length).sort((a, b) => a - b);
-            const p95Idx = Math.floor(lens.length * 0.95);
-            const p95 = lens[Math.min(p95Idx, lens.length - 1)];
-            const maxLen = Math.max(p95, minLen * 2);
-
-            for (let i = 0; i < rawSeqs.length; i++) {
-                if (rawSeqs[i].length <= maxLen) {
-                    sequences.push(rawSeqs[i]);
-                    objectTypeSequences.push(rawObjSeqs[i]);
-                } else {
-                    for (let s = 0; s < rawSeqs[i].length; s += maxLen) {
-                        const chunk = rawSeqs[i].slice(s, s + maxLen);
-                        const objChunk = rawObjSeqs[i].slice(s, s + maxLen);
-                        if (chunk.length >= minLen) {
-                            sequences.push(chunk);
-                            objectTypeSequences.push(objChunk);
-                        }
-                    }
-                }
-            }
-        }
-
-        // 6. Metadata.
-        const uniqueVerbs = new Set();
-        const uniqueObjectTypes = new Set();
-        for (let i = 0; i < sequences.length; i++) {
-            for (const v of sequences[i]) uniqueVerbs.add(v);
-            for (const o of objectTypeSequences[i]) if (o) uniqueObjectTypes.add(o);
-        }
-        const caseTitle = rows.find((r) => r.case_title)?.case_title || null;
-        const dateRange = rows.length
-            ? { start: rows[0].timestamp, end: rows[rows.length - 1].timestamp }
-            : null;
-
-        res.json({
-            sequences,
-            objectTypeSequences,
-            metadata: {
-                totalSequences: sequences.length,
-                totalEvents,
-                groupBy: grouping,
-                uniqueVerbs: [...uniqueVerbs].sort(),
-                uniqueObjectTypes: [...uniqueObjectTypes].sort(),
-                caseTitle,
-                dateRange,
-            },
+    const filter = buildLearningEventWhere(req, { alias: 'le.' });
+    try {
+        const result = await aggTnaSequences(dbAdapter, filter, {
+            minLen, minVerbPct, skipMerges, grouping,
         });
-    });
+        res.json(result);
+    } catch (err) {
+        (req.log || routesAdminLog).error('tna sequences query failed', { error: err.message });
+        res.status(500).json({ error: err.message });
+    }
 });
+
+// The five activity-bundle endpoints below now delegate to
+// server/lib/learningEventAggregates.js. Behaviour + response shapes are
+// unchanged (regression-locked by tests/server/analytics-tna.test.js);
+// the helper is what the teacher cohort scope reuses to serve the SAME
+// shapes through loadOwnedCohort() instead of requireAdmin.
 
 // GET /api/analytics/daily-counts — events per calendar day for the timeline.
-router.get('/analytics/daily-counts', authenticateToken, requireAdmin, (req, res) => {
-    const filters = buildLearningEventWhere(req);
-    let sql = `SELECT date(timestamp) AS day, COUNT(*) AS n
-                 FROM learning_events ${filters.where}`;
-    const params = filters.params;
-    sql += ' GROUP BY day ORDER BY day';
-    dbAdapter.all(sql, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ daily: rows.map((r) => ({ date: r.day, count: r.n })) });
-    });
+router.get('/analytics/daily-counts', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        res.json(await aggDailyCounts(dbAdapter, buildLearningEventWhere(req)));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// GET /api/analytics/hourly-counts — day-of-week × hour-of-day grid.
-//
-// Returns the shape LAILA's ActivityHeatmap component expects:
-// `[{ dow: 0..6, hour: 0..23, count }]`. SQLite's strftime('%w', ...)
-// returns 0 (Sunday) through 6 (Saturday) — same convention as JS
-// Date.getDay(). Unobserved cells are returned with count=0 so the
-// heatmap renders a full grid even on sparse data.
-router.get('/analytics/hourly-counts', authenticateToken, requireAdmin, (req, res) => {
-    const filters = buildLearningEventWhere(req);
-    let sql = `SELECT CAST(strftime('%w', timestamp) AS INTEGER) AS dow,
-                      CAST(strftime('%H', timestamp) AS INTEGER) AS hour,
-                      COUNT(*) AS n
-                 FROM learning_events ${filters.where}`;
-    const params = filters.params;
-    sql += ' GROUP BY dow, hour ORDER BY dow, hour';
-    dbAdapter.all(sql, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        // Build the dense 7×24 grid LAILA's heatmap expects.
-        const grid = [];
-        const observed = new Map();
-        for (const r of rows) {
-            if (Number.isInteger(r.dow) && Number.isInteger(r.hour)) {
-                observed.set(`${r.dow}:${r.hour}`, r.n);
-            }
-        }
-        for (let dow = 0; dow < 7; dow++) {
-            for (let hour = 0; hour < 24; hour++) {
-                grid.push({ dow, hour, count: observed.get(`${dow}:${hour}`) || 0 });
-            }
-        }
-        res.json({ hourly: grid });
-    });
+// GET /api/analytics/hourly-counts — dense 7×24 day-of-week × hour grid
+// in the shape LAILA's ActivityHeatmap expects ([{dow,hour,count}]).
+router.get('/analytics/hourly-counts', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        res.json(await aggHourlyCounts(dbAdapter, buildLearningEventWhere(req)));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // GET /api/analytics/timeline-series — verb-broken-out daily counts in
-// the shape LAILA's ActivityTimelineChart expects:
-//   { days: ['YYYY-MM-DD', ...], verbs: ['ORDERED_LAB', ...],
-//     series: { ORDERED_LAB: [n_for_day0, n_for_day1, ...], ... } }
-// Limits to the top 10 verbs by total count and folds the rest into a
-// synthetic 'OTHER' series so the legend stays readable.
-router.get('/analytics/timeline-series', authenticateToken, requireAdmin, (req, res) => {
-    const filters = buildLearningEventWhere(req);
-    let sql = `SELECT date(timestamp) AS day, verb, COUNT(*) AS n
-                 FROM learning_events ${filters.where}`;
-    const params = filters.params;
-    sql += ' GROUP BY day, verb ORDER BY day, verb';
-    dbAdapter.all(sql, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!rows.length) return res.json({ days: [], verbs: [], series: {} });
-
-        const dayIdx = new Map();
-        const days = [];
-        const verbTotals = new Map();
-        for (const r of rows) {
-            if (!dayIdx.has(r.day)) { dayIdx.set(r.day, days.length); days.push(r.day); }
-            verbTotals.set(r.verb, (verbTotals.get(r.verb) || 0) + r.n);
-        }
-
-        // Top 10 verbs by total count, rest into 'OTHER'.
-        const TOP = 10;
-        const sortedVerbs = [...verbTotals.entries()].sort((a, b) => b[1] - a[1]);
-        const topVerbs = new Set(sortedVerbs.slice(0, TOP).map(([v]) => v));
-        const verbs = [...topVerbs];
-        if (sortedVerbs.length > TOP) verbs.push('OTHER');
-
-        const series = {};
-        for (const v of verbs) series[v] = Array(days.length).fill(0);
-        for (const r of rows) {
-            const i = dayIdx.get(r.day);
-            const bucket = topVerbs.has(r.verb) ? r.verb : 'OTHER';
-            if (series[bucket]) series[bucket][i] += r.n;
-        }
-        res.json({ days, verbs, series });
-    });
+// the shape LAILA's ActivityTimelineChart expects ({days, verbs, series});
+// top 10 verbs, remainder folded into a synthetic 'OTHER' series.
+router.get('/analytics/timeline-series', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        res.json(await aggTimelineSeries(dbAdapter, buildLearningEventWhere(req)));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // GET /api/analytics/summary — top-line stat-card numbers.
-router.get('/analytics/summary', authenticateToken, requireAdmin, (req, res) => {
-    const { where, params } = buildLearningEventWhere(req);
-
-    const sql = `SELECT COUNT(*) AS totalActivities,
-                        COUNT(DISTINCT user_id) AS uniqueUsers,
-                        COUNT(DISTINCT session_id) AS uniqueSessions
-                   FROM learning_events ${where}`;
-    dbAdapter.get(sql, params, (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        const total = row?.totalActivities || 0;
-        const users = row?.uniqueUsers || 0;
-        res.json({
-            totalActivities: total,
-            uniqueUsers: users,
-            uniqueSessions: row?.uniqueSessions || 0,
-            avgPerUser: users > 0 ? Math.round(total / users) : 0,
-        });
-    });
+router.get('/analytics/summary', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        res.json(await aggSummary(dbAdapter, buildLearningEventWhere(req)));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // GET /api/analytics/stats — verb + object type frequency for donut charts.
-router.get('/analytics/stats', authenticateToken, requireAdmin, (req, res) => {
-    const { where, params } = buildLearningEventWhere(req);
-
-    const verbsSql = `SELECT verb AS label, COUNT(*) AS count FROM learning_events ${where} GROUP BY verb ORDER BY count DESC`;
-    const objsSql  = `SELECT object_type AS label, COUNT(*) AS count FROM learning_events ${where} GROUP BY object_type ORDER BY count DESC`;
-    dbAdapter.all(verbsSql, params, (err1, verbs) => {
-        if (err1) return res.status(500).json({ error: err1.message });
-        dbAdapter.all(objsSql, params, (err2, objs) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-            res.json({ verbs: verbs || [], objectTypes: objs || [] });
-        });
-    });
+router.get('/analytics/stats', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        res.json(await aggStats(dbAdapter, buildLearningEventWhere(req)));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// GET /api/analytics/top-resources — most-touched object_id+name (the
+// GET /api/analytics/top-resources — most-touched object_type+name (the
 // simulator equivalent of LAILA's top resources). Useful to spot which
 // labs / treatments / patients the cohort gravitates to.
-router.get('/analytics/top-resources', authenticateToken, requireAdmin, (req, res) => {
-    const { limit = '10' } = req.query;
-    const filters = buildLearningEventWhere(req);
-    let sql = `SELECT object_type, object_name, COUNT(*) AS n
-                 FROM learning_events
-                ${filters.where}
-                  AND object_name IS NOT NULL AND object_name != ''`;
-    const params = filters.params;
-    sql += ' GROUP BY object_type, object_name ORDER BY n DESC LIMIT ?';
-    params.push(Math.min(parseInt(limit, 10) || 10, 100));
-    dbAdapter.all(sql, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ resources: rows || [] });
-    });
+router.get('/analytics/top-resources', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        res.json(await aggTopResources(dbAdapter, buildLearningEventWhere(req), req.query.limit));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // GET /api/analytics/filter-options — courses + students for dropdown filters.

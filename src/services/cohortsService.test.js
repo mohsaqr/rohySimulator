@@ -17,7 +17,6 @@ import {
     listCohorts,
     getCohort,
     createCohort,
-    renameCohort,
     deleteCohort,
     addCohortMember,
     removeCohortMember,
@@ -57,11 +56,6 @@ describe('cohortsService — management helpers', () => {
     it('createCohort → POST /cohorts with { name }', async () => {
         await createCohort('Cardiology 101');
         expect(apiPost).toHaveBeenCalledWith('/cohorts', { name: 'Cardiology 101' });
-    });
-
-    it('renameCohort → PATCH /cohorts/:id with { name }', async () => {
-        await renameCohort(7, 'Renamed');
-        expect(apiPatch).toHaveBeenCalledWith('/cohorts/7', { name: 'Renamed' });
     });
 
     it('deleteCohort → DELETE /cohorts/:id', async () => {
