@@ -7,7 +7,7 @@ author cases, design scenarios, and read how your students performed.
 
 - [Classes (cohorts) & join codes](/educator/cohorts) — create a class, invite students
 - [Authoring a case (wizard)](/educator/case-wizard) — build a scenario end to end
-- [Reporting & analytics](/educator/reporting) — the four reporting views
+- [Reporting & analytics](/educator/reporting) — the five reporting views
 
 ## In this section
 
@@ -15,7 +15,7 @@ author cases, design scenarios, and read how your students performed.
 |---|---|
 | [Classes & join codes](/educator/cohorts) | Create/manage cohorts, member roles, join-code rotation |
 | [Assigning cases](/educator/assigning-cases) | Attaching cases to a class |
-| [Authoring a case (wizard)](/educator/case-wizard) | The 12-step case wizard |
+| [Authoring a case (wizard)](/educator/case-wizard) | The case authoring wizard, step by step |
 | [Agent personas](/educator/agents) | Patient/consultant agents, prompts, voice |
 | [Scenario timelines](/educator/scenarios) | Keyframed vitals progression |
 | [Reporting & analytics](/educator/reporting) | Roster, grid, feed, export |
