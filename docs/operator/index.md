@@ -2,13 +2,12 @@
 
 For the **operator / DevOps** — install, deploy, update and recover Rohy.
 
-The existing operator manuals remain authoritative in the repository while
-Stage 3 (G4) reconciles them into VitePress-safe runbook pages:
+The operator manuals, reconciled into VitePress-safe pages:
 
-- [Install ↗](https://github.com/mohsaqr/rohy/blob/main/docs/INSTALL.md) — five installation paths
-- [Deploy & harden ↗](https://github.com/mohsaqr/rohy/blob/main/docs/DEPLOY.md) — TLS, reverse proxy, security checklist
-- [Update ↗](https://github.com/mohsaqr/rohy/blob/main/docs/UPDATING.md) — `bin/rohy-update` and rollback
-- [Update strategy ↗](https://github.com/mohsaqr/rohy/blob/main/docs/UPDATE-STRATEGY.md) — the rationale
+- [Install](/operator/install) — five installation paths
+- [Deploy & harden](/operator/deploy) — TLS, reverse proxy, security checklist
+- [Update](/operator/updating) — `bin/rohy-update` and rollback
+- [Update strategy](/operator/update-strategy) — the rationale
 
 ## Runbook library
 
@@ -20,4 +19,4 @@ Stage 3 (G4) reconciles them into VitePress-safe runbook pages:
 | [Observability](/operator/observability) | NDJSON logs, slow queries, request IDs |
 | [Incident playbooks](/operator/incidents) | Wedged DB, failed update, TTS outage |
 
-> Existing manuals re-homed in **Stage 0**; runbooks authored in **Stage 3 (G4)** — milestone **M2**.
+> Manuals re-homed and runbooks authored in **Stage 3 (G4)** — milestone **M2**.
