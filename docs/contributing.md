@@ -67,3 +67,23 @@ These apply to the Stage 4 in-app help build, not just prose:
 - Section landing page is `index.md` and gives the lay of the section.
 - Do not commit VitePress build output (`.vitepress/cache|dist|.temp` are
   git-ignored). Do not commit session artifacts.
+
+## Maintenance & ownership (Stage 7)
+
+- **Drift gate.** The `Docs` CI workflow runs `npm run docs:check`:
+  it regenerates the reference, fails if `docs/reference` differs from
+  what's committed, validates `openapi.json`, and builds the site with
+  dead-link enforcement on. Run `npm run docs:check` locally before a PR
+  that touches routes, schema, env vars, the CLI, or any doc page.
+- **Touch a route → regenerate.** Changing `server/routes/*`, `db.js`,
+  migrations, env usage, or `bin`/`scripts` means you must run the matching
+  `npm run docs:gen:*` and commit the regenerated reference in the same PR.
+  CI will block you otherwise — this is what keeps generated reference
+  trustworthy.
+- **Ownership.** `.github/CODEOWNERS` routes review for `docs/`,
+  `scripts/docs-gen/`, `src/help/` and the docs workflow. Generators and
+  the reference they emit are owned together on purpose.
+- **Review cadence.** Re-verify authored guides against source once per
+  minor release (the reference self-checks every PR; prose does not).
+- **Dead links fail the build.** `ignoreDeadLinks` is `false`. Add a page
+  to the sidebar when you add it; fix the link target rather than silencing.

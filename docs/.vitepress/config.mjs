@@ -37,9 +37,10 @@ export default defineConfig({
     'DOCUMENTATION-QA.md',
     'audits/**',
   ],
-  // Many section pages are scaffolded ahead of their authoring stage.
-  // Dead-link enforcement is switched on in Stage 7 (CI) once content lands.
-  ignoreDeadLinks: true,
+  // Dead-link enforcement ON (Stage 7). All sections are authored and the
+  // link graph was swept clean in Stage 6; a broken intra-doc link now
+  // fails the build (and the docs CI / `npm run docs:check`).
+  ignoreDeadLinks: false,
   head: [
     ['meta', { name: 'robots', content: 'noindex' }],
     ['meta', { name: 'color-scheme', content: 'light dark' }],

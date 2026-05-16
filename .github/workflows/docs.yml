@@ -1,0 +1,64 @@
+name: Docs
+
+# Keeps the documentation honest:
+#  - the generated reference must match source (no drift)
+#  - OpenAPI is valid
+#  - the VitePress site builds with dead-link enforcement on
+#  - the in-app Help & Support system stays green
+#
+# The single-sourcing contract (DOCUMENTATION-PLAN §7) only holds if drift
+# fails CI — that is the whole point of this workflow.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    name: Docs build + drift gate
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      # Generators are pure Node and VitePress is pure JS — no native
+      # modules needed, so skip install scripts (no sqlite3 build, no Oyon
+      # model download) to keep this gate fast.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Regenerate reference, check drift, validate OpenAPI, build
+        run: npm run docs:check
+
+  help-system:
+    name: In-app Help & Support tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      # Full install — the server help test spawns the real Express app and
+      # needs the native sqlite3 build.
+      - name: Install dependencies
+        run: npm ci
+      - name: Help client tests
+        run: npx vitest run src/help/ --project=client
+      - name: Help server tests
+        run: npx vitest run tests/server/help-routes.test.js --project=server
