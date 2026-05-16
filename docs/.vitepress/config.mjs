@@ -65,6 +65,7 @@ export default defineConfig({
           { text: 'Glossary', link: '/reference/glossary' },
         ],
       },
+      { text: 'Tutorials', link: '/tutorials/' },
       { text: 'Security', link: '/security/' },
       { text: 'Release notes', link: '/release-notes/' },
     ],
@@ -159,6 +160,19 @@ export default defineConfig({
             { text: 'Config & env', link: '/reference/config/' },
             { text: 'CLI & ops', link: '/reference/cli/' },
             { text: 'Glossary', link: '/reference/glossary' },
+          ],
+        },
+      ],
+      '/tutorials/': [
+        {
+          text: 'Tutorials & media',
+          items: [
+            { text: 'Overview', link: '/tutorials/' },
+            { text: 'Trainee quickstart', link: '/tutorials/trainee-quickstart' },
+            { text: 'Educator quickstart', link: '/tutorials/educator-quickstart' },
+            { text: 'Operator quickstart', link: '/tutorials/operator-quickstart' },
+            { text: 'Walkthrough: acute cases', link: '/tutorials/walkthrough-acute-cases' },
+            { text: 'Media kit', link: '/tutorials/media-kit' },
           ],
         },
       ],
