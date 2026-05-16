@@ -271,6 +271,43 @@ describe('NotificationProvider — ack semantics', () => {
         if (rawAcked !== null) expect(JSON.parse(rawAcked)).toEqual([]);
         if (rawSnoozed !== null) expect(JSON.parse(rawSnoozed)).toEqual({});
     });
+
+    // Bug 7 (16.5.2026): clinical alarms latch in `active` and AudioSurface
+    // sounds anything still in `active`. App.handleEndSession() calls
+    // ackAll() on "End & Debrief" so the ICU tone stops through the debrief.
+    // This locks the guarantee ackAll() relies on: it clears latched
+    // audio-routed clinical alarms out of `active` (→ AudioSurface silent).
+    it('ackAll() clears latched audio-routed clinical alarms from active (Bug 7)', () => {
+        const ref = mountCenter();
+        act(() => {
+            ref.current.notify({
+                source: SOURCES.CLINICAL,
+                severity: SEVERITY.CRITICAL,
+                message: 'HR critical',
+                key: 'alarm:hr_high',
+                requiresAck: true,
+                ttlMs: 0,
+            });
+            ref.current.notify({
+                source: SOURCES.CLINICAL,
+                severity: SEVERITY.WARNING,
+                message: 'SpO2 low',
+                key: 'alarm:spo2_low',
+                requiresAck: true,
+                ttlMs: 0,
+            });
+        });
+        expect(ref.current.active.length).toBe(2);
+
+        act(() => { ref.current.ackAll(); });
+
+        // Nothing left in active → AudioSurface's audioActive filter is empty
+        // → pickPattern() returns NONE → the oscillator stops.
+        expect(ref.current.active).toEqual([]);
+        expect(ref.current.acked).toEqual(
+            expect.arrayContaining(['alarm:hr_high', 'alarm:spo2_low']),
+        );
+    });
 });
 
 describe('NotificationProvider — mute hierarchy', () => {

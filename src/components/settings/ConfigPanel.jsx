@@ -10,6 +10,8 @@ import ChatLogTable from '../analytics/ChatLogTable';
 import SessionsTable from '../analytics/SessionsTable';
 import ScenarioRepository from './ScenarioRepository';
 import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
+import { roleLabel } from '../../constants/roleLabels';
+import BodyMapDebug from '../examination/BodyMapDebug';
 import LabInvestigationEditor from './LabInvestigationEditor';
 import RadiologyEditor from './RadiologyEditor';
 import ClinicalRecordsEditor from './ClinicalRecordsEditor';
@@ -23,10 +25,72 @@ import AvatarsSettingsTab from './AvatarsSettingsTab';
 import NotificationsSettingsTab from './NotificationsSettingsTab';
 import OyonSettingsTab from './OyonSettingsTab';
 import OyonLearningAnalyticsTab from './OyonLearningAnalyticsTab';
+import CohortsManagementTab from './CohortsManagementTab';
 import TnaDashboardV2 from '../analytics/tna/TnaDashboardV2';
 import { Bell as BellIcon } from 'lucide-react';
 import CaseAvatarVoicePicker from './CaseAvatarVoicePicker';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
+
+// Bug 1 (16.5.2026): the old "Open Body Map Editor" button linked out to
+// /?debug=bodymap, an auth-bypassing branch deliberately gated to
+// import.meta.env.DEV (App.jsx) — so in any production build it just
+// reloaded the app and the editor never opened. This inline editor runs
+// the same BodyMapDebug surface INSIDE the already-admin-gated settings
+// tab, so it works in production without re-exposing the unauthenticated
+// URL flag. Self-contained so its hooks don't perturb ConfigPanel's
+// top-level hook order.
+export function InlineBodyMapEditor() {
+    const [open, setOpen] = useState(false);
+    const [gender, setGender] = useState('male');
+    const [view, setView] = useState('anterior');
+
+    if (!open) {
+        return (
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded transition-colors"
+            >
+                <Image className="w-4 h-4" />
+                Open Body Map Editor
+            </button>
+        );
+    }
+
+    return (
+        <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+                <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className="bg-neutral-900 text-white p-2 rounded border border-neutral-700"
+                >
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                </select>
+                <select
+                    value={view}
+                    onChange={(e) => setView(e.target.value)}
+                    className="bg-neutral-900 text-white p-2 rounded border border-neutral-700"
+                >
+                    <option value="anterior">Front (Anterior)</option>
+                    <option value="posterior">Back (Posterior)</option>
+                </select>
+                <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-neutral-700 hover:bg-neutral-600 text-white rounded transition-colors"
+                >
+                    <X className="w-4 h-4" />
+                    Close editor
+                </button>
+            </div>
+            <div className="bg-slate-900 rounded-lg overflow-hidden">
+                <BodyMapDebug gender={gender} view={view} />
+            </div>
+        </div>
+    );
+}
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'cases', initialWizardStep = 1, onOpenPersonaEditor, onCaseSaved }) {
     const { isAdmin, user } = useAuth();
@@ -34,6 +98,10 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
     // real rule (assertOyonReadAccess); this hides the sidebar item for users
     // who couldn't reach the page anyway.
     const canSeeOyonAnalytics = user?.role === 'educator' || user?.role === 'admin';
+    // Same educator+/admin gate as Oyon analytics. Server enforces the real
+    // rule on /cohorts; this only hides the sidebar item. Teachers see/manage
+    // their own cohorts, admins see all (the API decides which rows return).
+    const canManageCohorts = user?.role === 'educator' || user?.role === 'admin';
     const toast = useToast();
     // Default to 'cases' tab for all users; the parent can pass `initialTab`
     // to land directly on a specific tab — used when the persona editor
@@ -357,6 +425,15 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                             className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'oyon-analytics' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                         >
                             <Activity className="w-4 h-4" /> Oyon — Learning Analytics
+                        </button>
+                    )}
+                    {/* Classes — cohort management for teachers/admins. */}
+                    {canManageCohorts && (
+                        <button
+                            onClick={() => setActiveTab('cohorts')}
+                            className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'cohorts' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                        >
+                            <Users className="w-4 h-4" /> Classes
                         </button>
                     )}
                 </div>
@@ -769,14 +846,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                         Open the interactive editor to drag and adjust body region polygons.
                                         Click regions to select them, then drag vertices to reshape.
                                     </p>
-                                    <a
-                                        href="/?debug=bodymap"
-                                        target="_blank"
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded transition-colors"
-                                    >
-                                        <Image className="w-4 h-4" />
-                                        Open Body Map Editor
-                                    </a>
+                                    <InlineBodyMapEditor />
                                 </div>
 
                                 <div className="bg-neutral-800 rounded-lg p-4">
@@ -888,6 +958,11 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     {/* --- OYON LEARNING ANALYTICS (educator+ only; server enforces tenant view setting) --- */}
                     {activeTab === 'oyon-analytics' && canSeeOyonAnalytics && (
                         <OyonLearningAnalyticsTab />
+                    )}
+
+                    {/* --- CLASSES (educator+ only; server enforces ownership/tenant) --- */}
+                    {activeTab === 'cohorts' && canManageCohorts && (
+                        <CohortsManagementTab />
                     )}
 
                 </div>
@@ -2417,8 +2492,9 @@ student1,Student One,student1@school.edu,stud123,user`;
                             onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                         >
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
+                            <option value="user">{roleLabel('user')}</option>
+                            <option value="educator">{roleLabel('educator')}</option>
+                            <option value="admin">{roleLabel('admin')}</option>
                         </select>
                     </div>
                     <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded font-bold">
@@ -2488,8 +2564,9 @@ student1,Student One,student1@school.edu,stud123,user`;
                             onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                             className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
                         >
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
+                            <option value="user">{roleLabel('user')}</option>
+                            <option value="educator">{roleLabel('educator')}</option>
+                            <option value="admin">{roleLabel('admin')}</option>
                         </select>
                     </div>
                     <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded font-bold">
@@ -2583,7 +2660,10 @@ jane_admin,Jane Smith,jane@example.com,admin456,admin`}
                                     {user.username}
                                     {user.name && <span className="text-neutral-500 font-normal text-sm">({user.name})</span>}
                                     {user.role === 'admin' && (
-                                        <span className="px-2 py-0.5 bg-purple-600 text-white text-xs rounded">Admin</span>
+                                        <span className="px-2 py-0.5 bg-purple-600 text-white text-xs rounded">{roleLabel('admin')}</span>
+                                    )}
+                                    {user.role === 'educator' && (
+                                        <span className="px-2 py-0.5 bg-teal-600 text-white text-xs rounded">{roleLabel('educator')}</span>
                                     )}
                                 </div>
                                 <div className="text-xs text-neutral-400 mt-1">

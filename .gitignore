@@ -80,6 +80,11 @@ LATEST_UPDATES.md
 PORT_CONFIGURATION_FIX.md
 docs/plans/
 
+# VitePress build/cache artifacts — the docs sources are committed, not the output
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+docs/.vitepress/.temp/
+
 # Piper TTS — large binaries and voice models, downloaded by server/scripts/install-piper.sh
 server/data/piper/
 

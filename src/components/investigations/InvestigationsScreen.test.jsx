@@ -42,6 +42,14 @@ const toastError = vi.fn();
 vi.mock('../../contexts/ToastContext', () => ({
     useToast: () => ({ success: toastSuccess, error: toastError, info: vi.fn(), warning: vi.fn() }),
 }));
+// InvestigationsScreen calls useAuth() for the student-safe vs authoring
+// case label (Bug 9). These isolated topbar tests assert the authoring
+// title, i.e. the privileged-viewer view, so mock a privileged user. The
+// role gate is locked separately in src/utils/caseDisplayLabel.test.js.
+vi.mock('../../contexts/AuthContext', () => ({
+    useAuth: () => ({ user: { role: 'admin' }, isAdmin: () => true }),
+    AuthProvider: ({ children }) => children,
+}));
 const ordered = vi.fn();
 vi.mock('../../services/PatientRecord', () => ({
     usePatientRecord: () => ({ ordered, elicited: vi.fn() }),

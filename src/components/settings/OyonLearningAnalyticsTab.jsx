@@ -4,6 +4,7 @@ import {
    AlertTriangle, ChevronLeft, ChevronRight, Info, Sliders,
 } from 'lucide-react';
 import { apiFetch, ApiError } from '../../services/apiClient';
+import { roleLabel } from '../../constants/roleLabels';
 import {
    emotionColor, ALL_DOMINANT_LABELS, pct, signed, fix2, signedColor,
    fmtTime, qualityVerdict,
@@ -302,10 +303,10 @@ function FilterBar({ filters, onChange, onApply, onReset }) {
                   className="w-full px-2 py-1.5 rounded bg-neutral-900 border border-neutral-700 text-sm text-neutral-100"
                >
                   <option value="">All</option>
-                  <option value="student">Student</option>
-                  <option value="reviewer">Reviewer</option>
-                  <option value="educator">Educator</option>
-                  <option value="admin">Admin</option>
+                  <option value="student">{roleLabel('student')}</option>
+                  <option value="reviewer">{roleLabel('reviewer')}</option>
+                  <option value="educator">{roleLabel('educator')}</option>
+                  <option value="admin">{roleLabel('admin')}</option>
                </select>
             </FormRow>
             <FormRow label="Min confidence" hint={`${(filters.min_confidence * 100).toFixed(0)}%`}>

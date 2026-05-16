@@ -1,0 +1,118 @@
+# Data model reference
+
+> **Generated file — do not edit by hand.** Produced by `scripts/docs-gen/gen-data.mjs` from `server/db.js`, `migrations/0001_initial.sql` (the bootstrap schema) and all `migrations/*.sql`. Regenerate with `npm run docs:gen:data`.
+
+**80 tables** in the durable data model.
+
+> Note: `server/db.js` no longer holds inline `CREATE TABLE` DDL — it delegates to the migration runner. The canonical bootstrap schema is `migrations/0001_initial.sql`, treated here as the base schema. SQLite rebuild-scaffold tables (`*_new`/`*_old`) are intentionally excluded.
+
+See [tables.md](./tables.md) for the per-table column reference.
+
+## Cross-cutting conventions
+
+These columns recur across many tables and carry platform-wide semantics (see `CLAUDE.md`):
+
+| Convention | Column(s) | Meaning |
+| --- | --- | --- |
+| Soft-delete | `deleted_at` | Row is logically deleted when non-NULL. Most reads imply `deleted_at IS NULL`; physical purge is done by the retention sweep cron. |
+| Tenant scoping | `tenant_id` | Multi-tenant isolation. Enforced by `requireSameTenant()` middleware, not ad-hoc `WHERE` clauses. |
+| Audit / ownership | `created_by`, `created_at`, `updated_at` | Who authored the row and when; basis for ownership-based authz. |
+| Snapshot binding | `*_snapshot` | Frozen copy taken at session start so later admin edits do not bleed into a live session. |
+
+## Migration policy
+
+Schema evolves only through versioned `migrations/*.sql`. Each migration is classified **additive** (previous-version code still runs) or **destructive** in `migrations/MANIFEST.md`, which `bin/rohy-update` reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.
+
+Parsed **26 migration files** beyond the base schema (`0001_initial.sql`).
+
+| Migration | Class | Note |
+| --- | --- | --- |
+| `0001_initial.sql` | additive | Initial schema bootstrap. |
+| `0002_alarm_config_user_cascade.sql` | additive | Foreign key cascade addition. |
+| `0003_role_hierarchy.sql` | additive | New role rows + index. |
+| `0004_tenants.sql` | additive | Multi-tenant introduction. |
+| `0005_retention.sql` | additive | Retention policy table. |
+| `0006_tts_pitch_semitones.sql` | additive | New column with default. |
+| `0007_drug_lab_catalogue.sql` | additive | Catalogue table seed. |
+| `0008_audit_hash_chain.sql` | additive | Hash chain columns. |
+| `0009_client_logs.sql` | additive | New table. |
+| `0010_usage_budget.sql` | additive | Budget tracking columns. |
+| `0011_oyon_addon.sql` | additive | Oyon emotion-record tables. |
+| `0012_oyon_settings_runtime.sql` | additive | Runtime config columns. |
+| `0013_oyon_settings_default_interval.sql` | additive | Default change only. |
+| `0014_oyon_records_nullable_user.sql` | additive | Table rebuild — preserves all columns; widens NOT NULL to NULL. Old code still reads the same shape. |
+| `0015_oyon_settings_safer_default.sql` | additive | Default change only. |
+| `0016_oyon_records_unique_record_id.sql` | additive | Partial unique index. |
+| `0017_oyon_records_window_metadata.sql` | additive | New columns with defaults. |
+| `0018_learning_events_vitals.sql` | additive | New columns. |
+| `0019_oyon_lower_min_valid_frames.sql` | additive | Default change only — backfills legacy 6 → 3 so analytics stop dropping windows on normal blinks. |
+| `0020_clear_orus_patient_template_default.sql` | additive | Data fixup — removes the stale `en-US-Chirp3-HD-Orus` `case_voice` override from `is_default=1` patient templates. Targeted: only matches that exact value, so admin-picked voices are preserved. Idempotent (zero-row no-op on already-clean installs). |
+| `0021_learning_events_room.sql` | additive | New `room` column on learning_events + partial index. Pairs with the RoomNavigator: every event carries the active in-session room ('chat', 'examination', 'lab', 'radiology', 'consultant'). Pre-migration rows + pre-room events stay NULL. |
+| `0022_voice_surface_collapse.sql` | destructive | Reclassified from `additive` (2026-05-14 audit): the migration deletes rows from `platform_settings` and `cases` and overwrites `cases.config` / `agent_templates.config` for shipped cases. Predicate-based DELETE on user-authored tables without an FK guard is destructive per the policy above, even when the author believes "no operator has those rows." Operators on a version that already applied this migration are unaffected (data is gone); operators upgrading past it now go through the `--allow-destructive` gate. Concretely: (a) Deletes zombie `voice_*`/`piper_voice_*`/`default_voice_*` settings rows from platform_settings. (b) Strips `tts_provider`/`tts_rate`/`tts_pitch` from `cases.config.voice` and `tts_provider` from `agent_templates.config.voice`. (c) Clears non-Kokoro `case_voice` values. (d) Overwrites Kokoro voices on shipped cases 1–6. (e) Removes ~55 test-fixture cases by name pattern with no `WHERE NOT EXISTS (SELECT 1 FROM sessions WHERE case_id = cases.id)` guard. |
+| `0023_clamp_turnaround_to_5min.sql` | additive | Data-only normalisation. Clamps `case_investigations.turnaround_minutes` to the 1–5 minute band the sim uses after the turnaround cleanup (kills 30 / 60 / 240 / 2880 / 10080 minute waits seeded before the clamp). Schema unchanged — old code can still read these rows; only the column values move. Authors who deliberately need a longer wait can re-set via the case wizard. |
+| `0024_agent_arrives_at.sql` | additive | New nullable `arrives_at` column on `agent_session_state`. Anchors the paged → present timer on the server clock so the wait survives refreshes / room hops; pairs with the 1–3 minute clamp in the page handler. Old code that doesn't read this column keeps working — null on every row at migration time. |
+| `0025_cohorts.sql` | additive | Two new tables for teacher-owned cohorts: `cohorts` (teacher-owned class with optional join_code) + `cohort_members` (student membership). Partial unique indexes (live join_code, live cohort_id+user_id) plus owner/tenant/lookup indexes. Strictly additive — nothing on existing tables changes; pre-migration code never touches these tables. No endpoints/UI yet (Phase 2 = schema only). |
+| `0026_base_class_backfill.sql` | additive | Data backfill — per tenant with sessions, seeds one "Base Class" cohort (owned by that tenant's lowest-id admin, else educator) and enrolls every distinct user with a live session, so pre-feature activity is visible in the teacher dashboard out of the box. Only INSERTs into cohorts/cohort_members; no schema change; NOT EXISTS guards + 0025 partial-uniques make it re-run-safe. Tenants with sessions but no admin/educator are skipped (NOT NULL owner FK). |
+| `0027_cohort_entity.sql` | additive | Fleshes out the cohort entity. Adds 4 nullable `cohorts` columns (`description TEXT`, `starts_at DATETIME`, `ends_at DATETIME`, `settings JSON`), adds `cohort_members.member_role TEXT NOT NULL DEFAULT 'student'` (DEFAULT classifies the ~10 Base Class rows as students with no data step; allowed set 'student'\\|'teacher' enforced at app layer since SQLite can't ALTER-add a CHECK) + partial role index, and creates the new `cohort_cases` table (cohort↔case assignment, soft-delete, partial-unique on live (cohort_id,case_id) + cohort_id/case_id lookup indexes). Strictly additive: every column add is nullable or defaulted and the table is new — nothing dropped/renamed/narrowed; pre-migration code keeps working since it never selects these columns or touches the new table. |
+
+## Tables by concern
+
+### Auth & users
+
+`active_sessions`, `login_logs`, `user_preferences`, `users`
+
+### Tenants
+
+`tenants`
+
+### Cases & scenarios
+
+`case_versions`, `cases`, `clinical_pathways`, `diagnoses`, `patient_information`, `patient_record_documents`, `patient_record_events`, `scenario_events`, `scenario_templates`, `scenario_timeline_points`, `scenarios`
+
+### Sessions
+
+`clinical_notes`, `interactions`, `session_notes`, `session_settings`, `session_vitals`, `sessions`
+
+### Investigations & labs
+
+`body_map_coordinates`, `body_regions`, `case_investigations`, `custom_lab_group_items`, `custom_lab_groups`, `exam_techniques`, `investigation_orders`, `investigation_parameters`, `investigation_templates`, `investigation_views`, `lab_definitions`, `lab_panels`, `lab_reference_ranges`, `lab_tests`, `panel_tests`, `physical_exam_findings`, `region_default_findings`, `region_exam_types`, `region_special_tests`, `vital_sign_definitions`, `vital_sign_history`
+
+### Treatments & medications
+
+`active_treatments`, `case_treatments`, `custom_drug_group_items`, `custom_drug_groups`, `data_sources`, `medication_doses`, `medications`, `search_aliases`, `treatment_effects`, `treatment_orders`
+
+### Agents
+
+`agent_conversations`, `agent_session_state`, `agent_templates`, `case_agents`, `team_communications_log`
+
+### Cohorts
+
+`cohort_cases`, `cohort_members`, `cohorts`
+
+### Analytics & events
+
+`emotion_logs`, `event_log`, `export_records`, `learning_events`, `questionnaire_responses`
+
+### LLM & TTS usage
+
+`llm_model_pricing`, `llm_request_log`, `llm_usage`, `tts_usage`, `usage_budget`
+
+### Oyon (emotion add-on)
+
+`oyon_emotion_consents`, `oyon_emotion_records`, `oyon_settings`
+
+### Alarms
+
+`alarm_config`, `alarm_events`
+
+### Observability & audit
+
+`client_logs`, `settings_logs`, `system_audit_log`
+
+### Platform & retention
+
+`platform_settings`
+
+---
+
+_Regenerate: `npm run docs:gen:data`_

@@ -179,6 +179,11 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
                     signal: controller.signal,
                     silent: silentUser,
                     agentTemplateId: discussant.templateId || null,
+                    // The discussant owns its transcript via logTurn() →
+                    // agent_conversations. It must NOT also write to the
+                    // patient `interactions` thread, or the debrief bleeds
+                    // into the patient chat on restore (Bug 8).
+                    persistInteractions: false,
                     onDelta: (delta) => {
                         acc += delta;
                         setMessages(prev => prev.map(m =>

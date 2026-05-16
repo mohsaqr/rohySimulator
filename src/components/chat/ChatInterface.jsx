@@ -35,6 +35,15 @@ import { pickWaitPhase, formatRemaining, waitProgressPct } from '../../utils/age
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
 // only when a user actually toggles voice mode on for the first time.
 
+// Agents eligible for their own chat tab. The patient already has a
+// dedicated first tab driven by the case + attachedPatient merge, so an
+// agent_type==='patient' template (the seeded "Default Patient") must NOT
+// render a second tab mapped to the same person (Bug 10, 16.5.2026).
+export function visibleAgentTabs(agents) {
+    if (!Array.isArray(agents)) return [];
+    return agents.filter(a => a && a.enabled !== false && a.agent_type !== 'patient');
+}
+
 // Build a participant {avatar_id, avatar_camera, gender, name, id} from the
 // chat's current "who's talking" state — patient (from caseData) or one of
 // the agents (from the agents list). Pushed into VoiceContext for PatientVisual.
@@ -1446,7 +1455,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             {/* Tab Bar */}
             <div className="flex items-end gap-1 px-2 pt-2 bg-neutral-950 border-b border-neutral-800">
                 {renderTab('patient', patientName, <Bot className="w-4 h-4 text-emerald-400" />)}
-                {agents.filter(a => a.enabled !== false).map(agent => {
+                {/* Bug 10 (16.5.2026): patient already has its own tab
+                    above — visibleAgentTabs() drops agent_type==='patient'
+                    so the seeded "Default Patient" isn't a duplicate tab. */}
+                {visibleAgentTabs(agents).map(agent => {
                     const status = agentStates[agent.agent_type]?.status || agent.status || 'absent';
                     return renderTab(
                         agent.agent_type,

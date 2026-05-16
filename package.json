@@ -1,7 +1,7 @@
 {
   "name": "rohy",
   "private": true,
-  "version": "2.1.2",
+  "version": "2.3.0",
   "description": "Virtual Patient Simulation Platform for Medical Education",
   "author": {
     "name": "Mohammed Saqr",
@@ -19,7 +19,7 @@
     "install:piper": "bash server/scripts/install-piper.sh",
     "postinstall": "bash OyonR/scripts/download-models.sh 2>/dev/null || echo '[oyon] model bundles not downloaded — run: npm run setup:oyon (needs curl + network)'",
     "production": "NODE_ENV=production node server/server.js",
-    "build": "vite build --base=/rohy/ && rm -rf frontend && mkdir -p frontend && cp -rf dist/. frontend/",
+    "build": "npm run docs:build && vite build --base=/rohy/ && rm -rf frontend && mkdir -p frontend && cp -rf dist/. frontend/",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run --reporter=default",
@@ -31,7 +31,15 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install --with-deps chromium",
-    "bench": "NODE_OPTIONS='--max-old-space-size=4096' vitest bench --run"
+    "bench": "NODE_OPTIONS='--max-old-space-size=4096' vitest bench --run",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "docs:gen:cli": "node scripts/docs-gen/gen-cli.mjs",
+    "docs:gen:api": "node scripts/docs-gen/gen-api.mjs",
+    "docs:gen:data": "node scripts/docs-gen/gen-data.mjs",
+    "docs:gen:config": "node scripts/docs-gen/gen-config.mjs",
+    "docs:check": "bash scripts/docs-gen/check.sh"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -81,6 +89,7 @@
     "supertest": "^7.0.0",
     "tailwindcss": "^4.1.18",
     "vite": "^7.2.4",
+    "vitepress": "^1.6.4",
     "vitest": "^4.1.5"
   }
 }

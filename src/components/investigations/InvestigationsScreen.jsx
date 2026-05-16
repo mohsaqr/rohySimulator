@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle, Clock, Eye, FlaskConical, NotebookPen, Scan, X } from 'lucide-react';
 import { ApiError, apiFetch, apiPost } from '../../services/apiClient';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { caseDisplayLabel } from '../../utils/caseDisplayLabel';
 import { usePatientRecord } from '../../services/PatientRecord';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import SessionNotesDrawer from '../common/SessionNotesDrawer';
@@ -80,6 +82,7 @@ export default function InvestigationsScreen({
 }) {
     const [showNotes, setShowNotes] = useState(false);
     const toast = useToast();
+    const { user } = useAuth();
     const { ordered } = usePatientRecord();
 
     useEffect(() => {
@@ -139,7 +142,8 @@ export default function InvestigationsScreen({
     useEffect(() => { setExpandedId(null); }, [activeKind]);
     const expandedOrder = active.openOrders.find((o) => o.id === expandedId) || null;
 
-    const caseTitle = activeCase?.name || activeCase?.config?.patient_name || 'Patient';
+    // Students must not see the authoring title (it names the diagnosis).
+    const caseTitle = caseDisplayLabel(activeCase, user);
     const counts = useMemo(() => ({
         lab: countsFor(lab.orders),
         radiology: countsFor(radiology.orders),

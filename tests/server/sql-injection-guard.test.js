@@ -140,6 +140,40 @@ const ALLOWLIST = [
         lineSubstring: 'WHERE ${clauses.join(\' AND \')}',
         why: 'TNA filter helper — clauses[] entries are hardcoded SQL fragments with ? placeholders; values go through params[].',
     },
+    {
+        file: 'server/lib/learningEventAggregates.js',
+        why: 'Shared learning_events aggregation helpers. Every caller value flows through the params[] array as a ? placeholder (buildEventFilter pushes onto params for tenant/case/user/session/date and member-IN). The only interpolated tokens are: the column `alias` (a server-passed constant like "le."), the `?,?,?` member-IN marker string (markers only, never values), and the `${where}` clause that buildEventFilter itself built from hardcoded "col = ?" fragments. No req.* value is ever interpolated. Same safety basis as the analytics-routes TNA filter-helper entries above.',
+    },
+    {
+        file: 'server/routes/cohorts-routes.js',
+        lineSubstring: 'SELECT id FROM cases WHERE id IN (${placeholders})',
+        why: 'placeholders = caseIds.map(() => "?").join(",") — markers only, never values. caseIds is pre-filtered to integers (Number + Number.isInteger) earlier in the handler; tenant_id parameterised via ?. Used by POST /cohorts and POST /cohorts/:id/cases case-existence checks.',
+    },
+    {
+        file: 'server/routes/cohorts-routes.js',
+        lineSubstring: 'UPDATE cohorts SET ${sets.join(\', \')} WHERE id = ?',
+        why: 'sets[] entries are hardcoded "column = ?" string literals (name/description/starts_at/ends_at/settings); every value is pushed onto params[] as a ? placeholder; cohort id also parameterised. Same safe shape as the generic "SET ${updates.join" entry above.',
+    },
+    {
+        file: 'server/routes/cohorts-routes.js',
+        lineSubstring: 'UPDATE cohort_members SET deleted_at = NULL, joined_at = ${dbAdapter.now()}, member_role = ? WHERE id = ?',
+        why: 'dbAdapter.now() is the constant literal "datetime(\'now\')" (dbAdapter.js); member_role and membership id are parameterised via ?. Member-revive on re-add.',
+    },
+    {
+        file: 'server/routes/cohorts-routes.js',
+        lineSubstring: 'SET deleted_at = ${dbAdapter.now()} WHERE id = ?',
+        why: 'dbAdapter.now() returns the constant literal "datetime(\'now\')" (dbAdapter.js:200) — no user input; cohort id parameterised via ?.',
+    },
+    {
+        file: 'server/routes/cohorts-routes.js',
+        lineSubstring: 'SET deleted_at = ${dbAdapter.now()} WHERE cohort_id = ?',
+        why: 'dbAdapter.now() is the constant literal "datetime(\'now\')"; cohort_id parameterised via ?.',
+    },
+    {
+        file: 'server/routes/cohorts-routes.js',
+        lineSubstring: 'SET deleted_at = NULL, joined_at = ${dbAdapter.now()} WHERE id = ?',
+        why: 'dbAdapter.now() is the constant literal "datetime(\'now\')"; membership id parameterised via ?.',
+    },
 ];
 
 function isAllowlisted(filePath, line) {

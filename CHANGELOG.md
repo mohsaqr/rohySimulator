@@ -9,6 +9,42 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.3.0] — 2026-05-16
+
+Minor release. Teacher cohorts, the enterprise documentation site with
+in-app Help & Support, and a full triage pass over the 16.5.2026 bug
+report.
+
+### Added
+
+- **Teacher cohorts.** Teacher-owned classes with join codes, roster and
+  completion-grid views, cohort-scoped analytics (summary, timeline,
+  hourly, stats, TNA sequences), per-cohort case assignment and
+  co-teachers (migrations 0025–0027).
+- **Documentation site.** VitePress site (trainee → educator → admin →
+  operator → integrator → security) with local search, served at
+  `/rohy/docs/`, plus an in-app **Help & Support** drawer (role-filtered
+  articles, parsed release notes, redacted diagnostics bundle).
+
+### Fixed
+
+- **Investigations.** Default labs no longer hardcode a 30-minute
+  turnaround; lab/radiology order rows now persist `tenant_id` so
+  non-default-tenant sessions actually receive results; the worklist no
+  longer mislabels pending tests "Ready" (UTC parsing).
+- **Educational integrity.** The authoring case title (which names the
+  diagnosis) is no longer shown to students; only educators+ see it.
+- **Physical exam.** Posterior body-map regions (upper/lower back,
+  buttocks) resolve again; special-test chips are clickable.
+- **Debrief.** The discussant conversation no longer bleeds into the
+  patient chat; clinical alarms stop sounding after End & Debrief.
+- **Misc.** Body Map Editor opens for admins in production; the duplicate
+  "Default Patient" chat tab is gone; the avatar FOV control affects the
+  preview; Help/diagnostics requests use the correct API path and the
+  docs site is served + linked correctly.
+- **Cohort analytics.** Out-of-order or failed scoped reloads no longer
+  render the previous scope's stats.
+
 ## [2.1.0] — 2026-05-14
 
 Minor release. Per-persona LLM routing and a global version badge.

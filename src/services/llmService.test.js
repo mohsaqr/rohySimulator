@@ -689,4 +689,30 @@ describe('LLMService.streamMessage', () => {
         });
         expect(userTurnCall).toBeDefined();
     });
+
+    // --- 12. persistInteractions:false writes NOTHING to /interactions ---
+    it('skips BOTH user and assistant /interactions writes when persistInteractions:false (Bug 8)', async () => {
+        // CONTRACT: the debrief discussant owns its transcript via
+        // agent_conversations. It must never touch the patient `interactions`
+        // thread, or the debrief reappears in the patient chat on restore.
+        fetchMock.mockImplementation((url) => {
+            if (!String(url).includes('/proxy/llm')) {
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            }
+            return Promise.resolve(sseResponse([
+                'data: {"delta":"debrief reply"}\n\n',
+                'data: [DONE]\n\n',
+            ]));
+        });
+
+        await LLMService.streamMessage(
+            SESSION_ID, MESSAGES, SYSTEM_PROMPT, 'discussion',
+            { onDelta: () => {}, persistInteractions: false }
+        );
+
+        const interactionCalls = fetchMock.mock.calls.filter(
+            ([u]) => String(u).includes('/interactions')
+        );
+        expect(interactionCalls).toHaveLength(0);
+    });
 });

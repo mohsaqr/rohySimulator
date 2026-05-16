@@ -100,7 +100,7 @@ function Section({ title, count, icon: Icon, tint, children }) {
 }
 
 function PendingRow({ order }) {
-    const remaining = getTimeRemaining(order.available_at);
+    const remaining = pendingLabel(order);
     return (
         <div className="p-2.5 rounded-lg border-l-[3px] border-l-amber-500 border border-amber-700/30 bg-amber-900/15">
             <div className="text-sm font-medium text-white truncate">{order.test_name}</div>
@@ -149,18 +149,44 @@ function ViewedRow({ order, selected, onSelect }) {
     );
 }
 
-function getTimeRemaining(availableAt) {
-    if (!availableAt) return 'Ready soon';
-    const diff = new Date(availableAt).getTime() - Date.now();
-    if (diff <= 0) return 'Ready';
-    const minutes = Math.floor(diff / 60000);
-    const seconds = Math.floor((diff % 60000) / 1000);
-    return `${minutes}:${seconds.toString().padStart(2, '0')} remaining`;
+// SQLite emits "YYYY-MM-DD HH:MM:SS" with NO timezone marker — it is UTC,
+// but `new Date()` parses that space-separated form as LOCAL time. That
+// skew is exactly Bug 4: in a UTC-offset timezone the local parse lands
+// in the past, so a still-pending order printed the literal "Ready". Any
+// client-side math on these strings must normalise to UTC first.
+function parseSqliteUtc(ts) {
+    if (!ts) return NaN;
+    // Already has tz info (ISO 'Z' or ±HH:MM) → trust it.
+    if (/[zZ]|[+-]\d\d:?\d\d$/.test(ts)) return new Date(ts).getTime();
+    return new Date(`${String(ts).replace(' ', 'T')}Z`).getTime();
+}
+
+// Pending rows are filtered to !is_ready (server truth). The label must
+// therefore NEVER say "Ready" — it derives from the server-computed
+// minutes_remaining, not a re-parsed timestamp.
+function pendingLabel(order) {
+    const mins = Number(order?.minutes_remaining);
+    if (Number.isFinite(mins) && mins > 0) {
+        if (mins >= 1) return `~${Math.ceil(mins)} min remaining`;
+        return '< 1 min remaining';
+    }
+    // minutes_remaining absent or 0 but the server still has it pending
+    // (rounding / poll lag): show a truthful transient, not "Ready".
+    const at = parseSqliteUtc(order?.available_at);
+    if (Number.isFinite(at)) {
+        const diff = at - Date.now();
+        if (diff > 0) {
+            const m = Math.floor(diff / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            return `${m}:${s.toString().padStart(2, '0')} remaining`;
+        }
+    }
+    return 'Finalizing…';
 }
 
 function formatRelative(timestamp) {
     if (!timestamp) return '';
-    const diff = Date.now() - new Date(timestamp).getTime();
+    const diff = Date.now() - parseSqliteUtc(timestamp);
     if (diff < 60_000) return 'just now';
     if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
     if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;

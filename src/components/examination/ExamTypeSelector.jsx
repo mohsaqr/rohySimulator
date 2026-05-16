@@ -79,19 +79,33 @@ export default function ExamTypeSelector({
                 })}
             </div>
 
-            {/* Special tests section */}
+            {/* Special tests section.
+                Bug 3 (16.5.2026): these were inert <span>s. The exam data
+                models a single combined `special` finding per region (not
+                per-named-test), so each chip now performs the region's
+                special examination via the same handler the technique
+                buttons use, passing the test name for the exam log. */}
             {region.specialTests && region.specialTests.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-slate-700">
                     <div className="text-xs text-slate-500 mb-2">Available special tests:</div>
                     <div className="flex flex-wrap gap-1">
-                        {region.specialTests.map(test => (
-                            <span
-                                key={test}
-                                className="text-xs px-2 py-1 bg-slate-800 text-slate-400 rounded"
-                            >
-                                {test}
-                            </span>
-                        ))}
+                        {region.specialTests.map(test => {
+                            const isSelected = selectedExamType === 'special';
+                            return (
+                                <button
+                                    key={test}
+                                    type="button"
+                                    onClick={() => onExamTypeSelect('special', test)}
+                                    className={`text-xs px-2 py-1 rounded border transition-colors ${
+                                        isSelected
+                                            ? 'bg-cyan-600 border-cyan-500 text-white'
+                                            : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-cyan-500 hover:bg-slate-700'
+                                    }`}
+                                >
+                                    {test}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
             )}

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiFetch, apiPut } from '../../services/apiClient';
+import JoinClassPanel from './JoinClassPanel';
 
 /**
  * User Profile Panel
@@ -306,6 +307,17 @@ export default function UserProfilePanel({ _onClose }) {
                         <Bot className="w-4 h-4 inline mr-2" />
                         AI Settings
                     </button>
+                    <button
+                        onClick={() => setActiveTab('join-class')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            activeTab === 'join-class'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-neutral-800 text-neutral-400 hover:text-white'
+                        }`}
+                    >
+                        <GraduationCap className="w-4 h-4 inline mr-2" />
+                        Join a class
+                    </button>
                 </div>
             </div>
 
@@ -603,6 +615,10 @@ export default function UserProfilePanel({ _onClose }) {
                             </button>
                         </div>
                     </div>
+                )}
+
+                {activeTab === 'join-class' && (
+                    <JoinClassPanel />
                 )}
             </div>
         </div>

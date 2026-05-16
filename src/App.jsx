@@ -20,7 +20,7 @@ import DiagnosticBar from './components/debug/DiagnosticBar';
 import { PatientRecordProvider } from './services/PatientRecord';
 import EventLogger, { COMPONENTS, registerWindowLifecycleLogging } from './services/eventLogger';
 import { ApiError, apiFetch, apiPut } from './services/apiClient';
-import { Settings, X, LogOut, User, ChevronDown, Activity, StopCircle, AlertTriangle } from 'lucide-react';
+import { Settings, X, LogOut, User, ChevronDown, Activity, StopCircle, AlertTriangle, HelpCircle } from 'lucide-react';
 import BodyMapDebug from './components/examination/BodyMapDebug';
 import TnaDashboard from './components/analytics/tna/TnaDashboardV2';
 import DiscussionScreen from './components/discussion/DiscussionScreen';
@@ -28,6 +28,7 @@ import PhysicalExamScreen from './components/exam/PhysicalExamScreen';
 import InvestigationsScreen from './components/investigations/InvestigationsScreen';
 import RoomNavigator from './components/common/RoomNavigator';
 import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
+import { HelpCenter, OnboardingTour } from './help';
 
 // Persistence rule: a session ends ONLY through the Exit or End buttons
 // (or an explicit case-switch). Refresh, tab close, idle time — none of
@@ -80,6 +81,7 @@ function MainApp() {
    // renders its calm post-debrief strip. Cleared when a new case loads.
    const [caseEnded, setCaseEnded] = useState(false);
    const [showEndConfirm, setShowEndConfirm] = useState(false);
+   const [showHelpCenter, setShowHelpCenter] = useState(false);
    const showExamination = currentRoom === 'examination';
    const showInvestigations = currentRoom === 'lab' || currentRoom === 'radiology';
    const showDiscussion = currentRoom === 'consultant';
@@ -430,6 +432,14 @@ function MainApp() {
          component: COMPONENTS.APP,
       });
       endSessionOnServer(sessionId);
+      // Bug 7 (16.5.2026): clinical alarms latch until acked, and the
+      // AudioSurface keeps beeping any active alarm. Ending the case is an
+      // explicit "I'm done with the patient" — acknowledge outstanding
+      // alarms so the ICU tone doesn't keep sounding through the debrief.
+      // (Done here, not on consultant-room entry: the consultant is a peer
+      // room that does NOT end the session, so visiting it mid-case must
+      // not silence live alarms.)
+      notifications.ackAll?.();
       setShowEndConfirm(false);
       setCaseEnded(true);
       navigateToRoom('consultant');
@@ -699,6 +709,13 @@ function MainApp() {
                                  <Settings className="w-4 h-4 text-neutral-400" />
                                  Open Settings
                               </button>
+                              <button
+                                 onClick={() => { setShowHelpCenter(true); setShowUserMenu(false); }}
+                                 className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
+                              >
+                                 <HelpCircle className="w-4 h-4 text-blue-400" />
+                                 Help &amp; Support
+                              </button>
                               {isAdmin() && (
                                  <button
                                     onClick={() => { setShowTnaAnalytics(true); setShowUserMenu(false); }}
@@ -781,6 +798,12 @@ function MainApp() {
                caseData={activeCase}
             />
          )}
+
+         {/* In-app Help & Support (Stage 4). The drawer is always mounted
+             and self-hides on !open. The first-run onboarding tour shows
+             once per role per TOUR_VERSION (persisted in localStorage). */}
+         <HelpCenter open={showHelpCenter} onClose={() => setShowHelpCenter(false)} />
+         {user?.role && <OnboardingTour role={user.role} />}
 
          {/* Bottom RoomNavigator on the main chat surface. Same
              component renders inside PhysicalExamScreen and

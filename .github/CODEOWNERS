@@ -1,0 +1,18 @@
+# Code ownership for review routing.
+#
+# The generated reference and its generators are coupled: a change to a
+# route/schema/env/CLI must regenerate the reference (enforced by
+# `npm run docs:check` in CI). Keep these owned together.
+
+# Documentation site + authored guides
+/docs/                       @mohsaqr
+
+# Reference generators (source of the generated reference)
+/scripts/docs-gen/           @mohsaqr
+
+# In-app Help & Support
+/src/help/                   @mohsaqr
+/server/routes/help-routes.js @mohsaqr
+
+# Docs CI
+/.github/workflows/docs.yml  @mohsaqr
