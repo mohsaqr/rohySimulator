@@ -33,6 +33,7 @@ export default defineConfig({
     'UPDATE-STRATEGY.md',
     'ADMIN_FIRST_RUN.md',
     'DOCUMENTATION-PLAN.md',
+    'DOCUMENTATION-AUDIT.md',
     'audits/**',
   ],
   // Many section pages are scaffolded ahead of their authoring stage.
