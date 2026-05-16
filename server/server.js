@@ -137,12 +137,21 @@ app.use('/uploads', express.static(path.join(__dirname, "..", "public","uploads"
 // VitePress documentation site (Stage 4 — Help & Support links here).
 // The build emits cleanUrls (trainee/getting-started.html served at
 // /trainee/getting-started), so `extensions: ['html']` is required for the
-// in-app Help article links to resolve. Mounted at /rohy/docs to match
-// DOCS_BASE in src/help/helpContent.js, and BEFORE the SPA static so docs
-// URLs don't fall through to the React app's index.html.
+// in-app Help article links to resolve. Mounted BEFORE the SPA static so
+// docs URLs don't fall through to the React app's index.html.
+//
+// Two mount points on purpose: the Help drawer links at DOCS_BASE
+// `/rohy/docs/`. In local dev the Vite proxy forwards `/rohy/docs`
+// verbatim, so Express must answer `/rohy/docs`. In production the deploy
+// hub's nginx strips the `/rohy/` prefix before proxying (public
+// `/rohy/docs/X` → backend `/docs/X`), so Express must also answer
+// `/docs`. Serving the same dist at both paths makes the docs reachable
+// regardless of whether a prefix-stripping reverse proxy sits in front.
 const docsDist = path.join(__dirname, "..", "docs", ".vitepress", "dist");
 if (fs.existsSync(docsDist)) {
-    app.use('/rohy/docs', express.static(docsDist, { extensions: ['html'] }));
+    const docsStatic = express.static(docsDist, { extensions: ['html'] });
+    app.use('/rohy/docs', docsStatic); // local dev / non-stripping proxy
+    app.use('/docs', docsStatic);      // nginx-stripped prod path
 } else {
     bootLog.warn('docs site not built — Help article links will 404', { docs_dist: docsDist });
 }

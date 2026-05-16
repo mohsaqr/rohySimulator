@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.3.2] — 2026-05-17
+
+Patch release. Docs site reachable behind the prefix-stripping reverse proxy.
+
+### Fixed
+
+- **In-app Help article links 404'd in production.** The VitePress docs
+  were mounted only at `/rohy/docs`, but the deploy reverse proxy strips
+  the `/rohy/` prefix before forwarding (public `/rohy/docs/X` → backend
+  `/docs/X`). The docs dist is now served at **both** `/rohy/docs` (local
+  dev / non-stripping proxies) and `/docs` (nginx-stripped production), so
+  Help links resolve regardless of front-proxy prefix handling.
+
 ## [2.3.1] — 2026-05-17
 
 Patch release. Release-packaging fixes so a clean deploy actually works.
