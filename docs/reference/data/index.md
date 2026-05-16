@@ -21,7 +21,7 @@ These columns recur across many tables and carry platform-wide semantics (see `C
 
 ## Migration policy
 
-Schema evolves only through versioned `migrations/*.sql`. Each migration is classified **additive** (previous-version code still runs) or **destructive** in [`migrations/MANIFEST.md`](../../../migrations/MANIFEST.md), which `bin/rohy-update` reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.
+Schema evolves only through versioned `migrations/*.sql`. Each migration is classified **additive** (previous-version code still runs) or **destructive** in `migrations/MANIFEST.md`, which `bin/rohy-update` reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.
 
 Parsed **26 migration files** beyond the base schema (`0001_initial.sql`).
 

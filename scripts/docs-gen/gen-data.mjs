@@ -379,7 +379,7 @@ function render({ tables, manifest, parsedMigrations, dbJsTables }) {
   idx.push(
     'Schema evolves only through versioned `migrations/*.sql`. Each migration ' +
       'is classified **additive** (previous-version code still runs) or ' +
-      '**destructive** in [`migrations/MANIFEST.md`](../../../migrations/MANIFEST.md), ' +
+      '**destructive** in `migrations/MANIFEST.md`, ' +
       'which `bin/rohy-update` reads to decide whether to auto-apply. Default ' +
       'is additive-only; destructive changes follow a multi-release dance.',
   );

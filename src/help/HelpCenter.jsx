@@ -60,6 +60,17 @@ export default function HelpCenter({ open, onClose }) {
     setTab(id);
   }, []);
 
+  // WCAG 2.1.2 — keyboard users must be able to dismiss the dialog without
+  // a pointer. Escape closes the drawer while it is open.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
   const copyDiagnostics = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(diag, null, 2));
@@ -96,7 +107,9 @@ export default function HelpCenter({ open, onClose }) {
               key={t.id}
               type="button"
               role="tab"
+              id={`help-tab-${t.id}`}
               aria-selected={tab === t.id}
+              aria-controls="help-tabpanel"
               onClick={() => selectTab(t.id)}
               className={`flex-1 px-4 py-2 text-sm ${
                 tab === t.id
@@ -109,7 +122,12 @@ export default function HelpCenter({ open, onClose }) {
           ))}
         </nav>
 
-        <div className="flex-1 overflow-y-auto p-5 text-sm">
+        <div
+          className="flex-1 overflow-y-auto p-5 text-sm"
+          id="help-tabpanel"
+          role="tabpanel"
+          aria-labelledby={`help-tab-${tab}`}
+        >
           {error && (
             <p className="text-red-400 mb-4" role="alert">
               {error}

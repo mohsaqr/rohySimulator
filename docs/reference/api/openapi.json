@@ -4316,6 +4316,76 @@
         "security": []
       }
     },
+    "/api/help/diagnostics": {
+      "get": {
+        "summary": "Get /help/diagnostics",
+        "tags": [
+          "help"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/help-routes.js:100",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireAuth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/help/release-notes": {
+      "get": {
+        "summary": "Get /help/release-notes",
+        "tags": [
+          "help"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/help-routes.js:88",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireAuth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/api/interactions": {
       "post": {
         "summary": "Create /interactions",

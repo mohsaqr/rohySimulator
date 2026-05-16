@@ -5,6 +5,7 @@
 // intro), and it persists its own completion via useOnboarding so it never
 // re-nags. Dismissible at any step.
 
+import { useEffect } from 'react';
 import { useOnboarding } from './useOnboarding.js';
 
 export default function OnboardingTour({ role, enabled = true, storage }) {
@@ -12,6 +13,17 @@ export default function OnboardingTour({ role, enabled = true, storage }) {
     role,
     { enabled, storage },
   );
+
+  // WCAG 2.1.2 — the overlay must be dismissible from the keyboard.
+  // Escape performs the same action as the Skip control.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') skip();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open, skip]);
 
   if (!open || !step) return null;
 
