@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.3.1] — 2026-05-17
+
+Patch release. Release-packaging fixes so a clean deploy actually works.
+
+### Fixed
+
+- **`npm ci` failed on clean installs.** `package-lock.json` was out of
+  sync with `package.json` (the docs/VitePress devDependency closure was
+  never fully locked after stage-0). Regenerated the lockfile; `npm ci`
+  now succeeds on a pristine machine (the production deploy path).
+- **`build` no longer hard-fails without the docs toolchain.** A failed
+  `docs:build` (e.g. missing `vitepress`) previously aborted the entire
+  app build before the frontend was produced. It is now fail-soft: the
+  app frontend builds regardless; the docs site is built when available.
+
 ## [2.3.0] — 2026-05-16
 
 Minor release. Teacher cohorts, the enterprise documentation site with
