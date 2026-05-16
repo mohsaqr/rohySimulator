@@ -34,7 +34,11 @@
     "bench": "NODE_OPTIONS='--max-old-space-size=4096' vitest bench --run",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "docs:gen:cli": "node scripts/docs-gen/gen-cli.mjs",
+    "docs:gen:api": "node scripts/docs-gen/gen-api.mjs",
+    "docs:gen:data": "node scripts/docs-gen/gen-data.mjs",
+    "docs:gen:config": "node scripts/docs-gen/gen-config.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
