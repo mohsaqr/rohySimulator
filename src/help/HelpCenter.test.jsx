@@ -1,0 +1,60 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithProviders } from '../../tests/utils/renderWithProviders.jsx';
+
+const apiGet = vi.fn();
+vi.mock('../services/apiClient.js', () => ({
+  apiGet: (...args) => apiGet(...args),
+}));
+
+import HelpCenter from './HelpCenter.jsx';
+
+describe('HelpCenter', () => {
+  beforeEach(() => {
+    apiGet.mockReset();
+  });
+
+  it('renders nothing when closed', () => {
+    const { container } = renderWithProviders(
+      <HelpCenter open={false} onClose={() => {}} />,
+    );
+    expect(container.textContent).toBe('');
+  });
+
+  it('shows the three tabs and trainee articles by default (no user → student scope)', () => {
+    renderWithProviders(<HelpCenter open onClose={() => {}} />);
+    expect(screen.getByRole('tab', { name: 'Help' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: "What's new" })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Support' })).toBeTruthy();
+    expect(screen.getByText('Getting started')).toBeTruthy();
+    // educator-only article must not leak to the default (student) scope
+    expect(screen.queryByText('Classes & join codes')).toBeNull();
+  });
+
+  it('loads release notes when the What\'s new tab is opened', async () => {
+    apiGet.mockResolvedValueOnce({
+      releases: [
+        { version: '2.1.0', date: '2026-05-14', summary: 'Minor.', sections: { Added: ['A thing.'] } },
+      ],
+    });
+    renderWithProviders(<HelpCenter open onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('tab', { name: "What's new" }));
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/help/release-notes'));
+    expect(await screen.findByText('2.1.0')).toBeTruthy();
+    expect(screen.getByText('A thing.')).toBeTruthy();
+  });
+
+  it('surfaces an error if diagnostics fail to load', async () => {
+    apiGet.mockRejectedValueOnce(new Error('nope'));
+    renderWithProviders(<HelpCenter open onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Support' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('nope');
+  });
+
+  it('calls onClose from the close button', () => {
+    const onClose = vi.fn();
+    renderWithProviders(<HelpCenter open onClose={onClose} />);
+    fireEvent.click(screen.getByLabelText('Close help'));
+    expect(onClose).toHaveBeenCalled();
+  });
+});
