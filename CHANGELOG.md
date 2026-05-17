@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.3.9] — 2026-05-17
+
+Patch release. Kokoro is the default everywhere on a clean install.
+
+### Changed
+
+- **`audit-voices.sh` now defaults to `kokoro`**, matching the
+  clean-install `tts_provider` the server already seeds
+  (`server.js` → `setSettingIfEmpty('tts_provider','kokoro')`, idempotent;
+  `platform_settings.setting_key` is UNIQUE so it holds). Auditing
+  piper/google/openai is now explicit opt-in via
+  `ROHY_AUDIT_TTS_PROVIDERS` for operators who configured them, rather
+  than a CI-only env override. A base install (CI or fresh deploy)
+  audits the engine it actually runs — kokoro — with no special-casing.
+
 ## [2.3.8] — 2026-05-17
 
 Patch release. Last pre-existing CI audit failure.

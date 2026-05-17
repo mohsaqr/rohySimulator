@@ -244,10 +244,10 @@ jobs:
         env:
           ROHY_DB: /tmp/rohy-audit/audit.sqlite
           JWT_SECRET: audit-ci-only-secret-do-not-reuse-anywhere
-          # CI provisions only the in-process kokoro TTS engine. piper
-          # (no binary/voices) and google/openai (no API keys) legitimately
-          # 400 here — audit-voices.sh restricts to configured providers.
-          ROHY_AUDIT_TTS_PROVIDERS: kokoro
+          # audit-voices.sh defaults to kokoro (the clean-install TTS
+          # default) — no CI-specific override needed. Set
+          # ROHY_AUDIT_TTS_PROVIDERS here only if CI ever provisions piper
+          # or real google/openai keys.
         run: |
           set -e
           shopt -s nullglob
