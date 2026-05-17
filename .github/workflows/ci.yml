@@ -236,8 +236,14 @@ jobs:
         # $ROOT/server/database.sqlite — point them at the same path the
         # CI server is writing to, otherwise they query a non-existent
         # file and SQLITE_ERROR no such table.
+        # JWT_SECRET must match the value the CI server was started with:
+        # audit-retention.sh spawns scripts/retention-sweep.js as a
+        # subprocess, which imports server/middleware/auth.js — that
+        # process.exit(1)s if JWT_SECRET is unset. Step env doesn't inherit
+        # the server-start step's env, so set it here too (same value).
         env:
           ROHY_DB: /tmp/rohy-audit/audit.sqlite
+          JWT_SECRET: audit-ci-only-secret-do-not-reuse-anywhere
         run: |
           set -e
           shopt -s nullglob

@@ -125,15 +125,23 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                             <span className="text-slate-400">· {activeCase.name}</span>
                         )}
                         {/* Discussant identity lives here so the centre column
-                            stays free for the avatar + cinema subtitle band. */}
-                        {discussant?.name && (
+                            stays free for the avatar + cinema subtitle band.
+                            While the discussant is still being fetched the slot
+                            shows an ellipsis placeholder (so the header doesn't
+                            jump when the name arrives, and the loading state is
+                            observable — DiscussionScreen.test CONTRACT 1). */}
+                        {loading && !discussant ? (
+                            <span className="text-slate-400">
+                                · <span className="text-indigo-200">…</span>
+                            </span>
+                        ) : discussant?.name ? (
                             <span className="text-slate-400">
                                 · <span className="text-indigo-200">{discussant.name}</span>
                                 {discussant.roleTitle && (
                                     <span className="text-slate-500 ml-1">({discussant.roleTitle})</span>
                                 )}
                             </span>
-                        )}
+                        ) : null}
                     </div>
                 </div>
                 <div className="flex items-center gap-2">

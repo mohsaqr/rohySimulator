@@ -9,6 +9,35 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.3.7] — 2026-05-17
+
+Patch release. Pre-existing CI failures (red on main before this branch).
+
+### Fixed
+
+- **`JWT_SECRET` killed in-process server tests.** `server/middleware/
+  auth.js` `process.exit(1)`s at import if `JWT_SECRET` is unset; CI has
+  no `server/.env`, so any test importing an auth-touching module
+  in-process (e.g. `help-routes.test.js`) silently killed the vitest
+  worker. Added `tests/server-setup.js` (server project `setupFiles`)
+  that sets a test `JWT_SECRET` (and default `NODE_ENV`) before imports.
+  Fixes the Vitest and Docs `help-system` jobs; also fixes local runs
+  without a `server/.env`.
+- **Audit job same root cause.** `scripts/audit-retention.sh` spawns
+  `retention-sweep.js`, which imports `auth.js`; the "Run audit scripts"
+  CI step didn't pass `JWT_SECRET` (per-step env). Added it.
+- **`DiscussionScreen` loading placeholder.** The discussant-name slot
+  rendered nothing while loading; restored the `…` placeholder so the
+  header doesn't reflow and the loading state is observable
+  (DiscussionScreen.test CONTRACT 1).
+
+### Notes
+
+- E2E remains red: a **pre-existing** brittle/flaky UI suite (many specs
+  are maintainer-marked `SKIP … brittle`; failures span unrelated files;
+  some pass on retry; rest are headless render timeouts). Untouched by
+  the 16.5.2026 bug fixes; needs a dedicated stabilization effort.
+
 ## [2.3.6] — 2026-05-17
 
 Patch release. Regenerated API reference (docs drift gate).

@@ -125,6 +125,11 @@ export default defineConfig({
                 test: {
                     name: 'server',
                     environment: 'node',
+                    // Guarantees JWT_SECRET (+ default NODE_ENV) before any
+                    // server module is imported — see tests/server-setup.js.
+                    // Without it, in-process imports of auth-touching modules
+                    // call process.exit(1) on CI (which has no server/.env).
+                    setupFiles: ['./tests/server-setup.js'],
                     include: [
                         'tests/server/**/*.test.{js,jsx}',
                     ],
