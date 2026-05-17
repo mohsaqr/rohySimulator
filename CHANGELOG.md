@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.3.4] — 2026-05-17
+
+Patch release. Fixes red CI / broken clean installs (root cause of the
+2.3.1–2.3.3 deploy pain).
+
+### Fixed
+
+- **`package-lock.json` was structurally out of sync with
+  `package.json`** since the docs/teacher-cohorts stages. Any `npm ci`
+  on a clean checkout (GitHub Actions, fresh server, Docker) failed with
+  `EUSAGE … Missing: react@18.3.1, @types/react@18.3.28, scheduler@0.23.2
+  …`. Earlier `npm install --package-lock-only` regens were run from a
+  machine whose `node_modules` already satisfied the tree, so npm saw
+  "up to date" and never wrote the missing closure. The lockfile has now
+  been regenerated from a **pristine** state (no `node_modules`, no
+  prior lock); `npm ci` validates clean (`--dry-run` exit 0). This is the
+  actual fix — `npm install` fallbacks in deploy paths (2.3.1–2.3.3) were
+  papering over this; they remain as defence-in-depth.
+
 ## [2.3.3] — 2026-05-17
 
 Patch release. Operator update path made consistent with install paths.
