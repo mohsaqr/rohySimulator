@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.3.6] — 2026-05-17
+
+Patch release. Regenerated API reference (docs drift gate).
+
+### Fixed
+
+- **Generated reference was stale vs source.** The Bug 5/6 changes to
+  `server/routes/orders-routes.js` (tenant_id on order rows, turnaround
+  default) changed the orders API surface, so `docs:gen:api` output
+  drifted from the committed `docs/reference/api/orders.md` +
+  `openapi.json` (+ a config line). Regenerated and committed so the
+  Docs workflow's drift gate passes.
+
 ## [2.3.5] — 2026-05-17
 
 Patch release. The actual fix for red CI — npm-version lockfile skew.
