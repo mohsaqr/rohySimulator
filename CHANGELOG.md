@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.3.8] — 2026-05-17
+
+Patch release. Last pre-existing CI audit failure.
+
+### Fixed
+
+- **`audit-voices.sh` failed in CI** because it asserted HTTP 200 from
+  `/api/tts` for piper (no binary/voices) and google/openai (no API
+  keys) — providers CI doesn't provision. kokoro (in-process) already
+  passed. The provider list is now `ROHY_AUDIT_TTS_PROVIDERS`-overridable
+  (default = full set locally); the CI audit step sets it to `kokoro`.
+  Not a regression — asserting an unconfigured provider works was wrong.
+
 ## [2.3.7] — 2026-05-17
 
 Patch release. Pre-existing CI failures (red on main before this branch).

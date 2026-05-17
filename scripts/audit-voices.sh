@@ -69,7 +69,14 @@ AUTH="Authorization: Bearer $TOK"
 # ── Provider routing + sample-rate proof ───────────────────────────────────
 # Bash 3.2 has no associative arrays — we keep four parallel scalars (one
 # per provider) plus a list of provider names to drive the loop.
-PROVS="piper kokoro google openai"
+#
+# Override with ROHY_AUDIT_TTS_PROVIDERS to restrict to providers actually
+# configured in the environment. CI has no piper binary/voices and no
+# google/openai API keys, so /api/tts returns 400 for those — asserting
+# 200 there is wrong, not a real regression. CI sets this to the
+# in-process provider it does provision (kokoro); locally it defaults to
+# the full set so nothing is silently skipped on a dev box.
+PROVS="${ROHY_AUDIT_TTS_PROVIDERS:-piper kokoro google openai}"
 sample_rate_for() {
     case "$1" in
         piper)  echo 22050 ;;
