@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.3.3] — 2026-05-17
+
+Patch release. Operator update path made consistent with install paths.
+
+### Fixed
+
+- **`bin/rohy-update` used `npm ci`** while every fresh-install path
+  (`deploy/docker/Dockerfile`, `deploy/bootstrap.sh`,
+  `deploy/local-install.sh`) already uses `npm install`. Because rohy's
+  `file:` siblings (`dynajs`, `oyon`) make `npm ci`'s strict lock check
+  environment-fragile, the first `rohy-update` on an otherwise-healthy
+  install would fail (and could trigger a needless rollback). All three
+  `npm ci` invocations (update, rollback, hard-rollback) now use
+  `npm install`; `--silent` dropped so a failure is visible, not hidden.
+
 ## [2.3.2] — 2026-05-17
 
 Patch release. Docs site reachable behind the prefix-stripping reverse proxy.

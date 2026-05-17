@@ -331,10 +331,15 @@ cmd_apply() {
   step "checkout $target"
   ( cd "$ROHY_REPO_DIR" && git checkout "$target" ) || rollback_to "$snapshot" "$cur" "git checkout failed"
 
-  # 4. npm ci + build
-  step "npm ci"
-  ( cd "$ROHY_REPO_DIR" && npm ci --prefer-offline --silent --no-audit --no-fund ) \
-    || rollback_to "$snapshot" "$cur" "npm ci failed"
+  # 4. npm install + build
+  # `npm install`, NOT `npm ci`: rohy's file: siblings (dynajs/oyon) make
+  # npm ci's strict lock check environment-fragile — a lock valid on the
+  # build machine fails `npm ci` on a clean host. Every other supported
+  # path (Docker, bootstrap.sh, local-install.sh) already uses npm install.
+  # --silent dropped on purpose: it previously hid the install failure.
+  step "npm install"
+  ( cd "$ROHY_REPO_DIR" && npm install --prefer-offline --no-audit --no-fund ) \
+    || rollback_to "$snapshot" "$cur" "npm install failed"
   step "npm run build"
   ( cd "$ROHY_REPO_DIR" && npm run build ) \
     || rollback_to "$snapshot" "$cur" "npm run build failed"
@@ -379,8 +384,8 @@ rollback_to() {
   systemctl stop "$ROHY_SERVICE" 2>/dev/null || true
   ( cd "$ROHY_REPO_DIR" && git checkout "$old_sha" ) \
     || die "git checkout $old_sha failed during rollback — MANUAL RECOVERY REQUIRED. snapshot=$snapshot"
-  ( cd "$ROHY_REPO_DIR" && npm ci --prefer-offline --silent --no-audit --no-fund ) \
-    || warn "npm ci failed during rollback — you may need to install deps manually"
+  ( cd "$ROHY_REPO_DIR" && npm install --prefer-offline --no-audit --no-fund ) \
+    || warn "npm install failed during rollback — you may need to install deps manually"
   if [[ -f "$snapshot/database.sqlite" ]]; then
     cp "$snapshot/database.sqlite" "$ROHY_DB"
     ok "DB restored from $snapshot"
@@ -416,7 +421,7 @@ cmd_rollback() {
   if [[ "$destructive" == "true" ]]; then
     err "the apply included destructive migrations. Auto-rollback is unsafe — old code may not handle the new schema."
     say "Restore manually with: sudo rohy-update restore-backup $(basename "$snapshot")"
-    say "And then: cd $ROHY_REPO_DIR && git checkout $from_sha && npm ci && npm run build && systemctl restart $ROHY_SERVICE"
+    say "And then: cd $ROHY_REPO_DIR && git checkout $from_sha && npm install && npm run build && systemctl restart $ROHY_SERVICE"
     exit 1
   fi
 
@@ -426,8 +431,8 @@ cmd_rollback() {
 
   service_stop
   ( cd "$ROHY_REPO_DIR" && git checkout "$from_sha" ) || die "git checkout $from_sha failed"
-  ( cd "$ROHY_REPO_DIR" && npm ci --prefer-offline --silent --no-audit --no-fund ) \
-    || die "npm ci failed during rollback"
+  ( cd "$ROHY_REPO_DIR" && npm install --prefer-offline --no-audit --no-fund ) \
+    || die "npm install failed during rollback"
   ( cd "$ROHY_REPO_DIR" && npm run build ) || die "npm run build failed during rollback"
   cp "$snapshot/database.sqlite" "$ROHY_DB"
   if [[ -f "$snapshot/env" && -w "$ROHY_ENV_FILE" ]]; then
