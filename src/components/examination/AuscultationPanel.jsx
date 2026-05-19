@@ -65,9 +65,15 @@ const POINT_TYPE = {
 
 const ABDOMEN_KEYS = new Set(['abdomen', 'abdominal']);
 
-function getProfile(selectedRegion, regionName) {
+// Profile resolution is data-driven first: the region may declare
+// `auscultationProfile` in examRegions.js (the explicit, greppable
+// contract). The lowercased name match is only a defensive fallback so a
+// region that forgets the field still degrades to a best guess rather
+// than silently to the chest diagram.
+function getProfile(profileId, selectedRegion, regionName) {
+    const explicit = String(profileId || '').toLowerCase();
     const key = String(selectedRegion || regionName || '').toLowerCase();
-    if (ABDOMEN_KEYS.has(key)) {
+    if (explicit === 'abdomen' || (!explicit && ABDOMEN_KEYS.has(key))) {
         return {
             points: ABDOMEN_POINTS,
             // Bowel sounds are classically auscultated first; RLQ over the
@@ -127,10 +133,11 @@ export default function AuscultationPanel({
     audioUrls = {},    // Multiple audio files for different points { pointId: url }
     heartAudio,        // Custom heart sound (overrides default for all heart points)
     lungAudio,         // Custom lung sound (overrides default for all lung points)
-    selectedRegion,    // Region key — selects the auscultation profile
+    selectedRegion,        // Region key — fallback profile heuristic
+    auscultationProfile,   // Explicit profile id from examRegions.js (preferred)
     regionName = 'Chest'
 }) {
-    const profile = getProfile(selectedRegion, regionName);
+    const profile = getProfile(auscultationProfile, selectedRegion, regionName);
     const POINTS = profile.points;
 
     const [selectedPoint, setSelectedPoint] = useState(null);

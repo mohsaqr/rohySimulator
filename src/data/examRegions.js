@@ -277,6 +277,10 @@ export const BODY_REGIONS = {
         id: 'abdomen',
         name: 'Abdomen',
         view: 'anterior',
+        // Explicit, greppable contract for AuscultationPanel (Bug 19): use
+        // the abdominal profile (bowel quadrants + bruit points) instead of
+        // the default cardiopulmonary one. Don't rely on name matching.
+        auscultationProfile: 'abdomen',
         examTypes: ['inspection', 'auscultation', 'percussion', 'palpation', 'special'],
         specialTests: ["Murphy's sign", "Rovsing's sign", "McBurney's point", "Rebound tenderness", "Guarding"],
         defaultFindings: {

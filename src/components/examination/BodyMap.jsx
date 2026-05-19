@@ -86,7 +86,9 @@ export default function BodyMap({
     // width / height. Posterior images are ~0.43, anterior ~0.54 — seed
     // those so the very first paint already uses a near-correct box.
     const DEFAULT_RATIO = view === 'posterior' ? 438 / 1022 : 429 / 791;
-    const effectiveRatio = imgRatio || DEFAULT_RATIO;
+    // Round so the emitted CSS aspect-ratio / transform stays readable in
+    // the DOM; 4 dp is well below sub-pixel significance at any sane size.
+    const effectiveRatio = Number((imgRatio || DEFAULT_RATIO).toFixed(4));
     // Convert points array to SVG polygon points string
     const pointsToString = (points) => {
         return points.map(([x, y]) => `${x},${y}`).join(' ');
@@ -189,7 +191,7 @@ export default function BodyMap({
                                                 preserveAspectRatio="none", so a glyph is compressed horizontally
                                                 by exactly the container's W/H ratio. Undo it with 1/ratio
                                                 (Bug 13 — was hardcoded 1.8 for the old fixed 5:9 box). */}
-                                            <g transform={`scale(${1 / effectiveRatio}, 1)`}>
+                                            <g transform={`scale(${(1 / effectiveRatio).toFixed(3)}, 1)`}>
                                                 <rect
                                                     x="-8"
                                                     y="-2.5"

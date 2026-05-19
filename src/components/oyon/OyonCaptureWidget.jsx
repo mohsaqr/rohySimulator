@@ -4,6 +4,7 @@ import { EmotionRuntime } from 'oyon';
 import { apiFetch } from '../../services/apiClient';
 import { resolveModelConfig, DEFAULT_MODEL_PROFILE } from './modelProfiles';
 import { oyonClientLog } from './clientLogger';
+import { liveAnxiousIndex, ANXIOUS_FLAG_THRESHOLD } from './anxiousIndex';
 
 export const VALENCE_GRAPH_PREF_KEY = 'oyon.showValenceGraph';
 export const CONSENT_PREF_KEY = 'oyon.defaultConsent';
@@ -514,27 +515,6 @@ function topLabel(probabilities) {
    }
    return best;
 }
-
-// Derived anxiety indicator (Bug 18). AffectNet 8-class models have no
-// "anxious" label, so we derive one from the circumplex axes they DO
-// emit: high arousal + negative valence, reinforced by fear. Mirrors
-// `anxiousIndex` in OyonR/src/aggregation/EmotionAggregator.js — kept in
-// sync deliberately rather than cross-importing the vendored tree (which
-// is not in the SPA build graph). Returns 0..1, or null if unknown.
-function liveAnxiousIndex(probabilities, valence, arousal) {
-   const fear = probabilities && Number.isFinite(Number(probabilities.fear)) ? Number(probabilities.fear) : 0;
-   if (!Number.isFinite(valence) && !Number.isFinite(arousal) && !probabilities) return null;
-   const clamp01 = (x) => (!Number.isFinite(x) ? 0 : x < 0 ? 0 : x > 1 ? 1 : x);
-   const v = Number.isFinite(valence) ? valence : 0;
-   const a = Number.isFinite(arousal) ? arousal : 0;
-   const quadrant = clamp01((a + 1) / 2) * clamp01((1 - v) / 2);
-   return clamp01(0.6 * quadrant + 0.4 * fear);
-}
-
-// At/above this the learner is flagged as anxious in the live pill. 0.5
-// is the midpoint of the derived [0,1] scale (clearly negative-valence
-// AND elevated arousal, or strong fear).
-const ANXIOUS_FLAG_THRESHOLD = 0.5;
 
 function iconCls(small) { return small ? 'h-3 w-3' : 'h-4 w-4'; }
 

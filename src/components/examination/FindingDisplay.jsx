@@ -52,6 +52,13 @@ export default function FindingDisplay({
     if (selectedExamType === 'auscultation') {
         return (
             <AuscultationPanel
+                // Remount per region: AuscultationPanel keeps one-shot
+                // auto-play state (`hasAutoPlayed`) and a `selectedPoint`
+                // that is only valid for the active profile. Without a
+                // per-region key, jumping region→region via the exam log
+                // (which keeps examType==='auscultation', so no unmount)
+                // would leave a stale point selected under a new profile.
+                key={selectedRegion}
                 finding={finding}
                 isAbnormal={isAbnormal}
                 audioUrl={audioUrl}
@@ -59,6 +66,7 @@ export default function FindingDisplay({
                 heartAudio={heartAudio}
                 lungAudio={lungAudio}
                 selectedRegion={selectedRegion}
+                auscultationProfile={region?.auscultationProfile}
                 regionName={region?.name || selectedRegion}
             />
         );
