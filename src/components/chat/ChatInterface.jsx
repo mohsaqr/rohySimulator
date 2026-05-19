@@ -5,6 +5,7 @@ import { AgentService } from '../../services/AgentService';
 import { buildPersonaBlocks } from '../../utils/personaBlocks';
 import { roleAnchor } from '../../utils/roleAnchor';
 import { useAuth } from '../../contexts/AuthContext';
+import { caseDisplayLabel } from '../../utils/caseDisplayLabel';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { baseUrl } from '../../config/api';
 import { apiFetch, apiPost } from '../../services/apiClient';
@@ -1396,8 +1397,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         );
     }
 
-    // Get patient info from case config
-    const patientName = activeCase?.config?.patient_name || activeCase?.name || 'Patient';
+    // Get patient info from case config. Never fall back to activeCase.name
+    // for students — that is the diagnosis (Bug 14). caseDisplayLabel applies
+    // the role rule and still returns the real title for educators+.
+    const patientName = caseDisplayLabel(activeCase, user);
     const patientAvatar = activeCase?.config?.patient_avatar || '';
 
     // Get current conversation based on active tab
@@ -1755,7 +1758,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     single button → click anywhere on the haze to bring the
                     transcript back. No speaker label — the caption is the
                     only content. */}
-                {voiceMode && !showTranscript && (() => {
+                {voiceMode && !showTranscript && activeTab === 'patient' && (() => {
                     let line = null;
                     if (listening && input) {
                         line = input;
@@ -1788,7 +1791,11 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                             // glued to the waveform stack regardless of
                             // viewport height. No speaker label per prior
                             // user request.
-                            className="fixed inset-x-0 z-40 flex justify-center items-center px-6 py-8 text-center group"
+                            // pointer-events-none on the full-width strip so it
+                            // never swallows taps meant for the controls behind
+                            // it (Bug 17); only the visible caption block below
+                            // re-enables pointer events to stay dismissable.
+                            className="fixed inset-x-0 z-40 flex justify-center items-center px-6 py-8 text-center group pointer-events-none"
                             style={{ top: 'calc(29rem + 1cm)', background: 'transparent' }}
                         >
                             <div
@@ -1801,7 +1808,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                 }}
                             />
                             <div
-                                className="relative max-w-2xl pointer-events-none"
+                                className="relative max-w-2xl pointer-events-auto cursor-pointer"
                                 style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 18px rgba(0,0,0,0.75)' }}
                             >
                                 <p className="text-xl md:text-2xl font-medium text-white leading-snug whitespace-pre-wrap break-words">

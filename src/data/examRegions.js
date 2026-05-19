@@ -655,24 +655,26 @@ export const BODY_REGIONS = {
         id: 'poplitealLeft',
         name: 'Left Popliteal Fossa',
         view: 'posterior',
-        examTypes: ['inspection', 'palpation', 'auscultation'],
+        examTypes: ['inspection', 'palpation', 'auscultation', 'special'],
         specialTests: ['Popliteal pulse', 'Baker cyst assessment'],
         defaultFindings: {
             inspection: 'Popliteal fossa is of normal contour with no visible swelling or masses. No varicose veins. Skin is intact.',
             palpation: 'Popliteal pulse is 2+ (palpable with deep pressure in the centre of the fossa with knee slightly flexed). No popliteal aneurysm (non-expansile). No Baker\'s cyst (no fluctuant mass). Popliteal fossa is non-tender.',
-            auscultation: 'No bruit over the popliteal artery.'
+            auscultation: 'No bruit over the popliteal artery.',
+            special: 'Popliteal pulse is 2+ and symmetrical, best felt with the knee slightly flexed and the patient relaxed. No popliteal aneurysm (pulse is non-expansile). Baker\'s cyst assessment: no fluctuant or tense mass in the medial popliteal fossa; no Foucher\'s sign; cyst does not become more prominent on knee extension.'
         }
     },
     poplitealRight: {
         id: 'poplitealRight',
         name: 'Right Popliteal Fossa',
         view: 'posterior',
-        examTypes: ['inspection', 'palpation', 'auscultation'],
+        examTypes: ['inspection', 'palpation', 'auscultation', 'special'],
         specialTests: ['Popliteal pulse', 'Baker cyst assessment'],
         defaultFindings: {
             inspection: 'Popliteal fossa is of normal contour with no visible swelling or masses. No varicose veins. Skin is intact.',
             palpation: 'Popliteal pulse is 2+ (palpable with deep pressure in the centre of the fossa with knee slightly flexed). No popliteal aneurysm (non-expansile). No Baker\'s cyst (no fluctuant mass). Popliteal fossa is non-tender.',
-            auscultation: 'No bruit over the popliteal artery.'
+            auscultation: 'No bruit over the popliteal artery.',
+            special: 'Popliteal pulse is 2+ and symmetrical, best felt with the knee slightly flexed and the patient relaxed. No popliteal aneurysm (pulse is non-expansile). Baker\'s cyst assessment: no fluctuant or tense mass in the medial popliteal fossa; no Foucher\'s sign; cyst does not become more prominent on knee extension.'
         }
     },
 
@@ -757,7 +759,13 @@ export const BODY_REGIONS = {
         id: 'neurological',
         name: 'Neurological Examination',
         view: 'special',
-        examTypes: ['mentalStatus', 'cranialNerves', 'motor', 'sensory', 'reflexes', 'coordination', 'gait'],
+        // `special` MUST be present whenever `specialTests` is non-empty:
+        // ExamTypeSelector renders the chips off `specialTests` and fires
+        // exam type `special`, while the editor only exposes a configurable
+        // field for entries in `examTypes`. Omitting it (Bug 15, 18.5.2026)
+        // made the neuro special tests unconfigurable yet still clickable,
+        // so students got the literal "Not examined".
+        examTypes: ['mentalStatus', 'cranialNerves', 'motor', 'sensory', 'reflexes', 'coordination', 'gait', 'special'],
         specialTests: [
             'Romberg test', 'Pronator drift', 'Babinski sign', 'Hoffmann sign',
             'Lhermitte sign', 'Kernig sign', 'Brudzinski sign'
@@ -1013,7 +1021,20 @@ Single Leg Stance:
 
 Functional Assessment:
 - Able to rise from chair without using arms
-- Able to climb stairs with normal reciprocal pattern`
+- Able to climb stairs with normal reciprocal pattern`,
+            special: `Romberg test: NEGATIVE - maintains balance with feet together and eyes closed for 30 seconds (no significant sway or loss of balance).
+
+Pronator drift: NEGATIVE - arms held outstretched, palms up, eyes closed for 20-30 seconds with no drift, pronation, or downward movement of either arm.
+
+Babinski sign: Plantar responses are FLEXOR (downgoing) bilaterally - normal.
+
+Hoffmann sign: NEGATIVE bilaterally - flicking the distal phalanx of the middle finger produces no flexion of the thumb or index finger.
+
+Lhermitte sign: NEGATIVE - neck flexion produces no electric shock-like sensation down the spine or limbs.
+
+Kernig sign: NEGATIVE bilaterally - with hip flexed to 90°, the knee extends fully without resistance, pain, or hamstring spasm.
+
+Brudzinski sign: NEGATIVE - passive neck flexion does not produce involuntary flexion of the hips or knees. No meningism.`
         }
     },
     general: {

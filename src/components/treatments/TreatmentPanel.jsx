@@ -429,7 +429,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                         <div className="flex items-start justify-between">
                             <div>
                                 <div className="font-medium text-white flex items-center gap-2">
-                                    {order.is_high_alert && <AlertTriangle className="w-4 h-4 text-red-400" />}
+                                    {!!order.is_high_alert && <AlertTriangle className="w-4 h-4 text-red-400" />}
                                     {order.treatment_item}
                                 </div>
                                 <div className="text-xs text-neutral-400">

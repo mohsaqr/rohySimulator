@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Keyboard, GraduationCap, MessagesSquare, NotebookPen, Play } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { caseDisplayLabel } from '../../utils/caseDisplayLabel';
 import { fetchDiscussantForCase } from '../../services/discussionService';
 import { useDiscussionEngine } from '../../hooks/useDiscussionEngine';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
@@ -15,6 +17,11 @@ const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 
 export default function DiscussionScreen({ sessionId, activeCase, onClose, roomNav = null }) {
     const { headManifest, platformAvatars, voiceSettings } = useVoice();
+    const { user } = useAuth();
+    // Debrief is fully student-facing — the authoring title is the diagnosis.
+    // Gate it through the same role rule as every other room header (Bug 14,
+    // 18.5.2026: this screen was the surface that bypassed caseDisplayLabel).
+    const caseTitle = caseDisplayLabel(activeCase, user);
     const [discussant, setDiscussant] = useState(null);
     const [loading, setLoading] = useState(true);
     const [showText, setShowText] = useState(false);
@@ -121,8 +128,8 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                     <div className="flex items-center gap-2 text-sm">
                         <GraduationCap className="w-5 h-5 text-indigo-400" />
                         <span className="font-semibold text-slate-100">Case Debrief</span>
-                        {activeCase?.name && (
-                            <span className="text-slate-400">· {activeCase.name}</span>
+                        {caseTitle && (
+                            <span className="text-slate-400">· {caseTitle}</span>
                         )}
                         {/* Discussant identity lives here so the centre column
                             stays free for the avatar + cinema subtitle band.

@@ -232,12 +232,14 @@ export default function OyonCaptureWidget({ sessionId, caseId } = {}) {
             confidence: p.confidence,
             inference_ms: Math.round(event.durationMs ?? -1),
          });
+         const anxious = liveAnxiousIndex(p.probabilities, p.valence, p.arousal);
          setEmotion(prev => ({
             ...(prev || {}),
             dominant_emotion: dominant ?? prev?.dominant_emotion,
             confidence: p.confidence ?? prev?.confidence,
             valence: Number.isFinite(p.valence) ? p.valence : prev?.valence,
             arousal: Number.isFinite(p.arousal) ? p.arousal : prev?.arousal,
+            anxious_index: anxious ?? prev?.anxious_index,
          }));
          if (Number.isFinite(p.valence)) {
             setValenceTrack(prev => [...prev, p.valence].slice(-VALENCE_BUFFER));
@@ -348,9 +350,16 @@ export default function OyonCaptureWidget({ sessionId, caseId } = {}) {
       </>
    );
 
+   // Bug 18: surface the derived anxiety state the model can't name as a
+   // class. When elevated, it leads the pill (clinically the salient
+   // signal) with the model's own top label kept alongside for context.
+   const anxiousFlag = Number.isFinite(emotion?.anxious_index)
+      && emotion.anxious_index >= ANXIOUS_FLAG_THRESHOLD;
+   const liveWord = anxiousFlag ? (dom ? `anxious · ${dom}` : 'anxious') : (dom || '…');
+
    const headlineText = errorMsg
       ? 'Error'
-      : running ? (dom || '…')
+      : running ? liveWord
       : loadingModels ? 'loading…'
       : loadingCamera ? 'camera…'
       : modelsReady ? 'Ready'
@@ -505,6 +514,27 @@ function topLabel(probabilities) {
    }
    return best;
 }
+
+// Derived anxiety indicator (Bug 18). AffectNet 8-class models have no
+// "anxious" label, so we derive one from the circumplex axes they DO
+// emit: high arousal + negative valence, reinforced by fear. Mirrors
+// `anxiousIndex` in OyonR/src/aggregation/EmotionAggregator.js — kept in
+// sync deliberately rather than cross-importing the vendored tree (which
+// is not in the SPA build graph). Returns 0..1, or null if unknown.
+function liveAnxiousIndex(probabilities, valence, arousal) {
+   const fear = probabilities && Number.isFinite(Number(probabilities.fear)) ? Number(probabilities.fear) : 0;
+   if (!Number.isFinite(valence) && !Number.isFinite(arousal) && !probabilities) return null;
+   const clamp01 = (x) => (!Number.isFinite(x) ? 0 : x < 0 ? 0 : x > 1 ? 1 : x);
+   const v = Number.isFinite(valence) ? valence : 0;
+   const a = Number.isFinite(arousal) ? arousal : 0;
+   const quadrant = clamp01((a + 1) / 2) * clamp01((1 - v) / 2);
+   return clamp01(0.6 * quadrant + 0.4 * fear);
+}
+
+// At/above this the learner is flagged as anxious in the live pill. 0.5
+// is the midpoint of the derived [0,1] scale (clearly negative-valence
+// AND elevated arousal, or strong fear).
+const ANXIOUS_FLAG_THRESHOLD = 0.5;
 
 function iconCls(small) { return small ? 'h-3 w-3' : 'h-4 w-4'; }
 

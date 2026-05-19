@@ -58,6 +58,7 @@ export default function FindingDisplay({
                 audioUrls={audioUrls}
                 heartAudio={heartAudio}
                 lungAudio={lungAudio}
+                selectedRegion={selectedRegion}
                 regionName={region?.name || selectedRegion}
             />
         );

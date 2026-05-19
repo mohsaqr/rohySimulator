@@ -21,6 +21,14 @@ export default function BodyMap({
 }) {
     const [hoveredRegion, setHoveredRegion] = useState(null);
     const [savedRegions, setSavedRegions] = useState(null);
+    // Bug 13 (18.5.2026): the container was hardcoded to a 5:9 box for every
+    // view, but the posterior PNGs are intrinsically far narrower than the
+    // anterior ones (man-back ≈ 0.43 vs man-front ≈ 0.54), so the posterior
+    // image + its SVG overlay were stretched ~30% horizontally. We now drive
+    // the box (and the label counter-scale) from the image's real aspect
+    // ratio. Seed a per-view default so there is no first-paint distortion
+    // before onLoad fires; the exact ratio replaces it once the PNG loads.
+    const [imgRatio, setImgRatio] = useState(null);
 
     // Load saved regions on mount
     useEffect(() => {
@@ -70,6 +78,15 @@ export default function BodyMap({
 
     const currentRegions = getRegionsForView();
     const getImageSrc = () => { if (gender === 'female') return baseUrl(view === 'posterior' ? '/woman-back.png' : '/woman-front.png'); return baseUrl(view === 'posterior' ? '/man-back.png' : '/man-front.png'); }; const imageSrc = getImageSrc();
+
+    // Drop the measured ratio whenever the image changes so the previous
+    // view's ratio can't briefly distort the new one before it loads.
+    useEffect(() => { setImgRatio(null); }, [imageSrc]);
+
+    // width / height. Posterior images are ~0.43, anterior ~0.54 — seed
+    // those so the very first paint already uses a near-correct box.
+    const DEFAULT_RATIO = view === 'posterior' ? 438 / 1022 : 429 / 791;
+    const effectiveRatio = imgRatio || DEFAULT_RATIO;
     // Convert points array to SVG polygon points string
     const pointsToString = (points) => {
         return points.map(([x, y]) => `${x},${y}`).join(' ');
@@ -105,13 +122,15 @@ export default function BodyMap({
             {/* Main container */}
             <div className="relative flex-1 flex items-center justify-center min-h-0 overflow-hidden bg-white">
                 {/*
-                    Container maintains 5:9 aspect ratio and centers content.
-                    Using width: auto with height constraints ensures it doesn't over-stretch on tall screens.
+                    Container matches the active image's intrinsic aspect
+                    ratio (not a fixed 5:9) so anterior and posterior PNGs
+                    are both shown undistorted. width:auto + height
+                    constraint keeps it from over-stretching on tall screens.
                 */}
                 <div
                     className="relative h-full"
                     style={{
-                        aspectRatio: '5/9',
+                        aspectRatio: String(effectiveRatio),
                         maxHeight: '100%',
                         width: 'auto'
                     }}
@@ -122,6 +141,10 @@ export default function BodyMap({
                         alt={`${gender} body ${view} view`}
                         className="h-full w-full select-none pointer-events-none"
                         draggable={false}
+                        onLoad={(e) => {
+                            const { naturalWidth: w, naturalHeight: h } = e.target;
+                            if (w > 0 && h > 0) setImgRatio(w / h);
+                        }}
                     />
                     {/* SVG Overlay - positioned absolutely over the image */}
                     <svg
@@ -162,8 +185,11 @@ export default function BodyMap({
                                     {/* Label on hover/select */}
                                     {showLabel && (
                                         <g transform={`translate(${centerX}, ${centerY})`} style={{ pointerEvents: 'none' }}>
-                                            {/* Counter-scale to fix text stretching (viewBox is 100x100 but container is 5:9 aspect ratio) */}
-                                            <g transform="scale(1.8, 1)">
+                                            {/* Counter-scale to fix text stretching: viewBox is 100x100 with
+                                                preserveAspectRatio="none", so a glyph is compressed horizontally
+                                                by exactly the container's W/H ratio. Undo it with 1/ratio
+                                                (Bug 13 — was hardcoded 1.8 for the old fixed 5:9 box). */}
+                                            <g transform={`scale(${1 / effectiveRatio}, 1)`}>
                                                 <rect
                                                     x="-8"
                                                     y="-2.5"
