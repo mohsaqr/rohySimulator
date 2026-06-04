@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { FileText } from 'lucide-react';
+import { parseConfig } from '../../utils/parseConfig.js';
 
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 
@@ -14,11 +15,16 @@ export default function PatientSummaryCard({ activeCase, headManifest, platformA
             </div>
         );
     }
-    const cfg = activeCase.config || {};
+    const cfg = parseConfig(activeCase.config);
     const name = cfg.patient_name || activeCase.name || 'Patient';
     const age = cfg.demographics?.age;
     const gender = cfg.demographics?.gender;
-    const chief = cfg.structuredHistory?.chiefComplaint || activeCase.description;
+    // Chief complaint comes from the structured history, falling back to the
+    // denormalized `chief_complaint` column. We deliberately do NOT fall back
+    // to `activeCase.description` — that field is the case-selection summary
+    // (often the patient's name or a one-line blurb), so using it here showed
+    // the patient name in the CHIEF COMPLAINT slot (bug 04.06.2026 #2).
+    const chief = cfg.structuredHistory?.chiefComplaint || activeCase.chief_complaint || null;
     const hpi = cfg.structuredHistory?.historyOfPresentIllness;
     const avatarId = cfg.avatar_id || cfg.patient_avatar || null;
 

@@ -46,12 +46,34 @@ describe('HelpCenter', () => {
     expect(screen.getByText('A thing.')).toBeTruthy();
   });
 
-  it('requests diagnostics on the un-prefixed path and surfaces load errors', async () => {
-    apiGet.mockRejectedValueOnce(new Error('nope'));
+  it('requests diagnostics on the un-prefixed path and surfaces a friendly load error', async () => {
+    // The server can reject with a raw machine code (e.g. an error string);
+    // the UI must show human-readable copy, never the raw message.
+    apiGet.mockRejectedValueOnce(new Error('release_notes_unavailable'));
     renderWithProviders(<HelpCenter open onClose={() => {}} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Support' }));
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/help/diagnostics'));
-    expect(await screen.findByRole('alert')).toHaveTextContent('nope');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Could not load the support bundle right now.');
+    expect(alert.textContent).not.toContain('release_notes_unavailable');
+  });
+
+  it('shows friendly copy (not the raw error code) when release notes fail to load', async () => {
+    apiGet.mockRejectedValueOnce(new Error('release_notes_unavailable'));
+    renderWithProviders(<HelpCenter open onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('tab', { name: "What's new" }));
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/help/release-notes'));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Release notes are unavailable right now.');
+    expect(alert.textContent).not.toContain('release_notes_unavailable');
+  });
+
+  it('shows an empty-state when release notes load but are empty', async () => {
+    apiGet.mockResolvedValueOnce({ releases: [] });
+    renderWithProviders(<HelpCenter open onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('tab', { name: "What's new" }));
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/help/release-notes'));
+    expect(await screen.findByText('No release notes yet.')).toBeTruthy();
   });
 
   it('calls onClose from the close button', () => {

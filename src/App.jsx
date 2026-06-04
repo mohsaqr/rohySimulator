@@ -581,7 +581,7 @@ function MainApp() {
       age: activeCase.config?.demographics?.age || null,
       gender: activeCase.config?.demographics?.gender || null,
       mrn: activeCase.config?.demographics?.mrn || null,
-      chief_complaint: activeCase.config?.structuredHistory?.chiefComplaint || activeCase.description || null
+      chief_complaint: activeCase.config?.structuredHistory?.chiefComplaint || activeCase.chief_complaint || null
    } : null;
 
    return (

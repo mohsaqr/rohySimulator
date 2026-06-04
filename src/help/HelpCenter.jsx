@@ -41,7 +41,13 @@ export default function HelpCenter({ open, onClose }) {
           setReleases(r.releases || []);
           setError(null);
         })
-        .catch((e) => setError(e.message || 'Could not load release notes.'));
+        // The server surfaces machine codes (e.g. "release_notes_unavailable")
+        // in e.message — never show those raw. Use human-readable copy, and
+        // render an empty list so the panel still shows its "What's new" frame.
+        .catch(() => {
+          setReleases([]);
+          setError('Release notes are unavailable right now.');
+        });
     }
     if (tab === 'support' && diag === null) {
       apiGet('/help/diagnostics')
@@ -49,7 +55,7 @@ export default function HelpCenter({ open, onClose }) {
           setDiag(d);
           setError(null);
         })
-        .catch((e) => setError(e.message || 'Could not load diagnostics.'));
+        .catch(() => setError('Could not load the support bundle right now.'));
     }
   }, [open, tab, releases, diag]);
 
@@ -161,6 +167,9 @@ export default function HelpCenter({ open, onClose }) {
           {tab === 'whatsnew' && (
             <div>
               {releases === null && !error && <p className="text-neutral-400">Loading…</p>}
+              {Array.isArray(releases) && releases.length === 0 && !error && (
+                <p className="text-neutral-400">No release notes yet.</p>
+              )}
               {(releases || []).map((r) => (
                 <section key={r.version} className="mb-6">
                   <h3 className="text-neutral-100 font-semibold">

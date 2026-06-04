@@ -195,11 +195,17 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
     const ipAddress = req.ip || req.connection?.remoteAddress;
     const userAgent = req.headers['user-agent'];
 
-    // Extract patient info from config for denormalized storage
+    // Extract patient info from config for denormalized storage. The case
+    // editor writes the patient name to `config.patient_name` and the chief
+    // complaint to `config.structuredHistory.chiefComplaint`; older/top-level
+    // shapes (`demographics.name`, `config.chiefComplaint`) are kept as
+    // fallbacks. Reading only the legacy paths left these columns null for
+    // editor-created cases — which made the debrief fall back to the case
+    // description and show the patient name as the chief complaint (bug #2).
     const patientGender = config?.demographics?.gender || null;
     const patientAge = config?.demographics?.age || null;
-    const patientName = config?.demographics?.name || null;
-    const chiefComplaint = config?.chiefComplaint || null;
+    const patientName = config?.patient_name || config?.demographics?.name || null;
+    const chiefComplaint = config?.structuredHistory?.chiefComplaint || config?.chiefComplaint || null;
     const difficultyLevel = config?.difficulty_level || null;
 
     // Tuck the scenario provenance ({template_id|repository_id, name, duration})
@@ -278,11 +284,13 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
     const ipAddress = req.ip || req.connection?.remoteAddress;
     const userAgent = req.headers['user-agent'];
 
-    // Extract patient info from config for denormalized storage
+    // Extract patient info from config for denormalized storage. Mirror the
+    // POST handler: prefer the editor's `config.patient_name` /
+    // `config.structuredHistory.chiefComplaint`, fall back to legacy paths.
     const patientGender = config?.demographics?.gender || null;
     const patientAge = config?.demographics?.age || null;
-    const patientName = config?.demographics?.name || null;
-    const chiefComplaint = config?.chiefComplaint || null;
+    const patientName = config?.patient_name || config?.demographics?.name || null;
+    const chiefComplaint = config?.structuredHistory?.chiefComplaint || config?.chiefComplaint || null;
     const difficultyLevel = config?.difficulty_level || null;
 
     // Same scenario-source merge as the POST handler — see comment there.

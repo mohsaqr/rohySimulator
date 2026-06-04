@@ -1268,7 +1268,12 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                </button>
 
                <button
-                  onClick={() => handleControlsOpen()}
+                  // Open the settings panel on a real first tab, not whatever
+                  // tab was last active. Without an explicit tab this inherited
+                  // the previous activeTab (often 'alarms'), making the gear and
+                  // the bell open identical-looking panels (bug 04.06.2026 #3).
+                  // Students only have the alarms tab, so they land there.
+                  onClick={() => handleControlsOpen(isAdmin ? 'rhythm' : 'alarms')}
                   className={`p-2 rounded-md transition-colors shadow-lg relative ${
                      savedSettings
                         ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/20'

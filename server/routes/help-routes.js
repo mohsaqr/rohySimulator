@@ -93,6 +93,13 @@ router.get('/help/release-notes', authenticateToken, requireAuth, async (req, re
     }
     res.json({ releases: changelogCache, latest: changelogCache[0]?.version ?? null });
   } catch (err) {
+    // A missing changelog is not a server fault — it just means there are no
+    // notes to show (e.g. the file was excluded from a build). Degrade to an
+    // empty list so the in-app surface stays usable instead of erroring. Any
+    // other failure (permissions, read error) is a real problem → 500.
+    if (err.code === 'ENOENT') {
+      return res.json({ releases: [], latest: null });
+    }
     res.status(500).json({ error: 'release_notes_unavailable', message: err.message });
   }
 });

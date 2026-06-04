@@ -52,6 +52,79 @@ describe('PatientSummaryCard avatar wiring', () => {
         });
     });
 
+    it('shows the structured chief complaint, never the case description', async () => {
+        render(
+            <PatientSummaryCard
+                activeCase={{
+                    id: 'case-cc',
+                    name: 'Thomas Taylor',
+                    description: 'Thomas Taylor',
+                    chief_complaint: 'Crushing chest pain',
+                    config: {
+                        patient_name: 'Thomas Taylor',
+                        demographics: { gender: 'male', age: 69 },
+                        structuredHistory: { chiefComplaint: 'Chest pain for 2 hours' },
+                    },
+                }}
+            />
+        );
+        await screen.findByTestId('patient-avatar-stub');
+        expect(screen.getByText('Chest pain for 2 hours')).toBeTruthy();
+        // The name must not appear in the chief-complaint slot (bug #2).
+        expect(screen.queryByText('Chief complaint').nextSibling?.textContent).not.toBe('Thomas Taylor');
+    });
+
+    it('falls back to the chief_complaint column, not the description, when no structured history', async () => {
+        render(
+            <PatientSummaryCard
+                activeCase={{
+                    id: 'case-col',
+                    name: 'Thomas Taylor',
+                    description: 'Thomas Taylor',          // selection-screen blurb == name
+                    chief_complaint: 'Crushing chest pain', // dedicated column
+                    config: { patient_name: 'Thomas Taylor', demographics: { gender: 'male', age: 69 } },
+                }}
+            />
+        );
+        await screen.findByTestId('patient-avatar-stub');
+        expect(screen.getByText('Crushing chest pain')).toBeTruthy();
+        expect(screen.queryByText('Thomas Taylor', { selector: '.text-slate-100.text-sm' })).toBeNull();
+    });
+
+    it('renders no chief-complaint box when neither structured nor column value exists', async () => {
+        render(
+            <PatientSummaryCard
+                activeCase={{
+                    id: 'case-none',
+                    name: 'Thomas Taylor',
+                    description: 'Thomas Taylor',
+                    config: { patient_name: 'Thomas Taylor', demographics: { gender: 'male', age: 69 } },
+                }}
+            />
+        );
+        await screen.findByTestId('patient-avatar-stub');
+        // No "Chief complaint" label at all — better than echoing the name.
+        expect(screen.queryByText('Chief complaint')).toBeNull();
+    });
+
+    it('parses a stringified config so chief complaint still resolves', async () => {
+        render(
+            <PatientSummaryCard
+                activeCase={{
+                    id: 'case-str',
+                    name: 'Thomas Taylor',
+                    config: JSON.stringify({
+                        patient_name: 'Thomas Taylor',
+                        demographics: { gender: 'male', age: 69 },
+                        structuredHistory: { chiefComplaint: 'Shortness of breath' },
+                    }),
+                }}
+            />
+        );
+        await screen.findByTestId('patient-avatar-stub');
+        expect(screen.getByText('Shortness of breath')).toBeTruthy();
+    });
+
     it('still reads the legacy patient_avatar key when avatar_id is absent', async () => {
         render(
             <PatientSummaryCard

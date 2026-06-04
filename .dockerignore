@@ -49,6 +49,11 @@ README.md
 deploy/README.md
 deploy/docker/README.md
 deploy/PORTABILITY.md
+# CHANGELOG.md is NOT docs bloat — the runtime reads it for the in-app
+# "What's new" surface (GET /api/help/release-notes). The blanket *.md above
+# would strip it from the build context, so re-include it explicitly. Keep
+# this AFTER every *.md exclusion so nothing re-ignores it.
+!CHANGELOG.md
 
 # Tests don't ship to runtime images
 tests

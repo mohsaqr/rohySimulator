@@ -148,6 +148,13 @@ COPY --from=builder --chown=node:node /workspace/rohy/OyonR ./OyonR
 # which used to ship the runtime image with an empty lab table.
 COPY --from=builder --chown=node:node /workspace/rohy/Lab_database.json ./Lab_database.json
 COPY --from=builder --chown=node:node /workspace/rohy/heart.txt ./heart.txt
+# Repo-root CHANGELOG.md. `server/routes/help-routes.js` reads it via
+# `join(REPO_ROOT, 'CHANGELOG.md')` to power the in-app "What's new" surface.
+# It lives at the repo root (not under server/), so the directory-level COPYs
+# above miss it — without this line the release-notes endpoint 500s with
+# `release_notes_unavailable` in the container. (.dockerignore re-includes it
+# past the blanket `*.md` exclusion.)
+COPY --from=builder --chown=node:node /workspace/rohy/CHANGELOG.md ./CHANGELOG.md
 COPY --from=builder --chown=node:node /workspace/dynajs /opt/dynajs
 
 # rohy's package.json declares dynajs at "file:../dynajs". Recreate that

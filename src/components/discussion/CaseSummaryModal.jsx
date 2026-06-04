@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Activity, FlaskConical, Pill, Stethoscope, Image as ImageIcon } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
+import { parseConfig } from '../../utils/parseConfig.js';
 
 async function safeFetch(path) {
     try {
@@ -32,10 +33,15 @@ export default function CaseSummaryModal({ activeCase, sessionId, onClose }) {
         return () => { cancelled = true; };
     }, [sessionId]);
 
-    const cfg = activeCase?.config || {};
+    const cfg = parseConfig(activeCase?.config);
     const demographics = cfg.demographics || {};
     const history = cfg.structuredHistory || {};
-    const initial = cfg.initial_vitals || {};
+    // Configs store initial vitals under `initialVitals` (camelCase); accept the
+    // legacy `initial_vitals` snake_case too for older rows.
+    const initial = cfg.initialVitals || cfg.initial_vitals || {};
+    // Prefer structured chief complaint, then the denormalized column. Never
+    // the case description — see PatientSummaryCard for why (bug #2).
+    const chiefComplaint = history.chiefComplaint || activeCase?.chief_complaint || null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-sm">
@@ -66,7 +72,7 @@ export default function CaseSummaryModal({ activeCase, sessionId, onClose }) {
                     </Section>
 
                     <Section title="History" icon={<Stethoscope className="w-4 h-4" />}>
-                        <Row label="Chief complaint" value={history.chiefComplaint} block />
+                        <Row label="Chief complaint" value={chiefComplaint} block />
                         <Row label="HPI" value={history.historyOfPresentIllness} block />
                         <Row label="PMH" value={history.pastMedicalHistory} block />
                         <Row label="Medications" value={history.medications} block />
