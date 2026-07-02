@@ -50,7 +50,7 @@ export const AuthService = {
 
         const text = await response.text();
         if (!text) {
-            throw new Error('Server returned empty response. Check if backend is running on port 4000.');
+            throw new Error('Server returned empty response. Check that the backend is running and the /api proxy is reachable.');
         }
 
         let data;
