@@ -18,26 +18,29 @@ const MEASURE_I18N = {
   Betweenness: "sna.m_betweenness",
   Closeness: "sna.m_closeness"
 };
-const CentralityBarChart = ({ centralityData, colorMap, selectedMeasure }) => {
+const CentralityBarChart = ({ centralityData, colorMap, selectedMeasure, chartHeight }) => {
   const { t } = useTranslation(["courses", "admin"]);
   const { labels, measures } = centralityData;
   const measureKeys = Object.keys(measures).filter((k) => measures[k]?.length > 0);
   const [internalMeasure, setInternalMeasure] = useState(measureKeys[0] ?? "InStrength");
   const activeMeasure = selectedMeasure ?? internalMeasure;
   const showTabs = !selectedMeasure;
-  const values = measures[activeMeasure] ?? [];
+  const values = useMemo(() => measures[activeMeasure] ?? [], [measures, activeMeasure]);
   const sortedIndices = useMemo(() => {
     const indices = labels.map((_, i) => i);
     indices.sort((a, b) => (values[b] ?? 0) - (values[a] ?? 0));
     return indices;
   }, [labels, values]);
   const maxVal = useMemo(() => Math.max(...values, 1e-6), [values]);
-  const barHeight = 26;
-  const gap = 5;
   const margin = { top: 10, right: 55, bottom: 10, left: 100 };
   const svgWidth = 600;
   const plotW = svgWidth - margin.left - margin.right;
-  const svgHeight = margin.top + margin.bottom + labels.length * (barHeight + gap);
+  const fixedHeight = Number.isFinite(chartHeight) && chartHeight > margin.top + margin.bottom;
+  const plotH = fixedHeight ? chartHeight - margin.top - margin.bottom : null;
+  const step = fixedHeight && labels.length > 0 ? plotH / labels.length : null;
+  const barHeight = fixedHeight ? Math.min(36, Math.max(22, step * 0.72)) : 26;
+  const gap = fixedHeight ? Math.max(0, step - barHeight) : 5;
+  const svgHeight = fixedHeight ? chartHeight : margin.top + margin.bottom + labels.length * (barHeight + gap);
   return <div>
       {
     /* Measure tabs (hidden when controlled externally) */
