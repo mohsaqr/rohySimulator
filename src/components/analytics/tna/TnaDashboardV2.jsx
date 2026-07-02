@@ -25,7 +25,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     ArrowLeft, RefreshCw, Settings2, Users, Activity, Hash, Network, GitBranch,
-    Workflow, Layers, Eye, ScanEye, ListVideo, Info, Smile,
+    Workflow, Layers, Eye, ScanEye, ListVideo, Smile,
     GitCompare,
 } from 'lucide-react';
 import OyonAttentionView from '../../oyon/OyonAttentionView';
@@ -947,16 +947,6 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                     scope). */}
                 {isSignalTab && (
                     <div className="space-y-4">
-                        <div className="p-3 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 flex gap-2">
-                            <Info className="w-4 h-4 text-cyan-600 mt-0.5 shrink-0" />
-                            <span>
-                                Aggregate Oyon capture windows for the current filters. These
-                                are <strong>estimated facial-expression signals</strong> the Oyon model
-                                produced while students worked through cases — not feelings. Always
-                                read alongside the confidence and missing-face quality flags.
-                            </span>
-                        </div>
-
                         {emotionRecords && (
                             <div className="text-xs text-gray-500 text-right">
                                 {emotionRecords.length} window{emotionRecords.length === 1 ? '' : 's'} · {emotionSessionCount} session{emotionSessionCount === 1 ? '' : 's'}
