@@ -14,8 +14,8 @@ const oyonLog = logger('oyon-addon');
 const router = express.Router();
 const ASSET_ROOT = path.resolve(__dirname, '../../OyonR/standalone');
 const DEFAULT_CONSENT_VERSION = 'oyon-consent-v1';
-const POST_SESSION_DEBRIEF_CAPTURE_GRACE_MS = 24 * 60 * 60 * 1000;
-const DEBRIEF_CAPTURE_ROOMS = new Set(['consultant', 'discussant', 'debrief']);
+const MAX_EMOTION_EVENT_JSON_LENGTH = 20_000;
+const POST_SESSION_CAPTURE_GRACE_MS = 24 * 60 * 60 * 1000;
 
 // Runtime defaults match the hard-coded values previously baked into the
 // frontends. Migration 0012 stamps the same defaults onto oyon_settings, so
@@ -223,7 +223,7 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
 
     const validation = validateEmotionBatch(req.body, {
         maxBatchEvents: 64,
-        maxJsonStringLength: 4096,
+        maxJsonStringLength: MAX_EMOTION_EVENT_JSON_LENGTH,
     });
     if (!validation.ok) {
         oyonLog.warn('emotion batch rejected', { user_id: req.user.id, errors: validation.errors.slice(0, 5) });
@@ -668,10 +668,10 @@ async function latestConsent(req, sessionId) {
 
 function validateServerEvent(event, session) {
     const errors = [];
-    if (JSON.stringify(event).length > 4096) errors.push('Emotion event is too large');
+    if (JSON.stringify(event).length > MAX_EMOTION_EVENT_JSON_LENGTH) errors.push('Emotion event is too large');
     if (event.capture_mode !== 'local-browser') errors.push('capture_mode must be local-browser');
     if (!event.consent_version) errors.push('consent_version is required');
-    if (!timestampWithinSession(event.window_start, event.window_end, session, event)) {
+    if (!timestampWithinSession(event.window_start, event.window_end, session)) {
         errors.push('Emotion event timestamp is outside session bounds');
     }
     return errors;
@@ -869,14 +869,13 @@ function numberOr(value, fallback) {
     return Number.isFinite(n) ? n : fallback;
 }
 
-function timestampWithinSession(start, end, session, event = {}) {
+function timestampWithinSession(start, end, session) {
     const startMs = Date.parse(start);
     const endMs = Date.parse(end);
     const sessionStart = Date.parse(session.start_time);
     const rawSessionEnd = session.end_time ? Date.parse(session.end_time) : null;
-    const isPostCaseDebrief = DEBRIEF_CAPTURE_ROOMS.has(String(event.room || '').toLowerCase());
     const sessionEnd = Number.isFinite(rawSessionEnd)
-        ? rawSessionEnd + (isPostCaseDebrief ? POST_SESSION_DEBRIEF_CAPTURE_GRACE_MS : 60_000)
+        ? rawSessionEnd + POST_SESSION_CAPTURE_GRACE_MS
         : Date.now() + 60_000;
     return Number.isFinite(startMs)
         && Number.isFinite(endMs)

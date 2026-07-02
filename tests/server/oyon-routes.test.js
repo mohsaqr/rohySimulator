@@ -661,7 +661,7 @@ describe('assertOyonReadAccess across Oyon read endpoints', () => {
             expect(body).toMatchObject({ inserted: 1, skipped: 0 });
         });
 
-        it('still rejects non-debrief rooms after the normal session window', async () => {
+        it('also accepts other room labels during the post-case debrief period', async () => {
             const res = await fetch(`${server.baseUrl}/api/addons/oyon/emotion-records`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${studentTok}`, 'Content-Type': 'application/json' },
@@ -670,9 +670,9 @@ describe('assertOyonReadAccess across Oyon read endpoints', () => {
                     events: [buildEvent('chat', 'post-debrief-chat-1')],
                 }),
             });
-            expect(res.status).toBe(400);
+            expect(res.status).toBe(200);
             const body = await res.json();
-            expect(body.details).toContain('Emotion event timestamp is outside session bounds');
+            expect(body).toMatchObject({ inserted: 1, skipped: 0 });
         });
     });
 
@@ -723,6 +723,13 @@ describe('assertOyonReadAccess across Oyon read endpoints', () => {
                 sample_interval_ms: 500,
                 aggregate_window_ms: 10000,
                 settings_hash: 'fnv1a32:testhash',
+                gaze_aois: Array.from({ length: 50 }, (_, i) => ({
+                    id: `aoi-${i}`,
+                    x: 0.1,
+                    y: -0.1,
+                    width: 0.2,
+                    height: 0.2,
+                })),
             },
             dynamics: {
                 schema_version: 'oyon-dynamics-v1',
@@ -795,6 +802,7 @@ describe('assertOyonReadAccess across Oyon read endpoints', () => {
             expect(JSON.parse(row.settings_snapshot_json)).toMatchObject({
                 model_profile: 'hse-emotion-mtl',
                 sample_interval_ms: 500,
+                gaze_aois: expect.any(Array),
             });
             expect(JSON.parse(row.dynamics_json)).toMatchObject({
                 phase_quadrant: 'positive-activated',
