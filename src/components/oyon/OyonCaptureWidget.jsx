@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, BarChart3 } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 import { oyonClientLog } from './clientLogger';
@@ -64,6 +64,37 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
       roomRef.current = room;
    }, [sessionId, caseId, room]);
 
+   const ensureConsent = useCallback(async () => {
+      const sid = sessionRef.current;
+      if (!sid || !readConsentPref()) {
+         persistGateRef.current = false;
+         oyonClientLog('info', 'capture running without consent — local-only', {
+            session_id: sid, user_consent: readConsentPref(),
+         });
+         return;
+      }
+      if (consentSessionRef.current === sid) {
+         persistGateRef.current = true;
+         return;
+      }
+      try {
+         await apiFetch('/addons/oyon/consent', {
+            method: 'POST',
+            json: { session_id: sid, consent_granted: true, source_page: window.location.pathname },
+         });
+         consentSessionRef.current = sid;
+         persistGateRef.current = true;
+         setPersistOk(true);
+         oyonClientLog('info', 'consent recorded', { session_id: sid });
+      } catch (e) {
+         persistGateRef.current = false;
+         setPersistOk(false);
+         oyonClientLog('warn', 'consent POST failed; capture will not persist', {
+            session_id: sid, error: e?.message || String(e),
+         });
+      }
+   }, []);
+
    useEffect(() => {
       let cancelled = false;
       apiFetch('/addons/oyon/config')
@@ -108,37 +139,6 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
    useEffect(() => {
       if (!tenantEnabled || runtimeConfig == null) return undefined;
       let cancelled = false;
-
-      async function ensureConsent() {
-         const sid = sessionRef.current;
-         if (!sid || !readConsentPref()) {
-            persistGateRef.current = false;
-            oyonClientLog('info', 'capture running without consent — local-only', {
-               session_id: sid, user_consent: readConsentPref(),
-            });
-            return;
-         }
-         if (consentSessionRef.current === sid) {
-            persistGateRef.current = true;
-            return;
-         }
-         try {
-            await apiFetch('/addons/oyon/consent', {
-               method: 'POST',
-               json: { session_id: sid, consent_granted: true, source_page: window.location.pathname },
-            });
-            consentSessionRef.current = sid;
-            persistGateRef.current = true;
-            setPersistOk(true);
-            oyonClientLog('info', 'consent recorded', { session_id: sid });
-         } catch (e) {
-            persistGateRef.current = false;
-            setPersistOk(false);
-            oyonClientLog('warn', 'consent POST failed; capture will not persist', {
-               session_id: sid, error: e?.message || String(e),
-            });
-         }
-      }
 
       const onStatus = (e) => {
          const state = e?.detail?.state;
@@ -240,7 +240,7 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
          runningRef.current = false;
          persistGateRef.current = false;
       };
-   }, [tenantEnabled, runtimeConfig]);
+   }, [tenantEnabled, runtimeConfig, ensureConsent]);
 
    // Identity applies LIVE: on a session switch mid-capture the element
    // re-keys subsequent windows immediately, and consent (a per-session
@@ -250,7 +250,10 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
       if (!el) return;
       if (sessionId) el.setAttribute('session-id', String(sessionId));
       persistGateRef.current = consentSessionRef.current === sessionId && persistGateRef.current;
-   }, [sessionId]);
+      if (sessionId && runningRef.current && consentSessionRef.current !== sessionId) {
+         void ensureConsent();
+      }
+   }, [sessionId, ensureConsent]);
 
    if (!tenantEnabled) return null;
 
