@@ -42,6 +42,10 @@ describe('TransitionMiniCard', () => {
         render(<TransitionMiniCard title="Gaze target transitions" sequences={seqs} />);
         expect(screen.getByText('Gaze target transitions')).toBeInTheDocument();
         expect(screen.getByRole('img', { name: 'Transition network' })).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: 'Transition heatmap' })).toBeInTheDocument();
+        expect(screen.getByText('TNA Network')).toBeInTheDocument();
+        expect(screen.getByText('Transition Heatmap')).toBeInTheDocument();
+        expect(screen.getByText('Centrality')).toBeInTheDocument();
         expect(screen.getByText(/dynajs model/i)).toBeInTheDocument();
         // Measure pills present and switchable.
         expect(screen.getByRole('button', { name: 'InStrength' })).toBeInTheDocument();
