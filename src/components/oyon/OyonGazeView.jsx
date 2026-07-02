@@ -53,6 +53,9 @@ const ROOM_LABELS = {
    unassigned: 'Unassigned',
 };
 
+const GAZE_MAP_ROOMS = ['chat', 'examination', 'lab', 'radiology', 'consultant'];
+const GAZE_MAP_WIDTH = 340;
+
 function roomLabel(room) {
    if (ROOM_LABELS[room]) return ROOM_LABELS[room];
    const s = String(room ?? '');
@@ -68,10 +71,24 @@ export default function OyonGazeView({ records, loading }) {
    // shares (pure helper), with one stable palette colour per student across
    // every room panel.
    const roomMaps = useMemo(() => perRoomZoneStudentWeights(windows), [windows]);
-   const studentColors = useMemo(() => {
-      const names = [...new Set(roomMaps.flatMap((r) => r.students.map((s) => s.student)))].sort();
-      return new Map(names.map((name, i) => [name, CARM_PALETTE[i % CARM_PALETTE.length]]));
+   const displayRoomMaps = useMemo(() => {
+      const byRoom = new Map(
+         roomMaps
+            .filter((r) => GAZE_MAP_ROOMS.includes(r.room))
+            .map((r) => [r.room, r]),
+      );
+      if (byRoom.size === 0) return [];
+      return GAZE_MAP_ROOMS.map((room) => byRoom.get(room) ?? ({
+         room,
+         windows: 0,
+         zoneWeights: {},
+         students: [],
+      }));
    }, [roomMaps]);
+   const studentColors = useMemo(() => {
+      const names = [...new Set(displayRoomMaps.flatMap((r) => r.students.map((s) => s.student)))].sort();
+      return new Map(names.map((name, i) => [name, CARM_PALETTE[i % CARM_PALETTE.length]]));
+   }, [displayRoomMaps]);
 
    // Extra: transition networks (TNA + centrality) over the same records —
    // where the gaze MOVES between screen targets, and where the student
@@ -209,17 +226,12 @@ export default function OyonGazeView({ records, loading }) {
             </section>
          </div>
 
-         {/* Gaze maps by screen — ZoneBubbleMap small multiples, one per room */}
-         {roomMaps.length > 0 && (
+         {/* Gaze maps by screen — ZoneBubbleMap small multiples, one per simulator room */}
+         {displayRoomMaps.length > 0 && (
             <section className="rounded-lg border border-gray-200 bg-white p-4">
-               <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">Gaze maps by screen</h3>
-               <p className="mb-3 text-xs text-gray-500">
-                  Where they look, per screen — one panel per simulator room: the 3×3 heat is the
-                  room&apos;s overall gaze share, each translucent bubble is one student&apos;s own
-                  share of that zone.
-               </p>
-               <div className="flex flex-wrap gap-6">
-                  {roomMaps.map((r) => (
+               <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-800">Gaze maps by screen</h3>
+               <div className="flex flex-wrap gap-x-12 gap-y-6">
+                  {displayRoomMaps.map((r) => (
                      <ZoneBubbleMap
                         key={r.room}
                         title={`${roomLabel(r.room)} · ${r.windows} window${r.windows === 1 ? '' : 's'}`}
@@ -229,7 +241,7 @@ export default function OyonGazeView({ records, loading }) {
                            color: studentColors.get(s.student),
                            zones: s.zones,
                         }))}
-                        width={280}
+                        width={GAZE_MAP_WIDTH}
                      />
                   ))}
                </div>

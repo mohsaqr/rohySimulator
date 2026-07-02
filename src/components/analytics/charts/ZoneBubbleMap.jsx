@@ -38,6 +38,7 @@ export default function ZoneBubbleMap({
     const maxR = Math.min(cellW, cellH) * 0.45;
     const maxShare = ROWS.reduce(
         (m, rk) => COLS.reduce((mm, ck) => Math.max(mm, zoneWeights[`${rk}_${ck}`] ?? 0), m), 0);
+    const hasZoneWeights = maxShare > 0;
     const heatIsDark = hexLuminance(HEAT) < 0.45;
 
     return (
@@ -85,7 +86,7 @@ export default function ZoneBubbleMap({
                                 fill={labelFill}
                                 pointerEvents="none"
                             >
-                                {`${Math.round(share * 100)}%`}
+                                {hasZoneWeights ? `${Math.round(share * 100)}%` : ''}
                             </text>
                             {studentZoneWeights.flatMap((s) => {
                                 const sShare = s.zones?.[zone] ?? 0;
@@ -125,6 +126,19 @@ export default function ZoneBubbleMap({
                     strokeWidth={1}
                     rx={4}
                 />
+                {!hasZoneWeights && (
+                    <text
+                        x={width / 2}
+                        y={height / 2}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fontSize={12}
+                        fontWeight={600}
+                        fill={LABEL_MUTED}
+                    >
+                        No gaze data
+                    </text>
+                )}
             </svg>
         </div>
     );

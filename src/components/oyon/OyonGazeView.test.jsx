@@ -49,26 +49,28 @@ describe('OyonGazeView', () => {
         expect(screen.getByText('Gaze log')).toBeInTheDocument();
     });
 
-    it('renders one ZoneBubbleMap per room with gaze data, busiest room first', () => {
+    it('renders fixed simulator-room ZoneBubbleMaps and omits settings/unassigned', () => {
         render(<OyonGazeView records={RECORDS} loading={false} />);
         expect(screen.getByText('Gaze maps by screen')).toBeInTheDocument();
         const maps = screen.getAllByTestId('zone-bubble-map');
-        expect(maps).toHaveLength(3); // chat, consultant, unassigned
+        expect(maps).toHaveLength(5); // patient main, examination, lab, radiology, discussant
 
-        // Friendly labels, window counts, chat (2 windows) first.
+        // Friendly labels in simulator-room order; missing rooms render blank
+        // instead of being replaced by Settings/Unassigned.
         expect(maps[0]).toHaveTextContent('Patient (main) · 2 windows');
-        expect(screen.getByText('Discussant · 1 window')).toBeInTheDocument();
-        expect(screen.getByText('Unassigned · 1 window')).toBeInTheDocument();
-        // No lab windows → no lab zone-bubble panel (scope to the maps, since
-        // the new Location transition card lists "Lab" in its subtitle prose).
-        expect(maps.some((m) => /Lab ·/.test(m.textContent))).toBe(false);
+        expect(maps[1]).toHaveTextContent('Examination · 0 windows');
+        expect(maps[2]).toHaveTextContent('Lab · 0 windows');
+        expect(maps[3]).toHaveTextContent('Radiology · 0 windows');
+        expect(maps[4]).toHaveTextContent('Discussant · 1 window');
+        expect(maps.some((m) => /Settings ·/.test(m.textContent))).toBe(false);
+        expect(maps.some((m) => /Unassigned ·/.test(m.textContent))).toBe(false);
     });
 
-    it('draws per-student bubbles in each room panel', () => {
+    it('draws per-student bubbles in simulator-room panels only', () => {
         const { container } = render(<OyonGazeView records={RECORDS} loading={false} />);
         const bubbles = container.querySelectorAll('[data-testid="zone-bubble"]');
-        // chat: alice+bob × 2 zones = 4, consultant: alice × 2, unassigned: alice × 2.
-        expect(bubbles).toHaveLength(8);
+        // chat: alice+bob × 2 zones = 4, consultant: alice × 2; unassigned is hidden.
+        expect(bubbles).toHaveLength(6);
         const titles = [...bubbles].map((b) => b.querySelector('title').textContent);
         expect(titles).toContain('alice · middle_center · 70%');
         expect(titles).toContain('bob · top_center · 30%');
