@@ -14,6 +14,8 @@ const oyonLog = logger('oyon-addon');
 const router = express.Router();
 const ASSET_ROOT = path.resolve(__dirname, '../../OyonR/standalone');
 const DEFAULT_CONSENT_VERSION = 'oyon-consent-v1';
+const POST_SESSION_DEBRIEF_CAPTURE_GRACE_MS = 24 * 60 * 60 * 1000;
+const DEBRIEF_CAPTURE_ROOMS = new Set(['consultant', 'discussant', 'debrief']);
 
 // Runtime defaults match the hard-coded values previously baked into the
 // frontends. Migration 0012 stamps the same defaults onto oyon_settings, so
@@ -669,7 +671,7 @@ function validateServerEvent(event, session) {
     if (JSON.stringify(event).length > 4096) errors.push('Emotion event is too large');
     if (event.capture_mode !== 'local-browser') errors.push('capture_mode must be local-browser');
     if (!event.consent_version) errors.push('consent_version is required');
-    if (!timestampWithinSession(event.window_start, event.window_end, session)) {
+    if (!timestampWithinSession(event.window_start, event.window_end, session, event)) {
         errors.push('Emotion event timestamp is outside session bounds');
     }
     return errors;
@@ -867,11 +869,15 @@ function numberOr(value, fallback) {
     return Number.isFinite(n) ? n : fallback;
 }
 
-function timestampWithinSession(start, end, session) {
+function timestampWithinSession(start, end, session, event = {}) {
     const startMs = Date.parse(start);
     const endMs = Date.parse(end);
     const sessionStart = Date.parse(session.start_time);
-    const sessionEnd = session.end_time ? Date.parse(session.end_time) + 60_000 : Date.now() + 60_000;
+    const rawSessionEnd = session.end_time ? Date.parse(session.end_time) : null;
+    const isPostCaseDebrief = DEBRIEF_CAPTURE_ROOMS.has(String(event.room || '').toLowerCase());
+    const sessionEnd = Number.isFinite(rawSessionEnd)
+        ? rawSessionEnd + (isPostCaseDebrief ? POST_SESSION_DEBRIEF_CAPTURE_GRACE_MS : 60_000)
+        : Date.now() + 60_000;
     return Number.isFinite(startMs)
         && Number.isFinite(endMs)
         && Number.isFinite(sessionStart)

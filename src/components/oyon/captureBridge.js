@@ -57,7 +57,7 @@ export function persistBody(windows, { sessionId, caseId, room } = {}) {
     return {
         session_id: sessionId,
         events: events.map(ev => ({
-            ...ev,
+            ...sanitizeWindowForPersistence(ev),
             session_id: sessionId,
             case_id: caseId || null,
             // Simulator-room stamp — the room active when the window flushed
@@ -68,4 +68,14 @@ export function persistBody(windows, { sessionId, caseId, room } = {}) {
             consent_version: ev.consent_version || 'placeholder',
         })),
     };
+}
+
+function sanitizeWindowForPersistence(ev) {
+    if (!ev || typeof ev !== 'object') return {};
+    const out = { ...ev };
+    if (out.settings_snapshot && typeof out.settings_snapshot === 'object') {
+        const { gaze_aois: _gazeAois, ...settings } = out.settings_snapshot;
+        out.settings_snapshot = settings;
+    }
+    return out;
 }

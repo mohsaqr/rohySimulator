@@ -602,6 +602,80 @@ describe('assertOyonReadAccess across Oyon read endpoints', () => {
         });
     });
 
+    describe('post-case debrief capture: discussant windows remain part of the session', () => {
+        let endedSessionId;
+        const now = Date.now();
+
+        beforeAll(async () => {
+            await setOyonViewFlags(server.dbPath, { admin: 1, educator: 1, student: 1 });
+            const db = await openDb(server.dbPath);
+            const stu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['oroute_stu']);
+            await dbRun(db,
+                `INSERT INTO sessions (user_id, case_id, start_time, end_time, status, tenant_id)
+                 VALUES (?, NULL, ?, ?, 'completed', 1)`,
+                [
+                    stu.id,
+                    new Date(now - 8 * 60 * 60 * 1000).toISOString(),
+                    new Date(now - 6 * 60 * 60 * 1000).toISOString(),
+                ]);
+            const sess = await dbGet(db,
+                `SELECT id FROM sessions WHERE user_id = ? ORDER BY id DESC LIMIT 1`,
+                [stu.id]);
+            endedSessionId = sess.id;
+            await dbRun(db,
+                `INSERT INTO oyon_emotion_consents
+                    (tenant_id, user_id, student_id, session_id,
+                     consent_granted, consent_version)
+                 VALUES ('1', ?, ?, ?, 1, 'oyon-consent-v1')`,
+                [String(stu.id), String(stu.id), String(endedSessionId)]);
+            await dbClose(db);
+        });
+
+        function buildEvent(room, recordId) {
+            return {
+                session_id: String(endedSessionId),
+                record_id: recordId,
+                window_start: new Date(now - 10000).toISOString(),
+                window_end: new Date(now - 1000).toISOString(),
+                capture_mode: 'local-browser',
+                consent_version: 'oyon-consent-v1',
+                valid_frames: 5,
+                missing_face_ratio: 0.1,
+                confidence: 0.8,
+                dominant_emotion: 'neutral',
+                room,
+            };
+        }
+
+        it('accepts consultant/discussant windows after End & Debrief', async () => {
+            const res = await fetch(`${server.baseUrl}/api/addons/oyon/emotion-records`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${studentTok}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: endedSessionId,
+                    events: [buildEvent('consultant', 'post-debrief-consultant-1')],
+                }),
+            });
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body).toMatchObject({ inserted: 1, skipped: 0 });
+        });
+
+        it('still rejects non-debrief rooms after the normal session window', async () => {
+            const res = await fetch(`${server.baseUrl}/api/addons/oyon/emotion-records`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${studentTok}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: endedSessionId,
+                    events: [buildEvent('chat', 'post-debrief-chat-1')],
+                }),
+            });
+            expect(res.status).toBe(400);
+            const body = await res.json();
+            expect(body.details).toContain('Emotion event timestamp is outside session bounds');
+        });
+    });
+
     describe('full window persistence: runtime metadata survives storage', () => {
         let metadataSessionId;
         const baseTime = Date.now();

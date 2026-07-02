@@ -78,6 +78,28 @@ describe('persistBody — oyon:window payload → emotion-records POST body', ()
         expect(body.events[0].room).toBe('examination');
     });
 
+    it('drops repeated AOI geometry from settings_snapshot before POST', () => {
+        const body = persistBody([{
+            ...win,
+            settings_snapshot: {
+                model_profile: 'hse-emotion-mtl',
+                settings_hash: 'fnv1a32:test',
+                gaze_aois: Array.from({ length: 20 }, (_, i) => ({
+                    id: `aoi-${i}`,
+                    x: 0,
+                    y: 0,
+                    width: 0.1,
+                    height: 0.1,
+                })),
+            },
+        }], { sessionId: 's' });
+        expect(body.events[0].settings_snapshot).toEqual({
+            model_profile: 'hse-emotion-mtl',
+            settings_hash: 'fnv1a32:test',
+        });
+        expect(win.settings_snapshot).toBeUndefined();
+    });
+
     it('preserves an explicit capture_mode / consent_version when present', () => {
         const body = persistBody(
             [{ ...win, capture_mode: 'kiosk', consent_version: 'oyon-consent-v1' }],
