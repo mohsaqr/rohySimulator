@@ -1,152 +1,68 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, ExternalLink, Loader2, Pause, Play, Square, AlertTriangle } from 'lucide-react';
-import { EmotionRuntime } from 'oyon';
+import { AlertTriangle, BarChart3 } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
-import { resolveModelConfig, DEFAULT_MODEL_PROFILE } from './modelProfiles';
 import { oyonClientLog } from './clientLogger';
 import { liveAnxiousIndex, ANXIOUS_FLAG_THRESHOLD } from './anxiousIndex';
+import { loadOyonElement } from './loadOyonElement';
+import { elementSettings, persistBody, OYON_ASSET_BASE } from './captureBridge';
+import { getAois, onAois } from './screenAois';
 
 export const VALENCE_GRAPH_PREF_KEY = 'oyon.showValenceGraph';
 export const CONSENT_PREF_KEY = 'oyon.defaultConsent';
 
-const MEDIAPIPE_OPTS = {
-   wasmBaseUrl: '/standalone/vendor/mediapipe/wasm',
-   modelAssetPath: '/standalone/models/mediapipe/face_landmarker.task',
-   delegate: 'GPU',
-};
-const ONNX_OPTS = {
-   wasmPaths: '/standalone/vendor/onnxruntime-web/',
-   executionProviders: ['webgpu', 'wasm'],
-};
 const VALENCE_BUFFER = 30;
 
-// Lazy-init the EmotionRuntime as soon as the widget mounts — but note this
-// is NOT off-main-thread. Inference and ONNX preprocessing run on the React
-// main thread (a worker variant was attempted and abandoned, see
-// HANDOFF.md). "Pre-warm" here just means we defer the heavy model load
-// (~3.6MB face landmarker + ONNX session + WebGPU pipeline compile) by one
-// slot tick after mount, so it's done by the time the user clicks Camera and
-// pressing Start feels instant. The runtime holds the loaded models; we only
-// call camera.start() on user gesture.
-class CaptureSession {
-   constructor({ sessionId, caseId, runtimeConfig }) {
-      this.sessionId = sessionId;
-      this.caseId = caseId;
-      this.runtimeConfig = runtimeConfig || {};
-      this.runtime = null;
-      this.ready = false;
-      this.error = null;
-      this.listeners = new Set();
-   }
-
-   async preloadModels() {
-      if (this.runtime || this.error) return;
-      try {
-         const profileId = this.runtimeConfig.model_profile || DEFAULT_MODEL_PROFILE;
-         const modelConfig = resolveModelConfig(profileId);
-         oyonClientLog('debug', 'miniature preloading models', {
-            session_id: this.sessionId,
-            model_profile: profileId,
-         });
-         // Forward the full tenant runtime config to EmotionRuntime so the
-         // emitted windows reflect the admin's saved aggregation parameters
-         // (window length, min valid frames, smoothing, hold, switch
-         // confidence). Earlier we only wired model + sample interval,
-         // which let captured windows diverge silently from settings_snapshot
-         // and from what admins saw in the Settings tab. Field names map to
-         // OyonSettings.js: window_ms → aggregate_window_ms,
-         // min_switch_confidence → switch_confidence; the rest pass through.
-         const tenantSettings = {
-            model_profile: profileId,
-            sample_interval_ms: this.runtimeConfig.sample_interval_ms,
-            aggregate_window_ms: this.runtimeConfig.window_ms,
-            min_valid_frames: this.runtimeConfig.min_valid_frames,
-            smoothing_alpha: this.runtimeConfig.smoothing_alpha,
-            min_hold_ms: this.runtimeConfig.min_hold_ms,
-            switch_confidence: this.runtimeConfig.min_switch_confidence,
-         };
-         this.runtime = new EmotionRuntime({
-            transport: { send: async () => {} }, // no-op until consent + persistence enabled
-            mediaPipe: MEDIAPIPE_OPTS,
-            onnx: { ...ONNX_OPTS, ...modelConfig },
-            sampleIntervalMs: this.runtimeConfig.sample_interval_ms,
-            settings: tenantSettings,
-            contextProvider: () => ({
-               session_id: this.sessionId,
-               case_id: this.caseId,
-               model_profile: profileId,
-            }),
-         });
-         this.runtime.on('status', s => this.emit({ type: 'status', state: s.state }));
-         // Hot-path: every sample event also carries durationMs (how long the
-         // last inference took). Surface it via the same pipe so the pill can
-         // show "is this slow because the interval is high, or because each
-         // inference is taking 4 seconds?" without DevTools spelunking.
-         this.runtime.on('sample', s => this.emit({ type: 'sample', sample: s, durationMs: s.durationMs }));
-         this.runtime.on('window', events => this.emit({ type: 'window', events }));
-         this.runtime.on('error', e => this.emit({ type: 'error', message: e?.message || String(e) }));
-         await this.runtime.init();
-         this.ready = true;
-         oyonClientLog('info', 'miniature models ready', {
-            session_id: this.sessionId,
-            model_profile: profileId,
-         });
-         this.emit({ type: 'ready' });
-      } catch (err) {
-         this.error = err?.message || String(err);
-         oyonClientLog('error', 'miniature preload failed', {
-            session_id: this.sessionId,
-            error: this.error,
-         });
-         this.emit({ type: 'error', message: this.error });
-      }
-   }
-
-   async startCamera({ persistFn } = {}) {
-      if (this.error) throw new Error(this.error);
-      if (!this.runtime) await this.preloadModels();
-      if (this.error) throw new Error(this.error);
-      this.persistFn = persistFn;
-      this.runtime.transport = { send: async (events) => this.persistFn?.(events) };
-      await this.runtime.start();
-   }
-
-   pause() { this.runtime?.pause?.(); }
-   resume() { this.runtime?.resume?.(); }
-   // stop() is invoked from both the user-facing Stop button AND the widget's
-   // unmount cleanup. In both cases we want full disposal — ONNX session,
-   // MediaPipe FaceLandmarker, references — released. Otherwise repeated
-   // session re-mounts (route changes, model swaps) would leak WebGPU
-   // pipelines and eventually break capture.
-   async stop() {
-      try { await this.runtime?.dispose?.(); }
-      catch { /* ignore */ }
-      this.runtime = null;
-      this.ready = false;
-   }
-
-   on(handler) { this.listeners.add(handler); return () => this.listeners.delete(handler); }
-   emit(event) { for (const fn of this.listeners) try { fn(event); } catch { /* ignore */ } }
-}
-
-export default function OyonCaptureWidget({ sessionId, caseId } = {}) {
+/*
+ * Oyon v2 embed. The <oyon-app chrome="capture"> element OWNS the camera,
+ * the models, the capture pill UI and its start/stop controls — Rohy no
+ * longer constructs an EmotionRuntime of its own (the v1 widget did; that
+ * pulled the whole oyon library into the SPA bundle graph and re-implemented
+ * camera lifecycle that upstream now ships). Rohy keeps everything that is
+ * genuinely Rohy's:
+ *   - the tenant gate + runtime config (GET /addons/oyon/config), forwarded
+ *     into the element via its `settings` attribute;
+ *   - the consent contract (POST /addons/oyon/consent when capture actually
+ *     starts, per session, opt-out via CONSENT_PREF_KEY);
+ *   - persistence (windows from the element's `oyon:window` event POSTed to
+ *     /addons/oyon/emotion-records — the element also keeps a local copy,
+ *     local-first by design);
+ *   - the clinical extras the element doesn't know about: the derived
+ *     anxious flag (Bug 18) and the live valence sparkline, both fed from
+ *     the element's unconditional `oyon:sample` stream.
+ * Gaze is pinned to the training-free mediapipe engine (Rohy consumes zone
+ * aggregates, not calibrated points) and assets load same-origin via
+ * asset-base so air-gapped deploys never touch a CDN.
+ */
+export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnalytics } = {}) {
    const [tenantEnabled, setTenantEnabled] = useState(false);
    const [runtimeConfig, setRuntimeConfig] = useState(null);
-   const [running, setRunning] = useState(false);
-   const [paused, setPaused] = useState(false);
    const [status, setStatus] = useState('idle');
    const [emotion, setEmotion] = useState(null);
    const [valenceTrack, setValenceTrack] = useState([]);
    const [showGraph, setShowGraph] = useState(() => readGraphPref());
    const [errorMsg, setErrorMsg] = useState(null);
    const [persistOk, setPersistOk] = useState(true);
-   const [modelsReady, setModelsReady] = useState(false);
-   // eslint-disable-next-line unused-imports/no-unused-vars -- value
-   // currently consumed only by EventLogger via the setter; reserved
-   // for an upcoming "inference latency" badge in the widget.
-   const [_inferenceMs, setInferenceMs] = useState(null);
 
-   const sessionRef = useRef(null);
+   const hostRef = useRef(null);
+   const elRef = useRef(null);
+   // The element's event listeners are attached ONCE (at element creation)
+   // and read live values through refs, so prop changes never require
+   // re-wiring — and a late window can never persist against a stale closure.
+   const sessionRef = useRef(sessionId);
+   const caseRef = useRef(caseId);
+   const roomRef = useRef(room);
+   const runningRef = useRef(false);
+   // Persistence gate: true only once consent for the CURRENT session has
+   // been recorded server-side. Windows arriving while the gate is closed
+   // stay local-only (the element's own store) — the privacy contract.
+   const persistGateRef = useRef(false);
+   const consentSessionRef = useRef(null);
+
+   useEffect(() => {
+      sessionRef.current = sessionId;
+      caseRef.current = caseId;
+      roomRef.current = room;
+   }, [sessionId, caseId, room]);
 
    useEffect(() => {
       let cancelled = false;
@@ -154,10 +70,11 @@ export default function OyonCaptureWidget({ sessionId, caseId } = {}) {
          .then(c => {
             if (cancelled) return;
             setTenantEnabled(Boolean(c?.enabled));
-            // /config.runtime is the tenant-level source of truth (model + window
-            // params). If it's missing we fall back inside CaptureSession.
-            setRuntimeConfig(c?.runtime || null);
-            oyonClientLog('debug', 'miniature config loaded', {
+            // /config.runtime is the tenant-level source of truth (model +
+            // window params). Forwarded to the element as its `settings`
+            // attribute; missing fields keep the element's defaults.
+            setRuntimeConfig(c?.runtime || {});
+            oyonClientLog('debug', 'capture config loaded', {
                enabled: Boolean(c?.enabled),
                model_profile: c?.runtime?.model_profile,
             });
@@ -165,7 +82,7 @@ export default function OyonCaptureWidget({ sessionId, caseId } = {}) {
          .catch((e) => {
             if (cancelled) return;
             setTenantEnabled(false);
-            oyonClientLog('warn', 'miniature config fetch failed', { error: e?.message || String(e) });
+            oyonClientLog('warn', 'capture config fetch failed', { error: e?.message || String(e) });
          });
       return () => { cancelled = true; };
    }, []);
@@ -185,186 +102,162 @@ export default function OyonCaptureWidget({ sessionId, caseId } = {}) {
       };
    }, []);
 
-   // Pre-warm: as soon as the tenant is known to be enabled, kick off the
-   // model load. The load runs on the main thread (no app-level worker for
-   // now); we just defer one slot tick so initial render finishes first and
-   // by the time the user clicks camera-start, models are ready and the
-   // click feels instant.
+   // Mount exactly one <oyon-app chrome="capture"> once the tenant is known
+   // to be enabled and the runtime config has resolved. Listeners are
+   // attached BEFORE the node is appended so no early event is missed.
    useEffect(() => {
-      if (!tenantEnabled) return undefined;
-      // Wait until /config has resolved so we don't kick off the heavy load
-      // with stale defaults and then have to tear it down when the admin's
-      // chosen model arrives a tick later.
-      if (runtimeConfig == null) return undefined;
-      const session = new CaptureSession({ sessionId, caseId, runtimeConfig });
-      sessionRef.current = session;
-      const off = session.on(handleEvent);
-      // Defer slightly so initial render completes before the heavy load.
-      const id = setTimeout(() => session.preloadModels(), 50);
-      return () => {
-         clearTimeout(id);
-         off();
-         session.stop();
-         sessionRef.current = null;
-      };
+      if (!tenantEnabled || runtimeConfig == null) return undefined;
+      let cancelled = false;
 
-   }, [tenantEnabled, runtimeConfig, sessionId, caseId]);
-
-   function handleEvent(event) {
-      if (event.type === 'status') setStatus(event.state);
-      else if (event.type === 'ready') { setModelsReady(true); setStatus('ready'); }
-      else if (event.type === 'sample') {
-         // Sample events fire every sample_interval_ms (1s by default) and
-         // carry the live per-frame prediction. Drive ALL of the live UI from
-         // here — pill text, confidence, valence chart — so users see emotions
-         // update at sample cadence, not at the 10s window-aggregation cadence.
-         if (Number.isFinite(event.durationMs)) setInferenceMs(Math.round(event.durationMs));
-         const p = event.sample?.prediction;
-         if (!p) return;
-         // The runtime's prediction object exposes `probabilities` (per-label
-         // map) but NOT a precomputed `dominant` string — that's only added by
-         // the EmotionAggregator when it builds a window. Earlier code read
-         // p.dominant directly, which was always undefined, so the pill word
-         // was effectively driven by 10s window events while everything else
-         // (valence/confidence) updated per-sample. Derive top label here.
-         const dominant = topLabel(p.probabilities);
-         oyonClientLog('debug', 'miniature sample', {
-            dominant,
-            confidence: p.confidence,
-            inference_ms: Math.round(event.durationMs ?? -1),
-         });
-         const anxious = liveAnxiousIndex(p.probabilities, p.valence, p.arousal);
-         setEmotion(prev => ({
-            ...(prev || {}),
-            dominant_emotion: dominant ?? prev?.dominant_emotion,
-            confidence: p.confidence ?? prev?.confidence,
-            valence: Number.isFinite(p.valence) ? p.valence : prev?.valence,
-            arousal: Number.isFinite(p.arousal) ? p.arousal : prev?.arousal,
-            anxious_index: anxious ?? prev?.anxious_index,
-         }));
-         if (Number.isFinite(p.valence)) {
-            setValenceTrack(prev => [...prev, p.valence].slice(-VALENCE_BUFFER));
+      async function ensureConsent() {
+         const sid = sessionRef.current;
+         if (!sid || !readConsentPref()) {
+            persistGateRef.current = false;
+            oyonClientLog('info', 'capture running without consent — local-only', {
+               session_id: sid, user_consent: readConsentPref(),
+            });
+            return;
          }
-      } else if (event.type === 'window') {
-         // Window events are the persistence-shape rollups. We don't need them
-         // for live display anymore (samples cover that) — but keep merging in
-         // anything sample events don't already provide (e.g. entropy,
-         // missing_face_ratio, model name) so tooltips stay informative.
-         const last = event.events?.[event.events.length - 1];
-         if (!last) return;
-         setEmotion(prev => ({ ...(prev || {}), ...last }));
-      } else if (event.type === 'error') {
-         setErrorMsg(event.message);
-      }
-   }
-
-   async function start() {
-      if (running) return;
-      setErrorMsg(null);
-
-      // Consent is opt-in. The user must have ticked "I agree to local emotion
-      // capture" in Settings → Oyon (or in this widget's future inline prompt)
-      // before we POST consent. Without consent we still start the camera so
-      // the user gets the live preview/feedback, but we never write rows to
-      // the backend — that's the privacy contract.
-      const userConsent = readConsentPref();
-      let consentOk = false;
-      if (userConsent && sessionId) {
+         if (consentSessionRef.current === sid) {
+            persistGateRef.current = true;
+            return;
+         }
          try {
             await apiFetch('/addons/oyon/consent', {
                method: 'POST',
-               json: { session_id: sessionId, consent_granted: true, source_page: window.location.pathname },
+               json: { session_id: sid, consent_granted: true, source_page: window.location.pathname },
             });
-            consentOk = true;
+            consentSessionRef.current = sid;
+            persistGateRef.current = true;
             setPersistOk(true);
-            oyonClientLog('info', 'miniature consent recorded', { session_id: sessionId });
+            oyonClientLog('info', 'consent recorded', { session_id: sid });
          } catch (e) {
+            persistGateRef.current = false;
             setPersistOk(false);
-            oyonClientLog('warn', 'miniature consent POST failed; capture will not persist', {
-               session_id: sessionId,
-               error: e?.message || String(e),
+            oyonClientLog('warn', 'consent POST failed; capture will not persist', {
+               session_id: sid, error: e?.message || String(e),
             });
          }
-      } else {
-         oyonClientLog('info', 'miniature starting without consent — local-only capture', {
-            session_id: sessionId,
-            user_consent: userConsent,
-         });
       }
 
-      try {
-         const persistFn = consentOk ? (events) => persistEvents(events, sessionId, caseId, setPersistOk) : null;
-         await sessionRef.current?.startCamera({ persistFn });
-         setRunning(true);
-         setPaused(false);
-         oyonClientLog('info', 'miniature capture started', {
-            session_id: sessionId,
-            persisting: Boolean(persistFn),
-         });
-      } catch (e) {
-         setErrorMsg(e?.message || 'Could not start capture');
-         setStatus('error');
-         oyonClientLog('error', 'miniature capture start failed', {
-            session_id: sessionId,
-            error: e?.message || String(e),
-         });
-      }
-   }
+      const onStatus = (e) => {
+         const state = e?.detail?.state;
+         if (!state) return;
+         setStatus(state);
+         if (state === 'running') {
+            runningRef.current = true;
+            setErrorMsg(null);
+            // Consent is recorded when capture ACTUALLY starts (the user
+            // pressed the element pill's start control). The first window is
+            // one aggregation interval away (~10 s), so the POST settles long
+            // before anything could need persisting.
+            void ensureConsent();
+         } else if (state === 'stopped' || state === 'idle' || state === 'error') {
+            runningRef.current = false;
+            if (state === 'stopped') {
+               setEmotion(null);
+               setValenceTrack([]);
+            }
+         }
+      };
 
-   async function stop() {
-      await sessionRef.current?.stop();
-      setRunning(false);
-      setPaused(false);
-      setStatus('stopped');
-      setEmotion(null);
-      setValenceTrack([]);
-   }
+      const onSample = (e) => {
+         const d = e?.detail;
+         if (!d) return;
+         const anxious = liveAnxiousIndex(d.probabilities, d.valence, d.arousal);
+         setEmotion(prev => ({
+            ...(prev || {}),
+            dominant_emotion: d.dominant ?? prev?.dominant_emotion,
+            confidence: Number.isFinite(d.confidence) ? d.confidence : prev?.confidence,
+            valence: Number.isFinite(d.valence) ? d.valence : prev?.valence,
+            arousal: Number.isFinite(d.arousal) ? d.arousal : prev?.arousal,
+            anxious_index: anxious ?? prev?.anxious_index,
+         }));
+         if (Number.isFinite(d.valence)) {
+            setValenceTrack(prev => [...prev, d.valence].slice(-VALENCE_BUFFER));
+         }
+      };
 
-   function togglePause() {
-      if (!running) return;
-      if (paused) { sessionRef.current?.resume(); setPaused(false); }
-      else { sessionRef.current?.pause(); setPaused(true); }
-   }
+      const onWindow = (e) => {
+         const windows = e?.detail?.windows;
+         if (!Array.isArray(windows) || windows.length === 0) return;
+         if (!persistGateRef.current) return; // local-only capture
+         void persistWindows(windows, {
+            sessionId: sessionRef.current,
+            caseId: caseRef.current,
+            room: roomRef.current,
+         }, setPersistOk);
+      };
+
+      loadOyonElement()
+         .then(() => {
+            if (cancelled) return;
+            const host = hostRef.current;
+            if (!host || host.querySelector('oyon-app')) return;
+            const el = document.createElement('oyon-app');
+            el.setAttribute('chrome', 'capture');
+            // Training-free geometric gaze — Rohy only consumes zone/AOI
+            // aggregates, so the click-calibrated WebGazer default (which
+            // emits NOTHING until trained) would read as "gaze is broken".
+            el.setAttribute('gaze-engine', 'mediapipe');
+            // Same-origin models + WASM (air-gap contract) — see captureBridge.
+            el.setAttribute('asset-base', OYON_ASSET_BASE);
+            el.setAttribute('settings', JSON.stringify(elementSettings(runtimeConfig)));
+            if (sessionRef.current) el.setAttribute('session-id', String(sessionRef.current));
+            el.addEventListener('oyon:status', onStatus);
+            el.addEventListener('oyon:sample', onSample);
+            el.addEventListener('oyon:window', onWindow);
+            host.appendChild(el);
+            elRef.current = el;
+            // "What is the trainee looking at": seed the full AOI registry
+            // (patient face, ECG trace, vitals column, chat panel — whatever
+            // is currently on screen) so a capture started before a publisher
+            // re-measures still begins with the last known rects; live
+            // updates flow through the subscription below.
+            el.setGazeAois?.(getAois());
+         })
+         .catch((e) => {
+            if (cancelled) return;
+            setErrorMsg(e?.message || 'Could not load the Oyon capture element');
+            oyonClientLog('error', 'oyon element load failed', { error: e?.message || String(e) });
+         });
+
+      // Every published screen region is a live gaze AOI: the full set is
+      // hot-swapped on the running runtime whenever ANY publisher re-measures
+      // (resize, scroll, room change, element unmount → dropped from the set).
+      const offAoi = onAois((aois) => {
+         elRef.current?.setGazeAois?.(aois);
+      });
+
+      return () => {
+         cancelled = true;
+         offAoi();
+         // Removing the node IS the teardown contract: the element's
+         // disconnectedCallback stops capture, flushes the final window and
+         // releases the camera claim.
+         elRef.current?.remove();
+         elRef.current = null;
+         runningRef.current = false;
+         persistGateRef.current = false;
+      };
+   }, [tenantEnabled, runtimeConfig]);
+
+   // Identity applies LIVE: on a session switch mid-capture the element
+   // re-keys subsequent windows immediately, and consent (a per-session
+   // record) is re-established before anything persists under the new id.
+   useEffect(() => {
+      const el = elRef.current;
+      if (!el) return;
+      if (sessionId) el.setAttribute('session-id', String(sessionId));
+      persistGateRef.current = consentSessionRef.current === sessionId && persistGateRef.current;
+   }, [sessionId]);
 
    if (!tenantEnabled) return null;
 
-   const launchUrl = buildLaunchUrl({ sessionId, caseId });
-   const dom = emotion?.dominant_emotion;
-   const conf = Number.isFinite(emotion?.confidence) ? Math.round(emotion.confidence * 100) : null;
-   const tone = emotionTone(dom, running && !paused);
-   const loadingModels = !modelsReady && !errorMsg;
-   const loadingCamera = status === 'starting-camera';
-   const loading = loadingCamera; // only "loading" in the button sense when starting camera
-
-   const captureControls = !running ? (
-      <IconBtn small={showGraph} onClick={start} disabled={loading || !modelsReady} title={modelsReady ? 'Start capture' : 'Loading models…'}>
-         {loading || loadingModels ? <Loader2 className={`${iconCls(showGraph)} animate-spin`} /> : <Camera className={iconCls(showGraph)} />}
-      </IconBtn>
-   ) : (
-      <>
-         <IconBtn small={showGraph} onClick={togglePause} title={paused ? 'Resume' : 'Pause'}>
-            {paused ? <Play className={iconCls(showGraph)} /> : <Pause className={iconCls(showGraph)} />}
-         </IconBtn>
-         <IconBtn small={showGraph} onClick={stop} title="Stop" danger>
-            <Square className={iconCls(showGraph)} />
-         </IconBtn>
-      </>
-   );
-
-   // Bug 18: surface the derived anxiety state the model can't name as a
-   // class. When elevated, it leads the pill (clinically the salient
-   // signal) with the model's own top label kept alongside for context.
-   const anxiousFlag = Number.isFinite(emotion?.anxious_index)
+   const running = status === 'running' || status === 'paused';
+   const anxiousFlag = running
+      && Number.isFinite(emotion?.anxious_index)
       && emotion.anxious_index >= ANXIOUS_FLAG_THRESHOLD;
-   const liveWord = anxiousFlag ? (dom ? `anxious · ${dom}` : 'anxious') : (dom || '…');
-
-   const headlineText = errorMsg
-      ? 'Error'
-      : running ? liveWord
-      : loadingModels ? 'loading…'
-      : loadingCamera ? 'camera…'
-      : modelsReady ? 'Ready'
-      : 'Off';
 
    const errorBanner = errorMsg ? (
       <div className="text-[11px] text-red-200 bg-red-950/60 border border-red-500/40 rounded px-2 py-1 leading-tight max-w-[480px] break-words"
@@ -373,113 +266,63 @@ export default function OyonCaptureWidget({ sessionId, caseId } = {}) {
       </div>
    ) : null;
 
-   if (showGraph) {
-      return (
-         <div className="flex flex-col gap-1">
-            <div className="flex items-stretch gap-1.5 h-11">
-               <div
-                  className={`inline-flex items-center gap-2 rounded-xl border px-3 text-sm h-full ${errorMsg ? 'border-red-500/50' : ''}`}
-                  style={errorMsg ? { background: 'rgba(127,29,29,0.35)' } : { borderColor: tone.border, background: tone.bg, color: tone.fg }}
-               >
-                  <span
-                     className={`h-2 w-2 rounded-full shrink-0 ${running && !paused ? 'animate-pulse' : ''}`}
-                     style={{ background: errorMsg ? '#f87171' : tone.dot }}
-                  />
-                  <span title={errorMsg || ''} className="font-semibold capitalize tracking-wide leading-none truncate max-w-[90px]">
-                     {headlineText}
-                  </span>
-                  {running && conf != null && (
-                     <span className="text-[11px] tabular-nums leading-none shrink-0 opacity-75">{conf}%</span>
-                  )}
-                  {!persistOk && running && (
-                     <AlertTriangle className="h-3.5 w-3.5 text-amber-300" title="Backend rejected writes" />
-                  )}
-                  <span className="flex items-center gap-1 ml-1">{captureControls}</span>
-               </div>
-               <ValenceTrack values={valenceTrack} active={running && !paused} compact />
-               <a
-                  href={launchUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  title="Open full Oyon analytics for this session"
-                  className="grid place-items-center h-11 w-9 rounded-xl border border-white/10 bg-black/40 text-cyan-100/80 hover:bg-white/10 shrink-0"
-               >
-                  <ExternalLink className="h-4 w-4" />
-               </a>
-            </div>
-            {errorBanner}
-         </div>
-      );
-   }
-
    return (
       <div className="flex flex-col gap-1 w-fit">
-         <div className={`inline-flex items-center gap-2 rounded-full border pl-3 pr-1.5 py-2 text-cyan-50 text-sm w-fit ${errorMsg ? 'border-red-500/50 bg-red-950/40' : 'border-white/10 bg-black/40'}`}>
-            <span
-               className={`h-2 w-2 rounded-full shrink-0 ${running && !paused ? 'animate-pulse' : ''}`}
-               style={{ background: errorMsg ? '#f87171' : tone.dot }}
-            />
-            <span title={errorMsg || ''} className="font-semibold capitalize tracking-wide leading-none truncate max-w-[110px]">
-               {headlineText}
-            </span>
-            {running && conf != null && (
-               <span className="text-xs text-cyan-100/70 tabular-nums leading-none shrink-0">{conf}%</span>
+         <div className="flex items-stretch gap-1.5">
+            {/* The element renders Oyon's own capture pill (camera preview,
+                live emotion word, start/stop) inside this host. */}
+            <div ref={hostRef} className="shrink-0" />
+            {anxiousFlag && (
+               <span
+                  className="inline-flex items-center gap-1 self-center rounded-full border border-amber-400/50 bg-amber-950/50 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-200"
+                  title={`Derived anxiety indicator ${emotion.anxious_index.toFixed(2)} (high arousal + negative valence + fear)`}
+               >
+                  anxious
+               </span>
             )}
             {!persistOk && running && (
-               <AlertTriangle className="h-3.5 w-3.5 text-amber-300" title="Local capture only — backend rejected writes" />
+               <AlertTriangle
+                  className="h-4 w-4 self-center text-amber-300"
+                  title="Local capture only — backend rejected writes"
+               />
             )}
-            {captureControls}
-            <a
-               href={launchUrl}
-               target="_blank"
-               rel="noreferrer"
-               title="Open full Oyon analytics for this session"
-               className="grid place-items-center h-7 w-7 rounded-full text-cyan-100/80 hover:bg-white/10 shrink-0"
-            >
-               <ExternalLink className="h-4 w-4" />
-            </a>
+            {showGraph && <ValenceTrack values={valenceTrack} active={running && status !== 'paused'} compact />}
+            {/* In-app navigation to Settings → Oyon — Learning Analytics.
+                Only rendered when the host wires it (App gates on the same
+                educator/admin rule that shows the analytics tab itself). */}
+            {typeof onOpenAnalytics === 'function' && (
+               <button
+                  type="button"
+                  onClick={onOpenAnalytics}
+                  title="Open Learning Analytics (Settings → Oyon — Learning Analytics)"
+                  className="grid place-items-center self-center h-8 w-8 rounded-full border border-white/10 bg-black/40 text-cyan-100/80 hover:bg-white/10 shrink-0"
+               >
+                  <BarChart3 className="h-4 w-4" />
+               </button>
+            )}
          </div>
          {errorBanner}
       </div>
    );
 }
 
-async function persistEvents(events, sessionId, caseId, setPersistOk) {
-   if (!Array.isArray(events) || events.length === 0) return;
+async function persistWindows(windows, { sessionId, caseId, room }, setPersistOk) {
    try {
       await apiFetch('/addons/oyon/emotion-records', {
          method: 'POST',
-         json: {
-            session_id: sessionId,
-            // We do NOT pass consent_version here. The server is the source
-            // of truth: it stamps each record with the consent row's
-            // consent_version (server/routes/oyon-routes.js insertEmotionRecord).
-            // Sending one from the widget would be at best decorative
-            // and at worst create the divergence Codex flagged
-            // (widget defaulting to 'fer-consent-v1' while the actual
-            // accepted version was 'oyon-consent-v1'). The presence of
-            // `consent_version` on each event is still required by the
-            // payload validator so we send a placeholder; the server
-            // overwrites it.
-            events: events.map(ev => ({
-               ...ev,
-               session_id: sessionId,
-               case_id: caseId || null,
-               capture_mode: ev.capture_mode || 'local-browser',
-               consent_version: ev.consent_version || 'placeholder',
-            })),
-         },
+         json: persistBody(windows, { sessionId, caseId, room }),
       });
       setPersistOk(true);
-      oyonClientLog('debug', 'miniature batch persisted', {
+      oyonClientLog('debug', 'window batch persisted', {
          session_id: sessionId,
-         count: events.length,
+         count: windows.length,
+         room: room || null,
       });
    } catch (e) {
       setPersistOk(false);
-      oyonClientLog('warn', 'miniature batch persist failed', {
+      oyonClientLog('warn', 'window batch persist failed', {
          session_id: sessionId,
-         count: events.length,
+         count: windows.length,
          error: e?.message || String(e),
       });
    }
@@ -489,62 +332,12 @@ function readConsentPref() {
    // Tenant-level emotion_capture_enabled is the admin's opt-in. Per-user
    // consent defaults to ON when the tenant has opted in, opting OUT only
    // when the user explicitly toggled the switch off in Settings → Oyon
-   // (which writes '0'). Previously this defaulted to false, which meant
-   // every fresh login captured locally for the live preview but never
-   // persisted — analytics stayed empty until the user found and flipped
-   // the toggle. Default-on matches what the deployment's admin already
-   // decided when they enabled Oyon at the tenant level.
+   // (which writes '0'). Default-on matches what the deployment's admin
+   // already decided when they enabled Oyon at the tenant level.
    try {
       const v = localStorage.getItem(CONSENT_PREF_KEY);
       return v !== '0';
    } catch { return true; }
-}
-
-// Pick the label with the highest probability from the classifier's
-// per-label map. Returns null on empty/non-object input. Used to drive the
-// pill word at sample cadence — the per-frame `prediction` doesn't carry a
-// pre-picked dominant string (that's added later by the aggregator).
-function topLabel(probabilities) {
-   if (!probabilities || typeof probabilities !== 'object') return null;
-   let best = null;
-   let bestVal = -Infinity;
-   for (const [label, value] of Object.entries(probabilities)) {
-      const n = Number(value);
-      if (!Number.isFinite(n)) continue;
-      if (n > bestVal) { bestVal = n; best = label; }
-   }
-   return best;
-}
-
-function iconCls(small) { return small ? 'h-3 w-3' : 'h-4 w-4'; }
-
-function IconBtn({ children, onClick, disabled, title, danger, small }) {
-   const size = small ? 'h-5 w-5' : 'h-7 w-7';
-   return (
-      <button
-         type="button"
-         onClick={onClick}
-         disabled={disabled}
-         title={title}
-         className={`grid place-items-center ${size} rounded-full disabled:opacity-50 disabled:cursor-not-allowed shrink-0 ${
-            danger ? 'text-red-200 hover:bg-red-500/20' : 'hover:bg-white/15'
-         }`}
-      >
-         {children}
-      </button>
-   );
-}
-
-function buildLaunchUrl({ sessionId, caseId }) {
-   // Open the full standalone analytics dashboard (TNA networks, distribution
-   // plots, dynamics) in Rohy mode so it reads from the Rohy backend, scoped
-   // to the launching session by default. The dashboard's own session
-   // selector lets admins pivot to "All sessions" or pick a different one.
-   const params = new URLSearchParams();
-   params.set('source', 'rohy');
-   if (sessionId) params.set('session_id', String(sessionId));
-   if (caseId) params.set('case_id', String(caseId));
-   return `/oyon/standalone/logs.html?${params.toString()}`;
 }
 
 function readGraphPref() {
@@ -569,7 +362,7 @@ function ValenceTrack({ values, active, compact = false }) {
          return `${x.toFixed(1)},${y.toFixed(1)}`;
       });
       return `M ${points.join(' L ')}`;
-   }, [values]);
+   }, [values, W, H, PAD_X, PAD_Y]);
 
    const last = values[values.length - 1];
    const lastPoint = useMemo(() => {
@@ -581,7 +374,7 @@ function ValenceTrack({ values, active, compact = false }) {
       const x = PAD_X + offsetStart + (values.length - 1) * stepX;
       const y = PAD_Y + (1 - (clamp(last, -1, 1) + 1) / 2) * innerH;
       return { x, y };
-   }, [values, last]);
+   }, [values, last, W, H, PAD_X, PAD_Y]);
 
    const tone = last == null ? '#6b7280' : last >= 0 ? '#34d399' : '#60a5fa';
 
@@ -627,29 +420,3 @@ function ValenceTrack({ values, active, compact = false }) {
 }
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-
-function emotionTone(emotion, live) {
-   const fallback = {
-      bg: 'rgba(0,0,0,0.45)',
-      border: 'rgba(255,255,255,0.10)',
-      fg: 'rgb(207, 250, 254)',
-      dot: '#525252',
-   };
-   if (!live) return fallback;
-   const e = String(emotion || '').toLowerCase();
-   const map = {
-      happy:    { dot: '#34d399', bg: 'rgba(16,185,129,0.22)',  border: 'rgba(16,185,129,0.45)',  fg: '#bbf7d0' },
-      joy:      { dot: '#34d399', bg: 'rgba(16,185,129,0.22)',  border: 'rgba(16,185,129,0.45)',  fg: '#bbf7d0' },
-      happiness:{ dot: '#34d399', bg: 'rgba(16,185,129,0.22)',  border: 'rgba(16,185,129,0.45)',  fg: '#bbf7d0' },
-      sad:      { dot: '#60a5fa', bg: 'rgba(59,130,246,0.22)',  border: 'rgba(59,130,246,0.45)',  fg: '#bfdbfe' },
-      sadness:  { dot: '#60a5fa', bg: 'rgba(59,130,246,0.22)',  border: 'rgba(59,130,246,0.45)',  fg: '#bfdbfe' },
-      angry:    { dot: '#f87171', bg: 'rgba(220,38,38,0.25)',   border: 'rgba(220,38,38,0.50)',   fg: '#fecaca' },
-      anger:    { dot: '#f87171', bg: 'rgba(220,38,38,0.25)',   border: 'rgba(220,38,38,0.50)',   fg: '#fecaca' },
-      fear:     { dot: '#fbbf24', bg: 'rgba(217,119,6,0.22)',   border: 'rgba(217,119,6,0.45)',   fg: '#fde68a' },
-      surprise: { dot: '#e879f9', bg: 'rgba(217,70,239,0.22)',  border: 'rgba(217,70,239,0.45)',  fg: '#f5d0fe' },
-      contempt: { dot: '#fda4af', bg: 'rgba(244,114,182,0.20)', border: 'rgba(244,114,182,0.40)', fg: '#fbcfe8' },
-      disgust:  { dot: '#a3e635', bg: 'rgba(132,204,22,0.22)',  border: 'rgba(132,204,22,0.45)',  fg: '#d9f99d' },
-      neutral:  { dot: '#22d3ee', bg: 'rgba(34,211,238,0.16)',  border: 'rgba(34,211,238,0.40)',  fg: '#cffafe' },
-   };
-   return map[e] || map.neutral;
-}

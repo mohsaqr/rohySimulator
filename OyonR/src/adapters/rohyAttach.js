@@ -1,53 +1,23 @@
-import { EmotionRuntime } from '../core/EmotionRuntime.js';
-import { HttpEmotionTransport } from '../transport/HttpEmotionTransport.js';
+import { createOyonAttachment } from './oyonAttach.js';
 
+/**
+ * createRohyFerAttachment — Rohy-shaped wrapper over the host-neutral
+ * {@link createOyonAttachment}. Kept for back-compat: it normalizes the host
+ * session to Rohy's fixed four fields (`session_id`, `user_id`, `case_id`,
+ * `tenant_id`) and nothing else.
+ *
+ * New, non-Rohy hosts (LMS, analytics platforms, anything with its own
+ * context taxonomy) should use `createOyonAttachment` directly — it preserves
+ * arbitrary context keys instead of dropping them to these four.
+ */
 export function createRohyFerAttachment(options) {
-  const {
-    getSession,
-    getToken,
-    apiBaseUrl = '',
-    mount,
-    consentProvider,
-    transport,
-    transportOptions = {},
-    runtimeOptions = {},
-  } = options;
-
-  if (typeof getSession !== 'function') {
+  if (typeof options?.getSession !== 'function') {
     throw new Error('createRohyFerAttachment requires getSession().');
   }
-
-  const runtime = new EmotionRuntime({
-    ...runtimeOptions,
-    contextProvider: () => normalizeSession(getSession()),
-    transport: transport || new HttpEmotionTransport({
-      baseUrl: apiBaseUrl,
-      tokenProvider: getToken || (() => null),
-      ...transportOptions,
-    }),
+  return createOyonAttachment({
+    ...options,
+    getContext: () => normalizeSession(options.getSession()),
   });
-
-  let attached = false;
-
-  return {
-    runtime,
-    async attach() {
-      if (attached) return runtime;
-      const session = normalizeSession(getSession());
-      if (!session.session_id) throw new Error('Cannot attach FER without an active session_id.');
-      if (consentProvider && !await consentProvider(session)) {
-        return runtime;
-      }
-      await runtime.start();
-      mount?.(runtime);
-      attached = true;
-      return runtime;
-    },
-    async detach() {
-      attached = false;
-      await runtime.stop();
-    },
-  };
 }
 
 function normalizeSession(session = {}) {

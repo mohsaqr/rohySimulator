@@ -1,5 +1,9 @@
 import express from 'express';
 import dbAdapter from '../dbAdapter.js';
+import { joinMoments, parseTimestampMs } from '../../src/components/analytics/momentsJoin.js';
+import { sqliteTsToIso, toSqliteUtc } from '../sqliteTime.js';
+import { turnRowsFrom } from '../../src/components/analytics/turnRows.js';
+import { triggerReaction, actionAffectSummary } from '../../src/components/analytics/caseInsights.js';
 import {
     buildEventFilter,
     summary as aggSummary,
@@ -1044,6 +1048,532 @@ router.get('/learning-events/all', authenticateToken, (req, res) => {
 
         res.json({ events, sessions });
     });
+});
+
+// GET /api/learning-events/moments - Clinical Moments log.
+//
+// Each row is a learning_events record OR a per-turn chat message (from the
+// `interactions` table, which chat turns are written to instead of
+// learning_events — source: 'event' | 'chat') enriched with the emotion /
+// valence / arousal / focus / gaze_target from the oyon_emotion_records
+// sensing window covering its timestamp (same session,
+// window_start <= t < window_end).
+// The join itself lives in the shared pure module
+// src/components/analytics/momentsJoin.js (one copy of the logic — the
+// MomentsTable client tests exercise the same code the server runs).
+// Enrichment fields are null when no window covers the event (capture off)
+// — never fabricated. Gaze is the AGGREGATE AOI/zone summary only.
+//
+// Auth mirrors /learning-events/all: reviewer+ reads tenant-wide (educator/
+// admin surface), everyone else is locked to their own rows.
+//
+// Query params (all optional): case_id, session_id, user_id (reviewer+ only),
+// from, to (ISO or date-only; date-only `to` is inclusive of that day),
+// limit (default 1000, max 10000).
+const MOMENTS_DEFAULT_LIMIT = 1000;
+const MOMENTS_MAX_LIMIT = 10000;
+
+// Shared enrichment pipeline behind /learning-events/moments AND
+// /analytics/case-insights (one copy of the SQL + join — the two routes
+// must serve identical moment rows). Fetches filtered learning_events,
+// pulls the aggregate sensing windows for their sessions (scoped to the
+// caller when not reviewer+), joins via joinMoments, and shapes the
+// moment rows. Resolves to the moments array; rejects on DB error.
+function fetchEnrichedMoments(req, limit) {
+    return new Promise((resolve, reject) => {
+        const canReview = canReadAcrossUsers(req.user);
+
+        // Reviewer+ may target any user; everyone else is pinned to self.
+        const { where, params } = buildEventFilter({
+            tenantId: tenantId(req),
+            caseId: req.query.case_id,
+            userId: canReview ? req.query.user_id : req.user.id,
+            sessionId: req.query.session_id,
+            startDate: req.query.from,
+            endDate: req.query.to,
+            alias: 'le.',
+        });
+
+        const eventsSql = `
+            SELECT le.*,
+                   COALESCE(s.case_id, le.case_id) AS case_id,
+                   c.name as case_name,
+                   u.username
+            FROM learning_events le
+            LEFT JOIN sessions s ON le.session_id = s.id
+            LEFT JOIN cases c ON s.case_id = c.id
+            LEFT JOIN users u ON le.user_id = u.id
+            ${where}
+            ORDER BY le.timestamp DESC
+            LIMIT ?
+        `;
+
+        // Chat turns live in `interactions` (they are NOT dual-written to
+        // learning_events), so the per-turn chat log is fetched separately
+        // and mapped into pseudo-event rows: verb SENT_MESSAGE (user) /
+        // RECEIVED_MESSAGE (assistant) / SYSTEM_MESSAGE, object_type
+        // 'chat_message', message_role/message_content filled, everything
+        // clinical (vitals, result, …) null. Timestamps are normalised from
+        // SQLite's `YYYY-MM-DD HH:MM:SS` UTC shape to ISO `…T…Z` so the
+        // window join compares apples to apples (see server/sqliteTime.js).
+        const CHAT_VERBS = { user: 'SENT_MESSAGE', assistant: 'RECEIVED_MESSAGE', system: 'SYSTEM_MESSAGE' };
+        // from/to arrive as date-only or ISO; ISO needs the SQLite shape for
+        // lexicographic comparison against interactions.timestamp ('T' > ' ').
+        const sqlBound = (v) => (typeof v === 'string' && v.includes('T') && !Number.isNaN(Date.parse(v)))
+            ? toSqliteUtc(Date.parse(v))
+            : v;
+        const chatClauses = ['i.tenant_id = ?', 'i.deleted_at IS NULL'];
+        const chatParams = [tenantId(req)];
+        if (req.query.case_id) { chatClauses.push('s.case_id = ?'); chatParams.push(req.query.case_id); }
+        const chatUserId = canReview ? req.query.user_id : req.user.id;
+        if (chatUserId) { chatClauses.push('s.user_id = ?'); chatParams.push(chatUserId); }
+        if (req.query.session_id) { chatClauses.push('i.session_id = ?'); chatParams.push(req.query.session_id); }
+        if (req.query.from) { chatClauses.push('i.timestamp >= ?'); chatParams.push(sqlBound(req.query.from)); }
+        if (req.query.to) {
+            if (/^\d{4}-\d{2}-\d{2}$/.test(req.query.to)) {
+                chatClauses.push(`i.timestamp < date(?, '+1 day')`);
+                chatParams.push(req.query.to);
+            } else {
+                chatClauses.push('i.timestamp <= ?');
+                chatParams.push(sqlBound(req.query.to));
+            }
+        }
+        const chatSql = `
+            SELECT i.id, i.timestamp, i.role, i.content,
+                   i.session_id, s.user_id,
+                   s.case_id AS case_id,
+                   c.name AS case_name,
+                   u.username
+            FROM interactions i
+            LEFT JOIN sessions s ON i.session_id = s.id
+            LEFT JOIN cases c ON s.case_id = c.id
+            LEFT JOIN users u ON s.user_id = u.id
+            WHERE ${chatClauses.join(' AND ')}
+            ORDER BY i.timestamp DESC
+            LIMIT ?
+        `;
+
+        dbAdapter.all(eventsSql, [...params, limit], (err, eventRowsRaw) => {
+            if (err) return reject(err);
+
+            dbAdapter.all(chatSql, [...chatParams, limit], (chatErr, chatRowsRaw) => {
+            if (chatErr) return reject(chatErr);
+
+            const chatRows = (chatRowsRaw || []).map(row => ({
+                id: row.id,
+                source: 'chat',
+                timestamp: sqliteTsToIso(row.timestamp),
+                session_id: row.session_id,
+                case_id: row.case_id,
+                case_name: row.case_name,
+                user_id: row.user_id,
+                username: row.username,
+                verb: CHAT_VERBS[row.role] || 'SYSTEM_MESSAGE',
+                object_type: 'chat_message',
+                object_name: null,
+                component: 'chat',
+                severity: null,
+                category: 'COMMUNICATION',
+                message_role: row.role,
+                message_content: row.content,
+                result: null,
+                duration_ms: null,
+                room: null,
+                vital_hr: null, vital_spo2: null, vital_bp_sys: null, vital_bp_dia: null,
+                vital_rr: null, vital_temp: null, vital_etco2: null, vital_rhythm: null,
+            }));
+
+            // One merged, newest-first stream capped at `limit` overall so a
+            // chatty session can't starve the clinical events (both sources
+            // were fetched newest-first with the same cap).
+            const eventRows = [...(eventRowsRaw || []).map(r => ({ ...r, source: 'event' })), ...chatRows]
+                .sort((a, b) => (parseTimestampMs(b.timestamp) ?? 0) - (parseTimestampMs(a.timestamp) ?? 0))
+                .slice(0, limit);
+
+            const sessionIds = [...new Set(eventRows.map(e => e.session_id).filter(id => id != null))];
+
+            const finish = (windows) => {
+                // Per-session fallbacks harvested from the windows: attempt number
+                // plus title/name snapshots that survive anonymisation. First
+                // non-null value per session wins (they're constant per attempt).
+                const perSession = new Map();
+                for (const w of windows) {
+                    const key = String(w.session_id);
+                    const cur = perSession.get(key) || {};
+                    perSession.set(key, {
+                        attempt: cur.attempt ?? w.attempt_number ?? null,
+                        case_title: cur.case_title ?? w.case_title_snapshot ?? null,
+                        student_name: cur.student_name ?? w.student_name_snapshot ?? null,
+                    });
+                }
+
+                const enriched = joinMoments(eventRows, windows);
+                const moments = enriched.map(row => {
+                    const snap = row.session_id != null
+                        ? (perSession.get(String(row.session_id)) || {})
+                        : {};
+                    return {
+                        id: row.id,
+                        source: row.source ?? 'event',
+                        timestamp: row.timestamp,
+                        case_id: row.case_id,
+                        case_title: row.case_name ?? snap.case_title ?? null,
+                        session_id: row.session_id,
+                        attempt: snap.attempt ?? null,
+                        user_id: row.user_id,
+                        student_name: row.username ?? snap.student_name ?? null,
+                        room: row.room ?? null,
+                        verb: row.verb,
+                        object_type: row.object_type,
+                        object_name: row.object_name,
+                        component: row.component,
+                        severity: row.severity,
+                        category: row.category,
+                        message_content: row.message_content,
+                        message_role: row.message_role,
+                        result: row.result,
+                        duration_ms: row.duration_ms,
+                        vital_hr: row.vital_hr,
+                        vital_spo2: row.vital_spo2,
+                        vital_bp_sys: row.vital_bp_sys,
+                        vital_bp_dia: row.vital_bp_dia,
+                        vital_rr: row.vital_rr,
+                        vital_temp: row.vital_temp,
+                        vital_etco2: row.vital_etco2,
+                        vital_rhythm: row.vital_rhythm,
+                        emotion: row.emotion,
+                        valence: row.valence,
+                        arousal: row.arousal,
+                        focus: row.focus,
+                        gaze_target: row.gaze_target,
+                    };
+                });
+                resolve(moments);
+            };
+
+            if (sessionIds.length === 0) return finish([]);
+
+            // Only the aggregate columns the join needs — raw gaze point streams
+            // are never stored, and nothing beyond these fields leaves this route.
+            const markers = sessionIds.map(() => '?').join(',');
+            const windowsSql = `
+                SELECT session_id, window_start, window_end,
+                       dominant_emotion, valence, arousal,
+                       engagement_json, gaze_json,
+                       attempt_number, case_title_snapshot, student_name_snapshot
+                FROM oyon_emotion_records
+                WHERE tenant_id = ? AND session_id IN (${markers})
+                ${canReview ? '' : 'AND CAST(user_id AS INTEGER) = ?'}
+            `;
+            const windowParams = canReview
+                ? [tenantId(req), ...sessionIds]
+                : [tenantId(req), ...sessionIds, req.user.id];
+
+            dbAdapter.all(windowsSql, windowParams, (wErr, windows) => {
+                if (wErr) return reject(wErr);
+                finish(windows || []);
+            });
+            });
+        });
+    });
+}
+
+router.get('/learning-events/moments', authenticateToken, async (req, res) => {
+    const limitRaw = parseInt(req.query.limit, 10);
+    const limit = Math.min(
+        Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : MOMENTS_DEFAULT_LIMIT,
+        MOMENTS_MAX_LIMIT
+    );
+    try {
+        const moments = await fetchEnrichedMoments(req, limit);
+        res.json({ moments, total: moments.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/chat-log/turns - Per-TURN gaze + emotion summary.
+//
+// PORTED from chatoyon-plus /api/chat-log/turns (src/lib/logs/rows.ts →
+// turnRowsFrom): one row per USER message; its sensing is the lead-up —
+// windows ending in (previousUserMsg, thisUserMsg]; the last turn also owns
+// the trailing windows. Row shape matches chatoyon's TurnRow. The turn
+// builder is the shared pure module src/components/analytics/turnRows.js.
+// Auth mirrors /learning-events/moments: reviewer+ tenant-wide, others self.
+// Params: session_id, user_id (reviewer+), case_id, from, to, limit.
+router.get('/chat-log/turns', authenticateToken, (req, res) => {
+    const canReview = canReadAcrossUsers(req.user);
+    const limitRaw = parseInt(req.query.limit, 10);
+    const limit = Math.min(Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 500, 10000);
+    const sqlBound = (v) => (typeof v === 'string' && v.includes('T') && !Number.isNaN(Date.parse(v)))
+        ? toSqliteUtc(Date.parse(v))
+        : v;
+
+    const clauses = ['i.tenant_id = ?', 'i.deleted_at IS NULL'];
+    const params = [tenantId(req)];
+    const userId = canReview ? req.query.user_id : req.user.id;
+    if (userId) { clauses.push('s.user_id = ?'); params.push(userId); }
+    if (req.query.session_id) { clauses.push('i.session_id = ?'); params.push(req.query.session_id); }
+    if (req.query.case_id) { clauses.push('s.case_id = ?'); params.push(req.query.case_id); }
+    if (req.query.from) { clauses.push('i.timestamp >= ?'); params.push(sqlBound(req.query.from)); }
+    if (req.query.to) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(req.query.to)) {
+            clauses.push(`i.timestamp < date(?, '+1 day')`);
+            params.push(req.query.to);
+        } else {
+            clauses.push('i.timestamp <= ?');
+            params.push(sqlBound(req.query.to));
+        }
+    }
+
+    const msgSql = `
+        SELECT i.id, i.session_id, i.role, i.content, i.timestamp,
+               u.username, c.name AS case_name
+        FROM interactions i
+        LEFT JOIN sessions s ON i.session_id = s.id
+        LEFT JOIN cases c ON s.case_id = c.id
+        LEFT JOIN users u ON s.user_id = u.id
+        WHERE ${clauses.join(' AND ')}
+        ORDER BY i.timestamp ASC
+    `;
+
+    dbAdapter.all(msgSql, params, (err, msgRows) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        const messages = (msgRows || []).map(r => ({ ...r, timestamp: sqliteTsToIso(r.timestamp) }));
+        const sessionIds = [...new Set(messages.map(m => m.session_id).filter(id => id != null))];
+        if (sessionIds.length === 0) return res.json({ events: [], total: 0 });
+
+        // Aggregate sensing fields only — never raw gaze points.
+        const markers = sessionIds.map(() => '?').join(',');
+        const winSql = `
+            SELECT session_id, window_end, dominant_emotion, valence, arousal,
+                   engagement_json, gaze_json
+            FROM oyon_emotion_records
+            WHERE tenant_id = ? AND session_id IN (${markers})
+            ${canReview ? '' : 'AND CAST(user_id AS INTEGER) = ?'}
+        `;
+        const winParams = canReview
+            ? [tenantId(req), ...sessionIds]
+            : [tenantId(req), ...sessionIds, req.user.id];
+
+        dbAdapter.all(winSql, winParams, (wErr, winRows) => {
+            if (wErr) return res.status(500).json({ error: wErr.message });
+            const rows = turnRowsFrom(messages, winRows || []);
+            res.json({ events: rows.slice(0, limit), total: rows.length });
+        });
+    });
+});
+
+// GET /api/analytics/case-insights - Case Insights: critical-moment
+// highlights + action–affect summaries.
+//
+// Returns { triggers, summary }:
+//   triggers — the most recent (≤500) critical moments in scope: fired
+//     scenario_events (is_triggered = 1, triggered_at set, session-linked)
+//     and vitals alarm_events, each carrying `reaction` — the pre/post-30s
+//     affect movement computed by triggerReaction() from that session's
+//     AGGREGATE sensing windows (all-null sides when capture was off;
+//     nothing is ever fabricated).
+//   summary — actionAffectSummary() over the SAME enriched moment rows
+//     /learning-events/moments serves (shared fetchEnrichedMoments
+//     pipeline — one copy of the SQL + join).
+//
+// Query params (all optional): case_id, session_id, user_id (reviewer+
+// only), from, to (date-only `to` is inclusive of that whole day, same
+// convention as buildEventFilter).
+//
+// Auth mirrors /learning-events/moments: reviewer+ reads tenant-wide,
+// everyone else is pinned to their own sessions (and their own windows).
+const CASE_INSIGHTS_TRIGGER_LIMIT = 500;
+
+router.get('/analytics/case-insights', authenticateToken, async (req, res) => {
+    const canReview = canReadAcrossUsers(req.user);
+    const tenant = tenantId(req);
+
+    const allP = (sql, params) => new Promise((resolve, reject) => {
+        dbAdapter.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []));
+    });
+
+    // Date filter over a trigger timestamp column, mirroring
+    // buildEventFilter's from/to handling.
+    const isDateOnly = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    const dateFilter = (col) => {
+        const clauses = [];
+        const params = [];
+        if (req.query.from) {
+            clauses.push(`${col} >= ?`);
+            params.push(req.query.from);
+        }
+        if (req.query.to) {
+            clauses.push(isDateOnly(req.query.to) ? `${col} < date(?, '+1 day')` : `${col} <= ?`);
+            params.push(req.query.to);
+        }
+        return { clauses, params };
+    };
+
+    // Caller scoping shared by both trigger sources (both join sessions s):
+    // non-reviewers only see their own sessions; reviewers may narrow to one
+    // user. Mirrors the moments pipeline's user pinning.
+    const userScope = () => {
+        if (!canReview) return { clauses: ['s.user_id = ?'], params: [req.user.id] };
+        if (req.query.user_id) return { clauses: ['s.user_id = ?'], params: [req.query.user_id] };
+        return { clauses: [], params: [] };
+    };
+
+    // Fired scenario events. case_id lives on the row itself; a session link
+    // is required so a reaction can be computed against real windows.
+    const fetchScenarioTriggers = () => {
+        const dates = dateFilter('se.triggered_at');
+        const scope = userScope();
+        const clauses = [
+            'se.tenant_id = ?', 'se.is_triggered = 1',
+            'se.triggered_at IS NOT NULL', 'se.session_id IS NOT NULL',
+            ...dates.clauses, ...scope.clauses,
+        ];
+        const params = [tenant, ...dates.params, ...scope.params];
+        if (req.query.case_id) {
+            clauses.push('se.case_id = ?');
+            params.push(req.query.case_id);
+        }
+        if (req.query.session_id) {
+            clauses.push('se.session_id = ?');
+            params.push(req.query.session_id);
+        }
+        return allP(`
+            SELECT se.session_id, se.case_id, se.event_type, se.event_name,
+                   se.vital_changes, se.triggered_at,
+                   c.name AS case_title, u.username AS student_name
+            FROM scenario_events se
+            LEFT JOIN sessions s ON se.session_id = s.id
+            LEFT JOIN cases c ON se.case_id = c.id
+            LEFT JOIN users u ON s.user_id = u.id
+            WHERE ${clauses.join(' AND ')}
+            ORDER BY se.triggered_at DESC
+            LIMIT ?
+        `, [...params, CASE_INSIGHTS_TRIGGER_LIMIT]);
+    };
+
+    // Vitals alarms. alarm_events has NO case_id/user_id columns — both come
+    // through the sessions join, so the case filter targets s.case_id.
+    const fetchAlarmTriggers = () => {
+        const dates = dateFilter('ae.triggered_at');
+        const scope = userScope();
+        const clauses = [
+            'ae.tenant_id = ?', 'ae.triggered_at IS NOT NULL', 'ae.session_id IS NOT NULL',
+            ...dates.clauses, ...scope.clauses,
+        ];
+        const params = [tenant, ...dates.params, ...scope.params];
+        if (req.query.case_id) {
+            clauses.push('s.case_id = ?');
+            params.push(req.query.case_id);
+        }
+        if (req.query.session_id) {
+            clauses.push('ae.session_id = ?');
+            params.push(req.query.session_id);
+        }
+        return allP(`
+            SELECT ae.session_id, ae.vital_sign, ae.threshold_type,
+                   ae.actual_value, ae.triggered_at,
+                   s.case_id, c.name AS case_title, u.username AS student_name
+            FROM alarm_events ae
+            LEFT JOIN sessions s ON ae.session_id = s.id
+            LEFT JOIN cases c ON s.case_id = c.id
+            LEFT JOIN users u ON s.user_id = u.id
+            WHERE ${clauses.join(' AND ')}
+            ORDER BY ae.triggered_at DESC
+            LIMIT ?
+        `, [...params, CASE_INSIGHTS_TRIGGER_LIMIT]);
+    };
+
+    // Aggregate sensing windows for the trigger sessions — same column set
+    // and caller scoping as the moments pipeline (aggregates only, never a
+    // raw gaze point stream).
+    const fetchWindows = (sessionIds) => {
+        if (sessionIds.length === 0) return Promise.resolve([]);
+        const markers = sessionIds.map(() => '?').join(',');
+        const params = canReview
+            ? [tenant, ...sessionIds]
+            : [tenant, ...sessionIds, req.user.id];
+        return allP(`
+            SELECT session_id, window_start, window_end,
+                   dominant_emotion, valence, arousal,
+                   engagement_json, gaze_json, student_name_snapshot
+            FROM oyon_emotion_records
+            WHERE tenant_id = ? AND session_id IN (${markers})
+            ${canReview ? '' : 'AND CAST(user_id AS INTEGER) = ?'}
+        `, params);
+    };
+
+    const parseVitalChanges = (raw) => {
+        if (raw == null || raw === '') return null;
+        if (typeof raw === 'object') return raw;
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch {
+            return null;
+        }
+    };
+
+    try {
+        const [scenarioRows, alarmRows, moments] = await Promise.all([
+            fetchScenarioTriggers(),
+            fetchAlarmTriggers(),
+            fetchEnrichedMoments(req, MOMENTS_MAX_LIMIT),
+        ]);
+
+        const sessionIds = [...new Set(
+            [...scenarioRows, ...alarmRows].map(r => r.session_id).filter(id => id != null)
+        )];
+        const windows = await fetchWindows(sessionIds);
+
+        // Name fallback that survives anonymisation, same idea as moments.
+        const nameBySession = new Map();
+        for (const w of windows) {
+            const key = String(w.session_id);
+            if (!nameBySession.has(key) && w.student_name_snapshot != null) {
+                nameBySession.set(key, w.student_name_snapshot);
+            }
+        }
+        const studentName = (row) =>
+            row.student_name ?? nameBySession.get(String(row.session_id)) ?? null;
+
+        const triggers = [
+            ...scenarioRows.map(row => ({
+                source: 'scenario',
+                ts: row.triggered_at,
+                case_id: row.case_id,
+                case_title: row.case_title ?? null,
+                session_id: row.session_id,
+                student_name: studentName(row),
+                event_name: row.event_name || row.event_type,
+                vital_changes: parseVitalChanges(row.vital_changes),
+                reaction: triggerReaction(windows, row.session_id, row.triggered_at),
+            })),
+            ...alarmRows.map(row => ({
+                source: 'alarm',
+                ts: row.triggered_at,
+                case_id: row.case_id,
+                case_title: row.case_title ?? null,
+                session_id: row.session_id,
+                student_name: studentName(row),
+                event_name: [row.vital_sign, row.threshold_type].filter(Boolean).join(' ')
+                    + (row.actual_value != null ? ` = ${row.actual_value}` : ''),
+                vital_changes: null,
+                reaction: triggerReaction(windows, row.session_id, row.triggered_at),
+            })),
+        ]
+            // Numeric sort (newest first): triggered_at may be ISO or the
+            // SQLite "YYYY-MM-DD HH:MM:SS" shape — parseTimestampMs handles
+            // both, so mixed sources interleave correctly.
+            .sort((a, b) => (parseTimestampMs(b.ts) ?? 0) - (parseTimestampMs(a.ts) ?? 0))
+            .slice(0, CASE_INSIGHTS_TRIGGER_LIMIT);
+
+        res.json({ triggers, summary: actionAffectSummary(moments) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // GET /api/learning-events/detailed/:sessionId - Get detailed events with lab workflow info

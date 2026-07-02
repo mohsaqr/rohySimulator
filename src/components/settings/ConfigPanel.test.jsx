@@ -76,8 +76,15 @@ vi.mock('./CaseTreatmentConfig.jsx', () => ({
 vi.mock('./CaseAvatarVoicePicker.jsx', () => ({
     default: () => <div data-testid="stub-cavp">cavp</div>,
 }));
-vi.mock('../analytics/SessionLogViewer.jsx', () => ({
-    default: () => <div data-testid="stub-session-log">session-log</div>,
+// The Oyon data console inside System Logs fetches on mount — stub it so
+// the Logs smoke test doesn't depend on the Oyon addon routes.
+vi.mock('../analytics/OyonDataLogs.jsx', () => ({
+    default: () => <div data-testid="stub-oyon-data-logs">oyon-data-logs</div>,
+}));
+// The embedded TNA dashboard is a heavy fetch-on-mount component; the
+// Analytics-tab tests only assert the tab gate, not the dashboard itself.
+vi.mock('../analytics/tna/TnaDashboardV2.jsx', () => ({
+    default: () => <div data-testid="stub-tna-dashboard">tna-dashboard</div>,
 }));
 
 // scenarioTemplates is a data module — keep real, but light dependency.
@@ -165,10 +172,11 @@ beforeEach(() => {
 });
 
 // Helper: wait for the AuthProvider to flip into "isAdmin = true" by
-// waiting for the admin-only "Agent Personas" sidebar button to appear.
+// waiting for the admin-only "Agents" sidebar tab to appear. Anchored so it
+// can't match the "Agents & Voice" group header.
 async function waitForAdmin() {
     await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Agent Personas/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Agents$/i })).toBeInTheDocument();
     });
 }
 
@@ -177,18 +185,74 @@ function mount(props = {}) {
 }
 
 describe('ConfigPanel', () => {
-    // CONTRACT: smoke — admin sees the sidebar with all admin tabs.
+    // CONTRACT: smoke — admin sees the sidebar with all admin tabs. With the
+    // accordion, every group defaults to expanded so all tabs are visible at
+    // once. Labels are anchored so a tab name can't match a group header.
     it('renders the sidebar shell with admin tabs', async () => {
         mount({ initialTab: 'voice' });
         await waitForAdmin();
-        expect(screen.getByRole('button', { name: /Manage Cases/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /Scenarios/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /User Management/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /Platform Settings/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /System Logs/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /Avatars/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Cases$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Scenarios$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Users$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Platform$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Logs$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Avatars$/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /^Voice$/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /Notifications/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Notifications$/i })).toBeInTheDocument();
+    });
+
+    // CONTRACT: every tab id is reachable and its role gate is intact. Admin
+    // sees all 15 tabs across all 6 groups (admin also satisfies the
+    // educator+ gates for Cohorts / Analytics).
+    it('exposes every tab (with its role gate) for an admin', async () => {
+        mount({ initialTab: 'cases' });
+        await waitForAdmin();
+        const everyTab = [
+            /^Cases$/i, /^Scenarios$/i, /^Body Map$/i, /^Lab Database$/i, /^Medications$/i,
+            /^Agents$/i, /^Avatars$/i, /^Voice$/i,
+            /^Users$/i, /^Cohorts$/i,
+            /^Oyon$/i,
+            /^Platform$/i, /^Notifications$/i, /^Logs$/i,
+        ];
+        for (const name of everyTab) {
+            expect(screen.getByRole('button', { name })).toBeInTheDocument();
+        }
+        // "Analytics" is both the group header and (post-rename) the tab
+        // label — two distinct buttons.
+        expect(screen.getAllByRole('button', { name: /^Analytics$/i })).toHaveLength(2);
+        // The retired Emotion & Attention tab is gone.
+        expect(screen.queryByRole('button', { name: /^Emotion & Attention$/i })).not.toBeInTheDocument();
+        // Group headers render too (they're buttons, distinct from tabs).
+        expect(screen.getByRole('button', { name: /^Content$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Agents & Voice$/i })).toBeInTheDocument();
+    });
+
+    // CONTRACT: the Analytics tab (formerly admin-only "Case Analytics") is
+    // educator+ — educators previously reached the Oyon analysis views via
+    // the retired Emotion & Attention tab and must not lose analytics access.
+    it('shows the Analytics tab to an educator and renders the dashboard', async () => {
+        server.use(
+            http.get('*/api/auth/verify', () =>
+                HttpResponse.json({ user: { id: 3, username: 'teach', role: 'educator' } }),
+            ),
+        );
+        mount({ initialTab: 'analytics' });
+        await waitFor(() => {
+            // Group header + tab item both present for an educator.
+            expect(screen.getAllByRole('button', { name: /^Analytics$/i })).toHaveLength(2);
+        });
+        expect(await screen.findByTestId('stub-tna-dashboard')).toBeInTheDocument();
+        // Admin-only tabs stay hidden for educators.
+        expect(screen.queryByRole('button', { name: /^Logs$/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^Users$/i })).not.toBeInTheDocument();
+    });
+
+    // CONTRACT: System Logs hosts the "Oyon data" console sub-tab.
+    it('renders the Oyon data sub-tab inside System Logs', async () => {
+        mount({ initialTab: 'logs' });
+        await waitForAdmin();
+        fireEvent.click(await screen.findByRole('button', { name: /^Oyon data$/i }));
+        expect(await screen.findByTestId('stub-oyon-data-logs')).toBeInTheDocument();
     });
 
     // CONTRACT: initialTab='voice' lands directly on the Voice tab.
@@ -225,15 +289,18 @@ describe('ConfigPanel', () => {
     it('smoke-renders every admin tab without throwing', async () => {
         mount({ initialTab: 'voice' });
         await waitForAdmin();
+        // NOTE: click order matters. The Platform panel (PlatformSettings)
+        // has its OWN internal "Users" section button, so we visit the sidebar
+        // "Users" tab BEFORE "Platform" to avoid an ambiguous name match.
         const tabs = [
-            { name: /Avatars/i, testid: 'stub-avatars' },
-            { name: /Notifications/i, testid: 'stub-notifications' },
-            { name: /Agent Personas/i, testid: 'stub-agent-templates' },
-            { name: /System Logs/i, testid: null }, // SystemLogs is in-file; just check nothing crashed
-            { name: /Platform Settings/i, testid: null },
-            { name: /User Management/i, testid: null },
-            { name: /Scenarios/i, testid: 'stub-scenarios' },
+            { name: /^Avatars$/i, testid: 'stub-avatars' },
+            { name: /^Notifications$/i, testid: 'stub-notifications' },
+            { name: /^Agents$/i, testid: 'stub-agent-templates' },
+            { name: /^Users$/i, testid: null }, // UserManagement is in-file; just check nothing crashed
+            { name: /^Scenarios$/i, testid: 'stub-scenarios' },
             { name: /^Voice$/i, testid: 'stub-voice' },
+            { name: /^Logs$/i, testid: null }, // SystemLogs is in-file
+            { name: /^Platform$/i, testid: null }, // visited last (owns an internal "Users" button)
         ];
         for (const t of tabs) {
             fireEvent.click(screen.getByRole('button', { name: t.name }));
@@ -242,7 +309,7 @@ describe('ConfigPanel', () => {
             } else {
                 // The shell still renders; we just confirm the sidebar nav
                 // didn't blow the tree up.
-                expect(screen.getByRole('button', { name: /Manage Cases/i })).toBeInTheDocument();
+                expect(screen.getByRole('button', { name: /^Cases$/i })).toBeInTheDocument();
             }
         }
     });
@@ -401,13 +468,18 @@ describe('ConfigPanel', () => {
             ),
         );
         mount({ initialTab: 'notifications' });
-        // Non-admin sidebar still has "Manage Cases" + "Notifications".
+        // Non-admin sidebar still has "Select Case" + "Notifications".
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: /Notifications/i })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /^Notifications$/i })).toBeInTheDocument();
         });
-        // Admin-only buttons must NOT be visible.
-        expect(screen.queryByRole('button', { name: /Agent Personas/i })).not.toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /System Logs/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Select Case$/i })).toBeInTheDocument();
+        // Admin-only tabs must NOT be visible.
+        expect(screen.queryByRole('button', { name: /^Agents$/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^Logs$/i })).not.toBeInTheDocument();
+        // A group whose items are all admin-only (People, Analytics, Agents &
+        // Voice) must not render its header for a non-admin.
+        expect(screen.queryByRole('button', { name: /^People$/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^Agents & Voice$/i })).not.toBeInTheDocument();
         expect(await screen.findByTestId('stub-notifications')).toBeInTheDocument();
     });
 
@@ -445,5 +517,41 @@ describe('ConfigPanel', () => {
         const back = screen.getByRole('button', { name: /Back to Simulation/i });
         fireEvent.click(back);
         expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    // CONTRACT: a deep-linked initialTab auto-expands the group that owns it,
+    // even when that group was persisted collapsed in localStorage. Other
+    // persisted-collapsed groups stay collapsed (the effect only touches the
+    // active tab's group).
+    it('auto-expands the group of a deep-linked initialTab that was persisted collapsed', async () => {
+        window.localStorage.setItem(
+            'rohy.configPanel.openGroups',
+            JSON.stringify({ Content: false, People: false }),
+        );
+        mount({ initialTab: 'scenarios' });
+        await waitForAdmin();
+        // Content owns 'scenarios' → force-expanded → item visible and panel lands.
+        expect(screen.getByRole('button', { name: /^Scenarios$/i })).toBeInTheDocument();
+        expect(await screen.findByTestId('stub-scenarios')).toBeInTheDocument();
+        // People was also collapsed but holds no active tab → stays collapsed.
+        expect(screen.queryByRole('button', { name: /^Users$/i })).not.toBeInTheDocument();
+    });
+
+    // CONTRACT: clicking a group header collapses its items and persists the
+    // choice to localStorage. Collapsing a group that does NOT own the active
+    // tab keeps it collapsed (no force-expand kicks in).
+    it('collapses a group when its header is clicked and persists the state', async () => {
+        mount({ initialTab: 'voice' });
+        await waitForAdmin();
+        // Content is open by default → its items are visible.
+        expect(screen.getByRole('button', { name: /^Body Map$/i })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /^Content$/i }));
+        // Items are hidden after collapse.
+        expect(screen.queryByRole('button', { name: /^Body Map$/i })).not.toBeInTheDocument();
+        // The active tab (Voice) is unaffected and still reachable.
+        expect(screen.getByRole('button', { name: /^Voice$/i })).toBeInTheDocument();
+        // Choice is persisted.
+        const persisted = JSON.parse(window.localStorage.getItem('rohy.configPanel.openGroups'));
+        expect(persisted.Content).toBe(false);
     });
 });

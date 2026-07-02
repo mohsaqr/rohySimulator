@@ -25,8 +25,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     ArrowLeft, RefreshCw, Settings2, Users, Activity, Hash, Network, GitBranch,
-    Workflow, Layers,
+    Workflow, Layers, Eye, ScanEye, ListVideo, Info, Smile,
+    GitCompare,
 } from 'lucide-react';
+import OyonAttentionView from '../../oyon/OyonAttentionView';
+import OyonAffectView from '../../oyon/OyonAffectView';
+import OyonEngagementView from '../../oyon/OyonEngagementView';
+import OyonGazeView from '../../oyon/OyonGazeView';
+import OyonTrendsView from '../../oyon/OyonTrendsView';
+import OyonCompareView from '../../oyon/OyonCompareView';
+import OyonSessionsView from '../../oyon/OyonSessionsView';
 import {
     tna, ftna, ctna, atna,
     centralities, prune, summary, layout as dynaLayout,
@@ -47,12 +55,22 @@ import { ActivityHeatmap } from './laila/ActivityHeatmap';
 import { Loading } from './laila/Loading';
 import { createColorMap, PALETTE_NAMES } from './laila/colorFix';
 import ProcessMap from './laila/ProcessMap';
+import StackedAreaChart from '../charts/StackedAreaChart';
+import DayHourMatrix from '../charts/DayHourMatrix';
 
 import {
     DEFAULT_INTERPRETATIONS, OBJECT_OVERRIDES, VERB_FALLBACKS,
 } from './clinicalStates';
+import {
+    eventStateLabels, filterEvents, toDailyStateSeries, toMatrixEvents,
+} from './activityEvents';
+import { recordsToEmotionSequences } from './emotionSequences';
+import { recordsToRoomSequences, recordsToGazeTargetSequences } from './windowSequences';
 
 const MODEL_BUILDERS = { relative: tna, frequency: ftna, 'co-occurrence': ctna, attention: atna };
+// Newest-rows cap for the /learning-events/all fetch behind the Activity-tab
+// charts; when the response hits it, a note flags the truncation.
+const EVENTS_FETCH_LIMIT = 5000;
 const LAYOUT_OPTIONS = [
     { value: 'circle',        label: 'Circle' },
     { value: 'fr',            label: 'Force' },
@@ -101,13 +119,27 @@ function StatCard({ icon, label, value, accent = 'cyan' }) {
 // tab) instead of the fixed full-screen overlay used when the dashboard
 // is launched from the user menu. When `embedded`, no close button or
 // full-viewport positioning is applied.
-export default function TnaDashboardV2({ onClose, embedded = false }) {
+// `externalFilters`: when the parent (e.g. AnalyticsHub) owns a shared
+// Case/Student/Start/End filter bar, pass { caseId, userId, startDate,
+// endDate } here — every fetch uses those values and the four local
+// filter inputs are hidden. Per-tab controls (Source, Group by, Mode /
+// Emotion states) stay V2-owned. `null` (default) keeps local filters.
+// `hideHeader`: suppress V2's own title row + close/refresh buttons
+// when the parent provides its own header; the tab strip still renders.
+export default function TnaDashboardV2({ onClose, embedded = false, defaultSource = 'activity', defaultEmotionDimension = 'affective', externalFilters = null, hideHeader = false }) {
     // --- Filters ---
     const [caseId, setCaseId] = useState('');
     const [userId, setUserId] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [groupBy, setGroupBy] = useState('actor-session');
+
+    // Effective filter values: external (hub-driven) when provided,
+    // otherwise the local state above. All fetches and memos read these.
+    const effCaseId = externalFilters ? (externalFilters.caseId ?? '') : caseId;
+    const effUserId = externalFilters ? (externalFilters.userId ?? '') : userId;
+    const effStartDate = externalFilters ? (externalFilters.startDate ?? '') : startDate;
+    const effEndDate = externalFilters ? (externalFilters.endDate ?? '') : endDate;
 
     // --- Active tab ---
     const [activeTab, setActiveTab] = useState('network');
@@ -136,16 +168,47 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
     const [verbRenames, setVerbRenames] = useState({});
     const [verbExcludes, setVerbExcludes] = useState({});
 
+    // --- Sequence source: xAPI activity events vs Oyon emotion windows ---
+    // 'activity' keeps the pre-existing /analytics/tna-sequences flow
+    // untouched; 'emotions' feeds the SAME downstream pipeline with
+    // per-session dominant-emotion sequences (see emotionSequences.js).
+    const [seqSource, setSeqSource] = useState(defaultSource);
+    const [emotionDimension, setEmotionDimension] = useState(defaultEmotionDimension);
+    const [emotionRecords, setEmotionRecords] = useState(null);
+    const [emotionTruncated, setEmotionTruncated] = useState(false);
+
     // --- Server data ---
     const [filterOptions, setFilterOptions] = useState({ cases: [], users: [] });
     const [tnaData, setTnaData] = useState(null);
     const [activityBundle, setActivityBundle] = useState(null);
+    // Raw learning-event rows for the Activity-tab charts (educator-accessible,
+    // unlike the admin-only aggregate bundle). Fetched once per mount, capped
+    // at the EVENTS_FETCH_LIMIT most recent rows; filters apply client-side.
+    const [learningEvents, setLearningEvents] = useState(null);
+    const [eventsError, setEventsError] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(0);
 
     const isAnalyticsRelated = activeTab === 'network' || activeTab === 'clusters' || activeTab === 'patterns' || activeTab === 'process' || activeTab === 'settings';
     const isActivityTab = activeTab === 'activity';
+    const isEmotionSource = seqSource === 'emotions';
+    // The three window-record sources (emotions / locations / gaze targets)
+    // all analyse the SAME /addons/oyon/emotion-records rows — only the
+    // per-window state extractor differs.
+    const isRecordsSource = isEmotionSource || seqSource === 'rooms' || seqSource === 'gaze-targets';
+    // Oyon signal tabs — first-class dashboards over the SAME shared
+    // emotion-record fetch below
+    // (attention[+trends]/affect[+engagement]/gaze/compare/sessions).
+    const isSignalTab = activeTab === 'attention' || activeTab === 'affect'
+        || activeTab === 'gaze'
+        || activeTab === 'compare' || activeTab === 'sessions';
+    // The one shared emotion-records fetch fires when EITHER the Emotions
+    // sequence source is active on an analytics tab (the pre-existing flow)
+    // OR any signal tab is open. Collapsing both conditions into a single
+    // boolean dep means switching between two states where it stays true
+    // (e.g. emotions-source network → gaze) never double-fetches.
+    const wantsEmotionRecords = (isAnalyticsRelated && isRecordsSource) || isSignalTab;
 
     // --- Load filter options once ---
     useEffect(() => {
@@ -160,12 +223,12 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
 
     // --- Fetch TNA sequences when filters change and we're on an analytics-style tab ---
     useEffect(() => {
-        if (!isAnalyticsRelated) return;
+        if (!isAnalyticsRelated || isRecordsSource) return;
         const params = new URLSearchParams();
-        if (caseId) params.set('case_id', caseId);
-        if (userId) params.set('user_id', userId);
-        if (startDate) params.set('start_date', startDate);
-        if (endDate) params.set('end_date', endDate);
+        if (effCaseId) params.set('case_id', effCaseId);
+        if (effUserId) params.set('user_id', effUserId);
+        if (effStartDate) params.set('start_date', effStartDate);
+        if (effEndDate) params.set('end_date', effEndDate);
         params.set('group_by', groupBy);
         params.set('skip_merges', 'true'); // client resolver chain handles merging
 
@@ -175,16 +238,64 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
             .then((d) => { setTnaData(d); setLastUpdated(Date.now()); })
             .catch((err) => setError(err.message))
             .finally(() => setLoading(false));
-    }, [caseId, userId, startDate, endDate, groupBy, isAnalyticsRelated]);
+    }, [effCaseId, effUserId, effStartDate, effEndDate, groupBy, isAnalyticsRelated, isRecordsSource]);
+
+    // --- Fetch Oyon emotion windows (shared by the Emotions sequence source
+    // AND the signal tabs) ---
+    // Same paginated pattern as OyonLearningAnalyticsTab (limit/offset over
+    // /addons/oyon/emotion-records), capped at ~1000 windows. The endpoint
+    // shares the case/user filters; dates map to its from/to params.
+    useEffect(() => {
+        if (!wantsEmotionRecords) return;
+        const PAGE = 200;
+        const CAP = 1000;
+        let cancelled = false;
+
+        const params = new URLSearchParams();
+        if (effCaseId) params.set('case_id', effCaseId);
+        if (effUserId) params.set('user_id', effUserId);
+        if (effStartDate) params.set('from', effStartDate);
+        if (effEndDate) params.set('to', effEndDate);
+
+        setLoading(true);
+        setError(null);
+        (async () => {
+            try {
+                const all = [];
+                let offset = 0;
+                let total = Infinity;
+                while (offset < total && all.length < CAP) {
+                    params.set('limit', String(PAGE));
+                    params.set('offset', String(offset));
+                    const d = await apiFetch(`/addons/oyon/emotion-records?${params}`);
+                    const rows = d?.records || [];
+                    all.push(...rows);
+                    total = Number.isFinite(d?.total) ? d.total : all.length;
+                    if (rows.length < PAGE) break;
+                    offset += PAGE;
+                }
+                if (!cancelled) {
+                    setEmotionRecords(all);
+                    setEmotionTruncated(all.length >= CAP && total > all.length);
+                    setLastUpdated(Date.now());
+                }
+            } catch (err) {
+                if (!cancelled) setError(err.message);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [effCaseId, effUserId, effStartDate, effEndDate, wantsEmotionRecords]);
 
     // --- Fetch activity bundle for the Activity tab ---
     useEffect(() => {
         if (!isActivityTab) return;
         const params = new URLSearchParams();
-        if (caseId) params.set('case_id', caseId);
-        if (userId) params.set('user_id', userId);
-        if (startDate) params.set('start_date', startDate);
-        if (endDate) params.set('end_date', endDate);
+        if (effCaseId) params.set('case_id', effCaseId);
+        if (effUserId) params.set('user_id', effUserId);
+        if (effStartDate) params.set('start_date', effStartDate);
+        if (effEndDate) params.set('end_date', effEndDate);
 
         Promise.all([
             apiFetch(`/analytics/summary?${params}`),
@@ -202,10 +313,68 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
             });
             setLastUpdated(Date.now());
         }).catch((err) => setError(err.message));
-    }, [caseId, userId, startDate, endDate, isActivityTab]);
+    }, [effCaseId, effUserId, effStartDate, effEndDate, isActivityTab]);
 
-    // --- Transform sequences by mode + renames + excludes ---
+    // --- Fetch raw learning events for the Activity-tab charts ---
+    // The endpoint only takes `limit` (reviewer+ reads tenant-wide, others
+    // their own rows), so this fires ONCE per mount when the tab first
+    // activates; the dashboard filters re-slice the cached rows client-side
+    // in the memos below instead of re-fetching.
+    useEffect(() => {
+        if (!isActivityTab || learningEvents !== null) return;
+        apiFetch(`/learning-events/all?limit=${EVENTS_FETCH_LIMIT}`)
+            .then((d) => setLearningEvents(d?.events || []))
+            .catch((err) => setEventsError(err.message));
+    }, [isActivityTab, learningEvents]);
+
+    // --- Activity-tab chart inputs (client-side re-filter of the cached
+    // learning-event rows; see activityEvents.js for the pure mappers) ---
+    const filteredEvents = useMemo(() => (
+        learningEvents
+            ? filterEvents(learningEvents, {
+                caseId: effCaseId, userId: effUserId,
+                startDate: effStartDate, endDate: effEndDate,
+            })
+            : null
+    ), [learningEvents, effCaseId, effUserId, effStartDate, effEndDate]);
+
+    const activityCharts = useMemo(() => {
+        if (!filteredEvents) return null;
+        // Same palette machinery as the network tab (createColorMap over the
+        // sorted state list) so states share colors across tabs.
+        const colorMap = createColorMap(eventStateLabels(filteredEvents), palette);
+        const daily = toDailyStateSeries(filteredEvents);
+        return {
+            daily,
+            dailyColors: daily.series.map((s) => colorMap[s.label]),
+            matrixEvents: toMatrixEvents(filteredEvents),
+            colorMap,
+        };
+    }, [filteredEvents, palette]);
+
+    // --- Transform sequences by source + mode + renames + excludes ---
     const transformedData = useMemo(() => {
+        // Window-record sources (emotions / locations / gaze targets):
+        // per-session sequences over the shared Oyon records, then the same
+        // renames/excludes pass the activity sequences get below.
+        if (isRecordsSource) {
+            if (!emotionRecords?.length) return null;
+            const built = seqSource === 'rooms'
+                ? recordsToRoomSequences(emotionRecords)
+                : seqSource === 'gaze-targets'
+                    ? recordsToGazeTargetSequences(emotionRecords)
+                    : recordsToEmotionSequences(emotionRecords, { dimension: emotionDimension });
+            if (!built.sequences.length) return null;
+            const seqs = built.sequences.map((seq) =>
+                seq
+                    .map((v) => verbExcludes[v] ? null : (verbRenames[v] || v))
+                    .filter((v) => v !== null)
+            ).filter((seq) => seq.length >= 2);
+            const labelSet = new Set();
+            for (const seq of seqs) for (const v of seq) labelSet.add(v);
+            return { sequences: seqs, labels: [...labelSet].sort() };
+        }
+
         if (!tnaData?.sequences?.length) return null;
         const verbSeqs = tnaData.sequences;
         const objSeqs = tnaData.objectTypeSequences ?? [];
@@ -245,7 +414,8 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
         const labels = [...labelSet].sort();
 
         return { sequences: seqs, labels };
-    }, [tnaData, sequenceMode, interpretations, verbRenames, verbExcludes]);
+    }, [tnaData, sequenceMode, interpretations, verbRenames, verbExcludes,
+        isRecordsSource, seqSource, emotionRecords, emotionDimension]);
 
     // --- Build TNA model ---
     const analysis = useMemo(() => {
@@ -290,18 +460,50 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
         }
     }, [analysis?.prunedModel, graphLayout, nodeRadius]);
 
+    // Distinct sessions among the fetched emotion windows (signal-tab count line).
+    const emotionSessionCount = useMemo(() => {
+        if (!emotionRecords?.length) return 0;
+        const ids = emotionRecords
+            .map((r) => (r?.session_id != null ? String(r.session_id) : null))
+            .filter((id) => id !== null);
+        return new Set(ids).size;
+    }, [emotionRecords]);
+
     const refresh = () => {
         // Force the effect to re-fire by toggling a noop on the deps.
         setLastUpdated((t) => t + 1);
     };
 
-    const tabs = [
-        { id: 'activity',  label: 'Activity',  icon: Activity },
-        { id: 'network',   label: 'Network',   icon: Network },
-        { id: 'clusters',  label: 'Clusters',  icon: Layers },
-        { id: 'patterns',  label: 'Patterns',  icon: Hash },
-        { id: 'process',   label: 'Process Map', icon: Workflow },
-        { id: 'settings',  label: 'Settings',  icon: Settings2 },
+    // Tab strip in three visually grouped sections (thin dividers between):
+    //   Activity | the TNA analytics group | the Oyon signal group | Settings.
+    // Pre-existing ids/labels are unchanged so deep links and tests hold.
+    const tabGroups = [
+        [
+            { id: 'activity',  label: 'Activity',  icon: Activity },
+        ],
+        [
+            { id: 'network',   label: 'Network',   icon: Network },
+            { id: 'patterns',  label: 'Patterns',  icon: Hash },
+            { id: 'process',   label: 'Process Map', icon: Workflow },
+            { id: 'clusters',  label: 'Clusters',  icon: Layers },
+        ],
+        // Oyon signal tabs — attention (+ trends, merged into the same tab)/
+        // affect (+ engagement, merged the same way)/gaze/compare/sessions
+        // views, all over the ONE shared emotion-record fetch, honoring the
+        // same case/student/date filters. Deliberately NO embedded <oyon-app>
+        // element here — nesting Oyon's own app (with its own filter chrome)
+        // inside this dashboard was rejected; the element's Affect /
+        // Engagement / Comparison dashboards are ported as native views.
+        [
+            { id: 'attention',  label: 'Attention',  icon: Eye },
+            { id: 'affect',     label: 'Affect',     icon: Smile },
+            { id: 'gaze',       label: 'Gaze',       icon: ScanEye },
+            { id: 'compare',    label: 'Compare',    icon: GitCompare },
+            { id: 'sessions',   label: 'Sessions',   icon: ListVideo },
+        ],
+        [
+            { id: 'settings',  label: 'Settings',  icon: Settings2 },
+        ],
     ];
 
     // ===========================================================================
@@ -321,8 +523,9 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
 
     return (
         <Outer>
-                {/* Header — hidden when embedded since the parent (Settings tab) already has one */}
-                {!embedded && (
+                {/* Header — hidden when embedded (Settings tab) or when the
+                    parent hub provides its own header via `hideHeader` */}
+                {!embedded && !hideHeader && (
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                         {onClose && (
@@ -346,75 +549,109 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                 </div>
                 )}
 
-                {/* Tabs */}
-                <div className="flex flex-wrap gap-1 border-b border-neutral-800 mb-4">
-                    {tabs.map((tab) => {
-                        const Icon = tab.icon;
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`px-4 py-2 text-sm font-medium rounded-t flex items-center gap-2 transition-colors ${
-                                    activeTab === tab.id
-                                        ? 'bg-cyan-50 text-cyan-700 border-b-2 border-cyan-500'
-                                        : 'text-gray-600 hover:text-gray-900'
-                                }`}
-                            >
-                                <Icon className="w-4 h-4" />
-                                {tab.label}
-                            </button>
-                        );
-                    })}
+                {/* Tabs — grouped sections separated by thin dividers */}
+                <div className="flex flex-wrap items-stretch gap-1 border-b border-gray-300 mb-4">
+                    {tabGroups.map((group, gi) => (
+                        <React.Fragment key={gi}>
+                            {gi > 0 && (
+                                <span aria-hidden="true" className="w-px self-stretch my-2 bg-gray-400/60" />
+                            )}
+                            {group.map((tab) => {
+                                const Icon = tab.icon;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`px-4 py-2 text-sm font-medium rounded-t flex items-center gap-2 transition-colors ${
+                                            activeTab === tab.id
+                                                ? 'bg-cyan-50 text-cyan-700 border-b-2 border-cyan-500'
+                                                : 'text-gray-600 hover:text-gray-900'
+                                        }`}
+                                    >
+                                        <Icon className="w-4 h-4" />
+                                        {tab.label}
+                                    </button>
+                                );
+                            })}
+                        </React.Fragment>
+                    ))}
                 </div>
 
-                {/* Filters */}
+                {/* Filters — Case/Student/Start/End are the hub's when
+                    `externalFilters` is set; Source/Group by/Mode stay V2-owned */}
                 <div className="flex flex-wrap items-end gap-3 mb-4 p-3 bg-white border border-gray-200 rounded-lg">
-                    <div className="flex flex-col gap-1">
-                        <label className="text-xs text-gray-600">Case</label>
-                        <select value={caseId} onChange={(e) => setCaseId(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
-                            <option value="">All cases</option>
-                            {filterOptions.cases.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
-                        </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <label className="text-xs text-gray-600">Student</label>
-                        <select value={userId} onChange={(e) => setUserId(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
-                            <option value="">All students</option>
-                            {filterOptions.users.map((u) => <option key={u.id} value={u.id}>{u.fullname || u.username}</option>)}
-                        </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <label className="text-xs text-gray-600">Start</label>
-                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded"/>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <label className="text-xs text-gray-600">End</label>
-                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded"/>
-                    </div>
+                    {!externalFilters && (
+                        <>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-600">Case</label>
+                                <select value={caseId} onChange={(e) => setCaseId(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
+                                    <option value="">All cases</option>
+                                    {filterOptions.cases.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-600">Student</label>
+                                <select value={userId} onChange={(e) => setUserId(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
+                                    <option value="">All students</option>
+                                    {filterOptions.users.map((u) => <option key={u.id} value={u.id}>{u.fullname || u.username}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-600">Start</label>
+                                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded"/>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-600">End</label>
+                                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded"/>
+                            </div>
+                        </>
+                    )}
                     {isAnalyticsRelated && (
                         <>
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs text-gray-600">Group by</label>
-                                <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
-                                    <option value="actor-session">Per session</option>
-                                    <option value="actor">Per student</option>
+                                <label className="text-xs text-gray-600">Source</label>
+                                <select value={seqSource} onChange={(e) => setSeqSource(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
+                                    <option value="activity">Activity</option>
+                                    <option value="emotions">Emotions</option>
+                                    <option value="rooms">Locations</option>
+                                    <option value="gaze-targets">Gaze targets</option>
                                 </select>
                             </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-xs text-gray-600">Mode</label>
-                                <select value={sequenceMode} onChange={(e) => setSequenceMode(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
-                                    <option value="combined">Clinical state</option>
-                                    <option value="verb">Verb only</option>
-                                    <option value="objectType">Object only</option>
-                                    <option value="raw">Raw verb:object</option>
-                                </select>
-                            </div>
+                            {seqSource === 'activity' && (
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-xs text-gray-600">Group by</label>
+                                    <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
+                                        <option value="actor-session">Per session</option>
+                                        <option value="actor">Per student</option>
+                                    </select>
+                                </div>
+                            )}
+                            {seqSource === 'activity' && (
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-xs text-gray-600">Mode</label>
+                                    <select value={sequenceMode} onChange={(e) => setSequenceMode(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
+                                        <option value="combined">Clinical state</option>
+                                        <option value="verb">Verb only</option>
+                                        <option value="objectType">Object only</option>
+                                        <option value="raw">Raw verb:object</option>
+                                    </select>
+                                </div>
+                            )}
+                            {isEmotionSource && (
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-xs text-gray-600">Emotion states</label>
+                                    <select value={emotionDimension} onChange={(e) => setEmotionDimension(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
+                                        <option value="affective">Affective (grouped)</option>
+                                        <option value="raw">Raw emotions</option>
+                                    </select>
+                                </div>
+                            )}
                         </>
                     )}
                 </div>
 
                 {/* Stat cards */}
-                {tnaData?.metadata && isAnalyticsRelated && (
+                {!isRecordsSource && tnaData?.metadata && isAnalyticsRelated && (
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
                         <StatCard icon={<Users className="w-5 h-5" />} value={tnaData.metadata.totalSequences} label="Sequences" accent="cyan" />
                         <StatCard icon={<Activity className="w-5 h-5" />} value={tnaData.metadata.totalEvents} label="Events" accent="green" />
@@ -427,19 +664,104 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                         )}
                     </div>
                 )}
+                {isRecordsSource && isAnalyticsRelated && emotionRecords && (
+                    <div className="mb-4 space-y-2">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                            <StatCard icon={<Users className="w-5 h-5" />} value={transformedData?.sequences.length ?? 0} label="Session sequences" accent="cyan" />
+                            <StatCard icon={<Activity className="w-5 h-5" />} value={transformedData ? transformedData.sequences.reduce((n, s) => n + s.length, 0) : 0} label={isEmotionSource ? 'Emotion windows' : 'States visited'} accent="green" />
+                            <StatCard icon={<Hash className="w-5 h-5" />} value={transformedData?.labels.length ?? '—'} label={seqSource === 'rooms' ? 'Locations' : seqSource === 'gaze-targets' ? 'Gaze targets' : emotionDimension === 'affective' ? 'Affective states' : 'Emotions'} accent="amber" />
+                            {analysis?.summaryData?.density != null && (
+                                <StatCard icon={<Network className="w-5 h-5" />} value={`${(analysis.summaryData.density * 100).toFixed(1)}%`} label="Density" accent="violet" />
+                            )}
+                            {analysis?.summaryData?.nEdges != null && (
+                                <StatCard icon={<GitBranch className="w-5 h-5" />} value={analysis.summaryData.nEdges} label="Edges" accent="rose" />
+                            )}
+                        </div>
+                        <p className="text-xs text-gray-600">
+                            {isEmotionSource && (<>
+                                Transitions between per-window <strong>estimated</strong> dominant expressions from
+                                Oyon. Estimates of facial expression — not feelings.
+                            </>)}
+                            {seqSource === 'rooms' && 'Transitions between simulator locations (rooms), one state per capture window with consecutive repeats merged.'}
+                            {seqSource === 'gaze-targets' && 'Transitions between screen centers — the dominant gaze target per window (AOI dwell, falling back to the dominant screen zone), consecutive repeats merged.'}
+                            {' '}({emotionRecords.length} window record{emotionRecords.length === 1 ? '' : 's'} fetched
+                            {emotionTruncated ? ', capped at the most recent 1000' : ''}). Sessions with fewer than
+                            2 usable states are dropped.
+                        </p>
+                    </div>
+                )}
 
                 {error && (
-                    <div className="mb-3 p-3 rounded bg-red-900/30 border border-red-800 text-red-200 text-sm">
+                    <div className="mb-3 p-3 rounded bg-red-50 border border-red-200 text-red-700 text-sm">
                         {error}
                     </div>
                 )}
 
-                {/* Content */}
-                {loading && !tnaData && <Loading text="Loading sequences…" />}
+                {/* Content — signal tabs render their own loading card below */}
+                {loading && !isSignalTab && (isRecordsSource ? !emotionRecords : !tnaData) && (
+                    <Loading text={isRecordsSource ? 'Loading capture windows…' : 'Loading sequences…'} />
+                )}
+                {isRecordsSource && isAnalyticsRelated && !loading && emotionRecords && !transformedData && (
+                    <div className="mb-3 p-3 rounded bg-white border border-gray-200 text-sm text-gray-600">
+                        No sequences to analyze — no session has 2 or more usable states
+                        for the current filters and source.
+                    </div>
+                )}
 
                 {/* === ACTIVITY TAB === */}
-                {isActivityTab && activityBundle && (
+                {isActivityTab && (
                     <div className="space-y-4">
+                        {/* carmdash-style charts over raw learning events —
+                            educator-accessible, independent of the admin-only
+                            aggregate bundle rendered below. */}
+                        {eventsError && (
+                            <div className="p-3 rounded bg-white border border-gray-200 text-sm text-gray-600">
+                                Could not load learning events: {eventsError}
+                            </div>
+                        )}
+                        {!eventsError && !filteredEvents && <Loading text="Loading learning events…" />}
+                        {activityCharts && (
+                            <>
+                                {learningEvents.length >= EVENTS_FETCH_LIMIT && (
+                                    <div className="px-1 text-xs text-amber-700">
+                                        Charts cover the {EVENTS_FETCH_LIMIT.toLocaleString()} most recent
+                                        events — older activity is not included.
+                                    </div>
+                                )}
+                                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                    {activityCharts.daily.series.length ? (
+                                        <StackedAreaChart
+                                            series={activityCharts.daily.series}
+                                            xLabels={activityCharts.daily.xLabels}
+                                            colors={activityCharts.dailyColors}
+                                            title={activityCharts.daily.granularity === 'day'
+                                                ? 'Daily Activity by State'
+                                                : 'Activity by State over Time'}
+                                            xLabel={activityCharts.daily.granularity === 'day' ? 'Day' : 'Time'}
+                                            yLabel="Events"
+                                        />
+                                    ) : (
+                                        <>
+                                            <h3 className="text-sm font-bold text-gray-800 mb-2">Daily activity by state</h3>
+                                            <div className="text-xs text-gray-500 py-8 text-center">No events for the current filters</div>
+                                        </>
+                                    )}
+                                </div>
+                                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                    <h3 className="text-sm font-bold text-gray-800 mb-2">Student Activity</h3>
+                                    {activityCharts.matrixEvents.length ? (
+                                        <DayHourMatrix
+                                            events={activityCharts.matrixEvents}
+                                            colorMap={activityCharts.colorMap}
+                                        />
+                                    ) : (
+                                        <div className="text-xs text-gray-500 py-8 text-center">No events for the current filters</div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                        {activityBundle && (
+                        <>
                         {activityBundle.summary && (
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <StatCard icon={<Activity className="w-5 h-5" />} value={activityBundle.summary.totalActivities} label="Total events" accent="cyan" />
@@ -491,15 +813,17 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                                     </thead>
                                     <tbody>
                                         {activityBundle.resources.map((r, i) => (
-                                            <tr key={i} className="border-t border-neutral-800">
+                                            <tr key={i} className="border-t border-gray-200">
                                                 <td className="py-1 text-gray-600">{r.object_type}</td>
                                                 <td className="py-1">{r.object_name}</td>
-                                                <td className="py-1 text-right text-cyan-300">{r.n}</td>
+                                                <td className="py-1 text-right text-cyan-700">{r.n}</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             </div>
+                        )}
+                        </>
                         )}
                     </div>
                 )}
@@ -572,7 +896,7 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                                 <div className="bg-white border border-gray-200 rounded-lg p-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <h3 className="text-sm font-bold">{seqView === 'distribution' ? 'State distribution' : 'Index plot'}</h3>
-                                        <button onClick={() => setSeqView((v) => v === 'distribution' ? 'index' : 'distribution')} className="text-xs text-cyan-400 hover:text-cyan-300">
+                                        <button onClick={() => setSeqView((v) => v === 'distribution' ? 'index' : 'distribution')} className="text-xs text-cyan-600 hover:text-cyan-700">
                                             Toggle
                                         </button>
                                     </div>
@@ -581,7 +905,7 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
                                         : <TnaIndexPlot sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />}
                                 </div>
                                 <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                    <h3 className="text-sm font-bold mb-2">Verb frequency</h3>
+                                    <h3 className="text-sm font-bold mb-2">{isRecordsSource ? 'State frequency' : 'Verb frequency'}</h3>
                                     <TnaFrequencyChart sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />
                                 </div>
                             </div>
@@ -625,7 +949,60 @@ export default function TnaDashboardV2({ onClose, embedded = false }) {
 
                 {/* === PROCESS MAP TAB === */}
                 {activeTab === 'process' && transformedData && (
-                    <ProcessMap sequences={transformedData.sequences} labels={transformedData.labels} />
+                    <ProcessMap sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis?.colorMap} />
+                )}
+
+                {/* === OYON SIGNAL TABS === attention (+ trends stacked below) /
+                    affect / engagement / gaze / compare / sessions views, all
+                    fed the same shared emotion-record fetch (V2 filter bar
+                    scope). */}
+                {isSignalTab && (
+                    <div className="space-y-4">
+                        <div className="p-3 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 flex gap-2">
+                            <Info className="w-4 h-4 text-cyan-600 mt-0.5 shrink-0" />
+                            <span>
+                                Aggregate Oyon capture windows for the current filters. These
+                                are <strong>estimated facial-expression signals</strong> the Oyon model
+                                produced while students worked through cases — not feelings. Always
+                                read alongside the confidence and missing-face quality flags.
+                            </span>
+                        </div>
+
+                        {emotionRecords && (
+                            <div className="text-xs text-gray-500 text-right">
+                                {emotionRecords.length} window{emotionRecords.length === 1 ? '' : 's'} · {emotionSessionCount} session{emotionSessionCount === 1 ? '' : 's'}
+                                {emotionTruncated ? ' · capped at the most recent 1000 windows' : ''}
+                            </div>
+                        )}
+
+                        {loading && !emotionRecords && (
+                            <div className="p-8 bg-white border border-gray-200 rounded-lg text-center text-sm text-gray-500">
+                                Loading Oyon windows…
+                            </div>
+                        )}
+
+                        {emotionRecords && (
+                            // The Oyon views share the dashboard's light theme —
+                            // plain white card, no dark island.
+                            <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                {activeTab === 'attention'  && (
+                                    <div className="space-y-4">
+                                        <OyonAttentionView records={emotionRecords} loading={loading} />
+                                        <OyonTrendsView records={emotionRecords} loading={loading} />
+                                    </div>
+                                )}
+                                {activeTab === 'affect'     && (
+                                    <div className="space-y-4">
+                                        <OyonAffectView records={emotionRecords} loading={loading} />
+                                        <OyonEngagementView records={emotionRecords} loading={loading} />
+                                    </div>
+                                )}
+                                {activeTab === 'gaze'       && <OyonGazeView records={emotionRecords} loading={loading} />}
+                                {activeTab === 'compare'    && <OyonCompareView records={emotionRecords} loading={loading} />}
+                                {activeTab === 'sessions'   && <OyonSessionsView records={emotionRecords} />}
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 {/* === SETTINGS TAB === */}

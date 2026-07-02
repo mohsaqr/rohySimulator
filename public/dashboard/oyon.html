@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Oyon — analytics dashboard</title>
+    <!--
+      Oyon v2 dashboard page ("Open Oyon" in Settings → Oyon). Hosts the
+      <oyon-app> element in viewer mode (chrome="none"), landed directly on
+      the Analyze dashboards, and feeds it the SERVER-side emotion records
+      via el.setWindows() — fetched with the same bearer token the SPA keeps
+      in localStorage (same origin), so admins/educators see the whole
+      tenant-scoped pool, not just this browser's local capture store. If the
+      fetch fails (signed out, students without read access), the viewer
+      falls back to the local store.
+
+      asset-base keeps every model/WASM fetch same-origin (air-gap contract).
+    -->
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; background: #ffffff; }
+      oyon-app { display: block; height: calc(100% - 30px); }
+      .oyon-note {
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 12px; color: #6b7280; padding: 6px 12px; height: 18px;
+        border-bottom: 1px solid #e5e7eb; background: #f9fafb;
+      }
+      .oyon-note[data-kind="error"] { color: #991b1b; background: #fef2f2; }
+    </style>
+  </head>
+  <body>
+    <div id="note" class="oyon-note">Loading Oyon dashboards…</div>
+    <oyon-app chrome="none" page="/analyze" asset-base="/oyon/standalone"></oyon-app>
+    <script type="module">
+      const note = document.getElementById('note');
+      const show = (text, kind) => {
+        note.textContent = text;
+        if (kind) note.dataset.kind = kind;
+        else delete note.dataset.kind;
+      };
+      try {
+        await import('/oyon/standalone/app/dist-element/oyon-app.element.js?v=2');
+      } catch (err) {
+        show('Failed to load the Oyon dashboard element (' + (err?.message || err) + '). ' +
+             'Check that the server is running and OyonR assets are installed.', 'error');
+        document.querySelector('oyon-app')?.remove();
+      }
+
+      // Feed the viewer the server-side pool. The records API is paginated;
+      // pull up to 5 pages × 200 newest-first, then hand the element a
+      // chronological pool.
+      const el = document.querySelector('oyon-app');
+      // Auth: Rohy signs API calls with the session COOKIE (sent automatically
+      // on same-origin fetch; GETs need no CSRF header) — a localStorage
+      // bearer token is only a secondary path. Try the fetch either way and
+      // fall back to the local store on 401/403.
+      const token = localStorage.getItem('token');
+      if (el) {
+        try {
+          const pageSize = 200;
+          const records = [];
+          for (let offset = 0; offset < 1000; offset += pageSize) {
+            const res = await fetch(`/api/addons/oyon/emotion-records?limit=${pageSize}&offset=${offset}`, {
+              credentials: 'same-origin',
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (!res.ok) throw new Error(`records fetch ${res.status}`);
+            const data = await res.json();
+            records.push(...(data.records || []));
+            if (!data.records || data.records.length < pageSize || records.length >= (data.total ?? Infinity)) break;
+          }
+          // Server rows → EmotionWindow shape (same projection the SPA's
+          // serverWindows.js mapper performs; inlined so this page stays a
+          // self-contained static file).
+          const num = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
+          const windows = records.map((r) => ({
+            session_id: r.session_id != null ? String(r.session_id) : undefined,
+            user_id: r.user_id != null ? String(r.user_id) : undefined,
+            username: r.username || r.student_name_snapshot || undefined,
+            case_id: r.case_id != null ? String(r.case_id) : undefined,
+            record_id: r.record_id != null ? String(r.record_id) : undefined,
+            window_start: r.window_start,
+            window_end: r.window_end,
+            duration_ms: num(r.duration_ms) ?? undefined,
+            expected_samples: num(r.expected_samples) ?? undefined,
+            dominant_emotion: r.dominant_emotion ?? null,
+            probabilities: r.probabilities ?? null,
+            valence: num(r.valence),
+            valence_std: num(r.valence_std),
+            valence_min: num(r.valence_min),
+            valence_max: num(r.valence_max),
+            arousal: num(r.arousal),
+            arousal_std: num(r.arousal_std),
+            arousal_min: num(r.arousal_min),
+            arousal_max: num(r.arousal_max),
+            confidence: num(r.confidence) ?? 0,
+            confidence_std: num(r.confidence_std),
+            entropy: num(r.entropy),
+            entropy_std: num(r.entropy_std),
+            stability_score: num(r.stability_score),
+            valid_frames: Number.isInteger(Number(r.valid_frames)) ? Number(r.valid_frames) : 0,
+            missing_face_ratio: num(r.missing_face_ratio) ?? undefined,
+            quality: r.quality ?? null,
+            model_name: r.model_name ?? null,
+            model_version: r.model_version ?? null,
+            dynamics: r.dynamics ?? undefined,
+            gaze: r.gaze ?? null,
+            engagement: r.engagement ?? null,
+            room: r.room ?? null,
+          })).reverse();
+          el.setWindows?.(windows);
+          show(`Showing ${windows.length} server-side windows (tenant-scoped, newest ${pageSize}×5 cap). Local-only data is not included here.`);
+        } catch (err) {
+          show('Could not load server records (' + (err?.message || err) + ') — showing this browser’s local capture store instead. Sign in to Rohy in this browser to see the server-side pool.', 'error');
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -1,18 +1,10 @@
-import { ALLOWED_EMOTIONS } from '../config/emotionLabels.js';
-
 export class EmotionAggregator {
   constructor(options = {}) {
     this.options = {
       windowMs: 10000,
-      minValidFrames: 3,
+      minValidFrames: 6,
       sampleIntervalMs: 1000,
-      // Default labels come from the canonical ALLOWED_EMOTIONS in
-      // ../config/emotionLabels.js — the same source the validator and
-      // every model config use. The runtime overrides this with the
-      // actual classifier labels at construction; callers constructing
-      // the aggregator directly without a classifier still get a sane
-      // default that round-trips through the validator.
-      labels: ALLOWED_EMOTIONS,
+      labels: ['anger', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'],
       ...options,
     };
     this.windowStart = null;
@@ -51,7 +43,6 @@ export class EmotionAggregator {
         probabilities: null,
         valence: null,
         arousal: null,
-        anxious_index: null,
         confidence: 0,
         entropy: null,
         valid_frames: valid.length,
@@ -63,8 +54,6 @@ export class EmotionAggregator {
     }
 
     const model = valid.find(s => s.model)?.model || {};
-    const valenceMean = mean(valid.map(s => s.valence).filter(Number.isFinite));
-    const arousalMean = mean(valid.map(s => s.arousal).filter(Number.isFinite));
     return {
       window_start: new Date(windowStart).toISOString(),
       window_end: new Date(end).toISOString(),
@@ -72,15 +61,7 @@ export class EmotionAggregator {
       expected_samples: expectedSamples,
       dominant_emotion: dominant,
       probabilities,
-      // Bug 18 (18.5.2026): AffectNet 8-class models cannot emit anxiety —
-      // it is not a label they have. Rather than fake a 9th class (which
-      // would break the frozen ALLOWED_EMOTIONS validator/contract), we
-      // expose a *derived* anxiety indicator in [0,1] from the circumplex:
-      // anxiety = high arousal + negative valence, reinforced by fear.
-      // It is a separate field, never injected into `probabilities`, so the
-      // sum-to-one contract is untouched.
-      anxious_index: anxiousIndex(probabilities, valenceMean, arousalMean),
-      valence: valenceMean,
+      valence: mean(valid.map(s => s.valence).filter(Number.isFinite)),
       valence_std: std(valid.map(s => s.valence).filter(Number.isFinite)),
       valence_min: min(valid.map(s => s.valence).filter(Number.isFinite)),
       valence_max: max(valid.map(s => s.valence).filter(Number.isFinite)),
@@ -113,27 +94,6 @@ function meanProbabilities(samples, labels) {
   }
   for (const label of labels) out[label] /= samples.length;
   return out;
-}
-
-// Derived anxiety indicator (Bug 18). Not a model class — a composite of
-// the circumplex affect axes the MTL models DO emit. valence/arousal are
-// in [-1, 1]; fear is a probability in [0, 1]. Returns null when the
-// inputs are unavailable so consumers can distinguish "not anxious" (0)
-// from "unknown" (null).
-export function anxiousIndex(probabilities, valence, arousal) {
-  const fear = probabilities && Number.isFinite(probabilities.fear) ? probabilities.fear : 0;
-  if (!Number.isFinite(valence) && !Number.isFinite(arousal) && !probabilities) return null;
-  const v = Number.isFinite(valence) ? valence : 0;
-  const a = Number.isFinite(arousal) ? arousal : 0;
-  const arousalPos = clamp01((a + 1) / 2);   // high arousal → 1
-  const valenceNeg = clamp01((1 - v) / 2);   // very negative valence → 1
-  const quadrant = arousalPos * valenceNeg;  // high-arousal & negative quadrant
-  return clamp01(0.6 * quadrant + 0.4 * fear);
-}
-
-function clamp01(x) {
-  if (!Number.isFinite(x)) return 0;
-  return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
 function dominantLabel(probabilities) {

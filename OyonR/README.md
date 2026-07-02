@@ -45,6 +45,7 @@ ship overconfident labels with no uncertainty. Oyon is the opposite:
 | Output | Where |
 |---|---|
 | Live face box + landmarks | Browser canvas overlay |
+| Eye-tracking engagement signals (opt-in) | UI + telemetry |
 | Dominant expression label + confidence | UI + telemetry |
 | 8 expression class probabilities | UI + telemetry |
 | Valence (negative ↔ positive) and Arousal (calm ↔ activated) | UI + telemetry |
@@ -60,7 +61,40 @@ B0 MTL is the default emotion model because it has the strongest published bench
 See [`docs/MODEL_SELECTION.md`](docs/MODEL_SELECTION.md) for the
 trade-offs and licensing of the bundled weights.
 
-## Two ways to use it
+## Where it runs
+
+Oyon is plug-and-attach **inside one envelope**: a browser front-end that
+can open a camera over a secure context. Confirm the fit before integrating:
+
+- **Runs in:** any browser UI — vanilla, React, Next.js (client-only),
+  Vue/Svelte/Angular, static sites, Tauri/Electron. Desktop + mobile
+  (Chrome 90+, Safari 14+, Firefox 90+).
+- **Requires:** HTTPS or `localhost` (LAN IPs fail), a camera + user gesture,
+  and `'wasm-unsafe-eval'` in the page CSP. Two required peer deps
+  (`@mediapipe/tasks-vision`, `onnxruntime-web`); React is optional.
+- **Out of scope by construction:** Node/SSR execution, plain-HTTP or LAN-IP
+  production, multiple capture surfaces per page, and proprietary bundles
+  that select the GPL WebGazer engine (the default `mediapipe` engine is
+  permissive).
+
+Full support matrix, browser table, licensing, and a pre-integration
+checklist: **[`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)**.
+
+## Three ways to use it
+
+### 0. Embedded — the whole app in one tag
+
+The full Oyon Research Instrument (capture + every analytics dashboard,
+filterable by session/user) drops into any page as a web component:
+
+```html
+<script type="module"
+  src="https://cdn.jsdelivr.net/npm/oyon@2/standalone/app/dist-element/oyon-app.element.js"></script>
+<oyon-app user-id="student-42" style="height:100vh"></oyon-app>
+```
+
+Local-first (IndexedDB), optional backend sync, shadow-DOM isolated.
+See [`docs/EMBEDDING.md`](docs/EMBEDDING.md).
 
 ### 1. Standalone
 
@@ -88,10 +122,14 @@ session/user/case context will fit — wires Oyon in with **two new
 lines** in existing source plus one new component and one new
 backend route.
 
-The full integration plan, including database schema, logging
-hookpoints, governance, and rollback, is in
-[`docs/INTEGRATION_PLAN.md`](docs/INTEGRATION_PLAN.md). A clickable
-mockup of how the integration looks visually is in
+**→ The complete step-by-step guide for adding Oyon to an existing
+system — every integration mode, and routing the analytics into your
+existing database or a separate one — is
+[`docs/INTEGRATION_MANUAL.md`](docs/INTEGRATION_MANUAL.md).** If you
+use Claude Code, the repo ships an agent skill that performs the
+integration for you: [`.claude/skills/integrate-oyon/`](.claude/skills/integrate-oyon/SKILL.md).
+
+A clickable mockup of how the integration looks visually is in
 [`mock/rohy-integration.html`](mock/rohy-integration.html) —
 open it in any browser, no server needed.
 
@@ -120,6 +158,44 @@ function OyonMount() {
 ```
 
 See [`INSTALL.md`](INSTALL.md) for the full integration walkthrough.
+
+## Documentation
+
+All canonical reference docs live in [`docs/`](docs/) — start at the
+**[documentation index](docs/README.md)**, which maps every doc by goal and
+marks canonical vs. historical.
+
+### Reference (current)
+
+| Topic | Doc |
+|---|---|
+| **Documentation index** — every doc mapped by goal | [`docs/README.md`](docs/README.md) |
+| **Compatibility & requirements** — supported/unsupported systems, browsers, CSP, licensing, checklist | [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) |
+| **Integration manual** — add Oyon to an existing system, analytics into your DB or a separate one | [`docs/INTEGRATION_MANUAL.md`](docs/INTEGRATION_MANUAL.md) |
+| Install + linkage strategies (workspace, git, npm, CDN) | [`INSTALL.md`](INSTALL.md) |
+| Runtime asset model (CDN vs self-hosted, CLI, `assets-v1` release) | [`docs/ASSETS.md`](docs/ASSETS.md) |
+| Production deployment (HTTPS, CSP, caching, monitoring, rollback) | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) |
+| Integration recipes for any host (vanilla, React, Next.js, Vite, addon, CDN) | [`docs/INTEGRATION.md`](docs/INTEGRATION.md) |
+| **Rohy integration contract** (canonical — schema, routes, logging, governance, production lessons) | [`docs/ROHY_INTEGRATION.md`](docs/ROHY_INTEGRATION.md) |
+| Architecture & module layout | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Eye tracking design + engagement metric definitions | [`docs/EYE_TRACKING.md`](docs/EYE_TRACKING.md) |
+| Standalone demo internals | [`docs/STANDALONE.md`](docs/STANDALONE.md) |
+| Model selection rationale | [`docs/MODEL_SELECTION.md`](docs/MODEL_SELECTION.md) |
+| Platform design overview | [`docs/PLATFORM_DESIGN.md`](docs/PLATFORM_DESIGN.md) |
+| Design overview | [`docs/DESIGN_OVERVIEW.md`](docs/DESIGN_OVERVIEW.md) |
+| Embedding the full app (`<oyon-app>`) | [`docs/EMBEDDING.md`](docs/EMBEDDING.md) |
+| Testing strategy (unit chain, gates, browser E2E) | [`docs/TESTING.md`](docs/TESTING.md) |
+| Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
+
+### Historical (preserved for context)
+
+| Doc | Why kept |
+|---|---|
+| [`docs/INTEGRATION_PLAN.md`](docs/INTEGRATION_PLAN.md) | Original 5-phase rollout plan + four-surfaces logging table (referenced from ROHY_INTEGRATION.md) |
+| [`docs/ROHY_ADDON_FALLBACK_PLAN.md`](docs/ROHY_ADDON_FALLBACK_PLAN.md) | Original stability contract + add-on slot model framing |
+| [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Pipeline-level plan from v0.1.0 |
+| [`HANDOFF.md`](HANDOFF.md) | Current session handoff snapshot |
+| [`bkp/2026-05-15/docs-HANDOFF-2026-05-08.md`](bkp/2026-05-15/docs-HANDOFF-2026-05-08.md) | Older handoff snapshot preserved for context |
 
 ## Architecture in one diagram
 
@@ -167,7 +243,7 @@ standalone logging, settings, storage, and analytics architecture.
 
 Pre-alpha. The standalone demo is stable; the host integration is
 specified and templated but not yet pulled into a host app. See
-[`docs/HANDOFF.md`](docs/HANDOFF.md) for the latest work-state.
+[`HANDOFF.md`](HANDOFF.md) for the latest work-state.
 
 ## License
 

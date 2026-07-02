@@ -163,6 +163,30 @@ function parseJson(value) {
   }
 }
 
+// Server-side mirror of Oyon's client deny-list. See
+// src/validation/validateEmotionPayload.js — these keys must never appear in a
+// posted batch and the server fails closed if they do, even if the client
+// validator is bypassed.
+const FORBIDDEN_EVENT_KEYS = [
+  'iris_landmarks_raw',
+  'gaze_points_raw',
+  'pupil_diameter_px',
+];
+
+function rejectForbiddenKeys(obj, prefix, errors) {
+  if (!obj || typeof obj !== 'object') return;
+  for (const key of FORBIDDEN_EVENT_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      errors.push(`${prefix}.${key} is forbidden`);
+    }
+  }
+  for (const key of Object.keys(obj)) {
+    if (key.startsWith('eye_image_')) {
+      errors.push(`${prefix}.${key} is forbidden (eye image fields)`);
+    }
+  }
+}
+
 function validateServerEvent(event) {
   const errors = [];
   if (JSON.stringify(event).length > 4096) {
@@ -173,6 +197,12 @@ function validateServerEvent(event) {
   }
   if (!event.consent_version) {
     errors.push('consent_version is required');
+  }
+  // Mirror Oyon's client deny-list. Reject raw eye-tracking fields at the
+  // top level and inside the optional engagement sub-object.
+  rejectForbiddenKeys(event, 'event', errors);
+  if (event && typeof event.engagement === 'object' && event.engagement !== null) {
+    rejectForbiddenKeys(event.engagement, 'event.engagement', errors);
   }
   return errors;
 }

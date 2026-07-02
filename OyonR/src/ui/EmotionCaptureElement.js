@@ -41,3 +41,4 @@ export function defineEmotionCaptureElement(name = 'rohy-emotion-capture') {
     }
   });
 }
+

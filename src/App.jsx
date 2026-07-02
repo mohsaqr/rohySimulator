@@ -28,6 +28,8 @@ import PhysicalExamScreen from './components/exam/PhysicalExamScreen';
 import InvestigationsScreen from './components/investigations/InvestigationsScreen';
 import RoomNavigator from './components/common/RoomNavigator';
 import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
+import OyonCaptureWidget from './components/oyon/OyonCaptureWidget';
+import AoiRegion from './components/oyon/AoiRegion';
 import { HelpCenter, OnboardingTour } from './help';
 
 // Persistence rule: a session ends ONLY through the Exit or End buttons
@@ -38,7 +40,15 @@ function MainApp() {
    const [showFullPageSettings, setShowFullPageSettings] = useState(false);
    const [showUserProfile, setShowUserProfile] = useState(false);
    const [showUserMenu, setShowUserMenu] = useState(false);
+   // Top-bar "Analytics" dropdown. Peer to the Settings menu; surfaces the
+   // two analytics destinations (Emotion / Case) as primary top-level
+   // routes instead of leaving them buried in Settings tabs.
+   const [showAnalyticsMenu, setShowAnalyticsMenu] = useState(false);
    const [showTnaAnalytics, setShowTnaAnalytics] = useState(false);
+   // Emotion analytics as a first-class full-page route — the Oyon element's
+   // own Analyze dashboards (Emotion dynamics / Engagement / Affect / Gaze),
+   // one click from the top bar instead of buried under Settings → Oyon tab.
+   const [showOyonAnalytics, setShowOyonAnalytics] = useState(false);
    // Agent persona editor full-page route. null = closed; 'new' = create;
    // <number> = edit by template id. Setting this hides ConfigPanel so the
    // editor gets the entire viewport. On close we reopen ConfigPanel with
@@ -56,6 +66,11 @@ function MainApp() {
    const [personaEditorReturn, setPersonaEditorReturn] = useState(null);
    const [settingsInitialTab, setSettingsInitialTab] = useState('cases');
    const [settingsInitialStep, setSettingsInitialStep] = useState(1);
+   // Bumped by the Oyon pill's analytics shortcut. ConfigPanel keeps its
+   // active tab in local state seeded from `initialTab`, so a tab request
+   // made while the panel is ALREADY open needs a remount to take effect —
+   // the nonce is ConfigPanel's key.
+   const [settingsNavNonce] = useState(0);
    const { user, logout, isAdmin } = useAuth();
    const [sessionValidated, setSessionValidated] = useState(false);
    const lastActivityRef = useRef(Date.now());
@@ -222,6 +237,7 @@ function MainApp() {
       if (personaEditorTarget !== null) view = 'persona-editor';
       else if (showFullPageSettings)    view = 'settings';
       else if (showTnaAnalytics)        view = 'tna';
+      else if (showOyonAnalytics)       view = 'oyon';
       // 'view' tracks full-page surfaces above the in-session UI; the
       // bottom-nav room is orthogonal and persisted separately so hard
       // refresh inside Exam/Lab/Rad lands back in the same room, not chat.
@@ -236,7 +252,7 @@ function MainApp() {
       };
    }, [
       personaEditorTarget, personaEditorReturn,
-      showFullPageSettings, showTnaAnalytics, currentRoom, showUserProfile,
+      showFullPageSettings, showTnaAnalytics, showOyonAnalytics, currentRoom, showUserProfile,
       settingsInitialTab, settingsInitialStep,
    ]);
    const applyView = (saved) => {
@@ -264,6 +280,7 @@ function MainApp() {
             break;
          case 'settings':    setShowFullPageSettings(true); break;
          case 'tna':         setShowTnaAnalytics(true); break;
+         case 'oyon':        setShowOyonAnalytics(true); break;
          case 'home':
          case 'discussion':  // handled by the currentRoom restore above
          default: /* no-op — case view */ break;
@@ -485,6 +502,14 @@ function MainApp() {
       EventLogger.componentClosed(COMPONENTS.CONFIG_PANEL, 'Settings');
    };
 
+   // Oyon pill → the top-level Emotion Analytics page (the Oyon element's own
+   // Analyze dashboards). A first-class route, not a Settings deep-link.
+   const handleOpenOyonAnalytics = () => {
+      if (personaEditorTarget !== null) return; // editor owns the viewport
+      setShowOyonAnalytics(true);
+      EventLogger.componentOpened(COMPONENTS.CONFIG_PANEL, 'OyonAnalytics');
+   };
+
    const handleOpenPersonaEditor = (target, returnContext = null) => {
       // target: 'new' or numeric template id.
       // returnContext (optional): { tab, wizardStep } — where to land on close.
@@ -517,23 +542,57 @@ function MainApp() {
    };
 
    // Persona editor takes priority — when open, hide every other surface.
+   // Oyon capture pill — mounted ONCE at App level and kept in the SAME
+   // fragment slot across every top-level screen (rooms, settings, TNA,
+   // persona editor), so screen switches never remount the <oyon-app>
+   // element: the camera keeps running for the whole session (the
+   // chatoyon-plus persistent-pill lesson). `room` stamps each captured
+   // window with the active simulator room / app surface.
+   const oyonRoom = personaEditorTarget !== null ? 'persona-editor'
+      : showFullPageSettings ? 'settings'
+      : showTnaAnalytics ? 'tna'
+      : currentRoom;
+   // Mirror ConfigPanel's canSeeOyonAnalytics gate: the pill's analytics
+   // shortcut only renders for users who can actually see that tab.
+   const canSeeOyonAnalytics = user?.role === 'educator' || user?.role === 'admin';
+   const oyonPill = user ? (
+      // Top-center — the spot the pill has always lived in (the monitor
+      // header renders nothing there anymore). Rendered whenever a user is
+      // signed in, session or not: without a session the pill still captures
+      // locally; persistence starts once consent + a session exist.
+      <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[80]">
+         <OyonCaptureWidget
+            sessionId={sessionId}
+            caseId={activeCase?.id}
+            room={oyonRoom}
+            onOpenAnalytics={canSeeOyonAnalytics ? handleOpenOyonAnalytics : undefined}
+         />
+      </div>
+   ) : null;
+
    // Mounted at the App.jsx level so it owns the entire viewport (the
    // user's "not a toy" feedback was specifically about cramped chrome).
    if (personaEditorTarget !== null) {
       return (
+         <>
+         {oyonPill}
          <AgentPersonaEditor
             templateId={personaEditorTarget}
             onClose={handleClosePersonaEditor}
             onSaved={() => setPersonaRefreshCounter(c => c + 1)}
          />
+         </>
       );
    }
 
    // Show full-page settings
    if (showFullPageSettings) {
       return (
+         <>
+         {oyonPill}
          <div className="h-screen w-screen bg-neutral-950 text-white overflow-hidden">
             <ConfigPanel
+               key={settingsNavNonce}
                onClose={handleCloseSettings}
                onLoadCase={handleLoadCase}
                fullPage={true}
@@ -552,15 +611,35 @@ function MainApp() {
                }}
             />
          </div>
+         </>
       );
    }
 
    // Show full-page TNA analytics
    if (showTnaAnalytics) {
       return (
+         <>
+         {oyonPill}
          <div className="h-screen w-screen overflow-hidden">
             <TnaDashboard onClose={() => setShowTnaAnalytics(false)} />
          </div>
+         </>
+      );
+   }
+
+   // Show full-page Emotion analytics — the V2 TNA dashboard as a first-class
+   // top-level route, pre-set to the Oyon emotion source. Its own filter bar
+   // (Case / Student / Start / End / Source / Group by), network/centralities/
+   // patterns/process/clusters tabs, and the aggregate Attention tab render
+   // inside; nothing rohy-extra stacked on top.
+   if (showOyonAnalytics) {
+      return (
+         <>
+         {oyonPill}
+         <div className="h-screen w-screen overflow-hidden">
+            <TnaDashboard onClose={() => setShowOyonAnalytics(false)} defaultSource="emotions" defaultEmotionDimension="raw" />
+         </div>
+         </>
       );
    }
 
@@ -585,6 +664,8 @@ function MainApp() {
    } : null;
 
    return (
+      <>
+      {oyonPill}
       <PatientRecordProvider
          sessionId={sessionId}
          caseId={activeCase?.id}
@@ -678,7 +759,7 @@ function MainApp() {
                    banner that used to sit here was hidden per the operator
                    request — students don't need the diagnosis spoiled in
                    the header. */}
-               <div className="absolute top-4 left-4 z-10">
+               <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
                   <div className="relative">
                      <button
                         onClick={() => setShowUserMenu(!showUserMenu)}
@@ -741,6 +822,54 @@ function MainApp() {
                         </>
                      )}
                   </div>
+
+                  {/* Analytics dropdown — a peer of the Settings menu that
+                      promotes the two analytics surfaces to primary top-bar
+                      destinations. Emotion deep-links into the Oyon Learning
+                      Analytics settings tab (educator+/admin, matching the
+                      Oyon pill's canSeeOyonAnalytics gate); Case Analytics
+                      opens the full-page TNA dashboard (admin, matching the
+                      user-menu Analytics entry). Hidden entirely when the
+                      user can reach neither. */}
+                  {(canSeeOyonAnalytics || isAdmin()) && (
+                     <div className="relative">
+                        <button
+                           onClick={() => setShowAnalyticsMenu(!showAnalyticsMenu)}
+                           className="px-3 py-2 bg-black/50 backdrop-blur-md rounded-full flex items-center gap-2 text-sm hover:bg-black/70 transition-colors"
+                           title="Analytics"
+                        >
+                           <Activity className="w-4 h-4 text-purple-400" />
+                           <span className="text-neutral-200">Analytics</span>
+                           <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${showAnalyticsMenu ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {showAnalyticsMenu && (
+                           <>
+                              <div className="fixed inset-0 z-40" onClick={() => setShowAnalyticsMenu(false)} />
+                              <div className="absolute left-0 top-full mt-2 w-48 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                                 {canSeeOyonAnalytics && (
+                                    <button
+                                       onClick={() => { setShowOyonAnalytics(true); setShowAnalyticsMenu(false); }}
+                                       className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
+                                    >
+                                       <Activity className="w-4 h-4 text-pink-400" />
+                                       Emotion
+                                    </button>
+                                 )}
+                                 {isAdmin() && (
+                                    <button
+                                       onClick={() => { setShowTnaAnalytics(true); setShowAnalyticsMenu(false); }}
+                                       className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
+                                    >
+                                       <Activity className="w-4 h-4 text-purple-400" />
+                                       Case Analytics
+                                    </button>
+                                 )}
+                              </div>
+                           </>
+                        )}
+                     </div>
+                  )}
                </div>
 
                {/* End & Debrief — the explicit way for the learner to close
@@ -761,8 +890,12 @@ function MainApp() {
                )}
             </div>
 
-            {/* Bottom Left: Chat Interface */}
-            <div className="flex-1 min-h-0 relative">
+            {/* Bottom Left: Chat Interface — a gaze attention target
+                (AoiRegion): dwell on the conversation lands in
+                aoi_dwell_ms.chat_panel. Same div, same layout; mounting /
+                unmounting with this chat surface publishes and retracts the
+                AOI automatically. */}
+            <AoiRegion id="chat_panel" className="flex-1 min-h-0 relative">
                {sessionValidated && (
                   <ChatInterface
                      activeCase={activeCase}
@@ -771,7 +904,7 @@ function MainApp() {
                      personaRefreshCounter={personaRefreshCounter}
                   />
                )}
-            </div>
+            </AoiRegion>
 
          </div>
 
@@ -881,6 +1014,7 @@ function MainApp() {
          )}
          </>
       </PatientRecordProvider>
+      </>
    );
 }
 

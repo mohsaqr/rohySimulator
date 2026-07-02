@@ -159,6 +159,35 @@
         gap: 12px;
         align-items: start;
       }
+      .live-stage {
+        grid-template-columns: 1fr 1.4fr;
+      }
+      .live-stat {
+        background: var(--bg-0);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: 8px 10px;
+      }
+      .live-stat-label { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+      .live-stat-value { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink-0); }
+      .live-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 8px; border-radius: 999px;
+        background: var(--bg-0); border: 1px solid var(--line);
+        font-size: 11px; color: var(--ink-2);
+      }
+      .live-badge[data-state="ok"]   { border-color: var(--accent); color: var(--accent); }
+      .live-badge[data-state="warn"] { border-color: var(--warn);   color: var(--warn); }
+      .live-badge strong { color: var(--ink-0); font-weight: 600; }
+      .live-heat-tile {
+        position: relative; display: flex; align-items: center; justify-content: center;
+        background: rgba(37, 99, 235, 0.06);
+        border-radius: 4px;
+        transition: background 0.3s ease-out;
+        font-size: 14px; font-weight: 600; color: var(--ink-1); font-variant-numeric: tabular-nums;
+      }
+      .live-heat-pct { font-size: 14px; }
+      @media (max-width: 780px) { .live-stage { grid-template-columns: 1fr; } }
       .card {
         background: linear-gradient(180deg, var(--bg-1), var(--bg-2));
         border: 1px solid var(--line);
@@ -779,15 +808,6 @@
         .affect-pad { width: 100%; max-width: 320px; height: 240px; margin: 0 auto; }
       }
     </style>
-    <script type="importmap">
-      {
-        "imports": {
-          "@mediapipe/tasks-vision": "./vendor/mediapipe/vision_bundle.mjs",
-          "onnxruntime-web": "./vendor/onnxruntime-web/ort.min.mjs",
-          "onnxruntime-web/webgpu": "./vendor/onnxruntime-web/ort.webgpu.min.mjs"
-        }
-      }
-    </script>
   </head>
   <body>
     <main>
@@ -910,6 +930,73 @@
         </div>
       </section>
 
+      <section class="stage live-stage" aria-label="Live engagement and gaze" style="margin-top: 10px;">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Engagement</h2>
+            <span class="card-title" style="color: var(--ink-3);">per-window summary</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 14px; align-items: stretch;">
+            <div>
+              <div style="font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em;">Focus score</div>
+              <div id="liveFocus" style="font-size: 38px; font-weight: 700; font-variant-numeric: tabular-nums;">—</div>
+              <div style="height: 6px; background: var(--bg-2); border-radius: 3px; overflow: hidden; margin-top: 4px;">
+                <div id="liveFocusBar" style="height: 100%; background: var(--accent); width: 0%; transition: width 0.3s ease-out;"></div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+              <div class="live-stat"><div class="live-stat-label">Blink rate</div><div id="liveBlinkRate" class="live-stat-value">—</div></div>
+              <div class="live-stat"><div class="live-stat-label">Openness</div><div id="liveOpenness" class="live-stat-value">—</div></div>
+              <div class="live-stat"><div class="live-stat-label">Gaze entropy</div><div id="liveEntropy" class="live-stat-value">—</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Gaze (screen-point)</h2>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <select id="liveGazeEngine" aria-label="Gaze engine" style="width: auto; min-width: 132px; padding: 5px 8px; font-size: 12px;">
+                <option value="webgazer">WebGazer</option>
+                <option value="webeyetrack">WebEyeTrack</option>
+              </select>
+              <button id="liveCalibrateBtn" type="button" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; cursor: pointer;">Calibrate</button>
+              <button id="liveRecalibrateBtn" type="button" title="Run calibration again" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--bg-2); color: var(--ink-1); font-size: 12px; cursor: pointer;">↻</button>
+              <button id="liveClearCalibrationBtn" type="button" title="Clear calibration state" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--bg-2); color: var(--ink-1); font-size: 12px; cursor: pointer;">Clear</button>
+            </div>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums;">
+            <span id="liveGazeStatusPill" class="live-badge" data-state="warn" title="Adapter status">status <strong id="liveGazeStatus">idle</strong></span>
+            <span class="live-badge">rate <strong id="liveGazeRate">— Hz</strong></span>
+            <span id="liveGazeCalibrated" class="live-badge" data-state="warn">Not calibrated</span>
+            <span class="live-badge">n_points <strong id="liveGazeN">—</strong></span>
+            <span class="live-badge">σ <strong id="liveGazeDispersion">—</strong></span>
+            <span class="live-badge">centroid <strong id="liveGazeCentroid">—</strong></span>
+          </div>
+          <p id="liveGazeEngineNote" hidden style="margin: 0 0 8px; padding: 6px 9px; font-size: 11px; line-height: 1.4; color: var(--ink-2); background: var(--warn-dim); border: 1px solid var(--warn); border-radius: 6px;"></p>
+          <p id="liveGazeReloadNote" hidden style="margin: 0 0 8px; padding: 8px 11px; font-size: 12px; line-height: 1.45; color: var(--ink-0); background: var(--bad-dim); border: 1px solid var(--bad); border-radius: 6px;"></p>
+          <div id="liveGazeDiag" style="font-size: 10px; color: var(--ink-3); margin-bottom: 8px; font-variant-numeric: tabular-nums;">adapter: not created</div>
+          <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px;">
+            <div id="liveGazeViewport" style="position: relative; aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--bg-1), var(--bg-2)); border: 1px dashed var(--line-strong); border-radius: 8px; overflow: hidden;">
+              <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: rgba(0,0,0,0.06);"></div>
+              <div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: rgba(0,0,0,0.06);"></div>
+              <div id="liveGazeDot" style="position: absolute; width: 14px; height: 14px; margin-left: -7px; margin-top: -7px; border-radius: 50%; background: radial-gradient(circle at center, #fff 30%, var(--accent) 70%); box-shadow: 0 0 14px var(--accent-strong); transition: left 0.15s ease-out, top 0.15s ease-out; left: 50%; top: 50%;"></div>
+            </div>
+            <div class="live-heatmap" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; aspect-ratio: 1 / 1; background: var(--bg-2); padding: 3px; border-radius: 8px;">
+              <div class="live-heat-tile" data-zone="top_left" title="top-left"><span class="live-heat-pct">—</span></div>
+              <div class="live-heat-tile" data-zone="top_center" title="top-center"><span class="live-heat-pct">—</span></div>
+              <div class="live-heat-tile" data-zone="top_right" title="top-right"><span class="live-heat-pct">—</span></div>
+              <div class="live-heat-tile" data-zone="middle_left" title="middle-left"><span class="live-heat-pct">—</span></div>
+              <div class="live-heat-tile" data-zone="middle_center" title="middle-center"><span class="live-heat-pct">—</span></div>
+              <div class="live-heat-tile" data-zone="middle_right" title="middle-right"><span class="live-heat-pct">—</span></div>
+              <div class="live-heat-tile" data-zone="bottom_left" title="bottom-left"><span class="live-heat-pct">—</span></div>
+              <div class="live-heat-tile" data-zone="bottom_center" title="bottom-center"><span class="live-heat-pct">—</span></div>
+              <div class="live-heat-tile" data-zone="bottom_right" title="bottom-right"><span class="live-heat-pct">—</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="status-strip" aria-label="Session status" style="margin-top: 10px; margin-bottom: 0;">
         <span id="pillState" class="pill state" data-state="idle"><span class="dot"></span> <strong>idle</strong></span>
         <span class="pill"><span class="dot" style="background: var(--info);"></span> Model: <strong id="pillModel">—</strong></span>
@@ -929,6 +1016,7 @@
         <button class="drawer-tab" role="tab" aria-selected="true" data-tab="model">Model</button>
         <button class="drawer-tab" role="tab" aria-selected="false" data-tab="camera">Camera</button>
         <button class="drawer-tab" role="tab" aria-selected="false" data-tab="smoothing">Smoothing</button>
+        <button class="drawer-tab" role="tab" aria-selected="false" data-tab="gaze">Gaze</button>
         <button class="drawer-tab" role="tab" aria-selected="false" data-tab="operations">Operations</button>
         <button class="drawer-tab" role="tab" aria-selected="false" data-tab="dynaj">DynaJ</button>
         <button class="drawer-tab" role="tab" aria-selected="false" data-tab="help">Help</button>
@@ -943,6 +1031,15 @@
               <option value="emotieff-mobilevit">EmotiEffLib MobileViT + valence/arousal</option>
             </select>
             <small>B0 MTL is the default benchmark-backed model. Alternatives keep the same output contract.</small>
+          </div>
+          <div class="field">
+            <label for="gazeEngine"><span>Gaze engine</span></label>
+            <select id="gazeEngine">
+              <option value="webeyetrack">WebEyeTrack</option>
+              <option value="webgazer">WebGazer</option>
+              <option value="mediapipe">MediaPipe landmarks (calibration-free)</option>
+            </select>
+            <small>Selects the real screen-point gaze engine used during camera capture.</small>
           </div>
           <div class="field">
             <label for="sampleInterval"><span>Sample interval</span><span class="value" id="sampleIntervalValue"></span></label>
@@ -1001,6 +1098,93 @@
             <input id="switchConfidence" type="range" min="0.10" max="0.80" step="0.02">
             <small>New labels must reach this confidence before replacing the visible label.</small>
           </div>
+        </div>
+        <div class="drawer-pane" data-pane="gaze" hidden>
+          <p style="margin: 0 0 14px; padding: 8px 11px; font-size: 12px; line-height: 1.45; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink-1);">
+            Tunables for the selected gaze engine. Changes apply on the next <strong>Start</strong>.
+          </p>
+          <div class="field">
+            <label for="gazeEngineSettings"><span>Gaze engine (default)</span></label>
+            <select id="gazeEngineSettings">
+              <option value="webgazer">WebGazer (demo default · GPL-3.0-or-later)</option>
+              <option value="webeyetrack">WebEyeTrack (MIT-style)</option>
+              <option value="mediapipe">MediaPipe landmarks (library default · calibration-free)</option>
+            </select>
+            <small>The selected engine is persisted as your default. WebGazer is more accurate but copyleft; switching to WebEyeTrack avoids the GPL implication.</small>
+          </div>
+          <div class="field">
+            <label for="gazeMinQuality"><span>Sample quality threshold</span><span class="value" id="gazeMinQualityValue"></span></label>
+            <input id="gazeMinQuality" type="range" min="0" max="0.8" step="0.05">
+            <small>Samples below this quality proxy are kept but flagged invalid. Raise to be stricter, lower to keep more noisy frames in the window stats.</small>
+          </div>
+          <div class="field">
+            <label for="gazeCalibrationPoints"><span>Calibration points</span></label>
+            <select id="gazeCalibrationPoints">
+              <option value="5">5-point (corners + center)</option>
+              <option value="9">9-point (3×3 grid)</option>
+            </select>
+            <small>9-point calibration takes longer but anchors the regression with more data; 5-point is the fast default.</small>
+          </div>
+          <div class="field">
+            <label for="gazeZoneGrid"><span>Zone grid</span><span class="value" id="gazeZoneGridValue"></span></label>
+            <input id="gazeZoneGrid" type="range" min="2" max="6" step="1">
+            <small>Grid resolution for the live heatmap and window <code>zone_proportions</code>. 3 = named 9 zones, 4+ = indexed.</small>
+          </div>
+
+          <section class="ops-section" id="webgazerOptionsSection">
+            <h3>WebGazer options</h3>
+            <p id="webgazerOptionsInactiveNote" hidden style="margin: 0 0 10px; font-size: 12px; color: var(--ink-3);">Switch the engine to <strong>WebGazer</strong> to enable these options.</p>
+            <div class="field">
+              <label for="webgazerRegression"><span>Regression model</span></label>
+              <select id="webgazerRegression">
+                <option value="ridge">Ridge (default · stable)</option>
+                <option value="weightedRidge">Weighted ridge (recency-biased)</option>
+                <option value="threadedRidge">Threaded ridge (worker, not in every build)</option>
+              </select>
+              <small>How WebGazer fits the gaze regression. Ridge is the most reliable default.</small>
+            </div>
+            <div class="field">
+              <label><input id="webgazerShowFaceOverlay" type="checkbox" style="accent-color: var(--accent); width: auto; vertical-align: middle;"> Show WebGazer face overlay</label>
+              <small>Overlays WebGazer's internal landmark dots on the camera preview. Useful for debugging tracking loss; off by default.</small>
+            </div>
+            <div class="field">
+              <label><input id="webgazerShowPredictionPoints" type="checkbox" style="accent-color: var(--accent); width: auto; vertical-align: middle;"> Show prediction points</label>
+              <small>Renders WebGazer's own gaze marker on the page. Oyon's normalized dot in the live panel is independent.</small>
+            </div>
+            <div class="field">
+              <label><input id="webgazerShowFaceFeedbackBox" type="checkbox" style="accent-color: var(--accent); width: auto; vertical-align: middle;"> Show face feedback box</label>
+              <small>Renders the green "place your face here" guide WebGazer ships with. Helpful first-time setup affordance.</small>
+            </div>
+            <div class="field">
+              <label><input id="webgazerSaveAcrossSessions" type="checkbox" style="accent-color: var(--accent); width: auto; vertical-align: middle;"> Save calibration across sessions</label>
+              <small>Persists WebGazer's regression weights to localStorage so users don't have to recalibrate every page load. Off by default for privacy parity with Oyon's own settings.</small>
+            </div>
+          </section>
+
+          <section class="ops-section" id="aoiSection">
+            <h3>Areas of interest (AOI)</h3>
+            <p style="margin: 0 0 10px; font-size: 12px; color: var(--ink-3);">Rectangles in normalized <code>[-0.5, 0.5]</code> coords. Dwell time is reported per AOI in each gaze window.</p>
+            <div id="aoiList" class="event-list" style="margin-bottom: 10px;"></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 6px; align-items: end;">
+              <div class="field" style="margin: 0;">
+                <label for="aoiNewId" style="font-size: 10px;">ID</label>
+                <input id="aoiNewId" type="text" placeholder="e.g. video" style="padding: 6px 8px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; color: var(--ink-0); font: inherit; font-size: 12px;">
+              </div>
+              <div class="field" style="margin: 0;">
+                <label for="aoiNewX" style="font-size: 10px;">x</label>
+                <input id="aoiNewX" type="number" step="0.05" value="0" style="padding: 6px 8px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; color: var(--ink-0); font: inherit; font-size: 12px;">
+              </div>
+              <div class="field" style="margin: 0;">
+                <label for="aoiNewY" style="font-size: 10px;">y</label>
+                <input id="aoiNewY" type="number" step="0.05" value="0" style="padding: 6px 8px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; color: var(--ink-0); font: inherit; font-size: 12px;">
+              </div>
+              <div class="field" style="margin: 0;">
+                <label for="aoiNewSize" style="font-size: 10px;">size</label>
+                <input id="aoiNewSize" type="number" step="0.05" min="0.05" value="0.25" style="padding: 6px 8px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; color: var(--ink-0); font: inherit; font-size: 12px;">
+              </div>
+              <button id="aoiAddBtn" class="icon-button" type="button">Add</button>
+            </div>
+          </section>
         </div>
         <div class="drawer-pane" data-pane="operations" hidden>
           <div class="ops-toolbar">

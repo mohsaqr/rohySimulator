@@ -3,7 +3,6 @@ import {
   EmotionRuntime,
   EmotionAggregator,
   LocalEmotionTransport,
-  HttpEmotionTransport,
   LocalLogTransport,
   LocalMetricTransport,
   MediaPipeFaceTracker,
@@ -11,41 +10,14 @@ import {
   OyonLogger,
   OyonMetricRecorder,
   PredictionSmoother,
+  WebGazerAdapter,
+  WebEyeTrackAdapter,
   createOyonSettings,
+  defineGazeCalibrationOverlay,
   EMOTIEFF_MOBILEVIT_MTL_CONFIG,
   EMOTIEFF_MBF_MTL_CONFIG,
   HSE_EMOTION_MTL_CONFIG,
 } from '../src/index.js';
-
-// When opened from Rohy (?source=rohy&session_id=…&case_id=…) the standalone
-// switches its transport from local-only to Rohy's authenticated backend so
-// emotion windows are persisted per-session/student/case in Rohy's database.
-//
-// `?source=standalone` is the explicit opt-out for "I really do want pure
-// local-only mode even though I'm logged into rohy." With no query param we
-// auto-detect: if a rohy auth cookie is present in this origin, treat it as
-// rohy mode. This makes opening /oyon/standalone/ bare from a logged-in rohy
-// session do the right thing (server-backed) without requiring the operator
-// to remember the query params.
-const ROHY_QUERY = new URLSearchParams(window.location.search);
-function hasRohyAuthCookie() {
-  if (typeof document === 'undefined' || !document.cookie) return false;
-  return /\b(rohy_session|rohy_csrf)\s*=/.test(document.cookie);
-}
-function hasRohyAuthToken() {
-  // Token-auth mode (rohy default): JWT in localStorage at key 'token'.
-  // Same-origin storage is shared with the SPA so its presence is a valid
-  // signal that the user is logged in to rohy on this origin.
-  try { return !!localStorage.getItem('token'); } catch { return false; }
-}
-const ROHY_SOURCE = ROHY_QUERY.get('source');
-const ROHY_MODE = ROHY_SOURCE === 'rohy'
-  ? true
-  : ROHY_SOURCE === 'standalone'
-  ? false
-  : (hasRohyAuthCookie() || hasRohyAuthToken());
-const ROHY_SESSION_ID = ROHY_QUERY.get('session_id') || null;
-const ROHY_CASE_ID = ROHY_QUERY.get('case_id') || null;
 
 // surface any unexpected error so the user sees it instead of a blank page
 window.addEventListener('error', e => showToast(`JS error: ${e.message}`));
@@ -82,6 +54,8 @@ const els = {
   vaNote: document.querySelector('#vaNote'),
   probList: document.querySelector('#probList'),
   modelSelect: document.querySelector('#model'),
+  gazeEngine: document.querySelector('#gazeEngine'),
+  liveGazeEngine: document.querySelector('#liveGazeEngine'),
   drawer: document.querySelector('#settingsDrawer'),
   drawerBackdrop: document.querySelector('#drawerBackdrop'),
   drawerClose: document.querySelector('#drawerClose'),
@@ -166,168 +140,26 @@ const MODEL_PROFILES = {
   },
 };
 const DEFAULT_MODEL_PROFILE = 'hse-emotion-mtl';
-// CSRF: Rohy uses double-submit cookie pattern for cookie-auth state-changing
-// requests. The `rohy_csrf` cookie is non-HttpOnly so client JS can copy it
-// into `X-CSRF-Token` on every POST/PUT/PATCH/DELETE. Without this header,
-// the standalone's consent + emotion-records writes get 403 in deployed Rohy
-// even though they share an origin.
-// Read the JWT bearer token rohy stores in localStorage when running in
-// token-auth mode (the default). Same-origin localStorage is shared with
-// the rohy SPA, so the standalone page can pick it up here. Without
-// this, token-auth tenants get 401 on every standalone backend call
-// even though the user is logged into rohy in another tab. Cookie-auth
-// tenants don't need this — the rohy_session cookie carries auth
-// automatically — but reading a missing key is harmless.
-const ROHY_TOKEN_KEY = 'token';
-function readRohyToken() {
-  try { return localStorage.getItem(ROHY_TOKEN_KEY) || null; } catch { return null; }
-}
-
-function readRohyCsrfCookie() {
-  if (typeof document === 'undefined' || !document.cookie) return null;
-  for (const pair of document.cookie.split(';')) {
-    const eq = pair.indexOf('=');
-    if (eq === -1) continue;
-    const k = pair.slice(0, eq).trim();
-    if (k !== 'rohy_csrf') continue;
-    const v = pair.slice(eq + 1).trim();
-    try { return decodeURIComponent(v); }
-    catch { return v; }
-  }
-  return null;
-}
-function rohyFetch(url, init = {}) {
-  const headers = { ...(init.headers || {}) };
-  const method = (init.method || 'GET').toUpperCase();
-  if (method !== 'GET' && method !== 'HEAD') {
-    const tok = readRohyCsrfCookie();
-    if (tok) headers['X-CSRF-Token'] = tok;
-  }
-  // Send the bearer token if available — covers token-auth tenants. The
-  // server's authenticateToken middleware accepts EITHER the cookie OR
-  // a Bearer header, so sending both costs nothing and works for both
-  // auth modes without configuration.
-  const bearer = readRohyToken();
-  if (bearer && !headers.Authorization) headers.Authorization = `Bearer ${bearer}`;
-  return fetch(url, { ...init, headers, credentials: 'include' });
-}
-
-// In Rohy mode, ship every aggregated window straight into the Rohy backend
-// using same-origin cookie auth + CSRF token. Otherwise stick with the local
-// IndexedDB-ish store the standalone dashboard reads from.
-const transport = ROHY_MODE
-  ? new HttpEmotionTransport({
-      baseUrl: '',
-      endpointForSession: () => '/api/addons/oyon/emotion-records',
-      fetchImpl: rohyFetch,
-    })
-  : new LocalEmotionTransport({ storageKey: 'standalone-fer-events' });
+const localTransport = new LocalEmotionTransport({ storageKey: 'standalone-fer-events' });
+// Wrap so live UI panels can update on every window flush without polling
+// localStorage. Underlying LocalEmotionTransport still receives the batch.
+const transport = {
+  async send(events) {
+    try { onLiveWindows(events); } catch (err) { console.warn('live UI update failed:', err); }
+    return localTransport.send(events);
+  },
+  read() { return localTransport.read(); },
+  clear() { return localTransport.clear(); },
+};
 const logTransport = new LocalLogTransport({ storageKey: 'standalone-oyon-logs' });
 const metricTransport = new LocalMetricTransport({ storageKey: 'standalone-oyon-metrics' });
 const camera = new CameraController();
 let runtime = null;
+let liveGazeAdapter = null;
+let webGazerWasStarted = false;
 let running = false;
 let paused = false;
-
-// Single source of truth for the IDs that go on every emotion event. In Rohy
-// mode, the host app supplies session/case via query params; user/tenant come
-// from the auth cookie on the backend. In standalone mode we use stable
-// fixtures so the local logs page can group events.
-function buildSessionContext(modelProfile) {
-  if (ROHY_MODE) {
-    return {
-      session_id: ROHY_SESSION_ID || null,
-      case_id: ROHY_CASE_ID || null,
-      source: 'rohy',
-      model_profile: modelProfile,
-    };
-  }
-  return {
-    session_id: `standalone-session-${modelProfile}`,
-    user_id: 'standalone-user-1',
-    case_id: 'standalone-case-1',
-    tenant_id: 'standalone',
-    model_profile: modelProfile,
-  };
-}
-
-// Before the standalone can POST records, Rohy's backend requires a consent
-// row for the active session. Fire-and-forget on first launch in Rohy mode;
-// later we can add a UI prompt and route the click through this same call.
-async function ensureRohyConsent() {
-  if (!ROHY_MODE || !ROHY_SESSION_ID) return;
-  try {
-    await rohyFetch('/api/addons/oyon/consent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session_id: ROHY_SESSION_ID,
-        consent_granted: true,
-        source_page: '/oyon/standalone/?source=rohy',
-      }),
-    });
-  } catch (err) {
-    console.warn('[oyon] consent POST failed, capture may be rejected:', err);
-  }
-}
-ensureRohyConsent();
 let settings = loadSettings();
-
-// Single source of truth: whenever the standalone is served from a Rohy
-// origin (same origin as `/api/addons/oyon/config`), we honor the tenant
-// admin's model + runtime choice. We try this *unconditionally* — not just
-// when ?source=rohy is present — because a user opening /oyon/standalone/
-// directly is still inside the Rohy deployment and should see the tenant
-// model, not whatever happens to be in their localStorage. If the API
-// isn't reachable (no auth, OYON_ENABLED=0, dev/QA outside Rohy) we
-// gracefully fall back to localStorage and the in-page picker stays live.
-async function applyRohyTenantConfig() {
-  let r;
-  try {
-    const res = await fetch('/api/addons/oyon/config', { credentials: 'include' });
-    if (!res.ok) {
-      console.info('[oyon] standalone running in local mode (config unreachable: ' + res.status + ')');
-      return;
-    }
-    const config = await res.json();
-    r = config?.runtime;
-    if (!r) return;
-  } catch (err) {
-    console.info('[oyon] standalone running in local mode (config fetch error)', err?.message || err);
-    return;
-  }
-
-  settings = normalizeSettings({
-    ...settings,
-    model: MODEL_PROFILES[r.model_profile] ? r.model_profile : settings.model,
-    sampleIntervalMs: r.sample_interval_ms ?? settings.sampleIntervalMs,
-    windowMs: r.window_ms ?? settings.windowMs,
-    minValidFrames: r.min_valid_frames ?? settings.minValidFrames,
-    smoothingAlpha: r.smoothing_alpha ?? settings.smoothingAlpha,
-    minHoldMs: r.min_hold_ms ?? settings.minHoldMs,
-    minSwitchConfidence: r.min_switch_confidence ?? settings.minSwitchConfidence,
-  });
-  applySettingsToControls();
-
-  // The bootstrap above already painted the pill + render hint with the
-  // *previous* model name (from localStorage). Re-paint them now so the UI
-  // reflects what the runtime is actually going to use. Without this, the
-  // pill says one model name while inference uses another — which is exactly
-  // the "we're still using two models" symptom.
-  if (els.pillModel) els.pillModel.textContent = modelLabelShort(settings.model);
-  renderPrediction({ probabilities: null, hint: modelHint(settings.model) });
-
-  if (els.modelSelect) {
-    els.modelSelect.disabled = true;
-    els.modelSelect.title = 'Model is set by the tenant admin in Rohy → Settings → Oyon';
-  }
-  // If the user is already running when the override lands (rare — fetch is
-  // typically faster than starting capture), restart so inference picks up
-  // the new model. No-op if not running.
-  if (running) startSelectedModel();
-
-  console.info('[oyon] standalone applied tenant config', { model: settings.model, windowMs: settings.windowMs, rohyMode: ROHY_MODE });
-}
 let latestFace = null;
 let latestDisplay = null;
 
@@ -348,11 +180,20 @@ const affectTrail = []; // { v, a, t }
 // ---------- bootstrap ----------
 applySettingsToControls();
 bindUi();
-applyRohyTenantConfig();
+showReloadNote();
 renderPrediction({ probabilities: null, hint: modelHint(els.modelSelect.value) });
 els.pillModel.textContent = modelLabelShort(els.modelSelect.value);
 setRunState('idle');
 window.addEventListener('resize', () => { drawOverlay(); drawTimeline(); });
+
+function showReloadNote() {
+  let note = '';
+  try {
+    note = sessionStorage.getItem('oyon:reload-note') || '';
+    sessionStorage.removeItem('oyon:reload-note');
+  } catch {}
+  if (note) setTimeout(() => showToast(note), 100);
+}
 setInterval(updateFps, 500);
 requestAnimationFrame(animateAffect);
 
@@ -385,6 +226,10 @@ function bindUi() {
     }
     await startSelectedModel();
   };
+  els.gazeEngine.onchange = () => applyEngineChange(els.gazeEngine.value);
+  els.liveGazeEngine.onchange = () => applyEngineChange(els.liveGazeEngine.value);
+  paintEngineLicenseNote();
+  bindGazeTab();
   for (const ctl of [els.sampleInterval, els.smoothingAlpha, els.holdMs, els.switchConfidence, els.windowMs, els.minValidFrames]) {
     ctl.oninput = () => { updateSettingsFromControls(); updateSettingLabels(); };
     ctl.onchange = async () => {
@@ -434,20 +279,51 @@ function onKeydown(event) {
 
 // ---------- runtime control ----------
 async function startSelectedModel() {
+  // Once we've told the user a reload is required, every Start press should
+  // re-surface the affordance, not silently retry. Retrying inside a
+  // poisoned page session would either fail the same way or appear to
+  // succeed while running on stale Emscripten globals — both worse than
+  // making the user click "Reload now".
+  if (reloadRequired) {
+    paintReloadRequiredNote('Reload the page before starting again — Emscripten state is still resident from the previous WebGazer session.');
+    showToast('Reload required before starting a new session.', 4000);
+    return;
+  }
   try {
     setRunState('initializing');
     running = false;
     paused = false;
-    // Replacing the runtime: dispose the old one fully so ONNX session,
-    // MediaPipe FaceLandmarker, and any WebGPU pipelines are released.
-    // stop() alone keeps those resources alive for restart; calling start
-    // with a different model would otherwise leak them across switches.
-    try { await runtime?.dispose?.(); }
-    catch (err) { console.warn('[oyon] dispose on restart failed', err); }
+    // Full disposal of the previous runtime before constructing a new one.
+    // The runtime owns the gaze adapter; calling stop() drains the adapter
+    // chain, including WebGazerAdapter.dispose() which now also clears the
+    // legacy MediaPipe Module globals so a subsequent MediaPipe import gets
+    // a clean Emscripten slate. No page reload required.
+    try { await runtime?.stop(); } catch (err) {
+      console.warn('[oyon/standalone] previous runtime stop() threw', err);
+    }
     runtime = null;
-    runtime = createRuntime();
+    resetGazePanel(`engine: ${gazeEngineLabel(settings.gazeEngine)} · initializing`);
     renderPrediction({ probabilities: null, hint: `Loading ${modelLabelShort(els.modelSelect.value)}…` });
-    await runtime.start();
+    try {
+      runtime = createRuntime();
+      await runtime.start();
+      // Only mark WebGazer as "started in this session" after start() actually
+      // resolves. If begin() threw before MediaPipe touched its WASM globals,
+      // there's no Emscripten state to clean up — gating future switches
+      // behind the reload-required path would be incorrect.
+      if (settings.gazeEngine === 'webgazer') webGazerWasStarted = true;
+    } catch (initError) {
+      // Switching from WebGazer to MediaPipe / WebEyeTrack can hit Emscripten
+      // global pollution that the defensive cleanup didn't catch. Detect
+      // that family of failures and offer the user a manual reload — never
+      // call window.location.reload() ourselves, since this code is reused
+      // by host apps (Rohy) that won't tolerate a silent reload mid-session.
+      if (webGazerWasStarted && isEmscriptenBoundaryFailure(initError)) {
+        promptReloadForWebGazerBoundary(initError);
+        return;
+      }
+      throw initError;
+    }
     running = true;
     paused = false;
 
@@ -475,6 +351,88 @@ async function startSelectedModel() {
   }
 }
 
+/**
+ * Surface a manual-reload affordance when in-page engine switching fails
+ * because WebGazer's legacy MediaPipe globals couldn't be fully cleared.
+ *
+ * This intentionally does NOT call window.location.reload() — the previous
+ * version did, and it broke host SPA state. Users (and host apps) decide
+ * when to reload; we just say "this is why."
+ */
+/**
+ * Heuristic: did this init error come from Emscripten / WASM module-loading
+ * crosstalk between WebGazer's bundled MediaPipe runtime and the Tasks
+ * Vision package Oyon loads? Real-world failures I've observed surface as:
+ *   - Error.message ~ /Module|arguments_|wasm/
+ *   - Error.message ~ /Aborted/    (Emscripten runtime abort)
+ *   - Error.message ~ /Emscripten/
+ *   - Error.message ~ /FilesetResolver/   (Tasks Vision wasm bootstrap)
+ *   - Error.name === 'RuntimeError' | 'LinkError'   (WebAssembly stage)
+ * Any one of these → reload affordance. Keep this conservative; a false
+ * positive just over-suggests "reload to switch engines," which is a
+ * lower-cost outcome than a false negative (silent Camera error toast).
+ */
+function isEmscriptenBoundaryFailure(error) {
+  if (!error) return false;
+  const name = String(error.name || '');
+  if (name === 'RuntimeError' || name === 'LinkError' || name === 'CompileError') return true;
+  const message = String(error.message || '');
+  return /Module|arguments_|wasm|Aborted|Emscripten|FilesetResolver|MediaPipe/i.test(message);
+}
+
+// Sticky flag: once a reload is required, every subsequent UI repaint must
+// preserve the affordance. The Live card has two warning slots — the GPL
+// note and the reload-required note — and they used to fight over the same
+// DOM element. Now each has its own slot and this flag prevents the GPL
+// note's painter from running while a reload is outstanding.
+let reloadRequired = false;
+
+function promptReloadForWebGazerBoundary(error) {
+  saveSettings();
+  setRunState('error');
+  reloadRequired = true;
+  resetGazePanel(`engine: ${gazeEngineLabel(settings.gazeEngine)} · reload to switch from WebGazer`);
+  const reason = error?.message || 'MediaPipe globals are still set in the page.';
+  showToast(
+    `Switching engines after WebGazer needs a page reload. ${reason} Click "Reload now" in the gaze panel.`,
+    8000,
+  );
+  paintReloadRequiredNote(
+    `WebGazer’s MediaPipe runtime is still resident in this page session (${reason}).`,
+  );
+  renderPrediction({
+    probabilities: null,
+    hint: 'WebGazer left MediaPipe globals in the page. Reload manually to switch engines cleanly.',
+  });
+  updateButtons();
+}
+
+/**
+ * Paint the persistent reload-required affordance into its own DOM slot
+ * (#liveGazeReloadNote, distinct from the GPL note). Includes a real
+ * "Reload now" button so the user doesn't have to hunt for the browser
+ * refresh — and so the action is captured as an explicit click, not a
+ * silent window.location.reload() like the previous design.
+ */
+function paintReloadRequiredNote(detail) {
+  const note = document.getElementById('liveGazeReloadNote');
+  if (!note) return;
+  note.hidden = false;
+  note.innerHTML =
+    `<strong>Reload required to switch engines.</strong> ` +
+    `${escapeHtml(detail)} ` +
+    `<button id="reloadNowBtn" type="button" style="margin-left: 8px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; font-size: 11px; font-weight: 600; cursor: pointer;">Reload now</button>`;
+  // Re-binding is fine: replaceChildren-via-innerHTML drops any previous
+  // listener attached to the old button, so we can't leak handlers.
+  const btn = document.getElementById('reloadNowBtn');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      saveSettings();
+      window.location.reload();
+    });
+  }
+}
+
 function doPause() {
   if (!running || paused) return;
   runtime?.pause();
@@ -492,11 +450,7 @@ function doResume() {
 }
 
 async function doStop() {
-  // Permanent stop — release everything. Repeated start/stop cycles would
-  // otherwise pile up resources.
-  try { await runtime?.dispose?.(); }
-  catch (err) { console.warn('[oyon] dispose on stop failed', err); }
-  runtime = null;
+  await runtime?.stop();
   els.preview.srcObject = null;
   els.previewEmpty.hidden = false;
   latestFace = null;
@@ -505,6 +459,7 @@ async function doStop() {
   running = false;
   paused = false;
   sampleStamps.length = 0;
+  resetGazePanel('adapter: stopped');
   setRunState('stopped');
   setQualityBanner(null);
   updateButtons();
@@ -541,6 +496,48 @@ function setQualityBanner(level, text) {
 }
 
 // ---------- runtime construction ----------
+function createLiveGazeAdapter(engine) {
+  if (engine === 'webgazer' && !isHttpsOrigin()) {
+    throw new Error('WebGazer requires HTTPS. Restart with `npm run start:https` and open the https://127.0.0.1 URL.');
+  }
+  const common = {
+    onGaze: () => {},
+    onError: (err) => {
+      const el = document.getElementById('liveGazeDiag');
+      if (el) el.textContent = `adapter error: ${err?.message || err}`;
+    },
+    minQualityScore: Number.isFinite(settings.gazeMinQuality) ? settings.gazeMinQuality : 0.3,
+  };
+  if (engine === 'webgazer') {
+    return new WebGazerAdapter({
+      ...common,
+      // The four debug surfaces stay user-controllable from the Gaze tab.
+      // `showVideoPreview` remains off — we route the camera through Oyon's
+      // own <video> element instead so WebGazer doesn't double-render.
+      showVideoPreview: false,
+      showFaceOverlay: Boolean(settings.webgazerShowFaceOverlay),
+      showFaceFeedbackBox: Boolean(settings.webgazerShowFaceFeedbackBox),
+      showPredictionPoints: Boolean(settings.webgazerShowPredictionPoints),
+      saveDataAcrossSessions: Boolean(settings.webgazerSaveAcrossSessions),
+      regression: settings.webgazerRegression || 'ridge',
+      faceMeshSolutionPath: '/standalone/vendor/webgazer/face_mesh',
+      viewport: () => ({
+        width: window.innerWidth || document.documentElement.clientWidth || 1,
+        height: window.innerHeight || document.documentElement.clientHeight || 1,
+      }),
+      stream: () => camera.stream,
+    });
+  }
+  return new WebEyeTrackAdapter({
+    ...common,
+    videoElementId: 'preview',
+  });
+}
+
+function isHttpsOrigin() {
+  return window.location.protocol === 'https:';
+}
+
 function createRuntime() {
   const modelProfile = settings.model;
   const modelConfig = modelConfigFor(modelProfile);
@@ -552,6 +549,8 @@ function createRuntime() {
     minHoldMs: settings.minHoldMs,
     minSwitchConfidence: settings.minSwitchConfidence,
   });
+
+  liveGazeAdapter = createLiveGazeAdapter(settings.gazeEngine);
 
   const next = new EmotionRuntime({
     sampleIntervalMs: settings.sampleIntervalMs,
@@ -568,20 +567,50 @@ function createRuntime() {
       sampleIntervalMs: settings.sampleIntervalMs,
       labels,
     }),
+    gazeAdapter: liveGazeAdapter,
     transport,
     logger: new OyonLogger({
       source: 'oyon-standalone',
       transports: [logTransport],
-      contextProvider: () => buildSessionContext(modelProfile),
+      contextProvider: () => ({
+        session_id: `standalone-session-${modelProfile}`,
+        user_id: 'standalone-user-1',
+        case_id: 'standalone-case-1',
+        tenant_id: 'standalone',
+        model_profile: modelProfile,
+      }),
     }),
     metrics: new OyonMetricRecorder({
       source: 'oyon-standalone',
       transports: [metricTransport],
-      contextProvider: () => buildSessionContext(modelProfile),
+      contextProvider: () => ({
+        session_id: `standalone-session-${modelProfile}`,
+        user_id: 'standalone-user-1',
+        case_id: 'standalone-case-1',
+        tenant_id: 'standalone',
+        model_profile: modelProfile,
+      }),
     }),
     camera,
-    contextProvider: () => buildSessionContext(modelProfile),
+    contextProvider: () => ({
+      session_id: `standalone-session-${modelProfile}`,
+      user_id: 'standalone-user-1',
+      case_id: 'standalone-case-1',
+      tenant_id: 'standalone',
+      model_profile: modelProfile,
+    }),
   });
+
+  // Chain a live-dot painter onto the adapter's onGaze AFTER the runtime
+  // installed its _handleGazeSample wrapper. We wrap the runtime's handler
+  // so both run on every adapter callback.
+  if (liveGazeAdapter?.options) {
+    const runtimeHandler = liveGazeAdapter.options.onGaze;
+    liveGazeAdapter.options.onGaze = (sample) => {
+      try { runtimeHandler(sample); } catch (err) { console.warn('runtime gaze handler threw:', err); }
+      try { paintLiveGazeDot(sample); } catch (err) { /* never break the worker callback */ }
+    };
+  }
 
   next.on('status', event => {
     // map runtime state -> our pill state if not in error
@@ -1341,11 +1370,11 @@ function selectTab(name) {
 
 // ---------- toast ----------
 let toastTimer = null;
-function showToast(text) {
+function showToast(text, durationMs = 2400) {
   els.toast.textContent = text;
   els.toast.dataset.open = 'true';
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { els.toast.dataset.open = 'false'; }, 2400);
+  toastTimer = setTimeout(() => { els.toast.dataset.open = 'false'; }, durationMs);
 }
 
 // ---------- settings ----------
@@ -1356,6 +1385,16 @@ function defaultSettings() {
     smoothingAlpha: 0.28,
     minHoldMs: 3000,
     minSwitchConfidence: 0.5,
+    gazeEngine: 'webgazer',
+    gazeMinQuality: 0.3,
+    gazeCalibrationPoints: 5,
+    gazeZoneGrid: 3,
+    webgazerShowFaceOverlay: false,
+    webgazerShowPredictionPoints: false,
+    webgazerShowFaceFeedbackBox: false,
+    webgazerSaveAcrossSessions: false,
+    webgazerRegression: 'ridge',
+    gazeAois: [],
     windowMs: 10000,
     minValidFrames: 6,
     cameraZoom: 1,
@@ -1377,6 +1416,8 @@ function saveSettings() {
 function applySettingsToControls() {
   settings = normalizeSettings(settings);
   els.modelSelect.value = settings.model;
+  els.gazeEngine.value = settings.gazeEngine;
+  els.liveGazeEngine.value = settings.gazeEngine;
   els.sampleInterval.value = String(settings.sampleIntervalMs);
   els.smoothingAlpha.value = String(settings.smoothingAlpha);
   els.holdMs.value = String(settings.minHoldMs);
@@ -1404,6 +1445,7 @@ function applyCameraView() {
 function updateSettingsFromControls() {
   settings = normalizeSettings({
     model: els.modelSelect.value,
+    gazeEngine: els.liveGazeEngine?.value || els.gazeEngine.value,
     sampleIntervalMs: Number(els.sampleInterval.value),
     smoothingAlpha: Number(els.smoothingAlpha.value),
     minHoldMs: Number(els.holdMs.value),
@@ -1440,9 +1482,20 @@ function normalizeSettings(next) {
   const num = (value, fallback) => (Number.isFinite(Number(value)) ? Number(value) : fallback);
   const clamp = (value, min, max, fallback) => Math.max(min, Math.min(max, num(value, fallback)));
   const model = MODEL_PROFILES[next.model] ? next.model : defaults.model;
+  // WebGazer is the demo default (calibrated screen-point accuracy);
+  // 'webeyetrack' and 'mediapipe' (the library default) are explicit opt-ins.
+  const gazeEngine = next.gazeEngine === 'webeyetrack' || next.gazeEngine === 'mediapipe'
+    ? next.gazeEngine
+    : 'webgazer';
+  const regressionAllowed = ['ridge', 'weightedRidge', 'threadedRidge'];
+  const webgazerRegression = regressionAllowed.includes(next.webgazerRegression)
+    ? next.webgazerRegression
+    : defaults.webgazerRegression;
+  const gazeCalibrationPoints = next.gazeCalibrationPoints === 9 ? 9 : 5;
   return {
     ...next,
     model,
+    gazeEngine,
     sampleIntervalMs,
     windowMs,
     minValidFrames: Math.max(1, Math.min(num(next.minValidFrames, defaults.minValidFrames), maxValidFrames)),
@@ -1450,7 +1503,613 @@ function normalizeSettings(next) {
     cameraOffsetX: clamp(next.cameraOffsetX, -30, 30, defaults.cameraOffsetX),
     cameraOffsetY: clamp(next.cameraOffsetY, -30, 30, defaults.cameraOffsetY),
     cameraSize: clamp(next.cameraSize, 280, 640, defaults.cameraSize),
+    gazeMinQuality: clamp(next.gazeMinQuality, 0, 1, defaults.gazeMinQuality),
+    gazeCalibrationPoints,
+    gazeZoneGrid: clamp(next.gazeZoneGrid, 2, 6, defaults.gazeZoneGrid),
+    webgazerShowFaceOverlay: Boolean(next.webgazerShowFaceOverlay),
+    webgazerShowPredictionPoints: Boolean(next.webgazerShowPredictionPoints),
+    webgazerShowFaceFeedbackBox: Boolean(next.webgazerShowFaceFeedbackBox),
+    webgazerSaveAcrossSessions: Boolean(next.webgazerSaveAcrossSessions),
+    webgazerRegression,
+    gazeAois: normalizeStandaloneAois(next.gazeAois),
   };
+}
+
+function normalizeStandaloneAois(input) {
+  if (!Array.isArray(input)) return [];
+  const out = [];
+  for (const a of input) {
+    if (!a || typeof a !== 'object') continue;
+    if (typeof a.id !== 'string' || !a.id) continue;
+    if (!Number.isFinite(a.x) || !Number.isFinite(a.y)) continue;
+    if (!Number.isFinite(a.width) || !Number.isFinite(a.height)) continue;
+    if (a.width <= 0 || a.height <= 0) continue;
+    out.push({ id: a.id, x: Number(a.x), y: Number(a.y), width: Number(a.width), height: Number(a.height) });
+    if (out.length >= 16) break;
+  }
+  return out;
+}
+
+// ---------- live engagement + gaze panels ----------
+const ZONE_KEYS = [
+  'top_left', 'top_center', 'top_right',
+  'middle_left', 'middle_center', 'middle_right',
+  'bottom_left', 'bottom_center', 'bottom_right',
+];
+
+let lastGazeSampleAt = 0;
+let gazeSampleCount = 0;
+// Rolling rate buffer: timestamps of recent samples within the last 2s.
+const gazeRateWindow = [];
+const GAZE_RATE_WINDOW_MS = 2000;
+
+function gazeEngineLabel(engine) {
+  if (engine === 'webgazer') return 'WebGazer';
+  if (engine === 'mediapipe') return 'MediaPipe landmarks';
+  return 'WebEyeTrack';
+}
+
+function resetGazePanel(message = 'adapter: not created') {
+  lastGazeSampleAt = 0;
+  gazeSampleCount = 0;
+  setText('liveGazeN', '—');
+  setText('liveGazeDispersion', '—');
+  setText('liveGazeCentroid', '—');
+  const diag = document.getElementById('liveGazeDiag');
+  if (diag) diag.textContent = message;
+  const dot = document.getElementById('liveGazeDot');
+  if (dot) {
+    dot.style.left = '50%';
+    dot.style.top = '50%';
+    dot.setAttribute('data-stale', '');
+  }
+}
+
+function onLiveWindows(events) {
+  if (!Array.isArray(events)) return;
+  for (const w of events) {
+    if (w?.engagement) updateEngagementPanel(w.engagement);
+    if (w?.gaze) updateGazePanel(w.gaze);
+  }
+}
+
+function updateGazeDiagnostics() {
+  const el = document.getElementById('liveGazeDiag');
+  const statusEl = document.getElementById('liveGazeStatus');
+  const statusPill = document.getElementById('liveGazeStatusPill');
+  const rateEl = document.getElementById('liveGazeRate');
+
+  const adapter = liveGazeAdapter;
+  if (!adapter) {
+    if (el) el.textContent = 'adapter: not created';
+    if (statusEl) statusEl.textContent = 'idle';
+    if (statusPill) statusPill.dataset.state = 'warn';
+    if (rateEl) rateEl.textContent = '— Hz';
+    return;
+  }
+
+  // Surface any adapter init/start warning the runtime logged. The logger
+  // ring keeps these so a slow init isn't lost.
+  const logs = logTransport.read();
+  const gazeWarn = logs
+    .filter(ev => typeof ev?.event_name === 'string' && ev.event_name.startsWith('oyon.gaze.adapter_'))
+    .pop();
+
+  const status = typeof adapter.status === 'function' ? adapter.status() : '?';
+  const adapterError = typeof adapter.lastError === 'function' ? adapter.lastError() : null;
+  const ageMs = lastGazeSampleAt ? Math.round(performance.now() - lastGazeSampleAt) : null;
+  const ageText = ageMs == null ? 'never' : `${ageMs} ms ago`;
+  const warnMessage = adapterError?.message || gazeWarn?.fields?.message || '';
+  const warnText = gazeWarn || adapterError
+    ? ` · ${(gazeWarn?.event_name || 'oyon.gaze.adapter_error').replace('oyon.gaze.', '')}: ${warnMessage}`
+    : '';
+  if (el) {
+    el.textContent = `engine: ${gazeEngineLabel(settings.gazeEngine)} · status: ${status ?? 'null'} · samples: ${gazeSampleCount} · last: ${ageText}${warnText}`;
+  }
+
+  // Status pill: green for inference, blue-warn for starting, red for error,
+  // grey for idle/null/anything else.
+  if (statusEl) statusEl.textContent = status || 'null';
+  if (statusPill) {
+    if (adapterError || status === 'error') {
+      statusPill.dataset.state = 'warn';
+      statusPill.title = `Adapter error: ${warnMessage || 'unknown'}`;
+    } else if (status === 'inference') {
+      statusPill.dataset.state = 'ok';
+      statusPill.title = 'Adapter is producing samples';
+    } else {
+      statusPill.dataset.state = 'warn';
+      statusPill.title = `Adapter status: ${status || 'null'}`;
+    }
+  }
+  if (rateEl) {
+    const hz = gazeRateHz();
+    rateEl.textContent = hz > 0 ? `${hz.toFixed(1)} Hz` : '— Hz';
+  }
+}
+setInterval(updateGazeDiagnostics, 500);
+
+function updateEngagementPanel(e) {
+  const focus = document.getElementById('liveFocus');
+  const focusBar = document.getElementById('liveFocusBar');
+  if (focus) focus.textContent = fmt2(e.focus_score);
+  if (focusBar) focusBar.style.width = `${Math.round((e.focus_score ?? 0) * 100)}%`;
+  setText('liveBlinkRate', fmt2(e.blink_rate_hz));
+  setText('liveOpenness', fmt2(e.eye_openness_mean));
+  setText('liveEntropy', fmt2(e.gaze_entropy));
+}
+
+function updateGazePanel(g) {
+  setText('liveGazeN', String(g.n_points ?? 0));
+  setText('liveGazeDispersion', g.dispersion == null ? '—' : Number(g.dispersion).toFixed(3));
+  setText('liveGazeCentroid', g.centroid ? `${fmt2(g.centroid.x)}, ${fmt2(g.centroid.y)}` : '—');
+  const calBadge = document.getElementById('liveGazeCalibrated');
+  if (calBadge) {
+    if (Number.isFinite(g.calibration_age_ms)) {
+      const ageSec = Math.round(g.calibration_age_ms / 1000);
+      const confidence = g.calibration_confidence || 'unknown';
+      const qLabel =
+        Number.isFinite(g.calibration_quality)
+          ? `q ${Number(g.calibration_quality).toFixed(2)} · ${confidence}`
+          : confidence === 'unknown'
+            ? 'quality unknown'
+            : `${confidence}`;
+      calBadge.textContent = `Calibrated · ${qLabel} · ${ageSec} s ago`;
+      // 'measured' → strong green; 'inferred' → green-but-soft; 'unknown' →
+      // warn yellow. We never lie about quality the user can see.
+      calBadge.dataset.state = confidence === 'unknown' ? 'warn' : 'ok';
+    } else {
+      calBadge.textContent = 'Not calibrated';
+      calBadge.dataset.state = 'warn';
+    }
+  }
+  const zones = g.zone_proportions || {};
+  for (const key of ZONE_KEYS) {
+    const tile = document.querySelector(`.live-heat-tile[data-zone="${key}"]`);
+    if (!tile) continue;
+    const v = Number(zones[key]) || 0;
+    const pct = tile.querySelector('.live-heat-pct');
+    if (pct) pct.textContent = v === 0 ? '0' : `${Math.round(v * 100)}`;
+    const alpha = Math.min(1, Math.sqrt(v));
+    tile.style.background = `rgba(37, 99, 235, ${0.06 + 0.7 * alpha})`;
+  }
+}
+
+function paintLiveGazeDot(sample) {
+  if (sample) {
+    gazeSampleCount += 1;
+    const now = performance.now();
+    lastGazeSampleAt = now;
+    gazeRateWindow.push(now);
+    // Cheap eviction — only retain timestamps within the 2 s window.
+    const cutoff = now - GAZE_RATE_WINDOW_MS;
+    while (gazeRateWindow.length && gazeRateWindow[0] < cutoff) gazeRateWindow.shift();
+  }
+  const box = document.getElementById('liveGazeViewport');
+  const dot = document.getElementById('liveGazeDot');
+  if (!box || !dot) return;
+  if (!sample || sample.gaze_state === 'closed' || !(sample.quality > 0)) {
+    dot.setAttribute('data-stale', '');
+    return;
+  }
+  dot.removeAttribute('data-stale');
+  const rect = box.getBoundingClientRect();
+  const px = (0.5 + sample.x) * rect.width;
+  const py = (0.5 + sample.y) * rect.height;
+  dot.style.left = `${px}px`;
+  dot.style.top = `${py}px`;
+}
+
+function gazeRateHz() {
+  const now = performance.now();
+  const cutoff = now - GAZE_RATE_WINDOW_MS;
+  while (gazeRateWindow.length && gazeRateWindow[0] < cutoff) gazeRateWindow.shift();
+  if (gazeRateWindow.length < 2) return 0;
+  const spanMs = gazeRateWindow[gazeRateWindow.length - 1] - gazeRateWindow[0];
+  if (spanMs <= 0) return 0;
+  return ((gazeRateWindow.length - 1) / spanMs) * 1000;
+}
+
+let calibrationOverlayEl = null;
+async function startCalibrationFlow() {
+  if (!runtime || typeof runtime.calibrateGaze !== 'function') {
+    showToast('Start the camera first.');
+    return;
+  }
+  defineGazeCalibrationOverlay();
+  if (!calibrationOverlayEl) {
+    calibrationOverlayEl = document.createElement('oyon-gaze-calibration');
+    document.body.appendChild(calibrationOverlayEl);
+  }
+  calibrationOverlayEl.points = buildCalibrationPoints(settings.gazeCalibrationPoints);
+  const result = await calibrationOverlayEl.startCalibration(runtime);
+  if (result.ok) {
+    showToast(formatCalibrationOutcome(result));
+    // Reflect the result immediately on the badge instead of waiting for
+    // the next gaze window to flush. Mirrors the same vocabulary the
+    // gaze window will surface.
+    paintCalibrationBadgeFromResult(result);
+  } else {
+    showToast(`Calibration failed: ${result.reason}`);
+  }
+}
+
+/**
+ * Build a calibration sequence in normalized [-0.5, 0.5] coords. 5-point is
+ * center + four corners (the engine's "fast" default). 9-point is the 3×3
+ * grid that gives the regressor more anchors at the cost of extra time.
+ */
+function buildCalibrationPoints(count) {
+  if (count === 9) {
+    const out = [];
+    for (let row = 0; row < 3; row += 1) {
+      for (let col = 0; col < 3; col += 1) {
+        out.push({ x: col * 0.4 - 0.4, y: row * 0.4 - 0.4 });
+      }
+    }
+    return out;
+  }
+  return [
+    { x: 0, y: 0 },
+    { x: -0.4, y: -0.4 },
+    { x: 0.4, y: -0.4 },
+    { x: -0.4, y: 0.4 },
+    { x: 0.4, y: 0.4 },
+  ];
+}
+
+function formatCalibrationOutcome(result) {
+  const confidence = result.confidence || 'unknown';
+  if (confidence === 'unknown' || !Number.isFinite(result.quality)) {
+    return `Calibrated · quality unknown (engine: ${gazeEngineLabel(settings.gazeEngine)})`;
+  }
+  return `Calibrated · q ${fmt2(result.quality)} · ${confidence}`;
+}
+
+/**
+ * Single source of truth for engine selection. All three selectors
+ * (Model tab, Live card, Gaze tab) route here. Persists the choice,
+ * syncs the other dropdowns, and either restarts the runtime or — when
+ * switching FROM WebGazer mid-session — paints a reload affordance
+ * instead, since WebGazer's MediaPipe runtime is still resident.
+ */
+async function applyEngineChange(value) {
+  const previous = settings.gazeEngine;
+  settings = normalizeSettings({ ...settings, gazeEngine: value });
+  els.gazeEngine.value = settings.gazeEngine;
+  els.liveGazeEngine.value = settings.gazeEngine;
+  const gazeTab = document.getElementById('gazeEngineSettings');
+  if (gazeTab) gazeTab.value = settings.gazeEngine;
+  saveSettings();
+  paintEngineLicenseNote();
+  paintGazeTabLockState();
+  if (webGazerWasStarted && previous === 'webgazer' && settings.gazeEngine !== 'webgazer') {
+    paintReloadRequiredNote(
+      `Switching from WebGazer to ${gazeEngineLabel(settings.gazeEngine)} needs a fresh page. ` +
+      `WebGazer’s MediaPipe runtime is still resident from the previous start.`,
+    );
+    resetGazePanel(`engine: ${gazeEngineLabel(settings.gazeEngine)} · reload required to switch from WebGazer`);
+    return;
+  }
+  resetGazePanel(`engine: ${gazeEngineLabel(settings.gazeEngine)} · restart required`);
+  if (running) await startSelectedModel();
+}
+
+/**
+ * Show a small GPL disclosure note when WebGazer is the active engine,
+ * hide it otherwise. We do this in-UI rather than only in NOTICE.md so a
+ * user trying the engine for the first time can see the trade-off without
+ * digging through the repo.
+ */
+function paintEngineLicenseNote() {
+  const note = document.getElementById('liveGazeEngineNote');
+  if (!note) return;
+  // GPL note and reload-required note are independent. Reload-required has
+  // its own slot (#liveGazeReloadNote) and a sticky flag; we never wipe it
+  // from here. This painter only owns the license disclosure.
+  if (settings.gazeEngine === 'webgazer') {
+    note.hidden = false;
+    note.innerHTML =
+      '<strong>WebGazer is GPL-3.0-or-later.</strong> ' +
+      'It is bundled when this engine is selected. Hosts shipping a combined ' +
+      'work must comply with GPL obligations or pick the default WebEyeTrack ' +
+      'engine. See <code>NOTICE.md</code> for the full disclosure.';
+  } else {
+    note.hidden = true;
+    note.textContent = '';
+  }
+}
+
+function paintCalibrationBadgeFromResult(result) {
+  const calBadge = document.getElementById('liveGazeCalibrated');
+  if (!calBadge) return;
+  const confidence = result.confidence || 'unknown';
+  const qPart =
+    confidence === 'unknown' || !Number.isFinite(result.quality)
+      ? 'quality unknown'
+      : `q ${Number(result.quality).toFixed(2)} · ${confidence}`;
+  calBadge.textContent = `Calibrated · ${qPart} · 0 s ago`;
+  calBadge.dataset.state = confidence === 'unknown' ? 'warn' : 'ok';
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function fmt2(v) {
+  return v == null || Number.isNaN(v) ? '—' : Number(v).toFixed(2);
+}
+
+function bindLivePanelControls() {
+  const btn = document.getElementById('liveCalibrateBtn');
+  if (btn && !btn.__bound) {
+    btn.addEventListener('click', () => { startCalibrationFlow(); });
+    btn.__bound = true;
+  }
+  const recal = document.getElementById('liveRecalibrateBtn');
+  if (recal && !recal.__bound) {
+    recal.addEventListener('click', () => { startCalibrationFlow(); });
+    recal.__bound = true;
+  }
+  const clear = document.getElementById('liveClearCalibrationBtn');
+  if (clear && !clear.__bound) {
+    clear.addEventListener('click', () => clearCalibration());
+    clear.__bound = true;
+  }
+}
+window.addEventListener('DOMContentLoaded', bindLivePanelControls);
+
+/**
+ * Wire the new Gaze settings tab. Idempotent — safe to call from bindUi().
+ * Each control writes back to `settings` via normalizeSettings + saveSettings,
+ * then either repaints inline (toggles, regression, AOIs) or marks the
+ * runtime as dirty so the next Start picks the new value up.
+ */
+function bindGazeTab() {
+  const engineSel = document.getElementById('gazeEngineSettings');
+  if (engineSel && !engineSel.__bound) {
+    engineSel.value = settings.gazeEngine;
+    engineSel.addEventListener('change', () => applyEngineChange(engineSel.value));
+    engineSel.__bound = true;
+  }
+
+  const minQ = document.getElementById('gazeMinQuality');
+  const minQVal = document.getElementById('gazeMinQualityValue');
+  if (minQ && !minQ.__bound) {
+    minQ.value = String(settings.gazeMinQuality);
+    if (minQVal) minQVal.textContent = Number(minQ.value).toFixed(2);
+    minQ.addEventListener('input', () => {
+      if (minQVal) minQVal.textContent = Number(minQ.value).toFixed(2);
+    });
+    minQ.addEventListener('change', async () => {
+      settings = normalizeSettings({ ...settings, gazeMinQuality: Number(minQ.value) });
+      saveSettings();
+      if (running) await startSelectedModel();
+    });
+    minQ.__bound = true;
+  }
+
+  const calPts = document.getElementById('gazeCalibrationPoints');
+  if (calPts && !calPts.__bound) {
+    calPts.value = String(settings.gazeCalibrationPoints);
+    calPts.addEventListener('change', () => {
+      settings = normalizeSettings({ ...settings, gazeCalibrationPoints: Number(calPts.value) });
+      saveSettings();
+    });
+    calPts.__bound = true;
+  }
+
+  const grid = document.getElementById('gazeZoneGrid');
+  const gridVal = document.getElementById('gazeZoneGridValue');
+  if (grid && !grid.__bound) {
+    grid.value = String(settings.gazeZoneGrid);
+    if (gridVal) gridVal.textContent = `${grid.value}×${grid.value}`;
+    grid.addEventListener('input', () => {
+      if (gridVal) gridVal.textContent = `${grid.value}×${grid.value}`;
+    });
+    grid.addEventListener('change', async () => {
+      settings = normalizeSettings({ ...settings, gazeZoneGrid: Number(grid.value) });
+      saveSettings();
+      if (running) await startSelectedModel();
+    });
+    grid.__bound = true;
+  }
+
+  const reg = document.getElementById('webgazerRegression');
+  if (reg && !reg.__bound) {
+    reg.value = settings.webgazerRegression;
+    reg.addEventListener('change', async () => {
+      settings = normalizeSettings({ ...settings, webgazerRegression: reg.value });
+      saveSettings();
+      if (running) await startSelectedModel();
+    });
+    reg.__bound = true;
+  }
+
+  // The four checkboxes share a write-back / restart-on-change pattern.
+  const toggleMap = [
+    ['webgazerShowFaceOverlay', 'webgazerShowFaceOverlay'],
+    ['webgazerShowPredictionPoints', 'webgazerShowPredictionPoints'],
+    ['webgazerShowFaceFeedbackBox', 'webgazerShowFaceFeedbackBox'],
+    ['webgazerSaveAcrossSessions', 'webgazerSaveAcrossSessions'],
+  ];
+  for (const [elementId, settingKey] of toggleMap) {
+    const cb = document.getElementById(elementId);
+    if (!cb || cb.__bound) continue;
+    cb.checked = Boolean(settings[settingKey]);
+    cb.addEventListener('change', async () => {
+      settings = normalizeSettings({ ...settings, [settingKey]: cb.checked });
+      saveSettings();
+      if (running) await startSelectedModel();
+    });
+    cb.__bound = true;
+  }
+
+  const addBtn = document.getElementById('aoiAddBtn');
+  if (addBtn && !addBtn.__bound) {
+    addBtn.addEventListener('click', () => {
+      const id = (document.getElementById('aoiNewId').value || '').trim();
+      const x = Number(document.getElementById('aoiNewX').value);
+      const y = Number(document.getElementById('aoiNewY').value);
+      const size = Number(document.getElementById('aoiNewSize').value);
+      if (!id || !Number.isFinite(x) || !Number.isFinite(y) || !(size > 0)) {
+        showToast('AOI needs an id and finite x, y, size.');
+        return;
+      }
+      const aoi = { id, x, y, width: size, height: size };
+      const next = [...(settings.gazeAois || []).filter(a => a.id !== id), aoi];
+      settings = normalizeSettings({ ...settings, gazeAois: next });
+      saveSettings();
+      renderAoiList();
+      renderAoiOverlays();
+      document.getElementById('aoiNewId').value = '';
+    });
+    addBtn.__bound = true;
+  }
+
+  paintGazeTabLockState();
+  renderAoiList();
+  renderAoiOverlays();
+}
+
+/**
+ * Visually disable WebGazer-specific options when WebEyeTrack is the active
+ * engine. We don't hide them — being able to read what an option *would* do
+ * is part of "options to control the default."
+ */
+function paintGazeTabLockState() {
+  const inWebgazer = settings.gazeEngine === 'webgazer';
+  const note = document.getElementById('webgazerOptionsInactiveNote');
+  if (note) note.hidden = inWebgazer;
+  for (const id of [
+    'webgazerRegression',
+    'webgazerShowFaceOverlay',
+    'webgazerShowPredictionPoints',
+    'webgazerShowFaceFeedbackBox',
+    'webgazerSaveAcrossSessions',
+  ]) {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !inWebgazer;
+  }
+}
+
+function renderAoiList() {
+  const list = document.getElementById('aoiList');
+  if (!list) return;
+  const aois = settings.gazeAois || [];
+  if (aois.length === 0) {
+    list.innerHTML = '<div class="empty-state">No AOIs defined yet. Add one below.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  for (const a of aois) {
+    const row = document.createElement('div');
+    row.className = 'event-row';
+    row.innerHTML =
+      `<span class="level-pill" title="ID">${escapeHtml(a.id)}</span>` +
+      `<span class="name">x ${a.x.toFixed(2)} · y ${a.y.toFixed(2)} · ${a.width.toFixed(2)} × ${a.height.toFixed(2)}</span>` +
+      `<button class="icon-button" type="button" data-aoi-remove="${escapeHtml(a.id)}" style="padding: 3px 8px; font-size: 11px;">Remove</button>`;
+    list.appendChild(row);
+  }
+  for (const btn of list.querySelectorAll('[data-aoi-remove]')) {
+    btn.addEventListener('click', (ev) => {
+      const id = ev.currentTarget.getAttribute('data-aoi-remove');
+      settings = normalizeSettings({ ...settings, gazeAois: settings.gazeAois.filter(a => a.id !== id) });
+      saveSettings();
+      renderAoiList();
+      renderAoiOverlays();
+    });
+  }
+}
+
+/**
+ * Paint each AOI as a translucent rect inside #liveGazeViewport. The
+ * viewport uses normalized [-0.5, 0.5] coords on each axis, so we map
+ *   px = (0.5 + x_norm) * viewportWidth
+ *   py = (0.5 + y_norm) * viewportHeight
+ * Width / height are normalized too, so they scale by the same factor.
+ */
+function renderAoiOverlays() {
+  const viewport = document.getElementById('liveGazeViewport');
+  if (!viewport) return;
+  // Remove existing overlays.
+  for (const old of viewport.querySelectorAll('.aoi-overlay')) old.remove();
+  const aois = settings.gazeAois || [];
+  for (const a of aois) {
+    const div = document.createElement('div');
+    div.className = 'aoi-overlay';
+    div.title = `AOI ${a.id}`;
+    div.style.position = 'absolute';
+    div.style.left = `${(0.5 + a.x - a.width / 2) * 100}%`;
+    div.style.top = `${(0.5 + a.y - a.height / 2) * 100}%`;
+    div.style.width = `${a.width * 100}%`;
+    div.style.height = `${a.height * 100}%`;
+    div.style.border = '1px dashed var(--info)';
+    div.style.background = 'rgba(37, 99, 235, 0.06)';
+    div.style.borderRadius = '4px';
+    div.style.pointerEvents = 'none';
+    const label = document.createElement('span');
+    label.textContent = a.id;
+    label.style.position = 'absolute';
+    label.style.top = '-16px';
+    label.style.left = '0';
+    label.style.fontSize = '10px';
+    label.style.color = 'var(--info)';
+    label.style.background = 'var(--bg-0)';
+    label.style.padding = '0 4px';
+    label.style.borderRadius = '3px';
+    div.appendChild(label);
+    viewport.appendChild(div);
+  }
+}
+
+/**
+ * Best-effort calibration reset. Engine-specific notes:
+ *
+ *   WebGazer: exposes a public `clearData()` that drops the regressor
+ *   weights AND any localStorage-persisted training data (the latter only
+ *   matters when `saveDataAcrossSessions` is on). We call it before the
+ *   runtime teardown so the next start gets a truly fresh regressor.
+ *
+ *   WebEyeTrack: upstream has no untrain / clear API as of 0.0.2. The best
+ *   we can do is tear down the runtime so the next Start instantiates a
+ *   new `WebEyeTrackProxy`. Worker-internal state is opaque to us.
+ *
+ * In both cases the badge flips to "Not calibrated" so the user has a
+ * truthful visual signal, even if the engine's internal state is only
+ * partially reset.
+ */
+async function clearCalibration() {
+  if (settings.gazeEngine === 'webgazer') {
+    try {
+      // The webgazer module is a global singleton; reaching for it via
+      // globalThis avoids needing a runtime reference (which we are about
+      // to dispose).
+      const wg = typeof globalThis !== 'undefined' ? globalThis.webgazer : null;
+      if (wg && typeof wg.clearData === 'function') {
+        await Promise.resolve(wg.clearData());
+      }
+    } catch (err) {
+      console.warn('[oyon/standalone] webgazer.clearData() threw', err);
+    }
+  }
+  if (running) {
+    try { await runtime?.stop(); } catch {}
+  }
+  runtime = null;
+  setRunState('stopped');
+  const badge = document.getElementById('liveGazeCalibrated');
+  if (badge) {
+    badge.textContent = 'Not calibrated';
+    badge.dataset.state = 'warn';
+  }
+  resetGazePanel(`engine: ${gazeEngineLabel(settings.gazeEngine)} · calibration cleared`);
+  const detail = settings.gazeEngine === 'webgazer'
+    ? 'Calibration cleared (WebGazer regressor reset). Press Start to bring up a fresh session.'
+    : 'Runtime torn down (WebEyeTrack has no upstream untrain API). Press Start to bring up a fresh session.';
+  showToast(detail, 4000);
+  updateButtons();
 }
 
 function toOyonSettings(localSettings) {
@@ -1465,6 +2124,21 @@ function toOyonSettings(localSettings) {
     switch_confidence: localSettings.minSwitchConfidence,
     logging_mode: 'windows-and-runtime',
     enable_dynamics: true,
+    eye_tracking_enabled: true,
+    gaze_tracking_enabled: true,
+    gaze_engine: localSettings.gazeEngine,
+    gaze_min_quality_score: localSettings.gazeMinQuality,
+    gaze_zone_grid: localSettings.gazeZoneGrid,
+    gaze_aois: localSettings.gazeAois,
+    webgazer_show_face_overlay: localSettings.webgazerShowFaceOverlay,
+    webgazer_show_prediction_points: localSettings.webgazerShowPredictionPoints,
+    webgazer_show_face_feedback_box: localSettings.webgazerShowFaceFeedbackBox,
+    webgazer_save_across_sessions: localSettings.webgazerSaveAcrossSessions,
+    webgazer_regression: localSettings.webgazerRegression,
+    gaze_calibration_points: localSettings.gazeCalibrationPoints,
+    // Emit gaze blocks before calibration too — the user sees something
+    // moving immediately; once they click Calibrate, accuracy improves.
+    gaze_calibration_required: false,
   });
 }
 

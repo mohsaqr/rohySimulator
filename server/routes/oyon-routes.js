@@ -706,6 +706,7 @@ async function insertEmotionRecord(req, session, settings, consent, event) {
         'confidence_std', 'entropy', 'entropy_std', 'stability_score', 'label_switch_count',
         'valid_frames', 'missing_face_ratio', 'quality_json', 'model_name', 'model_version',
         'model_profile', 'settings_hash', 'settings_snapshot_json', 'dynamics_json',
+        'gaze_json', 'engagement_json', 'room',
         'capture_mode', 'capture_status', 'student_consent_enabled', 'student_can_view',
         'admin_can_view', 'educator_can_view', 'consent_version', 'consent_recorded_at',
     ];
@@ -762,6 +763,12 @@ async function insertEmotionRecord(req, session, settings, consent, event) {
         shortText(settingsHash, 100),
         jsonTextOrNull(event.settings_snapshot),
         jsonTextOrNull(event.dynamics),
+        // Oyon v2 window blocks (migration 0028). Aggregates only — the gaze
+        // block carries zone shares / AOI dwell / centroid stats, never a raw
+        // point stream (validateGazeBlock upstream enforces the same).
+        jsonTextOrNull(event.gaze),
+        jsonTextOrNull(event.engagement),
+        shortText(event.room, 100),
         event.capture_mode,
         'captured',
         consent.consent_granted ? 1 : 0,
@@ -800,6 +807,8 @@ function hydrateRecord(row) {
         quality: parseJson(row.quality_json),
         settings_snapshot: parseJson(row.settings_snapshot_json),
         dynamics: parseJson(row.dynamics_json),
+        gaze: parseJson(row.gaze_json),
+        engagement: parseJson(row.engagement_json),
     };
 }
 

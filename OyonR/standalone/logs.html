@@ -126,14 +126,8 @@
       canvas { display: block; width: 100%; height: 220px; background: var(--canvas-bg); }
       .network-svg-container { width: 100%; padding: 12px; background: #f5f5f5; border-radius: 0 0 8px 8px; --tna-svg-edge-label: #1f2937; --tna-svg-node-stroke: #ffffff; --tna-svg-donut-bg: rgba(0,0,0,0.10); }
       .network-svg-container svg { display: block; width: 100%; height: auto; max-height: 560px; }
-      .table-scroll {
-        max-height: 360px;
-        overflow: auto;
-      }
-      .table-scroll.wide { max-height: min(52vh, 520px); }
-      table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: auto; }
-      .table-scroll.wide table { min-width: 1080px; }
-      th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 11px; vertical-align: top; text-align: left; overflow-wrap: normal; word-break: normal; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 11px; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
       th { position: sticky; top: 0; background: var(--bg-2); color: var(--ink-2); z-index: 1; text-transform: uppercase; letter-spacing: 0.06em; font-size: 9px; }
       tr[data-selected="true"] td { background: rgba(37, 99, 235, 0.10); }
       tr:hover td { background: rgba(0, 0, 0, 0.04); cursor: pointer; }
@@ -189,6 +183,7 @@
         <div class="top-actions">
           <div class="tabs" role="tablist" aria-label="Views">
             <button class="tab" data-view="analytics" aria-selected="true">Analytics</button>
+            <button class="tab" data-view="gaze" aria-selected="false">Gaze</button>
             <button class="tab" data-view="settings" aria-selected="false">Settings</button>
           </div>
           <button id="refresh" class="primary" type="button">Refresh</button>
@@ -252,23 +247,19 @@
               </section>
               <section class="panel">
                 <header><h2>Centralities (dynajs)</h2><span id="centralityMeta" class="subtitle"></span></header>
-                <div class="table-scroll">
-                  <table>
-                    <thead><tr><th>State</th><th>InStrength</th><th>OutStrength</th><th>Closeness</th><th>Betweenness</th></tr></thead>
-                    <tbody id="centralityTable"></tbody>
-                  </table>
-                </div>
+                <table>
+                  <thead><tr><th>State</th><th>InStrength</th><th>OutStrength</th><th>Closeness</th><th>Betweenness</th></tr></thead>
+                  <tbody id="centralityTable"></tbody>
+                </table>
               </section>
             </div>
             <div class="grid two">
               <section class="panel">
                 <header><h2>Top n-gram patterns</h2><span id="patternsMeta" class="subtitle"></span></header>
-                <div class="table-scroll">
-                  <table>
-                    <thead><tr><th>Pattern</th><th style="width:80px;">Length</th><th style="width:90px;">Count</th><th style="width:110px;">Support</th></tr></thead>
-                    <tbody id="patternsTable"></tbody>
-                  </table>
-                </div>
+                <table>
+                  <thead><tr><th>Pattern</th><th style="width:80px;">Length</th><th style="width:90px;">Count</th><th style="width:110px;">Support</th></tr></thead>
+                  <tbody id="patternsTable"></tbody>
+                </table>
               </section>
               <section class="panel">
                 <header><h2>Transition matrix P(j | i)</h2><span id="matrixMeta" class="subtitle"></span></header>
@@ -290,30 +281,109 @@
 
             <section class="panel optional-table" id="panel-events" hidden>
               <header><h2>Structured event log</h2><span id="eventsMeta" class="subtitle"></span></header>
-              <div class="table-scroll wide">
-                <table>
-                  <thead><tr><th style="width:138px;">Time</th><th style="width:78px;">Level</th><th>Event</th><th>Context</th><th style="width:110px;">Source</th></tr></thead>
-                  <tbody id="eventsTable"></tbody>
-                </table>
-              </div>
+              <table>
+                <thead><tr><th style="width:138px;">Time</th><th style="width:78px;">Level</th><th>Event</th><th>Context</th><th style="width:110px;">Source</th></tr></thead>
+                <tbody id="eventsTable"></tbody>
+              </table>
             </section>
             <section class="panel optional-table" id="panel-metrics" hidden>
               <header><h2>Measurements</h2><span id="metricsMeta" class="subtitle"></span></header>
-              <div class="table-scroll wide">
-                <table>
-                  <thead><tr><th style="width:138px;">Time</th><th>Metric</th><th style="width:120px;">Value</th><th>Context</th><th style="width:90px;">Unit</th></tr></thead>
-                  <tbody id="metricsTable"></tbody>
-                </table>
-              </div>
+              <table>
+                <thead><tr><th style="width:138px;">Time</th><th>Metric</th><th style="width:120px;">Value</th><th>Context</th><th style="width:90px;">Unit</th></tr></thead>
+                <tbody id="metricsTable"></tbody>
+              </table>
             </section>
             <section class="panel optional-table" id="panel-windows" hidden>
               <header><h2>Emotion windows</h2><span id="windowsMeta" class="subtitle"></span></header>
-              <div class="table-scroll wide">
-                <table>
-                  <thead><tr><th style="width:138px;">Window end</th><th>Emotion</th><th style="width:100px;">Confidence</th><th style="width:100px;">Quality</th><th>Affect</th><th>Runtime</th></tr></thead>
-                  <tbody id="windowsTable"></tbody>
-                </table>
+              <table>
+                <thead><tr><th style="width:138px;">Window end</th><th>Emotion</th><th style="width:100px;">Confidence</th><th style="width:100px;">Quality</th><th>Affect</th><th>Runtime</th></tr></thead>
+                <tbody id="windowsTable"></tbody>
+              </table>
+            </section>
+          </section>
+
+          <section id="view-gaze" class="view grid hidden">
+            <div class="grid kpis" id="gazeKpis"></div>
+            <div class="grid two">
+              <section class="panel">
+                <header><h2>Coverage heatmap</h2><span id="gazeHeatMeta" class="subtitle"></span></header>
+                <div style="position: relative; padding: 12px;">
+                  <canvas id="gazeHeatChart" width="900" height="506" style="width: 100%; display: block; border-radius: 8px;"></canvas>
+                  <div id="gazeHeatLegend" style="margin-top: 8px; display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums;"></div>
+                </div>
+              </section>
+              <section class="panel">
+                <header><h2>Gaze transition network</h2><span id="gazeScanpathMeta" class="subtitle"></span></header>
+                <div style="padding: 12px 12px 0;">
+                  <div style="display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: 12px; color: var(--ink-2); margin-bottom: 10px;">
+                    <label style="display: inline-flex; align-items: center; gap: 6px;">
+                      Node size
+                      <select id="gazeNodeMetric" style="padding: 3px 6px; font-size: 12px;">
+                        <option value="instrength">Instrength</option>
+                        <option value="outstrength">Outstrength</option>
+                        <option value="visits">Visits</option>
+                      </select>
+                    </label>
+                    <label style="display: inline-flex; align-items: center; gap: 6px;">
+                      Edge weight
+                      <select id="gazeEdgeMetric" style="padding: 3px 6px; font-size: 12px;">
+                        <option value="counts">Counts</option>
+                        <option value="probabilities">P(j | i)</option>
+                      </select>
+                    </label>
+                    <label style="display: inline-flex; align-items: center; gap: 6px;">
+                      <input id="gazeShowSelfLoops" type="checkbox" checked>
+                      Show self-loops
+                    </label>
+                  </div>
+                </div>
+                <div style="padding: 0 12px 12px;">
+                  <div id="gazeNetworkChart" style="background: #ffffff; border: 1px solid var(--line); border-radius: 8px; aspect-ratio: 16 / 9; overflow: hidden;"></div>
+                  <div id="gazeNetworkLegend" style="margin-top: 8px; font-size: 11px; color: var(--ink-3);"></div>
+                </div>
+              </section>
+            </div>
+            <div class="grid two">
+              <section class="panel">
+                <header><h2>Dispersion &amp; valid-frame ratio</h2><span id="gazeQualityMeta" class="subtitle"></span></header>
+                <canvas id="gazeQualityChart" width="900" height="260"></canvas>
+              </section>
+              <section class="panel">
+                <header><h2>Zone proportions (3×3 reference)</h2><span id="gazeZoneRefMeta" class="subtitle"></span></header>
+                <div id="gazeZoneRef" style="padding: 16px;"></div>
+              </section>
+            </div>
+            <div class="grid two">
+              <section class="panel">
+                <header><h2>AOI dwell totals</h2><span id="gazeAoiMeta" class="subtitle"></span></header>
+                <canvas id="gazeAoiChart" width="900" height="260"></canvas>
+              </section>
+              <section class="panel">
+                <header><h2>Calibration timeline</h2><span id="gazeCalibMeta" class="subtitle"></span></header>
+                <canvas id="gazeCalibChart" width="900" height="260"></canvas>
+              </section>
+            </div>
+            <section class="panel">
+              <header>
+                <h2>Gaze windows</h2>
+                <span id="gazeTableMeta" class="subtitle"></span>
+              </header>
+              <div style="padding: 8px 14px; display: flex; gap: 8px; flex-wrap: wrap;">
+                <button id="exportGazeCsv" class="primary" type="button">Export CSV</button>
+                <button id="exportGazeJson" type="button">Export JSON</button>
               </div>
+              <table>
+                <thead><tr>
+                  <th style="width: 138px;">Window end</th>
+                  <th style="width: 70px;">n_points</th>
+                  <th style="width: 90px;">σ</th>
+                  <th style="width: 110px;">centroid (x, y)</th>
+                  <th style="width: 80px;">valid</th>
+                  <th style="width: 80px;">off-screen</th>
+                  <th>calibration</th>
+                </tr></thead>
+                <tbody id="gazeTable"></tbody>
+              </table>
             </section>
           </section>
 

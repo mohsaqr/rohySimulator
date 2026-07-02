@@ -12,11 +12,11 @@ import { canSeeCaseTitle } from '../../utils/caseDisplayLabel';
 // (mounted in App.jsx); the legacy alarmAudio helpers are no longer needed
 // here. Imports and audio init click-handler removed below.
 import LabValueEditor from '../investigations/LabValueEditor';
-import OyonCaptureWidget from '../oyon/OyonCaptureWidget';
 import VersionBadge from '../VersionBadge';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { apiFetch, apiPost } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
+import AoiRegion from '../oyon/AoiRegion';
 
 /**
  * ECG GENERATION
@@ -1226,9 +1226,9 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                </div>
             </div>
 
-            {/* Oyon emotion miniature — sits between the patient name and the
-                clock so it's easy to glance at without covering the avatar. */}
-            <OyonCaptureWidget sessionId={sessionId} caseId={caseData?.id} />
+            {/* The Oyon capture pill used to sit here; it now mounts ONCE at
+                App level (fixed overlay, bottom-right) so it survives room
+                navigation and settings screens without restarting the camera. */}
 
             <div className="flex items-center gap-3">
                {/* Rohy version stamp — sits beside the session timer.
@@ -1295,14 +1295,16 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
             {/* WAVEFORMS (LEFT) */}
             <div className="flex-1 flex flex-col bg-black relative">
 
-               {/* Channel 1: ECG */}
-               <div className="h-32 min-h-[160px] border-b border-neutral-800/50 relative group">
+               {/* Channel 1: ECG — a gaze attention target (AoiRegion), so
+                   analytics can answer "was the trainee watching the trace?"
+                   via aoi_dwell_ms.ecg_trace. Same div, same layout. */}
+               <AoiRegion id="ecg_trace" className="h-32 min-h-[160px] border-b border-neutral-800/50 relative group">
                   <div className="absolute top-2 left-3 z-10 font-mono text-sm font-bold text-green-500 select-none">
                      II <span className="text-xs font-normal opacity-70 ml-1">1mV</span>
                   </div>
                   <canvas ref={ecgCanvasRef} className="w-full h-full block" />
                   <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-black via-transparent to-transparent pointer-events-none" />
-               </div>
+               </AoiRegion>
 
                {/* Channel 2: PLETH */}
                <div className="h-32 border-b border-neutral-800/50 relative">
@@ -1326,8 +1328,10 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
             </div>
 
-            {/* VITALS (RIGHT SIDEBAR) */}
-            <div className="w-64 bg-neutral-900/50 backdrop-blur-sm border-l border-neutral-800 flex flex-col shrink-0 overflow-y-auto">
+            {/* VITALS (RIGHT SIDEBAR) — a gaze attention target (AoiRegion):
+                dwell on the numeric HR/SpO2/NIBP/RESP/TEMP column lands in
+                aoi_dwell_ms.vitals_values. Same div, same layout. */}
+            <AoiRegion id="vitals_values" className="w-64 bg-neutral-900/50 backdrop-blur-sm border-l border-neutral-800 flex flex-col shrink-0 overflow-y-auto">
 
                {/* HR Box */}
                <div className="h-24 border-b border-neutral-800 p-3 flex flex-col justify-center relative overflow-hidden">
@@ -1442,7 +1446,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                   </div>
                )}
 
-            </div>
+            </AoiRegion>
          </div>
 
          {/* CONTROLS OVERLAY (DRAWER) */}

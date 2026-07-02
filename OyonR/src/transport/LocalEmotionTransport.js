@@ -28,6 +28,12 @@ export class LocalEmotionTransport {
     }
   }
 
+  drain() {
+    const events = this.read();
+    this.clear();
+    return events;
+  }
+
   clear() {
     this.memoryEvents = [];
     this.options.storage?.removeItem(this.options.storageKey);

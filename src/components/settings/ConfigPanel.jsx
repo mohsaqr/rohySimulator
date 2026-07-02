@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
@@ -8,6 +8,9 @@ import ActivityTable from '../analytics/ActivityTable';
 import SystemLogTable from '../analytics/SystemLogTable';
 import ChatLogTable from '../analytics/ChatLogTable';
 import SessionsTable from '../analytics/SessionsTable';
+import MomentsTable from '../analytics/MomentsTable';
+import TurnsTable from '../analytics/TurnsTable';
+import CaseInsightsPanel from '../analytics/CaseInsightsPanel';
 import ScenarioRepository from './ScenarioRepository';
 import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
 import { roleLabel } from '../../constants/roleLabels';
@@ -24,7 +27,7 @@ import VoiceSettingsTab from './VoiceSettingsTab';
 import AvatarsSettingsTab from './AvatarsSettingsTab';
 import NotificationsSettingsTab from './NotificationsSettingsTab';
 import OyonSettingsTab from './OyonSettingsTab';
-import OyonLearningAnalyticsTab from './OyonLearningAnalyticsTab';
+import OyonDataLogs from '../analytics/OyonDataLogs';
 import CohortsManagementTab from './CohortsManagementTab';
 import TnaDashboardV2 from '../analytics/tna/TnaDashboardV2';
 import { Bell as BellIcon } from 'lucide-react';
@@ -92,12 +95,62 @@ export function InlineBodyMapEditor() {
     );
 }
 
+// --- Sidebar nav model (collapsible accordion, grouped by theme) ---------
+// This is pure nav-chrome: tab ids, per-tab role gating, and the content-area
+// panel switch are all unchanged. The ~16 setting tabs are grouped into
+// themed, collapsible sections. Group open/closed state is persisted in
+// localStorage; the group that owns the active tab is force-expanded so
+// `initialTab` deep-links always land on a visible item.
+const OPEN_GROUPS_KEY = 'rohy.configPanel.openGroups';
+const NAV_GROUP_ORDER = ['Content', 'Agents & Voice', 'People', 'Analytics', 'Capture', 'System'];
+// Static tab -> group map so the force-expand effect has no render-scope
+// dependencies (keeps react-hooks/exhaustive-deps happy).
+const TAB_GROUP = {
+    cases: 'Content', scenarios: 'Content', bodymap: 'Content', labdb: 'Content', medications: 'Content',
+    agents: 'Agents & Voice', avatars: 'Agents & Voice', voice: 'Agents & Voice',
+    users: 'People', cohorts: 'People',
+    analytics: 'Analytics',
+    oyon: 'Capture',
+    platform: 'System', notifications: 'System', logs: 'System',
+};
+
+// One sidebar tab button. Reproduces the original active/inactive className
+// verbatim (purple left-border + bg-neutral-900 when active).
+function NavItem({ item, active, onSelect }) {
+    const Icon = item.icon;
+    return (
+        <button
+            onClick={() => onSelect(item.id)}
+            className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${active ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+        >
+            <Icon className={item.iconClass ? `w-4 h-4 ${item.iconClass}` : 'w-4 h-4'} /> {item.label}
+        </button>
+    );
+}
+
+// Collapsible group header: chevron + uppercase theme label.
+function NavGroupHeader({ group, open, onToggle }) {
+    const Chevron = open ? ChevronDown : ChevronRight;
+    return (
+        <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => onToggle(group)}
+            className="px-4 pt-4 pb-1 text-left text-[11px] font-bold uppercase tracking-wider text-neutral-500 hover:text-neutral-300 flex items-center gap-1.5 transition-colors"
+        >
+            <Chevron className="w-3 h-3" /> {group}
+        </button>
+    );
+}
+
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'cases', initialWizardStep = 1, onOpenPersonaEditor, onCaseSaved }) {
     const { isAdmin, user } = useAuth();
-    // Educator+ gate for the Learning Analytics tab. Server still enforces the
-    // real rule (assertOyonReadAccess); this hides the sidebar item for users
-    // who couldn't reach the page anyway.
-    const canSeeOyonAnalytics = user?.role === 'educator' || user?.role === 'admin';
+    // Educator+ gate for the Analytics tab (formerly split into an admin-only
+    // "Case Analytics" and an educator+ "Emotion & Attention" Oyon tab — the
+    // Oyon analysis views now live inside the Analytics dashboard, so
+    // educators keep their access through this gate). Server still enforces
+    // the real rules per endpoint; this only hides the sidebar item.
+    const canSeeAnalytics = user?.role === 'educator' || user?.role === 'admin';
     // Same educator+/admin gate as Oyon analytics. Server enforces the real
     // rule on /cohorts; this only hides the sidebar item. Teachers see/manage
     // their own cohorts, admins see all (the API decides which rows return).
@@ -109,6 +162,40 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
     // on a specific case wizard step.
     const [activeTab, setActiveTab] = useState(initialTab); // cases, users, history, logs, platform, scenarios
     const [wizardInitialStep, setWizardInitialStep] = useState(initialWizardStep);
+
+    // Accordion open/closed state for the grouped sidebar. Defaults to every
+    // group expanded on first run; explicit user toggles are persisted to
+    // localStorage under OPEN_GROUPS_KEY. Multiple groups may be open at once.
+    const [openGroups, setOpenGroups] = useState(() => {
+        let stored = {};
+        try {
+            stored = JSON.parse(localStorage.getItem(OPEN_GROUPS_KEY)) || {};
+        } catch {
+            stored = {};
+        }
+        return NAV_GROUP_ORDER.reduce((acc, group) => {
+            acc[group] = stored[group] !== undefined ? stored[group] : true;
+            return acc;
+        }, {});
+    });
+    const toggleGroup = (group) => {
+        setOpenGroups((prev) => {
+            const next = { ...prev, [group]: !prev[group] };
+            try {
+                localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify(next));
+            } catch {
+                /* localStorage unavailable — accordion still works in-memory */
+            }
+            return next;
+        });
+    };
+    // Force-expand the group that owns the active tab so `initialTab` deep
+    // links (and any programmatic setActiveTab) always land on a visible item.
+    // Derived during render (no effect) so it holds on mount AND on every
+    // activeTab change, and can never be collapsed out from under the tab
+    // you're currently viewing.
+    const activeGroup = TAB_GROUP[activeTab];
+    const isGroupOpen = (group) => Boolean(openGroups[group]) || group === activeGroup;
 
     // Cases State
     const [cases, setCases] = useState([]);
@@ -296,6 +383,59 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
         });
     };
 
+    // Sidebar tab model. Each item carries the EXACT per-tab role gate that
+    // existed as an inline `isAdmin()` / `canManageCohorts` / `canSeeOyonAnalytics`
+    // guard before this refactor — see `visible`. A group whose items are all
+    // hidden is not rendered (see the sidebar map below). Tab ids are unchanged.
+    const admin = isAdmin();
+    const SECTIONS = [
+        {
+            group: 'Content',
+            items: [
+                { id: 'cases', label: admin ? 'Cases' : 'Select Case', icon: FileText, visible: true },
+                { id: 'scenarios', label: 'Scenarios', icon: Layers, visible: admin },
+                { id: 'bodymap', label: 'Body Map', icon: Image, visible: admin },
+                { id: 'labdb', label: 'Lab Database', icon: Database, visible: admin },
+                { id: 'medications', label: 'Medications', icon: Database, visible: admin },
+            ],
+        },
+        {
+            group: 'Agents & Voice',
+            items: [
+                { id: 'agents', label: 'Agents', icon: Users, visible: admin },
+                { id: 'avatars', label: 'Avatars', icon: Image, visible: admin },
+                { id: 'voice', label: 'Voice', icon: Mic, visible: admin },
+            ],
+        },
+        {
+            group: 'People',
+            items: [
+                { id: 'users', label: 'Users', icon: Users, visible: admin },
+                { id: 'cohorts', label: 'Cohorts', icon: Users, visible: canManageCohorts },
+            ],
+        },
+        {
+            group: 'Analytics',
+            items: [
+                { id: 'analytics', label: 'Analytics', icon: Activity, iconClass: 'text-purple-400', visible: canSeeAnalytics },
+            ],
+        },
+        {
+            group: 'Capture',
+            items: [
+                { id: 'oyon', label: 'Oyon', icon: Camera, visible: true },
+            ],
+        },
+        {
+            group: 'System',
+            items: [
+                { id: 'platform', label: 'Platform', icon: Settings, visible: admin },
+                { id: 'notifications', label: 'Notifications', icon: BellIcon, visible: true },
+                { id: 'logs', label: 'Logs', icon: ClipboardList, visible: admin },
+            ],
+        },
+    ];
+
     return (
         <div className={`flex flex-col h-full bg-neutral-900 text-white ${fullPage ? '' : 'rounded-xl'} overflow-hidden`}>
 
@@ -318,131 +458,44 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
             <div className="flex flex-1 overflow-hidden">
 
-                {/* Sidebar */}
+                {/* Sidebar — collapsible accordion grouped by theme. Simulation
+                    stays pinned on top (it's not a tab, it exits back to the
+                    running sim); the grouped tabs follow. Per-tab role gating
+                    lives on each SECTIONS item's `visible`; a group with no
+                    visible items renders neither its header nor body. */}
                 <div className="w-48 bg-neutral-950 border-r border-neutral-800 flex flex-col pt-4">
-                    {/* Analytics — first item, admin-only. Surfaces the LAILA-style
-                        TNA dashboard (Activity / Network / Clusters / Patterns /
-                        Process Map / Settings) without leaving the settings panel. */}
-                    {isAdmin() && (
-                        <button
-                            onClick={() => setActiveTab('analytics')}
-                            className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'analytics' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                        >
-                            <Activity className="w-4 h-4 text-purple-400" /> Analytics
-                        </button>
-                    )}
+                    {/* Simulation — not a tab: returns to the running simulation. */}
                     <button
-                        onClick={() => setActiveTab('cases')}
-                        className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'cases' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                        onClick={onClose}
+                        className="px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 border-transparent text-neutral-500 hover:text-neutral-300 transition-colors"
                     >
-                        <FileText className="w-4 h-4" /> {isAdmin() ? 'Manage Cases' : 'Select Case'}
+                        <Monitor className="w-4 h-4" /> Simulation
                     </button>
-                    {/* Scenarios - Admin Only */}
-                    {isAdmin() && (
-                        <button
-                            onClick={() => setActiveTab('scenarios')}
-                            className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'scenarios' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                        >
-                            <Layers className="w-4 h-4" /> Scenarios
-                        </button>
-                    )}
-                    {isAdmin() && (
-                        <>
-                            <button
-                                onClick={() => setActiveTab('users')}
-                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'users' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                            >
-                                <Users className="w-4 h-4" /> User Management
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('platform')}
-                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'platform' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                            >
-                                <Settings className="w-4 h-4" /> Platform Settings
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('logs')}
-                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'logs' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                            >
-                                <ClipboardList className="w-4 h-4" /> System Logs
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('labdb')}
-                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'labdb' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                            >
-                                <Database className="w-4 h-4" /> Lab Database
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('medications')}
-                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'medications' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                            >
-                                <Database className="w-4 h-4" /> Medications
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('bodymap')}
-                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'bodymap' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                            >
-                                <Image className="w-4 h-4" /> Body Map Editor
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('agents')}
-                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'agents' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                            >
-                                <Users className="w-4 h-4" /> Agent Personas
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('avatars')}
-                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'avatars' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                            >
-                                <Image className="w-4 h-4" /> Avatars
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('voice')}
-                                className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'voice' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                            >
-                                <Mic className="w-4 h-4" /> Voice
-                            </button>
-                        </>
-                    )}
-                    {/* Notifications & Alarms — available to every user, not just admins. */}
-                    <button
-                        onClick={() => setActiveTab('notifications')}
-                        className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'notifications' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                    >
-                        <BellIcon className="w-4 h-4" /> Notifications
-                    </button>
-                    {/* Oyon — emotion capture: terms/consent for everyone, tenant settings for admins. */}
-                    <button
-                        onClick={() => setActiveTab('oyon')}
-                        className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'oyon' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                    >
-                        <Camera className="w-4 h-4" /> Oyon — Emotion Capture
-                    </button>
-                    {/* Oyon — Learning Analytics: per-student/per-case rollups + session timeline aligned with learning events. Educator+ only; tenant view-enabled flag enforced server-side. */}
-                    {canSeeOyonAnalytics && (
-                        <button
-                            onClick={() => setActiveTab('oyon-analytics')}
-                            className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'oyon-analytics' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                        >
-                            <Activity className="w-4 h-4" /> Oyon — Learning Analytics
-                        </button>
-                    )}
-                    {/* Classes — cohort management for teachers/admins. */}
-                    {canManageCohorts && (
-                        <button
-                            onClick={() => setActiveTab('cohorts')}
-                            className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${activeTab === 'cohorts' ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                        >
-                            <Users className="w-4 h-4" /> Classes
-                        </button>
-                    )}
+                    {SECTIONS.map(({ group, items }) => {
+                        const visibleItems = items.filter((item) => item.visible);
+                        if (visibleItems.length === 0) return null;
+                        const open = isGroupOpen(group);
+                        return (
+                            <div key={group}>
+                                <NavGroupHeader group={group} open={open} onToggle={toggleGroup} />
+                                {open && visibleItems.map((item) => (
+                                    <NavItem
+                                        key={item.id}
+                                        item={item}
+                                        active={activeTab === item.id}
+                                        onSelect={setActiveTab}
+                                    />
+                                ))}
+                            </div>
+                        );
+                    })}
                 </div>
 
                 {/* Content Area */}
                 <div className="flex-1 p-8 overflow-y-auto bg-neutral-900">
 
-                    {/* --- ANALYTICS TAB --- TNA dashboard embedded inside settings */}
-                    {activeTab === 'analytics' && isAdmin() && (
+                    {/* --- ANALYTICS TAB (educator+) --- TNA dashboard embedded inside settings */}
+                    {activeTab === 'analytics' && canSeeAnalytics && (
                         <TnaDashboardV2 embedded={true} />
                     )}
 
@@ -952,12 +1005,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
                     {/* --- OYON TAB (all users; admin section gated inside) --- */}
                     {activeTab === 'oyon' && (
-                        <OyonSettingsTab />
-                    )}
-
-                    {/* --- OYON LEARNING ANALYTICS (educator+ only; server enforces tenant view setting) --- */}
-                    {activeTab === 'oyon-analytics' && canSeeOyonAnalytics && (
-                        <OyonLearningAnalyticsTab />
+                        <OyonSettingsTab onOpenAnalytics={canSeeAnalytics ? () => setActiveTab('analytics') : undefined} />
                     )}
 
                     {/* --- CLASSES (educator+ only; server enforces ownership/tenant) --- */}
@@ -2079,7 +2127,7 @@ function MonitorConfiguration() {
 // (variable-length nested object) doesn't fit the flat-grid model.
 function SystemLogs() {
     const toast = useToast();
-    const [activeLogTab, setActiveLogTab] = useState('activity'); // activity, sessions, system, chat, questionnaire
+    const [activeLogTab, setActiveLogTab] = useState('activity'); // activity, sessions, system, chat, moments, turns, insights, questionnaire, oyondata
     const [questionnaireResponses, setQuestionnaireResponses] = useState([]);
     const [expandedQRow, setExpandedQRow] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -2159,10 +2207,34 @@ function SystemLogs() {
                     Chat Log
                 </button>
                 <button
+                    onClick={() => setActiveLogTab('moments')}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'moments' ? 'border-emerald-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                >
+                    Moments
+                </button>
+                <button
+                    onClick={() => setActiveLogTab('turns')}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'turns' ? 'border-sky-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                >
+                    By Turn
+                </button>
+                <button
+                    onClick={() => setActiveLogTab('insights')}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'insights' ? 'border-amber-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                >
+                    Case Insights
+                </button>
+                <button
                     onClick={() => setActiveLogTab('questionnaire')}
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'questionnaire' ? 'border-teal-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     Reflection Questionnaire ({questionnaireResponses.length})
+                </button>
+                <button
+                    onClick={() => setActiveLogTab('oyondata')}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'oyondata' ? 'border-purple-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                >
+                    Oyon data
                 </button>
             </div>
 
@@ -2184,6 +2256,22 @@ function SystemLogs() {
                 ) : activeLogTab === 'chat' ? (
                     <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
                         <ChatLogTable />
+                    </div>
+                ) : activeLogTab === 'moments' ? (
+                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
+                        <MomentsTable />
+                    </div>
+                ) : activeLogTab === 'turns' ? (
+                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
+                        <TurnsTable />
+                    </div>
+                ) : activeLogTab === 'insights' ? (
+                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-auto" style={{ height: '650px' }}>
+                        <CaseInsightsPanel />
+                    </div>
+                ) : activeLogTab === 'oyondata' ? (
+                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-auto" style={{ height: '650px' }}>
+                        <OyonDataLogs />
                     </div>
                 ) : activeLogTab === 'questionnaire' ? (
                     <div className="overflow-x-auto">

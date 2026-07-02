@@ -4,11 +4,19 @@
 // (auth, admin, config, learning, chat, alarms, vitals, scenarios,
 // LLM/TTS/emotion). Per-source CSV exports stream from the server
 // via /api/export/system-log/:source — chosen via the dropdown above.
+//
+// Filtering model:
+//   - Date range (from/to) are /system-log/feed query params → refetch.
+//     They also flow into the per-source CSV export.
+//   - User and Component filter CLIENT-SIDE over the loaded rows (the feed
+//     has no user/component params). The FilterBar shows user NAMES; the
+//     user_id stays internal.
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { apiFetch, ApiError } from '../../services/apiClient';
 import { Download } from 'lucide-react';
 import LogGrid, { CopyableCell } from './LogGrid';
+import FilterBar, { applyClientFilters, contextualOptions } from './FilterBar';
 
 const DEFAULT_LIMIT = 500;
 
@@ -52,7 +60,11 @@ const COLUMNS = [
           const v = info.getValue();
           const uid = info.row.original.user_id;
           const display = v || (uid ? `#${uid}` : '—');
-          return <CopyableCell value={v || uid} className="text-neutral-200">{display}</CopyableCell>;
+          return (
+              <span title={`user id ${uid ?? '—'}`}>
+                  <CopyableCell value={v || uid} className="text-neutral-200">{display}</CopyableCell>
+              </span>
+          );
       } },
     {
         accessorKey: 'component', header: 'component', size: 110,
@@ -94,15 +106,23 @@ const COLUMNS = [
       cell: (info) => <CopyableCell value={info.getValue()} className="font-mono text-neutral-400" /> },
 ];
 
+const EMPTY_FILTERS = { user_id: '', component: '', from: '', to: '' };
+
+const FILTER_ACCESSORS = {
+    user_id: (r) => r.user_id,
+    component: (r) => r.component,
+};
+
 export default function SystemLogTable() {
     const [events, setEvents] = useState([]);
     const [sources, setSources] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [from, setFrom] = useState('');
-    const [to, setTo] = useState('');
+    const [filters, setFilters] = useState(EMPTY_FILTERS);
     const [exportSource, setExportSource] = useState('auth');
     const [currentLimit, setCurrentLimit] = useState(DEFAULT_LIMIT);
+
+    const { from, to } = filters;
 
     const load = useCallback(async (lim = currentLimit) => {
         setLoading(true);
@@ -125,6 +145,29 @@ export default function SystemLogTable() {
 
     useEffect(() => { load(DEFAULT_LIMIT);   }, [from, to]);
 
+    const setFilter = useCallback((key, value) => {
+        setFilters((prev) => ({ ...prev, [key]: value ?? '' }));
+    }, []);
+    const clearFilters = useCallback(() => setFilters(EMPTY_FILTERS), []);
+
+    // User + component narrow client-side; dates already narrowed server-side.
+    const filteredEvents = useMemo(
+        () => applyClientFilters(events, FILTER_ACCESSORS, filters),
+        [events, filters],
+    );
+
+    const filterDefs = useMemo(() => [
+        {
+            key: 'user_id', label: 'User',
+            options: contextualOptions(events, FILTER_ACCESSORS, filters, 'user_id',
+                (r) => r.username || `#${r.user_id}`),
+        },
+        {
+            key: 'component', label: 'Component', width: 'w-36',
+            options: contextualOptions(events, FILTER_ACCESSORS, filters, 'component'),
+        },
+    ], [events, filters]);
+
     const downloadSource = useCallback(async () => {
         try {
             const params = new URLSearchParams();
@@ -143,21 +186,6 @@ export default function SystemLogTable() {
         }
     }, [from, to, exportSource]);
 
-    const headerExtras = (
-        <>
-            <input
-                type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-                className="px-2 py-1.5 bg-neutral-900 border border-neutral-700 rounded text-xs"
-                title="From"
-            />
-            <input
-                type="date" value={to} onChange={(e) => setTo(e.target.value)}
-                className="px-2 py-1.5 bg-neutral-900 border border-neutral-700 rounded text-xs"
-                title="To"
-            />
-        </>
-    );
-
     const headerActions = (
         <div className="flex items-center gap-1">
             <select
@@ -171,7 +199,7 @@ export default function SystemLogTable() {
             <button
                 onClick={downloadSource}
                 className="px-2 py-1.5 bg-cyan-700 hover:bg-cyan-600 rounded text-xs text-white flex items-center gap-1"
-                title={`Stream every row of the ${exportSource} source as CSV (server-paged, no client memory cap)`}
+                title={`Stream every row of the ${exportSource} source as CSV (server-paged, honors the date range)`}
             >
                 <Download className="w-3 h-3" /> CSV
             </button>
@@ -180,16 +208,21 @@ export default function SystemLogTable() {
 
     return (
         <div className="flex flex-col h-full">
+            <FilterBar
+                filters={filterDefs}
+                values={filters}
+                onChange={setFilter}
+                onClearAll={clearFilters}
+            />
             <LogGrid
                 columns={COLUMNS}
-                data={events}
+                data={filteredEvents}
                 loading={loading}
                 error={error}
                 onRefresh={() => load(currentLimit)}
                 onLoadMore={(n) => load(n)}
                 currentLimit={currentLimit}
                 initialSorting={[{ id: 'ts', desc: true }]}
-                headerExtras={headerExtras}
                 headerActions={headerActions}
                 emptyMessage="No system events recorded yet."
                 storageKey="loggrid.system"

@@ -1,0 +1,46 @@
+{
+  "name": "@oyon/app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Oyon enterprise research-instrument shell — Phase A scaffold.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build && npm run build:trim",
+    "build:full": "tsc -b && vite build",
+    "build:trim": "node scripts/trim-bundled-wasm.mjs",
+    "build:element": "vite build -c vite.element.config.ts && node scripts/trim-bundled-wasm.mjs dist-element",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.2",
+    "@radix-ui/react-dropdown-menu": "^2.1.2",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-tabs": "^1.1.1",
+    "@radix-ui/react-toast": "^1.2.2",
+    "@radix-ui/react-tooltip": "^1.1.4",
+    "@tanstack/react-query": "^5.59.0",
+    "@tanstack/react-router": "^1.87.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.460.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.4",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@tanstack/router-devtools": "^1.87.0",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.6.3",
+    "vite": "^7.0.0"
+  }
+}

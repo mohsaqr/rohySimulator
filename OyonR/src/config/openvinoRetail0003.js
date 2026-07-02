@@ -1,19 +1,8 @@
-import { assertSubsetOfAllowed } from './emotionLabels.js';
-
 export const OPENVINO_RETAIL_0003_CONFIG = {
   id: 'openvino-emotions-recognition-retail-0003',
   modelName: 'emotions-recognition-retail-0003',
   modelVersion: 'open-model-zoo-retail-0003',
-  // 5-label subset of the canonical 8 — this baseline does not emit
-  // disgust/fear/contempt. Aggregator output for this profile sums to
-  // ~0.625, which the validator rejects (sum-close-to-1 check). That
-  // rejection is the deliberate signal that this profile isn't wired
-  // for the persistence path; it stays in the repo as a baseline
-  // contract reference only.
-  labels: assertSubsetOfAllowed(
-    ['neutral', 'happy', 'sad', 'surprise', 'anger'],
-    'openvino-emotions-recognition-retail-0003',
-  ),
+  labels: ['neutral', 'happy', 'sad', 'surprise', 'anger'],
   inputSize: 64,
   inputName: 'data',
   outputName: 'prob_emotion',

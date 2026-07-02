@@ -1,0 +1,120 @@
+/*
+ * Oyon design tokens — single source of truth.
+ * Ported from the duplicated :root blocks in standalone/index.html and
+ * standalone/logs.html (Rohy TNA light palette) so the same values now drive
+ * Tailwind utilities and any raw CSS that still references var(--token).
+ *
+ * Dark mode is selected via <html data-theme="dark">.
+ */
+
+/* `:host` carries the tokens into the <oyon-app> shadow root (it is inert
+ * in the light DOM, so standalone is unaffected). */
+:root,
+:host,
+[data-theme='light'] {
+  /* Surface tones — light → dark within the surface family. */
+  --surface-0: #ffffff;
+  --surface-1: #f5f5f5;
+  --surface-2: #e5e5e5;
+  --surface-3: #d4d4d4;
+
+  /* Foreground (ink) tones — most prominent → least prominent. */
+  --ink-0: #171717;
+  --ink-1: #404040;
+  --ink-2: #525252;
+  --ink-3: #737373;
+
+  /* Borders. */
+  --line: rgba(0, 0, 0, 0.10);
+  --line-strong: rgba(0, 0, 0, 0.18);
+
+  /* Semantic status colors — solid + dim background variant for badges. */
+  --status-ok: #16a34a;
+  --status-ok-dim: rgba(22, 163, 74, 0.14);
+  --status-ok-strong: rgba(22, 163, 74, 0.45);
+
+  --status-warn: #d97706;
+  --status-warn-dim: rgba(217, 119, 6, 0.14);
+
+  --status-bad: #dc2626;
+  --status-bad-dim: rgba(220, 38, 38, 0.12);
+
+  --status-info: #2563eb;
+  --status-info-dim: rgba(37, 99, 235, 0.14);
+
+  /* For honest-confidence: render "unknown / null" as a neutral pill,
+     not as ok/warn/bad. Distinct token avoids accidentally inferring state. */
+  --status-null: #737373;
+  --status-null-dim: rgba(115, 115, 115, 0.12);
+
+  /* Geometry. */
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 18px;
+
+  /* Elevation. */
+  --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.04) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.18);
+  --shadow-popover: 0 8px 24px -8px rgba(0, 0, 0, 0.22);
+
+  /* Spacing scale — theme-independent. Replaces ad-hoc px values scattered
+     across the shell, routes, and the legacy renderer chrome. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* Stacking scale — theme-independent. One ladder so overlays/popovers/
+     toasts never need a hand-picked magic z-index again. */
+  --z-base: 0;
+  --z-dock: 10;
+  --z-overlay: 20;
+  --z-modal: 30;
+  --z-toast: 40;
+
+  /* Canvas / plot tokens. Defined once here as references to the themed
+     surface/ink/status vars above, so canvas drawing (which needs literal
+     color strings via getComputedStyle) follows light/dark automatically
+     without a duplicated dark block. */
+  --canvas-bg: var(--surface-1);
+  --canvas-axis: var(--line-strong);
+  --canvas-label: var(--ink-1);
+  --canvas-muted: var(--ink-3);
+  --plot-valence: var(--status-ok);
+  --plot-arousal: var(--status-info);
+}
+
+[data-theme='dark'] {
+  --surface-0: #0a0c10;
+  --surface-1: #11141a;
+  --surface-2: #1a1e26;
+  --surface-3: #232932;
+
+  --ink-0: #f1f5f9;
+  --ink-1: #cbd5e1;
+  --ink-2: #94a3b8;
+  --ink-3: #64748b;
+
+  --line: rgba(255, 255, 255, 0.10);
+  --line-strong: rgba(255, 255, 255, 0.18);
+
+  --status-ok: #4ade80;
+  --status-ok-dim: rgba(74, 222, 128, 0.18);
+  --status-ok-strong: rgba(74, 222, 128, 0.50);
+
+  --status-warn: #fbbf24;
+  --status-warn-dim: rgba(251, 191, 36, 0.18);
+
+  --status-bad: #f87171;
+  --status-bad-dim: rgba(248, 113, 113, 0.18);
+
+  --status-info: #60a5fa;
+  --status-info-dim: rgba(96, 165, 250, 0.18);
+
+  --status-null: #94a3b8;
+  --status-null-dim: rgba(148, 163, 184, 0.18);
+
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 14px 36px -16px rgba(0, 0, 0, 0.60);
+  --shadow-popover: 0 12px 28px -10px rgba(0, 0, 0, 0.70);
+}

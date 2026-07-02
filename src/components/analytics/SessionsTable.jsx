@@ -1,14 +1,22 @@
 // SessionsTable — admin sessions list mounted on the unified LogGrid.
 //
 // Replaces the inline <table> that used to live in ConfigPanel.
-// Reads from /api/sessions which the existing dashboard already uses.
-// Click a row to download the per-session bundle CSV
-// (/api/export/complete-session/:id).
+// Reads from /api/analytics/sessions which the existing dashboard already
+// uses (no query params — the server scopes rows by role). All FilterBar
+// filters (student / case / date range) therefore apply CLIENT-SIDE over
+// the loaded rows. Click a row's download button to get the per-session
+// bundle CSV (/api/export/complete-session/:id).
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { apiFetch, ApiError } from '../../services/apiClient';
 import { Download } from 'lucide-react';
 import LogGrid, { CopyableCell } from './LogGrid';
+import FilterBar, {
+    applyClientFilters,
+    contextualOptions,
+    filterByDateRange,
+} from './FilterBar';
+import { useAuth } from '../../contexts/AuthContext';
 
 function fmtTime(ts) {
     if (!ts) return '';
@@ -30,10 +38,18 @@ const COLUMNS = [
     { accessorKey: 'username', header: 'user', size: 130,
       cell: (info) => {
           const v = info.getValue() || info.row.original.student_name;
-          return <CopyableCell value={v} className="text-neutral-200 font-medium" />;
+          return (
+              <span title={`user id ${info.row.original.user_id ?? '—'}`}>
+                  <CopyableCell value={v} className="text-neutral-200 font-medium" />
+              </span>
+          );
       } },
     { accessorKey: 'case_name', header: 'case', size: 200,
-      cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-300" /> },
+      cell: (info) => (
+          <span title={`case id ${info.row.original.case_id ?? '—'}`}>
+              <CopyableCell value={info.getValue()} className="text-neutral-300" />
+          </span>
+      ) },
     { accessorKey: 'start_time', header: 'started', size: 165,
       cell: (info) => <CopyableCell value={info.getValue()} className="font-mono text-neutral-400 whitespace-nowrap">{fmtTime(info.getValue())}</CopyableCell> },
     {
@@ -93,10 +109,20 @@ const COLUMNS = [
     },
 ];
 
+const EMPTY_FILTERS = { user_id: '', case_id: '', from: '', to: '' };
+
+const FILTER_ACCESSORS = {
+    user_id: (r) => r.user_id,
+    case_id: (r) => r.case_id,
+};
+
 export default function SessionsTable() {
+    const { user } = useAuth();
+    const canReview = ['reviewer', 'educator', 'admin'].includes(user?.role);
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [filters, setFilters] = useState(EMPTY_FILTERS);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -116,16 +142,58 @@ export default function SessionsTable() {
 
     useEffect(() => { load(); }, [load]);
 
+    const setFilter = useCallback((key, value) => {
+        setFilters((prev) => ({ ...prev, [key]: value ?? '' }));
+    }, []);
+    const clearFilters = useCallback(() => setFilters(EMPTY_FILTERS), []);
+
+    const filteredRows = useMemo(
+        () => filterByDateRange(
+            applyClientFilters(rows, FILTER_ACCESSORS, filters),
+            (r) => r.start_time, filters,
+        ),
+        [rows, filters],
+    );
+
+    const dated = useMemo(
+        () => filterByDateRange(rows, (r) => r.start_time, filters),
+        [rows, filters],
+    );
+    const filterDefs = useMemo(() => {
+        const defs = [];
+        if (canReview) {
+            defs.push({
+                key: 'user_id', label: 'Student',
+                options: contextualOptions(dated, FILTER_ACCESSORS, filters, 'user_id',
+                    (r) => r.username || r.student_name || `#${r.user_id}`),
+            });
+        }
+        defs.push({
+            key: 'case_id', label: 'Case', width: 'w-56',
+            options: contextualOptions(dated, FILTER_ACCESSORS, filters, 'case_id',
+                (r) => r.case_name || `#${r.case_id}`),
+        });
+        return defs;
+    }, [dated, filters, canReview]);
+
     return (
-        <LogGrid
-            columns={COLUMNS}
-            data={rows}
-            loading={loading}
-            error={error}
-            onRefresh={load}
-            initialSorting={[{ id: 'start_time', desc: true }]}
-            emptyMessage="No sessions yet."
-            storageKey="loggrid.sessions"
-        />
+        <div className="flex flex-col h-full">
+            <FilterBar
+                filters={filterDefs}
+                values={filters}
+                onChange={setFilter}
+                onClearAll={clearFilters}
+            />
+            <LogGrid
+                columns={COLUMNS}
+                data={filteredRows}
+                loading={loading}
+                error={error}
+                onRefresh={load}
+                initialSorting={[{ id: 'start_time', desc: true }]}
+                emptyMessage="No sessions yet."
+                storageKey="loggrid.sessions"
+            />
+        </div>
     );
 }

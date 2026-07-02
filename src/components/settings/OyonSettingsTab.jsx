@@ -1,21 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Camera, ExternalLink, BarChart3, ShieldCheck, Loader2, Save, LineChart, Cpu, AlertTriangle } from 'lucide-react';
+import { Camera, BarChart3, ShieldCheck, Loader2, Save, LineChart, Cpu, AlertTriangle } from 'lucide-react';
 import { apiFetch, ApiError } from '../../services/apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { VALENCE_GRAPH_PREF_KEY, CONSENT_PREF_KEY } from '../oyon/OyonCaptureWidget';
 import { modelProfileList, DEFAULT_MODEL_PROFILE } from '../oyon/modelProfiles';
 
-// Relative URLs only. Vite's dev proxy forwards /oyon/* to Express on :3000,
-// so this path works the same in dev and prod. Earlier the dev branch hard-
-// coded http://127.0.0.1:3000 — that's a *different origin* from the SPA's
-// http://localhost:5173, so the auth cookie never followed the user across
-// the click and every API call from the standalone returned 401, which
-// looked like "Oyon is unreachable" + "the standalone is using a different
-// model" because it'd silently fall back to its localStorage default.
-const OYON_URL = '/oyon/standalone/';
-const OYON_LOGS_URL = '/oyon/standalone/logs.html';
+// Analytics is an in-app surface: ConfigPanel's "Oyon — Learning Analytics"
+// tab embeds the viewer with a host-fed (server-scoped, filtered) data
+// bridge. The old new-window launches were removed on purpose — the
+// standalone logs page no longer ships, and opening the embedded viewer in
+// its own tab gave it NO host data feed, so it rendered empty. Navigation
+// happens through `onOpenAnalytics` (passed by ConfigPanel, educator/admin
+// only) which just switches the active settings tab.
 
-export default function OyonSettingsTab() {
+export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
    const { user, isAdmin } = useAuth();
    const admin = typeof isAdmin === 'function' ? isAdmin() : Boolean(isAdmin);
 
@@ -155,8 +153,8 @@ export default function OyonSettingsTab() {
          </div>
          <p className="text-sm text-neutral-400 -mt-3">
             Local browser-side emotion recognition for simulation sessions. Faces never leave the device —
-            only aggregate emotion windows are saved into Rohy. The full capture, settings, and analytics
-            views live in the Oyon application.
+            only aggregate emotion windows are saved into Rohy. Capture runs from the pill in the simulator
+            header; analytics live in the Oyon — Learning Analytics tab.
          </p>
 
          {error && (
@@ -175,24 +173,17 @@ export default function OyonSettingsTab() {
                   {captureEnabled ? 'Enabled' : 'Disabled'}
                </span>
             </div>
-            <div className="flex flex-wrap gap-2 pt-2">
-               <a
-                  href={OYON_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 text-white text-sm font-semibold"
-               >
-                  <ExternalLink className="w-4 h-4" /> Open Oyon
-               </a>
-               <a
-                  href={OYON_LOGS_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-neutral-700 hover:bg-neutral-800 text-neutral-200 text-sm font-semibold"
-               >
-                  <BarChart3 className="w-4 h-4" /> Open Analytics
-               </a>
-            </div>
+            {typeof onOpenAnalytics === 'function' && (
+               <div className="flex flex-wrap gap-2 pt-2">
+                  <button
+                     type="button"
+                     onClick={onOpenAnalytics}
+                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 text-white text-sm font-semibold"
+                  >
+                     <BarChart3 className="w-4 h-4" /> Open Learning Analytics
+                  </button>
+               </div>
+            )}
          </section>
 
          <section className="rounded-lg border border-neutral-800 bg-neutral-950/60 p-5 space-y-4">

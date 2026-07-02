@@ -1,14 +1,11 @@
-import { assertCanonicalLabels } from './emotionLabels.js';
+import { EMOTION_MODEL_MOBILEVIT_MTL_URL } from './cdnDefaults.js';
 
 export const EMOTIEFF_MOBILEVIT_MTL_CONFIG = {
   id: 'emotiefflib-mobilevit-va-mtl',
   modelName: 'mobilevit_va_mtl',
   modelVersion: 'sb-ai-lab-emotiefflib-main',
-  modelUrl: '/standalone/models/emotion/mobilevit_va_mtl.onnx',
-  labels: assertCanonicalLabels(
-    ['anger', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'],
-    'emotiefflib-mobilevit-va-mtl',
-  ),
+  modelUrl: EMOTION_MODEL_MOBILEVIT_MTL_URL,
+  labels: ['anger', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'],
   inputSize: 224,
   inputChannels: 3,
   inputName: 'input',
@@ -29,3 +26,4 @@ export const EMOTIEFF_MOBILEVIT_MTL_CONFIG = {
     'Default standalone profile for stronger valence/arousal-capable inference.',
   ],
 };
+

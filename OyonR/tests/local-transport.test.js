@@ -6,6 +6,9 @@ import { LocalEmotionTransport } from '../src/transport/LocalEmotionTransport.js
   await transport.send([{ id: 1 }, { id: 2 }]);
   await transport.send([{ id: 3 }]);
   assert.deepEqual(transport.read(), [{ id: 2 }, { id: 3 }]);
+  assert.deepEqual(transport.drain(), [{ id: 2 }, { id: 3 }]);
+  assert.deepEqual(transport.read(), []);
+  await transport.send([{ id: 4 }]);
   transport.clear();
   assert.deepEqual(transport.read(), []);
 }

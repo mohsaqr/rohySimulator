@@ -9,7 +9,7 @@
 // Built on TanStack Table v8 (headless). All markup + Tailwind classes
 // are local so the dark theme matches the rest of Settings.
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
     useReactTable,
     getCoreRowModel,
@@ -24,6 +24,12 @@ import {
 
 const DEFAULT_PAGE_SIZE = 100;
 const PAGE_STEPS = [100, 500, 2000, 10000];
+
+// Exact, case-insensitive, type-tolerant equality for select-based
+// per-column filters (null-safe; numbers compared via String()).
+function exactValueFilterFn(row, columnId, filterValue) {
+    return String(row.getValue(columnId) ?? '').toLowerCase() === String(filterValue).toLowerCase();
+}
 
 // Click any cell to copy its value. Visual confirmation lasts ~1s, then
 // reverts. Only fires on simple values — clicking inside an expand
@@ -53,8 +59,11 @@ function CopyableCell({ value, className = '', children }) {
 
 // Per-column quick filter row sitting under the header. Each cell is
 // either a free-text contains filter or a select if the column declares
-// a `filterOptions` array.
-function FilterRow({ table, density }) {
+// `meta.filterOptions` — a static array OR a `(rows) => options` function
+// evaluated against the currently-loaded data, so options track what's
+// actually in the table. Options may be plain strings or
+// `{ value, label }` objects (label shown, value filtered on).
+function FilterRow({ table, density, data }) {
     const cells = table.getVisibleLeafColumns();
     return (
         <tr className={`bg-neutral-850 ${density === 'compact' ? '' : 'h-8'}`}>
@@ -65,6 +74,14 @@ function FilterRow({ table, density }) {
                 }
                 const value = col.getFilterValue() ?? '';
                 if (meta.filterOptions) {
+                    const raw = typeof meta.filterOptions === 'function'
+                        ? meta.filterOptions(data)
+                        : meta.filterOptions;
+                    const options = (raw || []).map((o) => (
+                        o !== null && typeof o === 'object'
+                            ? { value: String(o.value), label: String(o.label ?? o.value) }
+                            : { value: String(o), label: String(o) }
+                    ));
                     return (
                         <td key={col.id} className="px-2 py-1 border-b border-neutral-800">
                             <select
@@ -73,8 +90,8 @@ function FilterRow({ table, density }) {
                                 className="w-full bg-neutral-900 border border-neutral-700 rounded text-xs px-1 py-0.5 text-neutral-200"
                             >
                                 <option value="">(any)</option>
-                                {meta.filterOptions.map((o) => (
-                                    <option key={o} value={o}>{o}</option>
+                                {options.map((o) => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
                                 ))}
                             </select>
                         </td>
@@ -97,7 +114,7 @@ function FilterRow({ table, density }) {
 }
 
 export default function LogGrid({
-    columns,                  // TanStack ColumnDef[] (with optional meta.filterOptions, meta.filterable=false)
+    columns,                  // TanStack ColumnDef[] (optional meta.filterOptions: array | (rows) => array of strings or {value,label}; meta.filterable=false)
     data,                     // row array
     loading = false,
     error = null,
@@ -139,9 +156,24 @@ export default function LogGrid({
         if (storageKey) localStorage.setItem(`${storageKey}.visibility`, JSON.stringify(columnVisibility));
     }, [storageKey, columnVisibility]);
 
+    // Columns whose quick filter is a select get exact (case-insensitive)
+    // matching instead of the free-text contains default — selecting
+    // "CHECKED" must not also match "CHECKED_VITALS". Columns that declare
+    // their own filterFn keep it. (Not TanStack's 'equalsString': that
+    // calls .toLowerCase() on the raw cell value and would throw on
+    // numbers/null.)
+    const resolvedColumns = useMemo(
+        () => columns.map((col) => (
+            col.meta?.filterOptions && !col.filterFn
+                ? { ...col, filterFn: exactValueFilterFn }
+                : col
+        )),
+        [columns],
+    );
+
     const table = useReactTable({
         data,
-        columns,
+        columns: resolvedColumns,
         state: { globalFilter, sorting, columnVisibility, columnSizing },
         onGlobalFilterChange: setGlobalFilter,
         onSortingChange: setSorting,
@@ -332,7 +364,7 @@ export default function LogGrid({
                                     })}
                                 </tr>
                             ))}
-                            {showFilterRow && <FilterRow table={table} density={density} />}
+                            {showFilterRow && <FilterRow table={table} density={density} data={data} />}
                         </thead>
                         <tbody>
                             {table.getRowModel().rows.map((row) => {

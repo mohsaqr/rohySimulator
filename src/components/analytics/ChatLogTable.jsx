@@ -7,10 +7,25 @@
 //
 // Click any row to expand — full message/content shown verbatim
 // (no truncation), so admins can read what was actually said.
+//
+// Filtering model:
+//   - Session and the date range are /chat-log/feed query params → refetch.
+//     The Session dropdown is contextual: options are derived from the
+//     loaded rows (narrowed by the selected user / case) with readable
+//     labels, and remembered across refetches so picking one doesn't
+//     collapse the list. Nobody types a session id.
+//   - User / Case / Source / Role filter CLIENT-SIDE over the loaded rows.
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { apiFetch, ApiError } from '../../services/apiClient';
 import LogGrid, { CopyableCell } from './LogGrid';
+import FilterBar, {
+    applyClientFilters,
+    contextualOptions,
+    deriveSessionOptions,
+    uniqueValues,
+    useOptionMemory,
+} from './FilterBar';
 
 const DEFAULT_LIMIT = 500;
 
@@ -58,9 +73,12 @@ const COLUMNS = [
           const cls = SOURCE_COLOR[v] || 'bg-neutral-700 text-neutral-300';
           return <span className={`px-1.5 py-0.5 rounded font-medium text-[11px] ${cls}`}>{SOURCE_LABEL[v] || v || '—'}</span>;
       },
-      meta: { filterOptions: Object.keys(SOURCE_LABEL) },
+      meta: {
+          filterOptions: Object.keys(SOURCE_LABEL).map((v) => ({ value: v, label: SOURCE_LABEL[v] })),
+      },
     },
     { accessorKey: 'role', header: 'role', size: 80,
+      meta: { filterOptions: (rows) => uniqueValues(rows, (r) => r.role) },
       cell: (info) => {
           const v = info.getValue();
           if (!v) return <span className="text-neutral-500">—</span>;
@@ -68,7 +86,11 @@ const COLUMNS = [
           return <span className={`px-1.5 py-0.5 rounded font-mono text-[11px] ${cls}`}>{v}</span>;
       } },
     { accessorKey: 'username', header: 'user', size: 110,
-      cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-200" /> },
+      cell: (info) => (
+          <span title={`user id ${info.row.original.user_id ?? '—'}`}>
+              <CopyableCell value={info.getValue()} className="text-neutral-200" />
+          </span>
+      ) },
     { accessorKey: 'session_id', header: 'sess', size: 60,
       cell: (info) => {
           const v = info.getValue();
@@ -110,15 +132,28 @@ const INITIAL_HIDDEN = {
     latency_ms: false,
 };
 
+const EMPTY_FILTERS = {
+    user_id: '', case_id: '', session_id: '',
+    source: '', role: '', from: '', to: '',
+};
+
+// Client-side equality filters (session_id is a SERVER param, not listed).
+const FILTER_ACCESSORS = {
+    user_id: (r) => r.user_id,
+    case_id: (r) => r.case_id,
+    source: (r) => r.source,
+    role: (r) => r.role,
+};
+
 export default function ChatLogTable() {
     const [events, setEvents] = useState([]);
     const [sources, setSources] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [from, setFrom] = useState('');
-    const [to, setTo] = useState('');
-    const [sessionFilter, setSessionFilter] = useState('');
+    const [filters, setFilters] = useState(EMPTY_FILTERS);
     const [currentLimit, setCurrentLimit] = useState(DEFAULT_LIMIT);
+
+    const { from, to, session_id: sessionFilter } = filters;
 
     const load = useCallback(async (lim = currentLimit) => {
         setLoading(true);
@@ -142,23 +177,59 @@ export default function ChatLogTable() {
 
     useEffect(() => { load(DEFAULT_LIMIT);   }, [from, to, sessionFilter]);
 
-    const headerExtras = (
-        <>
-            <input
-                type="text" value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)}
-                placeholder="Sess #" className="w-20 px-2 py-1.5 bg-neutral-900 border border-neutral-700 rounded text-xs"
-                title="Filter to a single session id"
-            />
-            <input
-                type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-                className="px-2 py-1.5 bg-neutral-900 border border-neutral-700 rounded text-xs" title="From"
-            />
-            <input
-                type="date" value={to} onChange={(e) => setTo(e.target.value)}
-                className="px-2 py-1.5 bg-neutral-900 border border-neutral-700 rounded text-xs" title="To"
-            />
-        </>
+    const setFilter = useCallback((key, value) => {
+        setFilters((prev) => {
+            const next = { ...prev, [key]: value ?? '' };
+            // A different user / case invalidates the session selection.
+            if (key === 'user_id' || key === 'case_id') next.session_id = '';
+            return next;
+        });
+    }, []);
+    const clearFilters = useCallback(() => setFilters(EMPTY_FILTERS), []);
+
+    const filteredEvents = useMemo(
+        () => applyClientFilters(events, FILTER_ACCESSORS, filters),
+        [events, filters],
     );
+
+    // Session options: derived from the rows matching the selected user /
+    // case, remembered across refetches (session_id is a server param — a
+    // refetch narrows the rows to one session, and without memory the
+    // dropdown would collapse to a single choice).
+    const sessionOptions = useOptionMemory(useMemo(() => {
+        const narrowing = { user_id: FILTER_ACCESSORS.user_id, case_id: FILTER_ACCESSORS.case_id };
+        return deriveSessionOptions(
+            applyClientFilters(events, narrowing, filters),
+            { id: (r) => r.session_id, ts: (r) => r.ts, caseName: (r) => r.case_name },
+        );
+    }, [events, filters]));
+
+    // User / case options are remembered too: with a session pinned
+    // server-side, the loaded rows alone can't offer the other choices.
+    const userOptions = useOptionMemory(useMemo(
+        () => contextualOptions(events, FILTER_ACCESSORS, filters, 'user_id',
+            (r) => r.username || `#${r.user_id}`),
+        [events, filters],
+    ));
+    const caseOptions = useOptionMemory(useMemo(
+        () => contextualOptions(events, FILTER_ACCESSORS, filters, 'case_id',
+            (r) => r.case_name || `#${r.case_id}`),
+        [events, filters],
+    ));
+
+    const filterDefs = useMemo(() => [
+        { key: 'user_id', label: 'User', options: userOptions },
+        { key: 'case_id', label: 'Case', options: caseOptions },
+        { key: 'session_id', label: 'Session', width: 'w-56', options: sessionOptions },
+        {
+            key: 'source', label: 'Source', width: 'w-32',
+            options: Object.keys(SOURCE_LABEL).map((v) => ({ value: v, label: SOURCE_LABEL[v] })),
+        },
+        {
+            key: 'role', label: 'Role', width: 'w-32',
+            options: contextualOptions(events, FILTER_ACCESSORS, filters, 'role'),
+        },
+    ], [events, filters, userOptions, caseOptions, sessionOptions]);
 
     // Expanded panel: full content verbatim, plus the secondary fields
     // that are hidden in the row by default. Lets a reviewer see the
@@ -183,9 +254,15 @@ export default function ChatLogTable() {
 
     return (
         <div className="flex flex-col h-full">
+            <FilterBar
+                filters={filterDefs}
+                values={filters}
+                onChange={setFilter}
+                onClearAll={clearFilters}
+            />
             <LogGrid
                 columns={COLUMNS}
-                data={events}
+                data={filteredEvents}
                 loading={loading}
                 error={error}
                 onRefresh={() => load(currentLimit)}
@@ -193,7 +270,6 @@ export default function ChatLogTable() {
                 currentLimit={currentLimit}
                 initialSorting={[{ id: 'ts', desc: true }]}
                 initialColumnVisibility={INITIAL_HIDDEN}
-                headerExtras={headerExtras}
                 expandRender={expandRender}
                 emptyMessage="No chat events yet."
                 storageKey="loggrid.chat"

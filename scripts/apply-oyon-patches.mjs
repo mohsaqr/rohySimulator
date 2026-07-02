@@ -38,8 +38,13 @@ if (!fs.existsSync(oyonRoot)) {
   process.exit(1);
 }
 if (!fs.existsSync(overlayRoot)) {
-  console.error(`Overlay tree missing: ${overlayRoot}`);
-  process.exit(1);
+  // Since the Oyon v2 embed, Rohy carries no source patches: the <oyon-app>
+  // element covers everything the old overlays did (asset paths, gaze engine,
+  // Rohy-mode transport) through host attributes. An absent overlay tree is
+  // the expected steady state, not an error — recreate scripts/oyon-overlay/
+  // only if a new Rohy-specific patch becomes unavoidable.
+  console.log('[overlay] no overlay tree — nothing to apply (Oyon v2 embed needs no source patches)');
+  process.exit(0);
 }
 
 let copied = 0;

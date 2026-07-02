@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Oyon — Preview (Engagement + Gaze)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f1419; color: #e6e9ed; padding: 24px; max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px 0; }
+  .caption { color: #8b95a1; font-size: 13px; margin-bottom: 20px; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+  .controls-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .controls-group-label { font-size: 10px; color: #8b95a1; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 4px; align-self: center; }
+  .controls-divider { width: 1px; height: 22px; background: #2a3441; margin: 0 4px; }
+  button { padding: 8px 14px; border: 1px solid #2a3441; background: #1a2230; color: #e6e9ed; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background 0.15s; }
+  button.active { background: #2563eb; border-color: #2563eb; }
+  button:hover { background: #243046; }
+  button.active:hover { background: #1d4ed8; }
+  button.calibrate { background: #15803d; border-color: #15803d; }
+  button.calibrate:hover { background: #166534; }
+  .panel { background: #161d28; border: 1px solid #232c3a; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+  .panel h2 { font-size: 12px; margin: 0 0 12px 0; color: #b6c0cd; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .stat { background: #0f1620; padding: 10px 12px; border-radius: 6px; }
+  .stat-label { font-size: 10px; color: #8b95a1; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .stat-value { font-size: 22px; font-weight: 600; color: #f6f8fa; font-variant-numeric: tabular-nums; }
+  .stat-unit { font-size: 12px; color: #8b95a1; margin-left: 2px; font-weight: 400; }
+  .bar { height: 6px; background: #1d2735; border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, #2563eb, #60a5fa); transition: width 0.3s ease-out; }
+  .bar-fill.entropy { background: linear-gradient(90deg, #f97316, #fbbf24); }
+  .focus .stat-value { font-size: 38px; }
+  .zones-engagement { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .zone { background: #0f1620; padding: 10px; border-radius: 6px; text-align: center; }
+  .zone-label { font-size: 10px; color: #8b95a1; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.06em; }
+  .zone-pct { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .log { background: #0f1620; padding: 10px 12px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 11px; color: #8b95a1; max-height: 140px; overflow-y: auto; }
+  .log-entry { padding: 2px 0; }
+  .log-entry strong { color: #e6e9ed; font-weight: 600; }
+  .top-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px; }
+  @media (max-width: 780px) { .top-grid { grid-template-columns: 1fr; } }
+
+  /* Gaze-specific styles */
+  .gaze-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; margin-bottom: 12px; }
+  @media (max-width: 780px) { .gaze-grid { grid-template-columns: 1fr; } }
+  .gaze-status-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; align-items: center; margin-bottom: 12px; }
+  .badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 4px 8px; border-radius: 999px; background: #0f1620; border: 1px solid #232c3a; font-size: 11px; color: #b6c0cd; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge.ok    { border-color: #15803d; color: #4ade80; }
+  .badge.warn  { border-color: #b45309; color: #fbbf24; }
+  .heatmap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; aspect-ratio: 1 / 1; background: #0f1620; padding: 4px; border-radius: 6px; }
+  .heat-tile { display: flex; align-items: center; justify-content: center; padding: 8px; border-radius: 4px; background: rgba(78, 167, 255, 0.06); position: relative; min-height: 48px; transition: background 0.3s ease-out; }
+  .heat-tile-label { position: absolute; top: 4px; left: 6px; font-size: 9px; color: rgba(230, 233, 237, 0.4); text-transform: uppercase; letter-spacing: 0.05em; }
+  .heat-tile-pct { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; color: #f6f8fa; }
+  .viewport-card { background: #0f1620; border-radius: 6px; padding: 10px; }
+  .viewport-box { position: relative; width: 100%; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #0a1018 0%, #131c2a 100%); border: 1px dashed #2a3441; border-radius: 4px; overflow: hidden; }
+  .viewport-dot { position: absolute; width: 14px; height: 14px; margin-left: -7px; margin-top: -7px; border-radius: 50%; background: radial-gradient(circle at center, #fbbf24 30%, #f97316 80%); box-shadow: 0 0 12px rgba(251, 191, 36, 0.6); transition: left 0.18s ease-out, top 0.18s ease-out, opacity 0.18s; left: 50%; top: 50%; z-index: 2; }
+  .viewport-dot[data-stale] { opacity: 0.25; box-shadow: none; }
+  .viewport-trail-dot { position: absolute; width: 8px; height: 8px; margin-left: -4px; margin-top: -4px; border-radius: 50%; background: rgba(251, 191, 36, 0.6); pointer-events: none; z-index: 1; transition: opacity 0.3s ease-out; }
+  .viewport-crosshair { position: absolute; top: 50%; left: 50%; width: 1px; height: 100%; background: rgba(255,255,255,0.04); transform: translateX(-0.5px); }
+  .viewport-crosshair.h { width: 100%; height: 1px; transform: translateY(-0.5px); }
+  .viewport-meta { display: flex; justify-content: space-between; font-size: 10px; color: #8b95a1; margin-top: 6px; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+  <h1>Oyon — Preview (Engagement + Gaze)</h1>
+  <p class="caption">Synthetic eye and gaze input; no camera. Click a behavior to see how engagement and gaze signals respond. Press <strong>Calibrate</strong> to demo the Stage 5 overlay against the mock adapter.</p>
+
+  <div class="controls">
+    <span class="controls-group-label">Gaze</span>
+    <div class="controls-group">
+      <button data-behavior="centered" class="active">Focused &amp; centered</button>
+      <button data-behavior="scanning">Scanning around</button>
+      <button data-behavior="reading">Reading sweep</button>
+      <button data-behavior="left">Looking left</button>
+      <button data-behavior="right">Looking right</button>
+    </div>
+    <span class="controls-divider"></span>
+    <span class="controls-group-label">Eye</span>
+    <div class="controls-group">
+      <button data-behavior="blinking">Blinking rapidly</button>
+      <button data-behavior="closed">Eyes closed</button>
+    </div>
+    <span class="controls-divider"></span>
+    <button id="calibrate-btn" class="calibrate" type="button">Calibrate (overlay demo)</button>
+  </div>
+
+  <div class="top-grid">
+    <div class="panel focus">
+      <h2>Focus score</h2>
+      <div class="stat">
+        <div class="stat-label">Composite (0 → 1)</div>
+        <div class="stat-value" id="focus-score">—</div>
+        <div class="bar"><div class="bar-fill" id="focus-bar" style="width: 0%"></div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Components</h2>
+      <div class="grid">
+        <div class="stat">
+          <div class="stat-label">Blink penalty</div>
+          <div class="stat-value" id="comp-blink">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Openness</div>
+          <div class="stat-value" id="comp-openness">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Gaze stability</div>
+          <div class="stat-value" id="comp-gaze">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Raw metrics (per window)</h2>
+    <div class="grid">
+      <div class="stat">
+        <div class="stat-label">Blink rate</div>
+        <div class="stat-value" id="blink-rate">—<span class="stat-unit"> Hz</span></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Blink count</div>
+        <div class="stat-value" id="blink-count">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Eye openness</div>
+        <div class="stat-value" id="openness">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Gaze entropy</div>
+        <div class="stat-value" id="entropy">—</div>
+        <div class="bar"><div class="bar-fill entropy" id="entropy-bar" style="width: 0%"></div></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Valid frames</div>
+        <div class="stat-value" id="valid-ratio">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Window #</div>
+        <div class="stat-value" id="window-count">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Engagement gaze zones (5-bucket coarse)</h2>
+    <div class="zones-engagement">
+      <div class="zone"><div class="zone-label">Up</div><div class="zone-pct" id="zone-up">—</div></div>
+      <div class="zone"><div class="zone-label">Left</div><div class="zone-pct" id="zone-left">—</div></div>
+      <div class="zone"><div class="zone-label">Center</div><div class="zone-pct" id="zone-center">—</div></div>
+      <div class="zone"><div class="zone-label">Right</div><div class="zone-pct" id="zone-right">—</div></div>
+      <div class="zone"><div class="zone-label">Down</div><div class="zone-pct" id="zone-down">—</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Gaze (screen-point)</h2>
+    <div class="gaze-status-row">
+      <span class="badge" id="gaze-calibrated-badge">Not calibrated</span>
+      <span class="badge" id="gaze-quality-badge">Quality —</span>
+      <span class="badge" id="gaze-model-badge">Model —</span>
+      <span class="badge" id="gaze-npoints-badge">n_points —</span>
+      <span class="badge" id="gaze-dispersion-badge">σ —</span>
+    </div>
+    <div class="gaze-grid">
+      <div>
+        <div class="viewport-card">
+          <div class="viewport-box" id="viewport-box">
+            <div class="viewport-crosshair"></div>
+            <div class="viewport-crosshair h"></div>
+            <div class="viewport-dot" id="viewport-dot"></div>
+          </div>
+          <div class="viewport-meta">
+            <span>centroid: <strong id="gaze-centroid">—</strong></span>
+            <span>off-screen: <strong id="gaze-offscreen">—</strong></span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="heatmap" id="heatmap">
+          <div class="heat-tile" data-zone="top_left" title="top-left"><span class="heat-tile-label">TL</span><span class="heat-tile-pct">—</span></div>
+          <div class="heat-tile" data-zone="top_center" title="top-center"><span class="heat-tile-label">TC</span><span class="heat-tile-pct">—</span></div>
+          <div class="heat-tile" data-zone="top_right" title="top-right"><span class="heat-tile-label">TR</span><span class="heat-tile-pct">—</span></div>
+          <div class="heat-tile" data-zone="middle_left" title="middle-left"><span class="heat-tile-label">ML</span><span class="heat-tile-pct">—</span></div>
+          <div class="heat-tile" data-zone="middle_center" title="middle-center"><span class="heat-tile-label">C</span><span class="heat-tile-pct">—</span></div>
+          <div class="heat-tile" data-zone="middle_right" title="middle-right"><span class="heat-tile-label">MR</span><span class="heat-tile-pct">—</span></div>
+          <div class="heat-tile" data-zone="bottom_left" title="bottom-left"><span class="heat-tile-label">BL</span><span class="heat-tile-pct">—</span></div>
+          <div class="heat-tile" data-zone="bottom_center" title="bottom-center"><span class="heat-tile-label">BC</span><span class="heat-tile-pct">—</span></div>
+          <div class="heat-tile" data-zone="bottom_right" title="bottom-right"><span class="heat-tile-label">BR</span><span class="heat-tile-pct">—</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Window log (newest first)</h2>
+    <div class="log" id="log"></div>
+  </div>
+
+<script type="module">
+import {
+  EmotionRuntime,
+  MockFaceTracker,
+  MockEmotionClassifier,
+  defineGazeCalibrationOverlay,
+} from '/src/index.js';
+import { MockWebEyeTrackAdapter } from '/src/mocks/MockWebEyeTrackAdapter.js';
+
+let behavior = 'centered';
+let frameI = 0;
+
+// Reading-sweep path. Each stop dwells DWELL_TICKS frames so the
+// EyeSmoother's hold-time + switch-votes state machine (default 400ms
+// hold + 2 consecutive votes) accepts each transition. Faster sweeps
+// stay locked on the first zone and make engagement zone proportions
+// look stuck — that's correct smoother behavior, but it hides the
+// reading pattern. Walks left→right within each row, top→bottom across
+// rows, then repeats. Total cycle = 3 rows × 3 cols × 3 dwell × 250ms
+// ≈ 6.75s, so each ~3s aggregation window catches at least 4 stops
+// across two rows for visible y variation.
+const DWELL_TICKS = 3;
+const READING_PATH = (() => {
+  const path = [];
+  const cols = [-0.35, 0.0, 0.35];
+  const rows = [-0.3, 0.0, 0.3];
+  for (const y of rows) for (const x of cols) {
+    for (let d = 0; d < DWELL_TICKS; d += 1) path.push({ x, y });
+  }
+  return path;
+})();
+
+document.querySelectorAll('button[data-behavior]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('button[data-behavior]').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    behavior = btn.dataset.behavior;
+  });
+});
+
+function synthEyeFeatures() {
+  const i = frameI;
+  const ts = performance.now();
+  switch (behavior) {
+    case 'centered':
+      return { eye_openness_l: 0.95, eye_openness_r: 0.95, blink_l: false, blink_r: false,
+        iris_offset_normalized: { l: { x: 0, y: 0 }, r: { x: 0, y: 0 } }, gaze_zone: 'center', valid: true, ts_ms: ts };
+    case 'scanning': {
+      const sweep = [-0.4, -0.2, 0, 0.2, 0.4, 0.2, -0.2, -0.4, 0.4, 0];
+      const x = sweep[i % sweep.length];
+      const zone = x < -0.14 ? 'left' : x > 0.14 ? 'right' : 'center';
+      return { eye_openness_l: 0.9, eye_openness_r: 0.9, blink_l: false, blink_r: false,
+        iris_offset_normalized: { l: { x, y: 0 }, r: { x, y: 0 } }, gaze_zone: zone, valid: true, ts_ms: ts };
+    }
+    case 'reading': {
+      const stop = READING_PATH[i % READING_PATH.length];
+      const horizZone = stop.x < -0.14 ? 'left' : stop.x > 0.14 ? 'right' : 'center';
+      const vertZone = stop.y < -0.14 ? 'up' : stop.y > 0.14 ? 'down' : null;
+      // Prefer the dominant axis: vertical when reader is clearly above/below
+      // the middle row, horizontal otherwise. The engagement smoother needs
+      // a clear winner, not a 2D coordinate.
+      const zone = vertZone && Math.abs(stop.y) > Math.abs(stop.x) ? vertZone : horizZone;
+      return { eye_openness_l: 0.9, eye_openness_r: 0.9, blink_l: false, blink_r: false,
+        iris_offset_normalized: { l: { x: stop.x, y: stop.y }, r: { x: stop.x, y: stop.y } },
+        gaze_zone: zone, valid: true, ts_ms: ts };
+    }
+    case 'blinking': {
+      const isBlink = (i % 3) === 0;
+      const openness = isBlink ? 0.05 : 0.9;
+      return { eye_openness_l: openness, eye_openness_r: openness, blink_l: isBlink, blink_r: isBlink,
+        iris_offset_normalized: isBlink ? { l: null, r: null } : { l: { x: 0, y: 0 }, r: { x: 0, y: 0 } },
+        gaze_zone: isBlink ? null : 'center', valid: !isBlink, ts_ms: ts };
+    }
+    case 'left':
+      return { eye_openness_l: 0.95, eye_openness_r: 0.95, blink_l: false, blink_r: false,
+        iris_offset_normalized: { l: { x: -0.35, y: 0 }, r: { x: -0.35, y: 0 } }, gaze_zone: 'left', valid: true, ts_ms: ts };
+    case 'right':
+      return { eye_openness_l: 0.95, eye_openness_r: 0.95, blink_l: false, blink_r: false,
+        iris_offset_normalized: { l: { x: 0.35, y: 0 }, r: { x: 0.35, y: 0 } }, gaze_zone: 'right', valid: true, ts_ms: ts };
+    case 'closed':
+      return { eye_openness_l: 0.05, eye_openness_r: 0.05, blink_l: true, blink_r: true,
+        iris_offset_normalized: { l: null, r: null }, gaze_zone: null, valid: false, ts_ms: ts };
+  }
+}
+
+function synthGazeSample() {
+  // Same behaviors as engagement; mapped onto normalized [-0.5, 0.5] gaze
+  // coordinates. The mock adapter forwards these straight through to the
+  // runtime's _handleGazeSample → GazeSmoother → GazeAggregator path.
+  const i = frameI;
+  switch (behavior) {
+    case 'centered':  return { x: 0,    y: 0,    quality: 0.95 };
+    case 'left':      return { x: -0.35, y: 0,   quality: 0.92 };
+    case 'right':     return { x: 0.35,  y: 0,   quality: 0.92 };
+    case 'scanning': {
+      const sweep = [-0.4, -0.2, 0, 0.2, 0.4, 0.2, -0.2, -0.4, 0.4, 0];
+      return { x: sweep[i % sweep.length], y: 0, quality: 0.88 };
+    }
+    case 'reading': {
+      const stop = READING_PATH[i % READING_PATH.length];
+      return { x: stop.x, y: stop.y, quality: 0.9 };
+    }
+    case 'blinking': {
+      const isBlink = (i % 3) === 0;
+      return isBlink ? { x: 0, y: 0, quality: 0, gaze_state: 'closed' } : { x: 0, y: 0, quality: 0.9 };
+    }
+    case 'closed':    return { x: 0, y: 0, quality: 0, gaze_state: 'closed' };
+    default:          return { x: 0, y: 0, quality: 0.9 };
+  }
+}
+
+const mockGazeAdapter = new MockWebEyeTrackAdapter({
+  onGaze: () => {},                         // runtime overrides
+  calibrationQuality: 0.83,
+  modelName: 'mock-blazegaze',
+  minCalibrationSamples: 5,
+});
+
+const runtime = new EmotionRuntime({
+  settings: {
+    eye_tracking_enabled: true,
+    gaze_tracking_enabled: true,
+    gaze_calibration_required: false,    // demo emits without first round-trip
+    gaze_min_quality_score: 0.3,
+    sample_interval_ms: 250,
+    aggregate_window_ms: 3000,
+    min_valid_frames: 2,
+    // Demo-tuned smoother responsiveness. Production default is 3000ms
+    // (longer than the aggregation window — correct for real eye tracking,
+    // wrong for a fast-switching synthetic demo).
+    min_hold_ms: 500,
+  },
+  faceTracker: new MockFaceTracker({
+    mockBlendshapes: [
+      { categoryName: 'eyeBlinkLeft', score: 0.05 },
+      { categoryName: 'eyeBlinkRight', score: 0.05 },
+    ],
+  }),
+  classifier: new MockEmotionClassifier(),
+  webEyeTrackAdapter: mockGazeAdapter,
+  transport: { async send(events) { events.forEach(onWindow); } },
+  eyeExtractor: { extract: () => synthEyeFeatures() },
+});
+runtime.camera = {
+  video: { readyState: 4, currentTime: 0 },
+  start: async () => {},
+  stop: () => {},
+};
+
+await runtime.init();
+await mockGazeAdapter.start();
+
+// Calibration overlay wiring — defined lazily so the page is interactive
+// even if the overlay module errors.
+defineGazeCalibrationOverlay();
+let overlayEl = null;
+document.getElementById('calibrate-btn').addEventListener('click', async () => {
+  if (!overlayEl) {
+    overlayEl = document.createElement('oyon-gaze-calibration');
+    overlayEl.fixationMs = 500;
+    overlayEl.captureMs = 1100;   // keep real-worker clicks outside 1000ms debounce
+    document.body.appendChild(overlayEl);
+  }
+  const result = await overlayEl.startCalibration(runtime);
+  appendLog(`<strong>CALIBRATE</strong> · ${result.ok ? 'OK' : 'FAIL'} · ${result.ok ? `q=${fmt(result.quality)}` : `reason=${result.reason}`}`);
+});
+
+let windowN = 0;
+const $ = (id) => document.getElementById(id);
+const fmt = (v, d = 2) => (v == null || Number.isNaN(v) ? '—' : Number(v).toFixed(d));
+const pct = (v) => (v == null || Number.isNaN(v) ? '—' : (Number(v) * 100).toFixed(0) + '%');
+
+function appendLog(html) {
+  const log = $('log');
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerHTML = `[#${windowN}] ${html}`;
+  log.prepend(div);
+  while (log.children.length > 12) log.removeChild(log.lastChild);
+}
+
+function paintGaze(g) {
+  if (!g) return;
+  $('gaze-npoints-badge').textContent = `n_points ${g.n_points}`;
+  $('gaze-dispersion-badge').textContent = `σ ${fmt(g.dispersion, 3)}`;
+  $('gaze-centroid').textContent = g.centroid ? `${fmt(g.centroid.x)}, ${fmt(g.centroid.y)}` : '—';
+  $('gaze-offscreen').textContent = pct(g.off_screen_ratio);
+  const z = g.zone_proportions || {};
+  document.querySelectorAll('.heat-tile').forEach((tile) => {
+    const v = Number(z[tile.dataset.zone]) || 0;
+    const pctEl = tile.querySelector('.heat-tile-pct');
+    pctEl.textContent = v === 0 ? '0' : (v * 100).toFixed(0);
+    // Quadratic curve so middling values still register visually.
+    const alpha = Math.min(1, Math.sqrt(v));
+    tile.style.background = `rgba(78, 167, 255, ${0.06 + 0.7 * alpha})`;
+  });
+}
+
+function paintCalibration(meta) {
+  if (!meta) return;
+  const calBadge = $('gaze-calibrated-badge');
+  const qBadge = $('gaze-quality-badge');
+  const mBadge = $('gaze-model-badge');
+  if (Number.isFinite(meta.calibration_age_ms)) {
+    calBadge.textContent = `Calibrated (${(meta.calibration_age_ms / 1000).toFixed(0)}s ago)`;
+    calBadge.className = 'badge ok';
+  } else {
+    calBadge.textContent = 'Not calibrated';
+    calBadge.className = 'badge';
+  }
+  qBadge.textContent = `Quality ${Number.isFinite(meta.calibration_quality) ? fmt(meta.calibration_quality) : '—'}`;
+  qBadge.className = Number.isFinite(meta.calibration_quality) && meta.calibration_quality >= 0.7 ? 'badge ok' : 'badge';
+  mBadge.textContent = `Model ${meta.model_version || '—'}`;
+}
+
+function onWindow(w) {
+  if (!w?.engagement && !w?.gaze) return;
+  windowN++;
+  $('window-count').textContent = windowN;
+  if (w.engagement) {
+    const e = w.engagement;
+    $('focus-score').textContent = fmt(e.focus_score);
+    $('focus-bar').style.width = ((e.focus_score ?? 0) * 100) + '%';
+    const c = e.focus_score_components || {};
+    $('comp-blink').textContent = fmt(c.blink);
+    $('comp-openness').textContent = fmt(c.openness);
+    $('comp-gaze').textContent = fmt(c.gaze_stability);
+    $('blink-rate').innerHTML = fmt(e.blink_rate_hz, 2) + '<span class="stat-unit"> Hz</span>';
+    $('blink-count').textContent = e.blink_count;
+    $('openness').textContent = fmt(e.eye_openness_mean);
+    $('entropy').textContent = fmt(e.gaze_entropy);
+    $('entropy-bar').style.width = ((e.gaze_entropy ?? 0) * 100) + '%';
+    $('valid-ratio').textContent = pct(e.valid_frame_ratio);
+    const z = e.gaze_zone_proportions || {};
+    $('zone-up').textContent = pct(z.up);
+    $('zone-left').textContent = pct(z.left);
+    $('zone-center').textContent = pct(z.center);
+    $('zone-right').textContent = pct(z.right);
+    $('zone-down').textContent = pct(z.down);
+  }
+  if (w.gaze) {
+    paintGaze(w.gaze);
+    paintCalibration(w.gaze);
+  }
+  const parts = [`<strong>${behavior.toUpperCase()}</strong>`];
+  if (w.engagement) parts.push(`focus=${fmt(w.engagement.focus_score)}`, `entropy=${fmt(w.engagement.gaze_entropy)}`);
+  if (w.gaze) parts.push(`gaze_n=${w.gaze.n_points}`, `σ=${fmt(w.gaze.dispersion, 2)}`);
+  appendLog(parts.join(' · '));
+}
+
+// Live gaze indicator — driven directly from the synthetic source so the
+// dot moves at the per-tick rate, not the per-window rate. Honest about
+// what's being shown: this reflects the synthetic *input*, the panels above
+// reflect what the runtime did with that input.
+const TRAIL_LENGTH = 8;
+const trail = [];
+function paintLiveDot(sample) {
+  const box = $('viewport-box');
+  const dot = $('viewport-dot');
+  if (!box || !dot) return;
+  if (!sample || sample.gaze_state === 'closed' || !(sample.quality > 0)) {
+    dot.setAttribute('data-stale', '');
+    return;
+  }
+  dot.removeAttribute('data-stale');
+  const rect = box.getBoundingClientRect();
+  const px = (0.5 + sample.x) * rect.width;
+  const py = (0.5 + sample.y) * rect.height;
+  dot.style.left = `${px}px`;
+  dot.style.top = `${py}px`;
+
+  // Trail: render up to TRAIL_LENGTH past positions with fading opacity.
+  trail.unshift({ px, py });
+  while (trail.length > TRAIL_LENGTH) trail.pop();
+  let trailEls = box.querySelectorAll('.viewport-trail-dot');
+  while (trailEls.length < TRAIL_LENGTH) {
+    const el = document.createElement('div');
+    el.className = 'viewport-trail-dot';
+    box.appendChild(el);
+    trailEls = box.querySelectorAll('.viewport-trail-dot');
+  }
+  for (let i = 0; i < TRAIL_LENGTH; i += 1) {
+    const el = trailEls[i];
+    const pos = trail[i + 1]; // i+1 so head dot doesn't get a trail dot on top
+    if (!pos) { el.style.opacity = '0'; continue; }
+    el.style.left = `${pos.px}px`;
+    el.style.top = `${pos.py}px`;
+    el.style.opacity = String(0.5 * (1 - i / TRAIL_LENGTH));
+  }
+}
+
+let t = 0;
+setInterval(async () => {
+  runtime.camera.video.currentTime = (t += 0.25);
+  frameI += 1;
+  const gazeSample = synthGazeSample();
+  paintLiveDot(gazeSample);
+  mockGazeAdapter.emitSample(gazeSample);
+  try { await runtime.sampleOnce(); } catch (err) { console.warn(err); }
+}, 250);
+</script>
+</body>
+</html>

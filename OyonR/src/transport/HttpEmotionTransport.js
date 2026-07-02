@@ -1,3 +1,5 @@
+import { validateEmotionBatch } from '../validation/validateEmotionPayload.js';
+
 export class HttpEmotionTransport {
   constructor(options = {}) {
     this.options = {
@@ -5,6 +7,8 @@ export class HttpEmotionTransport {
       endpointForSession: sessionId => `/api/sessions/${encodeURIComponent(sessionId)}/emotions/batch`,
       tokenProvider: () => null,
       fetchImpl: (...args) => fetch(...args),
+      validate: true,
+      validationOptions: {},
       ...options,
     };
   }
@@ -13,7 +17,14 @@ export class HttpEmotionTransport {
     if (!events.length) return;
     if (!context.session_id) throw new Error('session_id is required to send emotion events.');
 
-    const token = this.options.tokenProvider?.();
+    if (this.options.validate !== false) {
+      const validation = validateEmotionBatch({ events }, this.options.validationOptions);
+      if (!validation.ok) {
+        throw new Error(`Invalid emotion telemetry: ${validation.errors.join('; ')}`);
+      }
+    }
+
+    const token = await this.options.tokenProvider?.();
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
 

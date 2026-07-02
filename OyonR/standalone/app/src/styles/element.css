@@ -1,0 +1,54 @@
+/*
+ * element.css — the stylesheet adopted by the <oyon-app> shadow root.
+ *
+ * Pulls in the same tokens + Tailwind layers the standalone app uses, then
+ * replicates the document-level rules from globals.css (html/body/#root
+ * selectors are inert inside a shadow root) onto :host and the
+ * .oyon-app-host wrapper. Explicit font/color/background on the wrapper
+ * also stops inheritable host-page styles from piercing into the embed.
+ */
+
+@import './tokens.css';
+@import './globals.css';
+
+:host {
+  display: block;
+  height: 100%;
+  contain: layout style;
+}
+
+.oyon-app-host {
+  height: 100%;
+  margin: 0;
+  background: var(--surface-0);
+  color: var(--ink-0);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * capture mode → render only the compact capture pill. The element must size to
+ * the pill (fit-content / inline-block, NOT full height) and be transparent so a
+ * host can drop it straight into its own top bar — the dark glass of the pill
+ * itself provides the only background.
+ *
+ * Keyed off `data-oyon-chrome`, an IMMUTABLE attribute set once at mount — NOT
+ * the public `chrome` attribute. `chrome` is fixed at mount for the runtime, but
+ * a host can still externally `setAttribute('chrome', ...)`; if layout keyed off
+ * that, a live mutation would resize the embed even though the runtime ignores
+ * it. data-oyon-chrome can't be changed by such a mutation, so layout stays sound.
+ */
+:host([data-oyon-chrome='capture']) {
+  display: inline-block;
+  height: auto;
+  contain: layout style;
+}
+
+:host([data-oyon-chrome='capture']) .oyon-app-host {
+  height: auto;
+  background: transparent;
+}

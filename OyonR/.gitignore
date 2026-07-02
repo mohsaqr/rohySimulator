@@ -11,6 +11,7 @@ build/
 .env
 .env.*
 !.env.example
+.cert/
 
 # editor / OS
 .DS_Store
@@ -27,7 +28,21 @@ npm-debug.log*
 # test artifacts
 coverage/
 .nyc_output/
+.playwright-mcp/
 
 # tmp / scratch (per global rules — keep ./tmp/ excluded by default)
 tmp/
 .tmp/
+
+# local-only session artifacts (never committed)
+bkp/
+LEARNINGS.md
+
+# local-only orientation/session files (per user global rules)
+HANDOFF.md
+CLAUDE.md
+AGENT-NOTE-*.md
+
+# playwright artifacts
+test-results/
+playwright-report/

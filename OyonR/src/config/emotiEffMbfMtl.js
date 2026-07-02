@@ -1,14 +1,11 @@
-import { assertCanonicalLabels } from './emotionLabels.js';
+import { EMOTION_MODEL_MOBILEFACENET_MTL_URL } from './cdnDefaults.js';
 
 export const EMOTIEFF_MBF_MTL_CONFIG = {
   id: 'emotiefflib-mbf-va-mtl',
   modelName: 'mbf_va_mtl',
   modelVersion: 'sb-ai-lab-emotiefflib-main',
-  modelUrl: '/standalone/models/emotion/mbf_va_mtl.onnx',
-  labels: assertCanonicalLabels(
-    ['anger', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'],
-    'emotiefflib-mbf-va-mtl',
-  ),
+  modelUrl: EMOTION_MODEL_MOBILEFACENET_MTL_URL,
+  labels: ['anger', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'],
   inputSize: 112,
   inputChannels: 3,
   inputName: 'input',

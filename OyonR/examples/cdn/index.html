@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Oyon — CDN script-tag example</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    pre { background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+    code { font: 13px ui-monospace, Menlo, monospace; }
+    .row { display: flex; gap: 0.5rem; margin: 1rem 0; }
+    button { padding: 0.5rem 1rem; cursor: pointer; }
+    #out { white-space: pre-wrap; background: #111; color: #0f0; padding: 1rem; border-radius: 6px; min-height: 6rem; font: 12px ui-monospace, Menlo, monospace; }
+  </style>
+</head>
+<body>
+  <h1>Oyon via CDN (UMD)</h1>
+  <p>This page loads Oyon and its peer deps directly from jsDelivr, with no
+  build step. Suitable for prototyping or static hosting. For production,
+  prefer <code>npm install oyon</code> + a bundler.</p>
+
+  <pre><code>&lt;script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"&gt;&lt;/script&gt;
+&lt;script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js"&gt;&lt;/script&gt;
+&lt;script src="https://cdn.jsdelivr.net/npm/oyon/dist/oyon.umd.min.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  const runtime = new Oyon.EmotionRuntime({ /* options */ });
+  runtime.on('window', windows =&gt; console.log(windows));
+  runtime.start();
+&lt;/script&gt;</code></pre>
+
+  <div class="row">
+    <button id="init">Initialise runtime</button>
+    <button id="start" disabled>Start capture</button>
+    <button id="stop" disabled>Stop</button>
+  </div>
+  <div id="out">Click "Initialise runtime" to load peer deps and Oyon.</div>
+
+  <script>
+    const out = document.getElementById('out');
+    const log = msg => { out.textContent += '\n' + msg; };
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('failed: ' + src));
+        document.head.appendChild(s);
+      });
+    }
+
+    let runtime = null;
+
+    document.getElementById('init').addEventListener('click', async () => {
+      try {
+        out.textContent = 'Loading peer deps...';
+        await loadScript('https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js');
+        log('  ✓ onnxruntime-web');
+        await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js');
+        log('  ✓ @mediapipe/tasks-vision');
+        await loadScript('https://cdn.jsdelivr.net/npm/oyon/dist/oyon.umd.min.js');
+        log('  ✓ oyon UMD');
+        runtime = new window.Oyon.EmotionRuntime({
+          mediaPipe: { wasmBaseUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm/' },
+          onnx: { wasmPaths: 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/' },
+        });
+        runtime.on('status', p => log('status: ' + p.state));
+        runtime.on('error', e => log('error: ' + (e?.message || e)));
+        runtime.on('window', w => log('window: ' + JSON.stringify(w?.[0]?.dominant_emotion)));
+        document.getElementById('start').disabled = false;
+        log('Ready.');
+      } catch (err) {
+        log('init failed: ' + err.message);
+      }
+    });
+
+    document.getElementById('start').addEventListener('click', async () => {
+      try {
+        await runtime.start();
+        document.getElementById('stop').disabled = false;
+      } catch (err) { log('start failed: ' + err.message); }
+    });
+
+    document.getElementById('stop').addEventListener('click', async () => {
+      try {
+        await runtime.stop();
+        document.getElementById('stop').disabled = true;
+      } catch (err) { log('stop failed: ' + err.message); }
+    });
+  </script>
+</body>
+</html>

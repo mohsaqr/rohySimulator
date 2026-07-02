@@ -1,22 +1,24 @@
-const DEFAULT_LABELS = ['neutral', 'happy', 'sad', 'surprise', 'anger', 'fear', 'disgust'];
+import { ONNX_RUNTIME_WASM_CDN, DEFAULT_EMOTION_MODEL_URL } from '../config/cdnDefaults.js';
+
+const DEFAULT_LABELS = ['anger', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'];
 
 export class OnnxEmotionClassifier {
   constructor(options = {}) {
     this.options = {
-      modelUrl: '/models/emotion/fer.onnx',
+      modelUrl: DEFAULT_EMOTION_MODEL_URL,
       labels: DEFAULT_LABELS,
       inputSize: 224,
-      inputName: null,
+      inputName: 'input',
       outputName: null,
       inputScale: 1 / 255,
       inputChannels: 3,
-      colorOrder: 'RGB',
+      colorOrder: 'BGR',
       mean: [0.485, 0.456, 0.406],
       std: [0.229, 0.224, 0.225],
       emotionOffset: 0,
-      valenceIndex: null,
-      arousalIndex: null,
-      wasmPaths: '/standalone/vendor/onnxruntime-web/',
+      valenceIndex: 8,
+      arousalIndex: 9,
+      wasmPaths: ONNX_RUNTIME_WASM_CDN,
       executionProviders: null,
       modelName: 'fer-onnx',
       modelVersion: 'unknown',
@@ -96,36 +98,38 @@ export class OnnxEmotionClassifier {
 }
 
 async function loadOrt() {
-  // Always use the plain `onnxruntime-web` bundle. The `/webgpu` bundle
-  // dynamically imports `ort-wasm-simd-threaded.asyncify.mjs` at runtime,
-  // and that file is *not published* on jsDelivr for ORT 1.20.x or 1.21.x
-  // (the asyncify variant was dropped from npm dist in 1.20). When the
-  // dynamic import 404s, ORT marks initWasm() as failed and the WASM
-  // execution provider fallback also dies — every classify() throws
-  // "no available backend found".
-  //
-  // The plain bundle has no asyncify dependency. We default to
-  // `executionProviders: ['wasm']` anyway (see executionProviders()
-  // below), so WebGPU acceleration would have been unused. Until ORT
-  // ships asyncify on the CDN again — or we change to a vendor that does
-  // — the plain bundle is the only stable choice.
-  return await import('onnxruntime-web');
+  try {
+    return await import('onnxruntime-web/webgpu');
+  } catch {
+    return await import('onnxruntime-web');
+  }
 }
 
 function configureOrt(ort, options) {
   if (ort?.env?.wasm) {
-    ort.env.wasm.wasmPaths = options.wasmPaths;
-    // Honour cross-origin isolation when present: SharedArrayBuffer is the
-    // only thing standing between us and multi-threaded wasm. Cap thread
-    // count so we don't starve the rest of the page on high-core machines;
-    // 4 is the published sweet spot for ORT on browser CPUs. When not
-    // isolated, force single thread (ORT would crash trying to spawn
-    // workers without SAB).
-    const isolated = typeof globalThis !== 'undefined' && globalThis.crossOriginIsolated === true;
-    const hardware = (typeof navigator !== 'undefined' && Number(navigator.hardwareConcurrency)) || 4;
-    ort.env.wasm.numThreads = isolated ? Math.min(4, Math.max(1, hardware)) : 1;
+    ort.env.wasm.wasmPaths = resolveWasmPaths(ort, options.wasmPaths);
+    ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
   }
+}
+
+// If the configured WASM URL is the default jsDelivr pin, substitute the
+// version against whatever onnxruntime-web is actually loaded — the WASM
+// file names diverge across ORT minors (1.20.x: only jsep; 1.21+: also
+// asyncify) and a hardcoded pin drifts out of sync with package.json's
+// `^1.20.0` peer-dep range as ORT publishes new versions.
+//
+// Self-hosted, local `/public`, or custom URLs are returned unchanged.
+export function resolveWasmPaths(ort, configuredPath) {
+  if (!configuredPath || typeof configuredPath !== 'string') return configuredPath;
+  const jsdelivrMatch = /(onnxruntime-web@)([0-9][0-9A-Za-z.\-+]*)(\/dist\/)/.exec(configuredPath);
+  if (!jsdelivrMatch) return configuredPath;
+  const runtimeVersion =
+    ort?.env?.versions?.web ||
+    ort?.env?.versions?.common ||
+    null;
+  if (!runtimeVersion || runtimeVersion === jsdelivrMatch[2]) return configuredPath;
+  return configuredPath.replace(jsdelivrMatch[0], `${jsdelivrMatch[1]}${runtimeVersion}${jsdelivrMatch[3]}`);
 }
 
 function executionProviders(options) {

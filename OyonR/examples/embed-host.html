@@ -1,0 +1,86 @@
+<!doctype html>
+<!--
+  embed-host.html — a deliberately bare "foreign" host page demonstrating the
+  1-step <oyon-app> embed recipe against the locally built element.
+
+  Serve the REPO ROOT (so /standalone/app/dist-element resolves), e.g.:
+
+      npx vite . --port 5180
+      open http://127.0.0.1:5180/examples/embed-host.html
+
+  In production the script src is the CDN form:
+      https://cdn.jsdelivr.net/npm/oyon@2.1/standalone/app/dist-element/oyon-app.element.js
+
+  The garish host styles are intentional: they prove the shadow DOM keeps
+  Oyon's styles in and the host's styles out.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acme LMS — Oyon embed demo</title>
+    <style>
+      /* Hostile host styling on purpose — must NOT leak into <oyon-app>. */
+      body {
+        margin: 0;
+        font-family: 'Comic Sans MS', cursive;
+        background: #1c0a33;
+        color: #ffd700;
+        font-size: 22px;
+      }
+      header.acme {
+        padding: 12px 20px;
+        background: #460d70;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      pre#events {
+        margin: 0;
+        max-height: 160px;
+        overflow: auto;
+        background: #000;
+        color: #4ade80;
+        font-size: 11px;
+        padding: 8px 12px;
+      }
+      .embed-frame {
+        height: calc(100vh - 220px);
+        border-top: 4px solid #ffd700;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="acme">
+      <strong>ACME LMS (host app)</strong>
+      <span>
+        <button id="start">Start capture</button>
+        <button id="stop">Stop</button>
+      </span>
+    </header>
+    <pre id="events">host event log…</pre>
+
+    <div class="embed-frame">
+      <!-- The embed: one script (below) + this tag. -->
+      <oyon-app user-id="acme-student-42" user-label="Student 42" style="height: 100%"></oyon-app>
+    </div>
+
+    <script type="module" src="/standalone/app/dist-element/oyon-app.element.js"></script>
+    <script type="module">
+      const el = document.querySelector('oyon-app');
+      const log = document.getElementById('events');
+      const line = (s) =>
+        (log.textContent = `${new Date().toISOString().slice(11, 19)} ${s}\n` + log.textContent);
+
+      el.addEventListener('oyon:status', (e) => line(`status: ${e.detail.state}`));
+      el.addEventListener('oyon:window', (e) =>
+        line(
+          `window batch: ${e.detail.windows.length} · session ${e.detail.sessionId} · user ${e.detail.userId}`,
+        ),
+      );
+
+      document.getElementById('start').onclick = () => el.start().catch((err) => line(`start failed: ${err.message}`));
+      document.getElementById('stop').onclick = () => el.stop();
+    </script>
+  </body>
+</html>

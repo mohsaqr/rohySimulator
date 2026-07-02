@@ -148,24 +148,75 @@ import { useRohyFer } from '../../vendor/oyon/src/react/useRohyFer.js';
 The relative-import path is clunky. Workspace + submodule together is
 the cleanest combination.
 
-### Strategy C — published package
-
-Not yet published. To publish privately:
+### Strategy C — published package (recommended for production)
 
 ```bash
-cd Oyon
-npm version patch
-npm publish --registry=https://npm.your-org.example/
+npm install oyon @mediapipe/tasks-vision onnxruntime-web
+# react is an optional peer; install only if using oyon/react
+npm install react react-dom
 ```
 
-Then in the host:
+Then in your host code:
+
+```js
+import { EmotionRuntime } from 'oyon';
+import { useRohyFer } from 'oyon/react';
+import { createRohyOyonAddon } from 'oyon/addon';
+```
+
+#### Asset install (one-time)
+
+The npm package does NOT ship model weights or WASM runtimes (they're
+~150 MB). Use the bundled CLI to install them into your host's public dir:
 
 ```bash
-npm install oyon
+# Copies MediaPipe + ONNX Runtime WASM from your node_modules into ./public/oyon/vendor/
+npx oyon install-assets ./public
+
+# Downloads ONNX emotion models from upstream into ./public/oyon/models/
+npx oyon download-models ./public
 ```
 
-GitHub Packages registry works the same way with a `.npmrc` configured
-for `@mohsaqr` scope.
+Then point Oyon's runtime options at the served URLs:
+
+```js
+new EmotionRuntime({
+  mediaPipe: { wasmBaseUrl: '/oyon/vendor/mediapipe/wasm/' },
+  onnx:      { wasmPaths:   '/oyon/vendor/onnxruntime-web/' },
+  // ...
+});
+```
+
+#### CDN / no-build mode
+
+For prototypes or static sites, load Oyon from jsDelivr as UMD:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/oyon/dist/oyon.umd.min.js"></script>
+<script>
+  const runtime = new Oyon.EmotionRuntime({
+    mediaPipe: { wasmBaseUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm/' },
+    onnx:      { wasmPaths:   'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/' },
+  });
+  runtime.start();
+</script>
+```
+
+A working example lives at `examples/cdn/index.html`.
+
+#### Publishing (maintainers only)
+
+Tag-triggered via `.github/workflows/publish.yml`:
+
+```bash
+npm version patch  # or minor / major
+git push --follow-tags
+```
+
+The workflow runs `check`, `test`, `build:clean`, then `npm publish
+--provenance --access public`.
 
 ### Backend templates
 

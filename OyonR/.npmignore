@@ -1,0 +1,23 @@
+# Belt-and-suspenders: package.json `files` is the source of truth, but
+# this file makes accidental publishes of large assets impossible.
+
+# Heavy assets — never publish to npm.
+standalone/
+mock/
+.playwright-mcp/
+node_modules/
+
+# Dev / repo-only
+tests/
+docs/
+examples/
+HANDOFF.md
+LEARNINGS.md
+CHANGES.md
+rollup.config.mjs
+vite.config.*
+.gitattributes
+.gitignore
+.github/
+
+# Source maps generated alongside the build are fine to ship; do not exclude.

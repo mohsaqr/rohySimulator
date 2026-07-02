@@ -11,48 +11,6 @@ const STORAGE = {
   dashboard: 'standalone-oyon-dashboard-settings',
 };
 
-// When opened from the Rohy miniature (?source=rohy&session_id=…&case_id=…)
-// the dashboard reads emotion records from the Rohy backend via authenticated
-// fetch instead of localStorage. The launching session is preselected in the
-// existing session filter; admins/educators see records from every session
-// they're allowed to read, students see only their own.
-//
-// Auto-detect: if a rohy auth credential is reachable from this origin,
-// default to rohy mode even without `?source=rohy` in the URL.
-// `?source=standalone` is the explicit opt-out. This means opening
-// /oyon/standalone/logs.html bare from a logged-in rohy tab Just Works
-// (shows server records by session) instead of silently reading from
-// empty localStorage.
-//
-// Rohy supports two auth modes:
-//   - cookie-auth: rohy_session HttpOnly cookie + rohy_csrf companion.
-//                  Detected via document.cookie pattern below.
-//   - token-auth (default): JWT in localStorage at key 'token'. Same-origin
-//                  localStorage is shared with the SPA, so we can read it
-//                  here. Detected via the rohy app token key.
-// We accept either as evidence of "user is logged in to rohy on this
-// origin" and route the fetch through whichever credential is present.
-const ROHY_QUERY = new URLSearchParams(window.location.search);
-const ROHY_TOKEN_KEY = 'token';
-function readRohyToken() {
-  try { return localStorage.getItem(ROHY_TOKEN_KEY) || null; } catch { return null; }
-}
-function hasRohyAuthCookie() {
-  if (typeof document === 'undefined' || !document.cookie) return false;
-  return /\b(rohy_session|rohy_csrf)\s*=/.test(document.cookie);
-}
-function hasRohyAuthCredential() {
-  return hasRohyAuthCookie() || !!readRohyToken();
-}
-const ROHY_SOURCE = ROHY_QUERY.get('source');
-const ROHY_MODE = ROHY_SOURCE === 'rohy'
-  ? true
-  : ROHY_SOURCE === 'standalone'
-  ? false
-  : hasRohyAuthCredential();
-const ROHY_SESSION_ID = ROHY_QUERY.get('session_id') || null;
-const ROHY_API_BASE = '/api/addons/oyon';
-
 const TABLE_PAGE_SIZE = 50;
 
 const DEFAULT_UI_SETTINGS = {
@@ -60,6 +18,13 @@ const DEFAULT_UI_SETTINGS = {
   showMetrics: false,
   showWindows: false,
   showDemo: false,
+  // Gaze transition network toggles. Defaults match the panel's analytic
+  // intent: instrength tells you where attention LANDS; raw counts preserve
+  // the actual transition magnitudes; self-loops in are informative because
+  // a "loop" means the gaze stayed in the same zone across two windows.
+  gazeNodeMetric: 'instrength',     // 'instrength' | 'outstrength' | 'visits'
+  gazeEdgeMetric: 'counts',          // 'counts' | 'probabilities'
+  gazeShowSelfLoops: true,
 };
 
 let uiSettings = loadUiSettings();
@@ -138,6 +103,29 @@ const els = {
   detailsTitle: document.querySelector('#detailsTitle'),
   detailsJson: document.querySelector('#detailsJson'),
   copyDetails: document.querySelector('#copyDetails'),
+  // Gaze view
+  gazeKpis: document.querySelector('#gazeKpis'),
+  gazeHeatChart: document.querySelector('#gazeHeatChart'),
+  gazeHeatMeta: document.querySelector('#gazeHeatMeta'),
+  gazeHeatLegend: document.querySelector('#gazeHeatLegend'),
+  gazeNetworkChart: document.querySelector('#gazeNetworkChart'),
+  gazeNetworkLegend: document.querySelector('#gazeNetworkLegend'),
+  gazeScanpathMeta: document.querySelector('#gazeScanpathMeta'),
+  gazeNodeMetric: document.querySelector('#gazeNodeMetric'),
+  gazeEdgeMetric: document.querySelector('#gazeEdgeMetric'),
+  gazeShowSelfLoops: document.querySelector('#gazeShowSelfLoops'),
+  gazeZoneRef: document.querySelector('#gazeZoneRef'),
+  gazeZoneRefMeta: document.querySelector('#gazeZoneRefMeta'),
+  gazeQualityChart: document.querySelector('#gazeQualityChart'),
+  gazeQualityMeta: document.querySelector('#gazeQualityMeta'),
+  gazeAoiChart: document.querySelector('#gazeAoiChart'),
+  gazeAoiMeta: document.querySelector('#gazeAoiMeta'),
+  gazeCalibChart: document.querySelector('#gazeCalibChart'),
+  gazeCalibMeta: document.querySelector('#gazeCalibMeta'),
+  gazeTable: document.querySelector('#gazeTable'),
+  gazeTableMeta: document.querySelector('#gazeTableMeta'),
+  exportGazeCsv: document.querySelector('#exportGazeCsv'),
+  exportGazeJson: document.querySelector('#exportGazeJson'),
 };
 
 const EMOTION_COLORS = {
@@ -156,22 +144,20 @@ const EMOTION_COLORS = {
   insufficient: '#9ca3af',
 };
 
+const NAMED_3x3_ZONES = [
+  'top_left',    'top_center',    'top_right',
+  'middle_left', 'middle_center', 'middle_right',
+  'bottom_left', 'bottom_center', 'bottom_right',
+];
+
 let activeView = 'analytics';
 let selectedRecord = null;
-let cache = { logs: [], metrics: [], windows: [], settings: {} };
+let cache = readData();
 let liveTimer = null;
 
 bindUi();
 applyUiSettings();
 render();
-loadAndRender().then(() => {
-  // Preselect the launching session in Rohy mode so the page lands on the
-  // session the operator clicked from, not "All sessions".
-  if (ROHY_MODE && ROHY_SESSION_ID && els.session) {
-    els.session.value = String(ROHY_SESSION_ID);
-    render();
-  }
-});
 startLiveTimer();
 window.addEventListener('resize', () => renderCharts(currentFiltered()));
 
@@ -179,7 +165,10 @@ function bindUi() {
   for (const tab of els.tabs) {
     tab.addEventListener('click', () => setView(tab.dataset.view));
   }
-  els.refresh.addEventListener('click', () => { loadAndRender(); });
+  els.refresh.addEventListener('click', () => {
+    cache = readData();
+    render();
+  });
   els.copyDetails.addEventListener('click', copySelectedRecord);
   for (const input of [els.search, els.level, els.emotion, els.session, els.range]) {
     input.addEventListener('input', render);
@@ -201,6 +190,20 @@ function bindUi() {
   els.clearEvents.addEventListener('click', () => clearStream('events'));
   els.clearMetrics.addEventListener('click', () => clearStream('metrics'));
   els.clearAll.addEventListener('click', () => clearStream('all'));
+
+  // Gaze transition network toggles. Each writes through updateUiSetting so
+  // it persists, then triggers re-render. We re-run the full chart pipeline
+  // (cheap; ~ms for typical session sizes) rather than wiring a partial
+  // update path — the consistency win is worth the recompute.
+  if (els.gazeNodeMetric) {
+    els.gazeNodeMetric.addEventListener('change', () => updateUiSetting('gazeNodeMetric', els.gazeNodeMetric.value));
+  }
+  if (els.gazeEdgeMetric) {
+    els.gazeEdgeMetric.addEventListener('change', () => updateUiSetting('gazeEdgeMetric', els.gazeEdgeMetric.value));
+  }
+  if (els.gazeShowSelfLoops) {
+    els.gazeShowSelfLoops.addEventListener('change', () => updateUiSetting('gazeShowSelfLoops', els.gazeShowSelfLoops.checked));
+  }
 }
 
 function applyUiSettings() {
@@ -213,6 +216,9 @@ function applyUiSettings() {
   els.panelWindows.hidden = !uiSettings.showWindows;
   els.demoControls.hidden = !uiSettings.showDemo;
   els.demoHidden.hidden = uiSettings.showDemo;
+  if (els.gazeNodeMetric) els.gazeNodeMetric.value = uiSettings.gazeNodeMetric;
+  if (els.gazeEdgeMetric) els.gazeEdgeMetric.value = uiSettings.gazeEdgeMetric;
+  if (els.gazeShowSelfLoops) els.gazeShowSelfLoops.checked = uiSettings.gazeShowSelfLoops;
 }
 
 function updateUiSetting(key, value) {
@@ -232,102 +238,6 @@ function setView(view) {
   }
   render();
 }
-
-// Load + render. In Rohy mode this fetches windows from the Rohy backend;
-// logs/metrics aren't persisted server-side so they stay empty. In standalone
-// mode it reads everything from localStorage as before.
-async function loadAndRender() {
-  cache = ROHY_MODE ? await readDataFromRohy() : readData();
-  render();
-}
-
-async function readDataFromRohy() {
-  let rawWindows = [];
-  try {
-    // Send BOTH credentials — cookies for cookie-auth tenants and the
-    // bearer token for token-auth tenants. Either alone is sufficient at
-    // the server (auth middleware accepts both); sending both costs
-    // nothing and lets the dashboard work regardless of which mode the
-    // tenant is configured for. Without the bearer header, token-auth
-    // deploys (rohy's default) get a 401 here even when the user is
-    // actively logged into the SPA in another tab — symptom: the logs
-    // page shows zero records.
-    const headers = { Accept: 'application/json' };
-    const token = readRohyToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(`${ROHY_API_BASE}/emotion-records?limit=500`, {
-      method: 'GET',
-      credentials: 'include',
-      headers,
-    });
-    if (!res.ok) {
-      console.warn('[oyon dashboard] backend returned', res.status);
-    } else {
-      const body = await res.json();
-      rawWindows = (body?.records || []).map(rohyRecordToWindow);
-    }
-  } catch (err) {
-    console.warn('[oyon dashboard] backend fetch failed, falling back to local cache', err);
-    rawWindows = readJsonArray(STORAGE.windows);
-  }
-  const enrichedWindows = enrichWindowsWithDynamics(rawWindows);
-  const enriched = rawWindows.map((window, index) => ({
-    ...window,
-    dynamics: window.dynamics || enrichedWindows[index]?.dynamics || null,
-    _kind: 'window',
-    _id: `window-${index}-${window.window_end || ''}`,
-    _time: parseTime(window.window_end || window.timestamp),
-  }));
-  return { logs: [], metrics: [], windows: enriched, settings: {} };
-}
-
-// The Rohy backend stores records with snake_case columns and JSON-encoded
-// probabilities/quality. Reshape to match the in-page window shape that the
-// renderer expects.
-function rohyRecordToWindow(r) {
-  return {
-    session_id: r.session_id,
-    user_id: r.user_id,
-    case_id: r.case_id,
-    student_name: r.student_name_snapshot,
-    case_title: r.case_title_snapshot,
-    window_start: r.window_start,
-    window_end: r.window_end,
-    duration_ms: Number(r.duration_ms) || 0,
-    expected_samples: Number(r.expected_samples) || null,
-    dominant_emotion: r.dominant_emotion,
-    probabilities: typeof r.probabilities === 'object' && r.probabilities
-      ? r.probabilities
-      : (r.emotion_probabilities_json ? safeJson(r.emotion_probabilities_json) : null),
-    valence: numOrNull(r.valence),
-    valence_std: numOrNull(r.valence_std),
-    valence_min: numOrNull(r.valence_min),
-    valence_max: numOrNull(r.valence_max),
-    arousal: numOrNull(r.arousal),
-    arousal_std: numOrNull(r.arousal_std),
-    arousal_min: numOrNull(r.arousal_min),
-    arousal_max: numOrNull(r.arousal_max),
-    confidence: numOrNull(r.confidence),
-    confidence_std: numOrNull(r.confidence_std),
-    entropy: numOrNull(r.entropy),
-    entropy_std: numOrNull(r.entropy_std),
-    stability_score: numOrNull(r.stability_score),
-    label_switch_count: Number(r.label_switch_count) || 0,
-    valid_frames: Number(r.valid_frames) || 0,
-    missing_face_ratio: numOrNull(r.missing_face_ratio),
-    quality: r.quality || (r.quality_json ? safeJson(r.quality_json) : null),
-    model_name: r.model_name,
-    model_version: r.model_version,
-    model_profile: r.model_profile,
-    settings_hash: r.settings_hash,
-    settings_snapshot: r.settings_snapshot || (r.settings_snapshot_json ? safeJson(r.settings_snapshot_json) : null),
-    dynamics: r.dynamics || (r.dynamics_json ? safeJson(r.dynamics_json) : null),
-    capture_mode: r.capture_mode,
-  };
-}
-
-function numOrNull(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
-function safeJson(s) { try { return JSON.parse(s); } catch { return null; } }
 
 function readData() {
   const logs = readJsonArray(STORAGE.logs).map((event, index) => ({
@@ -610,6 +520,7 @@ function renderCharts(data) {
   drawNetwork(tnaResult);
   drawDynamics(data.windows);
   renderSequenceAnalysis(tnaResult, data.windows);
+  renderGazeView(data.windows);
 }
 
 function drawTimeline(windows) {
@@ -1289,7 +1200,10 @@ function generateDemoFixture() {
 function startLiveTimer() {
   if (liveTimer) clearInterval(liveTimer);
   if (!els.live.checked) return;
-  liveTimer = setInterval(() => { loadAndRender(); }, 3000);
+  liveTimer = setInterval(() => {
+    cache = readData();
+    render();
+  }, 3000);
 }
 
 function downloadJson(filename, payload) {
@@ -1462,4 +1376,1124 @@ function normAffect(value) {
 function clamp01(value) {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(1, value));
+}
+
+// ─── Gaze view ───────────────────────────────────────────────────────────
+// Visualizes gaze data captured per emotion window. The runtime attaches a
+// `gaze` block to each window when `gaze_window_share` is enabled.
+// NAMED_3x3_ZONES is declared near the top of the file with the other
+// module-level constants — keeping it there avoids a TDZ during bootstrap,
+// since `render()` runs before this section's code is reached.
+
+function renderGazeView(windows) {
+  const gazeWindows = (windows || []).filter(w => w && w.gaze);
+  const aois = readActiveAois();
+  renderGazeKpis(gazeWindows);
+  renderGazeHeatmap(gazeWindows, aois);
+  renderGazeScanpath(gazeWindows, aois);
+  renderGazeZoneRef(gazeWindows);
+  renderGazeQuality(gazeWindows);
+  renderGazeAoi(gazeWindows);
+  renderGazeCalibration(gazeWindows);
+  renderGazeTable(gazeWindows);
+  bindGazeExports(gazeWindows);
+}
+
+/**
+ * AOIs configured in the standalone Gaze tab live in localStorage under the
+ * same key the capture page uses. Reading them here lets the dashboard
+ * overlay them on the heatmap and scanpath without a runtime round-trip.
+ */
+function readActiveAois() {
+  try {
+    const raw = localStorage.getItem(STORAGE.settings);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.gazeAois) ? parsed.gazeAois : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderGazeKpis(gazeWindows) {
+  if (!els.gazeKpis) return;
+  if (gazeWindows.length === 0) {
+    els.gazeKpis.replaceChildren(
+      kpi('Gaze windows', 0),
+      kpi('Mean σ', '—'),
+      kpi('Mean valid', '—'),
+      kpi('Off-screen', '—'),
+      kpi('Calibration', '—'),
+      kpi('Samples', 0),
+    );
+    return;
+  }
+
+  // Average dispersion and valid_frame_ratio across windows that have a
+  // dispersion reading. Off-screen ratio averages across windows that had
+  // any on-screen valid points (denominator non-zero in the runtime).
+  const sigmas = gazeWindows.map(w => w.gaze.dispersion).filter(Number.isFinite);
+  const validRatios = gazeWindows.map(w => w.gaze.valid_frame_ratio).filter(Number.isFinite);
+  const offScreenRatios = gazeWindows.map(w => w.gaze.off_screen_ratio).filter(Number.isFinite);
+  const totalSamples = gazeWindows.reduce((sum, w) => sum + (Number(w.gaze.n_points) || 0), 0);
+
+  const meanSigma = sigmas.length ? sigmas.reduce((s, v) => s + v, 0) / sigmas.length : null;
+  const meanValid = validRatios.length ? validRatios.reduce((s, v) => s + v, 0) / validRatios.length : null;
+  const meanOff = offScreenRatios.length ? offScreenRatios.reduce((s, v) => s + v, 0) / offScreenRatios.length : null;
+
+  // Calibration KPI: distribution of confidence enum across windows.
+  const confCounts = countBy(gazeWindows, w => w.gaze.calibration_confidence || 'unknown');
+  const totalConf = gazeWindows.length;
+  const measured = confCounts.measured || 0;
+  const inferred = confCounts.inferred || 0;
+  const unknown = confCounts.unknown || 0;
+  const calLabel = totalConf > 0
+    ? `${Math.round((measured / totalConf) * 100)}% m · ${Math.round((inferred / totalConf) * 100)}% i · ${Math.round((unknown / totalConf) * 100)}% u`
+    : '—';
+
+  els.gazeKpis.replaceChildren(
+    kpi('Gaze windows', gazeWindows.length),
+    kpi('Mean σ', meanSigma == null ? '—' : meanSigma.toFixed(3)),
+    kpi('Mean valid', meanValid == null ? '—' : `${Math.round(meanValid * 100)}%`),
+    kpi('Off-screen', meanOff == null ? '—' : `${Math.round(meanOff * 100)}%`),
+    kpi('Calibration', calLabel),
+    kpi('Samples', totalSamples),
+  );
+}
+
+/**
+ * Smooth gaze density heatmap reconstructed from `zone_proportions` across
+ * the session.
+ *
+ * Why this works on aggregated data:
+ *   We don't persist raw gaze samples (privacy invariant in Oyon's runtime).
+ *   What we DO persist is, per window, the proportion of valid frames that
+ *   landed in each of N×N screen zones. Treating each zone as a 2-D
+ *   Gaussian kernel centered at the zone's center, with σ ≈ half a zone
+ *   width, and summing the weighted kernels reconstructs a smooth density
+ *   that is consistent with the published per-window summaries.
+ *
+ *   It is not the same as a real raw-sample heatmap (which would resolve
+ *   sub-zone fixations), but it is a faithful, deterministic estimate of
+ *   what the captured data implies — and it scales with the configured
+ *   zone grid resolution, so a 5×5 grid produces a sharper map than 3×3.
+ *
+ * Color ramp:
+ *   A perceptually-uniform sequence approximating viridis: dark navy →
+ *   teal → green → yellow. Reads correctly under grayscale conversion,
+ *   colorblind-safe, and matches what cognitive-load eye-tracking literature
+ *   tends to publish (Tobii Studio / iMotions both ship variants of it).
+ *
+ * Overlays:
+ *   - AOIs from `settings.gazeAois` drawn as dashed rects with labels.
+ *   - "Earlier dwell ↔ later dwell" color legend strip at the bottom.
+ */
+function renderGazeHeatmap(gazeWindows, aois = []) {
+  const canvas = els.gazeHeatChart;
+  if (!canvas || !els.gazeHeatMeta) return;
+  const ctx = setupCanvas(canvas);
+  clearCanvas(ctx);
+  paintViewportBackground(ctx, canvas);
+
+  if (gazeWindows.length === 0) {
+    els.gazeHeatMeta.textContent = '0 windows';
+    if (els.gazeHeatLegend) els.gazeHeatLegend.innerHTML = '<span>No data — run a session.</span>';
+    drawHeatmapPlaceholder(ctx, canvas);
+    return;
+  }
+
+  // Collect zone -> weight, where keys are either the named 3×3 set or
+  // r<row>c<col> indexed forms. Average across windows to get a stationary
+  // density estimate; running a per-window animation is a future stretch.
+  const zoneTotals = new Map(); // key → cumulative weight
+  let gridN = 3;
+  let totalWindows = 0;
+  for (const w of gazeWindows) {
+    const zp = w.gaze.zone_proportions;
+    if (!zp || typeof zp !== 'object') continue;
+    totalWindows += 1;
+    for (const [key, value] of Object.entries(zp)) {
+      if (!Number.isFinite(value)) continue;
+      zoneTotals.set(key, (zoneTotals.get(key) || 0) + Number(value));
+      const m = /^r(\d+)c(\d+)$/.exec(key);
+      if (m) gridN = Math.max(gridN, Math.max(Number(m[1]), Number(m[2])) + 1);
+    }
+  }
+  if (totalWindows === 0) {
+    els.gazeHeatMeta.textContent = `${gazeWindows.length} windows · no zone data`;
+    if (els.gazeHeatLegend) els.gazeHeatLegend.innerHTML = '<span>No zone_proportions recorded.</span>';
+    drawHeatmapPlaceholder(ctx, canvas);
+    return;
+  }
+
+  // Project each zone key to its center in normalized [-0.5, 0.5] coords.
+  const zoneCenters = [];
+  for (const [key, weight] of zoneTotals.entries()) {
+    const center = zoneKeyToCenter(key, gridN);
+    if (!center) continue;
+    zoneCenters.push({ x: center.x, y: center.y, weight: weight / totalWindows });
+  }
+
+  paintDensityField(ctx, canvas, zoneCenters, gridN);
+  paintAoiOverlay(ctx, canvas, aois);
+
+  els.gazeHeatMeta.textContent = `${gazeWindows.length} windows · ${gridN}×${gridN} zones`;
+  paintHeatmapLegend();
+}
+
+/**
+ * Paint a smooth density field on the canvas. The density is sampled at a
+ * lower resolution (cellPx × cellPx) for speed, then drawn as filled rects.
+ * For each on-screen pixel, density = Σ weight_i · exp(-d²/(2σ²)) where
+ * (d) is the distance to each zone center and σ = half a zone width.
+ *
+ * The integral of each kernel is intentionally NOT normalized to 1 — the
+ * weights ARE the integrals (zone proportions sum to ~1 per window). The
+ * Gaussian shape just spreads them visually.
+ */
+function paintDensityField(ctx, canvas, points, gridN) {
+  if (!points.length) return;
+  const cssWidth = canvas.width / (devicePixelRatio || 1);
+  const cssHeight = canvas.height / (devicePixelRatio || 1);
+  const cellPx = 6; // grid-cell resolution; smaller = smoother but slower
+  const sigmaPx = (cssWidth / gridN) * 0.55; // half a zone width
+  const invTwoSigma2 = 1 / (2 * sigmaPx * sigmaPx);
+
+  // Build a downsampled density grid.
+  const cols = Math.ceil(cssWidth / cellPx);
+  const rows = Math.ceil(cssHeight / cellPx);
+  const density = new Float32Array(cols * rows);
+  let max = 0;
+  for (let r = 0; r < rows; r += 1) {
+    const py = (r + 0.5) * cellPx;
+    for (let c = 0; c < cols; c += 1) {
+      const px = (c + 0.5) * cellPx;
+      let v = 0;
+      for (let i = 0; i < points.length; i += 1) {
+        const p = points[i];
+        const sx = (0.5 + p.x) * cssWidth;
+        const sy = (0.5 + p.y) * cssHeight;
+        const dx = px - sx;
+        const dy = py - sy;
+        v += p.weight * Math.exp(-(dx * dx + dy * dy) * invTwoSigma2);
+      }
+      const idx = r * cols + c;
+      density[idx] = v;
+      if (v > max) max = v;
+    }
+  }
+  if (max <= 0) return;
+
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
+      const idx = r * cols + c;
+      const t = density[idx] / max;
+      if (t < 0.02) continue; // skip near-black cells; let the bg show through
+      ctx.fillStyle = viridisLike(t);
+      ctx.fillRect(c * cellPx, r * cellPx, cellPx + 1, cellPx + 1);
+    }
+  }
+}
+
+function paintAoiOverlay(ctx, canvas, aois) {
+  if (!aois?.length) return;
+  const cssWidth = canvas.width / (devicePixelRatio || 1);
+  const cssHeight = canvas.height / (devicePixelRatio || 1);
+  ctx.save();
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.font = '11px ui-sans-serif, system-ui';
+  for (const a of aois) {
+    if (!Number.isFinite(a.x) || !Number.isFinite(a.y)) continue;
+    const x = (0.5 + a.x - a.width / 2) * cssWidth;
+    const y = (0.5 + a.y - a.height / 2) * cssHeight;
+    const w = a.width * cssWidth;
+    const h = a.height * cssHeight;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.strokeRect(x, y, w, h);
+    // Label with backdrop for legibility against bright heat patches.
+    const text = a.id || '';
+    const tw = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+    ctx.fillRect(x + 4, y + 4, tw + 8, 16);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(text, x + 8, y + 16);
+  }
+  ctx.restore();
+}
+
+function paintViewportBackground(ctx, canvas) {
+  const w = canvas.width / (devicePixelRatio || 1);
+  const h = canvas.height / (devicePixelRatio || 1);
+  // Dark navy backdrop matches the viridis ramp's low end and gives the
+  // heatmap real contrast — light/cream backgrounds wash out the cool end.
+  ctx.fillStyle = '#0b1220';
+  ctx.fillRect(0, 0, w, h);
+  // Center crosshair for orientation.
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(w / 2, 0);
+  ctx.lineTo(w / 2, h);
+  ctx.moveTo(0, h / 2);
+  ctx.lineTo(w, h / 2);
+  ctx.stroke();
+}
+
+function drawHeatmapPlaceholder(ctx, canvas) {
+  const w = canvas.width / (devicePixelRatio || 1);
+  const h = canvas.height / (devicePixelRatio || 1);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.font = '14px ui-sans-serif, system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('No gaze data yet — calibrate and run a session', w / 2, h / 2);
+  ctx.textAlign = 'start';
+}
+
+function paintHeatmapLegend() {
+  if (!els.gazeHeatLegend) return;
+  // 5-stop ramp visible to the user, mirroring viridisLike(t).
+  const stops = [0, 0.25, 0.5, 0.75, 1];
+  const swatches = stops.map(t => `<span style="display:inline-block;width:28px;height:10px;background:${viridisLike(t)};"></span>`).join('');
+  els.gazeHeatLegend.innerHTML =
+    `<span>lower dwell</span>${swatches}<span>higher dwell</span>` +
+    `<span style="margin-left: 12px;">white dashed boxes = AOIs</span>`;
+}
+
+/**
+ * Cheap viridis-ish ramp: pure JS, no external dep. Walks through anchor
+ * stops with linear interpolation in RGB. Looks correct on dark BG and
+ * preserves order under grayscale.
+ */
+function viridisLike(t) {
+  const stops = [
+    [0.0, [11, 18, 32]],     // near-bg
+    [0.18, [40, 27, 87]],    // deep purple
+    [0.40, [33, 145, 140]],  // teal
+    [0.65, [94, 201, 98]],   // green
+    [0.85, [253, 231, 37]],  // yellow
+    [1.0, [255, 240, 200]],  // hot peak
+  ];
+  const clamped = Math.max(0, Math.min(1, t));
+  for (let i = 1; i < stops.length; i += 1) {
+    if (clamped <= stops[i][0]) {
+      const [t0, c0] = stops[i - 1];
+      const [t1, c1] = stops[i];
+      const k = (clamped - t0) / Math.max(1e-9, t1 - t0);
+      const r = Math.round(c0[0] + (c1[0] - c0[0]) * k);
+      const g = Math.round(c0[1] + (c1[1] - c0[1]) * k);
+      const b = Math.round(c0[2] + (c1[2] - c0[2]) * k);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+  }
+  return 'rgb(255, 240, 200)';
+}
+
+function zoneKeyToCenter(key, gridN) {
+  if (NAMED_3x3_ZONES.includes(key)) {
+    const i = NAMED_3x3_ZONES.indexOf(key);
+    const row = Math.floor(i / 3);
+    const col = i % 3;
+    return { x: ((col + 0.5) / 3) - 0.5, y: ((row + 0.5) / 3) - 0.5 };
+  }
+  const m = /^r(\d+)c(\d+)$/.exec(key);
+  if (!m) return null;
+  const row = Number(m[1]);
+  const col = Number(m[2]);
+  if (!Number.isFinite(row) || !Number.isFinite(col)) return null;
+  return { x: ((col + 0.5) / gridN) - 0.5, y: ((row + 0.5) / gridN) - 0.5 };
+}
+
+/**
+ * Gaze transition network.
+ *
+ * Build:
+ *   1. For each window with a centroid, bin the centroid into the same N×N
+ *      zone grid the runtime uses. Use named 3×3 keys for grid_n === 3,
+ *      indexed r<row>c<col> otherwise.
+ *   2. Per session, walk the windows in time order producing a sequence of
+ *      zone labels. Each consecutive pair (z_i, z_{i+1}) is one transition.
+ *   3. Aggregate transitions into a square count matrix indexed by zone.
+ *   4. Layout: place each zone at its actual screen position (top-left zone
+ *      top-left in the diagram, etc.) instead of the emotion-network's ring
+ *      layout. This is the analytically right choice for spatial data —
+ *      reading direction, attention to corners, etc., is preserved.
+ *   5. Node radius = scaled instrength (Σ incoming weights). Larger circles
+ *      = zones the gaze returns to often.
+ *
+ * The visual vocabulary matches the emotion transition network on the same
+ * dashboard (filled disks, dark edges, directional arrows) for parity.
+ */
+function renderGazeScanpath(gazeWindows, aois = []) {
+  const container = els.gazeNetworkChart;
+  if (!container || !els.gazeScanpathMeta) return;
+  container.replaceChildren();
+
+  // Detect the configured grid resolution from the keys present. Default 3.
+  let gridN = 3;
+  for (const w of gazeWindows) {
+    const zp = w.gaze?.zone_proportions;
+    if (!zp) continue;
+    for (const key of Object.keys(zp)) {
+      const m = /^r(\d+)c(\d+)$/.exec(key);
+      if (m) gridN = Math.max(gridN, Math.max(Number(m[1]), Number(m[2])) + 1);
+    }
+  }
+
+  // Group windows by session so transitions don't bleed across sessions.
+  const bySession = new Map();
+  const sorted = gazeWindows
+    .filter(w => w.gaze?.centroid &&
+                 Number.isFinite(w.gaze.centroid.x) &&
+                 Number.isFinite(w.gaze.centroid.y))
+    .sort((a, b) => parseGazeTime(a) - parseGazeTime(b));
+  for (const w of sorted) {
+    const sid = getSessionId(w) || '__default__';
+    if (!bySession.has(sid)) bySession.set(sid, []);
+    bySession.get(sid).push(centroidToZoneKey(w.gaze.centroid, gridN));
+  }
+
+  // Build transition count matrix.
+  const labels = enumerateZoneKeys(gridN);
+  const labelToIndex = new Map(labels.map((k, i) => [k, i]));
+  const n = labels.length;
+  const matrix = Array.from({ length: n }, () => new Array(n).fill(0));
+  let totalTransitions = 0;
+  for (const seq of bySession.values()) {
+    for (let i = 1; i < seq.length; i += 1) {
+      const a = labelToIndex.get(seq[i - 1]);
+      const b = labelToIndex.get(seq[i]);
+      if (a == null || b == null) continue;
+      matrix[a][b] += 1;
+      totalTransitions += 1;
+    }
+  }
+
+  if (totalTransitions === 0) {
+    els.gazeScanpathMeta.textContent = sorted.length > 0 ? '1 fixation · no transitions yet' : '0 fixations';
+    container.append(makeNetworkEmptyState(
+      sorted.length > 0
+        ? 'Need at least two windows to draw a transition.'
+        : 'No gaze windows yet — calibrate and capture a session.',
+    ));
+    return;
+  }
+
+  // Three node-strength metrics. Computed once; the renderer picks the
+  // active one based on the user's toggle.
+  //   - inStrength[j]  = Σ_i  matrix[i][j]  → where attention LANDS
+  //   - outStrength[i] = Σ_j  matrix[i][j]  → where attention LEAVES FROM
+  //   - visits[i]      = how many windows assigned to zone i (regardless of
+  //                      whether they participated in a transition; an
+  //                      isolated single-window session still gets visits=1
+  //                      but instrength=outstrength=0)
+  const inStrength = new Array(n).fill(0);
+  const outStrength = new Array(n).fill(0);
+  const visits = new Array(n).fill(0);
+  for (let i = 0; i < n; i += 1) {
+    for (let j = 0; j < n; j += 1) {
+      inStrength[j] += matrix[i][j];
+      outStrength[i] += matrix[i][j];
+    }
+  }
+  for (const seq of bySession.values()) {
+    for (const k of seq) {
+      const i = labelToIndex.get(k);
+      if (i != null) visits[i] += 1;
+    }
+  }
+
+  const visitedIndices = labels.map((_, i) => i).filter(i => visits[i] > 0);
+  if (visitedIndices.length === 0) {
+    els.gazeScanpathMeta.textContent = '0 fixations';
+    container.append(makeNetworkEmptyState('No gaze windows yet — calibrate and capture a session.'));
+    return;
+  }
+
+  els.gazeScanpathMeta.textContent =
+    `${visitedIndices.length} zone${visitedIndices.length === 1 ? '' : 's'} · ` +
+    `${totalTransitions} transition${totalTransitions === 1 ? '' : 's'} · ${gridN}×${gridN} grid`;
+
+  drawGazeNetworkSvg(container, {
+    labels,
+    matrix,
+    inStrength,
+    outStrength,
+    visits,
+    visitedIndices,
+    gridN,
+    aois,
+    nodeMetric: uiSettings.gazeNodeMetric || 'instrength',
+    edgeMetric: uiSettings.gazeEdgeMetric || 'counts',
+    showSelfLoops: uiSettings.gazeShowSelfLoops !== false,
+  });
+  paintGazeNetworkLegend();
+}
+
+function paintGazeNetworkLegend() {
+  if (!els.gazeNetworkLegend) return;
+  const node = uiSettings.gazeNodeMetric || 'instrength';
+  const edge = uiSettings.gazeEdgeMetric || 'counts';
+  const loops = uiSettings.gazeShowSelfLoops !== false ? 'shown' : 'hidden';
+  const nodeDesc = {
+    instrength: 'Σ incoming transitions (where attention lands)',
+    outstrength: 'Σ outgoing transitions (where attention leaves from)',
+    visits: 'window count per zone (raw dwell, no transitions)',
+  }[node];
+  const edgeDesc = edge === 'probabilities'
+    ? 'P(j | i) — row-normalized: of transitions OUT of i, what fraction went to j'
+    : 'raw transition counts between consecutive windows';
+  els.gazeNetworkLegend.innerHTML =
+    `<strong>node size</strong>: ${node} — ${nodeDesc}. ` +
+    `<strong>edge width</strong>: ${edgeDesc}. ` +
+    `self-loops: ${loops}.`;
+}
+
+function drawGazeNetworkSvg(container, data) {
+  const {
+    labels, matrix, inStrength, outStrength, visits, visitedIndices, gridN, aois,
+    nodeMetric, edgeMetric, showSelfLoops,
+  } = data;
+  // Pick the active size metric. Fallback to instrength if the user-set
+  // string is unrecognized (e.g. older localStorage payload).
+  const sizeBy =
+    nodeMetric === 'outstrength' ? outStrength :
+    nodeMetric === 'visits' ? visits :
+    inStrength;
+  const W = 960;
+  const H = 540; // matches the panel's 16:9 aspect on a typical screen
+  const padding = 40;
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svg.style.display = 'block';
+  svg.style.background = '#ffffff';
+
+  // Defs: arrowhead marker.
+  const defs = document.createElementNS(ns, 'defs');
+  const marker = document.createElementNS(ns, 'marker');
+  marker.setAttribute('id', 'gaze-arrow');
+  marker.setAttribute('viewBox', '0 0 10 10');
+  marker.setAttribute('refX', '9');
+  marker.setAttribute('refY', '5');
+  marker.setAttribute('markerWidth', '7');
+  marker.setAttribute('markerHeight', '7');
+  marker.setAttribute('orient', 'auto-start-reverse');
+  const arrowPath = document.createElementNS(ns, 'path');
+  arrowPath.setAttribute('d', 'M0 0 L10 5 L0 10 Z');
+  arrowPath.setAttribute('fill', '#1f2937');
+  marker.appendChild(arrowPath);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
+  // Faint grid lines so the spatial layout is obvious.
+  const gridGroup = document.createElementNS(ns, 'g');
+  for (let k = 1; k < gridN; k += 1) {
+    const x = padding + ((W - padding * 2) * k) / gridN;
+    const vline = document.createElementNS(ns, 'line');
+    vline.setAttribute('x1', String(x));
+    vline.setAttribute('x2', String(x));
+    vline.setAttribute('y1', String(padding));
+    vline.setAttribute('y2', String(H - padding));
+    vline.setAttribute('stroke', '#e5e7eb');
+    vline.setAttribute('stroke-width', '1');
+    gridGroup.appendChild(vline);
+  }
+  for (let k = 1; k < gridN; k += 1) {
+    const y = padding + ((H - padding * 2) * k) / gridN;
+    const hline = document.createElementNS(ns, 'line');
+    hline.setAttribute('x1', String(padding));
+    hline.setAttribute('x2', String(W - padding));
+    hline.setAttribute('y1', String(y));
+    hline.setAttribute('y2', String(y));
+    hline.setAttribute('stroke', '#e5e7eb');
+    hline.setAttribute('stroke-width', '1');
+    gridGroup.appendChild(hline);
+  }
+  svg.appendChild(gridGroup);
+
+  // AOI overlays first so the network sits on top.
+  if (Array.isArray(aois) && aois.length) {
+    const aoiGroup = document.createElementNS(ns, 'g');
+    for (const a of aois) {
+      if (!Number.isFinite(a.x) || !Number.isFinite(a.y)) continue;
+      const rect = document.createElementNS(ns, 'rect');
+      const cx = padding + (0.5 + a.x) * (W - padding * 2);
+      const cy = padding + (0.5 + a.y) * (H - padding * 2);
+      const w = a.width * (W - padding * 2);
+      const h = a.height * (H - padding * 2);
+      rect.setAttribute('x', String(cx - w / 2));
+      rect.setAttribute('y', String(cy - h / 2));
+      rect.setAttribute('width', String(w));
+      rect.setAttribute('height', String(h));
+      rect.setAttribute('fill', 'rgba(37, 99, 235, 0.06)');
+      rect.setAttribute('stroke', '#2563eb');
+      rect.setAttribute('stroke-dasharray', '6 4');
+      rect.setAttribute('stroke-width', '1.2');
+      aoiGroup.appendChild(rect);
+      const label = document.createElementNS(ns, 'text');
+      label.setAttribute('x', String(cx - w / 2 + 4));
+      label.setAttribute('y', String(cy - h / 2 + 13));
+      label.setAttribute('font-size', '10');
+      label.setAttribute('fill', '#2563eb');
+      label.textContent = a.id;
+      aoiGroup.appendChild(label);
+    }
+    svg.appendChild(aoiGroup);
+  }
+
+  // Position each node at its real zone center on the panel.
+  const minRadius = 14;
+  const maxRadius = 44;
+  const maxSize = Math.max(...sizeBy, 1);
+  const nodes = labels.map((label, i) => {
+    const c = zoneKeyToCenter(label, gridN);
+    const cx = padding + (0.5 + (c?.x ?? 0)) * (W - padding * 2);
+    const cy = padding + (0.5 + (c?.y ?? 0)) * (H - padding * 2);
+    // visits==0 means the zone was never observed → hide it entirely.
+    // Otherwise scale radius by √(sizeBy / maxSize) so highly-active zones
+    // dominate sub-linearly (keeps the diagram readable).
+    const norm = sizeBy[i] / maxSize;
+    const radius = visits[i] === 0
+      ? 0
+      : Math.max(minRadius * 0.4, minRadius + (maxRadius - minRadius) * Math.sqrt(norm));
+    return {
+      label, cx, cy, radius, index: i,
+      inStrength: inStrength[i],
+      outStrength: outStrength[i],
+      visits: visits[i],
+      sizeMetric: sizeBy[i],
+    };
+  });
+
+  // Edges. Build a row-normalized matrix if `probabilities` is selected.
+  // Probabilities are P(j | i) = matrix[i][j] / Σ_j matrix[i][j], so each
+  // outgoing row sums to 1. This re-scales weights independent of row
+  // mass — a rarely-visited zone that always transitions to the same
+  // neighbor will have a "thick" edge in this view.
+  const n = labels.length;
+  const weightFor = (i, j) => {
+    if (edgeMetric === 'probabilities') {
+      const rowSum = outStrength[i] || 0;
+      return rowSum > 0 ? matrix[i][j] / rowSum : 0;
+    }
+    return matrix[i][j];
+  };
+  let maxWeight = 0;
+  for (let i = 0; i < n; i += 1) {
+    for (let j = 0; j < n; j += 1) {
+      const w = weightFor(i, j);
+      if (w > maxWeight) maxWeight = w;
+    }
+  }
+  if (maxWeight <= 0) maxWeight = 1;
+  const edgeGroup = document.createElementNS(ns, 'g');
+  for (let i = 0; i < n; i += 1) {
+    for (let j = 0; j < n; j += 1) {
+      const w = weightFor(i, j);
+      if (w <= 0) continue;
+      if (i === j && !showSelfLoops) continue;
+      const src = nodes[i];
+      const tgt = nodes[j];
+      if (src.radius === 0 || tgt.radius === 0) continue;
+      const widthPx = 1 + (w / maxWeight) * 5;
+      const opacity = 0.25 + (w / maxWeight) * 0.55;
+      if (i === j) {
+        // Self-loop: small arc above the node.
+        const r = src.radius + 8;
+        const path = document.createElementNS(ns, 'path');
+        const sx = src.cx - r * 0.7;
+        const sy = src.cy - r * 0.7;
+        const ex = src.cx + r * 0.7;
+        const ey = src.cy - r * 0.7;
+        path.setAttribute('d', `M ${sx} ${sy} A ${r} ${r} 0 1 1 ${ex} ${ey}`);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', '#1f2937');
+        path.setAttribute('stroke-width', String(widthPx));
+        path.setAttribute('stroke-opacity', String(opacity));
+        path.setAttribute('marker-end', 'url(#gaze-arrow)');
+        edgeGroup.appendChild(path);
+      } else {
+        // Straight directed edge, stopping at the target circle's rim.
+        const dx = tgt.cx - src.cx;
+        const dy = tgt.cy - src.cy;
+        const dist = Math.hypot(dx, dy) || 1;
+        const ux = dx / dist;
+        const uy = dy / dist;
+        const x1 = src.cx + ux * src.radius;
+        const y1 = src.cy + uy * src.radius;
+        const x2 = tgt.cx - ux * (tgt.radius + 6);
+        const y2 = tgt.cy - uy * (tgt.radius + 6);
+        const line = document.createElementNS(ns, 'line');
+        line.setAttribute('x1', String(x1));
+        line.setAttribute('y1', String(y1));
+        line.setAttribute('x2', String(x2));
+        line.setAttribute('y2', String(y2));
+        line.setAttribute('stroke', '#1f2937');
+        line.setAttribute('stroke-width', String(widthPx));
+        line.setAttribute('stroke-opacity', String(opacity));
+        line.setAttribute('marker-end', 'url(#gaze-arrow)');
+        edgeGroup.appendChild(line);
+      }
+    }
+  }
+  svg.appendChild(edgeGroup);
+
+  // Nodes on top of edges. Color by viridis(visits / maxVisits) so frequent
+  // zones pop visually too, not just by size.
+  const maxVisits = Math.max(...visits, 1);
+  const nodeGroup = document.createElementNS(ns, 'g');
+  for (const node of nodes) {
+    if (node.radius === 0) continue;
+    const t = node.visits / maxVisits;
+    const circle = document.createElementNS(ns, 'circle');
+    circle.setAttribute('cx', String(node.cx));
+    circle.setAttribute('cy', String(node.cy));
+    circle.setAttribute('r', String(node.radius));
+    circle.setAttribute('fill', viridisLike(0.15 + 0.75 * t));
+    circle.setAttribute('stroke', '#0f172a');
+    circle.setAttribute('stroke-width', '1.5');
+    const title = document.createElementNS(ns, 'title');
+    const activeMetricLabel =
+      nodeMetric === 'outstrength' ? 'outstrength' :
+      nodeMetric === 'visits' ? 'visits' :
+      'instrength';
+    title.textContent =
+      `${node.label}\n` +
+      `visits: ${node.visits}\n` +
+      `instrength: ${node.inStrength}\n` +
+      `outstrength: ${node.outStrength}\n` +
+      `(sized by ${activeMetricLabel}; r ∝ √(${activeMetricLabel}/max))`;
+    circle.appendChild(title);
+    nodeGroup.appendChild(circle);
+
+    const label = document.createElementNS(ns, 'text');
+    label.setAttribute('x', String(node.cx));
+    label.setAttribute('y', String(node.cy + 4));
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('font-size', '11');
+    label.setAttribute('font-weight', '600');
+    label.setAttribute('fill', t > 0.6 ? '#0b1220' : '#ffffff');
+    label.textContent = shortZoneLabel(node.label);
+    nodeGroup.appendChild(label);
+  }
+  svg.appendChild(nodeGroup);
+
+  container.append(svg);
+}
+
+function makeNetworkEmptyState(text) {
+  const div = document.createElement('div');
+  div.style.padding = '32px';
+  div.style.color = '#6b7280';
+  div.style.fontSize = '13px';
+  div.style.textAlign = 'center';
+  div.textContent = text;
+  return div;
+}
+
+function enumerateZoneKeys(gridN) {
+  if (gridN === 3) return NAMED_3x3_ZONES.slice();
+  const out = [];
+  for (let r = 0; r < gridN; r += 1) {
+    for (let c = 0; c < gridN; c += 1) out.push(`r${r}c${c}`);
+  }
+  return out;
+}
+
+function centroidToZoneKey(centroid, gridN) {
+  // Centroid is in normalized [-0.5, 0.5]; clamp slightly inside the edge.
+  const xn = Math.min(0.4999, Math.max(-0.4999, centroid.x));
+  const yn = Math.min(0.4999, Math.max(-0.4999, centroid.y));
+  const col = Math.floor((xn + 0.5) * gridN);
+  const row = Math.floor((yn + 0.5) * gridN);
+  if (gridN === 3) {
+    const i = row * 3 + col;
+    return NAMED_3x3_ZONES[i];
+  }
+  return `r${row}c${col}`;
+}
+
+function shortZoneLabel(key) {
+  // Names get abbreviated for the on-node label so they don't overflow:
+  //   "top_left" → "TL"; "middle_center" → "MC"; "bottom_right" → "BR"; etc.
+  const named = {
+    top_left: 'TL', top_center: 'TC', top_right: 'TR',
+    middle_left: 'ML', middle_center: 'MC', middle_right: 'MR',
+    bottom_left: 'BL', bottom_center: 'BC', bottom_right: 'BR',
+  };
+  if (named[key]) return named[key];
+  return key;
+}
+
+function withAlpha(rgbString, alpha) {
+  const m = /rgb\((\d+),\s*(\d+),\s*(\d+)\)/.exec(rgbString);
+  if (!m) return rgbString;
+  return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${alpha})`;
+}
+
+/**
+ * Compact 3×3 zone-proportion reference. Kept as a SECONDARY panel because
+ * the smooth density map is the headline visualization but the raw percentages
+ * are useful when reading published research that quantifies coverage by
+ * named zones (a common convention in reading-comprehension eye-tracking).
+ */
+function renderGazeZoneRef(gazeWindows) {
+  const root = els.gazeZoneRef;
+  if (!root || !els.gazeZoneRefMeta) return;
+  if (gazeWindows.length === 0) {
+    els.gazeZoneRefMeta.textContent = '0 windows';
+    root.innerHTML = '<div class="empty" style="padding:24px;color:var(--ink-3);">No gaze windows yet.</div>';
+    return;
+  }
+  const accum = {};
+  let denom = 0;
+  for (const w of gazeWindows) {
+    const zp = w.gaze.zone_proportions;
+    if (!zp || typeof zp !== 'object') continue;
+    for (const [key, value] of Object.entries(zp)) {
+      if (!Number.isFinite(value)) continue;
+      accum[key] = (accum[key] || 0) + Number(value);
+    }
+    denom += 1;
+  }
+  if (denom === 0) {
+    els.gazeZoneRefMeta.textContent = `${gazeWindows.length} windows · no zone data`;
+    root.innerHTML = '<div class="empty" style="padding:24px;color:var(--ink-3);">No zone_proportions recorded.</div>';
+    return;
+  }
+  const keysOrdered = NAMED_3x3_ZONES.every(k => k in accum)
+    ? NAMED_3x3_ZONES
+    : Object.keys(accum).slice(0, 9);
+  const cells = keysOrdered.map(k => ({ key: k, value: (accum[k] || 0) / denom }));
+  const max = Math.max(...cells.map(c => c.value), 1e-9);
+  els.gazeZoneRefMeta.textContent = `averaged across ${gazeWindows.length}`;
+  root.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.style.display = 'grid';
+  grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+  grid.style.gap = '3px';
+  grid.style.aspectRatio = '1 / 1';
+  grid.style.maxWidth = '260px';
+  grid.style.margin = '0 auto';
+  for (const cell of cells) {
+    const tile = document.createElement('div');
+    const t = Math.min(1, Math.sqrt(cell.value / max));
+    tile.style.background = viridisLike(t);
+    tile.style.borderRadius = '3px';
+    tile.style.display = 'flex';
+    tile.style.alignItems = 'center';
+    tile.style.justifyContent = 'center';
+    tile.style.flexDirection = 'column';
+    tile.style.padding = '6px';
+    tile.style.color = t > 0.5 ? '#0b1220' : '#ffffff';
+    tile.style.fontVariantNumeric = 'tabular-nums';
+    const pct = document.createElement('strong');
+    pct.style.fontSize = '14px';
+    pct.textContent = `${Math.round(cell.value * 100)}%`;
+    const lbl = document.createElement('span');
+    lbl.style.fontSize = '9px';
+    lbl.style.opacity = '0.85';
+    lbl.textContent = cell.key.replace(/_/g, ' ');
+    tile.append(pct, lbl);
+    grid.append(tile);
+  }
+  root.append(grid);
+}
+
+function renderGazeQuality(gazeWindows) {
+  if (!els.gazeQualityChart || !els.gazeQualityMeta) return;
+  const ctx = setupCanvas(els.gazeQualityChart);
+  clearCanvas(ctx);
+  if (gazeWindows.length === 0) {
+    els.gazeQualityMeta.textContent = '0 windows';
+    return drawNoData(ctx, 'No gaze windows');
+  }
+  els.gazeQualityMeta.textContent = `${gazeWindows.length} windows`;
+
+  // Stamp _time for ordering; fall back to window_end ISO when missing.
+  const rows = gazeWindows
+    .map(w => ({
+      _time: parseGazeTime(w),
+      sigma: Number.isFinite(w.gaze.dispersion) ? w.gaze.dispersion : null,
+      valid: Number.isFinite(w.gaze.valid_frame_ratio) ? w.gaze.valid_frame_ratio : null,
+    }))
+    .filter(r => Number.isFinite(r._time))
+    .sort((a, b) => a._time - b._time);
+  if (!rows.length) return drawNoData(ctx, 'No timestamped gaze windows');
+
+  const minT = rows[0]._time;
+  const maxT = rows[rows.length - 1]._time;
+  const denom = Math.max(1, maxT - minT);
+  const plot = plotArea(ctx);
+  drawAxes(ctx, plot);
+
+  // Dispersion is non-negative and unbounded. Normalize to [0, 1] using the
+  // observed max so the line stays in-plot even at high σ. Valid ratio is
+  // already [0, 1].
+  const sigmas = rows.map(r => r.sigma).filter(Number.isFinite);
+  const sigmaMax = sigmas.length ? Math.max(...sigmas) : 0;
+  const sigmaDenom = sigmaMax > 0 ? sigmaMax : 1;
+  drawLine(
+    ctx, plot, rows,
+    item => (item._time - minT) / denom,
+    item => item.sigma == null ? null : item.sigma / sigmaDenom,
+    '#dc2626',
+    'σ',
+  );
+  drawLine(
+    ctx, plot, rows,
+    item => (item._time - minT) / denom,
+    item => item.valid,
+    '#16a34a',
+    'valid',
+  );
+  drawLegend(ctx, [[`σ (max ${sigmaMax.toFixed(3)})`, '#dc2626'], ['valid ratio', '#16a34a']], plot.x + 10, plot.y + 10);
+}
+
+function renderGazeAoi(gazeWindows) {
+  if (!els.gazeAoiChart || !els.gazeAoiMeta) return;
+  const ctx = setupCanvas(els.gazeAoiChart);
+  clearCanvas(ctx);
+
+  // Sum dwell per AOI id across windows.
+  const totals = {};
+  for (const w of gazeWindows) {
+    const dwell = w.gaze.aoi_dwell_ms;
+    if (!dwell || typeof dwell !== 'object') continue;
+    for (const [id, ms] of Object.entries(dwell)) {
+      if (!Number.isFinite(ms)) continue;
+      totals[id] = (totals[id] || 0) + Number(ms);
+    }
+  }
+  const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) {
+    els.gazeAoiMeta.textContent = 'No AOIs configured';
+    return drawNoData(ctx, 'Define AOIs in the Gaze settings tab');
+  }
+  els.gazeAoiMeta.textContent = `${entries.length} AOI${entries.length === 1 ? '' : 's'}`;
+
+  const plot = plotArea(ctx);
+  const max = Math.max(...entries.map(([, total]) => total), 1);
+  const barGap = 8;
+  const barH = Math.max(14, (plot.h - barGap * (entries.length - 1)) / entries.length);
+  ctx.font = '12px ui-sans-serif, system-ui';
+  entries.forEach(([id, total], index) => {
+    const y = plot.y + index * (barH + barGap);
+    const width = (total / max) * (plot.w - 160);
+    ctx.fillStyle = '#2563eb';
+    ctx.fillRect(plot.x + 150, y, width, barH);
+    ctx.fillStyle = themeColor('--canvas-label', '#374151');
+    ctx.fillText(id, plot.x, y + barH - 4);
+    ctx.fillStyle = themeColor('--canvas-muted', '#6b7280');
+    ctx.fillText(`${(total / 1000).toFixed(1)} s`, plot.x + 156 + width, y + barH - 4);
+  });
+}
+
+function renderGazeCalibration(gazeWindows) {
+  if (!els.gazeCalibChart || !els.gazeCalibMeta) return;
+  const ctx = setupCanvas(els.gazeCalibChart);
+  clearCanvas(ctx);
+  if (gazeWindows.length === 0) {
+    els.gazeCalibMeta.textContent = '0 windows';
+    return drawNoData(ctx, 'No gaze windows');
+  }
+  els.gazeCalibMeta.textContent = `${gazeWindows.length} windows`;
+
+  const rows = gazeWindows
+    .map(w => ({
+      _time: parseGazeTime(w),
+      ageMs: Number.isFinite(w.gaze.calibration_age_ms) ? w.gaze.calibration_age_ms : null,
+      quality: Number.isFinite(w.gaze.calibration_quality) ? w.gaze.calibration_quality : null,
+      confidence: w.gaze.calibration_confidence || 'unknown',
+    }))
+    .filter(r => Number.isFinite(r._time))
+    .sort((a, b) => a._time - b._time);
+  if (!rows.length) return drawNoData(ctx, 'No timestamped windows');
+
+  const minT = rows[0]._time;
+  const maxT = rows[rows.length - 1]._time;
+  const denom = Math.max(1, maxT - minT);
+  const ages = rows.map(r => r.ageMs).filter(Number.isFinite);
+  const ageMax = ages.length ? Math.max(...ages) : 0;
+  const ageDenom = ageMax > 0 ? ageMax : 1;
+  const plot = plotArea(ctx);
+
+  // Background ribbon: color per confidence enum below the axis.
+  const ribbonY = plot.y + plot.h - 18;
+  const ribbonH = 8;
+  for (let i = 0; i < rows.length; i += 1) {
+    const xStart = plot.x + ((rows[i]._time - minT) / denom) * plot.w;
+    const xEnd = i + 1 < rows.length
+      ? plot.x + ((rows[i + 1]._time - minT) / denom) * plot.w
+      : plot.x + plot.w;
+    ctx.fillStyle = confidenceColor(rows[i].confidence);
+    ctx.fillRect(xStart, ribbonY, Math.max(1, xEnd - xStart), ribbonH);
+  }
+
+  drawAxes(ctx, plot);
+  drawLine(
+    ctx, plot, rows,
+    item => (item._time - minT) / denom,
+    item => item.ageMs == null ? null : item.ageMs / ageDenom,
+    '#7c3aed',
+    'age',
+  );
+  drawLine(
+    ctx, plot, rows,
+    item => (item._time - minT) / denom,
+    item => item.quality,
+    '#16a34a',
+    'quality',
+  );
+  drawLegend(ctx, [
+    [`age (max ${(ageMax / 1000).toFixed(1)} s)`, '#7c3aed'],
+    ['quality', '#16a34a'],
+    ['measured', '#16a34a'],
+    ['inferred', '#d97706'],
+    ['unknown', '#9ca3af'],
+  ], plot.x + 10, plot.y + 10);
+}
+
+function renderGazeTable(gazeWindows) {
+  if (!els.gazeTable || !els.gazeTableMeta) return;
+  els.gazeTable.replaceChildren();
+  els.gazeTableMeta.textContent = `${gazeWindows.length} window${gazeWindows.length === 1 ? '' : 's'}`;
+  if (!gazeWindows.length) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 7;
+    cell.textContent = 'No gaze data yet. Start a session, calibrate, and look around.';
+    cell.style.padding = '14px';
+    cell.style.color = 'var(--ink-3)';
+    row.append(cell);
+    els.gazeTable.append(row);
+    return;
+  }
+  const recent = gazeWindows.slice(-50).reverse();
+  for (const w of recent) {
+    const g = w.gaze;
+    const cells = [
+      shortDateTime(g.window_end || w.window_end),
+      String(g.n_points ?? '—'),
+      g.dispersion == null ? '—' : Number(g.dispersion).toFixed(3),
+      g.centroid ? `${g.centroid.x.toFixed(2)}, ${g.centroid.y.toFixed(2)}` : '—',
+      g.valid_frame_ratio == null ? '—' : `${Math.round(g.valid_frame_ratio * 100)}%`,
+      g.off_screen_ratio == null ? '—' : `${Math.round(g.off_screen_ratio * 100)}%`,
+      formatGazeCalibration(g),
+    ];
+    const row = tr(w, cells);
+    els.gazeTable.append(row);
+  }
+}
+
+function formatGazeCalibration(g) {
+  if (!Number.isFinite(g.calibration_age_ms)) return 'not calibrated';
+  const conf = g.calibration_confidence || 'unknown';
+  const qPart = Number.isFinite(g.calibration_quality)
+    ? `q ${Number(g.calibration_quality).toFixed(2)} · ${conf}`
+    : conf === 'unknown' ? 'quality unknown' : conf;
+  return `${qPart} · ${(g.calibration_age_ms / 1000).toFixed(0)} s ago`;
+}
+
+function confidenceColor(confidence) {
+  if (confidence === 'measured') return 'rgba(22, 163, 74, 0.55)';
+  if (confidence === 'inferred') return 'rgba(217, 119, 6, 0.55)';
+  return 'rgba(156, 163, 175, 0.55)';
+}
+
+function parseGazeTime(window) {
+  if (window._time && Number.isFinite(window._time)) return window._time;
+  const iso = window.gaze?.window_end || window.window_end;
+  const t = iso ? Date.parse(iso) : NaN;
+  return Number.isFinite(t) ? t : NaN;
+}
+
+function bindGazeExports(gazeWindows) {
+  if (els.exportGazeCsv && !els.exportGazeCsv.__bound) {
+    els.exportGazeCsv.addEventListener('click', () => downloadGazeCsv(gazeWindows));
+    els.exportGazeCsv.__bound = true;
+  }
+  if (els.exportGazeJson && !els.exportGazeJson.__bound) {
+    els.exportGazeJson.addEventListener('click', () => downloadGazeJson(gazeWindows));
+    els.exportGazeJson.__bound = true;
+  }
+}
+
+function downloadGazeCsv(gazeWindows) {
+  // Collect every AOI id seen across windows so CSV columns stay stable.
+  const aoiIds = new Set();
+  for (const w of gazeWindows) {
+    const dwell = w.gaze?.aoi_dwell_ms;
+    if (dwell && typeof dwell === 'object') {
+      for (const id of Object.keys(dwell)) aoiIds.add(id);
+    }
+  }
+  const aoiCols = Array.from(aoiIds).sort();
+  const header = [
+    'window_start', 'window_end', 'duration_ms',
+    'n_points', 'total_frames',
+    'centroid_x', 'centroid_y', 'dispersion',
+    'valid_frame_ratio', 'off_screen_ratio',
+    'calibration_age_ms', 'calibration_quality', 'calibration_confidence',
+    'model_version',
+    ...aoiCols.map(id => `aoi_${id}_dwell_ms`),
+  ];
+  const lines = [header.join(',')];
+  for (const w of gazeWindows) {
+    const g = w.gaze || {};
+    const row = [
+      csvField(g.window_start),
+      csvField(g.window_end),
+      csvField(g.duration_ms),
+      csvField(g.n_points),
+      csvField(g.total_frames),
+      csvField(g.centroid?.x),
+      csvField(g.centroid?.y),
+      csvField(g.dispersion),
+      csvField(g.valid_frame_ratio),
+      csvField(g.off_screen_ratio),
+      csvField(g.calibration_age_ms),
+      csvField(g.calibration_quality),
+      csvField(g.calibration_confidence),
+      csvField(g.model_version),
+      ...aoiCols.map(id => csvField(g.aoi_dwell_ms?.[id])),
+    ];
+    lines.push(row.join(','));
+  }
+  triggerDownload(lines.join('\n'), 'oyon-gaze-windows.csv', 'text/csv');
+}
+
+function downloadGazeJson(gazeWindows) {
+  const payload = gazeWindows.map(w => ({
+    window_start: w.window_start,
+    window_end: w.window_end,
+    session_id: w.session_id || null,
+    gaze: w.gaze || null,
+  }));
+  triggerDownload(JSON.stringify(payload, null, 2), 'oyon-gaze-windows.json', 'application/json');
+}
+
+function csvField(value) {
+  if (value == null) return '';
+  const s = String(value);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function triggerDownload(content, filename, mime) {
+  const blob = new Blob([content], { type: `${mime};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
