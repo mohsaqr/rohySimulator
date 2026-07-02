@@ -85,13 +85,13 @@ describe('zone helpers', () => {
 });
 
 describe('normalizeAoiDwell — case-insensitive target merge', () => {
-    it('lowercases ids and sums colliding dwell, preserving first-seen order', () => {
-        const merged = normalizeAoiDwell({ Chat: 2000, ecg: 500, chat: 3000 });
-        expect([...merged.entries()]).toEqual([['chat', 5000], ['ecg', 500]]);
+    it('canonicalizes ids and sums colliding dwell, preserving first-seen order', () => {
+        const merged = normalizeAoiDwell({ Chat: 2000, ecg: 500, chat_panel: 3000 });
+        expect([...merged.entries()]).toEqual([['chat_panel', 5000], ['ecg_trace', 500]]);
     });
 
     it('skips non-numeric dwell, clamps negatives to 0, tolerates junk input', () => {
-        expect([...normalizeAoiDwell({ chat: 'bad', ECG: -100, ecg: 700 })]).toEqual([['ecg', 700]]);
+        expect([...normalizeAoiDwell({ chat: 'bad', ECG: -100, ecg_trace: 700 })]).toEqual([['ecg_trace', 700]]);
         expect(normalizeAoiDwell(null).size).toBe(0);
         expect(normalizeAoiDwell(undefined).size).toBe(0);
         expect(normalizeAoiDwell('nope').size).toBe(0);
@@ -136,24 +136,24 @@ describe('aoiBreakdown — per-target attention', () => {
         ]);
     });
 
-    it('merges target ids that differ only by case ("Chat"/"chat") into one canonical target', () => {
+    it('merges short and publisher target ids ("Chat"/"chat_panel") into one canonical target', () => {
         const aois = aoiBreakdown([
             // Both eras in the SAME window: dwell sums, the window counts once.
-            gazeWindow({ aoiDwell: { Chat: 2000, chat: 3000 } }),
+            gazeWindow({ aoiDwell: { Chat: 2000, chat_panel: 3000 } }),
             gazeWindow({ aoiDwell: { chat: 1000 } }),
         ]);
         expect(aois).toEqual([
-            { id: 'chat', label: 'Chat', dwellMs: 6000, share: 6000 / 20000, windows: 2 },
+            { id: 'chat_panel', label: 'Chat', dwellMs: 6000, share: 6000 / 20000, windows: 2 },
         ]);
     });
 
-    it('keeps the ECG acronym label when merging "ECG"/"ecg"', () => {
+    it('keeps the ECG acronym label when merging "ECG"/"ecg_trace"', () => {
         const aois = aoiBreakdown([
             gazeWindow({ aoiDwell: { ECG: 4000 } }),
-            gazeWindow({ aoiDwell: { ecg: 2000 } }),
+            gazeWindow({ aoiDwell: { ecg_trace: 2000 } }),
         ]);
         expect(aois).toEqual([
-            { id: 'ecg', label: 'ECG', dwellMs: 6000, share: 0.3, windows: 2 },
+            { id: 'ecg_trace', label: 'ECG', dwellMs: 6000, share: 0.3, windows: 2 },
         ]);
     });
 
@@ -316,18 +316,18 @@ describe('gazeAnalytics', () => {
             gazeWindow({ room: 'examination', aoiDwell: { patient: 2000, Patient: 1000 } }),
         ]);
         // Pool-wide: one row per canonical target, dwell summed across eras.
-        expect(a.aois.map((x) => x.id)).toEqual(['patient', 'vitals']);
-        expect(a.aois[0]).toMatchObject({ id: 'patient', label: 'Patient', dwellMs: 13000, windows: 3 });
+        expect(a.aois.map((x) => x.id)).toEqual(['patient_face', 'vitals_values']);
+        expect(a.aois[0]).toMatchObject({ id: 'patient_face', label: 'Patient', dwellMs: 13000, windows: 3 });
         expect(a.aois[0].share).toBeCloseTo(13000 / 30000, 10);
-        expect(a.aois[1]).toMatchObject({ id: 'vitals', label: 'Vitals', dwellMs: 1000, windows: 1 });
+        expect(a.aois[1]).toMatchObject({ id: 'vitals_values', label: 'Vitals', dwellMs: 1000, windows: 1 });
         // Per-room matrix rows merge the same way — no duplicate columns.
         const chat = a.byRoom.find((r) => r.room === 'chat');
-        expect(chat.aois.map((x) => x.id)).toEqual(['patient', 'vitals']);
-        expect(chat.aois[0]).toMatchObject({ id: 'patient', dwellMs: 10000, windows: 2 });
+        expect(chat.aois.map((x) => x.id)).toEqual(['patient_face', 'vitals_values']);
+        expect(chat.aois[0]).toMatchObject({ id: 'patient_face', dwellMs: 10000, windows: 2 });
         expect(chat.aois[0].share).toBeCloseTo(0.5, 10);
         const exam = a.byRoom.find((r) => r.room === 'examination');
         expect(exam.aois).toEqual([
-            { id: 'patient', label: 'Patient', dwellMs: 3000, share: 0.3, windows: 1 },
+            { id: 'patient_face', label: 'Patient', dwellMs: 3000, share: 0.3, windows: 1 },
         ]);
     });
 

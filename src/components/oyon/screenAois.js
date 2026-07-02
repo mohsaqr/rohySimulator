@@ -44,12 +44,42 @@ export const AOI_LABELS = Object.freeze({
     chat_panel: 'Chat',
 });
 
+const AOI_ALIASES = Object.freeze({
+    patient: PATIENT_AOI_ID,
+    patient_face: PATIENT_AOI_ID,
+    patientface: PATIENT_AOI_ID,
+    'patient-face': PATIENT_AOI_ID,
+    ecg: 'ecg_trace',
+    ecg_trace: 'ecg_trace',
+    ecgtrace: 'ecg_trace',
+    'ecg-trace': 'ecg_trace',
+    vitals: 'vitals_values',
+    vitals_values: 'vitals_values',
+    vitalsvalues: 'vitals_values',
+    'vitals-values': 'vitals_values',
+    chat: 'chat_panel',
+    chat_panel: 'chat_panel',
+    chatpanel: 'chat_panel',
+    'chat-panel': 'chat_panel',
+});
+
+/** Canonical AOI id for analytics aggregation. Older capture rows used short
+ *  ids ("patient", "ecg", "chat", "vitals") while the current publisher uses
+ *  stable DOM-target ids ("patient_face", "ecg_trace", ...). Merge both eras
+ *  before labels are rendered, otherwise the UI gets duplicate columns with
+ *  the same human label. Unknown ids stay lowercased for deterministic output. */
+export function canonicalAoiId(id) {
+    const key = String(id ?? '').trim().toLowerCase();
+    if (!key) return key;
+    return AOI_ALIASES[key] ?? key;
+}
+
 /** Display label for an AOI id — friendly name when known (matched
  *  case-insensitively: real data carries ids from two capture eras that
  *  differ only by case, e.g. "Chat" vs "chat"), otherwise the id capitalized
  *  nicely (first letter upper, known acronym 'ecg' → 'ECG'). */
 export function aoiLabel(id) {
-    const key = String(id ?? '').toLowerCase();
+    const key = canonicalAoiId(id);
     const known = AOI_LABELS[key];
     if (known) return known;
     if (key === 'ecg') return 'ECG';

@@ -11,7 +11,7 @@
 // screenAois.js) and the app-location stamp is Rohy's `room` instead of
 // chatoyon's `page`.
 
-import { aoiLabel } from './screenAois.js';
+import { aoiLabel, canonicalAoiId } from './screenAois.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -32,10 +32,10 @@ export function hasGaze(w) {
 }
 
 /**
- * A window's aoi_dwell_ms map with target ids merged CASE-INSENSITIVELY:
- * real data carries ids from two capture eras that differ only by case
- * ("Patient" vs "patient", "ECG" vs "ecg", …), which used to render as
- * duplicate rows/columns. Canonical key = lowercased id; dwell values for
+ * A window's aoi_dwell_ms map with target ids canonicalized before display:
+ * real data carries ids from multiple capture eras ("Patient"/"patient" and
+ * short ids like "chat" versus publisher ids like "chat_panel"), which used
+ * to render as duplicate rows/columns with the same label. Dwell values for
  * colliding ids are summed (non-numeric entries skipped, negatives clamped
  * to 0). Returns a Map so insertion (first-seen) order is preserved.
  *
@@ -46,7 +46,8 @@ export function normalizeAoiDwell(dwellMap) {
     if (!dwellMap || typeof dwellMap !== 'object') return out;
     for (const [id, dwell] of Object.entries(dwellMap)) {
         if (!isNum(dwell)) continue;
-        const key = String(id).toLowerCase();
+        const key = canonicalAoiId(id);
+        if (!key) continue;
         out.set(key, (out.get(key) ?? 0) + Math.max(0, dwell));
     }
     return out;
