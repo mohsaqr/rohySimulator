@@ -194,25 +194,6 @@ export default function TransitionMiniCard({
                 </p>
             ) : (
                 <>
-                <div className="mx-auto mb-2 flex max-w-7xl flex-wrap items-center justify-end gap-2">
-                    <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                        Centrality — dynajs model, node size follows the selected measure
-                    </span>
-                    {MEASURES.map((m) => (
-                        <button
-                            key={m}
-                            type="button"
-                            onClick={() => setMeasure(m)}
-                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${
-                                measure === m
-                                    ? 'bg-slate-800 text-white'
-                                    : 'bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50'
-                            }`}
-                        >
-                            {m}
-                        </button>
-                    ))}
-                </div>
                 <div className="mx-auto grid max-w-7xl items-stretch gap-6 xl:grid-cols-[410px_420px_minmax(390px,1fr)]">
                     <div className="min-w-0">
                         <div className="mb-1 text-center text-[11px] font-bold uppercase tracking-wide text-gray-600">
@@ -242,6 +223,23 @@ export default function TransitionMiniCard({
                     <div className="h-[410px] min-w-0">
                         <div className="mb-1 text-center text-[11px] font-bold uppercase tracking-wide text-gray-600">
                             Centrality
+                        </div>
+                        <div className="mb-2 flex flex-wrap justify-center gap-1.5">
+                            {MEASURES.map((m) => (
+                                <button
+                                    key={m}
+                                    type="button"
+                                    onClick={() => setMeasure(m)}
+                                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${
+                                        measure === m
+                                            ? 'bg-slate-800 text-white'
+                                            : 'bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50'
+                                    }`}
+                                    title={`Size network nodes and rank bars by ${m}`}
+                                >
+                                    {m}
+                                </button>
+                            ))}
                         </div>
                         <CentralityBarChart
                             centralityData={analysis.centralityData}

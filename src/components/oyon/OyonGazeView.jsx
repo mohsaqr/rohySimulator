@@ -113,12 +113,10 @@ export default function OyonGazeView({ records, loading }) {
              the network and bars agree. */}
          <TransitionMiniCard
             title="Gaze target transitions"
-            subtitle="How attention moves between screen centers — Patient · ECG · Chat · Vitals (dominant AOI per window, screen zone fallback)."
             sequences={targetSeq.sequences}
          />
          <TransitionMiniCard
             title="Location transitions"
-            subtitle="How the student moves between simulator rooms — Patient (main) · Examination · Lab · Radiology · Discussant."
             sequences={roomSeq.sequences}
          />
 

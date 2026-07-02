@@ -46,7 +46,7 @@ describe('TransitionMiniCard', () => {
         expect(screen.getByText('TNA Network')).toBeInTheDocument();
         expect(screen.getByText('Transition Heatmap')).toBeInTheDocument();
         expect(screen.getByText('Centrality')).toBeInTheDocument();
-        expect(screen.getByText(/dynajs model/i)).toBeInTheDocument();
+        expect(screen.queryByText(/dynajs model/i)).not.toBeInTheDocument();
         // Measure pills present and switchable.
         expect(screen.getByRole('button', { name: 'InStrength' })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Betweenness' }));
