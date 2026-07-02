@@ -138,12 +138,12 @@ describe('gaze_target resolution', () => {
             aoi_dwell_ms: {},
             zone_proportions: { middle_center: 0.2, top_left: 0.7, bottom_right: 0.1 },
         };
-        expect(gazeTargetFromGaze(gaze)).toBe('top_left');
+        expect(gazeTargetFromGaze(gaze)).toBe('Top-left');
     });
 
     it('missing aoi_dwell_ms falls back to the dominant zone', () => {
         const gaze = { zone_proportions: { middle_center: 0.9, top_center: 0.1 } };
-        expect(gazeTargetFromGaze(gaze)).toBe('middle_center');
+        expect(gazeTargetFromGaze(gaze)).toBe('Center');
     });
 
     it('all-zero dwell is treated as no AOI signal → zone fallback', () => {
@@ -151,7 +151,12 @@ describe('gaze_target resolution', () => {
             aoi_dwell_ms: { patient_face: 0, ecg_trace: 0 },
             zone_proportions: { middle_left: 0.8, middle_center: 0.2 },
         };
-        expect(gazeTargetFromGaze(gaze)).toBe('middle_left');
+        expect(gazeTargetFromGaze(gaze)).toBe('Left');
+    });
+
+    it('normalizes legacy coarse zone labels', () => {
+        expect(gazeTargetFromGaze({ zone_proportions: { center: 1 } })).toBe('Center');
+        expect(gazeTargetFromGaze({ zone_proportions: { down: 1 } })).toBe('Bottom');
     });
 
     it('no usable gaze at all → null', () => {

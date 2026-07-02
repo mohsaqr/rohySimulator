@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import {
     gazeAnalytics, patientGazeRatio, aggregateZones, dominantZoneOf,
     topZonesText, hasGaze, windowZones, aoiBreakdown, normalizeAoiDwell,
-    perRoomZoneStudentWeights,
+    gazeTargetBreakdown, perRoomZoneStudentWeights, zoneTargetLabel,
 } from './gazeAnalytics.js';
 
 function gazeWindow({
@@ -81,6 +81,14 @@ describe('zone helpers', () => {
         expect(dominantZoneOf(zones)).toBe('middle_center');
         expect(topZonesText(zones)).toBe('middle_center 70% | top_center 30%');
         expect(dominantZoneOf(null)).toBeNull();
+    });
+
+    it('zoneTargetLabel matches the gaze-target transition labels', () => {
+        expect(zoneTargetLabel('middle_center')).toBe('Center');
+        expect(zoneTargetLabel('top_left')).toBe('Top-left');
+        expect(zoneTargetLabel('center')).toBe('Center');
+        expect(zoneTargetLabel('down')).toBe('Bottom');
+        expect(zoneTargetLabel('future_zone')).toBe('future zone');
     });
 });
 
@@ -171,6 +179,64 @@ describe('aoiBreakdown — per-target attention', () => {
     });
 });
 
+describe('gazeTargetBreakdown — AOIs plus screen-zone fallback', () => {
+    it('uses AOI dwell when present and zone fallback only when no AOI dwell exists', () => {
+        const targets = gazeTargetBreakdown([
+            gazeWindow({ aoiDwell: { patient_face: 4000, ecg_trace: 2000 } }),
+            gazeWindow({ aoiDwell: {}, zones: { middle_center: 0.75, top_left: 0.25 } }),
+            gazeWindow({ aoiDwell: { chat_panel: 0 }, zones: { top_left: 0.6, middle_center: 0.4 } }),
+        ]);
+
+        expect(targets.map((t) => [t.id, t.label])).toEqual([
+            ['zone:middle_center', 'Center'],
+            ['zone:top_left', 'Top-left'],
+            ['patient_face', 'Patient'],
+            ['ecg_trace', 'ECG'],
+        ]);
+        expect(targets.find((t) => t.id === 'zone:middle_center').share).toBeCloseTo(0.75, 10);
+        expect(targets.find((t) => t.id === 'zone:top_left').share).toBeCloseTo(0.6, 10);
+    });
+
+    it('falls back gracefully when fallback windows lack duration_ms', () => {
+        expect(gazeTargetBreakdown([
+            gazeWindow({ aoiDwell: {}, zones: { middle_right: 1 }, duration: null }),
+        ])).toEqual([
+            { id: 'zone:middle_right', label: 'Right', dwellMs: 0, share: null, windows: 1 },
+        ]);
+    });
+
+    it('counts legacy engagement-only gaze zones as fallback targets', () => {
+        const targets = gazeTargetBreakdown([
+            {
+                room: 'settings',
+                gaze: { n_points: 0, duration_ms: 0, aoi_dwell_ms: null, zone_proportions: null },
+                engagement: { duration_ms: 7000, gaze_zone_proportions: { center: 1 } },
+            },
+            {
+                room: 'settings',
+                gaze: { n_points: 0, duration_ms: 0, aoi_dwell_ms: null, zone_proportions: null },
+                engagement: { duration_ms: 0, gaze_zone_proportions: { down: 1 } },
+            },
+        ]);
+        expect(targets).toEqual([
+            { id: 'zone:center', label: 'Center', dwellMs: 7000, share: 1, windows: 1 },
+            { id: 'zone:down', label: 'Bottom', dwellMs: 0, share: null, windows: 1 },
+        ]);
+    });
+
+    it('uses the top-level record duration when nested legacy durations are zero', () => {
+        expect(gazeTargetBreakdown([
+            {
+                duration_ms: 10000,
+                gaze: { n_points: 0, duration_ms: 0, aoi_dwell_ms: null, zone_proportions: null },
+                engagement: { duration_ms: 0, gaze_zone_proportions: { down: 1 } },
+            },
+        ])).toEqual([
+            { id: 'zone:down', label: 'Bottom', dwellMs: 10000, share: 1, windows: 1 },
+        ]);
+    });
+});
+
 describe('perRoomZoneStudentWeights — "where they look, per screen"', () => {
     it('groups by room sorted by window count desc, null room → unassigned', () => {
         const rows = perRoomZoneStudentWeights([
@@ -256,6 +322,44 @@ describe('gazeAnalytics', () => {
         expect(a.summary.dominantZone).toBe('middle_center');
         expect(a.summary.avgPatientGaze).toBeCloseTo(0.5, 10); // mean(0.4, 0.6)
         expect(a.summary.patientGazeWindows).toBe(2);
+    });
+
+    it('uses the same target breakdown overall and per room', () => {
+        const a = gazeAnalytics([
+            gazeWindow({ room: 'chat', aoiDwell: { patient_face: 4000 } }),
+            gazeWindow({ room: 'chat', aoiDwell: {}, zones: { middle_center: 0.8 } }),
+            gazeWindow({ room: 'lab', aoiDwell: {}, zones: { top_left: 1 } }),
+        ]);
+
+        expect(a.aois.map((t) => [t.id, t.label])).toEqual([
+            ['zone:top_left', 'Top-left'],
+            ['zone:middle_center', 'Center'],
+            ['patient_face', 'Patient'],
+        ]);
+        const chat = a.targetByRoom.find((r) => r.room === 'chat');
+        expect(chat.aois.map((t) => [t.id, t.label])).toEqual([
+            ['zone:middle_center', 'Center'],
+            ['patient_face', 'Patient'],
+        ]);
+    });
+
+    it('keeps engagement-only fallback targets out of gaze-window counts', () => {
+        const a = gazeAnalytics([
+            gazeWindow({ room: 'chat', aoiDwell: { patient_face: 4000 } }),
+            {
+                room: 'settings',
+                gaze: { n_points: 0, duration_ms: 0, aoi_dwell_ms: null, zone_proportions: null },
+                engagement: { duration_ms: 7000, gaze_zone_proportions: { center: 1 } },
+            },
+        ]);
+
+        expect(a.summary.gazeWindowCount).toBe(1);
+        expect(a.aois.map((t) => [t.id, t.label])).toEqual([
+            ['zone:center', 'Center'],
+            ['patient_face', 'Patient'],
+        ]);
+        expect(a.byRoom.map((r) => r.room)).toEqual(['chat']);
+        expect(a.targetByRoom.map((r) => r.room).sort()).toEqual(['chat', 'settings']);
     });
 
     it('produces newest-first centroids and log rows with the room stamp', () => {

@@ -12,7 +12,7 @@ import { gazeAnalytics, perRoomZoneStudentWeights } from './gazeAnalytics';
  * chatoyon-plus's Gaze tab: aggregate stat chips (incl. "At patient", the
  * share of window time gazing toward the patient's face region), the
  * attention-targets breakdown ("WHAT was being looked at" — patient / ECG /
- * vitals / chat share bars plus the room × target table), the 3×3 zone grid,
+ * vitals / chat plus screen-zone fallback bars and the room × target table), the 3×3 zone grid,
  * the centroid map ("where on the screen"), the per-room breakdown, and the
  * flat per-window gaze log with CSV export. All numbers come from the pure
  * gazeAnalytics() module (tested); this file is layout.
@@ -62,7 +62,7 @@ function roomLabel(room) {
 export default function OyonGazeView({ records, loading }) {
    const windows = useMemo(() => recordsToWindows(records), [records]);
    const analytics = useMemo(() => gazeAnalytics(windows), [windows]);
-   const { summary, zones, aois, centroids, byRoom, log, truncatedLog } = analytics;
+   const { summary, zones, aois, centroids, byRoom, targetByRoom = [], log, truncatedLog } = analytics;
 
    // "Where they look, per screen" — per-room zone weights + per-student
    // shares (pure helper), with one stable palette colour per student across
@@ -122,12 +122,12 @@ export default function OyonGazeView({ records, loading }) {
             sequences={roomSeq.sequences}
          />
 
-         {/* Attention targets — WHAT was being looked at (per-AOI dwell) */}
+         {/* Attention targets — WHAT was being looked at (AOI dwell + zone fallback) */}
          <section className="rounded-lg border border-gray-200 bg-white p-4">
             <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">Attention targets</h3>
             <p className="mb-3 text-xs text-gray-500">
-               Share of gaze-window time dwelling on each on-screen target (over the windows where
-               that target was on screen). Targets can overlap, so shares need not sum to 100%.
+               Share of gaze-window time dwelling on each on-screen target. AOIs are used when
+               present; windows without AOI dwell fall back to their dominant screen zone.
             </p>
             {aois.length === 0 ? (
                <p className="text-sm text-gray-500">No AOI dwell data yet — captured by the v2 pill while a target is on screen.</p>
@@ -149,7 +149,7 @@ export default function OyonGazeView({ records, loading }) {
 
             {/* Room × target share matrix — "on the chat screen, was it the
                 patient, the ECG or the vitals?" */}
-            {aois.length > 0 && byRoom.length > 0 && (
+            {aois.length > 0 && targetByRoom.length > 0 && (
                <div className="mt-4 overflow-x-auto">
                   <table className="w-full text-left text-xs">
                      <thead>
@@ -161,7 +161,7 @@ export default function OyonGazeView({ records, loading }) {
                         </tr>
                      </thead>
                      <tbody>
-                        {byRoom.map((r) => {
+                        {targetByRoom.map((r) => {
                            const shareById = new Map(r.aois.map((a) => [a.id, a.share]));
                            return (
                               <tr key={r.room} className="border-b border-gray-200 text-gray-800">

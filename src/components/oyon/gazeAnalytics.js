@@ -1,8 +1,8 @@
 // Pure gaze analytics over a pool of EmotionWindows — everything the Gaze
-// view shows: aggregate summary, zone proportions, per-AOI attention targets
+// view shows: aggregate summary, zone proportions, per-target attention
 // ("WHAT was being looked at": patient / ECG / vitals / chat), per-window
 // centroid points ("where on screen"), a per-room breakdown (uses the `room`
-// stamp, each row also carrying its own per-AOI shares), and the flat
+// stamp, each row also carrying its own per-target shares), and the flat
 // per-window gaze log.
 //
 // Ported from chatoyon-plus src/lib/analytics/gaze.mjs; adaptations: the AOI
@@ -53,6 +53,44 @@ export function normalizeAoiDwell(dwellMap) {
     return out;
 }
 
+// Short, readable region names for the 3x3 gaze-zone fallback. These labels
+// are shared by summaries, moments, and TNA sequence builders so "attention
+// targets" means the same thing everywhere.
+const ZONE_TARGET_LABELS = {
+    top_left: 'Top-left',
+    top_center: 'Top',
+    top_right: 'Top-right',
+    middle_left: 'Left',
+    middle_center: 'Center',
+    middle_right: 'Right',
+    bottom_left: 'Bottom-left',
+    bottom_center: 'Bottom',
+    bottom_right: 'Bottom-right',
+    left: 'Left',
+    center: 'Center',
+    right: 'Right',
+    up: 'Top',
+    down: 'Bottom',
+};
+
+export function zoneTargetLabel(zone) {
+    if (ZONE_TARGET_LABELS[zone]) return ZONE_TARGET_LABELS[zone];
+    return String(zone ?? '').replace(/_/g, ' ');
+}
+
+function targetDurationMs(w) {
+    const gazeDuration = w?.gaze?.duration_ms;
+    if (isNum(gazeDuration) && gazeDuration > 0) return gazeDuration;
+    const engagementDuration = w?.engagement?.duration_ms;
+    if (isNum(engagementDuration) && engagementDuration > 0) return engagementDuration;
+    const recordDuration = w?.duration_ms;
+    return isNum(recordDuration) && recordDuration > 0 ? recordDuration : gazeDuration;
+}
+
+function hasTargetSignal(w) {
+    return hasGaze(w) || !!windowZones(w);
+}
+
 /**
  * Share of the window spent gazing toward the patient's face region
  * (aoi_dwell_ms.patient_face / window duration), clamped to [0, 1]. Null when
@@ -85,7 +123,7 @@ export function aoiBreakdown(windows) {
     for (const w of windows) {
         const dwellMap = normalizeAoiDwell(w?.gaze?.aoi_dwell_ms);
         if (dwellMap.size === 0) continue;
-        const duration = w?.gaze?.duration_ms;
+        const duration = targetDurationMs(w);
         for (const [id, dwell] of dwellMap) {
             const bucket = byId.get(id) ?? { dwellMs: 0, durationMs: 0, windows: 0 };
             bucket.dwellMs += dwell;
@@ -106,6 +144,56 @@ export function aoiBreakdown(windows) {
             windows: b.windows,
         }))
         .sort((a, b) => b.dwellMs - a.dwellMs);
+}
+
+/**
+ * Attention-target breakdown over a window pool. AOI dwell remains primary
+ * and can include overlapping targets. Windows without any positive AOI dwell
+ * fall back to their dominant 3x3 screen zone so the target summary matches
+ * the gaze-target transition graph.
+ *
+ * @returns {Array<{id:string,label:string,dwellMs:number,share:number|null,windows:number}>}
+ */
+export function gazeTargetBreakdown(windows) {
+    const byId = new Map();
+    for (const w of windows) {
+        const duration = targetDurationMs(w);
+        const dwellEntries = [...normalizeAoiDwell(w?.gaze?.aoi_dwell_ms)].filter(([, dwell]) => dwell > 0);
+        if (dwellEntries.length > 0) {
+            for (const [id, dwell] of dwellEntries) {
+                const bucket = byId.get(id) ?? { label: aoiLabel(id), dwellMs: 0, durationMs: 0, windows: 0 };
+                bucket.dwellMs += dwell;
+                if (isNum(duration) && duration > 0) bucket.durationMs += duration;
+                bucket.windows += 1;
+                byId.set(id, bucket);
+            }
+            continue;
+        }
+
+        const zones = windowZones(w);
+        const zone = dominantZoneOf(zones);
+        const zoneShare = zones?.[zone];
+        if (!zone || !isNum(zoneShare) || zoneShare <= 0) continue;
+
+        const id = `zone:${zone}`;
+        const bucket = byId.get(id) ?? { label: zoneTargetLabel(zone), dwellMs: 0, durationMs: 0, windows: 0 };
+        if (isNum(duration) && duration > 0) {
+            bucket.dwellMs += Math.max(0, duration * Math.min(1, zoneShare));
+            bucket.durationMs += duration;
+        }
+        bucket.windows += 1;
+        byId.set(id, bucket);
+    }
+
+    return [...byId.entries()]
+        .map(([id, b]) => ({
+            id,
+            label: b.label,
+            dwellMs: b.dwellMs,
+            share: b.durationMs > 0 ? Math.max(0, Math.min(1, b.dwellMs / b.durationMs)) : null,
+            windows: b.windows,
+        }))
+        .sort((a, b) => b.dwellMs - a.dwellMs || a.label.localeCompare(b.label));
 }
 
 /** n_points-weighted mean of each zone's proportion across gaze windows. */
@@ -223,9 +311,10 @@ export function gazeAnalytics(windows, { logCap = 2000, centroidCap = 1500 } = {
     const gazeWindows = pool.filter(hasGaze);
 
     const zones = aggregateZones(gazeWindows);
-    // "WHAT was the trainee looking at" — attention share per published AOI
-    // (patient / ECG / vitals / chat), overall and per room below.
-    const aois = aoiBreakdown(gazeWindows);
+    // "WHAT was the trainee looking at" — attention share per canonical AOI,
+    // falling back to readable screen-zone targets when no AOI was registered.
+    const targetWindows = pool.filter(hasTargetSignal);
+    const aois = gazeTargetBreakdown(targetWindows);
     const patientRatios = gazeWindows.map(patientGazeRatio).filter((r) => r !== null);
     const summary = {
         windowCount: pool.length,
@@ -264,7 +353,7 @@ export function gazeAnalytics(windows, { logCap = 2000, centroidCap = 1500 } = {
             const roomZones = aggregateZones(ws);
             return {
                 room,
-                aois: aoiBreakdown(ws),
+                aois: gazeTargetBreakdown(ws),
                 windows: ws.length,
                 points: ws.reduce((a, w) => a + (w.gaze?.n_points ?? 0), 0),
                 dominantZone: dominantZoneOf(roomZones),
@@ -275,6 +364,20 @@ export function gazeAnalytics(windows, { logCap = 2000, centroidCap = 1500 } = {
             };
         })
         .sort((a, b) => b.windows - a.windows);
+
+    const targetRooms = new Map();
+    for (const w of targetWindows) {
+        const room = typeof w.room === 'string' && w.room ? w.room : '(unknown)';
+        const bucket = targetRooms.get(room);
+        if (bucket) bucket.push(w);
+        else targetRooms.set(room, [w]);
+    }
+    const targetByRoom = [...targetRooms.entries()]
+        .map(([room, ws]) => ({
+            room,
+            aois: gazeTargetBreakdown(ws),
+        }))
+        .sort((a, b) => b.aois.reduce((sum, x) => sum + x.windows, 0) - a.aois.reduce((sum, x) => sum + x.windows, 0));
 
     const log = newestFirst.slice(0, logCap).map((w) => {
         const z = windowZones(w);
@@ -298,5 +401,5 @@ export function gazeAnalytics(windows, { logCap = 2000, centroidCap = 1500 } = {
         };
     });
 
-    return { summary, zones, aois, centroids, byRoom, log, truncatedLog: gazeWindows.length > logCap };
+    return { summary, zones, aois, centroids, byRoom, targetByRoom, log, truncatedLog: gazeWindows.length > logCap };
 }

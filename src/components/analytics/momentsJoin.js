@@ -16,7 +16,7 @@
 // (zone_proportions, aoi_dwell_ms) — never any raw (x, y) point stream.
 
 import { aoiLabel } from '../oyon/screenAois.js';
-import { normalizeAoiDwell } from '../oyon/gazeAnalytics.js';
+import { normalizeAoiDwell, zoneTargetLabel } from '../oyon/gazeAnalytics.js';
 
 /** Enrichment fields attached to every event, all-null when no window covers it. */
 const NULL_MOMENT = Object.freeze({
@@ -106,7 +106,7 @@ export function gazeTargetFromGaze(gaze) {
     const aoiKey = argmaxKey(Object.fromEntries(normalizeAoiDwell(g.aoi_dwell_ms)));
     if (aoiKey != null) return aoiLabel(aoiKey);
     const zoneKey = argmaxKey(g.zone_proportions);
-    return zoneKey != null ? zoneKey : null;
+    return zoneKey != null ? zoneTargetLabel(zoneKey) : null;
 }
 
 /**

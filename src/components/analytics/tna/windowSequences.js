@@ -15,7 +15,7 @@
 // runs of the same room/target are dwell, not transitions — without the
 // collapse the network is one giant self-loop per node.
 
-import { normalizeAoiDwell, windowZones, dominantZoneOf } from '../../oyon/gazeAnalytics.js';
+import { normalizeAoiDwell, windowZones, dominantZoneOf, zoneTargetLabel } from '../../oyon/gazeAnalytics.js';
 import { aoiLabel } from '../../oyon/screenAois.js';
 
 // Same readable room names the Gaze view uses.
@@ -34,14 +34,6 @@ function roomState(rec) {
     return room.charAt(0).toUpperCase() + room.slice(1);
 }
 
-// Short, readable region names for the 3×3 gaze-zone fallback (so the
-// transition network shows "center" / "left" rather than "middle_center").
-const ZONE_SHORT = {
-    top_left: 'Top-left', top_center: 'Top', top_right: 'Top-right',
-    middle_left: 'Left', middle_center: 'Center', middle_right: 'Right',
-    bottom_left: 'Bottom-left', bottom_center: 'Bottom', bottom_right: 'Bottom-right',
-};
-
 function gazeTargetState(rec) {
     const dwell = normalizeAoiDwell(rec.gaze?.aoi_dwell_ms);
     let best = null;
@@ -52,7 +44,7 @@ function gazeTargetState(rec) {
     if (best) return aoiLabel(best);
     const zone = dominantZoneOf(windowZones(rec));
     if (!zone) return null;
-    return ZONE_SHORT[zone] ?? zone.replace(/_/g, ' ');
+    return zoneTargetLabel(zone);
 }
 
 // SQLite timestamps come back as 'YYYY-MM-DD HH:MM:SS' (no zone) or ISO

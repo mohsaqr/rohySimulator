@@ -84,6 +84,22 @@ describe('recordsToGazeTargetSequences', () => {
         expect(recordsToGazeTargetSequences(rows).sequences).toEqual([['ECG', 'Top-left']]);
     });
 
+    it('normalizes legacy engagement-only zone labels', () => {
+        const rows = [
+            rec({
+                window_start: ts(10),
+                gaze: { aoi_dwell_ms: null, zone_proportions: null },
+                engagement: { gaze_zone_proportions: { down: 1 } },
+            }),
+            rec({
+                window_start: ts(0),
+                gaze: { aoi_dwell_ms: null, zone_proportions: null },
+                engagement: { gaze_zone_proportions: { center: 1 } },
+            }),
+        ];
+        expect(recordsToGazeTargetSequences(rows).sequences).toEqual([['Center', 'Bottom']]);
+    });
+
     it('skips windows with neither AOI dwell nor zones', () => {
         const rows = [
             rec({ window_start: ts(20), gaze: null }),
