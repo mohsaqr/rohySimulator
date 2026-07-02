@@ -677,17 +677,6 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                 <StatCard icon={<GitBranch className="w-5 h-5" />} value={analysis.summaryData.nEdges} label="Edges" accent="rose" />
                             )}
                         </div>
-                        <p className="text-xs text-gray-600">
-                            {isEmotionSource && (<>
-                                Transitions between per-window <strong>estimated</strong> dominant expressions from
-                                Oyon. Estimates of facial expression — not feelings.
-                            </>)}
-                            {seqSource === 'rooms' && 'Transitions between simulator locations (rooms), one state per capture window with consecutive repeats merged.'}
-                            {seqSource === 'gaze-targets' && 'Transitions between screen centers — the dominant gaze target per window (AOI dwell, falling back to the dominant screen zone), consecutive repeats merged.'}
-                            {' '}({emotionRecords.length} window record{emotionRecords.length === 1 ? '' : 's'} fetched
-                            {emotionTruncated ? ', capped at the most recent 1000' : ''}). Sessions with fewer than
-                            2 usable states are dropped.
-                        </p>
                     </div>
                 )}
 
