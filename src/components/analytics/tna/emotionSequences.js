@@ -5,8 +5,8 @@
 // how student emotions transition during a simulated case.
 //
 // Two dimensions:
-//   raw        — the 8 dominant-emotion classes exactly as stored
-//                (happy/sad/angry/fear/surprise/disgust/contempt/neutral)
+//   raw        — the 8 dominant-emotion classes as canonical Oyon labels
+//                (anger/contempt/disgust/fear/happy/neutral/sad/surprise)
 //   affective  — the 8 classes grouped into 4 clinical-training affect
 //                states via EMOTION_STATE_MAP (below). This is the
 //                simulator-domain analogue of chatoyon's pedagogical
@@ -31,10 +31,15 @@
 // visibility contract as clinicalStates' literal fallback) so new model
 // vocabularies surface in the UI instead of vanishing.
 
+import { canonicalEmotionLabel } from '../../oyon/emotionVocabulary';
+
 export const EMOTION_STATE_MAP = {
+    anger: 'stressed',
+    // Legacy Rohy rows/tests before the Oyon v2 vocabulary settled on
+    // `anger`. Keep the alias visible so old data does not fall through.
+    angry: 'stressed',
     happy: 'engaged',
     surprise: 'engaged',
-    angry: 'stressed',
     fear: 'stressed',
     disgust: 'stressed',
     sad: 'discouraged',
@@ -108,8 +113,9 @@ export function recordsToEmotionSequences(records, { dimension = 'raw' } = {}) {
             .map(({ rec }) => {
                 const dominant = rec.dominant_emotion;
                 if (typeof dominant !== 'string' || !dominant) return null;
-                if (dimension === 'raw') return dominant;
-                return EMOTION_STATE_MAP[dominant.toLowerCase()] ?? dominant;
+                const canonical = canonicalEmotionLabel(dominant);
+                if (dimension === 'raw') return canonical;
+                return EMOTION_STATE_MAP[canonical] ?? canonical;
             })
             .filter((s) => s !== null);
         if (states.length < 2) continue;

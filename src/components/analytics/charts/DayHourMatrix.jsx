@@ -8,11 +8,11 @@
 // and the week_day / month_day time modes — only day_hour is ported for
 // now; bucketDayHour keeps the extensible signature.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { bucketDayHour, dominantState, hexLuminance, lehmerJitter } from './chartMath';
 
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-const W = 800;
+const DEFAULT_W = 900;
 const MARGIN = { top: 30, right: 10, bottom: 20, left: 40 };
 const GAP = 2;
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -67,6 +67,33 @@ export default function DayHourMatrix({
 }) {
     const [mode, setMode] = useState(initialMode);
     const [windowStart, setWindowStart] = useState(null); // null = All time
+    const [chartW, setChartW] = useState(DEFAULT_W);
+    const wrapRef = useRef(null);
+
+    useEffect(() => {
+        const node = wrapRef.current;
+        if (!node) return undefined;
+
+        const updateWidth = () => {
+            const next = Math.floor(node.getBoundingClientRect().width);
+            if (next > 0) setChartW(next);
+        };
+
+        updateWidth();
+
+        if (typeof ResizeObserver !== 'undefined') {
+            const observer = new ResizeObserver(updateWidth);
+            observer.observe(node);
+            return () => observer.disconnect();
+        }
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('resize', updateWidth);
+            return () => window.removeEventListener('resize', updateWidth);
+        }
+
+        return undefined;
+    }, []);
 
     const dataMaxTs = useMemo(
         () => events.reduce((m, e) => (e.ts > 0 ? Math.max(m, e.ts) : m), 0), [events]);
@@ -86,7 +113,7 @@ export default function DayHourMatrix({
 
     const xLen = xLabels.length;
     const yLen = yLabels.length;
-    const innerW = W - MARGIN.left - MARGIN.right;
+    const innerW = chartW - MARGIN.left - MARGIN.right;
     const innerH = height - MARGIN.top - MARGIN.bottom;
     const cellW = (innerW - GAP * (xLen - 1)) / xLen;
     const cellH = (innerH - GAP * (yLen - 1)) / yLen;
@@ -116,7 +143,7 @@ export default function DayHourMatrix({
     };
 
     return (
-        <div data-testid="day-hour-matrix" style={{ fontFamily: FONT, color: '#1a1a2e' }}>
+        <div ref={wrapRef} data-testid="day-hour-matrix" style={{ fontFamily: FONT, color: '#1a1a2e' }}>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginBottom: 6 }}>
                 <button type="button" style={pill(mode === 'heatmap')} onClick={() => setMode('heatmap')}>
                     Heatmap
@@ -145,9 +172,7 @@ export default function DayHourMatrix({
                     All
                 </button>
             </div>
-            {/* maxWidth caps the viewBox scale — stretched across a wide
-                container it inflates cell text and bubbles ~2x. */}
-            <svg width="100%" style={{ maxWidth: W }} viewBox={`0 0 ${W} ${height}`} role="img" aria-label="Day by hour activity matrix">
+            <svg width="100%" height={height} style={{ display: 'block', width: '100%', height }} viewBox={`0 0 ${chartW} ${height}`} role="img" aria-label="Day by hour activity matrix">
                 <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
                     {xLabels.map((label, h) => (
                         (cellW >= 14 || h % 2 === 0) && (

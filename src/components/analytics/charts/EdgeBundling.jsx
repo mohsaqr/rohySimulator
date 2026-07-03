@@ -18,6 +18,7 @@ const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
  * @param {number} [props.beta=0.85] bundling strength 0–1
  * @param {number} [props.nodeRadius=5]
  * @param {number} [props.height=600] SVG is square: width = height
+ * @param {number} [props.labelPad=90] radial padding reserved for labels
  * @param {(groupKey:string) => string} [props.colorFor] group colour override
  * @param {string} [props.title]
  * @param {string} [props.subtitle]
@@ -31,6 +32,7 @@ export default function EdgeBundling({
     beta = 0.85,
     nodeRadius = 5,
     height = 600,
+    labelPad = LABEL_PAD,
     colorFor,
     title,
     subtitle,
@@ -41,7 +43,7 @@ export default function EdgeBundling({
     const [lockedId, setLockedId] = useState(null);
 
     const size = height;
-    const radius = size / 2 - LABEL_PAD;
+    const radius = size / 2 - labelPad;
 
     // Colour mapping: group if provided, otherwise parent id (carmdash).
     const colorOf = useMemo(() => {

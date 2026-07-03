@@ -16,8 +16,6 @@
 //     by ONE shared /addons/oyon/emotion-records fetch that fires
 //     whenever a signal tab is active — regardless of the Source select —
 //     paginated at 200/page and capped at 1000 with a truncation notice.
-//     Trends is NOT its own tab: the Attention tab renders the attention
-//     view with the trends view stacked below it.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -31,23 +29,17 @@ vi.mock('../../../services/apiClient', () => ({
 
 // The Oyon presentation views are heavy (SVG plots) — stub them so these
 // tests stay about V2's fetch/tab wiring.
-vi.mock('../../oyon/OyonAttentionView', () => ({
-    default: ({ records }) => <div data-testid="oyon-attention-view">attention:{records?.length ?? 0}</div>,
+vi.mock('../../oyon/OyonAttentionV2', () => ({
+    default: ({ records }) => <div data-testid="oyon-attention-v2-view">attention:{records?.length ?? 0}</div>,
 }));
 vi.mock('../../oyon/OyonGazeView', () => ({
     default: ({ records }) => <div data-testid="oyon-gaze-view">gaze:{records?.length ?? 0}</div>,
 }));
-vi.mock('../../oyon/OyonTrendsView', () => ({
-    default: ({ records }) => <div data-testid="oyon-trends-view">trends:{records?.length ?? 0}</div>,
-}));
 vi.mock('../../oyon/OyonSessionsView', () => ({
     default: ({ records }) => <div data-testid="oyon-sessions-view">sessions:{records?.length ?? 0}</div>,
 }));
-vi.mock('../../oyon/OyonAffectView', () => ({
-    default: ({ records }) => <div data-testid="oyon-affect-view">affect:{records?.length ?? 0}</div>,
-}));
-vi.mock('../../oyon/OyonEngagementView', () => ({
-    default: ({ records }) => <div data-testid="oyon-engagement-view">engagement:{records?.length ?? 0}</div>,
+vi.mock('../../oyon/OyonAffectV2', () => ({
+    default: ({ records }) => <div data-testid="oyon-affect-v2-view">affect:{records?.length ?? 0}</div>,
 }));
 
 // The two carmdash-style Activity-tab charts are SVG-heavy — stub them so the
@@ -113,29 +105,33 @@ beforeEach(() => {
 });
 
 describe('TnaDashboardV2 standalone (defaults)', () => {
-    it('renders its own Case/Student/Start/End filter inputs and header close button', async () => {
+    it('lands on Activity and renders its own Case/Student/Start/End filter inputs and header close button', async () => {
         render(<TnaDashboardV2 onClose={() => {}} />);
-        await waitFor(() => expect(seqUrls().length).toBe(1));
+        await waitFor(() => expect(eventUrls()).toEqual(['/learning-events/all?limit=5000']));
 
         expect(screen.getByText('Case')).toBeTruthy();
         expect(screen.getByText('Student')).toBeTruthy();
         expect(screen.getByText('Start')).toBeTruthy();
         expect(screen.getByText('End')).toBeTruthy();
-        expect(screen.getByText('Source')).toBeTruthy();
+        expect(screen.getByText('Activity Overview')).toBeTruthy();
         expect(screen.getByTitle('Close')).toBeTruthy();
         expect(screen.getByRole('heading', { name: 'Analytics' })).toBeTruthy();
+        expect(seqUrls().length).toBe(0);
     });
 });
 
 describe('TnaDashboardV2 externalFilters', () => {
     it('hides the Case/Student/Start/End inputs but keeps the per-tab controls', async () => {
         render(<TnaDashboardV2 externalFilters={{ caseId: '7' }} />);
-        await waitFor(() => expect(seqUrls().length).toBe(1));
+        await waitFor(() => expect(eventUrls().length).toBe(1));
 
         expect(screen.queryByText('Case')).toBeNull();
         expect(screen.queryByText('Student')).toBeNull();
         expect(screen.queryByText('Start')).toBeNull();
         expect(screen.queryByText('End')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
+        await waitFor(() => expect(seqUrls().length).toBe(1));
         // V2-owned per-tab controls stay.
         expect(screen.getByText('Source')).toBeTruthy();
         expect(screen.getByText('Group by')).toBeTruthy();
@@ -148,6 +144,7 @@ describe('TnaDashboardV2 externalFilters', () => {
                 externalFilters={{ caseId: '7', userId: '42', startDate: '2026-01-01', endDate: undefined }}
             />,
         );
+        fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
         await waitFor(() => expect(seqUrls().length).toBe(1));
 
         const params = lastSeqParams();
@@ -159,6 +156,7 @@ describe('TnaDashboardV2 externalFilters', () => {
 
     it('refetches with the new case_id when externalFilters changes', async () => {
         const { rerender } = render(<TnaDashboardV2 externalFilters={{ caseId: '1' }} />);
+        fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
         await waitFor(() => expect(seqUrls().length).toBe(1));
         expect(lastSeqParams().get('case_id')).toBe('1');
 
@@ -171,7 +169,7 @@ describe('TnaDashboardV2 externalFilters', () => {
 describe('TnaDashboardV2 hideHeader', () => {
     it('removes the close button and title but keeps the tab strip', async () => {
         render(<TnaDashboardV2 onClose={() => {}} hideHeader />);
-        await waitFor(() => expect(seqUrls().length).toBe(1));
+        await waitFor(() => expect(eventUrls().length).toBe(1));
 
         expect(screen.queryByTitle('Close')).toBeNull();
         expect(screen.queryByRole('heading', { name: 'Analytics' })).toBeNull();
@@ -190,12 +188,8 @@ const eventUrls = () => apiFetchMock.mock.calls
     .filter((u) => u.startsWith('/learning-events/all'));
 
 describe('TnaDashboardV2 activity tab charts', () => {
-    it('activating the tab fetches raw learning events (5000 cap) and renders both chart cards', async () => {
+    it('loads raw learning events on the landing Activity tab and renders both chart cards', async () => {
         render(<TnaDashboardV2 />);
-        await waitFor(() => expect(seqUrls().length).toBe(1));
-        expect(eventUrls().length).toBe(0);
-
-        fireEvent.click(screen.getByRole('button', { name: /^Activity$/ }));
 
         await waitFor(() => expect(eventUrls()).toEqual(['/learning-events/all?limit=5000']));
         await waitFor(() => expect(screen.getByTestId('stacked-area-chart')).toBeTruthy());
@@ -209,9 +203,7 @@ describe('TnaDashboardV2 activity tab charts', () => {
 
     it('filter changes re-slice the cached rows client-side without a second fetch', async () => {
         const { rerender } = render(<TnaDashboardV2 externalFilters={{ caseId: '' }} />);
-        await waitFor(() => expect(seqUrls().length).toBe(1));
 
-        fireEvent.click(screen.getByRole('button', { name: /^Activity$/ }));
         await waitFor(() => expect(screen.getByTestId('day-hour-matrix').textContent).toBe('matrix:2'));
 
         // Both fixture events are case c1 — narrowing to c2 empties the charts
@@ -226,6 +218,7 @@ describe('TnaDashboardV2 activity tab charts', () => {
 describe('TnaDashboardV2 window-record sources (Locations / Gaze targets)', () => {
     it('offers all four sources and switching to Locations uses the records fetch, not tna-sequences', async () => {
         render(<TnaDashboardV2 />);
+        fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
         await waitFor(() => expect(seqUrls().length).toBe(1));
 
         const sourceSelect = screen.getByText('Source').parentElement.querySelector('select');
@@ -248,6 +241,7 @@ describe('TnaDashboardV2 window-record sources (Locations / Gaze targets)', () =
 
     it('Gaze targets source builds sequences from AOI dwell', async () => {
         render(<TnaDashboardV2 />);
+        fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
         await waitFor(() => expect(seqUrls().length).toBe(1));
         const sourceSelect = screen.getByText('Source').parentElement.querySelector('select');
         fireEvent.change(sourceSelect, { target: { value: 'gaze-targets' } });
@@ -259,63 +253,60 @@ describe('TnaDashboardV2 window-record sources (Locations / Gaze targets)', () =
 describe('TnaDashboardV2 signal tabs', () => {
     it('shows all grouped tabs including the new signal tabs', async () => {
         render(<TnaDashboardV2 />);
-        await waitFor(() => expect(seqUrls().length).toBe(1));
+        await waitFor(() => expect(eventUrls().length).toBe(1));
 
         for (const name of ['Activity', 'Network', 'Patterns', 'Process Map', 'Clusters',
             'Attention', 'Affect', 'Gaze', 'Compare', 'Sessions', 'Settings']) {
             expect(screen.getByRole('button', { name: new RegExp(`^${name}$`) })).toBeTruthy();
         }
-        // Trends was merged INTO the Attention tab — no standalone tab.
+        expect(screen.queryByRole('button', { name: /^Attention 2$/ })).toBeNull();
+        expect(screen.queryByRole('button', { name: /^Affect 2$/ })).toBeNull();
+        // Trends was retired from the primary signal tab strip.
         expect(screen.queryByRole('button', { name: /^Trends$/ })).toBeNull();
-        // Engagement was merged INTO the Affect tab — no standalone tab.
+        // Engagement was retired from the primary signal tab strip.
         expect(screen.queryByRole('button', { name: /^Engagement$/ })).toBeNull();
         // The embedded <oyon-app> element tab was deliberately removed —
         // nesting Oyon's own app chrome inside this dashboard is not wanted.
         expect(screen.queryByRole('button', { name: /^Oyon$/ })).toBeNull();
     });
 
-    it('the Affect tab stacks the affect view with the engagement view below it', async () => {
+    it('the Affect tab renders the V2 affect view directly', async () => {
         render(<TnaDashboardV2 />);
-        await waitFor(() => expect(seqUrls().length).toBe(1));
+        await waitFor(() => expect(emotionUrls().length).toBeGreaterThan(0));
 
         fireEvent.click(screen.getByRole('button', { name: /^Affect$/ }));
-        await waitFor(() => expect(screen.getByTestId('oyon-affect-view').textContent).toBe('affect:3'));
-        expect(screen.getByTestId('oyon-engagement-view').textContent).toBe('engagement:3');
+        await waitFor(() => expect(screen.getByTestId('oyon-affect-v2-view').textContent).toBe('affect:3'));
     });
 
-    it('the Attention tab renders the attention AND trends views stacked together', async () => {
+    it('the Attention tab renders the V2 attention view directly', async () => {
         render(<TnaDashboardV2 />);
-        await waitFor(() => expect(seqUrls().length).toBe(1));
+        await waitFor(() => expect(emotionUrls().length).toBeGreaterThan(0));
 
-        fireEvent.click(screen.getByRole('button', { name: /Attention/ }));
+        fireEvent.click(screen.getByRole('button', { name: /^Attention$/ }));
 
-        await waitFor(() => expect(screen.getByTestId('oyon-attention-view').textContent).toBe('attention:3'));
-        expect(screen.getByTestId('oyon-trends-view').textContent).toBe('trends:3');
-        // Other signal views stay unmounted.
-        expect(screen.queryByTestId('oyon-gaze-view')).toBeNull();
-        expect(screen.queryByTestId('oyon-sessions-view')).toBeNull();
+        await waitFor(() => expect(screen.getByTestId('oyon-attention-v2-view').textContent).toBe('attention:3'));
     });
 
     it('clicking Gaze fetches emotion records even with source=activity and renders the gaze view', async () => {
         render(<TnaDashboardV2 />); // defaultSource = 'activity'
-        await waitFor(() => expect(seqUrls().length).toBe(1));
-        expect(emotionUrls().length).toBe(0); // activity source, analytics tab: no emotion fetch
+        await waitFor(() => expect(emotionUrls().length).toBe(1));
 
         fireEvent.click(screen.getByRole('button', { name: /Gaze/ }));
 
-        await waitFor(() => expect(emotionUrls().length).toBe(1));
         await waitFor(() => expect(screen.getByTestId('oyon-gaze-view').textContent).toBe('gaze:3'));
         // The other signal views stay unmounted.
-        expect(screen.queryByTestId('oyon-attention-view')).toBeNull();
+        expect(screen.queryByTestId('oyon-attention-v2-view')).toBeNull();
     });
 
     it('does not re-fetch when hopping between two signal tabs (one shared fetch)', async () => {
         render(<TnaDashboardV2 />);
-        await waitFor(() => expect(seqUrls().length).toBe(1));
+        await waitFor(() => expect(emotionUrls().length).toBeGreaterThan(0));
+        const callsAfterLanding = emotionUrls().length;
 
-        fireEvent.click(screen.getByRole('button', { name: /Attention/ }));
-        await waitFor(() => expect(screen.getByTestId('oyon-attention-view')).toBeTruthy());
+        fireEvent.click(screen.getByRole('button', { name: /^Attention$/ }));
+        await waitFor(() => expect(screen.getByTestId('oyon-attention-v2-view')).toBeTruthy());
         const callsAfterFirst = emotionUrls().length;
+        expect(callsAfterFirst).toBe(callsAfterLanding);
 
         fireEvent.click(screen.getByRole('button', { name: /Sessions/ }));
         await waitFor(() => expect(screen.getByTestId('oyon-sessions-view')).toBeTruthy());
@@ -329,11 +320,11 @@ describe('TnaDashboardV2 signal tabs', () => {
     it('paginates to the 1000-window cap and shows the truncation notice', async () => {
         routeApi({ emotionTotal: 1200 });
         render(<TnaDashboardV2 />);
-        await waitFor(() => expect(seqUrls().length).toBe(1));
+        await waitFor(() => expect(emotionUrls().length).toBe(5));
 
-        fireEvent.click(screen.getByRole('button', { name: /Attention/ }));
+        fireEvent.click(screen.getByRole('button', { name: /^Attention$/ }));
 
-        await waitFor(() => expect(screen.getByTestId('oyon-trends-view').textContent).toBe('trends:1000'));
+        await waitFor(() => expect(screen.getByTestId('oyon-attention-v2-view').textContent).toBe('attention:1000'));
         expect(emotionUrls().length).toBe(5); // 5 pages of 200
         expect(screen.getByText(/capped at the most recent 1000 windows/)).toBeTruthy();
     });
@@ -341,10 +332,10 @@ describe('TnaDashboardV2 signal tabs', () => {
     it('omits the truncation notice when under the cap', async () => {
         routeApi({ emotionTotal: 3 });
         render(<TnaDashboardV2 />);
-        await waitFor(() => expect(seqUrls().length).toBe(1));
+        await waitFor(() => expect(emotionUrls().length).toBe(1));
 
-        fireEvent.click(screen.getByRole('button', { name: /Attention/ }));
-        await waitFor(() => expect(screen.getByTestId('oyon-trends-view')).toBeTruthy());
+        fireEvent.click(screen.getByRole('button', { name: /^Attention$/ }));
+        await waitFor(() => expect(screen.getByTestId('oyon-attention-v2-view')).toBeTruthy());
 
         expect(screen.getByText(/3 windows · 3 sessions/)).toBeTruthy();
         expect(screen.queryByText(/capped at the most recent 1000 windows/)).toBeNull();

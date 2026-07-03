@@ -53,13 +53,10 @@ const ActivityDonutChart = ({ data, title, palette = "default" }) => {
     return { slices: s, total: tot, colorMap: cm };
   }, [data, palette]);
   if (slices.length === 0) {
-    return <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">{title}</h3>
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">No data</div>
-      </div>;
+    return <div className="text-center py-10 text-gray-500 text-sm">No data</div>;
   }
-  return <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-      <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">{title}</h3>
+  return <div>
+      {title && <h3 className="text-sm font-semibold text-gray-900 mb-2">{title}</h3>}
       <div className="flex flex-col items-center">
         <svg
     width={SVG_SIZE}

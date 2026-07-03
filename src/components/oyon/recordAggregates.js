@@ -1,3 +1,5 @@
+import { canonicalEmotionLabel } from './emotionVocabulary';
+
 // Pure client-side rollups over hydrated /addons/oyon/emotion-records rows —
 // the aggregation logic behind the standalone data views (OyonWindowsView's
 // quality filter, OyonStudentsView's per-student table, OyonCasesView's
@@ -28,7 +30,7 @@ export function filterRecords(records, { minConfidence, maxMissingFace, dominant
          if (!Number.isFinite(miss) || miss > maxMissingFace) return false;
       }
       if (dominant.length > 0) {
-         const label = String(r.dominant_emotion || '').toLowerCase();
+         const label = canonicalEmotionLabel(r.dominant_emotion);
          if (!dominant.includes(label)) return false;
       }
       return true;
@@ -60,7 +62,7 @@ export function studentAggregates(records) {
       if (r.session_id != null) g.sessions.add(String(r.session_id));
       if (r.case_id != null) g.cases.add(String(r.case_id));
       if (r.dominant_emotion) {
-         const d = String(r.dominant_emotion).toLowerCase();
+         const d = canonicalEmotionLabel(r.dominant_emotion);
          g.dominantCounts.set(d, (g.dominantCounts.get(d) ?? 0) + 1);
       }
       g.windows.push(r);
@@ -118,7 +120,7 @@ export function caseAggregates(records) {
       g.students.add(studentKey);
       if (r.session_id != null) g.sessions.add(String(r.session_id));
       if (r.dominant_emotion) {
-         const d = String(r.dominant_emotion).toLowerCase();
+         const d = canonicalEmotionLabel(r.dominant_emotion);
          g.dist[d] = (g.dist[d] ?? 0) + 1;
       }
       g.windows.push(r);

@@ -16,7 +16,7 @@
 // dropdown to the single selected choice.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { LineChart, Users, Calendar, RefreshCw, AlertTriangle } from 'lucide-react';
+import { LineChart, Users, Calendar, RefreshCw, AlertTriangle, ScanEye } from 'lucide-react';
 import { apiFetch, ApiError } from '../../services/apiClient';
 import FilterBar, {
     deriveOptions,
@@ -26,6 +26,7 @@ import FilterBar, {
 import OyonWindowsView from '../oyon/OyonWindowsView';
 import OyonStudentsView from '../oyon/OyonStudentsView';
 import OyonCasesView from '../oyon/OyonCasesView';
+import OyonGazeLogView from '../oyon/OyonGazeLogView';
 
 const PAGE_SIZE = 200;   // per-request limit (server default/max page)
 const MAX_RECORDS = 1000; // client-side cap — beyond this we note truncation
@@ -34,6 +35,7 @@ const EMPTY_FILTERS = { session_id: '', case_id: '', user_id: '', from: '', to: 
 
 const VIEWS = [
     { id: 'windows', label: 'Windows', icon: LineChart },
+    { id: 'gaze', label: 'Gaze', icon: ScanEye },
     { id: 'students', label: 'Students', icon: Users },
     { id: 'cases', label: 'Cases', icon: Calendar },
 ];
@@ -49,54 +51,73 @@ function filtersToParams(filters) {
     return p;
 }
 
+async function fetchEmotionRecords(filters) {
+    // Page through the endpoint (limit 200 per request) until every matching
+    // window is loaded or the MAX_RECORDS cap is hit.
+    const all = [];
+    let grandTotal = 0;
+    let offset = 0;
+    for (;;) {
+        const p = filtersToParams(filters);
+        p.set('limit', String(PAGE_SIZE));
+        p.set('offset', String(offset));
+        const data = await apiFetch(`/addons/oyon/emotion-records?${p.toString()}`);
+        const page = Array.isArray(data?.records) ? data.records : [];
+        grandTotal = Number(data?.total) || page.length;
+        all.push(...page);
+        offset += PAGE_SIZE;
+        if (!page.length || all.length >= Math.min(grandTotal, MAX_RECORDS)) break;
+    }
+    return { records: all.slice(0, MAX_RECORDS), total: grandTotal };
+}
+
+function normalizeLoadError(e) {
+    if (e instanceof ApiError && e.status === 403) {
+        return { kind: 'forbidden' };
+    }
+    if (e instanceof ApiError && (e.code === 'OYON_DISABLED' || e.code === 'OYON_IMPORT_FAILED')) {
+        // Structured 503 stub — surface the operator-actionable message from
+        // the body, not a bare error dump.
+        return { kind: 'serverDisabled', code: e.code, message: e.message };
+    }
+    return { kind: 'generic', message: e?.message || 'Could not load Oyon records' };
+}
+
 export default function OyonDataLogs() {
     const [view, setView] = useState('windows');
     const [filters, setFilters] = useState(EMPTY_FILTERS);
-    const [records, setRecords] = useState([]);
-    const [total, setTotal] = useState(0);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [refreshSeq, setRefreshSeq] = useState(0);
+    const requestKey = useMemo(() => JSON.stringify([filters, refreshSeq]), [filters, refreshSeq]);
+    const [loadResult, setLoadResult] = useState({
+        requestKey: null,
+        records: [],
+        total: 0,
+        error: null,
+    });
+    const records = loadResult.records;
+    const total = loadResult.total;
+    const error = loadResult.error;
+    const loading = loadResult.requestKey !== requestKey;
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            // Page through the endpoint (limit 200 per request) until every
-            // matching window is loaded or the MAX_RECORDS cap is hit.
-            const all = [];
-            let grandTotal = 0;
-            let offset = 0;
-            for (;;) {
-                const p = filtersToParams(filters);
-                p.set('limit', String(PAGE_SIZE));
-                p.set('offset', String(offset));
-                const data = await apiFetch(`/addons/oyon/emotion-records?${p.toString()}`);
-                const page = Array.isArray(data?.records) ? data.records : [];
-                grandTotal = Number(data?.total) || page.length;
-                all.push(...page);
-                offset += PAGE_SIZE;
-                if (!page.length || all.length >= Math.min(grandTotal, MAX_RECORDS)) break;
+    useEffect(() => {
+        let cancelled = false;
+
+        async function loadCurrentRequest() {
+            try {
+                const data = await fetchEmotionRecords(filters);
+                if (!cancelled) {
+                    setLoadResult({ requestKey, records: data.records, total: data.total, error: null });
+                }
+            } catch (e) {
+                if (!cancelled) {
+                    setLoadResult({ requestKey, records: [], total: 0, error: normalizeLoadError(e) });
+                }
             }
-            setRecords(all.slice(0, MAX_RECORDS));
-            setTotal(grandTotal);
-        } catch (e) {
-            if (e instanceof ApiError && e.status === 403) {
-                setError({ kind: 'forbidden' });
-            } else if (e instanceof ApiError && (e.code === 'OYON_DISABLED' || e.code === 'OYON_IMPORT_FAILED')) {
-                // Structured 503 stub — surface the operator-actionable
-                // message from the body, not a bare error dump.
-                setError({ kind: 'serverDisabled', code: e.code, message: e.message });
-            } else {
-                setError({ kind: 'generic', message: e?.message || 'Could not load Oyon records' });
-            }
-            setRecords([]);
-            setTotal(0);
-        } finally {
-            setLoading(false);
         }
-    }, [filters]);
 
-    useEffect(() => { load(); }, [load]);
+        loadCurrentRequest();
+        return () => { cancelled = true; };
+    }, [filters, requestKey]);
 
     const setFilter = useCallback((key, value) => {
         setFilters((prev) => {
@@ -107,6 +128,7 @@ export default function OyonDataLogs() {
         });
     }, []);
     const clearFilters = useCallback(() => setFilters(EMPTY_FILTERS), []);
+    const refresh = useCallback(() => setRefreshSeq((seq) => seq + 1), []);
 
     // Every filter is a server param, so remember options across refetches —
     // otherwise picking one user/case/session collapses its own dropdown.
@@ -178,7 +200,7 @@ export default function OyonDataLogs() {
                         {loading ? 'Loading…' : `${records.length} of ${total} window${total === 1 ? '' : 's'}`}
                     </span>
                     <button
-                        onClick={load}
+                        onClick={refresh}
                         disabled={loading}
                         title="Refresh"
                         className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 text-gray-800 hover:bg-gray-100 disabled:opacity-50 text-sm"
@@ -206,6 +228,7 @@ export default function OyonDataLogs() {
                 ) : (
                     <>
                         {view === 'windows' && <OyonWindowsView records={records} loading={loading} />}
+                        {view === 'gaze' && <OyonGazeLogView records={records} loading={loading} />}
                         {view === 'students' && <OyonStudentsView records={records} />}
                         {view === 'cases' && <OyonCasesView records={records} />}
                     </>

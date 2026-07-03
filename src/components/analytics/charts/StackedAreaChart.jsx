@@ -4,11 +4,11 @@
 // fills with a solid top line, ~5 horizontal gridlines, bottom legend, and
 // a hover layer (vertical guide + floating per-series value box).
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getColor, linearScale, monotonePath, stackSeries } from './chartMath';
 
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-const W = 640;
+const DEFAULT_W = 760;
 const MARGIN = { top: 16, right: 32, bottom: 48, left: 48 };
 
 /**
@@ -32,10 +32,36 @@ export default function StackedAreaChart({
     yLabel,
 }) {
     const [hoverIdx, setHoverIdx] = useState(null);
+    const [chartW, setChartW] = useState(DEFAULT_W);
     const wrapRef = useRef(null);
 
+    useEffect(() => {
+        const node = wrapRef.current;
+        if (!node) return undefined;
+
+        const updateWidth = () => {
+            const next = Math.floor(node.getBoundingClientRect().width);
+            if (next > 0) setChartW(next);
+        };
+
+        updateWidth();
+
+        if (typeof ResizeObserver !== 'undefined') {
+            const observer = new ResizeObserver(updateWidth);
+            observer.observe(node);
+            return () => observer.disconnect();
+        }
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('resize', updateWidth);
+            return () => window.removeEventListener('resize', updateWidth);
+        }
+
+        return undefined;
+    }, []);
+
     const legendH = series.length > 1 ? 24 : 0;
-    const innerW = W - MARGIN.left - MARGIN.right;
+    const innerW = chartW - MARGIN.left - MARGIN.right;
     const innerH = height - MARGIN.top - MARGIN.bottom - legendH;
 
     const { sortedXs, layers, xScale, yScale } = useMemo(() => {
@@ -62,7 +88,7 @@ export default function StackedAreaChart({
     const handleMove = (e) => {
         if (!sortedXs.length) return;
         const rect = e.currentTarget.getBoundingClientRect();
-        const px = ((e.clientX - rect.left) / rect.width) * W - MARGIN.left;
+        const px = ((e.clientX - rect.left) / rect.width) * chartW - MARGIN.left;
         const nearest = sortedXs.reduce(
             (best, x, i) => {
                 const d = Math.abs(xScale(x) - px);
@@ -94,10 +120,9 @@ export default function StackedAreaChart({
             {title && <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{title}</div>}
             <svg
                 width="100%"
-                // Cap at the natural coordinate size — stretching the viewBox
-                // across a wide container scales fonts/marks up ~2-3x.
-                style={{ maxWidth: W }}
-                viewBox={`0 0 ${W} ${height}`}
+                height={height}
+                style={{ display: 'block', width: '100%', height }}
+                viewBox={`0 0 ${chartW} ${height}`}
                 role="img"
                 aria-label={title ?? 'Stacked area chart'}
                 onMouseMove={handleMove}
@@ -188,7 +213,7 @@ export default function StackedAreaChart({
                     data-testid="hover-box"
                     style={{
                         position: 'absolute',
-                        left: `${(((xScale(hoverX) + MARGIN.left) / W) * 100).toFixed(2)}%`,
+                        left: `${(((xScale(hoverX) + MARGIN.left) / chartW) * 100).toFixed(2)}%`,
                         top: MARGIN.top + 8,
                         transform: xScale(hoverX) > innerW / 2 ? 'translateX(calc(-100% - 10px))' : 'translateX(10px)',
                         background: '#ffffff',

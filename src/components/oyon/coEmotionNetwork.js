@@ -13,6 +13,8 @@
 // simply "did this person ever show this emotion", exactly cooccur's
 // site × species incidence matrix.
 
+import { canonicalEmotionLabel, observedDominantLabels, probabilityChannelLabels } from './emotionVocabulary';
+
 const EDGE_CAP = 100;
 const PAIR_SEP = '\u0001'; // NUL — cannot appear in an emotion label
 
@@ -23,7 +25,6 @@ export const EMOTION_FAMILIES = Object.freeze({
     surprise: 'positive',
     neutral: 'neutral',
     sad: 'negative',
-    angry: 'negative',
     anger: 'negative',
     fear: 'negative',
     disgust: 'negative',
@@ -32,8 +33,7 @@ export const EMOTION_FAMILIES = Object.freeze({
 
 /** Normalized emotion label, or null when unusable. */
 function emotionKeyOf(raw) {
-    const s = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
-    return s || null;
+    return canonicalEmotionLabel(raw);
 }
 
 /** Site (person) identity of a row: user first, then roster snapshot, then
@@ -58,6 +58,7 @@ function siteKeyOf(record) {
  *   nodes: Array<{id:string,parent:string,label:string,group?:string}>,
  *   edges: Array<{source:string,target:string,weight:number}>,
  *   stats: {siteCount:number,emotionCount:number,edgeCount:number,
+ *           modelChannelCount:number, observedDominantCount:number,
  *           reason:null|'no-emotions'|'no-cooccurrence'},
  * }} EdgeBundling-ready hierarchy (root '' → valence-family groups →
  *   emotion leaves; leaf.group = the emotion itself so edges/labels take the
@@ -67,6 +68,8 @@ function siteKeyOf(record) {
  */
 export function buildCoEmotionNetwork(records, { by = 'person' } = {}) {
     const rows = Array.isArray(records) ? records : [];
+    const modelChannels = probabilityChannelLabels(rows);
+    const observedDominants = observedDominantLabels(rows);
 
     // site → Set(emotions present), and per-emotion incidence (how many
     // sites showed it) for node ordering.
@@ -100,7 +103,14 @@ export function buildCoEmotionNetwork(records, { by = 'person' } = {}) {
     const empty = (reason) => ({
         nodes: [],
         edges: [],
-        stats: { siteCount, emotionCount: incidence.size, edgeCount: 0, reason },
+        stats: {
+            siteCount,
+            emotionCount: incidence.size,
+            edgeCount: 0,
+            modelChannelCount: modelChannels.length,
+            observedDominantCount: observedDominants.length,
+            reason,
+        },
     });
     if (incidence.size === 0) return empty('no-emotions');
 
@@ -141,6 +151,8 @@ export function buildCoEmotionNetwork(records, { by = 'person' } = {}) {
             siteCount,
             emotionCount: emotions.length,
             edgeCount: edges.length,
+            modelChannelCount: modelChannels.length,
+            observedDominantCount: observedDominants.length,
             reason: null,
         },
     };

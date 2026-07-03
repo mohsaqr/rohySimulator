@@ -2,13 +2,15 @@
 // Used by OyonLearningAnalyticsTab. Pulled out of the deleted
 // EmotionLogsTable.jsx so we keep one source of colour + format truth.
 
+import { OYON_EMOTION_LABELS, canonicalEmotionLabel } from './emotionVocabulary';
+
 // 500/600-level palette — the old 300/400 pastels were tuned for the dark
 // theme and washed out as text/lines on the white analytics surface.
 export function emotionColor(label) {
-   const k = String(label || '').toLowerCase();
-   if (k === 'happy' || k === 'joy' || k === 'happiness') return '#10b981';
-   if (k === 'sad' || k === 'sadness') return '#3b82f6';
-   if (k === 'angry' || k === 'anger') return '#ef4444';
+   const k = canonicalEmotionLabel(label);
+   if (k === 'happy') return '#10b981';
+   if (k === 'sad') return '#3b82f6';
+   if (k === 'anger') return '#ef4444';
    if (k === 'fear') return '#d97706';
    if (k === 'surprise') return '#c026d3';
    if (k === 'disgust') return '#65a30d';
@@ -17,9 +19,7 @@ export function emotionColor(label) {
    return '#6b7280';
 }
 
-export const ALL_DOMINANT_LABELS = [
-   'happy', 'sad', 'angry', 'fear', 'surprise', 'disgust', 'contempt', 'neutral',
-];
+export const ALL_DOMINANT_LABELS = OYON_EMOTION_LABELS;
 
 export function pct(v) {
    return Number.isFinite(v) ? `${Math.round(v * 100)}%` : '—';

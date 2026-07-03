@@ -46,7 +46,7 @@ describe('OyonGazeView', () => {
         expect(screen.getByText('Screen zones')).toBeInTheDocument();
         expect(screen.getByText('Gaze centroids')).toBeInTheDocument();
         expect(screen.getByText('Gaze by room')).toBeInTheDocument();
-        expect(screen.getByText('Gaze log')).toBeInTheDocument();
+        expect(screen.queryByText('Gaze log')).not.toBeInTheDocument();
     });
 
     it('renders fixed simulator-room ZoneBubbleMaps and omits settings/unassigned', () => {

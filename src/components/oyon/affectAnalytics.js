@@ -1,3 +1,5 @@
+import { canonicalEmotionLabel } from './emotionVocabulary';
+
 // Pure affect analytics over the hydrated emotion-record rows — everything the
 // Affect view shows: the KPI summary chips, the capture-timeline strip, the
 // valence × arousal plane trail, the dominant-emotion distribution, and the
@@ -64,7 +66,7 @@ export function dominantProbability(record) {
  *  element's 'insufficient' bucket. */
 export function stateOf(record) {
    const d = record?.dominant_emotion;
-   return typeof d === 'string' && d.trim() ? d.trim().toLowerCase() : 'insufficient';
+   return typeof d === 'string' && d.trim() ? canonicalEmotionLabel(d) : 'insufficient';
 }
 
 // ── Fallback dynamics — port of OyonR src/analytics/DynamicalFeatures.js ──

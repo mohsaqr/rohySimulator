@@ -82,10 +82,17 @@ const PatternsTab = ({ sequences, colorMap, shortEnabled, onShortEnabledChange: 
 
     return (
         <div className="space-y-4">
-            {/* Summary */}
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <span className="font-semibold text-gray-800 dark:text-gray-200">{total}</span>{' '}
-                {t('patterns_found')}
+            <div className="rounded-md border border-gray-200 bg-white p-3 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-700">Pattern Mining</h2>
+                        <p className="mt-1 text-xs text-gray-500">Frequent short and long transition patterns for the current sequence source.</p>
+                    </div>
+                    <div className="rounded-md border border-cyan-100 bg-cyan-50 px-4 py-2 text-right">
+                        <div className="text-2xl font-semibold leading-none tabular-nums text-gray-950">{total}</div>
+                        <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">{t('patterns_found')}</div>
+                    </div>
+                </div>
             </div>
 
             {/* Two cards side by side */}
@@ -119,20 +126,20 @@ const PatternsTab = ({ sequences, colorMap, shortEnabled, onShortEnabledChange: 
 // per-length toggle chips, and the pattern table.
 function PatternPanel({ title, patterns, lengths, enabled, onToggle, colorMap, foundLabel, emptyLabel }) {
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-            <div className="mb-3 flex items-center justify-between">
+        <div className="rounded-md border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3 border-b border-gray-100 pb-3">
                 <div>
-                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{title}</h3>
-                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{patterns.length} {foundLabel}</p>
+                    <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+                    <p className="mt-0.5 text-xs font-medium text-gray-500">{patterns.length} {foundLabel}</p>
                 </div>
                 <div className="flex items-center gap-1">
                     {lengths.map((len) => (
                         <button
                             key={len}
                             onClick={() => onToggle(len)}
-                            className={`h-7 w-7 rounded text-xs font-medium transition-colors ${enabled[len]
-                                ? 'bg-cyan-600 text-white'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                            className={`h-8 w-8 rounded-md text-xs font-semibold transition-colors ${enabled[len]
+                                ? 'bg-gray-900 text-white shadow-sm'
+                                : 'bg-gray-50 text-gray-500 ring-1 ring-gray-200 hover:bg-gray-100'}`}
                         >
                             {len}
                         </button>

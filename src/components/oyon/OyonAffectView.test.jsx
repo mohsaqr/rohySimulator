@@ -184,7 +184,9 @@ describe('OyonAffectView', () => {
         ];
         render(<OyonAffectView records={rows} loading={false} />);
         expect(screen.getByText('Co-occurring emotions')).toBeInTheDocument();
-        expect(screen.getByText(/co-occur across people/i)).toBeInTheDocument();
+        expect(screen.getByText('Model channels')).toBeInTheDocument();
+        expect(screen.getByText('Dominant labels')).toBeInTheDocument();
+        expect(screen.getByText('Linked pairs')).toBeInTheDocument();
         const bundle = screen.getByTestId('edge-bundling');
         expect(bundle).toBeInTheDocument();
         expect(within(bundle).getByText('happy')).toBeInTheDocument();

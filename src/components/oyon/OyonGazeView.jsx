@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Download, ScanEye } from 'lucide-react';
+import { ScanEye } from 'lucide-react';
 import ZoneBubbleMap from '../analytics/charts/ZoneBubbleMap';
 import TransitionMiniCard from '../analytics/charts/TransitionMiniCard';
 import { CARM_PALETTE } from '../analytics/charts/chartMath';
@@ -13,8 +13,9 @@ import { gazeAnalytics, perRoomZoneStudentWeights } from './gazeAnalytics';
  * share of window time gazing toward the patient's face region), the
  * attention-targets breakdown ("WHAT was being looked at" — patient / ECG /
  * vitals / chat plus screen-zone fallback bars and the room × target table), the 3×3 zone grid,
- * the centroid map ("where on the screen"), the per-room breakdown, and the
- * flat per-window gaze log with CSV export. All numbers come from the pure
+ * the centroid map ("where on the screen"), and the per-room breakdown. The
+ * flat per-window gaze log lives in System Logs → Oyon Data → Gaze, where it
+ * uses the shared LogGrid controls/CSV export. All numbers come from the pure
  * gazeAnalytics() module (tested); this file is layout.
  */
 
@@ -23,25 +24,6 @@ const ZONE_ROWS = [
    ['middle_left', 'middle_center', 'middle_right'],
    ['bottom_left', 'bottom_center', 'bottom_right'],
 ];
-
-const LOG_COLUMNS = [
-   ['ts', 'Time'],
-   ['session_id', 'Session'],
-   ['username', 'User'],
-   ['room', 'Room'],
-   ['n_points', 'Points'],
-   ['dominant_zone', 'Zone'],
-   ['zones_top', 'Top zones'],
-   ['centroid_x', 'Cx'],
-   ['centroid_y', 'Cy'],
-   ['dispersion', 'Dispersion'],
-   ['off_screen', 'Off-screen'],
-   ['patient_gaze', 'At patient'],
-   ['focus', 'Focus'],
-   ['dominant_emotion', 'Emotion'],
-];
-
-const VISIBLE_LOG_ROWS = 50;
 
 // Friendly names for the simulator-room stamps on the per-screen gaze maps.
 const ROOM_LABELS = {
@@ -65,7 +47,7 @@ function roomLabel(room) {
 export default function OyonGazeView({ records, loading }) {
    const windows = useMemo(() => recordsToWindows(records), [records]);
    const analytics = useMemo(() => gazeAnalytics(windows), [windows]);
-   const { summary, zones, aois, centroids, byRoom, targetByRoom = [], log, truncatedLog } = analytics;
+   const { summary, zones, aois, centroids, byRoom, targetByRoom = [] } = analytics;
 
    // "Where they look, per screen" — per-room zone weights + per-student
    // shares (pure helper), with one stable palette colour per student across
@@ -291,47 +273,6 @@ export default function OyonGazeView({ records, loading }) {
             )}
          </section>
 
-         {/* Per-window gaze log */}
-         <section className="rounded-lg border border-gray-200 bg-white p-4">
-            <div className="mb-3 flex items-center justify-between">
-               <div>
-                  <h3 className="text-sm font-bold uppercase tracking-wide text-gray-800">Gaze log</h3>
-                  <p className="text-xs text-gray-500">
-                     Newest first — showing {Math.min(VISIBLE_LOG_ROWS, log.length)} of {log.length}
-                     {truncatedLog ? ' (log capped)' : ''}. CSV exports all listed rows.
-                  </p>
-               </div>
-               <button
-                  onClick={() => downloadCsv(log)}
-                  disabled={log.length === 0}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-100 disabled:opacity-50"
-               >
-                  <Download className="h-4 w-4" /> CSV
-               </button>
-            </div>
-            <div className="overflow-x-auto">
-               <table className="w-full text-left text-xs">
-                  <thead>
-                     <tr className="border-b border-gray-200 text-gray-500">
-                        {LOG_COLUMNS.map(([key, label]) => (
-                           <th key={key} className="py-1.5 pr-3 font-semibold whitespace-nowrap">{label}</th>
-                        ))}
-                     </tr>
-                  </thead>
-                  <tbody>
-                     {log.slice(0, VISIBLE_LOG_ROWS).map((row, i) => (
-                        <tr key={`${row.ts}-${row.session_id}-${i}`} className="border-b border-gray-200 text-gray-800">
-                           {LOG_COLUMNS.map(([key]) => (
-                              <td key={key} className="py-1.5 pr-3 whitespace-nowrap tabular-nums">
-                                 {formatCell(key, row[key])}
-                              </td>
-                           ))}
-                        </tr>
-                     ))}
-                  </tbody>
-               </table>
-            </div>
-         </section>
       </div>
    );
 }
@@ -402,32 +343,4 @@ function formatDwell(ms) {
    const minutes = Math.floor(totalSeconds / 60);
    const seconds = totalSeconds % 60;
    return `${minutes} m ${String(seconds).padStart(2, '0')} s`;
-}
-
-function formatCell(key, value) {
-   if (value == null) return '—';
-   if (key === 'ts') return String(value).replace('T', ' ').replace(/\.\d+Z?$/, '');
-   if (key === 'patient_gaze' || key === 'off_screen') return pctOrDash(value);
-   if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(2);
-   return String(value);
-}
-
-function downloadCsv(log) {
-   const header = LOG_COLUMNS.map(([key]) => key);
-   const escape = (v) => {
-      if (v == null) return '';
-      const s = String(v);
-      return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
-   };
-   const lines = [
-      header.join(','),
-      ...log.map((row) => header.map((key) => escape(row[key])).join(',')),
-   ];
-   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-   const url = URL.createObjectURL(blob);
-   const a = document.createElement('a');
-   a.href = url;
-   a.download = 'oyon-gaze-log.csv';
-   a.click();
-   URL.revokeObjectURL(url);
 }

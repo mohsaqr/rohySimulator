@@ -125,7 +125,7 @@ export default function LogGrid({
     initialSorting = [],
     initialColumnVisibility = {},
     expandRender,             // (row) => ReactNode rendered as the expanded panel under a row
-    headerActions,            // ReactNode injected on the right of the toolbar (e.g. export button)
+    headerActions,            // ReactNode or ({ visibleRows, visibleCount, totalRows, table }) => ReactNode injected on the toolbar
     headerExtras,             // ReactNode injected to the left of the search input (date pickers etc.)
     emptyMessage = 'No rows recorded yet.',
     storageKey,               // when set, density + visibility persist in localStorage
@@ -171,6 +171,10 @@ export default function LogGrid({
         [columns],
     );
 
+    // TanStack Table owns its internal function identity; this headless grid
+    // intentionally follows the library API and does not pass the instance
+    // into memoized children.
+    // eslint-disable-next-line react-hooks/incompatible-library
     const table = useReactTable({
         data,
         columns: resolvedColumns,
@@ -197,8 +201,13 @@ export default function LogGrid({
         },
     });
 
-    const visibleCount = table.getRowModel().rows.length;
+    const rowModel = table.getRowModel();
+    const visibleRows = rowModel.rows.map((row) => row.original);
+    const visibleCount = rowModel.rows.length;
     const totalRows = data.length;
+    const renderedHeaderActions = typeof headerActions === 'function'
+        ? headerActions({ visibleRows, visibleCount, totalRows, table })
+        : headerActions;
 
     const toggleExpand = (rowId) => {
         setExpanded((prev) => {
@@ -301,7 +310,7 @@ export default function LogGrid({
                         </button>
                     )}
 
-                    {headerActions}
+                    {renderedHeaderActions}
 
                     <span className="text-xs text-neutral-400 whitespace-nowrap ml-auto">
                         {visibleCount === totalRows
@@ -367,7 +376,7 @@ export default function LogGrid({
                             {showFilterRow && <FilterRow table={table} density={density} data={data} />}
                         </thead>
                         <tbody>
-                            {table.getRowModel().rows.map((row) => {
+                            {rowModel.rows.map((row) => {
                                 const rowKey = row.id;
                                 const isExpanded = expanded.has(rowKey);
                                 return (

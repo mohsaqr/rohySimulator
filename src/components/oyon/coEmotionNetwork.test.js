@@ -10,6 +10,16 @@ const rec = (user_id, dominant_emotion, over = {}) => ({
     user_id,
     session_id: `s-${user_id}`,
     dominant_emotion,
+    probabilities: {
+        anger: 0.05,
+        contempt: 0.05,
+        disgust: 0.05,
+        fear: 0.05,
+        happy: 0.5,
+        neutral: 0.1,
+        sad: 0.1,
+        surprise: 0.1,
+    },
     ...over,
 });
 
@@ -22,7 +32,14 @@ describe('buildCoEmotionNetwork (cooccur over people)', () => {
         ];
         const { edges, stats } = buildCoEmotionNetwork(records);
 
-        expect(stats).toEqual({ siteCount: 2, emotionCount: 3, edgeCount: 3, reason: null });
+        expect(stats).toEqual({
+            siteCount: 2,
+            emotionCount: 3,
+            edgeCount: 3,
+            modelChannelCount: 8,
+            observedDominantCount: 3,
+            reason: null,
+        });
         // happy↔sad seen in BOTH people = 2; the neutral pairs only in person 1 = 1.
         expect(edges).toEqual([
             { source: 'happy', target: 'sad', weight: 2 },
@@ -99,5 +116,15 @@ describe('buildCoEmotionNetwork (cooccur over people)', () => {
         const { nodes } = buildCoEmotionNetwork(records);
         expect(nodes.find((n) => n.id === 'bored').parent).toBe('family_other');
         expect(EMOTION_FAMILIES.bored).toBeUndefined();
+    });
+
+    it('canonicalizes legacy angry into anger', () => {
+        const records = [rec(1, 'angry'), rec(1, 'happy'), rec(2, 'anger'), rec(2, 'happy')];
+        const { nodes, edges, stats } = buildCoEmotionNetwork(records);
+        expect(nodes.find((n) => n.id === 'anger').parent).toBe('family_negative');
+        expect(nodes.find((n) => n.id === 'angry')).toBeUndefined();
+        expect(edges).toEqual([{ source: 'anger', target: 'happy', weight: 2 }]);
+        expect(stats.observedDominantCount).toBe(2);
+        expect(stats.modelChannelCount).toBe(8);
     });
 });

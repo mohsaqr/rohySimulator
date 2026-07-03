@@ -45,6 +45,7 @@ const rec = (over = {}) => ({
     user_role: 'student',
     case_id: 7,
     case_title_snapshot: 'Chest pain',
+    room: 'chat',
     window_start: '2026-07-02T08:00:00.000Z',
     window_end: '2026-07-02T08:00:10.000Z',
     dominant_emotion: 'happy',
@@ -52,6 +53,16 @@ const rec = (over = {}) => ({
     valence: 0.4,
     arousal: 0.3,
     missing_face_ratio: 0.05,
+    gaze: {
+        n_points: 100,
+        zone_proportions: { middle_center: 0.7, top_center: 0.3 },
+        centroid: { x: 0.05, y: -0.1 },
+        dispersion: 0.12,
+        off_screen_ratio: 0.05,
+        duration_ms: 10000,
+        aoi_dwell_ms: { patient_face: 4000 },
+    },
+    engagement: { focus_score: 0.8, gaze_entropy: 0.4 },
     ...over,
 });
 
@@ -133,4 +144,74 @@ describe('OyonDataLogs', () => {
         expect(screen.getByText('Mean valence')).toBeInTheDocument();
         expect(screen.getByText('alice')).toBeInTheDocument();
     });
+
+    it('switches to the enhanced Gaze log view via the pill nav', async () => {
+        respondWithRecords();
+        render(<OyonDataLogs />);
+        await screen.findByText('alice');
+
+        fireEvent.click(screen.getByRole('button', { name: /Gaze/ }));
+
+        expect(screen.getByPlaceholderText('Search any column…')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Columns/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /CSV/ })).toBeInTheDocument();
+        expect(screen.getByText('looking at')).toBeInTheDocument();
+        expect(screen.getAllByText('Patient').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('middle_center').length).toBeGreaterThan(0);
+    });
+
+    it('exports the currently listed Gaze log rows after grid search', async () => {
+        const blobs = [];
+        const originalCreateObjectURL = URL.createObjectURL;
+        const originalRevokeObjectURL = URL.revokeObjectURL;
+        const originalCreateElement = document.createElement.bind(document);
+        URL.createObjectURL = vi.fn((blob) => {
+            blobs.push(blob);
+            return 'blob:gaze-log';
+        });
+        URL.revokeObjectURL = vi.fn();
+        const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
+            const element = originalCreateElement(tagName, options);
+            if (String(tagName).toLowerCase() === 'a') element.click = vi.fn();
+            return element;
+        });
+
+        try {
+            respondWithRecords();
+            render(<OyonDataLogs />);
+            await screen.findByText('alice');
+
+            fireEvent.click(screen.getByRole('button', { name: /Gaze/ }));
+            fireEvent.change(screen.getByPlaceholderText('Search any column…'), {
+                target: { value: 'bob' },
+            });
+
+            await waitFor(() => {
+                expect(screen.queryByText('alice')).not.toBeInTheDocument();
+                expect(screen.getByText('bob')).toBeInTheDocument();
+            });
+
+            fireEvent.click(screen.getByRole('button', { name: /CSV/ }));
+            expect(blobs).toHaveLength(1);
+            const csv = await readBlobText(blobs[0]);
+            expect(csv).toContain('bob');
+            expect(csv).not.toContain('alice');
+            expect(csv.split('\r\n')).toHaveLength(2);
+        } finally {
+            createElementSpy.mockRestore();
+            if (originalCreateObjectURL) URL.createObjectURL = originalCreateObjectURL;
+            else delete URL.createObjectURL;
+            if (originalRevokeObjectURL) URL.revokeObjectURL = originalRevokeObjectURL;
+            else delete URL.revokeObjectURL;
+        }
+    });
 });
+
+function readBlobText(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ''));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(blob);
+    });
+}

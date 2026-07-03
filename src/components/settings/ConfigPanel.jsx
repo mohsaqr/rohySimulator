@@ -121,7 +121,7 @@ function NavItem({ item, active, onSelect }) {
     return (
         <button
             onClick={() => onSelect(item.id)}
-            className={`px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${active ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+            className={`w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${active ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
         >
             <Icon className={item.iconClass ? `w-4 h-4 ${item.iconClass}` : 'w-4 h-4'} /> {item.label}
         </button>
@@ -136,7 +136,7 @@ function NavGroupHeader({ group, open, onToggle }) {
             type="button"
             aria-expanded={open}
             onClick={() => onToggle(group)}
-            className="px-4 pt-4 pb-1 text-left text-[11px] font-bold uppercase tracking-wider text-neutral-500 hover:text-neutral-300 flex items-center gap-1.5 transition-colors"
+            className="w-full px-4 pt-3 pb-1 text-left text-[11px] font-bold uppercase tracking-wider text-neutral-500 hover:text-neutral-300 flex items-center gap-1.5 transition-colors"
         >
             <Chevron className="w-3 h-3" /> {group}
         </button>
@@ -463,11 +463,11 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     running sim); the grouped tabs follow. Per-tab role gating
                     lives on each SECTIONS item's `visible`; a group with no
                     visible items renders neither its header nor body. */}
-                <div className="w-48 bg-neutral-950 border-r border-neutral-800 flex flex-col pt-4">
+                <div className="w-48 min-h-0 overflow-y-auto bg-neutral-950 border-r border-neutral-800 flex flex-col py-3">
                     {/* Simulation — not a tab: returns to the running simulation. */}
                     <button
                         onClick={onClose}
-                        className="px-4 py-3 text-left text-sm font-bold flex items-center gap-2 border-l-2 border-transparent text-neutral-500 hover:text-neutral-300 transition-colors"
+                        className="w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-2 border-l-2 border-transparent text-neutral-500 hover:text-neutral-300 transition-colors"
                     >
                         <Monitor className="w-4 h-4" /> Simulation
                     </button>
@@ -2119,52 +2119,13 @@ function MonitorConfiguration() {
 
 // System Logs Component (Admin Only)
 //
-// All four log surfaces (Activity, Sessions, System Log, Chat Log) now mount
+// All log surfaces (Activity, Sessions, System Log, Chat Log, Moments, Turns,
+// Case Insights, Oyon data) now mount
 // the same unified `LogGrid` data grid via thin wrapper components in
 // `src/components/analytics/`. Each wrapper owns its own fetch + per-tab
 // CSV export — there is no longer a global "Export Data (CSV)" grid here.
-// The Reflection Questionnaire stays inline because its row shape
-// (variable-length nested object) doesn't fit the flat-grid model.
 function SystemLogs() {
-    const toast = useToast();
-    const [activeLogTab, setActiveLogTab] = useState('activity'); // activity, sessions, system, chat, moments, turns, insights, questionnaire, oyondata
-    const [questionnaireResponses, setQuestionnaireResponses] = useState([]);
-    const [expandedQRow, setExpandedQRow] = useState(null);
-    const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        if (activeLogTab === 'questionnaire') loadQuestionnaireResponses();
-    }, [activeLogTab]);
-
-    const loadQuestionnaireResponses = async () => {
-        setLoading(true);
-        try {
-            const data = await apiFetch('/questionnaire-responses');
-            setQuestionnaireResponses(data.responses || []);
-        } catch (err) {
-            console.error('Failed to load questionnaire responses', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const downloadQuestionnaire = async () => {
-        try {
-            const blob = await apiFetch('/export/questionnaire-responses', { parseAs: 'blob' });
-            const downloadUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = `questionnaire_${new Date().toISOString().split('T')[0]}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(downloadUrl);
-            toast.success('Questionnaire exported.');
-        } catch (error) {
-            const hint = error?.body?.hint || error?.body?.error;
-            toast.error(hint ? `Export failed: ${hint}` : 'Export failed. Please try again.');
-        }
-    };
+    const [activeLogTab, setActiveLogTab] = useState('activity'); // activity, sessions, system, chat, moments, turns, insights, oyondata
 
     return (
         <div className="space-y-4">
@@ -2225,12 +2186,6 @@ function SystemLogs() {
                     Case Insights
                 </button>
                 <button
-                    onClick={() => setActiveLogTab('questionnaire')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'questionnaire' ? 'border-teal-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
-                >
-                    Reflection Questionnaire ({questionnaireResponses.length})
-                </button>
-                <button
                     onClick={() => setActiveLogTab('oyondata')}
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'oyondata' ? 'border-purple-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
@@ -2272,95 +2227,6 @@ function SystemLogs() {
                 ) : activeLogTab === 'oyondata' ? (
                     <div className="bg-neutral-800 border border-neutral-700 rounded overflow-auto" style={{ height: '650px' }}>
                         <OyonDataLogs />
-                    </div>
-                ) : activeLogTab === 'questionnaire' ? (
-                    <div className="overflow-x-auto">
-                        <div className="flex justify-end mb-3">
-                            <button
-                                onClick={downloadQuestionnaire}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-teal-700 hover:bg-teal-600 text-white rounded text-sm font-medium transition-colors"
-                            >
-                                <Download className="w-4 h-4" />
-                                Download CSV
-                            </button>
-                        </div>
-                        {loading ? (
-                            <div className="text-center py-8">
-                                <Loader2 className="w-6 h-6 animate-spin mx-auto" />
-                            </div>
-                        ) : questionnaireResponses.length === 0 ? (
-                            <div className="text-center py-12 text-neutral-500 text-sm">
-                                No questionnaire responses recorded yet.
-                            </div>
-                        ) : (
-                            <table className="w-full text-sm">
-                                <thead className="bg-neutral-800 sticky top-0">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left font-bold">ID</th>
-                                        <th className="px-4 py-3 text-left font-bold">User</th>
-                                        <th className="px-4 py-3 text-left font-bold">Case</th>
-                                        <th className="px-4 py-3 text-left font-bold">Session</th>
-                                        <th className="px-4 py-3 text-left font-bold">Submitted At</th>
-                                        <th className="px-4 py-3 text-left font-bold">Responses</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {questionnaireResponses.map((row) => {
-                                        const isExpanded = expandedQRow === row.id;
-                                        const FIELD_LABELS = {
-                                            diagnosis: 'Diagnosis',
-                                            diagnosisConfidence: 'Diagnosis Confidence (0–5)',
-                                            decisionProcess: 'How decision was made',
-                                            keyFactors: 'Key factors influencing decision',
-                                            treatment: 'Possible treatment for next step',
-                                            treatmentConfidence: 'Treatment Confidence (0–5)',
-                                            improvements: 'Areas to improve in the future',
-                                            doDifferently: 'What would be done differently',
-                                        };
-                                        return (
-                                            <React.Fragment key={row.id}>
-                                                <tr className="border-b border-neutral-800 hover:bg-neutral-800/50">
-                                                    <td className="px-4 py-3 font-mono text-neutral-400">#{row.id}</td>
-                                                    <td className="px-4 py-3 font-medium">{row.username || row.email || '—'}</td>
-                                                    <td className="px-4 py-3 text-neutral-400">{row.case_name || '—'}</td>
-                                                    <td className="px-4 py-3 font-mono text-neutral-400">{row.session_id ? `#${row.session_id}` : '—'}</td>
-                                                    <td className="px-4 py-3 text-neutral-400">{new Date(row.submitted_at).toLocaleString()}</td>
-                                                    <td className="px-4 py-3">
-                                                        <button
-                                                            onClick={() => setExpandedQRow(isExpanded ? null : row.id)}
-                                                            className="px-2 py-1 text-xs rounded bg-teal-900/60 border border-teal-700 text-teal-300 hover:bg-teal-800 transition-colors"
-                                                        >
-                                                            {isExpanded ? 'Hide' : 'View'}
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                                {isExpanded && (
-                                                    <tr className="border-b border-neutral-700 bg-neutral-800/30">
-                                                        <td colSpan="6" className="px-6 py-4">
-                                                            <div className="space-y-3">
-                                                                <p className="text-xs font-bold uppercase tracking-wide text-teal-400 mb-2">Reflection Questionnaire — Full Responses</p>
-                                                                {Object.entries(row.responses).map(([key, value]) => {
-                                                                    const label = FIELD_LABELS[key] || key;
-                                                                    const displayValue = Array.isArray(value)
-                                                                        ? value.length > 0 ? value.join(', ') : '—'
-                                                                        : value !== null && value !== undefined ? String(value) : '—';
-                                                                    return (
-                                                                        <div key={key} className="flex gap-3">
-                                                                            <span className="text-xs font-semibold text-neutral-400 w-56 shrink-0">{label}</span>
-                                                                            <span className="text-xs text-neutral-200">{displayValue}</span>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </React.Fragment>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        )}
                     </div>
                 ) : null}
             </div>

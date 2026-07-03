@@ -21,9 +21,9 @@ function rec(sessionId, windowStart, dominant, extra = {}) {
 }
 
 describe('EMOTION_STATE_MAP', () => {
-    it('covers exactly the 8 stored dominant-emotion classes', () => {
+    it('covers the 8 stored dominant-emotion classes plus the legacy angry alias', () => {
         expect(Object.keys(EMOTION_STATE_MAP).sort()).toEqual(
-            ['angry', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'],
+            ['anger', 'angry', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'],
         );
     });
 
@@ -146,6 +146,17 @@ describe('recordsToEmotionSequences — dimensions', () => {
         expect(sequences).toEqual([
             ['engaged', 'engaged', 'stressed', 'discouraged', 'composed'],
         ]);
+    });
+
+    it('canonicalizes upstream anger and legacy angry into one raw label', () => {
+        const records = [
+            rec('1', '2026-07-01 10:00:10', 'angry'),
+            rec('1', '2026-07-01 10:00:00', 'anger'),
+        ];
+        const raw = recordsToEmotionSequences(records, { dimension: 'raw' });
+        const affective = recordsToEmotionSequences(records, { dimension: 'affective' });
+        expect(raw.sequences).toEqual([['anger', 'anger']]);
+        expect(affective.sequences).toEqual([['stressed', 'stressed']]);
     });
 
     it('affective passes unknown labels through literally', () => {

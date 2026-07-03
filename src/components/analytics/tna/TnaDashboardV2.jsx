@@ -9,7 +9,7 @@
 //   - 12 educational states → 10 clinical states (see clinicalStates.js).
 //
 // Six tabs:
-//   activity  — daily timeline, hourly heatmap, top-event donut, top resources
+//   activity  — state timeline, student matrix, top-event donut, top resources
 //   network   — TNA + centralities + distribution + index plot
 //   clusters  — clusterData (PAM/single/complete/average/ward, 4 dissimilarity)
 //   patterns  — discoverPatterns short (2–3) + long (4–7)
@@ -26,13 +26,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     ArrowLeft, RefreshCw, Settings2, Users, Activity, Hash, Network, GitBranch,
     Workflow, Layers, Eye, ScanEye, ListVideo, Smile,
-    GitCompare,
+    GitCompare, CalendarDays, Clock3, BookOpen, Database, Brain,
 } from 'lucide-react';
-import OyonAttentionView from '../../oyon/OyonAttentionView';
-import OyonAffectView from '../../oyon/OyonAffectView';
-import OyonEngagementView from '../../oyon/OyonEngagementView';
+import OyonAttentionV2 from '../../oyon/OyonAttentionV2';
+import OyonAffectV2 from '../../oyon/OyonAffectV2';
 import OyonGazeView from '../../oyon/OyonGazeView';
-import OyonTrendsView from '../../oyon/OyonTrendsView';
 import OyonCompareView from '../../oyon/OyonCompareView';
 import OyonSessionsView from '../../oyon/OyonSessionsView';
 import {
@@ -49,9 +47,7 @@ import { CentralityBarChart } from './laila/CentralityBarChart';
 import { TnaCentralityTable } from './laila/TnaCentralityTable';
 import { ClustersTab } from './laila/ClustersTab';
 import { PatternsTab } from './laila/PatternsTab';
-import { ActivityTimelineChart } from './laila/ActivityTimelineChart';
 import { ActivityDonutChart } from './laila/ActivityDonutChart';
-import { ActivityHeatmap } from './laila/ActivityHeatmap';
 import { Loading } from './laila/Loading';
 import { createColorMap, PALETTE_NAMES } from './laila/colorFix';
 import ProcessMap from './laila/ProcessMap';
@@ -66,6 +62,7 @@ import {
 } from './activityEvents';
 import { recordsToEmotionSequences } from './emotionSequences';
 import { recordsToRoomSequences, recordsToGazeTargetSequences } from './windowSequences';
+import { observedDominantLabels, probabilityChannelLabels } from '../../oyon/emotionVocabulary';
 
 const MODEL_BUILDERS = { relative: tna, frequency: ftna, 'co-occurrence': ctna, attention: atna };
 // Newest-rows cap for the /learning-events/all fetch behind the Activity-tab
@@ -98,20 +95,103 @@ function resolveInterpretation(key, customMap) {
 
 function StatCard({ icon, label, value, accent = 'cyan' }) {
     const colors = {
-        cyan:   'bg-cyan-50 text-cyan-700 border-cyan-200',
-        green:  'bg-emerald-50 text-emerald-700 border-emerald-200',
-        amber:  'bg-amber-50 text-amber-700 border-amber-200',
-        violet: 'bg-violet-50 text-violet-700 border-violet-200',
-        rose:   'bg-rose-50 text-rose-700 border-rose-200',
+        cyan:   'from-cyan-50 to-white text-cyan-700 ring-cyan-100',
+        green:  'from-emerald-50 to-white text-emerald-700 ring-emerald-100',
+        amber:  'from-amber-50 to-white text-amber-700 ring-amber-100',
+        violet: 'from-violet-50 to-white text-violet-700 ring-violet-100',
+        rose:   'from-rose-50 to-white text-rose-700 ring-rose-100',
     };
     return (
-        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${colors[accent] || colors.cyan}`}>
-            {icon}
-            <div className="flex flex-col">
-                <span className="text-lg font-bold leading-tight">{value}</span>
-                <span className="text-xs opacity-80">{label}</span>
+        <div className="group relative overflow-hidden rounded-md border border-gray-200 bg-gradient-to-br from-white to-gray-50 px-4 py-3 shadow-sm">
+            <div className="flex items-start gap-3">
+                <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-md bg-gradient-to-br ring-1 ${colors[accent] || colors.cyan}`}>
+                    {icon}
+                </div>
+                <div className="min-w-0">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">{label}</div>
+                    <div className="mt-1 text-2xl font-semibold leading-none tabular-nums text-gray-950">{value}</div>
+                </div>
             </div>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gray-900/5 group-hover:bg-gray-900/10" />
         </div>
+    );
+}
+
+function LandingMetricCard({ icon, label, value, detail, accent = 'cyan' }) {
+    const colors = {
+        cyan:   'from-cyan-50 to-white text-cyan-700 ring-cyan-100',
+        green:  'from-emerald-50 to-white text-emerald-700 ring-emerald-100',
+        amber:  'from-amber-50 to-white text-amber-700 ring-amber-100',
+        violet: 'from-violet-50 to-white text-violet-700 ring-violet-100',
+        rose:   'from-rose-50 to-white text-rose-700 ring-rose-100',
+        slate:  'from-slate-50 to-white text-slate-700 ring-slate-100',
+    };
+    return (
+        <div className="group relative overflow-hidden rounded-md border border-gray-200 bg-gradient-to-br from-white to-gray-50 px-4 py-3 shadow-sm">
+            <div className="flex items-start gap-3">
+                <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-md bg-gradient-to-br ring-1 ${colors[accent] || colors.cyan}`}>
+                    {icon}
+                </div>
+                <div className="min-w-0">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">{label}</div>
+                    <div className="mt-1 text-2xl font-semibold leading-none tabular-nums text-gray-950">{value}</div>
+                    {detail && <div className="mt-1 truncate text-xs font-medium text-gray-500">{detail}</div>}
+                </div>
+            </div>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gray-900/5 group-hover:bg-gray-900/10" />
+        </div>
+    );
+}
+
+function MetricGrid({ children, cols = 'lg:grid-cols-5' }) {
+    return (
+        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 ${cols}`}>
+            {children}
+        </div>
+    );
+}
+
+function Panel({ title, actions, children, className = '', bodyClassName = '' }) {
+    return (
+        <section className={`rounded-md border border-gray-200 bg-white ${className}`}>
+            {(title || actions) && (
+                <div className="flex min-h-11 items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+                    {title ? <h3 className="text-sm font-semibold text-gray-900">{title}</h3> : <span />}
+                    {actions}
+                </div>
+            )}
+            <div className={`p-4 ${bodyClassName}`}>{children}</div>
+        </section>
+    );
+}
+
+function EmptyPanelText({ children }) {
+    return <div className="py-12 text-center text-sm text-gray-500">{children}</div>;
+}
+
+function formatNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toLocaleString() : '—';
+}
+
+function parseEventTime(value) {
+    if (!value) return null;
+    const t = new Date(value).getTime();
+    return Number.isFinite(t) ? t : null;
+}
+
+function activitySpanMinutes(events) {
+    const times = (events ?? []).map((e) => parseEventTime(e?.timestamp)).filter((t) => t != null);
+    if (times.length < 2) return 0;
+    return Math.max(1, Math.round((Math.max(...times) - Math.min(...times)) / 60000));
+}
+
+function hasGazePayload(record) {
+    const dwell = record?.gaze?.aoi_dwell_ms;
+    const zones = record?.gaze?.zone_proportions || record?.engagement?.gaze_zone_proportions;
+    return Boolean(
+        (dwell && Object.values(dwell).some((v) => Number(v) > 0))
+        || (zones && Object.values(zones).some((v) => Number(v) > 0))
     );
 }
 
@@ -142,7 +222,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     const effEndDate = externalFilters ? (externalFilters.endDate ?? '') : endDate;
 
     // --- Active tab ---
-    const [activeTab, setActiveTab] = useState('network');
+    const [activeTab, setActiveTab] = useState('activity');
 
     // --- Network controls ---
     const [pruneThreshold, setPruneThreshold] = useState(0.05);
@@ -198,9 +278,9 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     // per-window state extractor differs.
     const isRecordsSource = isEmotionSource || seqSource === 'rooms' || seqSource === 'gaze-targets';
     // Oyon signal tabs — first-class dashboards over the SAME shared
-    // emotion-record fetch below
-    // (attention[+trends]/affect[+engagement]/gaze/compare/sessions).
-    const isSignalTab = activeTab === 'attention' || activeTab === 'affect'
+    // emotion-record fetch below.
+    const isSignalTab = activeTab === 'attention'
+        || activeTab === 'affect'
         || activeTab === 'gaze'
         || activeTab === 'compare' || activeTab === 'sessions';
     // The one shared emotion-records fetch fires when EITHER the Emotions
@@ -208,7 +288,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     // OR any signal tab is open. Collapsing both conditions into a single
     // boolean dep means switching between two states where it stays true
     // (e.g. emotions-source network → gaze) never double-fetches.
-    const wantsEmotionRecords = (isAnalyticsRelated && isRecordsSource) || isSignalTab;
+    const wantsEmotionRecords = isActivityTab || (isAnalyticsRelated && isRecordsSource) || isSignalTab;
 
     // --- Load filter options once ---
     useEffect(() => {
@@ -469,6 +549,38 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
         return new Set(ids).size;
     }, [emotionRecords]);
 
+    const emotionSourceStats = useMemo(() => {
+        if (!emotionRecords?.length) {
+            return { modelChannels: 0, dominantLabels: 0 };
+        }
+        return {
+            modelChannels: probabilityChannelLabels(emotionRecords).length,
+            dominantLabels: observedDominantLabels(emotionRecords).length,
+        };
+    }, [emotionRecords]);
+
+    const activityLandingStats = useMemo(() => {
+        const events = filteredEvents || [];
+        const caseCount = new Set(events.map((e) => e?.case_id).filter((v) => v != null && v !== '')).size;
+        const objectCount = new Set(events.map((e) => e?.object_name || e?.object_type).filter(Boolean)).size;
+        const emotionWindows = emotionRecords?.length ?? 0;
+        const emotionLabels = emotionRecords?.length ? observedDominantLabels(emotionRecords).length : 0;
+        const gazeWindows = (emotionRecords ?? []).filter(hasGazePayload).length;
+        const summaryD = activityBundle?.summary || {};
+
+        return {
+            events: summaryD.totalActivities ?? events.length,
+            users: summaryD.uniqueUsers ?? new Set(events.map((e) => e?.user_id).filter((v) => v != null)).size,
+            sessions: summaryD.uniqueSessions ?? new Set(events.map((e) => e?.session_id).filter(Boolean)).size,
+            cases: caseCount,
+            minutes: activitySpanMinutes(events),
+            resources: objectCount,
+            emotions: emotionWindows,
+            emotionLabels,
+            gazeWindows,
+        };
+    }, [activityBundle, filteredEvents, emotionRecords]);
+
     const refresh = () => {
         // Force the effect to re-fire by toggling a noop on the deps.
         setLastUpdated((t) => t + 1);
@@ -487,13 +599,10 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
             { id: 'process',   label: 'Process Map', icon: Workflow },
             { id: 'clusters',  label: 'Clusters',  icon: Layers },
         ],
-        // Oyon signal tabs — attention (+ trends, merged into the same tab)/
-        // affect (+ engagement, merged the same way)/gaze/compare/sessions
-        // views, all over the ONE shared emotion-record fetch, honoring the
-        // same case/student/date filters. Deliberately NO embedded <oyon-app>
-        // element here — nesting Oyon's own app (with its own filter chrome)
-        // inside this dashboard was rejected; the element's Affect /
-        // Engagement / Comparison dashboards are ported as native views.
+        // Oyon signal tabs — all over the ONE shared emotion-record fetch,
+        // honoring the same case/student/date filters. Deliberately NO
+        // embedded <oyon-app> element here — nesting Oyon's own app chrome
+        // inside this dashboard was rejected.
         [
             { id: 'attention',  label: 'Attention',  icon: Eye },
             { id: 'affect',     label: 'Affect',     icon: Smile },
@@ -517,7 +626,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
         )
         : ({ children }) => (
             <div className="fixed inset-0 z-40 bg-gray-200 text-gray-900 overflow-auto">
-                <div className="max-w-[1600px] mx-auto p-6">{children}</div>
+                <div className="max-w-[1440px] mx-auto px-8 py-6">{children}</div>
             </div>
         );
 
@@ -652,7 +761,8 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
 
                 {/* Stat cards */}
                 {!isRecordsSource && tnaData?.metadata && isAnalyticsRelated && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+                    <div className="mb-4">
+                    <MetricGrid>
                         <StatCard icon={<Users className="w-5 h-5" />} value={tnaData.metadata.totalSequences} label="Sequences" accent="cyan" />
                         <StatCard icon={<Activity className="w-5 h-5" />} value={tnaData.metadata.totalEvents} label="Events" accent="green" />
                         <StatCard icon={<Hash className="w-5 h-5" />} value={transformedData?.labels.length ?? '—'} label={sequenceMode === 'combined' ? 'States' : sequenceMode === 'objectType' ? 'Object types' : 'Verbs'} accent="amber" />
@@ -662,21 +772,25 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                         {analysis?.summaryData?.nEdges != null && (
                             <StatCard icon={<GitBranch className="w-5 h-5" />} value={analysis.summaryData.nEdges} label="Edges" accent="rose" />
                         )}
+                    </MetricGrid>
                     </div>
                 )}
                 {isRecordsSource && isAnalyticsRelated && emotionRecords && (
-                    <div className="mb-4 space-y-2">
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <div className="mb-4">
+                        <MetricGrid cols={isEmotionSource ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}>
                             <StatCard icon={<Users className="w-5 h-5" />} value={transformedData?.sequences.length ?? 0} label="Session sequences" accent="cyan" />
                             <StatCard icon={<Activity className="w-5 h-5" />} value={transformedData ? transformedData.sequences.reduce((n, s) => n + s.length, 0) : 0} label={isEmotionSource ? 'Emotion windows' : 'States visited'} accent="green" />
                             <StatCard icon={<Hash className="w-5 h-5" />} value={transformedData?.labels.length ?? '—'} label={seqSource === 'rooms' ? 'Locations' : seqSource === 'gaze-targets' ? 'Gaze targets' : emotionDimension === 'affective' ? 'Affective states' : 'Emotions'} accent="amber" />
+                            {isEmotionSource && (
+                                <StatCard icon={<Smile className="w-5 h-5" />} value={emotionSourceStats.modelChannels || '—'} label="Model channels" accent="violet" />
+                            )}
                             {analysis?.summaryData?.density != null && (
                                 <StatCard icon={<Network className="w-5 h-5" />} value={`${(analysis.summaryData.density * 100).toFixed(1)}%`} label="Density" accent="violet" />
                             )}
                             {analysis?.summaryData?.nEdges != null && (
                                 <StatCard icon={<GitBranch className="w-5 h-5" />} value={analysis.summaryData.nEdges} label="Edges" accent="rose" />
                             )}
-                        </div>
+                        </MetricGrid>
                     </div>
                 )}
 
@@ -709,6 +823,31 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                             </div>
                         )}
                         {!eventsError && !filteredEvents && <Loading text="Loading learning events…" />}
+                        {(activityBundle?.summary || filteredEvents || emotionRecords) && (
+                            <div className="rounded-md border border-gray-200 bg-white p-3 shadow-sm">
+                                <div className="mb-3 flex items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                                    <div>
+                                        <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-700">Activity Overview</h2>
+                                        <p className="mt-1 text-xs text-gray-500">Learning events, simulator sessions, and Oyon capture coverage for the current filters.</p>
+                                    </div>
+                                    {emotionTruncated && (
+                                        <div className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                                            Oyon windows capped at 1000
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                    <LandingMetricCard icon={<Hash className="h-5 w-5" />} value={formatNumber(activityLandingStats.sessions)} label="Sessions" detail={`${formatNumber(activityLandingStats.events)} events`} accent="cyan" />
+                                    <LandingMetricCard icon={<BookOpen className="h-5 w-5" />} value={formatNumber(activityLandingStats.cases)} label="Cases Taken" detail={`${formatNumber(activityLandingStats.resources)} resources touched`} accent="green" />
+                                    <LandingMetricCard icon={<Clock3 className="h-5 w-5" />} value={formatNumber(activityLandingStats.minutes)} label="Minutes" detail="Observed activity span" accent="amber" />
+                                    <LandingMetricCard icon={<Users className="h-5 w-5" />} value={formatNumber(activityLandingStats.users)} label="Students" detail={`${formatNumber(activityBundle?.summary?.avgPerUser ?? 0)} events / user`} accent="violet" />
+                                    <LandingMetricCard icon={<Brain className="h-5 w-5" />} value={formatNumber(activityLandingStats.emotions)} label="Emotions Captured" detail={`${formatNumber(activityLandingStats.emotionLabels)} dominant labels`} accent="rose" />
+                                    <LandingMetricCard icon={<ScanEye className="h-5 w-5" />} value={formatNumber(activityLandingStats.gazeWindows)} label="Gaze Records" detail="Windows with AOI signal" accent="slate" />
+                                    <LandingMetricCard icon={<CalendarDays className="h-5 w-5" />} value={formatNumber(activityCharts?.daily?.xLabels?.length ?? 0)} label="Time Buckets" detail={activityCharts?.daily?.granularity ?? 'loading'} accent="cyan" />
+                                    <LandingMetricCard icon={<Database className="h-5 w-5" />} value={formatNumber(activityBundle?.resources?.length ?? 0)} label="Top Resources" detail="Ranked resource rows" accent="green" />
+                                </div>
+                            </div>
+                        )}
                         {activityCharts && (
                             <>
                                 {learningEvents.length >= EVENTS_FETCH_LIMIT && (
@@ -717,85 +856,52 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                         events — older activity is not included.
                                     </div>
                                 )}
-                                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                <Panel title={activityCharts.daily.granularity === 'day' ? 'Daily Activity by State' : 'Activity by State over Time'}>
                                     {activityCharts.daily.series.length ? (
                                         <StackedAreaChart
                                             series={activityCharts.daily.series}
                                             xLabels={activityCharts.daily.xLabels}
                                             colors={activityCharts.dailyColors}
-                                            title={activityCharts.daily.granularity === 'day'
-                                                ? 'Daily Activity by State'
-                                                : 'Activity by State over Time'}
                                             xLabel={activityCharts.daily.granularity === 'day' ? 'Day' : 'Time'}
                                             yLabel="Events"
+                                            height={260}
                                         />
                                     ) : (
-                                        <>
-                                            <h3 className="text-sm font-bold text-gray-800 mb-2">Daily activity by state</h3>
-                                            <div className="text-xs text-gray-500 py-8 text-center">No events for the current filters</div>
-                                        </>
+                                        <EmptyPanelText>No events for the current filters</EmptyPanelText>
                                     )}
-                                </div>
-                                <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                    <h3 className="text-sm font-bold text-gray-800 mb-2">Student Activity</h3>
+                                </Panel>
+                                <Panel title="Student Activity">
                                     {activityCharts.matrixEvents.length ? (
                                         <DayHourMatrix
                                             events={activityCharts.matrixEvents}
                                             colorMap={activityCharts.colorMap}
+                                            height={260}
                                         />
                                     ) : (
-                                        <div className="text-xs text-gray-500 py-8 text-center">No events for the current filters</div>
+                                        <EmptyPanelText>No events for the current filters</EmptyPanelText>
                                     )}
-                                </div>
+                                </Panel>
                             </>
                         )}
                         {activityBundle && (
                         <>
-                        {activityBundle.summary && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <StatCard icon={<Activity className="w-5 h-5" />} value={activityBundle.summary.totalActivities} label="Total events" accent="cyan" />
-                                <StatCard icon={<Users className="w-5 h-5" />} value={activityBundle.summary.uniqueUsers} label="Users" accent="green" />
-                                <StatCard icon={<Hash className="w-5 h-5" />} value={activityBundle.summary.uniqueSessions} label="Sessions" accent="amber" />
-                                <StatCard icon={<Network className="w-5 h-5" />} value={activityBundle.summary.avgPerUser} label="Avg / user" accent="violet" />
-                            </div>
-                        )}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                <h3 className="text-sm font-bold text-gray-800 mb-2">Activity over time</h3>
-                                {activityBundle.timeline?.days?.length ? (
-                                    <ActivityTimelineChart
-                                        days={activityBundle.timeline.days}
-                                        verbs={activityBundle.timeline.verbs}
-                                        series={activityBundle.timeline.series}
-                                        palette={palette}
-                                    />
-                                ) : <div className="text-xs text-gray-500 py-8 text-center">No timeline data</div>}
-                            </div>
-                            <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                <h3 className="text-sm font-bold text-gray-800 mb-2">Day-of-week × hour heatmap</h3>
-                                <ActivityHeatmap data={activityBundle.heatmap || []} />
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                <h3 className="text-sm font-bold text-gray-800 mb-2">Verbs</h3>
+                            <Panel title="Verbs">
                                 {/* Donut expects a plain object {label: count}, not an array. */}
                                 <ActivityDonutChart
                                     data={Object.fromEntries((activityBundle.stats?.verbs || []).map((r) => [r.label, r.count]))}
                                     palette={palette}
                                 />
-                            </div>
-                            <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                <h3 className="text-sm font-bold text-gray-800 mb-2">Object types</h3>
+                            </Panel>
+                            <Panel title="Object types">
                                 <ActivityDonutChart
                                     data={Object.fromEntries((activityBundle.stats?.objectTypes || []).map((r) => [r.label, r.count]))}
                                     palette={palette}
                                 />
-                            </div>
+                            </Panel>
                         </div>
                         {activityBundle.resources?.length > 0 && (
-                            <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                <h3 className="text-sm font-bold text-gray-800 mb-2">Top resources</h3>
+                            <Panel title="Top resources">
                                 <table className="w-full text-sm">
                                     <thead className="text-xs text-gray-600">
                                         <tr><th className="text-left py-1">Object type</th><th className="text-left py-1">Name</th><th className="text-right py-1">Count</th></tr>
@@ -810,7 +916,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                         ))}
                                     </tbody>
                                 </table>
-                            </div>
+                            </Panel>
                         )}
                         </>
                         )}
@@ -820,49 +926,57 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                 {/* === NETWORK TAB === */}
                 {activeTab === 'network' && analysis && (
                     <div className="space-y-4">
-                        <div className="flex flex-wrap items-end gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-                            <div className="flex flex-col gap-1">
-                                <label className="text-xs text-gray-600">Prune: {pruneThreshold.toFixed(2)}</label>
-                                <input type="range" min={0} max={0.5} step={0.01} value={pruneThreshold} onChange={(e) => setPruneThreshold(parseFloat(e.target.value))} className="w-32" />
+                        <div className="rounded-md border border-gray-200 bg-white p-3 shadow-sm">
+                            <div className="mb-3 flex items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                                <div>
+                                    <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-700">Network Model</h2>
+                                    <p className="mt-1 text-xs text-gray-500">Tune the transition model, graph layout, and display rules for the current sequence source.</p>
+                                </div>
                             </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-xs text-gray-600">Model</label>
-                                <select value={modelType} onChange={(e) => setModelType(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
-                                    <option value="relative">Relative</option>
-                                    <option value="frequency">Frequency</option>
-                                    <option value="co-occurrence">Co-occurrence</option>
-                                    <option value="attention">Attention</option>
-                                </select>
+                            <div className="flex flex-wrap items-end gap-3">
+                                <div className="flex min-w-36 flex-col gap-1">
+                                    <label className="text-xs font-medium text-gray-600">Prune: {pruneThreshold.toFixed(2)}</label>
+                                    <input type="range" min={0} max={0.5} step={0.01} value={pruneThreshold} onChange={(e) => setPruneThreshold(parseFloat(e.target.value))} className="w-36 accent-cyan-700" />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-xs font-medium text-gray-600">Model</label>
+                                    <select value={modelType} onChange={(e) => setModelType(e.target.value)} className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm">
+                                        <option value="relative">Relative</option>
+                                        <option value="frequency">Frequency</option>
+                                        <option value="co-occurrence">Co-occurrence</option>
+                                        <option value="attention">Attention</option>
+                                    </select>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-xs font-medium text-gray-600">Layout</label>
+                                    <select value={graphLayout} onChange={(e) => setGraphLayout(e.target.value)} className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm">
+                                        {LAYOUT_OPTIONS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-xs font-medium text-gray-600">Node size</label>
+                                    <select value={nodeSizeMetric} onChange={(e) => setNodeSizeMetric(e.target.value)} className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm">
+                                        {NODE_SIZE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-xs font-medium text-gray-600">Palette</label>
+                                    <select value={palette} onChange={(e) => setPalette(e.target.value)} className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm">
+                                        {PALETTE_NAMES.map((p) => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                </div>
+                                <label className="flex h-9 items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 text-xs font-medium text-gray-700">
+                                    <input type="checkbox" checked={showSelfLoops} onChange={(e) => setShowSelfLoops(e.target.checked)} className="accent-cyan-700" />
+                                    Self-loops
+                                </label>
+                                <label className="flex h-9 items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 text-xs font-medium text-gray-700">
+                                    <input type="checkbox" checked={showEdgeLabels} onChange={(e) => setShowEdgeLabels(e.target.checked)} className="accent-cyan-700" />
+                                    Edge labels
+                                </label>
                             </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-xs text-gray-600">Layout</label>
-                                <select value={graphLayout} onChange={(e) => setGraphLayout(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
-                                    {LAYOUT_OPTIONS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-                                </select>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-xs text-gray-600">Node size</label>
-                                <select value={nodeSizeMetric} onChange={(e) => setNodeSizeMetric(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
-                                    {NODE_SIZE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                </select>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-xs text-gray-600">Palette</label>
-                                <select value={palette} onChange={(e) => setPalette(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
-                                    {PALETTE_NAMES.map((p) => <option key={p} value={p}>{p}</option>)}
-                                </select>
-                            </div>
-                            <label className="text-xs text-gray-700 flex items-center gap-1">
-                                <input type="checkbox" checked={showSelfLoops} onChange={(e) => setShowSelfLoops(e.target.checked)} />
-                                Self-loops
-                            </label>
-                            <label className="text-xs text-gray-700 flex items-center gap-1">
-                                <input type="checkbox" checked={showEdgeLabels} onChange={(e) => setShowEdgeLabels(e.target.checked)} />
-                                Edge labels
-                            </label>
                         </div>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                            <Panel title="TNA network" bodyClassName="min-h-[360px]">
                                 <TnaNetworkGraph
                                     model={analysis.prunedModel}
                                     showSelfLoops={showSelfLoops}
@@ -874,35 +988,33 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                     modelType={modelType}
                                     externalPositions={graphPositions}
                                 />
-                            </div>
-                            <div className="space-y-4">
-                                {analysis.centralityData && (
-                                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                        <h3 className="text-sm font-bold mb-2">Centrality</h3>
-                                        <CentralityBarChart centralityData={analysis.centralityData} colorMap={analysis.colorMap} />
-                                    </div>
-                                )}
-                                <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <h3 className="text-sm font-bold">{seqView === 'distribution' ? 'State distribution' : 'Index plot'}</h3>
-                                        <button onClick={() => setSeqView((v) => v === 'distribution' ? 'index' : 'distribution')} className="text-xs text-cyan-600 hover:text-cyan-700">
-                                            Toggle
-                                        </button>
-                                    </div>
-                                    {seqView === 'distribution'
-                                        ? <TnaDistributionPlot sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />
-                                        : <TnaIndexPlot sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />}
-                                </div>
-                                <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                    <h3 className="text-sm font-bold mb-2">{isRecordsSource ? 'State frequency' : 'Verb frequency'}</h3>
-                                    <TnaFrequencyChart sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />
-                                </div>
-                            </div>
+                            </Panel>
+                            {analysis.centralityData && (
+                                <Panel title="Centrality" bodyClassName="min-h-[360px]">
+                                    <CentralityBarChart centralityData={analysis.centralityData} colorMap={analysis.colorMap} />
+                                </Panel>
+                            )}
+                            <Panel
+                                title={seqView === 'distribution' ? 'State distribution' : 'Index plot'}
+                                bodyClassName="min-h-[320px]"
+                                actions={
+                                    <button onClick={() => setSeqView((v) => v === 'distribution' ? 'index' : 'distribution')} className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-700 hover:bg-cyan-100">
+                                        Toggle
+                                    </button>
+                                }
+                            >
+                                {seqView === 'distribution'
+                                    ? <TnaDistributionPlot sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />
+                                    : <TnaIndexPlot sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />}
+                            </Panel>
+                            <Panel title={isRecordsSource ? 'State frequency' : 'Verb frequency'} bodyClassName="min-h-[320px]">
+                                <TnaFrequencyChart sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />
+                            </Panel>
                         </div>
                         {analysis.centralityData && (
-                            <div className="bg-white border border-gray-200 rounded-lg p-4">
+                            <Panel title="Centrality table">
                                 <TnaCentralityTable centralityData={analysis.centralityData} colorMap={analysis.colorMap} />
-                            </div>
+                            </Panel>
                         )}
                     </div>
                 )}
@@ -947,7 +1059,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                     scope). */}
                 {isSignalTab && (
                     <div className="space-y-4">
-                        {emotionRecords && (
+                        {emotionRecords && activeTab !== 'affect' && (
                             <div className="text-xs text-gray-500 text-right">
                                 {emotionRecords.length} window{emotionRecords.length === 1 ? '' : 's'} · {emotionSessionCount} session{emotionSessionCount === 1 ? '' : 's'}
                                 {emotionTruncated ? ' · capped at the most recent 1000 windows' : ''}
@@ -961,25 +1073,13 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                         )}
 
                         {emotionRecords && (
-                            // The Oyon views share the dashboard's light theme —
-                            // plain white card, no dark island.
-                            <div className="bg-white border border-gray-200 rounded-lg p-4">
-                                {activeTab === 'attention'  && (
-                                    <div className="space-y-4">
-                                        <OyonAttentionView records={emotionRecords} loading={loading} />
-                                        <OyonTrendsView records={emotionRecords} loading={loading} />
-                                    </div>
-                                )}
-                                {activeTab === 'affect'     && (
-                                    <div className="space-y-4">
-                                        <OyonAffectView records={emotionRecords} loading={loading} />
-                                        <OyonEngagementView records={emotionRecords} loading={loading} />
-                                    </div>
-                                )}
-                                {activeTab === 'gaze'       && <OyonGazeView records={emotionRecords} loading={loading} />}
-                                {activeTab === 'compare'    && <OyonCompareView records={emotionRecords} loading={loading} />}
-                                {activeTab === 'sessions'   && <OyonSessionsView records={emotionRecords} />}
-                            </div>
+                            <>
+                            {activeTab === 'attention'  && <OyonAttentionV2 records={emotionRecords} loading={loading} />}
+                            {activeTab === 'affect'     && <OyonAffectV2 records={emotionRecords} loading={loading} />}
+                            {activeTab === 'gaze'       && <OyonGazeView records={emotionRecords} loading={loading} />}
+                            {activeTab === 'compare'    && <OyonCompareView records={emotionRecords} loading={loading} />}
+                            {activeTab === 'sessions'   && <OyonSessionsView records={emotionRecords} />}
+                            </>
                         )}
                     </div>
                 )}
