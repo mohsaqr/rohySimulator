@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.5.0] — 2026-07-04
+
+### Added
+
+- **The patient makes eye contact and follows you.** When Oyon capture is
+  running, the patient's (and debrief discussant's) eyes and head track
+  your movements via the webcam face stream, glance at the vitals monitor
+  when an alarm fires, and settle back into eye contact when you're still.
+  He never looks down, and only rarely (and slightly) up.
+- Monitor header redesign: the Oyon capture pill gets a reserved dock in
+  the center, the Rohy wordmark leads the header, and the patient's name
+  now captions the avatar.
+- Settings sidebar is flat (no collapsing sections) and ordered by how
+  often each area is used; reference catalogues (Body Map, Lab Database,
+  Medications) live under Libraries near the bottom.
+
 ## [2.3.10] — 2026-05-17
 
 ### Changed
