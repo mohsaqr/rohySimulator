@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera, ChevronDown, ChevronRight } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
@@ -95,24 +95,13 @@ export function InlineBodyMapEditor() {
     );
 }
 
-// --- Sidebar nav model (collapsible accordion, grouped by theme) ---------
+// --- Sidebar nav model (flat, grouped by theme) ---------------------------
 // This is pure nav-chrome: tab ids, per-tab role gating, and the content-area
-// panel switch are all unchanged. The ~16 setting tabs are grouped into
-// themed, collapsible sections. Group open/closed state is persisted in
-// localStorage; the group that owns the active tab is force-expanded so
-// `initialTab` deep-links always land on a visible item.
-const OPEN_GROUPS_KEY = 'rohy.configPanel.openGroups';
-const NAV_GROUP_ORDER = ['Content', 'Agents & Voice', 'People', 'Analytics', 'Capture', 'System'];
-// Static tab -> group map so the force-expand effect has no render-scope
-// dependencies (keeps react-hooks/exhaustive-deps happy).
-const TAB_GROUP = {
-    cases: 'Content', scenarios: 'Content', bodymap: 'Content', labdb: 'Content', medications: 'Content',
-    agents: 'Agents & Voice', avatars: 'Agents & Voice', voice: 'Agents & Voice',
-    users: 'People', cohorts: 'People',
-    analytics: 'Analytics',
-    oyon: 'Capture',
-    platform: 'System', notifications: 'System', logs: 'System',
-};
+// panel switch are all unchanged. The ~16 setting tabs are grouped under
+// static theme labels. The groups used to be a collapsible accordion with
+// localStorage-persisted open state; that was retired (operator feedback
+// 2026-07-03: collapsing whole sections behind headers was impractical) —
+// every item is now always visible.
 
 // One sidebar tab button.
 function NavItem({ item, active, onSelect }) {
@@ -128,19 +117,9 @@ function NavItem({ item, active, onSelect }) {
     );
 }
 
-// Collapsible group header: chevron + uppercase theme label.
-function NavGroupHeader({ group, open, onToggle }) {
-    const Chevron = open ? ChevronDown : ChevronRight;
-    return (
-        <button
-            type="button"
-            aria-expanded={open}
-            onClick={() => onToggle(group)}
-            className="rohy-settings-nav-group"
-        >
-            <Chevron className="w-3 h-3" /> {group}
-        </button>
-    );
+// Static group header: uppercase theme label (not interactive).
+function NavGroupLabel({ group }) {
+    return <div className="rohy-settings-nav-group">{group}</div>;
 }
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'cases', initialWizardStep = 1, onOpenPersonaEditor, onCaseSaved }) {
@@ -162,40 +141,6 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
     // on a specific case wizard step.
     const [activeTab, setActiveTab] = useState(initialTab); // cases, users, history, logs, platform, scenarios
     const [wizardInitialStep, setWizardInitialStep] = useState(initialWizardStep);
-
-    // Accordion open/closed state for the grouped sidebar. Defaults to every
-    // group expanded on first run; explicit user toggles are persisted to
-    // localStorage under OPEN_GROUPS_KEY. Multiple groups may be open at once.
-    const [openGroups, setOpenGroups] = useState(() => {
-        let stored = {};
-        try {
-            stored = JSON.parse(localStorage.getItem(OPEN_GROUPS_KEY)) || {};
-        } catch {
-            stored = {};
-        }
-        return NAV_GROUP_ORDER.reduce((acc, group) => {
-            acc[group] = stored[group] !== undefined ? stored[group] : true;
-            return acc;
-        }, {});
-    });
-    const toggleGroup = (group) => {
-        setOpenGroups((prev) => {
-            const next = { ...prev, [group]: !prev[group] };
-            try {
-                localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify(next));
-            } catch {
-                /* localStorage unavailable — accordion still works in-memory */
-            }
-            return next;
-        });
-    };
-    // Force-expand the group that owns the active tab so `initialTab` deep
-    // links (and any programmatic setActiveTab) always land on a visible item.
-    // Derived during render (no effect) so it holds on mount AND on every
-    // activeTab change, and can never be collapsed out from under the tab
-    // you're currently viewing.
-    const activeGroup = TAB_GROUP[activeTab];
-    const isGroupOpen = (group) => Boolean(openGroups[group]) || group === activeGroup;
 
     // Cases State
     const [cases, setCases] = useState([]);
@@ -388,15 +333,16 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
     // guard before this refactor — see `visible`. A group whose items are all
     // hidden is not rendered (see the sidebar map below). Tab ids are unchanged.
     const admin = isAdmin();
+    // Ordered by how often each tab is actually reached for: the everyday
+    // surfaces (cases, agents, people, analytics, capture) lead; the
+    // set-up-once reference catalogues (Body Map editor, Lab Database,
+    // Medications) sit in Libraries near the bottom, above System.
     const SECTIONS = [
         {
             group: 'Content',
             items: [
                 { id: 'cases', label: admin ? 'Cases' : 'Select Case', icon: FileText, visible: true },
                 { id: 'scenarios', label: 'Scenarios', icon: Layers, visible: admin },
-                { id: 'bodymap', label: 'Body Map', icon: Image, visible: admin },
-                { id: 'labdb', label: 'Lab Database', icon: Database, visible: admin },
-                { id: 'medications', label: 'Medications', icon: Database, visible: admin },
             ],
         },
         {
@@ -424,6 +370,14 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             group: 'Capture',
             items: [
                 { id: 'oyon', label: 'Oyon', icon: Camera, visible: true },
+            ],
+        },
+        {
+            group: 'Libraries',
+            items: [
+                { id: 'bodymap', label: 'Body Map', icon: Image, visible: admin },
+                { id: 'labdb', label: 'Lab Database', icon: Database, visible: admin },
+                { id: 'medications', label: 'Medications', icon: Database, visible: admin },
             ],
         },
         {
@@ -459,11 +413,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
             <div className="flex flex-1 overflow-hidden">
 
-                {/* Sidebar — collapsible accordion grouped by theme. Simulation
-                    stays pinned on top (it's not a tab, it exits back to the
-                    running sim); the grouped tabs follow. Per-tab role gating
-                    lives on each SECTIONS item's `visible`; a group with no
-                    visible items renders neither its header nor body. */}
+                {/* Sidebar — flat list grouped under static theme labels.
+                    Simulation stays pinned on top (it's not a tab, it exits
+                    back to the running sim); the grouped tabs follow. Per-tab
+                    role gating lives on each SECTIONS item's `visible`; a
+                    group with no visible items renders neither its label nor
+                    body. */}
                 <div className="rohy-admin-sidebar w-48 min-h-0 overflow-y-auto border-r border-neutral-800 flex flex-col py-3">
                     {/* Simulation — not a tab: returns to the running simulation. */}
                     <button
@@ -476,11 +431,10 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     {SECTIONS.map(({ group, items }) => {
                         const visibleItems = items.filter((item) => item.visible);
                         if (visibleItems.length === 0) return null;
-                        const open = isGroupOpen(group);
                         return (
                             <div key={group}>
-                                <NavGroupHeader group={group} open={open} onToggle={toggleGroup} />
-                                {open && visibleItems.map((item) => (
+                                <NavGroupLabel group={group} />
+                                {visibleItems.map((item) => (
                                     <NavItem
                                         key={item.id}
                                         item={item}

@@ -185,9 +185,9 @@ function mount(props = {}) {
 }
 
 describe('ConfigPanel', () => {
-    // CONTRACT: smoke — admin sees the sidebar with all admin tabs. With the
-    // accordion, every group defaults to expanded so all tabs are visible at
-    // once. Labels are anchored so a tab name can't match a group header.
+    // CONTRACT: smoke — admin sees the sidebar with all admin tabs. The
+    // sidebar is flat (no accordion), so every tab is always visible.
+    // Labels are anchored so a tab name can't match a group header.
     it('renders the sidebar shell with admin tabs', async () => {
         mount({ initialTab: 'voice' });
         await waitForAdmin();
@@ -202,7 +202,7 @@ describe('ConfigPanel', () => {
     });
 
     // CONTRACT: every tab id is reachable and its role gate is intact. Admin
-    // sees all 15 tabs across all 6 groups (admin also satisfies the
+    // sees all 15 tabs across all 7 groups (admin also satisfies the
     // educator+ gates for Cohorts / Analytics).
     it('exposes every tab (with its role gate) for an admin', async () => {
         mount({ initialTab: 'cases' });
@@ -217,14 +217,16 @@ describe('ConfigPanel', () => {
         for (const name of everyTab) {
             expect(screen.getByRole('button', { name })).toBeInTheDocument();
         }
-        // "Analytics" is both the group header and (post-rename) the tab
-        // label — two distinct buttons.
-        expect(screen.getAllByRole('button', { name: /^Analytics$/i })).toHaveLength(2);
+        // "Analytics" is both the (static) group label and the tab button —
+        // only the tab is a button now that group headers are not interactive.
+        expect(screen.getAllByRole('button', { name: /^Analytics$/i })).toHaveLength(1);
         // The retired Emotion & Attention tab is gone.
         expect(screen.queryByRole('button', { name: /^Emotion & Attention$/i })).not.toBeInTheDocument();
-        // Group headers render too (they're buttons, distinct from tabs).
-        expect(screen.getByRole('button', { name: /^Content$/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /^Agents & Voice$/i })).toBeInTheDocument();
+        // Group labels render as static text, NOT buttons (accordion retired).
+        expect(screen.getByText(/^Content$/i)).toBeInTheDocument();
+        expect(screen.getByText(/^Agents & Voice$/i)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^Content$/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^Agents & Voice$/i })).not.toBeInTheDocument();
     });
 
     // CONTRACT: the Analytics tab (formerly admin-only "Case Analytics") is
@@ -238,8 +240,9 @@ describe('ConfigPanel', () => {
         );
         mount({ initialTab: 'analytics' });
         await waitFor(() => {
-            // Group header + tab item both present for an educator.
-            expect(screen.getAllByRole('button', { name: /^Analytics$/i })).toHaveLength(2);
+            // The Analytics tab button is present for an educator (the group
+            // label of the same name is static text, not a button).
+            expect(screen.getAllByRole('button', { name: /^Analytics$/i })).toHaveLength(1);
         });
         expect(await screen.findByTestId('stub-tna-dashboard')).toBeInTheDocument();
         // Admin-only tabs stay hidden for educators.
@@ -519,39 +522,24 @@ describe('ConfigPanel', () => {
         expect(onClose).toHaveBeenCalledTimes(1);
     });
 
-    // CONTRACT: a deep-linked initialTab auto-expands the group that owns it,
-    // even when that group was persisted collapsed in localStorage. Other
-    // persisted-collapsed groups stay collapsed (the effect only touches the
-    // active tab's group).
-    it('auto-expands the group of a deep-linked initialTab that was persisted collapsed', async () => {
+    // CONTRACT: the sidebar is flat — the accordion was retired (operator
+    // feedback 2026-07-03: collapsing sections behind headers was
+    // impractical). Every tab stays visible even when a stale
+    // rohy.configPanel.openGroups localStorage entry says groups are
+    // collapsed, and group labels are not clickable.
+    it('keeps every tab visible and ignores stale persisted collapse state', async () => {
         window.localStorage.setItem(
             'rohy.configPanel.openGroups',
             JSON.stringify({ Content: false, People: false }),
         );
         mount({ initialTab: 'scenarios' });
         await waitForAdmin();
-        // Content owns 'scenarios' → force-expanded → item visible and panel lands.
+        // Items from "collapsed" groups are all still visible.
         expect(screen.getByRole('button', { name: /^Scenarios$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Users$/i })).toBeInTheDocument();
         expect(await screen.findByTestId('stub-scenarios')).toBeInTheDocument();
-        // People was also collapsed but holds no active tab → stays collapsed.
-        expect(screen.queryByRole('button', { name: /^Users$/i })).not.toBeInTheDocument();
-    });
-
-    // CONTRACT: clicking a group header collapses its items and persists the
-    // choice to localStorage. Collapsing a group that does NOT own the active
-    // tab keeps it collapsed (no force-expand kicks in).
-    it('collapses a group when its header is clicked and persists the state', async () => {
-        mount({ initialTab: 'voice' });
-        await waitForAdmin();
-        // Content is open by default → its items are visible.
-        expect(screen.getByRole('button', { name: /^Body Map$/i })).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: /^Content$/i }));
-        // Items are hidden after collapse.
-        expect(screen.queryByRole('button', { name: /^Body Map$/i })).not.toBeInTheDocument();
-        // The active tab (Voice) is unaffected and still reachable.
-        expect(screen.getByRole('button', { name: /^Voice$/i })).toBeInTheDocument();
-        // Choice is persisted.
-        const persisted = JSON.parse(window.localStorage.getItem('rohy.configPanel.openGroups'));
-        expect(persisted.Content).toBe(false);
+        // Group labels are static text — clicking one is not possible
+        // because they are not buttons.
+        expect(screen.queryByRole('button', { name: /^Content$/i })).not.toBeInTheDocument();
     });
 });
