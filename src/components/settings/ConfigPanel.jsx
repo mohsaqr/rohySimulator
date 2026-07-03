@@ -119,8 +119,9 @@ function NavItem({ item, active, onSelect }) {
     const Icon = item.icon;
     return (
         <button
+            type="button"
             onClick={() => onSelect(item.id)}
-            className={`w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${active ? 'border-teal-700 bg-teal-50 text-teal-950' : 'border-transparent text-gray-700 hover:text-gray-950 hover:bg-teal-50/70'}`}
+            className={`rohy-settings-nav-item ${active ? 'rohy-settings-nav-item--active' : ''}`}
         >
             <Icon className={item.iconClass ? `w-4 h-4 ${item.iconClass}` : 'w-4 h-4'} /> {item.label}
         </button>
@@ -135,7 +136,7 @@ function NavGroupHeader({ group, open, onToggle }) {
             type="button"
             aria-expanded={open}
             onClick={() => onToggle(group)}
-            className="w-full px-4 pt-3 pb-1 text-left text-[11px] font-bold uppercase tracking-wider text-gray-600 hover:text-gray-900 flex items-center gap-1.5 transition-colors"
+            className="rohy-settings-nav-group"
         >
             <Chevron className="w-3 h-3" /> {group}
         </button>
@@ -416,7 +417,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
         {
             group: 'Analytics',
             items: [
-                { id: 'analytics', label: 'Analytics', icon: Activity, iconClass: 'text-teal-700', visible: canSeeAnalytics },
+                { id: 'analytics', label: 'Analytics', icon: Activity, visible: canSeeAnalytics },
             ],
         },
         {
@@ -446,6 +447,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                 </h2>
                 {fullPage && (
                     <button
+                        type="button"
                         onClick={onClose}
                         className="rohy-subtle-button px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
                     >
@@ -465,8 +467,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                 <div className="rohy-admin-sidebar w-48 min-h-0 overflow-y-auto border-r border-neutral-800 flex flex-col py-3">
                     {/* Simulation — not a tab: returns to the running simulation. */}
                     <button
+                        type="button"
                         onClick={onClose}
-                        className="w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-2 border-l-2 border-transparent text-gray-700 hover:text-gray-950 hover:bg-teal-50/70 transition-colors"
+                        className="rohy-settings-nav-item"
                     >
                         <Monitor className="w-4 h-4" /> Simulation
                     </button>

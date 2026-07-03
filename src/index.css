@@ -389,6 +389,108 @@ body,
     box-shadow: 0 12px 28px rgb(17 24 39 / 0.16);
   }
 
+  .rohy-topbar-menu-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 9999px;
+    border: 1px solid var(--rohy-border);
+    color: var(--rohy-text);
+    background-color: rgb(255 255 255 / 0.94);
+    backdrop-filter: blur(6px);
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .rohy-topbar-menu-trigger:hover,
+  .rohy-topbar-menu-trigger:focus-visible {
+    background-color: rgb(255 255 255 / 1);
+    border-color: var(--rohy-accent-border);
+    box-shadow: 0 2px 10px rgb(15 118 110 / 0.18);
+  }
+
+  .rohy-topbar-menu-trigger-open {
+    border-color: var(--rohy-accent);
+    box-shadow: 0 0 0 2px rgb(20 184 166 / 0.2);
+  }
+
+  .rohy-topbar-menu-panel {
+    width: 13rem;
+    overflow: hidden;
+    border-radius: 0.625rem;
+  }
+
+  .rohy-menu-divider {
+    border-top: 1px solid var(--rohy-border);
+    opacity: 0.75;
+  }
+
+  .rohy-topbar-menu-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--rohy-text);
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .rohy-topbar-menu-item:hover,
+  .rohy-topbar-menu-item:focus-visible {
+    background-color: var(--rohy-bg-hover);
+    color: var(--rohy-text);
+  }
+
+  .rohy-topbar-menu-item-danger {
+    color: #b42318;
+  }
+
+  .rohy-topbar-menu-item-danger:hover,
+  .rohy-topbar-menu-item-danger:focus-visible {
+    background-color: #fee2e2;
+    color: #7f1d1d;
+  }
+
+  .rohy-settings-nav-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    border-left: 2px solid transparent;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.25rem;
+    color: var(--rohy-text);
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .rohy-settings-nav-item:hover {
+    background-color: var(--rohy-bg-hover);
+    color: var(--rohy-text);
+  }
+
+  .rohy-settings-nav-item--active {
+    border-left-color: var(--rohy-accent);
+    background: var(--rohy-accent-soft);
+    color: var(--rohy-text);
+  }
+
+  .rohy-settings-nav-group {
+    width: 100%;
+    padding: 0.75rem 1rem 0.25rem;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--rohy-muted);
+    transition: color 0.15s ease;
+  }
+
   .rohy-danger-icon-button {
     color: var(--rohy-muted);
   }

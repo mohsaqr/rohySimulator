@@ -72,8 +72,17 @@ function MainApp() {
    // the nonce is ConfigPanel's key.
    const [settingsNavNonce] = useState(0);
    const { user, logout, isAdmin } = useAuth();
+   const isAdminUser = isAdmin();
+   const canSeeOyonAnalytics = user?.role === 'educator' || user?.role === 'admin';
+   const canSeeAnalyticsMenu = canSeeOyonAnalytics || isAdminUser;
    const [sessionValidated, setSessionValidated] = useState(false);
    const lastActivityRef = useRef(Date.now());
+   const userMenuRef = useRef(null);
+
+   const closeTopMenus = useCallback(() => {
+      setShowUserMenu(false);
+      setShowAnalyticsMenu(false);
+   }, []);
 
    // Restore and validate session from localStorage on mount
    const [activeCase, setActiveCase] = useState(null);
@@ -100,6 +109,19 @@ function MainApp() {
    const showExamination = currentRoom === 'examination';
    const showInvestigations = currentRoom === 'lab' || currentRoom === 'radiology';
    const showDiscussion = currentRoom === 'consultant';
+
+   useEffect(() => {
+      if (!showUserMenu && !showAnalyticsMenu) return;
+
+      const onKeydown = (event) => {
+         if (event.key === 'Escape') {
+            closeTopMenus();
+         }
+      };
+
+      window.addEventListener('keydown', onKeydown);
+      return () => window.removeEventListener('keydown', onKeydown);
+   }, [showUserMenu, showAnalyticsMenu, closeTopMenus]);
 
    // Set user context for EventLogger when user logs in
    useEffect(() => {
@@ -554,7 +576,6 @@ function MainApp() {
       : currentRoom;
    // Mirror ConfigPanel's canSeeOyonAnalytics gate: the pill's analytics
    // shortcut only renders for users who can actually see that tab.
-   const canSeeOyonAnalytics = user?.role === 'educator' || user?.role === 'admin';
    const oyonPill = user ? (
       // Top-center — the spot the pill has always lived in (the monitor
       // header renders nothing there anymore). Rendered whenever a user is
@@ -760,60 +781,80 @@ function MainApp() {
                    request — students don't need the diagnosis spoiled in
                    the header. */}
                <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-                  <div className="relative">
+                  <div className="relative" ref={userMenuRef}>
                      <button
-                        onClick={() => setShowUserMenu(!showUserMenu)}
-                        className="px-3 py-2 bg-black/50 backdrop-blur-md rounded-full flex items-center gap-2 text-sm hover:bg-black/70 transition-colors"
-                        title="Settings & profile"
+                        type="button"
+                        onClick={() => {
+                           setShowUserMenu(v => !v);
+                           setShowAnalyticsMenu(false);
+                        }}
+                        aria-expanded={showUserMenu}
+                        aria-controls="app-user-menu"
+                        aria-label="Settings and profile menu"
+                        className={`rohy-topbar-menu-trigger text-sm ${showUserMenu ? 'rohy-topbar-menu-trigger-open' : ''}`}
                      >
-                        <Settings className="w-4 h-4 text-neutral-300" />
-                        <span className="text-neutral-200">Settings</span>
-                        <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+                        <Settings className="w-4 h-4 text-[var(--rohy-accent)]" />
+                        <span>Settings</span>
+                        <ChevronDown className={`w-4 h-4 text-[var(--rohy-muted)] transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
                      </button>
 
                      {/* Dropdown */}
                      {showUserMenu && (
                         <>
-                           <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-                           <div className="absolute left-0 top-full mt-2 w-48 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                           <div className="fixed inset-0 z-40" onClick={closeTopMenus} />
+                           <div
+                              id="app-user-menu"
+                              role="menu"
+                              className="absolute left-0 top-full mt-2 z-50 rohy-menu rohy-topbar-menu-panel"
+                           >
                               <button
+                                 type="button"
                                  onClick={() => { setShowUserProfile(true); setShowUserMenu(false); }}
-                                 className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
+                                 role="menuitem"
+                                 className="rohy-topbar-menu-item"
                               >
-                                 <User className="w-4 h-4 text-blue-400" />
+                                 <User className="w-4 h-4" />
                                  My Profile
                               </button>
                               <button
+                                 type="button"
                                  onClick={() => { handleOpenSettings(); setShowUserMenu(false); }}
-                                 className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
+                                 role="menuitem"
+                                 className="rohy-topbar-menu-item"
                               >
-                                 <Settings className="w-4 h-4 text-neutral-400" />
+                                 <Settings className="w-4 h-4" />
                                  Open Settings
                               </button>
                               <button
+                                 type="button"
                                  onClick={() => { setShowHelpCenter(true); setShowUserMenu(false); }}
-                                 className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
+                                 role="menuitem"
+                                 className="rohy-topbar-menu-item"
                               >
-                                 <HelpCircle className="w-4 h-4 text-blue-400" />
+                                 <HelpCircle className="w-4 h-4" />
                                  Help &amp; Support
                               </button>
-                              {isAdmin() && (
+                              {isAdminUser && (
                                  <button
+                                    type="button"
                                     onClick={() => { setShowTnaAnalytics(true); setShowUserMenu(false); }}
-                                    className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
+                                    role="menuitem"
+                                    className="rohy-topbar-menu-item"
                                  >
-                                    <Activity className="w-4 h-4 text-teal-400" />
+                                    <Activity className="w-4 h-4" />
                                     Analytics
                                  </button>
                               )}
-                              <div className="border-t border-neutral-700" />
+                              <div className="rohy-menu-divider" />
                               <button
+                                 type="button"
                                  onClick={() => {
                                     EventLogger.log('CLICKED', 'button', { objectId: 'logout', objectName: 'Logout', component: COMPONENTS.APP });
                                     logout();
-                                    setShowUserMenu(false);
+                                    closeTopMenus();
                                  }}
-                                 className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-red-900/30 flex items-center gap-3"
+                                 role="menuitem"
+                                 className="rohy-topbar-menu-item rohy-topbar-menu-item-danger"
                               >
                                  <LogOut className="w-4 h-4" />
                                  Logout
@@ -831,37 +872,52 @@ function MainApp() {
                       opens the full-page TNA dashboard (admin, matching the
                       user-menu Analytics entry). Hidden entirely when the
                       user can reach neither. */}
-                  {(canSeeOyonAnalytics || isAdmin()) && (
+                  {canSeeAnalyticsMenu && (
                      <div className="relative">
                         <button
-                           onClick={() => setShowAnalyticsMenu(!showAnalyticsMenu)}
-                           className="px-3 py-2 bg-black/50 backdrop-blur-md rounded-full flex items-center gap-2 text-sm hover:bg-black/70 transition-colors"
+                           type="button"
+                           onClick={() => {
+                              setShowAnalyticsMenu(v => !v);
+                              setShowUserMenu(false);
+                           }}
+                           aria-expanded={showAnalyticsMenu}
+                           aria-controls="app-analytics-menu"
+                           aria-label="Analytics menu"
+                           className={`rohy-topbar-menu-trigger text-sm ${showAnalyticsMenu ? 'rohy-topbar-menu-trigger-open' : ''}`}
                            title="Analytics"
                         >
-                           <Activity className="w-4 h-4 text-teal-400" />
-                           <span className="text-neutral-200">Analytics</span>
-                           <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${showAnalyticsMenu ? 'rotate-180' : ''}`} />
+                           <Activity className="w-4 h-4 text-[var(--rohy-accent)]" />
+                           <span>Analytics</span>
+                           <ChevronDown className={`w-4 h-4 text-[var(--rohy-muted)] transition-transform ${showAnalyticsMenu ? 'rotate-180' : ''}`} />
                         </button>
 
                         {showAnalyticsMenu && (
                            <>
-                              <div className="fixed inset-0 z-40" onClick={() => setShowAnalyticsMenu(false)} />
-                              <div className="absolute left-0 top-full mt-2 w-48 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                              <div className="fixed inset-0 z-40" onClick={closeTopMenus} />
+                              <div
+                                 id="app-analytics-menu"
+                                 role="menu"
+                                 className="absolute left-0 top-full mt-2 z-50 rohy-menu rohy-topbar-menu-panel"
+                              >
                                  {canSeeOyonAnalytics && (
                                     <button
+                                       type="button"
                                        onClick={() => { setShowOyonAnalytics(true); setShowAnalyticsMenu(false); }}
-                                       className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
+                                       role="menuitem"
+                                       className="rohy-topbar-menu-item"
                                     >
-                                       <Activity className="w-4 h-4 text-teal-400" />
+                                       <Activity className="w-4 h-4" />
                                        Emotion
                                     </button>
                                  )}
-                                 {isAdmin() && (
+                                 {isAdminUser && (
                                     <button
+                                       type="button"
                                        onClick={() => { setShowTnaAnalytics(true); setShowAnalyticsMenu(false); }}
-                                       className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
+                                       role="menuitem"
+                                       className="rohy-topbar-menu-item"
                                     >
-                                       <Activity className="w-4 h-4 text-teal-400" />
+                                       <Activity className="w-4 h-4" />
                                        Case Analytics
                                     </button>
                                  )}
