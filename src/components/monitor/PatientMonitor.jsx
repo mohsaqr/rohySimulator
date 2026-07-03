@@ -1202,6 +1202,9 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
       return () => observer.disconnect();
    }, []);
 
+   const caseTitle = caseData?.patient_name || caseData?.config?.patient_name || (canSeeCaseTitle(user) ? caseData?.name : null) || 'ICU MONITOR';
+   const patientMeta = `${caseData?.patient_age || caseData?.config?.demographics?.age ? `${caseData?.patient_age || caseData?.config?.demographics?.age}y` : ''}${(caseData?.patient_gender || caseData?.config?.demographics?.gender) ? ` ${caseData?.patient_gender || caseData?.config?.demographics?.gender}` : ''}${caseData?.config?.demographics?.weight ? ` • ${caseData?.config?.demographics?.weight}` : ''}`.trim();
+
    return (
       <div ref={containerRef} className="flex flex-col h-full bg-black text-gray-100 font-sans overflow-hidden select-none">
 
@@ -1210,19 +1213,6 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
             <div className="flex items-center gap-4">
                <div className="bg-neutral-800 p-2 rounded-md">
                   <Monitor className="w-5 h-5 text-blue-400" />
-               </div>
-               <div>
-                  <h1 className="text-lg font-bold tracking-tight text-white leading-tight">
-                     {caseData?.patient_name || caseData?.config?.patient_name || (canSeeCaseTitle(user) ? caseData?.name : null) || 'ICU MONITOR'}
-                  </h1>
-                  <div className="flex items-center gap-2 text-xs text-neutral-400">
-                     <User className="w-3 h-3" />
-                     <span>
-                        {(caseData?.patient_age || caseData?.config?.demographics?.age) ? `${caseData?.patient_age || caseData.config.demographics.age}y` : ''}
-                        {(caseData?.patient_gender || caseData?.config?.demographics?.gender) ? ` ${caseData?.patient_gender || caseData.config.demographics.gender}` : ''}
-                        {caseData?.config?.demographics?.weight ? ` • ${caseData.config.demographics.weight}` : ''}
-                     </span>
-                  </div>
                </div>
             </div>
 
@@ -1289,7 +1279,14 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
             </div>
          </div>
 
-         {/* MAIN LAYOUT */}
+            {caseTitle && (
+               <div className="px-4 py-1.5 bg-neutral-900 border-b border-neutral-800 text-sm">
+                  <div className="font-semibold text-white truncate">{caseTitle}</div>
+                  {patientMeta && <div className="text-xs text-neutral-400 mt-0.5">{patientMeta}</div>}
+               </div>
+            )}
+
+            {/* MAIN LAYOUT */}
          <div className="flex flex-1 relative overflow-hidden">
 
             {/* WAVEFORMS (LEFT) */}
