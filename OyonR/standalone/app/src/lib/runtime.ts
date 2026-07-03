@@ -812,6 +812,12 @@ function useRealRuntime(
             valence: typeof samplePred.valence === 'number' && Number.isFinite(samplePred.valence) ? samplePred.valence : null,
             arousal: typeof samplePred.arousal === 'number' && Number.isFinite(samplePred.arousal) ? samplePred.arousal : null,
             probabilities: samplePred.probabilities,
+            // Live face position — the normalized [0,1] MediaPipe bbox of the
+            // tracked face this frame, null when no face. Per the data policy
+            // every per-frame signal ships to the host; this one lets hosts
+            // drive gaze-aware UI (e.g. an avatar that makes eye contact by
+            // following the user's face).
+            face: evt.face?.facePresent && evt.face.quality?.bbox ? evt.face.quality.bbox : null,
             ts: Date.now(),
           });
         }
