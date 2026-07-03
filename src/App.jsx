@@ -40,10 +40,6 @@ function MainApp() {
    const [showFullPageSettings, setShowFullPageSettings] = useState(false);
    const [showUserProfile, setShowUserProfile] = useState(false);
    const [showUserMenu, setShowUserMenu] = useState(false);
-   // Top-bar "Analytics" dropdown. Peer to the Settings menu; surfaces the
-   // two analytics destinations (Emotion / Case) as primary top-level
-   // routes instead of leaving them buried in Settings tabs.
-   const [showAnalyticsMenu, setShowAnalyticsMenu] = useState(false);
    const [showTnaAnalytics, setShowTnaAnalytics] = useState(false);
    // Emotion analytics as a first-class full-page route — the Oyon element's
    // own Analyze dashboards (Emotion dynamics / Engagement / Affect / Gaze),
@@ -74,14 +70,11 @@ function MainApp() {
    const { user, logout, isAdmin } = useAuth();
    const isAdminUser = isAdmin();
    const canSeeOyonAnalytics = user?.role === 'educator' || user?.role === 'admin';
-   const canSeeAnalyticsMenu = canSeeOyonAnalytics || isAdminUser;
    const [sessionValidated, setSessionValidated] = useState(false);
    const lastActivityRef = useRef(Date.now());
-   const userMenuRef = useRef(null);
 
    const closeTopMenus = useCallback(() => {
       setShowUserMenu(false);
-      setShowAnalyticsMenu(false);
    }, []);
 
    // Restore and validate session from localStorage on mount
@@ -111,7 +104,7 @@ function MainApp() {
    const showDiscussion = currentRoom === 'consultant';
 
    useEffect(() => {
-      if (!showUserMenu && !showAnalyticsMenu) return;
+      if (!showUserMenu) return;
 
       const onKeydown = (event) => {
          if (event.key === 'Escape') {
@@ -121,7 +114,7 @@ function MainApp() {
 
       window.addEventListener('keydown', onKeydown);
       return () => window.removeEventListener('keydown', onKeydown);
-   }, [showUserMenu, showAnalyticsMenu, closeTopMenus]);
+   }, [showUserMenu, closeTopMenus]);
 
    // Set user context for EventLogger when user logs in
    useEffect(() => {
@@ -775,18 +768,18 @@ function MainApp() {
                <PatientVisual caseData={activeCase} />
 
                {/* Settings menu — far-left top corner. Replaces the old
-                   admin/username pill. The dropdown still contains Profile /
-                   TNA Analytics / Logout for the admin role. The case-name
-                   banner that used to sit here was hidden per the operator
+                   admin/username pill. Single menu now contains Profile,
+                   Support, and Analytics shortcuts (educator+/admin, based on
+                   role gate) in one place. The case-name banner that used to
+                   sit here was hidden per the operator
                    request — students don't need the diagnosis spoiled in
                    the header. */}
                <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-                  <div className="relative" ref={userMenuRef}>
+                  <div className="relative">
                      <button
                         type="button"
                         onClick={() => {
                            setShowUserMenu(v => !v);
-                           setShowAnalyticsMenu(false);
                         }}
                         aria-expanded={showUserMenu}
                         aria-controls="app-user-menu"
@@ -834,6 +827,20 @@ function MainApp() {
                                  <HelpCircle className="w-4 h-4" />
                                  Help &amp; Support
                               </button>
+                              {(canSeeOyonAnalytics || isAdminUser) && (
+                                 <div className="rohy-menu-divider" />
+                              )}
+                              {canSeeOyonAnalytics && (
+                                 <button
+                                    type="button"
+                                    onClick={() => { setShowOyonAnalytics(true); setShowUserMenu(false); }}
+                                    role="menuitem"
+                                    className="rohy-topbar-menu-item"
+                                 >
+                                    <Activity className="w-4 h-4" />
+                                    Emotion Analytics
+                                 </button>
+                              )}
                               {isAdminUser && (
                                  <button
                                     type="button"
@@ -842,10 +849,12 @@ function MainApp() {
                                     className="rohy-topbar-menu-item"
                                  >
                                     <Activity className="w-4 h-4" />
-                                    Analytics
+                                    Case Analytics
                                  </button>
                               )}
-                              <div className="rohy-menu-divider" />
+                              {(canSeeOyonAnalytics || isAdminUser) && (
+                                 <div className="rohy-menu-divider" />
+                              )}
                               <button
                                  type="button"
                                  onClick={() => {
@@ -863,69 +872,6 @@ function MainApp() {
                         </>
                      )}
                   </div>
-
-                  {/* Analytics dropdown — a peer of the Settings menu that
-                      promotes the two analytics surfaces to primary top-bar
-                      destinations. Emotion deep-links into the Oyon Learning
-                      Analytics settings tab (educator+/admin, matching the
-                      Oyon pill's canSeeOyonAnalytics gate); Case Analytics
-                      opens the full-page TNA dashboard (admin, matching the
-                      user-menu Analytics entry). Hidden entirely when the
-                      user can reach neither. */}
-                  {canSeeAnalyticsMenu && (
-                     <div className="relative">
-                        <button
-                           type="button"
-                           onClick={() => {
-                              setShowAnalyticsMenu(v => !v);
-                              setShowUserMenu(false);
-                           }}
-                           aria-expanded={showAnalyticsMenu}
-                           aria-controls="app-analytics-menu"
-                           aria-label="Analytics menu"
-                           className={`rohy-topbar-menu-trigger text-sm ${showAnalyticsMenu ? 'rohy-topbar-menu-trigger-open' : ''}`}
-                           title="Analytics"
-                        >
-                           <Activity className="w-4 h-4 text-[var(--rohy-accent)]" />
-                           <span>Analytics</span>
-                           <ChevronDown className={`w-4 h-4 text-[var(--rohy-muted)] transition-transform ${showAnalyticsMenu ? 'rotate-180' : ''}`} />
-                        </button>
-
-                        {showAnalyticsMenu && (
-                           <>
-                              <div className="fixed inset-0 z-40" onClick={closeTopMenus} />
-                              <div
-                                 id="app-analytics-menu"
-                                 role="menu"
-                                 className="absolute left-0 top-full mt-2 z-50 rohy-menu rohy-topbar-menu-panel"
-                              >
-                                 {canSeeOyonAnalytics && (
-                                    <button
-                                       type="button"
-                                       onClick={() => { setShowOyonAnalytics(true); setShowAnalyticsMenu(false); }}
-                                       role="menuitem"
-                                       className="rohy-topbar-menu-item"
-                                    >
-                                       <Activity className="w-4 h-4" />
-                                       Emotion
-                                    </button>
-                                 )}
-                                 {isAdminUser && (
-                                    <button
-                                       type="button"
-                                       onClick={() => { setShowTnaAnalytics(true); setShowAnalyticsMenu(false); }}
-                                       role="menuitem"
-                                       className="rohy-topbar-menu-item"
-                                    >
-                                       <Activity className="w-4 h-4" />
-                                       Case Analytics
-                                    </button>
-                                 )}
-                              </div>
-                           </>
-                        )}
-                     </div>
-                  )}
                </div>
 
                {/* End & Debrief — the explicit way for the learner to close
