@@ -63,7 +63,7 @@ export default function OyonSessionsView({ records }) {
    };
 
    return (
-      <div className="space-y-3">
+      <div className="rohy-admin-light space-y-3">
          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-gray-600">
                {rows.length} window{rows.length === 1 ? '' : 's'} across {grouped.length} session{grouped.length === 1 ? '' : 's'}
@@ -179,7 +179,7 @@ function ValenceLine({ windows, startMs, totalMs }) {
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full h-12 rounded bg-gray-100">
          <line x1={PAD} y1={H/2} x2={W-PAD} y2={H/2} stroke="#d1d5db" strokeDasharray="3 3" />
          {points.length >= 2 && (
-            <polyline fill="none" stroke="#7c3aed" strokeWidth="2" points={points.join(' ')} />
+            <polyline fill="none" stroke="#0f766e" strokeWidth="2" points={points.join(' ')} />
          )}
          {!points.length && (
             <text x={W/2} y={H/2 + 4} fontSize="10" fill="#6b7280" textAnchor="middle">no valence estimates</text>
@@ -190,7 +190,7 @@ function ValenceLine({ windows, startMs, totalMs }) {
 
 function Empty({ msg }) {
    return (
-      <div className="rounded-md border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
+      <div className="rohy-admin-light rounded-md border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
          {msg}
       </div>
    );

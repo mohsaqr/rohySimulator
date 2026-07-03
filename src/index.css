@@ -16,18 +16,1099 @@
   --font-mono: "Fira Code", monospace;
 }
 
+:root {
+  --rohy-bg: #e0e6ed;
+  --rohy-surface: #edf1f5;
+  --rohy-surface-muted: #e5ebf1;
+  --rohy-surface-strong: #d8e1eb;
+  --rohy-bg-hover: #d2dbe6;
+  --rohy-border: #b3bfcd;
+  --rohy-border-strong: #8493a6;
+  --rohy-text: #111827;
+  --rohy-muted: #374151;
+  --rohy-accent: #0f766e;
+  --rohy-accent-strong: #0e7490;
+  --rohy-accent-hover: #0f5f69;
+  --rohy-accent-soft: #d9f3f0;
+  --rohy-accent-muted: #bfe8e2;
+  --rohy-accent-border: #5eead4;
+}
+
 html,
 body,
 #root {
   height: 100%;
   overflow: hidden;
-  background-color: black;
-  color: white;
+  background-color: var(--rohy-bg);
+  color: var(--rohy-text);
 }
 
 @layer components {
+  .rohy-offwhite-bg {
+    background-color: var(--rohy-bg);
+    color: var(--rohy-text);
+  }
+
+  .rohy-admin-light {
+    background-color: var(--rohy-bg);
+    color: var(--rohy-text);
+  }
+
+  .rohy-admin-header,
+  .rohy-admin-sidebar {
+    background-color: var(--rohy-surface);
+    color: var(--rohy-text);
+  }
+
+  .rohy-admin-page {
+    background-color: var(--rohy-bg);
+    color: var(--rohy-text);
+  }
+
+  .rohy-card {
+    background-color: var(--rohy-surface);
+    border: 1px solid var(--rohy-border);
+    box-shadow: 0 1px 2px rgb(21 29 42 / 0.05);
+  }
+
+  .rohy-card:hover {
+    background-color: var(--rohy-surface-muted);
+  }
+
+  .rohy-card-active {
+    border-color: var(--rohy-accent-border);
+    box-shadow: inset 3px 0 0 var(--rohy-accent), 0 1px 2px rgb(21 29 42 / 0.05);
+  }
+
+  .rohy-stat-card {
+    background-color: var(--rohy-surface);
+    border: 1px solid var(--rohy-border);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65);
+  }
+
+  .rohy-stat-card-accent {
+    background-color: var(--rohy-surface-strong);
+    border-color: #83c5c5;
+  }
+
+  .rohy-subtle-button {
+    background-color: var(--rohy-surface-muted);
+    border: 1px solid var(--rohy-border);
+    color: var(--rohy-text);
+  }
+
+  .rohy-subtle-button:hover {
+    background-color: var(--rohy-bg-hover);
+  }
+
+  .rohy-admin-light [class*="bg-neutral-"],
+  .rohy-admin-light [class*="bg-gray-"],
+  .rohy-admin-light [class*="bg-slate-"],
+  .rohy-admin-light [class*="bg-zinc-"],
+  .rohy-admin-light [class*="bg-stone-"],
+  .rohy-admin-light [class*="bg-white"],
+  .rohy-admin-light [class*="bg-black"] {
+    background-color: var(--rohy-surface) !important;
+  }
+
+  .rohy-admin-light [class*="bg-gradient"] {
+    background-image: none !important;
+    background-color: var(--rohy-surface) !important;
+  }
+
+  .rohy-admin-light [class*="hover:bg-neutral-"]:hover,
+  .rohy-admin-light [class*="hover:bg-gray-"]:hover,
+  .rohy-admin-light [class*="hover:bg-slate-"]:hover,
+  .rohy-admin-light [class*="hover:bg-zinc-"]:hover,
+  .rohy-admin-light [class*="hover:bg-stone-"]:hover,
+  .rohy-admin-light [class*="hover:bg-white"]:hover,
+  .rohy-admin-light [class*="hover:bg-black"]:hover {
+    background-color: var(--rohy-bg-hover) !important;
+  }
+
+  .rohy-admin-light [class*="border-neutral-"],
+  .rohy-admin-light [class*="border-gray-"],
+  .rohy-admin-light [class*="border-slate-"],
+  .rohy-admin-light [class*="border-zinc-"],
+  .rohy-admin-light [class*="border-stone-"] {
+    border-color: var(--rohy-border) !important;
+  }
+
+  .rohy-admin-light [class*="text-neutral-"],
+  .rohy-admin-light [class*="text-gray-"],
+  .rohy-admin-light [class*="text-slate-"],
+  .rohy-admin-light [class*="placeholder-neutral-"]::placeholder {
+    color: var(--rohy-muted) !important;
+  }
+
+  .rohy-admin-light [class~="text-white"],
+  .rohy-admin-light [class*="text-neutral-100"],
+  .rohy-admin-light [class*="text-neutral-200"],
+  .rohy-admin-light [class*="text-neutral-300"],
+  .rohy-admin-light [class*="text-gray-800"],
+  .rohy-admin-light [class*="text-gray-900"],
+  .rohy-admin-light [class*="text-slate-800"],
+  .rohy-admin-light [class*="text-slate-900"] {
+    color: var(--rohy-text) !important;
+  }
+
+  .rohy-admin-light input,
+  .rohy-admin-light select,
+  .rohy-admin-light textarea {
+    background-color: var(--rohy-surface) !important;
+    border-color: var(--rohy-border) !important;
+    color: var(--rohy-text) !important;
+    color-scheme: light;
+  }
+
+  .rohy-admin-light table {
+    background-color: var(--rohy-surface);
+  }
+
+  .rohy-admin-light button[class*="bg-blue-600"],
+  .rohy-admin-light button[class*="bg-blue-700"],
+  .rohy-admin-light button[class*="bg-purple-600"],
+  .rohy-admin-light button[class*="bg-purple-700"],
+  .rohy-admin-light button[class*="bg-green-600"],
+  .rohy-admin-light button[class*="bg-green-700"],
+  .rohy-admin-light button[class*="bg-red-600"],
+  .rohy-admin-light button[class*="bg-red-700"],
+  .rohy-admin-light button[class*="bg-cyan-600"],
+  .rohy-admin-light button[class*="bg-cyan-700"],
+  .rohy-admin-light a[class*="bg-blue-600"],
+  .rohy-admin-light a[class*="bg-purple-600"],
+  .rohy-admin-light a[class*="bg-green-700"] {
+    color: #ffffff !important;
+  }
+
+  .rohy-admin-light button[class*="bg-blue-600"] *,
+  .rohy-admin-light button[class*="bg-blue-700"] *,
+  .rohy-admin-light button[class*="bg-purple-600"] *,
+  .rohy-admin-light button[class*="bg-purple-700"] *,
+  .rohy-admin-light button[class*="bg-green-600"] *,
+  .rohy-admin-light button[class*="bg-green-700"] *,
+  .rohy-admin-light button[class*="bg-red-600"] *,
+  .rohy-admin-light button[class*="bg-red-700"] *,
+  .rohy-admin-light button[class*="bg-cyan-600"] *,
+  .rohy-admin-light button[class*="bg-cyan-700"] * {
+    color: #ffffff !important;
+  }
+
+  .rohy-admin-light [class*="text-purple-"],
+  .rohy-admin-light [class*="text-violet-"],
+  .rohy-admin-light [class*="text-pink-"] {
+    color: var(--rohy-accent) !important;
+  }
+
+  .rohy-admin-light [class*="border-purple-"],
+  .rohy-admin-light [class*="border-violet-"],
+  .rohy-admin-light [class*="border-pink-"],
+  .rohy-admin-light [class*="hover:border-purple-"]:hover,
+  .rohy-admin-light [class*="hover:border-violet-"]:hover,
+  .rohy-admin-light [class*="hover:border-pink-"]:hover,
+  .rohy-admin-light [class*="focus:border-purple-"]:focus,
+  .rohy-admin-light [class*="focus:border-violet-"]:focus,
+  .rohy-admin-light [class*="focus:border-pink-"]:focus {
+    border-color: var(--rohy-accent-border) !important;
+  }
+
+  .rohy-admin-light [class*="bg-purple-"],
+  .rohy-admin-light [class*="bg-violet-"],
+  .rohy-admin-light [class*="bg-pink-"],
+  .rohy-admin-light [class*="hover:bg-purple-"]:hover,
+  .rohy-admin-light [class*="hover:bg-violet-"]:hover,
+  .rohy-admin-light [class*="hover:bg-pink-"]:hover,
+  .rohy-admin-light [class*="file:bg-purple-"]::file-selector-button,
+  .rohy-admin-light [class*="file:bg-violet-"]::file-selector-button,
+  .rohy-admin-light [class*="file:bg-pink-"]::file-selector-button {
+    background-color: var(--rohy-accent-strong) !important;
+  }
+
+  .rohy-admin-light [class*="bg-purple-50"],
+  .rohy-admin-light [class*="bg-purple-100"],
+  .rohy-admin-light [class*="bg-purple-200"],
+  .rohy-admin-light [class*="bg-purple-500/10"],
+  .rohy-admin-light [class*="bg-purple-600/20"],
+  .rohy-admin-light [class*="bg-purple-700/40"],
+  .rohy-admin-light [class*="bg-purple-900/"],
+  .rohy-admin-light [class*="bg-purple-950/"],
+  .rohy-admin-light [class*="bg-violet-50"],
+  .rohy-admin-light [class*="bg-violet-100"],
+  .rohy-admin-light [class*="bg-violet-200"],
+  .rohy-admin-light [class*="bg-violet-500/10"],
+  .rohy-admin-light [class*="bg-violet-600/20"],
+  .rohy-admin-light [class*="bg-violet-700/40"],
+  .rohy-admin-light [class*="bg-violet-900/"],
+  .rohy-admin-light [class*="bg-violet-950/"],
+  .rohy-admin-light [class*="bg-pink-50"],
+  .rohy-admin-light [class*="bg-pink-100"],
+  .rohy-admin-light [class*="bg-pink-200"],
+  .rohy-admin-light [class*="bg-pink-500/10"],
+  .rohy-admin-light [class*="bg-pink-600/20"],
+  .rohy-admin-light [class*="bg-pink-700/40"],
+  .rohy-admin-light [class*="bg-pink-900/"],
+  .rohy-admin-light [class*="bg-pink-950/"],
+  .rohy-admin-light [class*="hover:bg-purple-50"]:hover,
+  .rohy-admin-light [class*="hover:bg-purple-100"]:hover,
+  .rohy-admin-light [class*="hover:bg-purple-200"]:hover,
+  .rohy-admin-light [class*="hover:bg-purple-900/"]:hover,
+  .rohy-admin-light [class*="hover:bg-purple-950/"]:hover,
+  .rohy-admin-light [class*="hover:bg-violet-50"]:hover,
+  .rohy-admin-light [class*="hover:bg-violet-100"]:hover,
+  .rohy-admin-light [class*="hover:bg-violet-200"]:hover,
+  .rohy-admin-light [class*="hover:bg-violet-900/"]:hover,
+  .rohy-admin-light [class*="hover:bg-violet-950/"]:hover,
+  .rohy-admin-light [class*="hover:bg-pink-50"]:hover,
+  .rohy-admin-light [class*="hover:bg-pink-100"]:hover,
+  .rohy-admin-light [class*="hover:bg-pink-200"]:hover,
+  .rohy-admin-light [class*="hover:bg-pink-900/"]:hover,
+  .rohy-admin-light [class*="hover:bg-pink-950/"]:hover {
+    background-color: var(--rohy-accent-soft) !important;
+  }
+
+  .rohy-admin-light [class*="ring-purple-"],
+  .rohy-admin-light [class*="ring-violet-"],
+  .rohy-admin-light [class*="ring-pink-"],
+  .rohy-admin-light [class*="focus:ring-purple-"]:focus,
+  .rohy-admin-light [class*="focus:ring-violet-"]:focus,
+  .rohy-admin-light [class*="focus:ring-pink-"]:focus {
+    --tw-ring-color: rgb(20 184 166 / 0.42) !important;
+  }
+
+  .rohy-admin-light [class*="from-purple-"],
+  .rohy-admin-light [class*="from-violet-"],
+  .rohy-admin-light [class*="from-pink-"] {
+    --tw-gradient-from: var(--rohy-accent-soft) var(--tw-gradient-from-position) !important;
+    --tw-gradient-to: rgb(217 243 240 / 0) var(--tw-gradient-to-position) !important;
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+  }
+
+  .rohy-admin-light [class*="via-purple-"],
+  .rohy-admin-light [class*="via-violet-"],
+  .rohy-admin-light [class*="via-pink-"] {
+    --tw-gradient-via: var(--rohy-accent-muted) var(--tw-gradient-via-position) !important;
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to) !important;
+  }
+
+  .rohy-admin-light [class*="to-purple-"],
+  .rohy-admin-light [class*="to-violet-"],
+  .rohy-admin-light [class*="to-pink-"] {
+    --tw-gradient-to: var(--rohy-accent-soft) var(--tw-gradient-to-position) !important;
+  }
+
+  .rohy-admin-light [class*="shadow-purple-"],
+  .rohy-admin-light [class*="shadow-violet-"],
+  .rohy-admin-light [class*="shadow-pink-"] {
+    --tw-shadow-color: rgb(15 118 110 / 0.32) !important;
+  }
+
+  .rohy-admin-light [class*="accent-purple-"],
+  .rohy-admin-light [class*="accent-violet-"],
+  .rohy-admin-light [class*="accent-pink-"] {
+    accent-color: var(--rohy-accent) !important;
+  }
+
+  .rohy-count-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 0.375rem;
+    border: 1px solid var(--rohy-border);
+    background-color: var(--rohy-surface-muted);
+    color: var(--rohy-muted);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .rohy-admin-tab {
+    color: var(--rohy-muted);
+    border: 1px solid transparent;
+  }
+
+  .rohy-admin-tab:hover {
+    background-color: var(--rohy-surface-muted);
+    color: var(--rohy-text);
+  }
+
+  .rohy-admin-tab-active {
+    background-color: var(--rohy-surface);
+    border-color: var(--rohy-border);
+    color: var(--rohy-text);
+    box-shadow: inset 0 -2px 0 var(--rohy-accent);
+  }
+
+  .rohy-field {
+    background-color: var(--rohy-surface-muted) !important;
+    border: 1px solid var(--rohy-border) !important;
+    color: var(--rohy-text) !important;
+  }
+
+  .rohy-field:focus {
+    border-color: var(--rohy-accent-strong) !important;
+    outline: none;
+    box-shadow: 0 0 0 2px rgb(20 184 166 / 0.18);
+  }
+
+  .rohy-table-shell {
+    background-color: var(--rohy-surface);
+    border: 1px solid var(--rohy-border);
+    box-shadow: 0 1px 2px rgb(17 24 39 / 0.04);
+  }
+
+  .rohy-table-head {
+    background-color: var(--rohy-surface-strong);
+    color: var(--rohy-text);
+  }
+
+  .rohy-table-row {
+    background-color: var(--rohy-surface);
+  }
+
+  .rohy-table-row:hover {
+    background-color: var(--rohy-surface-muted);
+  }
+
+  .rohy-table-cell {
+    border-bottom: 1px solid var(--rohy-border);
+    color: var(--rohy-text);
+  }
+
+  .rohy-table-muted {
+    color: var(--rohy-muted);
+  }
+
+  .rohy-detail-panel {
+    background-color: var(--rohy-surface-muted);
+    border-top: 1px solid var(--rohy-border);
+  }
+
+  .rohy-menu {
+    background-color: var(--rohy-surface);
+    border: 1px solid var(--rohy-border);
+    box-shadow: 0 12px 28px rgb(17 24 39 / 0.16);
+  }
+
+  .rohy-danger-icon-button {
+    color: var(--rohy-muted);
+  }
+
+  .rohy-danger-icon-button:hover {
+    background-color: #fee2e2;
+    color: #991b1b;
+  }
+
+  .rohy-danger-button {
+    color: #b91c1c;
+  }
+
+  .rohy-danger-button:hover {
+    background-color: #fee2e2;
+    color: #991b1b;
+  }
+
+  .rohy-badge,
+  .rohy-badge-blue,
+  .rohy-badge-cyan,
+  .rohy-badge-teal,
+  .rohy-badge-green,
+  .rohy-badge-amber,
+  .rohy-badge-red,
+  .rohy-badge-violet,
+  .rohy-badge-neutral {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 0.375rem;
+    border: 1px solid;
+    padding: 0.125rem 0.375rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 700;
+  }
+
+  .rohy-badge-blue {
+    background-color: var(--rohy-accent-soft);
+    border-color: var(--rohy-accent-border);
+    color: var(--rohy-accent);
+  }
+
+  .rohy-badge-cyan {
+    background-color: var(--rohy-accent-soft);
+    border-color: var(--rohy-accent-border);
+    color: var(--rohy-accent);
+  }
+
+  .rohy-badge-green {
+    background-color: var(--rohy-accent-soft);
+    border-color: var(--rohy-accent-border);
+    color: var(--rohy-accent);
+  }
+
+  .rohy-badge-amber {
+    background-color: var(--rohy-surface-strong);
+    border-color: var(--rohy-border-strong);
+    color: var(--rohy-muted);
+  }
+
+  .rohy-badge-red {
+    background-color: #fee2e2;
+    border-color: #fca5a5;
+    color: #991b1b;
+  }
+
+  .rohy-badge-violet {
+    background-color: var(--rohy-accent-soft);
+    border-color: var(--rohy-accent-border);
+    color: var(--rohy-accent);
+  }
+
+  .rohy-badge-teal {
+    background-color: var(--rohy-accent-soft);
+    border-color: var(--rohy-accent-border);
+    color: var(--rohy-accent);
+  }
+
+  .rohy-badge-neutral {
+    background-color: var(--rohy-surface-strong);
+    border-color: var(--rohy-border-strong);
+    color: var(--rohy-text);
+  }
+
+  /* Temporary compatibility layer while older components still carry
+     purple/violet/pink Tailwind utilities. Render them as the app's
+     bluish-green accent so no purple leaks into the UI. */
+  [class*="text-purple-"],
+  [class*="text-violet-"],
+  [class*="text-pink-"] {
+    color: var(--rohy-accent) !important;
+  }
+
+  [class*="border-purple-"],
+  [class*="border-violet-"],
+  [class*="border-pink-"],
+  [class*="hover:border-purple-"]:hover,
+  [class*="hover:border-violet-"]:hover,
+  [class*="hover:border-pink-"]:hover,
+  [class*="focus:border-purple-"]:focus,
+  [class*="focus:border-violet-"]:focus,
+  [class*="focus:border-pink-"]:focus {
+    border-color: var(--rohy-accent-border) !important;
+  }
+
+  [class*="bg-purple-"],
+  [class*="bg-violet-"],
+  [class*="bg-pink-"],
+  [class*="hover:bg-purple-"]:hover,
+  [class*="hover:bg-violet-"]:hover,
+  [class*="hover:bg-pink-"]:hover,
+  [class*="file:bg-purple-"]::file-selector-button,
+  [class*="file:bg-violet-"]::file-selector-button,
+  [class*="file:bg-pink-"]::file-selector-button {
+    background-color: var(--rohy-accent-strong) !important;
+  }
+
+  [class*="bg-purple-50"],
+  [class*="bg-purple-100"],
+  [class*="bg-purple-200"],
+  [class*="bg-purple-500/10"],
+  [class*="bg-purple-600/20"],
+  [class*="bg-purple-700/40"],
+  [class*="bg-purple-900/"],
+  [class*="bg-purple-950/"],
+  [class*="bg-violet-50"],
+  [class*="bg-violet-100"],
+  [class*="bg-violet-200"],
+  [class*="bg-violet-500/10"],
+  [class*="bg-violet-600/20"],
+  [class*="bg-violet-700/40"],
+  [class*="bg-violet-900/"],
+  [class*="bg-violet-950/"],
+  [class*="bg-pink-50"],
+  [class*="bg-pink-100"],
+  [class*="bg-pink-200"],
+  [class*="bg-pink-500/10"],
+  [class*="bg-pink-600/20"],
+  [class*="bg-pink-700/40"],
+  [class*="bg-pink-900/"],
+  [class*="bg-pink-950/"],
+  [class*="hover:bg-purple-50"]:hover,
+  [class*="hover:bg-purple-100"]:hover,
+  [class*="hover:bg-purple-200"]:hover,
+  [class*="hover:bg-purple-900/"]:hover,
+  [class*="hover:bg-purple-950/"]:hover,
+  [class*="hover:bg-violet-50"]:hover,
+  [class*="hover:bg-violet-100"]:hover,
+  [class*="hover:bg-violet-200"]:hover,
+  [class*="hover:bg-violet-900/"]:hover,
+  [class*="hover:bg-violet-950/"]:hover,
+  [class*="hover:bg-pink-50"]:hover,
+  [class*="hover:bg-pink-100"]:hover,
+  [class*="hover:bg-pink-200"]:hover,
+  [class*="hover:bg-pink-900/"]:hover,
+  [class*="hover:bg-pink-950/"]:hover {
+    background-color: var(--rohy-accent-soft) !important;
+  }
+
+  [class*="ring-purple-"],
+  [class*="ring-violet-"],
+  [class*="ring-pink-"],
+  [class*="focus:ring-purple-"]:focus,
+  [class*="focus:ring-violet-"]:focus,
+  [class*="focus:ring-pink-"]:focus {
+    --tw-ring-color: rgb(20 184 166 / 0.42) !important;
+  }
+
+  [class*="from-purple-"],
+  [class*="from-violet-"],
+  [class*="from-pink-"] {
+    --tw-gradient-from: var(--rohy-accent-soft) var(--tw-gradient-from-position) !important;
+    --tw-gradient-to: rgb(217 243 240 / 0) var(--tw-gradient-to-position) !important;
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+  }
+
+  [class*="via-purple-"],
+  [class*="via-violet-"],
+  [class*="via-pink-"] {
+    --tw-gradient-via: var(--rohy-accent-muted) var(--tw-gradient-via-position) !important;
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to) !important;
+  }
+
+  [class*="to-purple-"],
+  [class*="to-violet-"],
+  [class*="to-pink-"] {
+    --tw-gradient-to: var(--rohy-accent-soft) var(--tw-gradient-to-position) !important;
+  }
+
+  [class*="shadow-purple-"],
+  [class*="shadow-violet-"],
+  [class*="shadow-pink-"] {
+    --tw-shadow-color: rgb(15 118 110 / 0.32) !important;
+  }
+
+  [class*="accent-purple-"],
+  [class*="accent-violet-"],
+  [class*="accent-pink-"] {
+    accent-color: var(--rohy-accent) !important;
+  }
+
+  .rohy-admin-light [class*="text-blue-"],
+  .rohy-admin-light [class*="text-sky-"],
+  .rohy-admin-light [class*="text-cyan-"],
+  .rohy-admin-light [class*="text-teal-"],
+  .rohy-admin-light [class*="text-green-"],
+  .rohy-admin-light [class*="text-emerald-"],
+  .rohy-admin-light [class*="text-lime-"],
+  .rohy-admin-light [class*="text-indigo-"],
+  .rohy-admin-light [class*="text-fuchsia-"] {
+    color: var(--rohy-accent) !important;
+  }
+
+  .rohy-admin-light [class*="border-blue-"],
+  .rohy-admin-light [class*="border-sky-"],
+  .rohy-admin-light [class*="border-cyan-"],
+  .rohy-admin-light [class*="border-teal-"],
+  .rohy-admin-light [class*="border-green-"],
+  .rohy-admin-light [class*="border-emerald-"],
+  .rohy-admin-light [class*="border-lime-"],
+  .rohy-admin-light [class*="border-indigo-"],
+  .rohy-admin-light [class*="border-fuchsia-"],
+  .rohy-admin-light [class*="hover:border-blue-"]:hover,
+  .rohy-admin-light [class*="hover:border-sky-"]:hover,
+  .rohy-admin-light [class*="hover:border-cyan-"]:hover,
+  .rohy-admin-light [class*="hover:border-teal-"]:hover,
+  .rohy-admin-light [class*="hover:border-green-"]:hover,
+  .rohy-admin-light [class*="hover:border-emerald-"]:hover,
+  .rohy-admin-light [class*="hover:border-lime-"]:hover,
+  .rohy-admin-light [class*="hover:border-indigo-"]:hover,
+  .rohy-admin-light [class*="hover:border-fuchsia-"]:hover,
+  .rohy-admin-light [class*="focus:border-blue-"]:focus,
+  .rohy-admin-light [class*="focus:border-sky-"]:focus,
+  .rohy-admin-light [class*="focus:border-cyan-"]:focus,
+  .rohy-admin-light [class*="focus:border-teal-"]:focus,
+  .rohy-admin-light [class*="focus:border-green-"]:focus,
+  .rohy-admin-light [class*="focus:border-emerald-"]:focus,
+  .rohy-admin-light [class*="focus:border-lime-"]:focus,
+  .rohy-admin-light [class*="focus:border-indigo-"]:focus,
+  .rohy-admin-light [class*="focus:border-fuchsia-"]:focus {
+    border-color: var(--rohy-accent-border) !important;
+  }
+
+  .rohy-admin-light [class*="bg-blue-"],
+  .rohy-admin-light [class*="bg-sky-"],
+  .rohy-admin-light [class*="bg-cyan-"],
+  .rohy-admin-light [class*="bg-teal-"],
+  .rohy-admin-light [class*="bg-green-"],
+  .rohy-admin-light [class*="bg-emerald-"],
+  .rohy-admin-light [class*="bg-lime-"],
+  .rohy-admin-light [class*="bg-indigo-"],
+  .rohy-admin-light [class*="bg-fuchsia-"],
+  .rohy-admin-light [class*="hover:bg-blue-"]:hover,
+  .rohy-admin-light [class*="hover:bg-sky-"]:hover,
+  .rohy-admin-light [class*="hover:bg-cyan-"]:hover,
+  .rohy-admin-light [class*="hover:bg-teal-"]:hover,
+  .rohy-admin-light [class*="hover:bg-green-"]:hover,
+  .rohy-admin-light [class*="hover:bg-emerald-"]:hover,
+  .rohy-admin-light [class*="hover:bg-lime-"]:hover,
+  .rohy-admin-light [class*="hover:bg-indigo-"]:hover,
+  .rohy-admin-light [class*="hover:bg-fuchsia-"]:hover,
+  .rohy-admin-light [class*="file:bg-blue-"]::file-selector-button,
+  .rohy-admin-light [class*="file:bg-sky-"]::file-selector-button,
+  .rohy-admin-light [class*="file:bg-cyan-"]::file-selector-button,
+  .rohy-admin-light [class*="file:bg-teal-"]::file-selector-button,
+  .rohy-admin-light [class*="file:bg-green-"]::file-selector-button,
+  .rohy-admin-light [class*="file:bg-emerald-"]::file-selector-button,
+  .rohy-admin-light [class*="file:bg-lime-"]::file-selector-button,
+  .rohy-admin-light [class*="file:bg-indigo-"]::file-selector-button,
+  .rohy-admin-light [class*="file:bg-fuchsia-"]::file-selector-button {
+    background-color: var(--rohy-accent-strong) !important;
+  }
+
+  .rohy-admin-light [class*="bg-blue-50"],
+  .rohy-admin-light [class*="bg-blue-100"],
+  .rohy-admin-light [class*="bg-blue-200"],
+  .rohy-admin-light [class*="bg-blue-500/"],
+  .rohy-admin-light [class*="bg-blue-600/"],
+  .rohy-admin-light [class*="bg-blue-700/"],
+  .rohy-admin-light [class*="bg-blue-800/"],
+  .rohy-admin-light [class*="bg-blue-900/"],
+  .rohy-admin-light [class*="bg-blue-950/"],
+  .rohy-admin-light [class*="bg-sky-50"],
+  .rohy-admin-light [class*="bg-sky-100"],
+  .rohy-admin-light [class*="bg-sky-200"],
+  .rohy-admin-light [class*="bg-sky-500/"],
+  .rohy-admin-light [class*="bg-sky-600/"],
+  .rohy-admin-light [class*="bg-sky-700/"],
+  .rohy-admin-light [class*="bg-sky-800/"],
+  .rohy-admin-light [class*="bg-sky-900/"],
+  .rohy-admin-light [class*="bg-sky-950/"],
+  .rohy-admin-light [class*="bg-cyan-50"],
+  .rohy-admin-light [class*="bg-cyan-100"],
+  .rohy-admin-light [class*="bg-cyan-200"],
+  .rohy-admin-light [class*="bg-cyan-500/"],
+  .rohy-admin-light [class*="bg-cyan-600/"],
+  .rohy-admin-light [class*="bg-cyan-700/"],
+  .rohy-admin-light [class*="bg-cyan-800/"],
+  .rohy-admin-light [class*="bg-cyan-900/"],
+  .rohy-admin-light [class*="bg-cyan-950/"],
+  .rohy-admin-light [class*="bg-teal-50"],
+  .rohy-admin-light [class*="bg-teal-100"],
+  .rohy-admin-light [class*="bg-teal-200"],
+  .rohy-admin-light [class*="bg-teal-500/"],
+  .rohy-admin-light [class*="bg-teal-600/"],
+  .rohy-admin-light [class*="bg-teal-700/"],
+  .rohy-admin-light [class*="bg-teal-800/"],
+  .rohy-admin-light [class*="bg-teal-900/"],
+  .rohy-admin-light [class*="bg-teal-950/"],
+  .rohy-admin-light [class*="bg-green-50"],
+  .rohy-admin-light [class*="bg-green-100"],
+  .rohy-admin-light [class*="bg-green-200"],
+  .rohy-admin-light [class*="bg-green-500/"],
+  .rohy-admin-light [class*="bg-green-600/"],
+  .rohy-admin-light [class*="bg-green-700/"],
+  .rohy-admin-light [class*="bg-green-800/"],
+  .rohy-admin-light [class*="bg-green-900/"],
+  .rohy-admin-light [class*="bg-green-950/"],
+  .rohy-admin-light [class*="bg-emerald-50"],
+  .rohy-admin-light [class*="bg-emerald-100"],
+  .rohy-admin-light [class*="bg-emerald-200"],
+  .rohy-admin-light [class*="bg-emerald-500/"],
+  .rohy-admin-light [class*="bg-emerald-600/"],
+  .rohy-admin-light [class*="bg-emerald-700/"],
+  .rohy-admin-light [class*="bg-emerald-800/"],
+  .rohy-admin-light [class*="bg-emerald-900/"],
+  .rohy-admin-light [class*="bg-emerald-950/"],
+  .rohy-admin-light [class*="bg-lime-50"],
+  .rohy-admin-light [class*="bg-lime-100"],
+  .rohy-admin-light [class*="bg-lime-200"],
+  .rohy-admin-light [class*="bg-lime-500/"],
+  .rohy-admin-light [class*="bg-lime-600/"],
+  .rohy-admin-light [class*="bg-lime-700/"],
+  .rohy-admin-light [class*="bg-lime-800/"],
+  .rohy-admin-light [class*="bg-lime-900/"],
+  .rohy-admin-light [class*="bg-lime-950/"],
+  .rohy-admin-light [class*="bg-indigo-50"],
+  .rohy-admin-light [class*="bg-indigo-100"],
+  .rohy-admin-light [class*="bg-indigo-200"],
+  .rohy-admin-light [class*="bg-indigo-500/"],
+  .rohy-admin-light [class*="bg-indigo-600/"],
+  .rohy-admin-light [class*="bg-indigo-700/"],
+  .rohy-admin-light [class*="bg-indigo-800/"],
+  .rohy-admin-light [class*="bg-indigo-900/"],
+  .rohy-admin-light [class*="bg-indigo-950/"],
+  .rohy-admin-light [class*="bg-fuchsia-50"],
+  .rohy-admin-light [class*="bg-fuchsia-100"],
+  .rohy-admin-light [class*="bg-fuchsia-200"],
+  .rohy-admin-light [class*="bg-fuchsia-500/"],
+  .rohy-admin-light [class*="bg-fuchsia-600/"],
+  .rohy-admin-light [class*="bg-fuchsia-700/"],
+  .rohy-admin-light [class*="bg-fuchsia-800/"],
+  .rohy-admin-light [class*="bg-fuchsia-900/"],
+  .rohy-admin-light [class*="bg-fuchsia-950/"] {
+    background-color: var(--rohy-accent-soft) !important;
+  }
+
+  .rohy-admin-light [class*="text-amber-"],
+  .rohy-admin-light [class*="text-orange-"],
+  .rohy-admin-light [class*="text-yellow-"] {
+    color: var(--rohy-muted) !important;
+  }
+
+  .rohy-admin-light [class*="bg-amber-"],
+  .rohy-admin-light [class*="bg-orange-"],
+  .rohy-admin-light [class*="bg-yellow-"],
+  .rohy-admin-light [class*="hover:bg-amber-"]:hover,
+  .rohy-admin-light [class*="hover:bg-orange-"]:hover,
+  .rohy-admin-light [class*="hover:bg-yellow-"]:hover {
+    background-color: var(--rohy-surface-muted) !important;
+  }
+
+  .rohy-admin-light [class*="border-amber-"],
+  .rohy-admin-light [class*="border-orange-"],
+  .rohy-admin-light [class*="border-yellow-"],
+  .rohy-admin-light [class*="hover:border-amber-"]:hover,
+  .rohy-admin-light [class*="hover:border-orange-"]:hover,
+  .rohy-admin-light [class*="hover:border-yellow-"]:hover {
+    border-color: var(--rohy-border-strong) !important;
+  }
+
+  .rohy-admin-light [class*="text-red-"],
+  .rohy-admin-light [class*="text-rose-"] {
+    color: #b91c1c !important;
+  }
+
+  .rohy-admin-light [class*="border-red-"],
+  .rohy-admin-light [class*="border-rose-"],
+  .rohy-admin-light [class*="hover:border-red-"]:hover,
+  .rohy-admin-light [class*="hover:border-rose-"]:hover {
+    border-color: #fca5a5 !important;
+  }
+
+  .rohy-admin-light [class*="bg-red-50"],
+  .rohy-admin-light [class*="bg-red-100"],
+  .rohy-admin-light [class*="bg-red-200"],
+  .rohy-admin-light [class*="bg-red-500/"],
+  .rohy-admin-light [class*="bg-red-600/"],
+  .rohy-admin-light [class*="bg-red-700/"],
+  .rohy-admin-light [class*="bg-red-800/"],
+  .rohy-admin-light [class*="bg-red-900/"],
+  .rohy-admin-light [class*="bg-red-950/"],
+  .rohy-admin-light [class*="bg-rose-50"],
+  .rohy-admin-light [class*="bg-rose-100"],
+  .rohy-admin-light [class*="bg-rose-200"],
+  .rohy-admin-light [class*="bg-rose-500/"],
+  .rohy-admin-light [class*="bg-rose-600/"],
+  .rohy-admin-light [class*="bg-rose-700/"],
+  .rohy-admin-light [class*="bg-rose-800/"],
+  .rohy-admin-light [class*="bg-rose-900/"],
+  .rohy-admin-light [class*="bg-rose-950/"],
+  .rohy-admin-light [class*="hover:bg-red-900/"]:hover,
+  .rohy-admin-light [class*="hover:bg-red-950/"]:hover,
+  .rohy-admin-light [class*="hover:bg-rose-900/"]:hover,
+  .rohy-admin-light [class*="hover:bg-rose-950/"]:hover {
+    background-color: #fee2e2 !important;
+  }
+
+  .rohy-admin-light [class*="bg-red-600"],
+  .rohy-admin-light [class*="bg-red-700"],
+  .rohy-admin-light [class*="bg-rose-600"],
+  .rohy-admin-light [class*="bg-rose-700"],
+  .rohy-admin-light [class*="hover:bg-red-600"]:hover,
+  .rohy-admin-light [class*="hover:bg-red-700"]:hover,
+  .rohy-admin-light [class*="hover:bg-rose-600"]:hover,
+  .rohy-admin-light [class*="hover:bg-rose-700"]:hover {
+    background-color: #b91c1c !important;
+    color: #ffffff !important;
+  }
+
+  .rohy-admin-light button[class*="bg-sky-600"],
+  .rohy-admin-light button[class*="bg-sky-700"],
+  .rohy-admin-light button[class*="bg-teal-600"],
+  .rohy-admin-light button[class*="bg-teal-700"],
+  .rohy-admin-light button[class*="bg-emerald-600"],
+  .rohy-admin-light button[class*="bg-emerald-700"],
+  .rohy-admin-light button[class*="bg-lime-600"],
+  .rohy-admin-light button[class*="bg-lime-700"],
+  .rohy-admin-light button[class*="bg-indigo-600"],
+  .rohy-admin-light button[class*="bg-indigo-700"],
+  .rohy-admin-light button[class*="bg-fuchsia-600"],
+  .rohy-admin-light button[class*="bg-fuchsia-700"],
+  .rohy-admin-light a[class*="bg-sky-600"],
+  .rohy-admin-light a[class*="bg-teal-600"],
+  .rohy-admin-light a[class*="bg-emerald-600"],
+  .rohy-admin-light a[class*="bg-indigo-600"],
+  .rohy-admin-light a[class*="bg-fuchsia-600"] {
+    color: #ffffff !important;
+  }
+
+  .rohy-admin-light button[class*="bg-sky-600"] *,
+  .rohy-admin-light button[class*="bg-sky-700"] *,
+  .rohy-admin-light button[class*="bg-teal-600"] *,
+  .rohy-admin-light button[class*="bg-teal-700"] *,
+  .rohy-admin-light button[class*="bg-emerald-600"] *,
+  .rohy-admin-light button[class*="bg-emerald-700"] *,
+  .rohy-admin-light button[class*="bg-lime-600"] *,
+  .rohy-admin-light button[class*="bg-lime-700"] *,
+  .rohy-admin-light button[class*="bg-indigo-600"] *,
+  .rohy-admin-light button[class*="bg-indigo-700"] *,
+  .rohy-admin-light button[class*="bg-fuchsia-600"] *,
+  .rohy-admin-light button[class*="bg-fuchsia-700"] * {
+    color: #ffffff !important;
+  }
+
+  .rohy-admin-sidebar button:not(:hover):not([class~="bg-teal-50"]):not([class~="bg-teal-700"]) {
+    background-color: transparent !important;
+  }
+
+  .rohy-admin-light [class~="bg-blue-500"],
+  .rohy-admin-light [class~="bg-blue-600"],
+  .rohy-admin-light [class~="bg-blue-700"],
+  .rohy-admin-light [class~="bg-sky-500"],
+  .rohy-admin-light [class~="bg-sky-600"],
+  .rohy-admin-light [class~="bg-sky-700"],
+  .rohy-admin-light [class~="bg-cyan-500"],
+  .rohy-admin-light [class~="bg-cyan-600"],
+  .rohy-admin-light [class~="bg-cyan-700"],
+  .rohy-admin-light [class~="bg-teal-500"],
+  .rohy-admin-light [class~="bg-teal-600"],
+  .rohy-admin-light [class~="bg-teal-700"],
+  .rohy-admin-light [class~="bg-green-500"],
+  .rohy-admin-light [class~="bg-green-600"],
+  .rohy-admin-light [class~="bg-green-700"],
+  .rohy-admin-light [class~="bg-emerald-500"],
+  .rohy-admin-light [class~="bg-emerald-600"],
+  .rohy-admin-light [class~="bg-emerald-700"],
+  .rohy-admin-light [class~="bg-lime-500"],
+  .rohy-admin-light [class~="bg-lime-600"],
+  .rohy-admin-light [class~="bg-lime-700"],
+  .rohy-admin-light [class~="bg-indigo-500"],
+  .rohy-admin-light [class~="bg-indigo-600"],
+  .rohy-admin-light [class~="bg-indigo-700"],
+  .rohy-admin-light [class~="bg-fuchsia-500"],
+  .rohy-admin-light [class~="bg-fuchsia-600"],
+  .rohy-admin-light [class~="bg-fuchsia-700"],
+  .rohy-admin-light [class~="hover:bg-blue-500"]:hover,
+  .rohy-admin-light [class~="hover:bg-blue-600"]:hover,
+  .rohy-admin-light [class~="hover:bg-blue-700"]:hover,
+  .rohy-admin-light [class~="hover:bg-sky-500"]:hover,
+  .rohy-admin-light [class~="hover:bg-sky-600"]:hover,
+  .rohy-admin-light [class~="hover:bg-sky-700"]:hover,
+  .rohy-admin-light [class~="hover:bg-cyan-500"]:hover,
+  .rohy-admin-light [class~="hover:bg-cyan-600"]:hover,
+  .rohy-admin-light [class~="hover:bg-cyan-700"]:hover,
+  .rohy-admin-light [class~="hover:bg-teal-500"]:hover,
+  .rohy-admin-light [class~="hover:bg-teal-600"]:hover,
+  .rohy-admin-light [class~="hover:bg-teal-700"]:hover,
+  .rohy-admin-light [class~="hover:bg-green-500"]:hover,
+  .rohy-admin-light [class~="hover:bg-green-600"]:hover,
+  .rohy-admin-light [class~="hover:bg-green-700"]:hover,
+  .rohy-admin-light [class~="hover:bg-emerald-500"]:hover,
+  .rohy-admin-light [class~="hover:bg-emerald-600"]:hover,
+  .rohy-admin-light [class~="hover:bg-emerald-700"]:hover,
+  .rohy-admin-light [class~="hover:bg-lime-500"]:hover,
+  .rohy-admin-light [class~="hover:bg-lime-600"]:hover,
+  .rohy-admin-light [class~="hover:bg-lime-700"]:hover,
+  .rohy-admin-light [class~="hover:bg-indigo-500"]:hover,
+  .rohy-admin-light [class~="hover:bg-indigo-600"]:hover,
+  .rohy-admin-light [class~="hover:bg-indigo-700"]:hover,
+  .rohy-admin-light [class~="hover:bg-fuchsia-500"]:hover,
+  .rohy-admin-light [class~="hover:bg-fuchsia-600"]:hover,
+  .rohy-admin-light [class~="hover:bg-fuchsia-700"]:hover {
+    background-color: var(--rohy-accent-strong) !important;
+    color: #ffffff !important;
+  }
+
+  .rohy-admin-light [class~="bg-blue-500"] *,
+  .rohy-admin-light [class~="bg-blue-600"] *,
+  .rohy-admin-light [class~="bg-blue-700"] *,
+  .rohy-admin-light [class~="bg-sky-500"] *,
+  .rohy-admin-light [class~="bg-sky-600"] *,
+  .rohy-admin-light [class~="bg-sky-700"] *,
+  .rohy-admin-light [class~="bg-cyan-500"] *,
+  .rohy-admin-light [class~="bg-cyan-600"] *,
+  .rohy-admin-light [class~="bg-cyan-700"] *,
+  .rohy-admin-light [class~="bg-teal-500"] *,
+  .rohy-admin-light [class~="bg-teal-600"] *,
+  .rohy-admin-light [class~="bg-teal-700"] *,
+  .rohy-admin-light [class~="bg-green-500"] *,
+  .rohy-admin-light [class~="bg-green-600"] *,
+  .rohy-admin-light [class~="bg-green-700"] *,
+  .rohy-admin-light [class~="bg-emerald-500"] *,
+  .rohy-admin-light [class~="bg-emerald-600"] *,
+  .rohy-admin-light [class~="bg-emerald-700"] *,
+  .rohy-admin-light [class~="bg-lime-500"] *,
+  .rohy-admin-light [class~="bg-lime-600"] *,
+  .rohy-admin-light [class~="bg-lime-700"] *,
+  .rohy-admin-light [class~="bg-indigo-500"] *,
+  .rohy-admin-light [class~="bg-indigo-600"] *,
+  .rohy-admin-light [class~="bg-indigo-700"] *,
+  .rohy-admin-light [class~="bg-fuchsia-500"] *,
+  .rohy-admin-light [class~="bg-fuchsia-600"] *,
+  .rohy-admin-light [class~="bg-fuchsia-700"] * {
+    color: #ffffff !important;
+  }
+
+  /* Old dark-theme section panels used colored alpha fills such as
+     bg-purple-950/20 and bg-teal-900/40. In the light admin UI those
+     should read as neutral panels, with color reserved for small accents. */
+  .rohy-admin-light [class*="bg-blue-800/"],
+  .rohy-admin-light [class*="bg-blue-900/"],
+  .rohy-admin-light [class*="bg-blue-950/"],
+  .rohy-admin-light [class*="bg-sky-800/"],
+  .rohy-admin-light [class*="bg-sky-900/"],
+  .rohy-admin-light [class*="bg-sky-950/"],
+  .rohy-admin-light [class*="bg-cyan-800/"],
+  .rohy-admin-light [class*="bg-cyan-900/"],
+  .rohy-admin-light [class*="bg-cyan-950/"],
+  .rohy-admin-light [class*="bg-teal-800/"],
+  .rohy-admin-light [class*="bg-teal-900/"],
+  .rohy-admin-light [class*="bg-teal-950/"],
+  .rohy-admin-light [class*="bg-green-800/"],
+  .rohy-admin-light [class*="bg-green-900/"],
+  .rohy-admin-light [class*="bg-green-950/"],
+  .rohy-admin-light [class*="bg-emerald-800/"],
+  .rohy-admin-light [class*="bg-emerald-900/"],
+  .rohy-admin-light [class*="bg-emerald-950/"],
+  .rohy-admin-light [class*="bg-lime-800/"],
+  .rohy-admin-light [class*="bg-lime-900/"],
+  .rohy-admin-light [class*="bg-lime-950/"],
+  .rohy-admin-light [class*="bg-indigo-800/"],
+  .rohy-admin-light [class*="bg-indigo-900/"],
+  .rohy-admin-light [class*="bg-indigo-950/"],
+  .rohy-admin-light [class*="bg-fuchsia-800/"],
+  .rohy-admin-light [class*="bg-fuchsia-900/"],
+  .rohy-admin-light [class*="bg-fuchsia-950/"],
+  .rohy-admin-light [class*="bg-purple-800/"],
+  .rohy-admin-light [class*="bg-purple-900/"],
+  .rohy-admin-light [class*="bg-purple-950/"],
+  .rohy-admin-light [class*="bg-violet-800/"],
+  .rohy-admin-light [class*="bg-violet-900/"],
+  .rohy-admin-light [class*="bg-violet-950/"],
+  .rohy-admin-light [class*="bg-pink-800/"],
+  .rohy-admin-light [class*="bg-pink-900/"],
+  .rohy-admin-light [class*="bg-pink-950/"],
+  .rohy-admin-light [class*="bg-amber-800/"],
+  .rohy-admin-light [class*="bg-amber-900/"],
+  .rohy-admin-light [class*="bg-amber-950/"],
+  .rohy-admin-light [class*="bg-orange-800/"],
+  .rohy-admin-light [class*="bg-orange-900/"],
+  .rohy-admin-light [class*="bg-orange-950/"],
+  .rohy-admin-light [class*="bg-yellow-800/"],
+  .rohy-admin-light [class*="bg-yellow-900/"],
+  .rohy-admin-light [class*="bg-yellow-950/"] {
+    background-color: var(--rohy-surface-muted) !important;
+  }
+
+  .rohy-admin-light [class*="border-blue-700/"],
+  .rohy-admin-light [class*="border-blue-800"],
+  .rohy-admin-light [class*="border-blue-900"],
+  .rohy-admin-light [class*="border-blue-950"],
+  .rohy-admin-light [class*="border-sky-700/"],
+  .rohy-admin-light [class*="border-sky-800"],
+  .rohy-admin-light [class*="border-sky-900"],
+  .rohy-admin-light [class*="border-sky-950"],
+  .rohy-admin-light [class*="border-cyan-700/"],
+  .rohy-admin-light [class*="border-cyan-800"],
+  .rohy-admin-light [class*="border-cyan-900"],
+  .rohy-admin-light [class*="border-cyan-950"],
+  .rohy-admin-light [class*="border-teal-700/"],
+  .rohy-admin-light [class*="border-teal-800"],
+  .rohy-admin-light [class*="border-teal-900"],
+  .rohy-admin-light [class*="border-teal-950"],
+  .rohy-admin-light [class*="border-green-700/"],
+  .rohy-admin-light [class*="border-green-800"],
+  .rohy-admin-light [class*="border-green-900"],
+  .rohy-admin-light [class*="border-green-950"],
+  .rohy-admin-light [class*="border-emerald-700/"],
+  .rohy-admin-light [class*="border-emerald-800"],
+  .rohy-admin-light [class*="border-emerald-900"],
+  .rohy-admin-light [class*="border-emerald-950"],
+  .rohy-admin-light [class*="border-lime-700/"],
+  .rohy-admin-light [class*="border-lime-800"],
+  .rohy-admin-light [class*="border-lime-900"],
+  .rohy-admin-light [class*="border-lime-950"],
+  .rohy-admin-light [class*="border-indigo-700/"],
+  .rohy-admin-light [class*="border-indigo-800"],
+  .rohy-admin-light [class*="border-indigo-900"],
+  .rohy-admin-light [class*="border-indigo-950"],
+  .rohy-admin-light [class*="border-fuchsia-700/"],
+  .rohy-admin-light [class*="border-fuchsia-800"],
+  .rohy-admin-light [class*="border-fuchsia-900"],
+  .rohy-admin-light [class*="border-fuchsia-950"],
+  .rohy-admin-light [class*="border-purple-700/"],
+  .rohy-admin-light [class*="border-purple-800"],
+  .rohy-admin-light [class*="border-purple-900"],
+  .rohy-admin-light [class*="border-purple-950"],
+  .rohy-admin-light [class*="border-violet-700/"],
+  .rohy-admin-light [class*="border-violet-800"],
+  .rohy-admin-light [class*="border-violet-900"],
+  .rohy-admin-light [class*="border-violet-950"],
+  .rohy-admin-light [class*="border-pink-700/"],
+  .rohy-admin-light [class*="border-pink-800"],
+  .rohy-admin-light [class*="border-pink-900"],
+  .rohy-admin-light [class*="border-pink-950"],
+  .rohy-admin-light [class*="border-amber-700/"],
+  .rohy-admin-light [class*="border-amber-800"],
+  .rohy-admin-light [class*="border-amber-900"],
+  .rohy-admin-light [class*="border-amber-950"],
+  .rohy-admin-light [class*="border-orange-700/"],
+  .rohy-admin-light [class*="border-orange-800"],
+  .rohy-admin-light [class*="border-orange-900"],
+  .rohy-admin-light [class*="border-orange-950"],
+  .rohy-admin-light [class*="border-yellow-700/"],
+  .rohy-admin-light [class*="border-yellow-800"],
+  .rohy-admin-light [class*="border-yellow-900"],
+  .rohy-admin-light [class*="border-yellow-950"] {
+    border-color: var(--rohy-border) !important;
+  }
+
+  .rohy-admin-light input:not([type="checkbox"]):not([type="radio"]):not(:focus),
+  .rohy-admin-light select:not(:focus),
+  .rohy-admin-light textarea:not(:focus) {
+    border-color: var(--rohy-border) !important;
+  }
+
+  .rohy-admin-light input:not([type="checkbox"]):not([type="radio"]):focus,
+  .rohy-admin-light select:focus,
+  .rohy-admin-light textarea:focus {
+    border-color: var(--rohy-accent-strong) !important;
+  }
+
+  .rohy-admin-light [class~="bg-purple-500"],
+  .rohy-admin-light [class~="bg-purple-600"],
+  .rohy-admin-light [class~="bg-purple-700"],
+  .rohy-admin-light [class~="bg-violet-500"],
+  .rohy-admin-light [class~="bg-violet-600"],
+  .rohy-admin-light [class~="bg-violet-700"],
+  .rohy-admin-light [class~="bg-pink-500"],
+  .rohy-admin-light [class~="bg-pink-600"],
+  .rohy-admin-light [class~="bg-pink-700"],
+  .rohy-admin-light [class~="hover:bg-purple-500"]:hover,
+  .rohy-admin-light [class~="hover:bg-purple-600"]:hover,
+  .rohy-admin-light [class~="hover:bg-purple-700"]:hover,
+  .rohy-admin-light [class~="hover:bg-violet-500"]:hover,
+  .rohy-admin-light [class~="hover:bg-violet-600"]:hover,
+  .rohy-admin-light [class~="hover:bg-violet-700"]:hover,
+  .rohy-admin-light [class~="hover:bg-pink-500"]:hover,
+  .rohy-admin-light [class~="hover:bg-pink-600"]:hover,
+  .rohy-admin-light [class~="hover:bg-pink-700"]:hover {
+    background-color: var(--rohy-accent-strong) !important;
+    color: #ffffff !important;
+  }
+
+  .rohy-admin-light [class~="bg-purple-500"] *,
+  .rohy-admin-light [class~="bg-purple-600"] *,
+  .rohy-admin-light [class~="bg-purple-700"] *,
+  .rohy-admin-light [class~="bg-violet-500"] *,
+  .rohy-admin-light [class~="bg-violet-600"] *,
+  .rohy-admin-light [class~="bg-violet-700"] *,
+  .rohy-admin-light [class~="bg-pink-500"] *,
+  .rohy-admin-light [class~="bg-pink-600"] *,
+  .rohy-admin-light [class~="bg-pink-700"] * {
+    color: #ffffff !important;
+  }
+
   .input-dark {
-    @apply w-full bg-neutral-800 border border-neutral-700 rounded p-2 text-sm focus:border-purple-500 outline-none;
+    @apply w-full bg-neutral-800 border border-neutral-700 rounded p-2 text-sm focus:border-cyan-600 outline-none;
   }
   
   .label-xs {

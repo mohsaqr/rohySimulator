@@ -34,7 +34,7 @@ export default function OyonAffectV2({ records, loading }) {
    }
 
    return (
-      <div className="space-y-3">
+      <div className="rohy-admin-light space-y-3">
          <section className="rounded-md border border-gray-200 bg-white p-3 shadow-sm">
             <div className="mb-2 flex items-center justify-between gap-3 border-b border-gray-100 pb-2">
                <div>
@@ -240,7 +240,7 @@ function AffectPlane({ points }) {
          <text x={S / 2} y={S - 6} textAnchor="middle" fontSize={10} fill="#6b7280">low arousal</text>
          <text x={6} y={S / 2 - 6} fontSize={10} fill="#6b7280">negative</text>
          <text x={S - 6} y={S / 2 - 6} textAnchor="end" fontSize={10} fill="#6b7280">positive</text>
-         <path d={path} fill="none" stroke="#7c3aed" strokeWidth={1.5} opacity={0.32} strokeLinejoin="round" />
+         <path d={path} fill="none" stroke="#0f766e" strokeWidth={1.5} opacity={0.32} strokeLinejoin="round" />
          {trail.map((p, i) => {
             const t = (i + 1) / trail.length;
             return (
@@ -356,7 +356,7 @@ function EmptyPanelText({ children }) {
 
 function EmptyState({ icon, text, detail }) {
    return (
-      <div className="rounded-md border border-gray-200 bg-white p-8 text-center text-sm text-gray-600 shadow-sm">
+      <div className="rohy-admin-light rounded-md border border-gray-200 bg-white p-8 text-center text-sm text-gray-600 shadow-sm">
          {icon && <div className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-md bg-gray-50 text-gray-400">{icon}</div>}
          <div className="font-medium text-gray-800">{text}</div>
          {detail && <div className="mt-1 text-xs text-gray-500">{detail}</div>}

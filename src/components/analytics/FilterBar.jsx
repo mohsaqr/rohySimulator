@@ -359,7 +359,7 @@ export default function FilterBar({
     if (showDates && values.to) chips.push({ key: 'to', text: `To: ${values.to}` });
 
     return (
-        <div className="border-b border-neutral-700 bg-neutral-800 px-3 pt-2 pb-2">
+        <div className="rohy-admin-light border-b border-neutral-700 px-3 pt-2 pb-2">
             <div className="flex flex-wrap items-end gap-2">
                 {normalized.map((f) => (
                     <Combobox

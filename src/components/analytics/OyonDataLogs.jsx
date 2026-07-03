@@ -170,7 +170,7 @@ export default function OyonDataLogs() {
     }
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="rohy-admin-light flex flex-col h-full">
             <FilterBar
                 filters={filterDefs}
                 values={filters}
@@ -240,7 +240,7 @@ export default function OyonDataLogs() {
 
 function Notice({ icon = false, children }) {
     return (
-        <div className="rounded-md border border-gray-200 bg-white p-6 text-center text-sm text-gray-600">
+        <div className="rohy-admin-light rounded-md border border-gray-200 bg-white p-6 text-center text-sm text-gray-600">
             {icon && <AlertTriangle className="w-5 h-5 mx-auto mb-2 text-amber-400" />}
             {children}
         </div>
@@ -253,7 +253,7 @@ function Notice({ icon = false, children }) {
 function DisabledOnServer({ code, message }) {
     const isImportFail = code === 'OYON_IMPORT_FAILED';
     return (
-        <div className="p-6 max-w-3xl">
+        <div className="rohy-admin-light p-6 max-w-3xl">
             <div className="rounded-md border border-amber-700/40 bg-amber-950/20 p-5 text-sm">
                 <div className="flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />

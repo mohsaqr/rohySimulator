@@ -48,13 +48,13 @@ const ROUTE_OPTIONS = ['oral', 'iv', 'im', 'sc', 'topical', 'inhaled', 'sublingu
 
 function ScopeBadge({ scope, isCurated }) {
     const map = {
-        platform: { label: isCurated ? 'Curated' : 'Platform', color: 'bg-cyan-900/40 text-cyan-300 border-cyan-700' },
-        tenant:   { label: 'Tenant',   color: 'bg-amber-900/40 text-amber-300 border-amber-700' },
-        user:     { label: 'My',       color: 'bg-emerald-900/40 text-emerald-300 border-emerald-700' },
-        session:  { label: 'Session',  color: 'bg-neutral-800 text-neutral-400 border-neutral-700' },
+        platform: { label: isCurated ? 'Curated' : 'Platform', color: 'rohy-badge-cyan' },
+        tenant:   { label: 'Tenant',   color: 'rohy-badge-amber' },
+        user:     { label: 'My',       color: 'rohy-badge-green' },
+        session:  { label: 'Session',  color: 'rohy-badge-neutral' },
     };
     const meta = map[scope] || map.platform;
-    return <span className={`inline-flex items-center text-[10px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded border ${meta.color}`}>{meta.label}</span>;
+    return <span className={`${meta.color} uppercase tracking-wide`}>{meta.label}</span>;
 }
 
 function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, saving }) {
@@ -79,12 +79,12 @@ function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, savi
         const dose = [med.typical_dose, med.dose_unit].filter(Boolean).join(' ');
         const editable = canEditRow(currentUser, med);
         return (
-            <div className="px-6 py-4 bg-neutral-900/60 border-t border-neutral-800 grid grid-cols-2 gap-4 text-xs">
+            <div className="px-6 py-4 rohy-detail-panel grid grid-cols-2 gap-4 text-xs">
                 <div className="col-span-2 flex items-center justify-between">
                     <div className="flex items-center gap-2 flex-wrap">
                         <ScopeBadge scope={med.scope} isCurated={med.is_curated} />
                         {med.data_source_key && (
-                            <span className="text-[10px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded border bg-neutral-800 text-neutral-400 border-neutral-700">
+                            <span className="rohy-badge-neutral uppercase tracking-wide">
                                 {med.data_source_key}
                             </span>
                         )}
@@ -92,7 +92,7 @@ function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, savi
                             <a
                                 href={`https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${med.rxcui}`}
                                 target="_blank" rel="noreferrer"
-                                className="text-[10px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded border bg-violet-900/30 text-violet-300 border-violet-700 hover:bg-violet-900/50"
+                                className="rohy-badge-teal uppercase tracking-wide hover:brightness-95"
                             >
                                 RxCUI {med.rxcui}
                             </a>
@@ -101,7 +101,7 @@ function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, savi
                     {editable ? (
                         <button
                             onClick={onEdit}
-                            className="flex items-center gap-1 px-3 py-1 text-xs bg-cyan-700/50 hover:bg-cyan-600 rounded"
+                            className="rohy-subtle-button flex items-center gap-1 px-3 py-1 text-xs rounded"
                         >
                             <Edit2 className="w-3.5 h-3.5" />
                             Edit
@@ -132,7 +132,7 @@ function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, savi
     }
 
     return (
-        <div className="px-6 py-4 bg-neutral-900/60 border-t border-neutral-800 grid grid-cols-2 gap-3 text-xs">
+        <div className="px-6 py-4 rohy-detail-panel grid grid-cols-2 gap-3 text-xs">
             <Input label="Generic name" value={draft.generic_name} onChange={(v) => setDraft({ ...draft, generic_name: v })} />
             <Input label="Drug class" value={draft.drug_class} onChange={(v) => setDraft({ ...draft, drug_class: v })} />
             <Input label="Category" value={draft.category} onChange={(v) => setDraft({ ...draft, category: v })} />
@@ -141,7 +141,7 @@ function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, savi
                 <select
                     value={draft.route}
                     onChange={(e) => setDraft({ ...draft, route: e.target.value })}
-                    className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-600 rounded text-xs focus:border-cyan-500 outline-none"
+                    className="rohy-field w-full px-2 py-1.5 rounded text-xs"
                 >
                     {ROUTE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
@@ -160,7 +160,7 @@ function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, savi
                 <button
                     onClick={onCancel}
                     disabled={saving}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-neutral-800 hover:bg-neutral-700 rounded"
+                    className="rohy-subtle-button flex items-center gap-1 px-3 py-1.5 text-xs rounded"
                 >
                     <X className="w-3.5 h-3.5" /> Cancel
                 </button>
@@ -172,7 +172,7 @@ function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, savi
                         side_effects: csvToArray(draft.side_effects),
                     })}
                     disabled={saving || !draft.generic_name.trim()}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-cyan-600 hover:bg-cyan-500 disabled:bg-neutral-700 rounded font-bold"
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-cyan-700 hover:bg-cyan-600 text-white disabled:opacity-50 rounded font-bold"
                 >
                     {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                     Save
@@ -199,7 +199,7 @@ function Input({ label, value, onChange, wide }) {
                 type="text"
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
-                className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-600 rounded text-xs focus:border-cyan-500 outline-none"
+                className="rohy-field w-full px-2 py-1.5 rounded text-xs"
             />
         </div>
     );
@@ -414,34 +414,34 @@ export default function MedicationManager() {
 
     if (rankOf(currentUser) < ROLE_RANKS.admin) {
         return (
-            <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-6 text-sm text-neutral-400">
+            <div className="rohy-card rounded-lg p-6 text-sm rohy-table-muted">
                 Medication management requires an administrator account.
             </div>
         );
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 rohy-admin-light">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <Pill className="w-5 h-5 text-pink-400" />
+                    <Pill className="w-5 h-5 text-teal-700" />
                     <h3 className="text-lg font-bold">Medication Database</h3>
-                    <span className="text-xs text-neutral-500 bg-neutral-800 px-2 py-1 rounded">
+                    <span className="rohy-count-pill">
                         {medications.length} medications
                     </span>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={fetchMedications}
-                        className="p-2 hover:bg-neutral-800 rounded"
+                        className="rohy-subtle-button p-2 rounded"
                         title="Refresh"
                     >
                         <RefreshCw className="w-4 h-4" />
                     </button>
                     <button
                         onClick={handleExport}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded text-sm"
+                        className="rohy-subtle-button flex items-center gap-1 px-3 py-1.5 rounded text-sm"
                     >
                         <Download className="w-4 h-4" />
                         Export
@@ -453,21 +453,21 @@ export default function MedicationManager() {
             <div className="flex gap-2 border-b border-neutral-700 pb-2">
                 <button
                     onClick={() => setActiveTab('browse')}
-                    className={`px-4 py-2 text-sm font-medium rounded-t ${activeTab === 'browse' ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-white'}`}
+                    className={`px-4 py-2 text-sm font-medium rounded-t ${activeTab === 'browse' ? 'rohy-admin-tab-active' : 'rohy-admin-tab'}`}
                 >
                     <Database className="w-4 h-4 inline mr-2" />
                     Browse
                 </button>
                 <button
                     onClick={() => setActiveTab('add')}
-                    className={`px-4 py-2 text-sm font-medium rounded-t ${activeTab === 'add' ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-white'}`}
+                    className={`px-4 py-2 text-sm font-medium rounded-t ${activeTab === 'add' ? 'rohy-admin-tab-active' : 'rohy-admin-tab'}`}
                 >
                     <Plus className="w-4 h-4 inline mr-2" />
                     Add
                 </button>
                 <button
                     onClick={() => setActiveTab('import')}
-                    className={`px-4 py-2 text-sm font-medium rounded-t ${activeTab === 'import' ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-white'}`}
+                    className={`px-4 py-2 text-sm font-medium rounded-t ${activeTab === 'import' ? 'rohy-admin-tab-active' : 'rohy-admin-tab'}`}
                 >
                     <Upload className="w-4 h-4 inline mr-2" />
                     Bulk Import
@@ -485,14 +485,14 @@ export default function MedicationManager() {
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Search by name, class, or RxCUI..."
-                            className="w-full pl-10 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm focus:border-cyan-500 outline-none"
+                            className="rohy-field w-full pl-10 pr-4 py-2 rounded-lg text-sm"
                         />
                     </div>
 
                     {/* Medications List */}
-                    <div className="max-h-[600px] overflow-y-auto border border-neutral-700 rounded-lg">
+                    <div className="rohy-table-shell max-h-[600px] overflow-y-auto rounded-lg">
                         <table className="w-full text-sm">
-                            <thead className="bg-neutral-800 sticky top-0 z-10">
+                            <thead className="rohy-table-head sticky top-0 z-10">
                                 <tr>
                                     <th className="w-8"></th>
                                     <th className="px-4 py-3 text-left font-bold">Name</th>
@@ -516,20 +516,20 @@ export default function MedicationManager() {
                                         return (
                                             <React.Fragment key={med.id}>
                                                 <tr
-                                                    className="border-t border-neutral-800 hover:bg-neutral-800/50 cursor-pointer"
+                                                    className="rohy-table-row cursor-pointer"
                                                     onClick={() => toggleRow(med.id)}
                                                 >
-                                                    <td className="px-2 py-2 text-neutral-500">
+                                                    <td className="rohy-table-cell px-2 py-2 rohy-table-muted">
                                                         {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                                                     </td>
-                                                    <td className="px-4 py-2 font-medium">{med.generic_name}</td>
-                                                    <td className="px-4 py-2 text-neutral-400">{med.drug_class || '-'}</td>
-                                                    <td className="px-4 py-2 text-neutral-400 uppercase text-xs">{med.route || '-'}</td>
-                                                    <td className="px-4 py-2"><ScopeBadge scope={med.scope} isCurated={med.is_curated} /></td>
-                                                    <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                                                    <td className="rohy-table-cell px-4 py-2 font-medium">{med.generic_name}</td>
+                                                    <td className="rohy-table-cell px-4 py-2 rohy-table-muted">{med.drug_class || '-'}</td>
+                                                    <td className="rohy-table-cell px-4 py-2 rohy-table-muted uppercase text-xs">{med.route || '-'}</td>
+                                                    <td className="rohy-table-cell px-4 py-2"><ScopeBadge scope={med.scope} isCurated={med.is_curated} /></td>
+                                                    <td className="rohy-table-cell px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                                                         <button
                                                             onClick={() => handleDeleteMed(med.id, med.generic_name)}
-                                                            className="p-1 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded"
+                                                            className="rohy-danger-icon-button p-1 rounded"
                                                             title="Delete"
                                                         >
                                                             <Trash2 className="w-4 h-4" />
@@ -564,7 +564,7 @@ export default function MedicationManager() {
                         <div className="flex justify-end">
                             <button
                                 onClick={handleClearAll}
-                                className="flex items-center gap-2 px-3 py-1.5 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded text-sm"
+                                className="rohy-danger-button flex items-center gap-2 px-3 py-1.5 rounded text-sm"
                             >
                                 <Trash2 className="w-4 h-4" />
                                 Clear All
@@ -576,7 +576,7 @@ export default function MedicationManager() {
 
             {/* Add Tab */}
             {activeTab === 'add' && (
-                <div className="space-y-4 bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
+                <div className="rohy-card space-y-4 rounded-lg p-4">
                     <h4 className="font-bold text-sm">Add New Medication</h4>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -586,7 +586,7 @@ export default function MedicationManager() {
                                 type="text"
                                 value={newMed.generic_name}
                                 onChange={(e) => setNewMed({ ...newMed, generic_name: e.target.value })}
-                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-600 rounded text-sm focus:border-cyan-500 outline-none"
+                                className="rohy-field w-full px-3 py-2 rounded text-sm"
                                 placeholder="e.g., Metformin"
                             />
                         </div>
@@ -596,7 +596,7 @@ export default function MedicationManager() {
                                 type="text"
                                 value={newMed.drug_class}
                                 onChange={(e) => setNewMed({ ...newMed, drug_class: e.target.value })}
-                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-600 rounded text-sm focus:border-cyan-500 outline-none"
+                                className="rohy-field w-full px-3 py-2 rounded text-sm"
                                 placeholder="e.g., Biguanide"
                             />
                         </div>
@@ -605,7 +605,7 @@ export default function MedicationManager() {
                             <select
                                 value={newMed.route}
                                 onChange={(e) => setNewMed({ ...newMed, route: e.target.value })}
-                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-600 rounded text-sm focus:border-cyan-500 outline-none"
+                                className="rohy-field w-full px-3 py-2 rounded text-sm"
                             >
                                 {ROUTE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
                             </select>
@@ -616,7 +616,7 @@ export default function MedicationManager() {
                                 type="text"
                                 value={newMed.typical_dose}
                                 onChange={(e) => setNewMed({ ...newMed, typical_dose: e.target.value })}
-                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-600 rounded text-sm focus:border-cyan-500 outline-none"
+                                className="rohy-field w-full px-3 py-2 rounded text-sm"
                                 placeholder="e.g., 500mg"
                             />
                         </div>
@@ -628,7 +628,7 @@ export default function MedicationManager() {
                             type="text"
                             value={newMed.indications}
                             onChange={(e) => setNewMed({ ...newMed, indications: e.target.value })}
-                            className="w-full px-3 py-2 bg-neutral-800 border border-neutral-600 rounded text-sm focus:border-cyan-500 outline-none"
+                            className="rohy-field w-full px-3 py-2 rounded text-sm"
                             placeholder="e.g., Type 2 Diabetes, PCOS"
                         />
                     </div>
@@ -639,14 +639,14 @@ export default function MedicationManager() {
                             type="text"
                             value={newMed.side_effects}
                             onChange={(e) => setNewMed({ ...newMed, side_effects: e.target.value })}
-                            className="w-full px-3 py-2 bg-neutral-800 border border-neutral-600 rounded text-sm focus:border-cyan-500 outline-none"
+                            className="rohy-field w-full px-3 py-2 rounded text-sm"
                             placeholder="e.g., Nausea, Diarrhea"
                         />
                     </div>
 
                     <button
                         onClick={handleAddMed}
-                        className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded text-sm font-bold"
+                        className="flex items-center gap-2 px-4 py-2 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-sm font-bold"
                     >
                         <Plus className="w-4 h-4" />
                         Add Medication
@@ -656,7 +656,7 @@ export default function MedicationManager() {
 
             {/* Import Tab */}
             {activeTab === 'import' && (
-                <div className="space-y-4 bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
+                <div className="rohy-card space-y-4 rounded-lg p-4">
                     <h4 className="font-bold text-sm">Bulk Import Medications</h4>
                     <p className="text-xs text-neutral-400">Enter medication names, one per line</p>
 
@@ -664,7 +664,7 @@ export default function MedicationManager() {
                         value={importData}
                         onChange={(e) => setImportData(e.target.value)}
                         rows={10}
-                        className="w-full px-3 py-2 bg-neutral-800 border border-neutral-600 rounded text-sm font-mono focus:border-cyan-500 outline-none"
+                        className="rohy-field w-full px-3 py-2 rounded text-sm font-mono"
                         placeholder="Aspirin&#10;Ibuprofen&#10;Metformin&#10;..."
                     />
 
@@ -675,7 +675,7 @@ export default function MedicationManager() {
                         <button
                             onClick={handleBulkImport}
                             disabled={!importData.trim()}
-                            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-neutral-700 disabled:text-neutral-500 rounded text-sm font-bold"
+                            className="flex items-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-600 text-white disabled:opacity-50 rounded text-sm font-bold"
                         >
                             <Upload className="w-4 h-4" />
                             Import

@@ -10,8 +10,8 @@ export const NODE_COLORS = [
   '#76b7b2', // Teal
   '#59a14f', // Green
   '#edc948', // Gold
-  '#b07aa1', // Purple
-  '#ff9da7', // Pink
+  '#0f766e', // Deep Teal
+  '#38bdf8', // Sky
   '#9c755f', // Brown
 ];
 
@@ -33,7 +33,7 @@ export const CLUSTER_COLORS = [
   '#f59e0b', // Amber
   '#10b981', // Emerald
   '#ef4444', // Red
-  '#8b5cf6', // Violet
+  '#0f766e', // Deep Teal
 ];
 
 /**

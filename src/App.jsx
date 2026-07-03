@@ -590,7 +590,7 @@ function MainApp() {
       return (
          <>
          {oyonPill}
-         <div className="h-screen w-screen bg-neutral-950 text-white overflow-hidden">
+         <div className="h-screen w-screen rohy-offwhite-bg overflow-hidden">
             <ConfigPanel
                key={settingsNavNonce}
                onClose={handleCloseSettings}
@@ -802,7 +802,7 @@ function MainApp() {
                                     onClick={() => { setShowTnaAnalytics(true); setShowUserMenu(false); }}
                                     className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
                                  >
-                                    <Activity className="w-4 h-4 text-purple-400" />
+                                    <Activity className="w-4 h-4 text-teal-400" />
                                     Analytics
                                  </button>
                               )}
@@ -838,7 +838,7 @@ function MainApp() {
                            className="px-3 py-2 bg-black/50 backdrop-blur-md rounded-full flex items-center gap-2 text-sm hover:bg-black/70 transition-colors"
                            title="Analytics"
                         >
-                           <Activity className="w-4 h-4 text-purple-400" />
+                           <Activity className="w-4 h-4 text-teal-400" />
                            <span className="text-neutral-200">Analytics</span>
                            <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${showAnalyticsMenu ? 'rotate-180' : ''}`} />
                         </button>
@@ -852,7 +852,7 @@ function MainApp() {
                                        onClick={() => { setShowOyonAnalytics(true); setShowAnalyticsMenu(false); }}
                                        className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
                                     >
-                                       <Activity className="w-4 h-4 text-pink-400" />
+                                       <Activity className="w-4 h-4 text-teal-400" />
                                        Emotion
                                     </button>
                                  )}
@@ -861,7 +861,7 @@ function MainApp() {
                                        onClick={() => { setShowTnaAnalytics(true); setShowAnalyticsMenu(false); }}
                                        className="w-full px-4 py-3 text-left text-sm text-neutral-300 hover:bg-neutral-800 flex items-center gap-3"
                                     >
-                                       <Activity className="w-4 h-4 text-purple-400" />
+                                       <Activity className="w-4 h-4 text-teal-400" />
                                        Case Analytics
                                     </button>
                                  )}

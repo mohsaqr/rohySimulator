@@ -16,7 +16,7 @@ export default function OyonCasesView({ records }) {
    const cases = useMemo(() => caseAggregates(records), [records]);
    if (!cases.length) return <Empty msg="No cases match the current filters." />;
    return (
-      <div className="max-h-[70vh] overflow-auto rounded-lg border border-gray-200">
+      <div className="rohy-admin-light max-h-[70vh] overflow-auto rounded-lg border border-gray-200">
          <table className="min-w-[920px] w-full text-sm">
             <thead className="sticky top-0 z-10 bg-white shadow-lg text-gray-600 text-xs uppercase">
                <tr>
@@ -70,7 +70,7 @@ function DistBar({ dist }) {
 
 function Empty({ msg }) {
    return (
-      <div className="rounded-md border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
+      <div className="rohy-admin-light rounded-md border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
          {msg}
       </div>
    );

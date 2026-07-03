@@ -13,7 +13,7 @@ import { trendsAnalytics } from './trendsAnalytics';
  */
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const VALENCE_COLOR = '#a855f7'; // purple, the oyon accent
+const VALENCE_COLOR = '#0f766e';
 const AROUSAL_COLOR = '#f59e0b'; // amber, contrasts on the dark theme
 
 export default function OyonTrendsView({ records, loading }) {
@@ -24,7 +24,7 @@ export default function OyonTrendsView({ records, loading }) {
 
    if (loading && summary.windows === 0) {
       return (
-         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+         <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
             Loading trends…
          </div>
       );
@@ -32,7 +32,7 @@ export default function OyonTrendsView({ records, loading }) {
 
    if (summary.windows === 0) {
       return (
-         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
+         <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
             <TrendingUp className="mx-auto mb-2 h-6 w-6 text-gray-400" />
             No windows in the current selection. Trends appear once emotion
             windows have been captured — run a capture (or widen the filters),
@@ -48,7 +48,7 @@ export default function OyonTrendsView({ records, loading }) {
          : undefined;
 
    return (
-      <div className="space-y-5">
+      <div className="rohy-admin-light space-y-5">
          {/* Aggregate stat chips */}
          <div className="flex flex-wrap gap-2">
             <Stat label="Days active" value={String(summary.daysActive)} hint={daySpan} />
@@ -130,10 +130,10 @@ function Stat({ label, value, hint, accent }) {
    return (
       <div
          title={hint}
-         className={`rounded-lg border px-3 py-2 ${accent ? 'border-purple-600/50 bg-purple-950/40' : 'border-gray-200 bg-white'}`}
+         className={`rounded-lg border px-3 py-2 ${accent ? 'border-teal-600/50 bg-teal-50' : 'border-gray-200 bg-white'}`}
       >
          <div className="text-[10px] uppercase tracking-wide text-gray-500">{label}</div>
-         <div className={`text-base font-bold tabular-nums ${accent ? 'text-purple-200' : 'text-gray-900'}`}>{value}</div>
+         <div className={`text-base font-bold tabular-nums ${accent ? 'text-teal-700' : 'text-gray-900'}`}>{value}</div>
       </div>
    );
 }

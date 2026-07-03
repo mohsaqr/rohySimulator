@@ -222,7 +222,7 @@ export default function LogGrid({
     const headPad = density === 'compact' ? 'px-2 py-1' : 'px-3 py-2';
 
     return (
-        <div className="flex flex-col h-full bg-neutral-900 text-white">
+        <div className="rohy-admin-light flex flex-col h-full">
             {/* Toolbar */}
             <div className="flex flex-col gap-2 p-3 border-b border-neutral-700 bg-neutral-800">
                 <div className="flex items-center gap-2 flex-wrap">

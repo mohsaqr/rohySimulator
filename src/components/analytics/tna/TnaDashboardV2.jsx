@@ -98,7 +98,7 @@ function StatCard({ icon, label, value, accent = 'cyan' }) {
         cyan:   'from-cyan-50 to-white text-cyan-700 ring-cyan-100',
         green:  'from-emerald-50 to-white text-emerald-700 ring-emerald-100',
         amber:  'from-amber-50 to-white text-amber-700 ring-amber-100',
-        violet: 'from-violet-50 to-white text-violet-700 ring-violet-100',
+        teal:   'from-teal-50 to-white text-teal-700 ring-teal-100',
         rose:   'from-rose-50 to-white text-rose-700 ring-rose-100',
     };
     return (
@@ -122,7 +122,7 @@ function LandingMetricCard({ icon, label, value, detail, accent = 'cyan' }) {
         cyan:   'from-cyan-50 to-white text-cyan-700 ring-cyan-100',
         green:  'from-emerald-50 to-white text-emerald-700 ring-emerald-100',
         amber:  'from-amber-50 to-white text-amber-700 ring-amber-100',
-        violet: 'from-violet-50 to-white text-violet-700 ring-violet-100',
+        teal:   'from-teal-50 to-white text-teal-700 ring-teal-100',
         rose:   'from-rose-50 to-white text-rose-700 ring-rose-100',
         slate:  'from-slate-50 to-white text-slate-700 ring-slate-100',
     };
@@ -622,10 +622,10 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     // panel edges instead of leaving a black border.
     const Outer = embedded
         ? ({ children }) => (
-            <div className="-m-8 p-8 bg-gray-200 text-gray-900 min-h-full">{children}</div>
+            <div className="rohy-admin-light -m-8 p-8 min-h-full">{children}</div>
         )
         : ({ children }) => (
-            <div className="fixed inset-0 z-40 bg-gray-200 text-gray-900 overflow-auto">
+            <div className="rohy-admin-light fixed inset-0 z-40 overflow-auto">
                 <div className="max-w-[1440px] mx-auto px-8 py-6">{children}</div>
             </div>
         );
@@ -767,7 +767,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                         <StatCard icon={<Activity className="w-5 h-5" />} value={tnaData.metadata.totalEvents} label="Events" accent="green" />
                         <StatCard icon={<Hash className="w-5 h-5" />} value={transformedData?.labels.length ?? '—'} label={sequenceMode === 'combined' ? 'States' : sequenceMode === 'objectType' ? 'Object types' : 'Verbs'} accent="amber" />
                         {analysis?.summaryData?.density != null && (
-                            <StatCard icon={<Network className="w-5 h-5" />} value={`${(analysis.summaryData.density * 100).toFixed(1)}%`} label="Density" accent="violet" />
+                            <StatCard icon={<Network className="w-5 h-5" />} value={`${(analysis.summaryData.density * 100).toFixed(1)}%`} label="Density" accent="teal" />
                         )}
                         {analysis?.summaryData?.nEdges != null && (
                             <StatCard icon={<GitBranch className="w-5 h-5" />} value={analysis.summaryData.nEdges} label="Edges" accent="rose" />
@@ -782,10 +782,10 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                             <StatCard icon={<Activity className="w-5 h-5" />} value={transformedData ? transformedData.sequences.reduce((n, s) => n + s.length, 0) : 0} label={isEmotionSource ? 'Emotion windows' : 'States visited'} accent="green" />
                             <StatCard icon={<Hash className="w-5 h-5" />} value={transformedData?.labels.length ?? '—'} label={seqSource === 'rooms' ? 'Locations' : seqSource === 'gaze-targets' ? 'Gaze targets' : emotionDimension === 'affective' ? 'Affective states' : 'Emotions'} accent="amber" />
                             {isEmotionSource && (
-                                <StatCard icon={<Smile className="w-5 h-5" />} value={emotionSourceStats.modelChannels || '—'} label="Model channels" accent="violet" />
+                                <StatCard icon={<Smile className="w-5 h-5" />} value={emotionSourceStats.modelChannels || '—'} label="Model channels" accent="teal" />
                             )}
                             {analysis?.summaryData?.density != null && (
-                                <StatCard icon={<Network className="w-5 h-5" />} value={`${(analysis.summaryData.density * 100).toFixed(1)}%`} label="Density" accent="violet" />
+                                <StatCard icon={<Network className="w-5 h-5" />} value={`${(analysis.summaryData.density * 100).toFixed(1)}%`} label="Density" accent="teal" />
                             )}
                             {analysis?.summaryData?.nEdges != null && (
                                 <StatCard icon={<GitBranch className="w-5 h-5" />} value={analysis.summaryData.nEdges} label="Edges" accent="rose" />
@@ -840,7 +840,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                     <LandingMetricCard icon={<Hash className="h-5 w-5" />} value={formatNumber(activityLandingStats.sessions)} label="Sessions" detail={`${formatNumber(activityLandingStats.events)} events`} accent="cyan" />
                                     <LandingMetricCard icon={<BookOpen className="h-5 w-5" />} value={formatNumber(activityLandingStats.cases)} label="Cases Taken" detail={`${formatNumber(activityLandingStats.resources)} resources touched`} accent="green" />
                                     <LandingMetricCard icon={<Clock3 className="h-5 w-5" />} value={formatNumber(activityLandingStats.minutes)} label="Minutes" detail="Observed activity span" accent="amber" />
-                                    <LandingMetricCard icon={<Users className="h-5 w-5" />} value={formatNumber(activityLandingStats.users)} label="Students" detail={`${formatNumber(activityBundle?.summary?.avgPerUser ?? 0)} events / user`} accent="violet" />
+                                    <LandingMetricCard icon={<Users className="h-5 w-5" />} value={formatNumber(activityLandingStats.users)} label="Students" detail={`${formatNumber(activityBundle?.summary?.avgPerUser ?? 0)} events / user`} accent="teal" />
                                     <LandingMetricCard icon={<Brain className="h-5 w-5" />} value={formatNumber(activityLandingStats.emotions)} label="Emotions Captured" detail={`${formatNumber(activityLandingStats.emotionLabels)} dominant labels`} accent="rose" />
                                     <LandingMetricCard icon={<ScanEye className="h-5 w-5" />} value={formatNumber(activityLandingStats.gazeWindows)} label="Gaze Records" detail="Windows with AOI signal" accent="slate" />
                                     <LandingMetricCard icon={<CalendarDays className="h-5 w-5" />} value={formatNumber(activityCharts?.daily?.xLabels?.length ?? 0)} label="Time Buckets" detail={activityCharts?.daily?.granularity ?? 'loading'} accent="cyan" />

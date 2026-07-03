@@ -52,7 +52,7 @@ export function InlineBodyMapEditor() {
             <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded transition-colors"
             >
                 <Image className="w-4 h-4" />
                 Open Body Map Editor
@@ -114,14 +114,13 @@ const TAB_GROUP = {
     platform: 'System', notifications: 'System', logs: 'System',
 };
 
-// One sidebar tab button. Reproduces the original active/inactive className
-// verbatim (purple left-border + bg-neutral-900 when active).
+// One sidebar tab button.
 function NavItem({ item, active, onSelect }) {
     const Icon = item.icon;
     return (
         <button
             onClick={() => onSelect(item.id)}
-            className={`w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${active ? 'border-purple-500 bg-neutral-900 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+            className={`w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-2 border-l-2 transition-colors ${active ? 'border-teal-700 bg-teal-50 text-teal-950' : 'border-transparent text-gray-700 hover:text-gray-950 hover:bg-teal-50/70'}`}
         >
             <Icon className={item.iconClass ? `w-4 h-4 ${item.iconClass}` : 'w-4 h-4'} /> {item.label}
         </button>
@@ -136,7 +135,7 @@ function NavGroupHeader({ group, open, onToggle }) {
             type="button"
             aria-expanded={open}
             onClick={() => onToggle(group)}
-            className="w-full px-4 pt-3 pb-1 text-left text-[11px] font-bold uppercase tracking-wider text-neutral-500 hover:text-neutral-300 flex items-center gap-1.5 transition-colors"
+            className="w-full px-4 pt-3 pb-1 text-left text-[11px] font-bold uppercase tracking-wider text-gray-600 hover:text-gray-900 flex items-center gap-1.5 transition-colors"
         >
             <Chevron className="w-3 h-3" /> {group}
         </button>
@@ -417,7 +416,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
         {
             group: 'Analytics',
             items: [
-                { id: 'analytics', label: 'Analytics', icon: Activity, iconClass: 'text-purple-400', visible: canSeeAnalytics },
+                { id: 'analytics', label: 'Analytics', icon: Activity, iconClass: 'text-teal-700', visible: canSeeAnalytics },
             ],
         },
         {
@@ -437,18 +436,18 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
     ];
 
     return (
-        <div className={`flex flex-col h-full bg-neutral-900 text-white ${fullPage ? '' : 'rounded-xl'} overflow-hidden`}>
+        <div className={`rohy-admin-light flex flex-col h-full ${fullPage ? '' : 'rounded-xl'} overflow-hidden`}>
 
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-neutral-800 bg-neutral-900 relative">
+            <div className="rohy-admin-header flex items-center justify-between p-6 border-b border-neutral-800 relative">
                 <h2 className="text-xl font-bold flex items-center gap-2">
-                    <Settings className="w-6 h-6 text-purple-500" />
+                    <Settings className="w-6 h-6 text-teal-700" />
                     {fullPage ? 'Rohy - Settings & Administration' : 'Platform Configuration'}
                 </h2>
                 {fullPage && (
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+                        className="rohy-subtle-button px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
                     >
                         <X className="w-4 h-4" />
                         Back to Simulation
@@ -463,11 +462,11 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     running sim); the grouped tabs follow. Per-tab role gating
                     lives on each SECTIONS item's `visible`; a group with no
                     visible items renders neither its header nor body. */}
-                <div className="w-48 min-h-0 overflow-y-auto bg-neutral-950 border-r border-neutral-800 flex flex-col py-3">
+                <div className="rohy-admin-sidebar w-48 min-h-0 overflow-y-auto border-r border-neutral-800 flex flex-col py-3">
                     {/* Simulation — not a tab: returns to the running simulation. */}
                     <button
                         onClick={onClose}
-                        className="w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-2 border-l-2 border-transparent text-neutral-500 hover:text-neutral-300 transition-colors"
+                        className="w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-2 border-l-2 border-transparent text-gray-700 hover:text-gray-950 hover:bg-teal-50/70 transition-colors"
                     >
                         <Monitor className="w-4 h-4" /> Simulation
                     </button>
@@ -492,7 +491,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                 </div>
 
                 {/* Content Area */}
-                <div className="flex-1 p-8 overflow-y-auto bg-neutral-900">
+                <div className="rohy-admin-page flex-1 p-8 overflow-y-auto">
 
                     {/* --- ANALYTICS TAB (educator+) --- TNA dashboard embedded inside settings */}
                     {activeTab === 'analytics' && canSeeAnalytics && (
@@ -544,7 +543,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                             };
                                                             input.click();
                                                         }}
-                                                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-bold"
+                                                        className="flex items-center gap-2 px-4 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded text-sm font-bold"
                                                         title="Import Case from JSON"
                                                     >
                                                         <FileUp className="w-4 h-4" /> Import
@@ -557,32 +556,32 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                     {/* Case Stats */}
                                     {isAdmin() && (
                                         <div className="grid grid-cols-3 gap-3 mb-4">
-                                            <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-3 text-center">
-                                                <div className="text-xl font-bold text-white">{cases.length}</div>
-                                                <div className="text-xs text-neutral-400">Total Cases</div>
+                                            <div className="rohy-stat-card rounded-lg p-3 text-center">
+                                                <div className="text-xl font-bold text-gray-900">{cases.length}</div>
+                                                <div className="text-xs text-gray-600">Total Cases</div>
                                             </div>
-                                            <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-3 text-center">
-                                                <div className="text-xl font-bold text-blue-400">{cases.filter(c => c.is_available).length}</div>
-                                                <div className="text-xs text-neutral-400">Available</div>
+                                            <div className="rohy-stat-card rohy-stat-card-accent rounded-lg p-3 text-center">
+                                                <div className="text-xl font-bold text-blue-700">{cases.filter(c => c.is_available).length}</div>
+                                                <div className="text-xs text-gray-700">Available</div>
                                             </div>
-                                            <div className="bg-neutral-700/30 border border-neutral-600 rounded-lg p-3 text-center">
-                                                <div className="text-xl font-bold text-neutral-400">{cases.filter(c => !c.is_available).length}</div>
-                                                <div className="text-xs text-neutral-400">Hidden</div>
+                                            <div className="rohy-stat-card rounded-lg p-3 text-center">
+                                                <div className="text-xl font-bold text-gray-700">{cases.filter(c => !c.is_available).length}</div>
+                                                <div className="text-xs text-gray-600">Hidden</div>
                                             </div>
                                         </div>
                                     )}
 
                                     <div className="grid gap-3">
                                         {cases.map(c => (
-                                            <div key={c.id} className={`p-4 bg-neutral-800 border rounded-lg flex justify-between items-center hover:bg-neutral-800/80 ${c.is_default ? 'border-green-600/50 ring-1 ring-green-600/20' : 'border-neutral-700'}`}>
+                                            <div key={c.id} className={`rohy-card p-4 rounded-lg flex justify-between items-center ${c.is_default ? 'rohy-card-active' : ''}`}>
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="font-bold text-white">{c.name}</span>
+                                                        <span className="font-bold text-gray-900">{c.name}</span>
                                                         {c.is_default && (
-                                                            <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded border border-green-700/50">Default</span>
+                                                            <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded border border-green-300">Default</span>
                                                         )}
                                                         {isAdmin() && (
-                                                            <span className={`px-2 py-0.5 text-xs rounded border ${c.is_available ? 'bg-blue-900/50 text-blue-400 border-blue-700/50' : 'bg-neutral-700/50 text-neutral-500 border-neutral-600'}`}>
+                                                            <span className={`px-2 py-0.5 text-xs rounded border ${c.is_available ? 'bg-blue-100 text-blue-800 border-blue-300' : 'bg-gray-100 text-gray-700 border-gray-300'}`}>
                                                                 {c.is_available ? 'Available' : 'Hidden'}
                                                             </span>
                                                         )}
@@ -591,14 +590,14 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                             start changing prompts/vitals mid-simulation. */}
                                                         {isAdmin() && c.active_session_count > 0 && (
                                                             <span
-                                                                className="px-2 py-0.5 text-xs rounded border bg-orange-900/40 text-orange-300 border-orange-700/50"
+                                                                className="px-2 py-0.5 text-xs rounded border bg-orange-100 text-orange-800 border-orange-300"
                                                                 title={`${c.active_session_count} active simulation session(s) — edits will be visible to learners on their next request.`}
                                                             >
                                                                 ⚡ {c.active_session_count} live
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className="text-sm text-neutral-400">{c.description}</div>
+                                                    <div className="text-sm text-gray-600">{c.description}</div>
                                                 </div>
                                                 <div className="flex gap-2 items-center">
                                                     {/* Admin: Availability Toggle */}
@@ -613,7 +612,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                     console.error('Failed to toggle availability:', err);
                                                                 }
                                                             }}
-                                                            className={`px-2 py-1 text-xs rounded border ${c.is_available ? 'bg-blue-900/30 border-blue-700/50 text-blue-400 hover:bg-blue-900/50' : 'bg-neutral-700/30 border-neutral-600 text-neutral-400 hover:bg-neutral-700/50'}`}
+                                                            className={`px-2 py-1 text-xs rounded border ${c.is_available ? 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100' : 'rohy-subtle-button'}`}
                                                             title={c.is_available ? 'Hide from students' : 'Make available to students'}
                                                         >
                                                             {c.is_available ? 'Hide' : 'Show'}
@@ -631,7 +630,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                     console.error('Failed to set default:', err);
                                                                 }
                                                             }}
-                                                            className="px-2 py-1 text-xs rounded border bg-green-900/30 border-green-700/50 text-green-400 hover:bg-green-900/50"
+                                                            className="px-2 py-1 text-xs rounded border bg-green-50 border-green-300 text-green-700 hover:bg-green-100"
                                                             title="Set as default case for students"
                                                         >
                                                             Set Default
@@ -670,7 +669,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                 document.body.removeChild(a);
                                                                 window.URL.revokeObjectURL(url);
                                                             }}
-                                                            className="p-2 bg-blue-700 hover:bg-blue-600 rounded text-xs"
+                                                            className="p-2 bg-blue-700 hover:bg-blue-600 rounded text-xs text-white"
                                                             title="Export to JSON"
                                                         >
                                                             <FileDown className="w-4 h-4" />
@@ -683,7 +682,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                 localStorage.removeItem('rohy_editing_case');
                                                                 console.log('[ConfigPanel] Editing case:', c.name, 'scenario:', c.scenario ? 'present' : 'null');
                                                                 setEditingCase(c);
-                                                            }} className="p-2 bg-neutral-700 rounded text-xs hover:bg-neutral-600">Edit</button>
+                                                            }} className="rohy-subtle-button p-2 rounded text-xs">Edit</button>
                                                             <button
                                                                 onClick={() => {
                                                                     // Duplicate case - create a copy without ID
@@ -698,12 +697,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                     setEditingCase(duplicatedCase);
                                                                     toast.success(`Duplicated "${c.name}" - Edit and save as new case`);
                                                                 }}
-                                                                className="p-2 bg-purple-900/30 text-purple-400 rounded text-xs hover:bg-purple-900/50"
+                                                                className="p-2 bg-teal-100 text-teal-700 border border-teal-200 rounded text-xs hover:bg-teal-200"
                                                                 title="Duplicate case"
                                                             >
                                                                 <Copy className="w-4 h-4" />
                                                             </button>
-                                                            <button onClick={() => handleDeleteCase(c.id)} className="p-2 bg-red-900/30 text-red-400 rounded text-xs hover:bg-red-900/50">Delete</button>
+                                                            <button onClick={() => handleDeleteCase(c.id)} className="p-2 bg-red-50 text-red-700 border border-red-200 rounded text-xs hover:bg-red-100">Delete</button>
                                                         </>
                                                     )}
                                                 </div>
@@ -913,7 +912,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                             <label className="text-sm font-medium">Male Front</label>
                                             <div className="flex gap-2">
                                                 <img src="./man-front.png" alt="Male front" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
-                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-purple-500 transition-colors">
+                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
                                                     <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
                                                         const file = e.target.files?.[0];
                                                         if (file) {
@@ -930,7 +929,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                             <label className="text-sm font-medium">Male Back</label>
                                             <div className="flex gap-2">
                                                 <img src="./man-back.png" alt="Male back" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
-                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-purple-500 transition-colors">
+                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
                                                     <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
                                                         const file = e.target.files?.[0];
                                                         if (file) {
@@ -947,7 +946,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                             <label className="text-sm font-medium">Female Front</label>
                                             <div className="flex gap-2">
                                                 <img src="./woman-front.png" alt="Female front" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
-                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-purple-500 transition-colors">
+                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
                                                     <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
                                                         const file = e.target.files?.[0];
                                                         if (file) {
@@ -964,7 +963,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                             <label className="text-sm font-medium">Female Back</label>
                                             <div className="flex gap-2">
                                                 <img src="./woman-back.png" alt="Female back" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
-                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-purple-500 transition-colors">
+                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
                                                     <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
                                                         const file = e.target.files?.[0];
                                                         if (file) {
@@ -1228,7 +1227,7 @@ function UserFieldConfiguration() {
 
     return (
         <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
-            <h4 className="text-md font-bold text-purple-400 mb-4 flex items-center gap-2">
+            <h4 className="text-md font-bold text-teal-400 mb-4 flex items-center gap-2">
                 <User className="w-5 h-5" />
                 User Profile Field Configuration
             </h4>
@@ -1269,7 +1268,7 @@ function UserFieldConfiguration() {
                                     type="text"
                                     value={config.label}
                                     onChange={(e) => handleFieldChange(fieldKey, 'label', e.target.value)}
-                                    className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-600 rounded text-sm text-white focus:border-purple-500 outline-none"
+                                    className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-600 rounded text-sm text-white focus:border-teal-500 outline-none"
                                 />
                             </div>
                             <div className="col-span-2 text-center">
@@ -1281,7 +1280,7 @@ function UserFieldConfiguration() {
                                         disabled={fieldKey === 'name'}
                                         className="sr-only peer"
                                     />
-                                    <div className={`w-9 h-5 rounded-full peer-focus:ring-2 peer-focus:ring-purple-500 ${config.enabled ? 'bg-purple-600' : 'bg-neutral-600'
+                                    <div className={`w-9 h-5 rounded-full peer-focus:ring-2 peer-focus:ring-teal-500 ${config.enabled ? 'bg-teal-600' : 'bg-neutral-600'
                                         } ${fieldKey === 'name' ? 'opacity-50 cursor-not-allowed' : ''} after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4`}></div>
                                 </label>
                             </div>
@@ -1311,7 +1310,7 @@ function UserFieldConfiguration() {
                 <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="px-6 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-neutral-600 text-white rounded-lg font-medium flex items-center gap-2"
+                    className="px-6 py-2 bg-teal-600 hover:bg-teal-500 disabled:bg-neutral-600 text-white rounded-lg font-medium flex items-center gap-2"
                 >
                     {saving ? (
                         <>
@@ -2144,50 +2143,50 @@ function SystemLogs() {
             <div className="border-b border-neutral-700 flex gap-4 overflow-x-auto">
                 <button
                     onClick={() => setActiveLogTab('activity')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-1 whitespace-nowrap ${activeLogTab === 'activity' ? 'border-cyan-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-1 whitespace-nowrap ${activeLogTab === 'activity' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     <Activity className="w-4 h-4" />
                     Activity
                 </button>
                 <button
                     onClick={() => setActiveLogTab('sessions')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'sessions' ? 'border-blue-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'sessions' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     Sessions
                 </button>
                 <button
                     onClick={() => setActiveLogTab('system')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'system' ? 'border-cyan-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'system' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     System Log
                 </button>
                 <button
                     onClick={() => setActiveLogTab('chat')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'chat' ? 'border-indigo-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'chat' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     Chat Log
                 </button>
                 <button
                     onClick={() => setActiveLogTab('moments')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'moments' ? 'border-emerald-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'moments' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     Moments
                 </button>
                 <button
                     onClick={() => setActiveLogTab('turns')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'turns' ? 'border-sky-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'turns' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     By Turn
                 </button>
                 <button
                     onClick={() => setActiveLogTab('insights')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'insights' ? 'border-amber-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'insights' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     Case Insights
                 </button>
                 <button
                     onClick={() => setActiveLogTab('oyondata')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'oyondata' ? 'border-purple-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'oyondata' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     Oyon data
                 </button>
@@ -2197,35 +2196,35 @@ function SystemLogs() {
                 fetch, filters, and CSV export — same UX across tabs. */}
             <div className="flex-1 overflow-auto">
                 {activeLogTab === 'activity' ? (
-                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
+                    <div className="rohy-table-shell rounded overflow-hidden" style={{ height: '650px' }}>
                         <ActivityTable />
                     </div>
                 ) : activeLogTab === 'sessions' ? (
-                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
+                    <div className="rohy-table-shell rounded overflow-hidden" style={{ height: '650px' }}>
                         <SessionsTable />
                     </div>
                 ) : activeLogTab === 'system' ? (
-                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
+                    <div className="rohy-table-shell rounded overflow-hidden" style={{ height: '650px' }}>
                         <SystemLogTable />
                     </div>
                 ) : activeLogTab === 'chat' ? (
-                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
+                    <div className="rohy-table-shell rounded overflow-hidden" style={{ height: '650px' }}>
                         <ChatLogTable />
                     </div>
                 ) : activeLogTab === 'moments' ? (
-                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
+                    <div className="rohy-table-shell rounded overflow-hidden" style={{ height: '650px' }}>
                         <MomentsTable />
                     </div>
                 ) : activeLogTab === 'turns' ? (
-                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-hidden" style={{ height: '650px' }}>
+                    <div className="rohy-table-shell rounded overflow-hidden" style={{ height: '650px' }}>
                         <TurnsTable />
                     </div>
                 ) : activeLogTab === 'insights' ? (
-                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-auto" style={{ height: '650px' }}>
+                    <div className="rohy-table-shell rounded overflow-auto" style={{ height: '650px' }}>
                         <CaseInsightsPanel />
                     </div>
                 ) : activeLogTab === 'oyondata' ? (
-                    <div className="bg-neutral-800 border border-neutral-700 rounded overflow-auto" style={{ height: '650px' }}>
+                    <div className="rohy-table-shell rounded overflow-auto" style={{ height: '650px' }}>
                         <OyonDataLogs />
                     </div>
                 ) : null}
@@ -2563,7 +2562,7 @@ student1,Student One,student1@school.edu,stud123,user`;
                             type="file"
                             accept=".csv"
                             onChange={handleBatchUpload}
-                            className="w-full bg-neutral-700 border border-neutral-600 rounded px-3 py-2 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-purple-600 file:text-white hover:file:bg-purple-500"
+                            className="w-full bg-neutral-700 border border-neutral-600 rounded px-3 py-2 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-teal-600 file:text-white hover:file:bg-teal-500"
                         />
                     </div>
 
@@ -2588,7 +2587,7 @@ jane_admin,Jane Smith,jane@example.com,admin456,admin`}
                 <div className="flex gap-2">
                     <button
                         onClick={() => setShowBatchUpload(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded text-sm font-bold"
+                        className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded text-sm font-bold"
                     >
                         <Upload className="w-4 h-4" />
                         Batch Upload
@@ -2614,7 +2613,7 @@ jane_admin,Jane Smith,jane@example.com,admin456,admin`}
                                     {user.username}
                                     {user.name && <span className="text-neutral-500 font-normal text-sm">({user.name})</span>}
                                     {user.role === 'admin' && (
-                                        <span className="px-2 py-0.5 bg-purple-600 text-white text-xs rounded">{roleLabel('admin')}</span>
+                                        <span className="px-2 py-0.5 bg-teal-600 text-white text-xs rounded">{roleLabel('admin')}</span>
                                     )}
                                     {user.role === 'educator' && (
                                         <span className="px-2 py-0.5 bg-teal-600 text-white text-xs rounded">{roleLabel('educator')}</span>
@@ -2874,7 +2873,7 @@ function PagesEditor({ pages, onChange }) {
                 <button
                     type="button"
                     onClick={add}
-                    className="px-2.5 py-1 rounded text-xs font-semibold text-white flex items-center gap-1 bg-purple-700 hover:bg-purple-600"
+                    className="px-2.5 py-1 rounded text-xs font-semibold text-white flex items-center gap-1 bg-teal-700 hover:bg-teal-600"
                 >
                     <Plus className="w-3.5 h-3.5" /> Add page
                 </button>
@@ -2898,7 +2897,7 @@ function PagesEditor({ pages, onChange }) {
                                     value={page.title || ''}
                                     onChange={(e) => update(i, { title: e.target.value })}
                                     placeholder="Page title (e.g., Lab Result Summary)"
-                                    className="flex-1 px-2 py-1.5 bg-neutral-950 border border-neutral-800 rounded text-sm focus:outline-none focus:border-purple-500"
+                                    className="flex-1 px-2 py-1.5 bg-neutral-950 border border-neutral-800 rounded text-sm focus:outline-none focus:border-teal-500"
                                 />
                                 <button
                                     type="button"
@@ -2913,7 +2912,7 @@ function PagesEditor({ pages, onChange }) {
                                 onChange={(e) => update(i, { content: e.target.value })}
                                 placeholder="Body text — anything the AI should know but reveal only on demand."
                                 rows={4}
-                                className="w-full px-2.5 py-2 bg-neutral-950 border border-neutral-800 rounded text-sm focus:outline-none focus:border-purple-500 resize-y"
+                                className="w-full px-2.5 py-2 bg-neutral-950 border border-neutral-800 rounded text-sm focus:outline-none focus:border-teal-500 resize-y"
                             />
                         </li>
                     ))}
@@ -3020,7 +3019,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
     if (loading) {
         return (
             <div className="flex items-center justify-center p-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500"></div>
             </div>
         );
     }
@@ -3030,7 +3029,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
         return (
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                    <h4 className="text-lg font-bold text-purple-400">Edit Agent: {editingAgent.name}</h4>
+                    <h4 className="text-lg font-bold text-teal-400">Edit Agent: {editingAgent.name}</h4>
                     <button
                         onClick={() => setEditingAgent(null)}
                         className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-sm"
@@ -3191,7 +3190,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h4 className="text-lg font-bold text-purple-400">8. AI Agents</h4>
+                    <h4 className="text-lg font-bold text-teal-400">8. AI Agents</h4>
                     <p className="text-xs text-neutral-500">Configure which AI agents are available in this case</p>
                 </div>
                 {!caseId ? (
@@ -3202,7 +3201,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                     <button
                         onClick={handleAddDefaultAgents}
                         disabled={caseAgents.length > 0}
-                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm flex items-center gap-1"
+                        className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm flex items-center gap-1"
                     >
                         <Plus className="w-4 h-4" /> Add Default Agents
                     </button>
@@ -3271,7 +3270,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                             // with the seeder/case-data; if step numbering ever changes,
                                             // search this comment to find the magic number.
                                             onClick={() => onOpenPersonaEditor(agent.agent_template_id, { tab: 'cases', wizardStep: 11 })}
-                                            className="px-2 py-1 bg-purple-700/40 hover:bg-purple-700 text-purple-200 hover:text-white rounded text-xs"
+                                            className="px-2 py-1 bg-teal-700/40 hover:bg-teal-700 text-teal-200 hover:text-white rounded text-xs"
                                             title="Open the underlying persona template in the full editor (system-wide; affects every case using it). You'll return here when done."
                                         >
                                             Edit persona ↗
@@ -3305,7 +3304,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                             <button
                                 key={template.id}
                                 onClick={() => handleAddAgent(template.id)}
-                                className="p-3 bg-neutral-800/50 border border-neutral-700 rounded-lg hover:bg-neutral-800 hover:border-purple-600 transition-all text-left"
+                                className="p-3 bg-neutral-800/50 border border-neutral-700 rounded-lg hover:bg-neutral-800 hover:border-teal-600 transition-all text-left"
                             >
                                 <div className="font-medium text-sm">{template.name}</div>
                                 <div className="text-xs text-neutral-500">{template.role_title || template.agent_type}</div>
@@ -3629,7 +3628,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                 setStep(s.num);
                             }}
                             className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${step === s.num
-                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/30'
+                                ? 'bg-teal-600 text-white shadow-lg shadow-teal-900/30'
                                 : step > s.num
                                     ? 'bg-green-900/30 text-green-300 hover:bg-green-900/50 border border-green-700/50'
                                     : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-white'
@@ -3648,7 +3647,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {/* STEP 1: DEMOGRAPHICS (EHR-style) */}
                 {step === 1 && (
                     <div className="space-y-6">
-                        <h4 className="text-lg font-bold text-purple-400">1. Patient Demographics</h4>
+                        <h4 className="text-lg font-bold text-teal-400">1. Patient Demographics</h4>
                         <p className="text-xs text-neutral-500 -mt-4">EHR-style patient information. Most fields are optional.</p>
 
                         {/* Top Section: Basic Info (Patient Photo replaced by avatar system) */}
@@ -3895,7 +3894,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {step === 2 && (
                     <div className="space-y-4">
                         <div>
-                            <h4 className="text-lg font-bold text-purple-400">2. Avatar &amp; Voice</h4>
+                            <h4 className="text-lg font-bold text-teal-400">2. Avatar &amp; Voice</h4>
                             <p className="text-xs text-neutral-500">
                                 Pick the 3D head, framing, and voice for this case. Empty fields inherit the
                                 platform's persona default for the patient's gender.
@@ -3910,17 +3909,17 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     <div className="space-y-6">
                         <div className="flex justify-between items-end">
                             <div>
-                                <h4 className="text-lg font-bold text-purple-400">3. Patient Story & Behavior</h4>
+                                <h4 className="text-lg font-bold text-teal-400">3. Patient Story & Behavior</h4>
                                 <p className="text-xs text-neutral-500">Define how the simulated patient behaves and communicates.</p>
                             </div>
-                            <button onClick={applyPersonaDefaults} className="text-xs bg-neutral-800 hover:bg-neutral-700 px-3 py-1 rounded text-purple-300">
+                            <button onClick={applyPersonaDefaults} className="text-xs bg-neutral-800 hover:bg-neutral-700 px-3 py-1 rounded text-teal-300">
                                 Load Defaults
                             </button>
                         </div>
 
                         {/* Personality Section */}
-                        <div className="bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-lg p-4 border border-purple-700/30">
-                            <h5 className="text-sm font-bold text-purple-300 mb-3">Personality & Communication</h5>
+                        <div className="bg-gradient-to-r from-teal-900/20 to-blue-900/20 rounded-lg p-4 border border-teal-700/30">
+                            <h5 className="text-sm font-bold text-teal-300 mb-3">Personality & Communication</h5>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="label-xs">Persona Type</label>
@@ -4071,7 +4070,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             });
                                         }}
                                         className={`px-3 py-1 text-xs font-bold rounded transition-colors ${(caseData.config?.storyMode || 'freeform') === 'freeform'
-                                            ? 'bg-purple-600 text-white'
+                                            ? 'bg-teal-600 text-white'
                                             : 'text-neutral-400 hover:text-white'
                                             }`}
                                     >
@@ -4096,7 +4095,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             }));
                                         }}
                                         className={`px-3 py-1 text-xs font-bold rounded transition-colors ${caseData.config?.storyMode === 'structured'
-                                            ? 'bg-purple-600 text-white'
+                                            ? 'bg-teal-600 text-white'
                                             : 'text-neutral-400 hover:text-white'
                                             }`}
                                     >
@@ -4239,7 +4238,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {/* STEP 4: VITALS & ALARMS */}
                 {step === 5 && (
                     <div className="space-y-6">
-                        <h4 className="text-lg font-bold text-purple-400">4. Initial Vitals & Alarms</h4>
+                        <h4 className="text-lg font-bold text-teal-400">4. Initial Vitals & Alarms</h4>
 
                         {/* Scenario/Vitals status indicator */}
                         <div className={`p-3 rounded-lg border ${hasScenario
@@ -4466,7 +4465,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         key={r}
                                         onClick={() => updateConfig('initialVitals', { ...(caseData.config?.initialVitals || {}), rhythm: r })}
                                         className={`px-3 py-2 rounded text-xs font-bold transition-all ${(caseData.config?.initialVitals?.rhythm || 'NSR') === r
-                                            ? 'bg-purple-600 text-white'
+                                            ? 'bg-teal-600 text-white'
                                             : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
                                             }`}
                                     >
@@ -4538,7 +4537,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {/* STEP 3: SCENARIO (OPTIONAL) */}
                 {step === 4 && (
                     <div className="space-y-6">
-                        <h4 className="text-lg font-bold text-purple-400">3. Progression Scenario (Optional)</h4>
+                        <h4 className="text-lg font-bold text-teal-400">3. Progression Scenario (Optional)</h4>
                         <p className="text-xs text-neutral-500">Add automatic deterioration or improvement over time. Choose from quick templates or browse the full repository.</p>
 
                         {/* Scenario Selector */}
@@ -4726,11 +4725,11 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             {/* Preview */}
                             {caseData.scenario?.timeline && (
                                 <div className="mt-4 bg-neutral-800 border border-neutral-700 rounded p-4">
-                                    <h5 className="text-sm font-bold mb-2 text-purple-300">Timeline Preview</h5>
+                                    <h5 className="text-sm font-bold mb-2 text-teal-300">Timeline Preview</h5>
                                     <div className="space-y-2 text-xs">
                                         {caseData.scenario.timeline.map((step, idx) => (
                                             <div key={idx} className="flex items-start gap-3 text-neutral-300">
-                                                <span className="text-purple-400 font-mono min-w-[60px]">
+                                                <span className="text-teal-400 font-mono min-w-[60px]">
                                                     {Math.floor(step.time / 60)}:{String(step.time % 60).padStart(2, '0')}
                                                 </span>
                                                 <span>{step.label}</span>
@@ -4767,7 +4766,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {/* STEP 5: LABORATORY INVESTIGATIONS */}
                 {step === 6 && (
                     <div className="space-y-6">
-                        <h4 className="text-lg font-bold text-purple-400">5. Laboratory Investigations</h4>
+                        <h4 className="text-lg font-bold text-teal-400">5. Laboratory Investigations</h4>
                         <p className="text-xs text-neutral-500">
                             Configure lab tests with smart search, clinical panel templates, and visual value editors.
                         </p>
@@ -4821,7 +4820,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {/* STEP 9: TREATMENTS */}
                 {step === 10 && (
                     <div className="space-y-6">
-                        <h4 className="text-lg font-bold text-purple-400">9. Treatment Configuration</h4>
+                        <h4 className="text-lg font-bold text-teal-400">9. Treatment Configuration</h4>
                         <p className="text-xs text-neutral-500">
                             Configure which treatments are expected, contraindicated, or hidden for this case.
                             Assign points for correct treatment decisions and provide feedback for learning.
@@ -4889,7 +4888,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                 await onSave();
                                 setStep(s => s + 1);
                             }}
-                            className="px-6 py-2 bg-purple-600 hover:bg-purple-500 rounded font-bold text-sm"
+                            className="px-6 py-2 bg-teal-600 hover:bg-teal-500 rounded font-bold text-sm"
                         >
                             Next
                         </button>

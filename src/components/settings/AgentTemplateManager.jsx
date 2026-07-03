@@ -4,14 +4,14 @@ import { useToast } from '../../contexts/ToastContext';
 import { AgentService } from '../../services/AgentService';
 
 const AGENT_TYPE_BADGE = {
-   patient: 'bg-rose-900/50 text-rose-300',
-   discussant: 'bg-indigo-900/50 text-indigo-400',
-   nurse: 'bg-blue-900/50 text-blue-400',
-   consultant: 'bg-green-900/50 text-green-400',
-   relative: 'bg-amber-900/50 text-amber-400',
-   pharmacist: 'bg-fuchsia-900/50 text-fuchsia-300',
-   technician: 'bg-teal-900/50 text-teal-300',
-   other: 'bg-neutral-800 text-neutral-400',
+   patient: 'bg-neutral-200 text-teal-700 border border-neutral-300',
+   discussant: 'bg-neutral-200 text-teal-700 border border-neutral-300',
+   nurse: 'bg-neutral-200 text-teal-700 border border-neutral-300',
+   consultant: 'bg-neutral-200 text-teal-700 border border-neutral-300',
+   relative: 'bg-neutral-200 text-teal-700 border border-neutral-300',
+   pharmacist: 'bg-neutral-200 text-teal-700 border border-neutral-300',
+   technician: 'bg-neutral-200 text-teal-700 border border-neutral-300',
+   other: 'bg-neutral-200 text-teal-700 border border-neutral-300',
 };
 
 // AgentTemplateManager is the list view. The actual editing now happens
@@ -84,7 +84,7 @@ export default function AgentTemplateManager({ onOpenEditor }) {
    if (loading) {
       return (
          <div className="flex items-center justify-center p-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600" />
          </div>
       );
    }
@@ -112,17 +112,15 @@ export default function AgentTemplateManager({ onOpenEditor }) {
       const dontsCount = Array.isArray(cfg.donts) ? cfg.donts.length : 0;
       const ctxFilter = template.context_filter || 'full';
       const ctxColor =
-         ctxFilter === 'full' ? 'text-green-400' :
-         ctxFilter === 'history' ? 'text-amber-400' :
+         ctxFilter === 'full' ? 'text-teal-700' :
+         ctxFilter === 'history' ? 'text-neutral-600' :
          'text-neutral-400';
 
       return (
          <div
             key={template.id}
             onClick={() => handleEdit(template)}
-            className={`border rounded-lg transition-colors px-4 py-3 flex flex-col md:flex-row md:items-center gap-3 cursor-pointer hover:bg-neutral-800/40 ${
-               isStandard ? 'border-purple-800 bg-purple-950/20' : 'border-neutral-800 bg-neutral-900/50'
-            }`}
+            className="rohy-card rounded-lg transition-colors px-4 py-3 flex flex-col md:flex-row md:items-center gap-3 cursor-pointer"
          >
             <div className="flex items-center gap-3 min-w-0 md:flex-1">
                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${AGENT_TYPE_BADGE[template.agent_type] || AGENT_TYPE_BADGE.other}`}>
@@ -131,12 +129,12 @@ export default function AgentTemplateManager({ onOpenEditor }) {
                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                      <span className="font-medium">{template.name}</span>
-                     <span className="px-1.5 py-0.5 rounded text-xs bg-neutral-800 text-neutral-300 capitalize">{template.agent_type}</span>
+                     <span className="rohy-badge-neutral capitalize">{template.agent_type}</span>
                      {isStandard && (
-                        <span className="px-1.5 py-0.5 bg-purple-600/50 text-purple-200 rounded text-xs">Standard</span>
+                        <span className="rohy-badge-teal">Standard</span>
                      )}
                   </div>
-                  <div className="text-sm text-neutral-500 truncate">
+                  <div className="text-sm text-neutral-600 truncate">
                      {template.role_title || template.agent_type} · {template.communication_style || 'standard'}
                   </div>
                </div>
@@ -147,26 +145,26 @@ export default function AgentTemplateManager({ onOpenEditor }) {
                 side panels) it stacks vertically under the name as a single
                 column of "label: value" lines so the info doesn't disappear. */}
             <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs shrink-0 md:max-w-[280px] w-full md:w-auto">
-               <span className="text-neutral-500 md:text-right">voice</span>
-               <span className={voiceId ? 'text-white font-mono truncate' : 'text-neutral-600 italic'} title={voiceId || 'no voice set'}>
-                  {voiceId || 'unset'}{voiceGender ? <span className="text-neutral-500"> · {voiceGender}</span> : null}
+               <span className="text-neutral-600 md:text-right">voice</span>
+               <span className={voiceId ? 'text-neutral-900 font-mono truncate' : 'text-neutral-500 italic'} title={voiceId || 'no voice set'}>
+                  {voiceId || 'unset'}{voiceGender ? <span className="text-neutral-600"> · {voiceGender}</span> : null}
                </span>
-               <span className="text-neutral-500 md:text-right">avatar</span>
-               <span className={avatarFile ? 'text-white font-mono truncate' : 'text-neutral-600 italic'} title={avatarFile || 'no avatar set'}>
+               <span className="text-neutral-600 md:text-right">avatar</span>
+               <span className={avatarFile ? 'text-neutral-900 font-mono truncate' : 'text-neutral-500 italic'} title={avatarFile || 'no avatar set'}>
                   {avatarFile || 'unset'}
                </span>
-               <span className="text-neutral-500 md:text-right">do / don&apos;t</span>
-               <span className="text-neutral-300">
-                  <span className={dosCount > 0 ? 'text-emerald-400' : 'text-neutral-600'}>{dosCount}</span>
+               <span className="text-neutral-600 md:text-right">do / don&apos;t</span>
+               <span className="text-neutral-700">
+                  <span className={dosCount > 0 ? 'text-teal-700' : 'text-neutral-500'}>{dosCount}</span>
                   {' / '}
-                  <span className={dontsCount > 0 ? 'text-rose-400' : 'text-neutral-600'}>{dontsCount}</span>
+                  <span className={dontsCount > 0 ? 'text-red-700' : 'text-neutral-500'}>{dontsCount}</span>
                </span>
-               <span className="text-neutral-500 md:text-right">context</span>
+               <span className="text-neutral-600 md:text-right">context</span>
                <span className={ctxColor}>{ctxFilter}</span>
                {llmLabel && (
                   <>
-                     <span className="text-neutral-500 md:text-right">LLM</span>
-                     <span className="text-amber-300 font-mono truncate" title={llmLabel}>{llmLabel}</span>
+                     <span className="text-neutral-600 md:text-right">LLM</span>
+                     <span className="text-neutral-700 font-mono truncate" title={llmLabel}>{llmLabel}</span>
                   </>
                )}
             </div>
@@ -181,7 +179,7 @@ export default function AgentTemplateManager({ onOpenEditor }) {
             >
                <button
                   onClick={() => handleDuplicate(template)}
-                  className="p-2 rounded hover:bg-neutral-700 text-neutral-300 hover:text-white"
+                  className="rohy-subtle-button p-2 rounded"
                   title="Duplicate"
                   aria-label="Duplicate"
                >
@@ -190,7 +188,7 @@ export default function AgentTemplateManager({ onOpenEditor }) {
                {isStandard ? (
                   <button
                      onClick={() => setResetTarget(template)}
-                     className="px-2 py-1.5 rounded hover:bg-amber-700/50 text-amber-400 hover:text-amber-200 flex items-center gap-1 text-xs"
+                     className="rohy-subtle-button px-2 py-1.5 rounded flex items-center gap-1 text-xs"
                      title="Reset to shipped defaults"
                      aria-label="Reset to defaults"
                   >
@@ -200,7 +198,7 @@ export default function AgentTemplateManager({ onOpenEditor }) {
                ) : (
                   <button
                      onClick={() => handleDelete(template)}
-                     className="p-2 rounded hover:bg-red-700/50 text-red-400 hover:text-red-200"
+                     className="rohy-danger-icon-button p-2 rounded"
                      title="Delete"
                      aria-label="Delete"
                   >
@@ -214,19 +212,19 @@ export default function AgentTemplateManager({ onOpenEditor }) {
 
    return (
       <div className="space-y-6">
-         <div className="flex items-center justify-between border-b border-neutral-800 pb-4">
+         <div className="flex items-center justify-between border-b border-neutral-300 pb-4">
             <div>
                <h3 className="text-lg font-bold flex items-center gap-2">
-                  <Bot className="w-5 h-5 text-purple-400" />
+                  <Bot className="w-5 h-5 text-teal-700" />
                   Agent Personas
                </h3>
-               <p className="text-sm text-neutral-500 mt-1">
+               <p className="text-sm text-neutral-600 mt-1">
                   Standard personas ship with Rohy. Admins can edit them in place; the &quot;Reset to defaults&quot; button restores the shipped baseline. Custom personas are admin-authored and available system-wide.
                </p>
             </div>
             <button
                onClick={handleCreate}
-               className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded text-sm flex items-center gap-1"
+               className="px-3 py-1.5 bg-teal-700 hover:bg-teal-600 text-white rounded text-sm flex items-center gap-1 font-semibold"
             >
                <Plus className="w-4 h-4" /> New Custom
             </button>
@@ -234,8 +232,8 @@ export default function AgentTemplateManager({ onOpenEditor }) {
 
          <section>
             <div className="flex items-center justify-between mb-2">
-               <h4 className="text-sm font-bold text-purple-300 uppercase tracking-wider">Standard templates</h4>
-               <span className="text-xs text-neutral-500">{standardTemplates.length} shipped · admin-editable</span>
+               <h4 className="text-sm font-bold text-teal-700 uppercase tracking-wider">Standard templates</h4>
+               <span className="text-xs text-neutral-600">{standardTemplates.length} shipped · admin-editable</span>
             </div>
             {standardTemplates.length === 0 ? (
                <div className="text-sm text-neutral-500 italic px-2 py-4">No standard templates seeded.</div>
@@ -246,12 +244,12 @@ export default function AgentTemplateManager({ onOpenEditor }) {
 
          <section>
             <div className="flex items-center justify-between mb-2">
-               <h4 className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Custom templates</h4>
-               <span className="text-xs text-neutral-500">{customTemplates.length} authored · system-wide</span>
+               <h4 className="text-sm font-bold text-neutral-700 uppercase tracking-wider">Custom templates</h4>
+               <span className="text-xs text-neutral-600">{customTemplates.length} authored · system-wide</span>
             </div>
             {customTemplates.length === 0 ? (
-               <div className="rounded border border-dashed border-neutral-800 p-6 text-center text-sm text-neutral-500">
-                  No custom templates yet. Click <span className="text-purple-300">+ New Custom</span> or duplicate a standard template above to get started.
+               <div className="rounded border border-dashed border-neutral-400 p-6 text-center text-sm text-neutral-600">
+                  No custom templates yet. Click <span className="text-teal-700">+ New Custom</span> or duplicate a standard template above to get started.
                </div>
             ) : (
                <div className="space-y-3">{customTemplates.map(t => renderTemplateCard(t, { isStandard: false }))}</div>
@@ -260,24 +258,24 @@ export default function AgentTemplateManager({ onOpenEditor }) {
 
          {resetTarget && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-               <div className="bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl w-full max-w-md">
-                  <div className="px-6 py-5 border-b border-neutral-800">
-                     <h2 className="text-base font-semibold text-white">Reset &quot;{resetTarget.name}&quot; to shipped defaults?</h2>
+               <div className="rohy-card rounded-lg shadow-2xl w-full max-w-md">
+                  <div className="px-6 py-5 border-b border-neutral-300">
+                     <h2 className="text-base font-semibold text-neutral-900">Reset &quot;{resetTarget.name}&quot; to shipped defaults?</h2>
                   </div>
-                  <div className="px-6 py-5 text-sm text-neutral-300 space-y-2">
+                  <div className="px-6 py-5 text-sm text-neutral-700 space-y-2">
                      <p>This restores the original name, role, system prompt, dos/don&apos;ts, avatar, and voice slot, and clears any LLM or memory overrides.</p>
-                     <p className="text-amber-400">Custom edits to this standard persona will be lost.</p>
+                     <p className="text-neutral-600">Custom edits to this standard persona will be lost.</p>
                   </div>
-                  <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-neutral-800">
+                  <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-neutral-300">
                      <button
                         onClick={() => setResetTarget(null)}
-                        className="px-4 py-2 text-sm rounded border border-neutral-700 text-neutral-300 hover:text-white"
+                        className="rohy-subtle-button px-4 py-2 text-sm rounded"
                      >
                         Cancel
                      </button>
                      <button
                         onClick={handleResetConfirmed}
-                        className="px-4 py-2 text-sm rounded bg-amber-600 hover:bg-amber-500 text-white font-semibold"
+                        className="px-4 py-2 text-sm rounded bg-teal-700 hover:bg-teal-600 text-white font-semibold"
                      >
                         Reset to defaults
                      </button>

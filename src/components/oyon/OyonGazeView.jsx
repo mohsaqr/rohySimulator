@@ -80,7 +80,7 @@ export default function OyonGazeView({ records, loading }) {
 
    if (!loading && summary.gazeWindowCount === 0) {
       return (
-         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
+         <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
             <ScanEye className="mx-auto mb-2 h-6 w-6 text-gray-400" />
             No gaze data in the current selection. Gaze arrives with windows captured
             by the v2 pill (mediapipe engine, on by default) — run a capture, then refresh.
@@ -89,7 +89,7 @@ export default function OyonGazeView({ records, loading }) {
    }
 
    return (
-      <div className="space-y-5">
+      <div className="rohy-admin-light space-y-5">
          {/* Aggregate stat chips — the summary panel comes first. */}
          <div className="flex flex-wrap gap-2">
             <Stat label="Gaze windows" value={`${summary.gazeWindowCount} / ${summary.windowCount}`} />
@@ -134,7 +134,7 @@ export default function OyonGazeView({ records, loading }) {
                      <div key={a.id} className="flex items-center gap-3" title={`${a.label}: ${pctOrDash(a.share)} of gaze time · ${formatDwell(a.dwellMs)} dwell · ${a.windows} windows`}>
                         <span className="w-24 shrink-0 truncate text-xs font-semibold text-gray-800">{a.label}</span>
                         <div className="h-3 flex-1 overflow-hidden rounded bg-gray-100">
-                           <div className="h-full rounded bg-purple-600/80" style={{ width: `${((a.share ?? 0) * 100).toFixed(1)}%` }} />
+                           <div className="h-full rounded bg-teal-700/80" style={{ width: `${((a.share ?? 0) * 100).toFixed(1)}%` }} />
                         </div>
                         <span className="w-32 shrink-0 text-right text-xs tabular-nums text-gray-600">
                            {pctOrDash(a.share)} · {formatDwell(a.dwellMs)}
@@ -281,10 +281,10 @@ function Stat({ label, value, hint, accent }) {
    return (
       <div
          title={hint}
-         className={`rounded-lg border px-3 py-2 ${accent ? 'border-purple-600/50 bg-purple-950/40' : 'border-gray-200 bg-white'}`}
+         className={`rounded-lg border px-3 py-2 ${accent ? 'border-teal-600/50 bg-teal-50' : 'border-gray-200 bg-white'}`}
       >
          <div className="text-[10px] uppercase tracking-wide text-gray-500">{label}</div>
-         <div className={`text-base font-bold tabular-nums ${accent ? 'text-purple-200' : 'text-gray-900'}`}>{value}</div>
+         <div className={`text-base font-bold tabular-nums ${accent ? 'text-teal-700' : 'text-gray-900'}`}>{value}</div>
       </div>
    );
 }
@@ -313,9 +313,9 @@ function CentroidMap({ points }) {
                cx={(clamp(p.x) + 0.5) * W}
                cy={(clamp(p.y) + 0.5) * H}
                r={2 + 5 * Math.sqrt(p.n / maxN)}
-               fill="#a855f7"
+               fill="#0f766e"
                fillOpacity={0.22}
-               stroke="#a855f7"
+               stroke="#0f766e"
                strokeOpacity={0.4}
             >
                <title>{`x ${p.x.toFixed(2)} · y ${p.y.toFixed(2)} · ${p.n} points`}</title>

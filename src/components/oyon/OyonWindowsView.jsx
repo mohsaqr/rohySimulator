@@ -43,7 +43,7 @@ export default function OyonWindowsView({ records, loading }) {
    }
 
    return (
-      <div className="space-y-2">
+      <div className="rohy-admin-light space-y-2">
          <div className="rounded-lg border border-gray-200 bg-white p-3 grid gap-3 md:grid-cols-3">
             <FormRow label="Min confidence" hint={`${(minConfidence * 100).toFixed(0)}%`}>
                <input
@@ -240,7 +240,7 @@ function FormRow({ label, hint, children }) {
 
 function Empty({ msg }) {
    return (
-      <div className="rounded-md border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
+      <div className="rohy-admin-light rounded-md border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
          {msg}
       </div>
    );

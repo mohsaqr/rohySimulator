@@ -12,7 +12,7 @@ export function emotionColor(label) {
    if (k === 'sad') return '#3b82f6';
    if (k === 'anger') return '#ef4444';
    if (k === 'fear') return '#d97706';
-   if (k === 'surprise') return '#c026d3';
+   if (k === 'surprise') return '#14b8a6';
    if (k === 'disgust') return '#65a30d';
    if (k === 'contempt') return '#f43f5e';
    if (k === 'neutral') return '#0891b2';

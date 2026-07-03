@@ -21,7 +21,7 @@ import { fix2 } from './emotionLogShared';
  * concatenation caveat instead of hiding).
  */
 
-const FOCUS_COLOR = '#a855f7';
+const FOCUS_COLOR = '#0f766e';
 const EYE_COLOR = '#0891b2';
 
 const TONE_STYLES = {
@@ -37,7 +37,7 @@ export default function OyonEngagementView({ records, loading }) {
 
    if (loading && summary.windows === 0) {
       return (
-         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+         <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
             Loading engagement data…
          </div>
       );
@@ -45,7 +45,7 @@ export default function OyonEngagementView({ records, loading }) {
 
    if (summary.engagementWindows === 0) {
       return (
-         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
+         <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
             <Gauge className="mx-auto mb-2 h-6 w-6 text-gray-400" />
             No engagement data in the current selection. Engagement arrives with
             windows captured by the v2 pill (mediapipe engine, on by default) —
@@ -57,7 +57,7 @@ export default function OyonEngagementView({ records, loading }) {
    const withEngagement = series.filter((p) => p.focus != null || p.eyeOpenness != null).length;
 
    return (
-      <div className="space-y-5">
+      <div className="rohy-admin-light space-y-5">
          {/* Summary chips — the element's Metric row */}
          <div className="flex flex-wrap gap-2">
             <Stat label="Windows" value={String(summary.windows)} />

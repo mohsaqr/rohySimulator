@@ -34,7 +34,7 @@ export default function OyonAttentionV2({ records, loading }) {
    }
 
    return (
-      <div className="space-y-4">
+      <div className="rohy-admin-light space-y-4">
          <section className="rounded-md border border-gray-200 bg-white p-3 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-3 border-b border-gray-100 pb-3">
                <div>
@@ -53,7 +53,7 @@ export default function OyonAttentionV2({ records, loading }) {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                <MetricCard icon={<Users className="h-5 w-5" />} label="Sessions" value={summary.sessions} detail={`${summary.windows} windows`} accent="cyan" />
                <MetricCard icon={<Activity className="h-5 w-5" />} label="Engagement Windows" value={`${summary.engagementWindows} / ${summary.windows}`} detail="Usable engagement payloads" accent="green" />
-               <MetricCard icon={<Gauge className="h-5 w-5" />} label="Avg Focus" value={pct(summary.avgFocus)} detail={focusLabel(summary.avgFocus)} accent="violet" />
+               <MetricCard icon={<Gauge className="h-5 w-5" />} label="Avg Focus" value={pct(summary.avgFocus)} detail={focusLabel(summary.avgFocus)} accent="teal" />
                <MetricCard icon={<Eye className="h-5 w-5" />} label="Eye Openness" value={pct(summary.avgEyeOpenness)} detail="Mean tracked openness" accent="cyan" />
                <MetricCard icon={<Timer className="h-5 w-5" />} label="Blink Rate" value={hz(summary.avgBlinkHz)} detail="Mean blink frequency" accent="amber" />
                <MetricCard icon={<ScanEye className="h-5 w-5" />} label="Off-screen" value={pct(summary.avgOffScreen)} detail="Look-away share" accent="rose" />
@@ -85,7 +85,7 @@ function MetricCard({ icon, label, value, detail, accent = 'cyan' }) {
       cyan: 'from-cyan-50 to-white text-cyan-700 ring-cyan-100',
       green: 'from-emerald-50 to-white text-emerald-700 ring-emerald-100',
       amber: 'from-amber-50 to-white text-amber-700 ring-amber-100',
-      violet: 'from-violet-50 to-white text-violet-700 ring-violet-100',
+      teal: 'from-teal-50 to-white text-teal-700 ring-teal-100',
       rose: 'from-rose-50 to-white text-rose-700 ring-rose-100',
       slate: 'from-slate-50 to-white text-slate-700 ring-slate-100',
    };
@@ -126,12 +126,12 @@ function FocusOverview({ points }) {
       <div className="space-y-3">
          <LineChart
             series={[
-               { name: 'Focus', color: '#7c3aed', values: points.map((p) => p.focus) },
+               { name: 'Focus', color: '#0f766e', values: points.map((p) => p.focus) },
                { name: 'Eye openness', color: '#0891b2', values: points.map((p) => p.eyeOpenness) },
             ]}
          />
          <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-            <LegendItem label="Focus" color="#7c3aed" />
+            <LegendItem label="Focus" color="#0f766e" />
             <LegendItem label="Eye openness" color="#0891b2" />
          </div>
       </div>
@@ -297,7 +297,7 @@ function EmptyPanelText({ children }) {
 
 function EmptyState({ icon, text, detail }) {
    return (
-      <div className="rounded-md border border-gray-200 bg-white p-8 text-center text-sm text-gray-600 shadow-sm">
+      <div className="rohy-admin-light rounded-md border border-gray-200 bg-white p-8 text-center text-sm text-gray-600 shadow-sm">
          {icon && <div className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-md bg-gray-50 text-gray-400">{icon}</div>}
          <div className="font-medium text-gray-800">{text}</div>
          {detail && <div className="mt-1 text-xs text-gray-500">{detail}</div>}

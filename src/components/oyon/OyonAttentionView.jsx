@@ -13,7 +13,7 @@ import { emotionColor } from './emotionLogShared';
  * module (tested); this file is layout + the inline SVG charts.
  */
 
-const FOCUS_COLOR = '#a855f7';
+const FOCUS_COLOR = '#0f766e';
 const EYE_COLOR = '#0891b2';
 
 const CROSS_TAB_COLUMNS = [
@@ -32,7 +32,7 @@ export default function OyonAttentionView({ records, loading }) {
 
    if (loading && summary.windows === 0) {
       return (
-         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+         <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
             Loading engagement data…
          </div>
       );
@@ -40,7 +40,7 @@ export default function OyonAttentionView({ records, loading }) {
 
    if (!loading && summary.engagementWindows === 0) {
       return (
-         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
+         <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
             <Eye className="mx-auto mb-2 h-6 w-6 text-gray-400" />
             No engagement data in the current selection. Engagement arrives with
             windows captured by the v2 pill (mediapipe engine, on by default) —
@@ -50,7 +50,7 @@ export default function OyonAttentionView({ records, loading }) {
    }
 
    return (
-      <div className="space-y-5">
+      <div className="rohy-admin-light space-y-5">
          {/* Quality + headline attention stat chips */}
          <div className="flex flex-wrap gap-2">
             <Stat label="Sessions" value={String(summary.sessions)} />
@@ -144,10 +144,10 @@ function Stat({ label, value, hint, accent }) {
    return (
       <div
          title={hint}
-         className={`rounded-lg border px-3 py-2 ${accent ? 'border-purple-600/50 bg-purple-950/40' : 'border-gray-200 bg-white'}`}
+         className={`rounded-lg border px-3 py-2 ${accent ? 'border-teal-600/50 bg-teal-50' : 'border-gray-200 bg-white'}`}
       >
          <div className="text-[10px] uppercase tracking-wide text-gray-500">{label}</div>
-         <div className={`text-base font-bold tabular-nums ${accent ? 'text-purple-200' : 'text-gray-900'}`}>{value}</div>
+         <div className={`text-base font-bold tabular-nums ${accent ? 'text-teal-700' : 'text-gray-900'}`}>{value}</div>
       </div>
    );
 }

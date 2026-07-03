@@ -36,7 +36,7 @@ export default function OyonAffectView({ records, loading }) {
 
    if (loading && summary.windows === 0) {
       return (
-         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+         <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
             Loading affect data…
          </div>
       );
@@ -44,7 +44,7 @@ export default function OyonAffectView({ records, loading }) {
 
    if (summary.windows === 0) {
       return (
-         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
+         <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
             <Smile className="mx-auto mb-2 h-6 w-6 text-gray-400" />
             No windows in the current selection. Affect appears once emotion
             windows have been captured — run a capture (or widen the filters),
@@ -54,7 +54,7 @@ export default function OyonAffectView({ records, loading }) {
    }
 
    return (
-      <div className="space-y-5">
+      <div className="rohy-admin-light space-y-5">
          {/* KPI chips — the element's summary row */}
          <div className="flex flex-wrap gap-2">
             <Stat label="Windows" value={String(summary.windows)} />
@@ -163,10 +163,10 @@ function Stat({ label, value, hint, accent, capitalizeValue }) {
    return (
       <div
          title={hint}
-         className={`rounded-lg border px-3 py-2 ${accent ? 'border-purple-300 bg-purple-50' : 'border-gray-200 bg-white'}`}
+         className={`rounded-lg border px-3 py-2 ${accent ? 'border-teal-300 bg-teal-50' : 'border-gray-200 bg-white'}`}
       >
          <div className="text-[10px] uppercase tracking-wide text-gray-500">{label}</div>
-         <div className={`text-base font-bold tabular-nums ${capitalizeValue ? 'capitalize' : ''} ${accent ? 'text-purple-700' : 'text-gray-900'}`}>{value}</div>
+         <div className={`text-base font-bold tabular-nums ${capitalizeValue ? 'capitalize' : ''} ${accent ? 'text-teal-700' : 'text-gray-900'}`}>{value}</div>
       </div>
    );
 }
@@ -230,7 +230,7 @@ function AffectPlane({ points }) {
          <text x={5} y={S / 2 - 5} textAnchor="start" fontSize={10} fill="#6b7280">negative</text>
          <text x={S - 5} y={S / 2 - 5} textAnchor="end" fontSize={10} fill="#6b7280">positive</text>
          {/* Trail line */}
-         <path d={path} fill="none" stroke="#a855f7" strokeWidth={1.5} opacity={0.35} strokeLinejoin="round" />
+         <path d={path} fill="none" stroke="#0f766e" strokeWidth={1.5} opacity={0.35} strokeLinejoin="round" />
          {/* Trail dots — older = smaller + dimmer */}
          {trail.map((p, i) => {
             const t = (i + 1) / trail.length;
@@ -240,7 +240,7 @@ function AffectPlane({ points }) {
                   cx={toX(p.v)}
                   cy={toY(p.a)}
                   r={2 + t * 4}
-                  fill="#a855f7"
+                  fill="#0f766e"
                   opacity={0.15 + t * 0.85}
                >
                   <title>{`${p.emotion} · v ${isNum(p.v) ? p.v.toFixed(2) : '—'} · a ${isNum(p.a) ? p.a.toFixed(2) : '—'} · ${p.quadrant ?? '—'}`}</title>
@@ -249,7 +249,7 @@ function AffectPlane({ points }) {
          })}
          {/* Latest dot with halo */}
          <circle cx={toX(last.v)} cy={toY(last.a)} r={10} fill="rgba(168,85,247,0.35)" />
-         <circle cx={toX(last.v)} cy={toY(last.a)} r={5} fill="#a855f7" />
+         <circle cx={toX(last.v)} cy={toY(last.a)} r={5} fill="#0f766e" />
       </svg>
    );
 }

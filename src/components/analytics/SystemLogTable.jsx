@@ -29,13 +29,13 @@ function fmtTime(ts) {
 
 const COMPONENT_COLOR = {
     auth:     'bg-emerald-900/40 text-emerald-300',
-    admin:    'bg-purple-900/40 text-purple-300',
+    admin:    'bg-teal-900/40 text-teal-300',
     config:   'bg-amber-900/40 text-amber-300',
     learning: 'bg-blue-900/40 text-blue-300',
     chat:     'bg-indigo-900/40 text-indigo-300',
     alarm:    'bg-orange-900/40 text-orange-300',
     llm:      'bg-fuchsia-900/40 text-fuchsia-300',
-    tts:      'bg-pink-900/40 text-pink-300',
+    tts:      'bg-sky-900/40 text-sky-300',
     emotion:  'bg-rose-900/40 text-rose-300',
     oyon:     'bg-yellow-900/40 text-yellow-300',
     vitals:   'bg-teal-900/40 text-teal-300',

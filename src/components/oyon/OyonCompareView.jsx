@@ -38,7 +38,7 @@ export default function OyonCompareView({ records, loading }) {
 
    if (loading && cmp.totalWindows === 0) {
       return (
-         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+         <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
             Loading comparison data…
          </div>
       );
@@ -46,7 +46,7 @@ export default function OyonCompareView({ records, loading }) {
 
    if (cmp.totalWindows === 0) {
       return (
-         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
+         <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
             <GitCompare className="mx-auto mb-2 h-6 w-6 text-gray-400" />
             No windows in the current selection. Comparisons appear once emotion
             windows have been captured — run a capture (or widen the filters),
@@ -60,7 +60,7 @@ export default function OyonCompareView({ records, loading }) {
    const chartGroups = cmp.groups.slice(0, CHART_CAP);
 
    return (
-      <div className="space-y-5">
+      <div className="rohy-admin-light space-y-5">
          {/* Compare-by toggle + slice select + export */}
          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs uppercase tracking-wide text-gray-500">Compare by</span>
@@ -71,7 +71,7 @@ export default function OyonCompareView({ records, loading }) {
                   aria-pressed={compareBy === id}
                   className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${
                      compareBy === id
-                        ? 'border-purple-600/60 bg-purple-950/40 text-purple-200'
+                        ? 'border-teal-600/60 bg-teal-50 text-teal-700'
                         : 'border-gray-300 text-gray-800 hover:bg-gray-100'
                   }`}
                >

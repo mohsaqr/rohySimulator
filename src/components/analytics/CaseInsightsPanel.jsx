@@ -19,7 +19,7 @@ import { apiFetch } from '../../services/apiClient';
 import { RefreshCw, Loader2, AlertTriangle, Zap, Bell } from 'lucide-react';
 import { emotionColor, signed, fix2, fmtTime } from '../oyon/emotionLogShared';
 
-const FIELD_CLS = 'bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs text-neutral-200 focus:outline-none focus:border-cyan-600';
+const FIELD_CLS = 'rohy-field rounded px-2 py-1 text-xs';
 
 // Colored valence delta: rise = green, drop = red, flat/unknown = neutral.
 function deltaColor(delta) {
@@ -102,7 +102,7 @@ function TriggerCard({ trigger }) {
     const isAlarm = trigger.source === 'alarm';
     const chips = vitalChangeChips(trigger.vital_changes);
     return (
-        <div className="bg-neutral-900 border border-neutral-700 rounded p-3 space-y-2">
+        <div className="rohy-card rounded p-3 space-y-2">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded font-semibold text-[11px] ${isAlarm ? 'bg-red-900/50 text-red-300' : 'bg-amber-900/50 text-amber-300'}`}>
                     {isAlarm ? <Bell className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
@@ -116,7 +116,7 @@ function TriggerCard({ trigger }) {
             {chips.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                     {chips.map((chip) => (
-                        <span key={chip} className="px-1.5 py-0.5 bg-neutral-800 border border-neutral-700 rounded font-mono text-[11px] text-neutral-300">
+                        <span key={chip} className="rohy-badge-neutral font-mono">
                             {chip}
                         </span>
                     ))}
@@ -202,7 +202,7 @@ export default function CaseInsightsPanel() {
                 />
                 <button
                     onClick={load}
-                    className="px-2 py-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-xs text-neutral-300 flex items-center gap-1"
+                    className="rohy-subtle-button px-2 py-1.5 rounded text-xs flex items-center gap-1"
                     title="Refresh"
                 >
                     <RefreshCw className="w-3 h-3" /> Refresh
@@ -220,13 +220,13 @@ export default function CaseInsightsPanel() {
             ) : (
                 <>
                     <section className="space-y-2">
-                        <h3 className="text-neutral-200 font-bold">Critical moments</h3>
+                        <h3 className="font-bold">Critical moments</h3>
                         <p className="text-xs text-neutral-500">
                             Fired scenario events and vitals alarms, with the sensed reaction
                             in the 30 seconds before vs after each one.
                         </p>
                         {data.triggers.length === 0 ? (
-                            <div className="text-center py-8 text-neutral-500 text-xs border border-dashed border-neutral-800 rounded">
+                            <div className="text-center py-8 rohy-table-muted text-xs border border-dashed border-[var(--rohy-border)] rounded">
                                 No critical moments in scope. Scenario events fire during a
                                 running session; vitals alarms appear when thresholds are crossed.
                             </div>
@@ -240,20 +240,20 @@ export default function CaseInsightsPanel() {
                     </section>
 
                     <section className="space-y-2">
-                        <h3 className="text-neutral-200 font-bold">Action–affect summary</h3>
+                        <h3 className="font-bold">Action-affect summary</h3>
                         <p className="text-xs text-neutral-500">
                             How trainees felt while performing each action, per case. n counts
                             every action; affect columns aggregate only the sensed ones.
                         </p>
                         {data.summary.length === 0 ? (
-                            <div className="text-center py-8 text-neutral-500 text-xs border border-dashed border-neutral-800 rounded">
+                            <div className="text-center py-8 rohy-table-muted text-xs border border-dashed border-[var(--rohy-border)] rounded">
                                 No actions in scope yet.
                             </div>
                         ) : (
-                            <div className="overflow-x-auto border border-neutral-700 rounded">
+                            <div className="rohy-table-shell overflow-x-auto rounded">
                                 <table className="w-full text-xs">
-                                    <thead>
-                                        <tr className="bg-neutral-900 text-neutral-400 text-left">
+                                    <thead className="rohy-table-head">
+                                        <tr className="text-left">
                                             <th className="px-3 py-2 font-semibold">case</th>
                                             <th className="px-3 py-2 font-semibold">action</th>
                                             <th className="px-3 py-2 font-semibold text-right">n</th>
@@ -267,19 +267,19 @@ export default function CaseInsightsPanel() {
                                         {data.summary.map((row) => (
                                             <tr
                                                 key={`${row.case_id}-${row.verb}`}
-                                                className="border-t border-neutral-800 hover:bg-neutral-900/60"
+                                                className="rohy-table-row"
                                             >
-                                                <td className="px-3 py-1.5 text-neutral-300">{row.case_title ?? '—'}</td>
-                                                <td className="px-3 py-1.5">
-                                                    <span className="px-1.5 py-0.5 bg-blue-900/40 text-blue-300 rounded font-medium text-[11px]">
+                                                <td className="rohy-table-cell px-3 py-1.5">{row.case_title ?? '—'}</td>
+                                                <td className="rohy-table-cell px-3 py-1.5">
+                                                    <span className="rohy-badge-teal">
                                                         {row.verb ?? '—'}
                                                     </span>
                                                 </td>
-                                                <td className="px-3 py-1.5 text-right font-mono text-neutral-300">{row.n}</td>
-                                                <td className="px-3 py-1.5"><EmotionChip label={row.emotion_dominant} /></td>
-                                                <td className="px-3 py-1.5 text-right"><Valence value={row.valence_mean} /></td>
-                                                <td className="px-3 py-1.5 text-neutral-200">{row.gaze_dominant ?? <span className="text-neutral-600">—</span>}</td>
-                                                <td className="px-3 py-1.5 text-right font-mono text-neutral-300">
+                                                <td className="rohy-table-cell px-3 py-1.5 text-right font-mono">{row.n}</td>
+                                                <td className="rohy-table-cell px-3 py-1.5"><EmotionChip label={row.emotion_dominant} /></td>
+                                                <td className="rohy-table-cell px-3 py-1.5 text-right"><Valence value={row.valence_mean} /></td>
+                                                <td className="rohy-table-cell px-3 py-1.5">{row.gaze_dominant ?? <span className="text-neutral-600">—</span>}</td>
+                                                <td className="rohy-table-cell px-3 py-1.5 text-right font-mono">
                                                     {row.focus_mean == null ? <span className="text-neutral-600">—</span> : fix2(row.focus_mean)}
                                                 </td>
                                             </tr>

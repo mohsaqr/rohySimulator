@@ -392,7 +392,7 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
    // ─── render ────────────────────────────────────────────────────────────
    if (loading || !template) {
       return (
-         <div className="h-screen w-screen bg-neutral-950 text-white flex items-center justify-center">
+         <div className="rohy-admin-light h-screen w-screen flex items-center justify-center">
             <div className="flex flex-col items-center gap-3 text-neutral-400">
                <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
                <span className="text-sm">Loading persona editor…</span>
@@ -404,7 +404,7 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
    const typeLabel = AGENT_TYPES.find(a => a.value === template.agent_type)?.label || template.agent_type;
 
    return (
-      <div className="h-screen w-screen bg-neutral-950 text-white flex flex-col overflow-hidden">
+      <div className="rohy-admin-light h-screen w-screen flex flex-col overflow-hidden">
 
          {/* ── Header ─────────────────────────────────────────────────── */}
          <header className="border-b border-neutral-800 bg-neutral-900/95 px-6 py-4 flex items-center justify-between gap-4">
