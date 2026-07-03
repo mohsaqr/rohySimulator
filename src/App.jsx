@@ -574,15 +574,13 @@ function MainApp() {
       // header renders nothing there anymore). Rendered whenever a user is
       // signed in, session or not: without a session the pill still captures
       // locally; persistence starts once consent + a session exist.
-      <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[80] w-full max-w-[calc(100vw-3rem)] pointer-events-none overflow-visible">
-         <div className="w-fit mx-auto pointer-events-auto">
-            <OyonCaptureWidget
-               sessionId={sessionId}
-               caseId={activeCase?.id}
-               room={oyonRoom}
-               onOpenAnalytics={canSeeOyonAnalytics ? handleOpenOyonAnalytics : undefined}
-            />
-         </div>
+      <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[80]">
+         <OyonCaptureWidget
+            sessionId={sessionId}
+            caseId={activeCase?.id}
+            room={oyonRoom}
+            onOpenAnalytics={canSeeOyonAnalytics ? handleOpenOyonAnalytics : undefined}
+         />
       </div>
    ) : null;
 
