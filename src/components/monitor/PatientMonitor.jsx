@@ -16,6 +16,7 @@ import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { apiFetch, apiPost } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
 import AoiRegion from '../oyon/AoiRegion';
+import { requestAvatarGlance } from '../oyon/studentPresence';
 
 /**
  * ECG GENERATION
@@ -350,6 +351,16 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    // Alarm System Hook — audio context, persistence, mute, ack/snooze all
    // live in the central NotificationCenter now; this hook just produces.
    const alarmSystem = useAlarms(displayVitals, sessionId);
+
+   // Alarm → the patient glances at his own monitor. The monitor is the
+   // right column of the screen, i.e. the avatar's LEFT (positive yaw for a
+   // +Z-facing head = toward screen right), slightly up toward the
+   // waveforms. Re-fires whenever the active-alarm set changes size, and
+   // expires on its own so he returns to the student.
+   const activeAlarmCount = alarmSystem.activeAlarms.length;
+   useEffect(() => {
+      if (activeAlarmCount > 0) requestAvatarGlance(0.5, -0.06, 6000);
+   }, [activeAlarmCount]);
 
    // Previous vitals for change detection
    const prevVitalsRef = useRef(displayVitals);
