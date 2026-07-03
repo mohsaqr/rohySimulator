@@ -567,14 +567,53 @@ function MainApp() {
       : showFullPageSettings ? 'settings'
       : showTnaAnalytics ? 'tna'
       : currentRoom;
+
+   // Publish the pill's live width as --oyon-pill-w on <html> so headers it
+   // floats over (PatientMonitor's) can reserve a real layout slot for it
+   // instead of letting their content slide underneath. The width is dynamic
+   // (recording state, consent badge, analytics shortcut), hence a
+   // ResizeObserver rather than a constant.
+   const oyonPillRef = useRef(null);
+   useEffect(() => {
+      const el = oyonPillRef.current;
+      const root = document.documentElement;
+      if (!el) {
+         root.style.removeProperty('--oyon-pill-w');
+         return undefined;
+      }
+      const publish = () => {
+         root.style.setProperty('--oyon-pill-w', `${Math.ceil(el.getBoundingClientRect().width)}px`);
+      };
+      const observer = new ResizeObserver(publish);
+      observer.observe(el);
+      publish();
+      return () => {
+         observer.disconnect();
+         root.style.removeProperty('--oyon-pill-w');
+      };
+   }, [user]);
    // Mirror ConfigPanel's canSeeOyonAnalytics gate: the pill's analytics
    // shortcut only renders for users who can actually see that tab.
+   //
+   // Positioning: on the chat+monitor screen the pill docks over the CENTER
+   // of the monitor column (left column is w-[35%] min-w-[350px], so the
+   // column seam is max(35vw, 350px)), where PatientMonitor's header grid
+   // reserves a matching slot via --oyon-pill-w. Everywhere else it keeps
+   // the historical viewport top-center spot.
+   const oyonDockedOverMonitor = oyonRoom === 'chat';
    const oyonPill = user ? (
-      // Top-center — the spot the pill has always lived in (the monitor
-      // header renders nothing there anymore). Rendered whenever a user is
-      // signed in, session or not: without a session the pill still captures
-      // locally; persistence starts once consent + a session exist.
-      <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[80]">
+      // Rendered whenever a user is signed in, session or not: without a
+      // session the pill still captures locally; persistence starts once
+      // consent + a session exist.
+      <div
+         ref={oyonPillRef}
+         className="fixed top-2 -translate-x-1/2 z-[80]"
+         style={{
+            left: oyonDockedOverMonitor
+               ? 'calc(max(35vw, 350px) + (100vw - max(35vw, 350px)) / 2)'
+               : '50vw',
+         }}
+      >
          <OyonCaptureWidget
             sessionId={sessionId}
             caseId={activeCase?.id}

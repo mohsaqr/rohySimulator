@@ -34,12 +34,12 @@ export default function PatientVisual({ caseData, participant }) {
         return {
             avatar_id: c.avatar_id || null,
             avatar_camera: c.avatar_camera || null,
-            gender: c.demographics?.gender,
-            name: c.patient_name,
-            age: c.demographics?.age,
+            gender: caseData?.patient_gender || c.demographics?.gender,
+            name: caseData?.patient_name || c.patient_name,
+            age: caseData?.patient_age || c.demographics?.age,
             id: caseData?.id
         };
-    }, [caseData?.id, caseData?.config]);
+    }, [caseData?.id, caseData?.config, caseData?.patient_name, caseData?.patient_age, caseData?.patient_gender]);
 
     const p = participant || activeParticipant || caseFallback;
 
@@ -91,6 +91,22 @@ export default function PatientVisual({ caseData, participant }) {
                     </div>
                 )}
             </div>
+
+            {/* Speaker caption — the patient's (or active agent's) name lives
+                here, on the face it belongs to, since the monitor header now
+                leads with the Rohy wordmark instead. Bottom-center overlay so
+                it reads as a caption under the avatar without reserving
+                layout height. */}
+            {p?.name && (
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 max-w-[85%] px-4 py-1.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-center pointer-events-none select-none">
+                    <div className="text-base font-bold text-white leading-tight truncate">{p.name}</div>
+                    {(p.age || p.gender) && (
+                        <div className="text-[11px] text-neutral-300 leading-tight truncate">
+                            {p.age ? `${p.age}y` : ''}{p.age && p.gender ? ' ' : ''}{p.gender || ''}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

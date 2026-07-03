@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Heart, Activity, Bell, Settings, Play, Pause, AlertCircle, X, Monitor, User, FileJson, Save, Download, Upload, Volume2, VolumeX, Pencil, Pill } from 'lucide-react';
+import { Heart, Activity, Bell, Settings, Play, Pause, AlertCircle, X, Monitor, FileJson, Save, Download, Upload, Volume2, VolumeX, Pencil, Pill } from 'lucide-react';
 import defaultSettings from '../../settings.json';
 import { useAlarms } from '../../hooks/useAlarms';
 import { useNotifications } from '../../notifications/useNotifications';
@@ -7,7 +7,6 @@ import { SOURCES } from '../../notifications/types';
 import { useTreatmentEffects } from '../../hooks/useTreatmentEffects';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { canSeeCaseTitle } from '../../utils/caseDisplayLabel';
 // Audio for alarms is owned by the central NotificationCenter's AudioSurface
 // (mounted in App.jsx); the legacy alarmAudio helpers are no longer needed
 // here. Imports and audio init click-handler removed below.
@@ -277,7 +276,7 @@ const importSettingsFromJSON = (file, setRhythm, setConditions, setParams) => {
 
 export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdmin: isAdminProp = false }) {
    const toast = useToast();
-   const { isAdmin: isAdminAuth, user } = useAuth();
+   const { isAdmin: isAdminAuth } = useAuth();
    const isAdmin = isAdminProp || isAdminAuth();
    const { noted, changed } = usePatientRecord();
    // --- Refs for Canvas & Buffers ---
@@ -1205,36 +1204,30 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    return (
       <div ref={containerRef} className="flex flex-col h-full bg-black text-gray-100 font-sans overflow-hidden select-none">
 
-         {/* HEADER */}
-         <div className="flex items-center justify-between px-4 py-3 bg-neutral-900 border-b border-neutral-800 shrink-0 z-20">
-            <div className="flex items-center gap-4">
-               <div className="bg-neutral-800 p-2 rounded-md">
+         {/* HEADER — three-zone grid. The middle column is a reserved dock
+             for the Oyon capture pill: the pill itself stays mounted ONCE at
+             App level (fixed overlay, centered over this monitor column) so
+             room navigation never restarts the camera, and App.jsx publishes
+             its live width as --oyon-pill-w. Reserving that width here means
+             the pill always wins the space contest — the patient identity on
+             the left truncates instead of sliding underneath it. */}
+         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4 py-3 bg-neutral-900 border-b border-neutral-800 shrink-0 z-20">
+            {/* Patient identity moved onto the avatar panel (PatientVisual)
+                where it labels the face it belongs to; the brand wordmark
+                takes its old spot so the header leads with the app, not a
+                name that duplicated the avatar caption. */}
+            <div className="flex items-center gap-4 min-w-0">
+               <div className="bg-neutral-800 p-2 rounded-md shrink-0">
                   <Monitor className="w-5 h-5 text-blue-400" />
                </div>
-               <div>
-                  <h1 className="text-lg font-bold tracking-tight text-white leading-tight">
-                     {caseData?.patient_name || caseData?.config?.patient_name || (canSeeCaseTitle(user) ? caseData?.name : null) || 'ICU MONITOR'}
-                  </h1>
-                  <div className="flex items-center gap-2 text-xs text-neutral-400">
-                     <User className="w-3 h-3" />
-                     <span>
-                        {(caseData?.patient_age || caseData?.config?.demographics?.age) ? `${caseData?.patient_age || caseData.config.demographics.age}y` : ''}
-                        {(caseData?.patient_gender || caseData?.config?.demographics?.gender) ? ` ${caseData?.patient_gender || caseData.config.demographics.gender}` : ''}
-                        {caseData?.config?.demographics?.weight ? ` • ${caseData.config.demographics.weight}` : ''}
-                     </span>
-                  </div>
-               </div>
+               <VersionBadge />
             </div>
 
-            {/* The Oyon capture pill used to sit here; it now mounts ONCE at
-                App level (fixed overlay, bottom-right) so it survives room
-                navigation and settings screens without restarting the camera. */}
+            {/* Dock slot for the App-level Oyon pill — width tracks the pill
+                via --oyon-pill-w (0 when the pill isn't rendered). */}
+            <div aria-hidden="true" style={{ width: 'var(--oyon-pill-w, 0px)' }} />
 
-            <div className="flex items-center gap-3">
-               {/* Rohy version stamp — sits beside the session timer.
-                   Moved here from the global top-centre mount so it stops
-                   colliding with the Oyon widget and the patient name. */}
-               <VersionBadge />
+            <div className="flex items-center gap-3 justify-self-end">
                {/* Session Timer */}
                {monitorSettings.showTimer && (
                   <div className="text-center mr-2 px-3 py-1 bg-neutral-800 rounded-lg">
