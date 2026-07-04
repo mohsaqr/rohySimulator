@@ -58,6 +58,7 @@
     "lucide-react": "^0.562.0",
     "multer": "^2.0.2",
     "oyon": "file:./OyonR",
+    "papaparse": "^5.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "sqlite3": "^5.1.7",

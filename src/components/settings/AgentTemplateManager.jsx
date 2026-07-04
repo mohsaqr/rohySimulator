@@ -120,53 +120,59 @@ export default function AgentTemplateManager({ onOpenEditor }) {
          <div
             key={template.id}
             onClick={() => handleEdit(template)}
-            className="rohy-card rounded-lg transition-colors px-4 py-3 flex flex-col md:flex-row md:items-center gap-3 cursor-pointer"
+            className="rohy-card rounded-lg transition-colors px-4 py-3 flex items-start gap-3 cursor-pointer"
          >
-            <div className="flex items-center gap-3 min-w-0 md:flex-1">
-               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${AGENT_TYPE_BADGE[template.agent_type] || AGENT_TYPE_BADGE.other}`}>
-                  <Users className="w-5 h-5" />
-               </div>
-               <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                     <span className="font-medium">{template.name}</span>
-                     <span className="rohy-badge-neutral capitalize">{template.agent_type}</span>
-                     {isStandard && (
-                        <span className="rohy-badge-teal">Standard</span>
-                     )}
-                  </div>
-                  <div className="text-sm text-neutral-600 truncate">
-                     {template.role_title || template.agent_type} · {template.communication_style || 'standard'}
-                  </div>
-               </div>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${AGENT_TYPE_BADGE[template.agent_type] || AGENT_TYPE_BADGE.other}`}>
+               <Users className="w-5 h-5" />
             </div>
 
-            {/* Value grid. On md+ screens it sits to the right of the name
-                column with right-aligned labels; on narrow screens (mobile,
-                side panels) it stacks vertically under the name as a single
-                column of "label: value" lines so the info doesn't disappear. */}
-            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs shrink-0 md:max-w-[280px] w-full md:w-auto">
-               <span className="text-neutral-600 md:text-right">voice</span>
-               <span className={voiceId ? 'text-neutral-900 font-mono truncate' : 'text-neutral-500 italic'} title={voiceId || 'no voice set'}>
-                  {voiceId || 'unset'}{voiceGender ? <span className="text-neutral-600"> · {voiceGender}</span> : null}
-               </span>
-               <span className="text-neutral-600 md:text-right">avatar</span>
-               <span className={avatarFile ? 'text-neutral-900 font-mono truncate' : 'text-neutral-500 italic'} title={avatarFile || 'no avatar set'}>
-                  {avatarFile || 'unset'}
-               </span>
-               <span className="text-neutral-600 md:text-right">do / don&apos;t</span>
-               <span className="text-neutral-700">
-                  <span className={dosCount > 0 ? 'text-teal-700' : 'text-neutral-500'}>{dosCount}</span>
-                  {' / '}
-                  <span className={dontsCount > 0 ? 'text-red-700' : 'text-neutral-500'}>{dontsCount}</span>
-               </span>
-               <span className="text-neutral-600 md:text-right">context</span>
-               <span className={ctxColor}>{ctxFilter}</span>
-               {llmLabel && (
-                  <>
-                     <span className="text-neutral-600 md:text-right">LLM</span>
-                     <span className="text-neutral-700 font-mono truncate" title={llmLabel}>{llmLabel}</span>
-                  </>
-               )}
+            {/* Identity + metadata. The attributes lay out as a wrapping strip
+                of labelled chips that fills the row width, rather than a cramped
+                right-aligned key/value grid that left a dead gap in the middle.
+                The strip wraps gracefully in narrow side panels. */}
+            <div className="min-w-0 flex-1">
+               <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold">{template.name}</span>
+                  <span className="rohy-badge-neutral capitalize">{template.agent_type}</span>
+                  {isStandard && (
+                     <span className="rohy-badge-teal">Standard</span>
+                  )}
+               </div>
+               <div className="text-sm text-neutral-600 truncate mt-0.5">
+                  {template.role_title || template.agent_type} · {template.communication_style || 'standard'}
+               </div>
+
+               <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                  <span className="rohy-meta-chip">
+                     <span className="rohy-meta-chip__k">voice</span>
+                     <span className={voiceId ? 'font-mono truncate max-w-[150px]' : 'text-neutral-500 italic'} title={voiceId || 'no voice set'}>
+                        {voiceId || 'unset'}
+                     </span>
+                     {voiceGender && <span className="text-neutral-500">· {voiceGender}</span>}
+                  </span>
+                  <span className="rohy-meta-chip">
+                     <span className="rohy-meta-chip__k">avatar</span>
+                     <span className={avatarFile ? 'font-mono truncate max-w-[180px]' : 'text-neutral-500 italic'} title={avatarFile || 'no avatar set'}>
+                        {avatarFile || 'unset'}
+                     </span>
+                  </span>
+                  <span className="rohy-meta-chip" title={`${dosCount} dos · ${dontsCount} don'ts`}>
+                     <span className="rohy-meta-chip__k">do / don&apos;t</span>
+                     <span className={dosCount > 0 ? 'text-teal-700 font-semibold' : 'text-neutral-400'}>{dosCount}</span>
+                     <span className="text-neutral-400">/</span>
+                     <span className={dontsCount > 0 ? 'text-red-700 font-semibold' : 'text-neutral-400'}>{dontsCount}</span>
+                  </span>
+                  <span className="rohy-meta-chip">
+                     <span className="rohy-meta-chip__k">context</span>
+                     <span className={`font-medium ${ctxColor}`}>{ctxFilter}</span>
+                  </span>
+                  {llmLabel && (
+                     <span className="rohy-meta-chip" title={llmLabel}>
+                        <span className="rohy-meta-chip__k">llm</span>
+                        <span className="font-mono truncate max-w-[180px]">{llmLabel}</span>
+                     </span>
+                  )}
+               </div>
             </div>
 
             {/* Action buttons. Stop propagation so clicks don't trigger the
@@ -174,7 +180,7 @@ export default function AgentTemplateManager({ onOpenEditor }) {
                 because RotateCcw alone reads as "undo" and we don't want
                 anyone touching a shipped standard by mistake. */}
             <div
-               className="flex items-center gap-1 shrink-0 self-end md:self-auto"
+               className="flex items-center gap-1 shrink-0"
                onClick={(e) => e.stopPropagation()}
             >
                <button

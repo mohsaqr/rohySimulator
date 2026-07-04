@@ -20,7 +20,10 @@ import {
     canManageOwnedResource,
     canReadAcrossUsers,
     clampInitialVitals,
+    cohortCaseEnforcementOn,
+    cohortCaseVisibleExists,
     createCaseVersion,
+    isEnforcedStudent,
     logAudit,
     mergeScenarioSource,
     parseAuditJson,
@@ -50,15 +53,30 @@ try {
 
 const router = express.Router();
 
-router.get('/cases', authenticateToken, (req, res) => {
+router.get('/cases', authenticateToken, async (req, res) => {
     const canReview = canReadAcrossUsers(req.user);
 
-    // Students only see available cases; reviewer+ can inspect all cases.
-    const sql = canReview
-        ? "SELECT * FROM cases WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, created_at DESC"
-        : "SELECT * FROM cases WHERE tenant_id = ? AND deleted_at IS NULL AND is_available = 1 ORDER BY is_default DESC, created_at DESC";
+    // Reviewer+ inspect all cases. Students see available cases; when cohort-case
+    // enforcement is ON they additionally must be assigned the case (in-window)
+    // via a class they belong to — the tenant default case is always visible so
+    // "Basic course" members are never locked out. Flag OFF = legacy behaviour.
+    let sql;
+    let params;
+    if (canReview) {
+        sql = "SELECT * FROM cases WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, created_at DESC";
+        params = [tenantId(req)];
+    } else if (isEnforcedStudent(req.user) && await cohortCaseEnforcementOn()) {
+        sql = `SELECT c.* FROM cases c
+               WHERE c.tenant_id = ? AND c.deleted_at IS NULL AND c.is_available = 1
+                 AND ( c.is_default = 1 OR ${cohortCaseVisibleExists('c')} )
+               ORDER BY c.is_default DESC, c.created_at DESC`;
+        params = [tenantId(req), req.user.id];
+    } else {
+        sql = "SELECT * FROM cases WHERE tenant_id = ? AND deleted_at IS NULL AND is_available = 1 ORDER BY is_default DESC, created_at DESC";
+        params = [tenantId(req)];
+    }
 
-    dbAdapter.all(sql, [tenantId(req)], (err, rows) => {
+    dbAdapter.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
 
         // Parse JSON fields
@@ -94,11 +112,24 @@ router.get('/cases', authenticateToken, (req, res) => {
 });
 
 // GET /api/cases/:id - Authenticated users can read a live case in their tenant
-router.get('/cases/:id', authenticateToken, (req, res) => {
-    const sql = canReadAcrossUsers(req.user)
-        ? `SELECT * FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`
-        : `SELECT * FROM cases WHERE id = ? AND tenant_id = ? AND is_available = 1 AND deleted_at IS NULL`;
-    dbAdapter.get(sql, [req.params.id, tenantId(req)], (err, row) => {
+router.get('/cases/:id', authenticateToken, async (req, res) => {
+    let sql;
+    let params;
+    if (canReadAcrossUsers(req.user)) {
+        sql = `SELECT * FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`;
+        params = [req.params.id, tenantId(req)];
+    } else if (isEnforcedStudent(req.user) && await cohortCaseEnforcementOn()) {
+        // Same gate as GET /cases; a hidden case returns the existing 404 (no
+        // existence leak — "not assigned" is indistinguishable from "not found").
+        sql = `SELECT c.* FROM cases c
+               WHERE c.id = ? AND c.tenant_id = ? AND c.is_available = 1 AND c.deleted_at IS NULL
+                 AND ( c.is_default = 1 OR ${cohortCaseVisibleExists('c')} )`;
+        params = [req.params.id, tenantId(req), req.user.id];
+    } else {
+        sql = `SELECT * FROM cases WHERE id = ? AND tenant_id = ? AND is_available = 1 AND deleted_at IS NULL`;
+        params = [req.params.id, tenantId(req)];
+    }
+    dbAdapter.get(sql, params, (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(404).json({ error: 'Case not found' });
         res.json({

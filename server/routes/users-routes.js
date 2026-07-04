@@ -19,6 +19,7 @@ import {
     auditSuccess,
     buildUserPurgePlan,
     dbGet,
+    ensureBasicCourseMembership,
     executeUserPurge,
     isValidRole,
     logAudit,
@@ -210,16 +211,182 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
     });
 });
 
+// Idempotent, revive-aware enrol of a user into a cohort (local to import).
+async function enrollUserInCohort(cohortId, userId) {
+    const existing = await dbAdapter.get(
+        `SELECT id, deleted_at FROM cohort_members WHERE cohort_id = ? AND user_id = ?
+          ORDER BY (deleted_at IS NULL) DESC, id DESC LIMIT 1`,
+        [cohortId, userId]
+    );
+    if (existing && existing.deleted_at == null) return 'already';
+    if (existing) {
+        // Fresh re-enrolment on revive (mirror upsertMember): reset lifecycle to
+        // active + clear the window so access is actually restored.
+        await dbAdapter.run(
+            `UPDATE cohort_members SET deleted_at = NULL, status = 'active', enrolled_from = NULL, enrolled_until = NULL WHERE id = ?`,
+            [existing.id]
+        );
+        return 'revived';
+    }
+    await dbAdapter.run(`INSERT INTO cohort_members (cohort_id, user_id) VALUES (?, ?)`, [cohortId, userId]);
+    return 'enrolled';
+}
+
+// POST /api/users/import - Wizard commit: create users AND enrol them into a
+// class, with a validate-only `dryRun`. Reuses the batch validation rules and
+// leaves /users/batch untouched. A per-row `class` (name or join_code) overrides
+// the top-level `cohortId`. Returns per-row created/enrolled/skipped/failed so
+// the client can build a downloadable error report.
+router.post('/users/import', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { rows, cohortId, dryRun } = req.body || {};
+        if (!Array.isArray(rows) || rows.length === 0) {
+            return res.status(400).json({ error: 'rows must be a non-empty array' });
+        }
+        const tid = tenantId(req);
+        const results = { created: [], enrolled: [], skipped: [], failed: [] };
+
+        const existingUsers = await dbAdapter.all(
+            `SELECT id, username, email FROM users WHERE tenant_id = ? AND deleted_at IS NULL`, [tid]
+        );
+        const byUsername = new Map(existingUsers.map(u => [String(u.username).toLowerCase(), u]));
+        const byEmail = new Map(existingUsers.map(u => [String(u.email).toLowerCase(), u]));
+        const seenInFile = new Set();
+
+        let topCohort = null;
+        if (cohortId) {
+            topCohort = await dbAdapter.get(
+                `SELECT id, name FROM cohorts WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`, [cohortId, tid]
+            );
+            if (!topCohort) return res.status(400).json({ error: 'cohortId is not a valid class in this tenant' });
+        }
+
+        for (let i = 0; i < rows.length; i++) {
+            const raw = rows[i] || {};
+            const username = String(raw.username || '').trim();
+            const email = String(raw.email || '').trim();
+            const name = String(raw.name || '').trim();
+            const password = raw.password || '';
+            const finalRole = roleForStorage(raw.role || 'student');
+            const className = String(raw.class || raw.cohort || '').trim();
+            const rowNo = i + 1;
+            const fail = (error) => results.failed.push({ row: rowNo, username, email, role: raw.role || 'student', class: className, error });
+
+            if (!username || !email) { fail('Missing username or email'); continue; }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { fail('Invalid email format'); continue; }
+            if (!isValidRole(finalRole)) { fail('Invalid role'); continue; }
+            if (getRoleRank(finalRole) > getRoleRank(req.user)) { fail('Cannot grant a role higher than your own'); continue; }
+
+            const uKey = username.toLowerCase();
+            const eKey = email.toLowerCase();
+            if (seenInFile.has(uKey) || seenInFile.has(eKey)) { fail('Duplicate row in file'); continue; }
+            seenInFile.add(uKey); seenInFile.add(eKey);
+
+            let cohort = topCohort;
+            if (className) {
+                cohort = await dbAdapter.get(
+                    `SELECT id, name FROM cohorts WHERE (name = ? OR join_code = ?) AND tenant_id = ? AND deleted_at IS NULL
+                      ORDER BY (name = ?) DESC LIMIT 1`,
+                    [className, className, tid, className]
+                );
+                if (!cohort) { fail(`Unknown class "${className}"`); continue; }
+            }
+
+            const existing = byUsername.get(uKey) || byEmail.get(eKey);
+            if (existing) {
+                if (!cohort) { results.skipped.push({ row: rowNo, username, email, reason: 'already exists (no class to enrol into)' }); continue; }
+                if (dryRun) { results.enrolled.push({ row: rowNo, username: existing.username, class: cohort.name, existing: true }); continue; }
+                const outcome = await enrollUserInCohort(cohort.id, existing.id);
+                results.enrolled.push({ row: rowNo, username: existing.username, class: cohort.name, existing: true, outcome });
+                continue;
+            }
+
+            if (!password) { fail('Password required for a new user'); continue; }
+            const pv = validatePassword(password);
+            if (!pv.valid) { fail(pv.errors.join('. ')); continue; }
+
+            if (dryRun) { results.created.push({ row: rowNo, username, email, role: finalRole, class: cohort?.name || null }); continue; }
+
+            try {
+                const password_hash = await bcrypt.hash(password, 10);
+                const newId = await new Promise((resolve, reject) => {
+                    dbAdapter.run(
+                        `INSERT INTO users (username, name, email, password_hash, role, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+                        [username, name || null, email, password_hash, finalRole, tid],
+                        function (err) {
+                            if (err) return reject(err.message?.includes('UNIQUE') ? new Error('Username or email already exists') : err);
+                            resolve(this.lastID);
+                        }
+                    );
+                });
+                results.created.push({ row: rowNo, id: newId, username, email, role: finalRole, class: cohort?.name || null });
+                await ensureBasicCourseMembership(newId, tid);
+                if (cohort) {
+                    const outcome = await enrollUserInCohort(cohort.id, newId);
+                    results.enrolled.push({ row: rowNo, username, class: cohort.name, outcome });
+                }
+                byUsername.set(uKey, { id: newId, username, email });
+                byEmail.set(eKey, { id: newId, username, email });
+            } catch (err) {
+                fail(err.message || 'Insert failed');
+            }
+        }
+
+        if (!dryRun) {
+            auditSuccess(req, {
+                action: 'admin_import_users', resourceType: 'user_batch', resourceId: `import-${Date.now()}`,
+                metadata: {
+                    created: results.created.length, enrolled: results.enrolled.length,
+                    skipped: results.skipped.length, failed: results.failed.length, cohort_id: cohortId || null,
+                },
+            });
+        }
+        res.json({ dryRun: !!dryRun, results });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /api/tenants - Create a tenant shell for future enterprise deployments.
 // E6 keeps admins tenant-local; cross-tenant super-admin views and bulk user
 // migration tooling are explicitly deferred.
 
-router.get('/users', authenticateToken, requireAdmin, (req, res) => {
-    const sql = `SELECT id, username, name, email, role, tenant_id, created_at FROM users WHERE tenant_id = ? ORDER BY created_at DESC`;
-    dbAdapter.all(sql, [tenantId(req)], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ users: rows });
-    });
+router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
+    // Additive: extra columns (status, last_login, department, deleted_at) plus
+    // an opt-in `?include=memberships` join. The WHERE clause is unchanged so
+    // existing consumers (PeoplePicker, cohortsService.listTenantUsers) see the
+    // same row set, just with more fields.
+    try {
+        const users = await dbAdapter.all(
+            `SELECT id, username, name, email, role, status, last_login, department, tenant_id, created_at, deleted_at
+               FROM users WHERE tenant_id = ? ORDER BY created_at DESC`,
+            [tenantId(req)]
+        );
+        const includeMemberships = String(req.query.include || '').split(',').includes('memberships');
+        if (includeMemberships && users.length) {
+            const rows = await dbAdapter.all(
+                `SELECT cm.user_id, co.id AS cohort_id, co.name AS cohort_name,
+                        cm.member_role, cm.status AS enrollment_status
+                   FROM cohort_members cm
+                   JOIN cohorts co ON co.id = cm.cohort_id AND co.deleted_at IS NULL
+                  WHERE cm.deleted_at IS NULL AND co.tenant_id = ?
+                  ORDER BY co.name ASC`,
+                [tenantId(req)]
+            );
+            const byUser = new Map();
+            for (const r of rows) {
+                if (!byUser.has(r.user_id)) byUser.set(r.user_id, []);
+                byUser.get(r.user_id).push({
+                    cohort_id: r.cohort_id, name: r.cohort_name,
+                    member_role: r.member_role, enrollment_status: r.enrollment_status,
+                });
+            }
+            for (const u of users) u.memberships = byUser.get(u.id) || [];
+        }
+        res.json({ users });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // --- USER PREFERENCES (declared early) ---
@@ -323,43 +490,147 @@ router.get('/users/:id', authenticateToken, requireAdmin, (req, res) => {
     });
 });
 
+// GET /api/users/:id/detail - Rich user detail for the admin workspace drawer:
+// profile + class memberships + inherited (class-assigned) cases + session count.
+router.get('/users/:id/detail', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const id = req.params.id;
+        const tid = tenantId(req);
+        const user = await dbAdapter.get(
+            `SELECT id, username, name, email, role, status, last_login, department, institution,
+                    tenant_id, created_at
+               FROM users WHERE id = ? AND tenant_id = ?`,
+            [id, tid]
+        );
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        const memberships = await dbAdapter.all(
+            `SELECT co.id AS cohort_id, co.name, cm.member_role, cm.status AS enrollment_status
+               FROM cohort_members cm
+               JOIN cohorts co ON co.id = cm.cohort_id AND co.deleted_at IS NULL
+              WHERE cm.user_id = ? AND cm.deleted_at IS NULL AND co.tenant_id = ?
+              ORDER BY co.name ASC`,
+            [id, tid]
+        );
+        const inherited = await dbAdapter.all(
+            `SELECT DISTINCT ca.id, ca.name
+               FROM cohort_members cm
+               JOIN cohorts co ON co.id = cm.cohort_id AND co.deleted_at IS NULL
+               JOIN cohort_cases cc ON cc.cohort_id = co.id AND cc.deleted_at IS NULL
+               JOIN cases ca ON ca.id = cc.case_id AND ca.deleted_at IS NULL
+              WHERE cm.user_id = ? AND cm.deleted_at IS NULL AND cm.status = 'active' AND co.tenant_id = ?
+              ORDER BY ca.name ASC`,
+            [id, tid]
+        );
+        const sc = await dbAdapter.get(
+            `SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+            [id, tid]
+        );
+        if (String(id) !== String(req.user.id)) {
+            auditSuccess(req, { action: 'read_user_detail_admin', resourceType: 'user', resourceId: String(id), resourceName: user.username });
+        }
+        res.json({ user, memberships, inherited_cases: inherited, session_count: sc?.n || 0 });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PATCH /api/users/:id/status - Set account status (active|inactive|suspended).
+router.patch('/users/:id/status', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const id = req.params.id;
+        const status = req.body?.status;
+        if (!['active', 'inactive', 'suspended'].includes(status)) {
+            return res.status(400).json({ error: "status must be 'active', 'inactive', or 'suspended'" });
+        }
+        if (String(id) === String(req.user.id) && status !== 'active') {
+            return res.status(400).json({ error: 'You cannot deactivate your own account' });
+        }
+        const target = await dbAdapter.get(
+            'SELECT id, username, role, status FROM users WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
+            [id, tenantId(req)]
+        );
+        if (!target) return res.status(404).json({ error: 'User not found' });
+        if (getRoleRank(target.role) >= getRoleRank(req.user.role)) {
+            return res.status(403).json({ error: 'Cannot modify a user at or above your role' });
+        }
+        await dbAdapter.run('UPDATE users SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?', [status, id, tenantId(req)]);
+        auditSuccess(req, {
+            action: 'admin_user_status_change', resourceType: 'user', resourceId: String(id),
+            resourceName: target.username, oldValue: { status: target.status }, newValue: { status },
+        });
+        res.json({ updated: true, status });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/users/bulk-action - Apply role/suspend/reactivate to many users.
+// Delete is intentionally excluded (single DELETE /users/:id keeps the hard
+// cascade + case-version protection). Each row guarded (no self, rank ceiling).
+router.post('/users/bulk-action', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { action, ids, value } = req.body || {};
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: 'ids must be a non-empty array' });
+        }
+        if (!['role', 'suspend', 'reactivate'].includes(action)) {
+            return res.status(400).json({ error: "action must be 'role', 'suspend', or 'reactivate'" });
+        }
+        const tid = tenantId(req);
+        const results = { success: [], failed: [] };
+        for (const rawId of ids) {
+            const id = Number(rawId);
+            try {
+                if (String(id) === String(req.user.id)) { results.failed.push({ id, error: 'cannot act on self' }); continue; }
+                const target = await dbAdapter.get('SELECT id, username, role FROM users WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tid]);
+                if (!target) { results.failed.push({ id, error: 'not found' }); continue; }
+                if (getRoleRank(target.role) >= getRoleRank(req.user.role)) { results.failed.push({ id, error: 'at or above your role' }); continue; }
+                if (action === 'role') {
+                    const newRole = roleForStorage(value, null);
+                    if (!newRole || !isValidRole(newRole)) { results.failed.push({ id, error: 'invalid role' }); continue; }
+                    if (getRoleRank(newRole) > getRoleRank(req.user.role)) { results.failed.push({ id, error: 'cannot grant a role above your own' }); continue; }
+                    await dbAdapter.run('UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?', [newRole, id, tid]);
+                } else if (action === 'suspend') {
+                    await dbAdapter.run("UPDATE users SET status = 'suspended', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?", [id, tid]);
+                } else {
+                    await dbAdapter.run("UPDATE users SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?", [id, tid]);
+                }
+                results.success.push({ id, username: target.username });
+            } catch (err) {
+                results.failed.push({ id, error: err.message });
+            }
+        }
+        auditSuccess(req, {
+            action: `admin_bulk_${action}`, resourceType: 'user',
+            metadata: { count: ids.length, success: results.success.length, failed: results.failed.length, value: action === 'role' ? value : undefined },
+        });
+        res.json({ results });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // PUT /api/users/:id - Update user (Admin only)
 //
 // Stage-7 audit: log password resets and role changes. Pre-fix admins
 // could rotate passwords or escalate roles silently — no audit trail for
 // incident response.
 router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-    const { username, name, email, role, password } = req.body;
+    const body = req.body || {};
     const targetUserId = req.params.id;
-    const requestedRole = roleForStorage(role, null);
-
-    // Read prior state so we can record what changed.
-    const prior = await new Promise((resolve) => {
-        dbAdapter.get('SELECT username, role, tenant_id FROM users WHERE id = ? AND tenant_id = ?', [targetUserId, tenantId(req)], (err, row) => {
-            if (err) return resolve(null);
-            resolve(row);
-        });
-    });
-
-    const logUserChange = ({ passwordReset, roleChanged }) => {
-        if (!passwordReset && !roleChanged) return;
-        logAudit({
-            userId: req.user.id,
-            username: req.user.username,
-            action: passwordReset && roleChanged
-                ? 'admin_user_password_and_role_change'
-                : passwordReset ? 'admin_user_password_reset' : 'admin_user_role_change',
-            targetType: 'user',
-            targetId: targetUserId,
-            oldValue: prior ? { role: prior.role } : null,
-            newValue: { role: requestedRole ?? prior?.role }
-        });
-    };
+    const requestedRole = roleForStorage(body.role, null);
 
     try {
-        if (!prior) {
-            return res.status(404).json({ error: 'User not found' });
-        }
+        // Read the full prior row so unspecified fields are preserved (read-merge)
+        // and so we can audit role/password/status changes.
+        const prior = await dbAdapter.get(
+            `SELECT username, name, email, role, tenant_id, status,
+                    department, institution, address, phone, alternative_email, education, grade
+               FROM users WHERE id = ? AND tenant_id = ?`,
+            [targetUserId, tenantId(req)]
+        );
+        if (!prior) return res.status(404).json({ error: 'User not found' });
+
         if (requestedRole && !isValidRole(requestedRole)) {
             return res.status(400).json({ error: 'Invalid role' });
         }
@@ -368,44 +639,77 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
         }
         const finalRole = requestedRole || prior.role;
 
-        // If password is provided, validate and hash it
-        if (password) {
-            const passwordValidation = validatePassword(password);
-            if (!passwordValidation.valid) {
-                return res.status(400).json({ error: passwordValidation.errors.join('. ') });
+        let finalStatus = prior.status;
+        if (body.status !== undefined) {
+            if (!['active', 'inactive', 'suspended'].includes(body.status)) {
+                return res.status(400).json({ error: "status must be 'active', 'inactive', or 'suspended'" });
             }
-            const password_hash = await bcrypt.hash(password, 10);
-            const sql = `UPDATE users SET username = ?, name = ?, email = ?, role = ?, password_hash = ? WHERE id = ? AND tenant_id = ?`;
-            dbAdapter.run(sql, [username, name || null, email, finalRole, password_hash, targetUserId, tenantId(req)], function (err) {
-                if (err) {
-                    if (err.message.includes('UNIQUE')) {
-                        return res.status(409).json({ error: 'Username or email already exists' });
-                    }
-                    return res.status(500).json({ error: 'Failed to update user' });
-                }
-                if (this.changes === 0) {
-                    return res.status(404).json({ error: 'User not found' });
-                }
-                logUserChange({ passwordReset: true, roleChanged: prior.role !== finalRole });
-                res.json({ message: 'User updated successfully', id: targetUserId });
-            });
-        } else {
-            // Update without changing password
-            const sql = `UPDATE users SET username = ?, name = ?, email = ?, role = ? WHERE id = ? AND tenant_id = ?`;
-            dbAdapter.run(sql, [username, name || null, email, finalRole, targetUserId, tenantId(req)], function (err) {
-                if (err) {
-                    if (err.message.includes('UNIQUE')) {
-                        return res.status(409).json({ error: 'Username or email already exists' });
-                    }
-                    return res.status(500).json({ error: 'Failed to update user' });
-                }
-                if (this.changes === 0) {
-                    return res.status(404).json({ error: 'User not found' });
-                }
-                logUserChange({ passwordReset: false, roleChanged: prior.role !== finalRole });
-                res.json({ message: 'User updated successfully', id: targetUserId });
+            if (String(targetUserId) === String(req.user.id) && body.status !== 'active') {
+                return res.status(400).json({ error: 'You cannot deactivate your own account' });
+            }
+            finalStatus = body.status;
+        }
+
+        // Only overwrite a field when the caller sent it; empty string clears to
+        // NULL. Unspecified fields keep their prior value.
+        const merge = (k) => (body[k] !== undefined ? (body[k] === '' ? null : body[k]) : prior[k]);
+        const username = body.username !== undefined ? body.username : prior.username;
+        const name = body.name !== undefined ? (body.name || null) : prior.name;
+        const email = body.email !== undefined ? body.email : prior.email;
+
+        let password_hash = null;
+        if (body.password) {
+            const pv = validatePassword(body.password);
+            if (!pv.valid) return res.status(400).json({ error: pv.errors.join('. ') });
+            password_hash = await bcrypt.hash(body.password, 10);
+        }
+
+        // Fixed column list (no SQL interpolation). Two statements so the
+        // password hash is only written when a new password was supplied.
+        const cols = [username, name, email, finalRole, finalStatus,
+            merge('department'), merge('institution'), merge('address'),
+            merge('phone'), merge('alternative_email'), merge('education'), merge('grade')];
+        let result;
+        try {
+            if (password_hash) {
+                result = await dbAdapter.run(
+                    `UPDATE users SET username=?, name=?, email=?, role=?, status=?,
+                            department=?, institution=?, address=?, phone=?, alternative_email=?, education=?, grade=?,
+                            password_hash=?, updated_at=CURRENT_TIMESTAMP
+                       WHERE id=? AND tenant_id=?`,
+                    [...cols, password_hash, targetUserId, tenantId(req)]
+                );
+            } else {
+                result = await dbAdapter.run(
+                    `UPDATE users SET username=?, name=?, email=?, role=?, status=?,
+                            department=?, institution=?, address=?, phone=?, alternative_email=?, education=?, grade=?,
+                            updated_at=CURRENT_TIMESTAMP
+                       WHERE id=? AND tenant_id=?`,
+                    [...cols, targetUserId, tenantId(req)]
+                );
+            }
+        } catch (err) {
+            if (String(err.message).includes('UNIQUE')) {
+                return res.status(409).json({ error: 'Username or email already exists' });
+            }
+            throw err;
+        }
+        if (!result || result.changes === 0) return res.status(404).json({ error: 'User not found' });
+
+        const roleChanged = prior.role !== finalRole;
+        const statusChanged = prior.status !== finalStatus;
+        if (password_hash || roleChanged || statusChanged) {
+            logAudit({
+                userId: req.user.id,
+                username: req.user.username,
+                action: password_hash ? 'admin_user_password_and_profile_change' : 'admin_user_profile_change',
+                targetType: 'user',
+                targetId: targetUserId,
+                oldValue: { role: prior.role, status: prior.status },
+                newValue: { role: finalRole, status: finalStatus, password_reset: !!password_hash },
             });
         }
+        res.json({ message: 'User updated successfully', id: targetUserId });
     } catch (err) {
         (req.log || routesAuthLog).error('user update failed', { error: err.message });
         res.status(500).json({ error: 'Failed to update user' });

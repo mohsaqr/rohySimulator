@@ -20,6 +20,7 @@ import RadiologyEditor from './RadiologyEditor';
 import ClinicalRecordsEditor from './ClinicalRecordsEditor';
 import PhysicalExamEditor from './PhysicalExamEditor';
 import LabTestManager from './LabTestManager';
+import UsersWorkspace from './users/UsersWorkspace';
 import MedicationManager from './MedicationManager';
 import AgentTemplateManager from './AgentTemplateManager';
 import CaseTreatmentConfig from './CaseTreatmentConfig';
@@ -394,16 +395,25 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
         <div className={`rohy-admin-light flex flex-col h-full ${fullPage ? '' : 'rounded-xl'} overflow-hidden`}>
 
             {/* Header */}
-            <div className="rohy-admin-header flex items-center justify-between p-6 border-b border-neutral-800 relative">
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                    <Settings className="w-6 h-6 text-teal-700" />
-                    {fullPage ? 'Rohy - Settings & Administration' : 'Platform Configuration'}
-                </h2>
+            <div className="rohy-admin-header flex items-center justify-between px-6 py-4 border-b border-neutral-800 relative">
+                <div className="flex items-center gap-3">
+                    <span className="rohy-admin-brand-mark">
+                        <Settings className="w-5 h-5" />
+                    </span>
+                    <div className="flex flex-col leading-tight">
+                        <h2 className="text-[0.9375rem] font-bold tracking-tight text-gray-900">
+                            {fullPage ? 'Rohy — Settings & Administration' : 'Platform Configuration'}
+                        </h2>
+                        <span className="text-xs text-gray-500 font-medium">
+                            {fullPage ? 'Manage cases, cohorts, agents & platform configuration' : 'Workspace configuration'}
+                        </span>
+                    </div>
+                </div>
                 {fullPage && (
                     <button
                         type="button"
                         onClick={onClose}
-                        className="rohy-subtle-button px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                        className="rohy-subtle-button px-3.5 py-2 rounded-lg flex items-center gap-2"
                     >
                         <X className="w-4 h-4" />
                         Back to Simulation
@@ -468,7 +478,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                 <>
                                                     <button
                                                         onClick={() => setEditingCase({ name: '', description: '', config: { pages: [] } })}
-                                                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-bold"
+                                                        className="rohy-btn rohy-btn-primary"
                                                     >
                                                         <Plus className="w-4 h-4" /> New Case
                                                     </button>
@@ -500,7 +510,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                             };
                                                             input.click();
                                                         }}
-                                                        className="flex items-center gap-2 px-4 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded text-sm font-bold"
+                                                        className="rohy-btn rohy-btn-secondary"
                                                         title="Import Case from JSON"
                                                     >
                                                         <FileUp className="w-4 h-4" /> Import
@@ -809,7 +819,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
                     {/* --- USER MANAGEMENT TAB (Admin Only) --- */}
                     {activeTab === 'users' && isAdmin() && (
-                        <UserManagement />
+                        <UsersWorkspace />
                     )}
 
                     {/* --- SYSTEM LOGS TAB (Admin Only) --- */}
@@ -2012,7 +2022,7 @@ function MonitorConfiguration() {
     ];
 
     return (
-        <div className="bg-neutral-800/50 border border-neutral-700 rounded-xl p-6 mt-6">
+        <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6 mt-6">
             <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-cyan-600/20 rounded-lg">
                     <Monitor className="w-5 h-5 text-cyan-400" />
@@ -2190,423 +2200,6 @@ function SystemLogs() {
     );
 }
 
-// User Management Component (Admin Only)
-function UserManagement() {
-    const toast = useToast();
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [showCreateForm, setShowCreateForm] = useState(false);
-    const [showEditForm, setShowEditForm] = useState(false);
-    const [editingUser, setEditingUser] = useState(null);
-    const [showBatchUpload, setShowBatchUpload] = useState(false);
-    const [formData, setFormData] = useState({ username: '', name: '', email: '', password: '', role: 'user' });
-
-    useEffect(() => {
-        loadUsers();
-    }, []);
-
-    const loadUsers = async () => {
-        setLoading(true);
-        try {
-            const data = await apiFetch('/users');
-            setUsers(data.users || []);
-        } catch (err) {
-            console.error('Failed to load users', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleCreateUser = async (e) => {
-        e.preventDefault();
-        try {
-            await apiPost('/users/create', formData);
-            toast.success('User created successfully!');
-            loadUsers();
-            setShowCreateForm(false);
-            setFormData({ username: '', name: '', email: '', password: '', role: 'user' });
-        } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Error creating user');
-        }
-    };
-
-    const handleEditUser = async (e) => {
-        e.preventDefault();
-
-        try {
-            await apiPut(`/users/${editingUser.id}`, formData);
-            toast.success('User updated successfully!');
-            loadUsers();
-            setShowEditForm(false);
-            setEditingUser(null);
-            setFormData({ username: '', name: '', email: '', password: '', role: 'user' });
-        } catch (err) {
-            console.error('Error updating user:', err);
-            toast.error(err instanceof ApiError ? err.message : 'Error updating user: ' + err.message);
-        }
-    };
-
-    const handleBatchUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            try {
-                const csv = event.target.result;
-                const lines = csv.split('\n');
-                const users = [];
-
-                // Skip header row
-                for (let i = 1; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue;
-
-                    const [username, name, email, password, role] = line.split(',').map(s => s.trim());
-                    if (username && email && password) {
-                        users.push({ username, name: name || '', email, password, role: role || 'user' });
-                    }
-                }
-
-                if (users.length === 0) {
-                    toast.warning('No valid users found in CSV');
-                    return;
-                }
-
-                const data = await apiPost('/users/batch', { users });
-                toast.success(data.message);
-                if (data.results.failed.length > 0) {
-                    console.log('Failed users:', data.results.failed);
-                }
-                loadUsers();
-                setShowBatchUpload(false);
-            } catch {
-                toast.error('Error processing CSV file');
-            }
-        };
-        reader.readAsText(file);
-    };
-
-    const downloadCSVTemplate = () => {
-        const csv = `username,name,email,password,role
-john_doe,John Doe,john@example.com,password123,user
-jane_admin,Jane Smith,jane@example.com,admin456,admin
-student1,Student One,student1@school.edu,stud123,user`;
-
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'user_upload_template.csv';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-    };
-
-    const handleDeleteUser = async (userId) => {
-        const confirmed = await toast.confirm('Are you sure you want to delete this user?', { title: 'Delete User', type: 'danger', confirmText: 'Delete' });
-        if (!confirmed) return;
-
-        try {
-            await apiDelete(`/users/${userId}`);
-            setUsers(prev => prev.filter(u => u.id !== userId));
-            toast.success('User deleted successfully');
-        } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to delete user');
-        }
-    };
-
-    const handleToggleRole = async (userId, currentRole) => {
-        const newRole = currentRole === 'admin' ? 'user' : 'admin';
-
-        try {
-            const user = users.find(u => u.id === userId);
-            await apiPut(`/users/${userId}`, { username: user.username, name: user.name, email: user.email, role: newRole });
-            setUsers(prev => prev.map(u =>
-                u.id === userId ? { ...u, role: newRole } : u
-            ));
-            toast.success('User role updated');
-        } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to update role');
-        }
-    };
-
-    const openEditForm = (user) => {
-        setEditingUser(user);
-        setFormData({ username: user.username, name: user.name || '', email: user.email, password: '', role: user.role });
-        setShowEditForm(true);
-    };
-
-    if (loading) {
-        return <div className="text-center py-8"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>;
-    }
-
-    // Create User Form
-    if (showCreateForm) {
-        return (
-            <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-bold">Create New User</h3>
-                    <button onClick={() => setShowCreateForm(false)} className="text-sm text-neutral-400 hover:text-white">
-                        ← Back
-                    </button>
-                </div>
-
-                <form onSubmit={handleCreateUser} className="space-y-4 max-w-md">
-                    <div>
-                        <label className="block text-sm font-bold mb-2">Username *</label>
-                        <input
-                            type="text"
-                            value={formData.username}
-                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                            className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold mb-2">Full Name</label>
-                        <input
-                            type="text"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
-                            placeholder="e.g. John Doe"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold mb-2">Email *</label>
-                        <input
-                            type="email"
-                            value={formData.email}
-                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                            className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold mb-2">Password * (min 6 characters)</label>
-                        <input
-                            type="password"
-                            value={formData.password}
-                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                            className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
-                            minLength={6}
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold mb-2">Role</label>
-                        <select
-                            value={formData.role}
-                            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                            className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
-                        >
-                            <option value="user">{roleLabel('user')}</option>
-                            <option value="educator">{roleLabel('educator')}</option>
-                            <option value="admin">{roleLabel('admin')}</option>
-                        </select>
-                    </div>
-                    <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded font-bold">
-                        Create User
-                    </button>
-                </form>
-            </div>
-        );
-    }
-
-    // Edit User Form
-    if (showEditForm && editingUser) {
-        return (
-            <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-bold">Edit User: {editingUser.username}</h3>
-                    <button onClick={() => { setShowEditForm(false); setEditingUser(null); }} className="text-sm text-neutral-400 hover:text-white">
-                        ← Back
-                    </button>
-                </div>
-
-                <form onSubmit={handleEditUser} className="space-y-4 max-w-md">
-                    <div>
-                        <label className="block text-sm font-bold mb-2">Username *</label>
-                        <input
-                            type="text"
-                            value={formData.username}
-                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                            className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold mb-2">Full Name</label>
-                        <input
-                            type="text"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
-                            placeholder="e.g. John Doe"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold mb-2">Email *</label>
-                        <input
-                            type="email"
-                            value={formData.email}
-                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                            className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold mb-2">New Password (leave blank to keep current)</label>
-                        <input
-                            type="password"
-                            value={formData.password}
-                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                            className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
-                            minLength={6}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold mb-2">Role</label>
-                        <select
-                            value={formData.role}
-                            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                            className="w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2"
-                        >
-                            <option value="user">{roleLabel('user')}</option>
-                            <option value="educator">{roleLabel('educator')}</option>
-                            <option value="admin">{roleLabel('admin')}</option>
-                        </select>
-                    </div>
-                    <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded font-bold">
-                        Update User
-                    </button>
-                </form>
-            </div>
-        );
-    }
-
-    // Batch Upload View
-    if (showBatchUpload) {
-        return (
-            <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-bold">Batch Upload Users (CSV)</h3>
-                    <button onClick={() => setShowBatchUpload(false)} className="text-sm text-neutral-400 hover:text-white">
-                        ← Back
-                    </button>
-                </div>
-
-                <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-6 space-y-4">
-                    <div>
-                        <h4 className="font-bold mb-2">CSV Format</h4>
-                        <p className="text-sm text-neutral-400 mb-4">
-                            Upload a CSV file with the following columns: username, name, email, password, role
-                        </p>
-                        <button
-                            onClick={downloadCSVTemplate}
-                            className="flex items-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-600 text-white rounded font-bold"
-                        >
-                            <Download className="w-4 h-4" />
-                            Download CSV Template
-                        </button>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-bold mb-2">Upload CSV File</label>
-                        <input
-                            type="file"
-                            accept=".csv"
-                            onChange={handleBatchUpload}
-                            className="w-full bg-neutral-700 border border-neutral-600 rounded px-3 py-2 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-teal-600 file:text-white hover:file:bg-teal-500"
-                        />
-                    </div>
-
-                    <div className="bg-blue-900/20 border border-blue-700/50 rounded p-4 text-sm">
-                        <p className="font-bold mb-2">CSV Example:</p>
-                        <pre className="text-xs text-neutral-300">
-                            {`username,name,email,password,role
-john_doe,John Doe,john@example.com,password123,user
-jane_admin,Jane Smith,jane@example.com,admin456,admin`}
-                        </pre>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // Main User List View
-    return (
-        <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <h3 className="text-lg font-bold">User Management</h3>
-                <div className="flex gap-2">
-                    <button
-                        onClick={() => setShowBatchUpload(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded text-sm font-bold"
-                    >
-                        <Upload className="w-4 h-4" />
-                        Batch Upload
-                    </button>
-                    <button
-                        onClick={() => setShowCreateForm(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-bold"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Create User
-                    </button>
-                </div>
-            </div>
-
-            <div className="text-sm text-neutral-400">{users.length} total users</div>
-
-            <div className="space-y-2">
-                {users.map(user => (
-                    <div key={user.id} className="p-4 bg-neutral-800 border border-neutral-700 rounded-lg">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <div className="font-bold flex items-center gap-2">
-                                    {user.username}
-                                    {user.name && <span className="text-neutral-500 font-normal text-sm">({user.name})</span>}
-                                    {user.role === 'admin' && (
-                                        <span className="px-2 py-0.5 bg-teal-600 text-white text-xs rounded">{roleLabel('admin')}</span>
-                                    )}
-                                    {user.role === 'educator' && (
-                                        <span className="px-2 py-0.5 bg-teal-600 text-white text-xs rounded">{roleLabel('educator')}</span>
-                                    )}
-                                </div>
-                                <div className="text-xs text-neutral-400 mt-1">
-                                    {user.email} • Joined {new Date(user.created_at).toLocaleDateString()}
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => openEditForm(user)}
-                                    className="text-xs bg-blue-700 hover:bg-blue-600 text-white px-3 py-1.5 rounded"
-                                >
-                                    Edit
-                                </button>
-                                <button
-                                    onClick={() => handleToggleRole(user.id, user.role)}
-                                    className="text-xs bg-neutral-700 px-3 py-1.5 rounded hover:bg-neutral-600"
-                                >
-                                    {user.role === 'admin' ? 'Demote' : 'Make Admin'}
-                                </button>
-                                <button
-                                    onClick={() => handleDeleteUser(user.id)}
-                                    className="text-xs bg-red-900/30 text-red-400 px-3 py-1.5 rounded hover:bg-red-900/50"
-                                >
-                                    Delete
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
 
 // Lab Investigation Selector Component
 function LabInvestigationSelector({ _caseData, onAddLab, patientGender, showAddByGroup = false }) {

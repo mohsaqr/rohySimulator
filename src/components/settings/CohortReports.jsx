@@ -116,7 +116,7 @@ function StatTile({ label, value, accent }) {
 function ChartCard({ title, hint, wide, children }) {
     return (
         <div
-            className={`rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ${
+            className={`rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden ${
                 wide ? 'lg:col-span-2' : ''
             }`}
         >
@@ -418,7 +418,7 @@ function AnalyticsView({ cohortId }) {
                 {!loading && data && (
                     <>
                         {/* KPI band — one bordered strip, divided cells. */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden divide-x divide-y lg:divide-y-0 divide-gray-100">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden divide-x divide-y lg:divide-y-0 divide-gray-100">
                             <StatTile label="Events" value={data.summary.totalActivities} accent />
                             <StatTile label="Sessions" value={data.summary.uniqueSessions} />
                             <StatTile
@@ -429,7 +429,7 @@ function AnalyticsView({ cohortId }) {
                         </div>
 
                         {data.summary.totalActivities === 0 ? (
-                            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 py-14 text-center">
+                            <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 py-14 text-center">
                                 <p className="text-sm font-medium text-gray-500">
                                     No recorded activity for this {scopeWord} yet.
                                 </p>

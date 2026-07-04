@@ -50,7 +50,7 @@ export default function NotificationsSettingsTab() {
     }, [history]);
 
     return (
-        <div className="space-y-6 p-6 max-w-4xl">
+        <div className="space-y-6 max-w-4xl">
             <div className="flex items-center gap-2 mb-2">
                 <Bell className="w-6 h-6 text-purple-500" />
                 <h2 className="text-xl font-bold">Notifications & Alarms</h2>

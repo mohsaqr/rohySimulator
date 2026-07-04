@@ -17,21 +17,45 @@
 }
 
 :root {
-  --rohy-bg: #e0e6ed;
-  --rohy-surface: #edf1f5;
-  --rohy-surface-muted: #e5ebf1;
-  --rohy-surface-strong: #d8e1eb;
-  --rohy-bg-hover: #d2dbe6;
-  --rohy-border: #b3bfcd;
-  --rohy-border-strong: #8493a6;
-  --rohy-text: #111827;
-  --rohy-muted: #374151;
-  --rohy-accent: #0f766e;
-  --rohy-accent-strong: #0e7490;
-  --rohy-accent-hover: #0f5f69;
-  --rohy-accent-soft: #d9f3f0;
-  --rohy-accent-muted: #bfe8e2;
-  --rohy-accent-border: #5eead4;
+  /* ── Rohy admin design system ────────────────────────────────────────────
+     Enterprise light system with a confident teal accent, engineered around a
+     THREE-surface hierarchy so nothing reads as flat gray-on-gray:
+
+        canvas (--rohy-bg)  — deep cool slate; the desk the app sits on
+        rail   (--rohy-sidebar) — a distinct cooler tint for navigation chrome
+        card   (--rohy-surface) — crisp WHITE, lifting off the canvas via a real
+                                  hairline + layered shadow (Linear/Stripe idiom)
+
+     Text stays dark slate (AA on white) which keeps the large `.rohy-admin-light`
+     Tailwind-remap cascade below valid (it assumes light surface + dark ink).
+     "Darker / enterprise" lives in the deeper canvas, the tinted rail, and the
+     saturated accent — not in muddying the readable card surfaces. */
+  --rohy-bg: #dbe1ea;            /* page canvas — cool slate, clearly deeper than cards */
+  --rohy-surface: #ffffff;       /* cards + header — crisp white */
+  --rohy-surface-muted: #f1f4f9; /* inset fields, row hover, quiet sub-panels */
+  --rohy-surface-strong: #e7ecf3;/* table heads, stronger fills */
+  --rohy-sidebar: #edf1f7;       /* navigation rail — its own cool tint */
+  --rohy-bg-hover: #e5eaf1;      /* nav / row hover over tinted surfaces */
+  --rohy-border: #d4dbe5;        /* hairline divider */
+  --rohy-border-strong: #b6c2d1; /* emphasized divider */
+  --rohy-text: #0f172a;          /* slate-900 — primary ink (AA on white) */
+  --rohy-muted: #475569;         /* slate-600 — secondary ink */
+  --rohy-faint: #64748b;         /* slate-500 — meta / tracked labels */
+  --rohy-accent: #0f766e;        /* teal-700 — icons, borders, accent text, solid bg (AA white) */
+  --rohy-accent-strong: #0f766e; /* solid button / remapped-utility bg */
+  --rohy-accent-hover: #0b5f58;  /* solid accent hover / pressed */
+  --rohy-accent-soft: #d7f1ec;   /* accent tint background */
+  --rohy-accent-muted: #b6e6dd;  /* stronger accent tint */
+  --rohy-accent-border: #5eead4; /* accent hairline */
+  --rohy-ring: rgb(13 148 136 / 0.35); /* focus ring color */
+  /* Elevation + shape scale — one radius, two shadow depths. */
+  --rohy-radius: 0.625rem;       /* 10px — the unified card/control radius */
+  --rohy-radius-sm: 0.4375rem;   /* 7px — pills, chips, small controls */
+  --rohy-shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05), 0 1px 3px -1px rgb(15 23 42 / 0.09);
+  --rohy-shadow-md: 0 2px 5px -1px rgb(15 23 42 / 0.08), 0 8px 20px -6px rgb(15 23 42 / 0.14);
+  --rohy-danger: #b42318;
+  --rohy-danger-soft: #fef2f2;
+  --rohy-danger-border: #fecaca;
 }
 
 html,
@@ -41,6 +65,25 @@ body,
   overflow: hidden;
   background-color: var(--rohy-bg);
   color: var(--rohy-text);
+}
+
+/* Enterprise density for the settings surface. Unlayered so these win over
+   Tailwind's layered `p-8` / `space-y-6` utilities without `!important`, and
+   scoped to `.rohy-admin-page` so nothing outside settings is affected. Tightens
+   the content frame and the between-section/between-card rhythm; individual
+   card padding is left alone. */
+.rohy-admin-page {
+  padding: 1.5rem;
+}
+
+.rohy-admin-page > .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1rem;
+}
+
+/* Card-list grids (a grid whose direct children are rohy cards) tighten from
+   0.75rem to 0.5rem so stacked cards read as one dense group. */
+.rohy-admin-page .grid:has(> .rohy-card) {
+  gap: 0.5rem;
 }
 
 @layer components {
@@ -54,10 +97,36 @@ body,
     color: var(--rohy-text);
   }
 
-  .rohy-admin-header,
-  .rohy-admin-sidebar {
+  /* Header — crisp white chrome with a hairline base and a whisper of shadow so
+     it reads as a fixed bar floating over the scrolling content beneath it. */
+  .rohy-admin-header {
     background-color: var(--rohy-surface);
     color: var(--rohy-text);
+    box-shadow: 0 2px 6px -2px rgb(15 23 42 / 0.10);
+    z-index: 1;
+  }
+
+  /* Navigation rail — its own cool tint, distinct from both the white cards and
+     the deeper canvas, with an inset hairline on its trailing edge. */
+  .rohy-admin-sidebar {
+    background-color: var(--rohy-sidebar);
+    color: var(--rohy-text);
+    box-shadow: inset -1px 0 0 var(--rohy-border);
+  }
+
+  /* Decorative icon chip in the header title. */
+  .rohy-admin-brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--rohy-radius-sm);
+    background: linear-gradient(160deg, var(--rohy-accent-soft), #ffffff 82%);
+    border: 1px solid var(--rohy-accent-border);
+    color: var(--rohy-accent);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7);
+    flex: none;
   }
 
   .rohy-admin-page {
@@ -65,40 +134,136 @@ body,
     color: var(--rohy-text);
   }
 
+  /* Unified card system — one surface, one border, one shadow. Radius comes from
+     the JSX `rounded-lg`; where absent, `--rohy-radius` applies. */
   .rohy-card {
     background-color: var(--rohy-surface);
     border: 1px solid var(--rohy-border);
-    box-shadow: 0 1px 2px rgb(21 29 42 / 0.05);
+    border-radius: var(--rohy-radius);
+    box-shadow: var(--rohy-shadow-sm);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
   }
 
+  /* Interactive card rows lift on hover — a restrained elevation, not a color wash. */
   .rohy-card:hover {
-    background-color: var(--rohy-surface-muted);
+    border-color: var(--rohy-border-strong);
+    box-shadow: var(--rohy-shadow-md);
   }
 
-  .rohy-card-active {
+  .rohy-card-active,
+  .rohy-card-active:hover {
     border-color: var(--rohy-accent-border);
-    box-shadow: inset 3px 0 0 var(--rohy-accent), 0 1px 2px rgb(21 29 42 / 0.05);
+    background-color: color-mix(in srgb, var(--rohy-accent-soft) 45%, #ffffff);
+    box-shadow: inset 3px 0 0 var(--rohy-accent), var(--rohy-shadow-sm);
   }
 
   .rohy-stat-card {
     background-color: var(--rohy-surface);
     border: 1px solid var(--rohy-border);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65);
+    border-radius: var(--rohy-radius);
+    box-shadow: var(--rohy-shadow-sm);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
 
+  /* Emphasis KPI tile — accent-tinted with an accent top hairline. */
   .rohy-stat-card-accent {
-    background-color: var(--rohy-surface-strong);
-    border-color: #83c5c5;
+    background:
+      linear-gradient(180deg, var(--rohy-accent) 0 2px, transparent 2px),
+      linear-gradient(180deg, var(--rohy-accent-soft), #ffffff 70%);
+    border-color: var(--rohy-accent-border);
   }
 
-  .rohy-subtle-button {
+  /* ── Button system ──────────────────────────────────────────────────────
+     Semantic button classes for admin chrome. Layout (icon gap, sizing) is
+     baked in so a converted button needs no extra utilities. */
+  .rohy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    border-radius: var(--rohy-radius-sm);
+    border: 1px solid transparent;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+  }
+
+  .rohy-btn:active {
+    transform: translateY(0.5px);
+  }
+
+  .rohy-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .rohy-btn-primary {
+    background-color: var(--rohy-accent);
+    color: #ffffff;
+    box-shadow: var(--rohy-shadow-sm);
+  }
+
+  .rohy-btn-primary:hover:not(:disabled) {
+    background-color: var(--rohy-accent-hover);
+  }
+
+  .rohy-btn-secondary {
+    background-color: var(--rohy-surface);
+    border-color: var(--rohy-border-strong);
+    color: var(--rohy-text);
+    box-shadow: var(--rohy-shadow-sm);
+  }
+
+  .rohy-btn-secondary:hover:not(:disabled) {
     background-color: var(--rohy-surface-muted);
-    border: 1px solid var(--rohy-border);
+    border-color: var(--rohy-border-strong);
+  }
+
+  .rohy-btn-ghost {
+    background-color: transparent;
+    color: var(--rohy-muted);
+  }
+
+  .rohy-btn-ghost:hover:not(:disabled) {
+    background-color: var(--rohy-surface-muted);
     color: var(--rohy-text);
   }
 
+  .rohy-btn-danger {
+    background-color: var(--rohy-danger-soft);
+    border-color: var(--rohy-danger-border);
+    color: var(--rohy-danger);
+  }
+
+  .rohy-btn-danger:hover:not(:disabled) {
+    background-color: #fee4e2;
+    border-color: #fca5a5;
+    color: #7f1d1d;
+  }
+
+  /* Legacy alias — kept a real surface+border chip, now aligned to the button scale. */
+  .rohy-subtle-button {
+    background-color: var(--rohy-surface);
+    border: 1px solid var(--rohy-border-strong);
+    color: var(--rohy-text);
+    box-shadow: var(--rohy-shadow-sm);
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+
   .rohy-subtle-button:hover {
-    background-color: var(--rohy-bg-hover);
+    background-color: var(--rohy-surface-muted);
+  }
+
+  /* Accessible keyboard focus — one consistent accent ring across all admin
+     controls. Mouse clicks stay clean (`:focus-visible` only). */
+  .rohy-admin-light :is(button, a, [role="button"], summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--rohy-accent);
+    outline-offset: 2px;
+    border-radius: var(--rohy-radius-sm);
   }
 
   .rohy-admin-light [class*="bg-neutral-"],
@@ -311,19 +476,47 @@ body,
   .rohy-count-pill {
     display: inline-flex;
     align-items: center;
-    border-radius: 0.375rem;
+    border-radius: var(--rohy-radius-sm);
     border: 1px solid var(--rohy-border);
     background-color: var(--rohy-surface-muted);
     color: var(--rohy-muted);
     font-size: 0.75rem;
     line-height: 1rem;
     font-weight: 600;
-    padding: 0.25rem 0.5rem;
+    padding: 0.1875rem 0.5rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Metadata chip: a compact labelled key/value tag used to lay out a row of
+     scannable attributes (voice, avatar, rules, context, llm) inline instead
+     of a cramped right-aligned key/value grid. */
+  .rohy-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    max-width: 100%;
+    padding: 0.1875rem 0.5rem;
+    border-radius: var(--rohy-radius-sm);
+    border: 1px solid var(--rohy-border);
+    background-color: var(--rohy-surface-muted);
+    color: var(--rohy-text);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    white-space: nowrap;
+  }
+
+  .rohy-meta-chip__k {
+    color: var(--rohy-faint);
+    font-weight: 700;
+    font-size: 0.625rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 
   .rohy-admin-tab {
     color: var(--rohy-muted);
     border: 1px solid transparent;
+    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
   }
 
   .rohy-admin-tab:hover {
@@ -334,35 +527,53 @@ body,
   .rohy-admin-tab-active {
     background-color: var(--rohy-surface);
     border-color: var(--rohy-border);
-    color: var(--rohy-text);
+    color: var(--rohy-accent);
+    font-weight: 650;
     box-shadow: inset 0 -2px 0 var(--rohy-accent);
   }
 
   .rohy-field {
-    background-color: var(--rohy-surface-muted) !important;
+    background-color: var(--rohy-surface) !important;
     border: 1px solid var(--rohy-border) !important;
+    border-radius: var(--rohy-radius-sm) !important;
     color: var(--rohy-text) !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
 
   .rohy-field:focus {
-    border-color: var(--rohy-accent-strong) !important;
+    border-color: var(--rohy-accent) !important;
     outline: none;
-    box-shadow: 0 0 0 2px rgb(20 184 166 / 0.18);
+    box-shadow: 0 0 0 3px var(--rohy-ring);
+  }
+
+  /* Consistent accent focus ring for every native field inside the admin. */
+  .rohy-admin-light input:not([type="checkbox"]):not([type="radio"]):focus,
+  .rohy-admin-light select:focus,
+  .rohy-admin-light textarea:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--rohy-ring);
   }
 
   .rohy-table-shell {
     background-color: var(--rohy-surface);
     border: 1px solid var(--rohy-border);
-    box-shadow: 0 1px 2px rgb(17 24 39 / 0.04);
+    border-radius: var(--rohy-radius);
+    box-shadow: var(--rohy-shadow-sm);
+    overflow: hidden;
   }
 
   .rohy-table-head {
     background-color: var(--rohy-surface-strong);
-    color: var(--rohy-text);
+    color: var(--rohy-faint);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
   .rohy-table-row {
     background-color: var(--rohy-surface);
+    transition: background-color 0.12s ease;
   }
 
   .rohy-table-row:hover {
@@ -386,7 +597,8 @@ body,
   .rohy-menu {
     background-color: var(--rohy-surface);
     border: 1px solid var(--rohy-border);
-    box-shadow: 0 12px 28px rgb(17 24 39 / 0.16);
+    border-radius: var(--rohy-radius);
+    box-shadow: var(--rohy-shadow-md);
   }
 
   .rohy-topbar-menu-trigger {
@@ -455,17 +667,25 @@ body,
   }
 
   .rohy-settings-nav-item {
-    width: 100%;
+    position: relative;
+    width: calc(100% - 0.75rem);
+    margin: 0.0625rem 0.375rem;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.625rem 1rem;
-    border-left: 2px solid transparent;
-    font-size: 0.875rem;
-    font-weight: 700;
+    gap: 0.625rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--rohy-radius-sm);
+    font-size: 0.8125rem;
+    font-weight: 550;
     line-height: 1.25rem;
-    color: var(--rohy-text);
-    transition: background-color 0.15s ease, border-color 0.15s ease;
+    color: var(--rohy-muted);
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .rohy-settings-nav-item svg {
+    color: var(--rohy-faint);
+    flex: none;
+    transition: color 0.15s ease;
   }
 
   .rohy-settings-nav-item:hover {
@@ -473,21 +693,43 @@ body,
     color: var(--rohy-text);
   }
 
-  .rohy-settings-nav-item--active {
-    border-left-color: var(--rohy-accent);
-    background: var(--rohy-accent-soft);
-    color: var(--rohy-text);
+  .rohy-settings-nav-item:hover svg {
+    color: var(--rohy-muted);
+  }
+
+  /* Active nav — accent rail + accent-tinted fill + accent ink & icon. */
+  .rohy-settings-nav-item--active,
+  .rohy-settings-nav-item--active:hover {
+    background-color: var(--rohy-accent-soft);
+    color: var(--rohy-accent);
+    font-weight: 650;
+  }
+
+  .rohy-settings-nav-item--active svg,
+  .rohy-settings-nav-item--active:hover svg {
+    color: var(--rohy-accent);
+  }
+
+  .rohy-settings-nav-item--active::before {
+    content: "";
+    position: absolute;
+    left: -0.375rem;
+    top: 0.375rem;
+    bottom: 0.375rem;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background-color: var(--rohy-accent);
   }
 
   .rohy-settings-nav-group {
     width: 100%;
-    padding: 0.75rem 1rem 0.25rem;
+    padding: 1rem 1.125rem 0.375rem;
     text-align: left;
     font-size: 0.6875rem;
     font-weight: 700;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--rohy-muted);
+    color: var(--rohy-faint);
     transition: color 0.15s ease;
   }
 
@@ -509,6 +751,9 @@ body,
     color: #991b1b;
   }
 
+  /* ── Status chips ───────────────────────────────────────────────────────
+     One coherent set: neutral / accent (blue·cyan·teal·violet) / success /
+     warn / danger. Each is a tint fill + matched hairline + saturated ink. */
   .rohy-badge,
   .rohy-badge-blue,
   .rohy-badge-cyan,
@@ -520,60 +765,49 @@ body,
   .rohy-badge-neutral {
     display: inline-flex;
     align-items: center;
-    border-radius: 0.375rem;
+    gap: 0.25rem;
+    border-radius: var(--rohy-radius-sm);
     border: 1px solid;
-    padding: 0.125rem 0.375rem;
+    padding: 0.125rem 0.4375rem;
     font-size: 0.6875rem;
     line-height: 1rem;
     font-weight: 700;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
   }
 
-  .rohy-badge-blue {
-    background-color: var(--rohy-accent-soft);
-    border-color: var(--rohy-accent-border);
-    color: var(--rohy-accent);
-  }
-
-  .rohy-badge-cyan {
-    background-color: var(--rohy-accent-soft);
-    border-color: var(--rohy-accent-border);
-    color: var(--rohy-accent);
-  }
-
-  .rohy-badge-green {
-    background-color: var(--rohy-accent-soft);
-    border-color: var(--rohy-accent-border);
-    color: var(--rohy-accent);
-  }
-
-  .rohy-badge-amber {
-    background-color: var(--rohy-surface-strong);
-    border-color: var(--rohy-border-strong);
-    color: var(--rohy-muted);
-  }
-
-  .rohy-badge-red {
-    background-color: #fee2e2;
-    border-color: #fca5a5;
-    color: #991b1b;
-  }
-
+  .rohy-badge,
+  .rohy-badge-blue,
+  .rohy-badge-cyan,
+  .rohy-badge-teal,
   .rohy-badge-violet {
     background-color: var(--rohy-accent-soft);
     border-color: var(--rohy-accent-border);
     color: var(--rohy-accent);
   }
 
-  .rohy-badge-teal {
-    background-color: var(--rohy-accent-soft);
-    border-color: var(--rohy-accent-border);
-    color: var(--rohy-accent);
+  .rohy-badge-green {
+    background-color: #dcfce7;
+    border-color: #86efac;
+    color: #15803d;
+  }
+
+  .rohy-badge-amber {
+    background-color: #fef3c7;
+    border-color: #fcd34d;
+    color: #92620a;
+  }
+
+  .rohy-badge-red {
+    background-color: var(--rohy-danger-soft);
+    border-color: #fca5a5;
+    color: #991b1b;
   }
 
   .rohy-badge-neutral {
     background-color: var(--rohy-surface-strong);
     border-color: var(--rohy-border-strong);
-    color: var(--rohy-text);
+    color: var(--rohy-muted);
   }
 
   /* Temporary compatibility layer while older components still carry
@@ -957,7 +1191,9 @@ body,
     color: #ffffff !important;
   }
 
-  .rohy-admin-sidebar button:not(:hover):not([class~="bg-teal-50"]):not([class~="bg-teal-700"]) {
+  /* Strip stray Tailwind fills off sidebar buttons, but leave the semantic nav
+     item alone so its accent-tinted active/hover state can render. */
+  .rohy-admin-sidebar button:not(:hover):not(.rohy-settings-nav-item):not([class~="bg-teal-50"]):not([class~="bg-teal-700"]) {
     background-color: transparent !important;
   }
 

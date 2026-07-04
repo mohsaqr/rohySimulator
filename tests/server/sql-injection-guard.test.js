@@ -151,6 +151,11 @@ const ALLOWLIST = [
     },
     {
         file: 'server/routes/cohorts-routes.js',
+        lineSubstring: 'FROM users WHERE id IN (${placeholders})',
+        why: 'placeholders = userIds.map(() => "?").join(",") — markers only, never values. userIds is pre-filtered to positive integers (Number + Number.isInteger) earlier in POST /cohorts/bulk-enroll; tenant_id parameterised via ?. User-existence check for the bulk enroll/unenroll report.',
+    },
+    {
+        file: 'server/routes/cohorts-routes.js',
         lineSubstring: 'UPDATE cohorts SET ${sets.join(\', \')} WHERE id = ?',
         why: 'sets[] entries are hardcoded "column = ?" string literals (name/description/starts_at/ends_at/settings); every value is pushed onto params[] as a ? placeholder; cohort id also parameterised. Same safe shape as the generic "SET ${updates.join" entry above.',
     },

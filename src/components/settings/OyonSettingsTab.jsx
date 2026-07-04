@@ -113,7 +113,7 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
    if (serverDisabled) {
       const isImportFail = serverDisabled.code === 'OYON_IMPORT_FAILED';
       return (
-         <div className="space-y-6 p-6 max-w-4xl">
+         <div className="space-y-6 max-w-4xl">
             <div className="flex items-center gap-2 mb-2">
                <Camera className="w-6 h-6 text-neutral-500" />
                <h2 className="text-xl font-bold text-neutral-300">Oyon — Emotion Capture</h2>
@@ -146,7 +146,7 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
    }
 
    return (
-      <div className="space-y-6 p-6 max-w-4xl">
+      <div className="space-y-6 max-w-4xl">
          <div className="flex items-center gap-2 mb-2">
             <Camera className="w-6 h-6 text-purple-500" />
             <h2 className="text-xl font-bold">Oyon — Emotion Capture</h2>

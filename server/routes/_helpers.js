@@ -27,6 +27,98 @@ export const isValidRole = (role) => VALID_ROLES.includes(normalizeRole(role));
 export const roleForStorage = (role, fallback = 'student') => normalizeRole(role || fallback);
 export const tenantId = (req) => resolveTenant(req);
 
+// --- Cohort-case access enforcement (class-centric, date-windowed) ----------
+// Enforcement is OPT-IN via the global platform flag `enforce_cohort_case_access`
+// and only applies to sub-reviewer ranks (students). Reviewer/educator/admin
+// always bypass. When the flag is absent or unreadable we treat it as OFF, so a
+// settings glitch can never lock every student out (fail-safe / non-breaking).
+
+/** True when the caller is subject to cohort-case enforcement (a student). */
+export const isEnforcedStudent = (user) => !canReadAcrossUsers(user);
+
+let _enforceCache = { value: null, at: 0 };
+const ENFORCE_CACHE_MS = 15000;
+
+/** Read the global enforcement flag (cached ~15s, fail-safe OFF). */
+export async function cohortCaseEnforcementOn() {
+    const now = Date.now();
+    if (_enforceCache.value !== null && now - _enforceCache.at < ENFORCE_CACHE_MS) {
+        return _enforceCache.value;
+    }
+    try {
+        const row = await dbGet(
+            `SELECT setting_value FROM platform_settings WHERE setting_key = 'enforce_cohort_case_access'`
+        );
+        const on = row?.setting_value === 'true' || row?.setting_value === '1';
+        _enforceCache = { value: on, at: now };
+        return on;
+    } catch {
+        return false;
+    }
+}
+
+/** Drop the cached flag after a toggle (admin route / tests call this). */
+export function resetCohortCaseEnforcementCache() {
+    _enforceCache = { value: null, at: 0 };
+}
+
+/**
+ * SQL `EXISTS (...)` fragment: true when the given cases-row alias is assigned,
+ * in-window, to a live active in-window membership of the bound user. Contains
+ * exactly ONE bind placeholder (`?` for the student's user id). All time
+ * comparisons wrap both sides in datetime() because cohort windows are stored as
+ * ISO strings while CURRENT_TIMESTAMP columns use 'YYYY-MM-DD HH:MM:SS' — the two
+ * are not lexically comparable. `caseAlias` is a trusted internal literal.
+ */
+export function cohortCaseVisibleExists(caseAlias = 'c') {
+    return `EXISTS (
+        SELECT 1
+          FROM cohort_cases cc
+          JOIN cohorts co ON co.id = cc.cohort_id
+          JOIN cohort_members cm ON cm.cohort_id = co.id
+         WHERE cc.case_id = ${caseAlias}.id
+           AND cc.deleted_at IS NULL
+           AND co.deleted_at IS NULL
+           AND co.tenant_id = ${caseAlias}.tenant_id
+           AND cm.user_id = ?
+           AND cm.deleted_at IS NULL
+           AND cm.status = 'active'
+           AND (co.starts_at IS NULL OR datetime(co.starts_at) <= datetime('now'))
+           AND (co.ends_at IS NULL OR datetime(co.ends_at) >= datetime('now'))
+           AND (cc.available_from IS NULL OR datetime(cc.available_from) <= datetime('now'))
+           AND (cc.available_until IS NULL OR datetime(cc.available_until) >= datetime('now'))
+           AND (cm.enrolled_from IS NULL OR datetime(cm.enrolled_from) <= datetime('now'))
+           AND (cm.enrolled_until IS NULL OR datetime(cm.enrolled_until) >= datetime('now'))
+    )`;
+}
+
+/**
+ * Idempotently enrol a user into their tenant's "Basic course" default class —
+ * the safety net that guarantees every student always has the default case, so
+ * enforcement can never lock anyone out. No-op if the class is absent for the
+ * tenant or the user is already a live member. Never throws (login/register must
+ * not fail on this).
+ */
+export async function ensureBasicCourseMembership(userId, tenant_id) {
+    if (!userId) return;
+    try {
+        await dbRun(
+            `INSERT INTO cohort_members (cohort_id, user_id)
+             SELECT c.id, ?
+               FROM cohorts c
+              WHERE c.tenant_id = ?
+                AND c.name = 'Basic course'
+                AND c.deleted_at IS NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM cohort_members m
+                     WHERE m.cohort_id = c.id AND m.user_id = ? AND m.deleted_at IS NULL)`,
+            [userId, tenant_id, userId]
+        );
+    } catch (err) {
+        routesCasesLog.warn('ensureBasicCourseMembership failed', { user_id: userId, tenant_id, error: err.message });
+    }
+}
+
 export const SOFT_DELETE_TABLES = [
     'cases',
     'sessions',

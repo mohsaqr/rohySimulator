@@ -114,6 +114,24 @@ async function loadOwnedCohort(req, res) {
     return null;
 }
 
+// Res-free variant for endpoints that operate across MANY cohorts and must
+// report per-cohort (skip a denied/missing one) rather than 404 the whole
+// request. Returns the cohort row when the caller can manage it, else null.
+async function resolveManageableCohort(cohortId, req) {
+    const cohort = await dbAdapter.get(
+        `SELECT * FROM cohorts WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+        [cohortId, tenantId(req)]
+    );
+    if (!cohort) return null;
+    if (cohort.owner_user_id === req.user.id || isAdmin(req)) return cohort;
+    const teacher = await dbAdapter.get(
+        `SELECT 1 FROM cohort_members
+          WHERE cohort_id = ? AND user_id = ? AND member_role = 'teacher' AND deleted_at IS NULL LIMIT 1`,
+        [cohort.id, req.user.id]
+    );
+    return teacher ? cohort : null;
+}
+
 // ISO-8601-ish date acceptance. Accepts a string parseable by Date and
 // returns its normalised value (the original string is stored as-is into
 // the DATETIME column — SQLite is typeless and the rest of the schema
@@ -290,7 +308,8 @@ router.get('/cohorts/:id', authenticateToken, requireEducator, async (req, res, 
         const students = allMembers.filter(m => m.member_role !== 'teacher');
         const teachers = allMembers.filter(m => m.member_role === 'teacher');
         const cases = await dbAdapter.all(
-            `SELECT cc.case_id AS id, c.name AS name, cc.created_at AS assigned_at
+            `SELECT cc.case_id AS id, c.name AS name, cc.created_at AS assigned_at,
+                    cc.available_from, cc.available_until
                FROM cohort_cases cc
                JOIN cases c ON c.id = cc.case_id
               WHERE cc.cohort_id = ? AND cc.deleted_at IS NULL
@@ -437,8 +456,16 @@ async function upsertMember(cohortId, userId, role = 'student') {
         return { membership: existing, created: false, revived: false, promoted: false, unchangedRole: true };
     }
     if (existing) {
+        // Reviving a soft-deleted membership is a fresh re-enrolment: reset the
+        // lifecycle to active and clear any prior window, otherwise a member who
+        // was 'completed'/'dropped' (or whose window expired) is re-added but
+        // still fails the `status = 'active'` + window checks in the enforcement
+        // predicate — access would silently stay blocked.
         await dbAdapter.run(
-            `UPDATE cohort_members SET deleted_at = NULL, joined_at = ${dbAdapter.now()}, member_role = ? WHERE id = ?`,
+            `UPDATE cohort_members
+                SET deleted_at = NULL, joined_at = ${dbAdapter.now()}, member_role = ?,
+                    status = 'active', enrolled_from = NULL, enrolled_until = NULL
+              WHERE id = ?`,
             [role, existing.id]
         );
         const revived = await dbAdapter.get(`SELECT * FROM cohort_members WHERE id = ?`, [existing.id]);
@@ -534,13 +561,39 @@ router.post('/cohorts/:id/cases', authenticateToken, requireEducator, async (req
     try {
         const cohort = await loadOwnedCohort(req, res);
         if (!cohort) return;
-        const raw = req.body?.case_ids;
-        if (!Array.isArray(raw)) {
-            return res.status(400).json({ error: 'case_ids must be an array' });
+        // Accept EITHER the legacy `case_ids: [int]` (windows stay open) OR the
+        // richer `assignments: [{ case_id, available_from?, available_until? }]`
+        // so a teacher can schedule per-case open/close dates. The legacy
+        // case_ids path preserves the exact prior behaviour (no window writes,
+        // live rows skipped, 200 when nothing changed).
+        const body = req.body || {};
+        const windowsProvided = Array.isArray(body.assignments);
+        const wanted = new Map(); // case_id -> { available_from, available_until }
+        if (windowsProvided) {
+            for (const a of body.assignments) {
+                const cid = Number(a?.case_id);
+                if (!Number.isInteger(cid) || cid <= 0) continue;
+                const from = parseDateInput(a?.available_from);
+                const until = parseDateInput(a?.available_until);
+                if (from === false || until === false) {
+                    return res.status(400).json({ error: 'available_from / available_until must be valid dates' });
+                }
+                if (from && until && Date.parse(from) > Date.parse(until)) {
+                    return res.status(400).json({ error: 'available_from must be on or before available_until' });
+                }
+                wanted.set(cid, { available_from: from ?? null, available_until: until ?? null });
+            }
+        } else if (Array.isArray(body.case_ids)) {
+            for (const n of body.case_ids) {
+                const cid = Number(n);
+                if (Number.isInteger(cid) && cid > 0) wanted.set(cid, { available_from: null, available_until: null });
+            }
+        } else {
+            return res.status(400).json({ error: 'case_ids or assignments array is required' });
         }
-        const caseIds = [...new Set(raw.map(Number).filter(n => Number.isInteger(n) && n > 0))];
+        const caseIds = [...wanted.keys()];
         if (caseIds.length === 0) {
-            return res.status(400).json({ error: 'case_ids must contain at least one valid case id' });
+            return res.status(400).json({ error: 'at least one valid case id is required' });
         }
         const placeholders = caseIds.map(() => '?').join(',');
         const found = await dbAdapter.all(
@@ -550,42 +603,55 @@ router.post('/cohorts/:id/cases', authenticateToken, requireEducator, async (req
         if (found.length !== caseIds.length) {
             return res.status(400).json({ error: 'one or more case_ids are not valid cases in this tenant' });
         }
-        let createdCount = 0;
+        let changedCount = 0;
         for (const cid of caseIds) {
+            const win = wanted.get(cid);
             const existing = await dbAdapter.get(
                 `SELECT * FROM cohort_cases WHERE cohort_id = ? AND case_id = ?
                   ORDER BY (deleted_at IS NULL) DESC, id DESC LIMIT 1`,
                 [cohort.id, cid]
             );
-            if (existing && existing.deleted_at == null) continue;
+            if (existing && existing.deleted_at == null) {
+                // Live row: only touch the window when the caller supplied one
+                // (assignments form), so a plain case_ids re-post is a no-op.
+                if (windowsProvided) {
+                    await dbAdapter.run(
+                        `UPDATE cohort_cases SET available_from = ?, available_until = ? WHERE id = ?`,
+                        [win.available_from, win.available_until, existing.id]
+                    );
+                    changedCount++;
+                }
+                continue;
+            }
             if (existing) {
                 await dbAdapter.run(
-                    `UPDATE cohort_cases SET deleted_at = NULL WHERE id = ?`,
-                    [existing.id]
+                    `UPDATE cohort_cases SET deleted_at = NULL, available_from = ?, available_until = ? WHERE id = ?`,
+                    [win.available_from, win.available_until, existing.id]
                 );
             } else {
                 await dbAdapter.run(
-                    `INSERT INTO cohort_cases (cohort_id, case_id) VALUES (?, ?)`,
-                    [cohort.id, cid]
+                    `INSERT INTO cohort_cases (cohort_id, case_id, available_from, available_until) VALUES (?, ?, ?, ?)`,
+                    [cohort.id, cid, win.available_from, win.available_until]
                 );
             }
-            createdCount++;
+            changedCount++;
         }
         auditSuccess(req, {
             action: 'cohort.cases.assign',
             resourceType: 'cohort',
             resourceId: cohort.id,
-            metadata: { case_ids: caseIds, applied: createdCount },
+            metadata: { case_ids: caseIds, applied: changedCount, windowed: windowsProvided },
         });
         const cases = await dbAdapter.all(
-            `SELECT cc.case_id AS id, c.name AS name, cc.created_at AS assigned_at
+            `SELECT cc.case_id AS id, c.name AS name, cc.created_at AS assigned_at,
+                    cc.available_from, cc.available_until
                FROM cohort_cases cc
                JOIN cases c ON c.id = cc.case_id
               WHERE cc.cohort_id = ? AND cc.deleted_at IS NULL
               ORDER BY c.name ASC, cc.case_id ASC`,
             [cohort.id]
         );
-        res.status(createdCount > 0 ? 201 : 200).json({ cases });
+        res.status(changedCount > 0 ? 201 : 200).json({ cases });
     } catch (err) {
         next(err);
     }
@@ -612,6 +678,196 @@ router.delete('/cohorts/:id/cases/:caseId', authenticateToken, requireEducator, 
             metadata: { case_id: caseId },
         });
         res.json({ removed: true });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Edit one case assignment's date window (null clears → open). Same
+// loadOwnedCohort chokepoint; writes only cohort_cases.
+router.patch('/cohorts/:id/cases/:caseId', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const caseId = Number.parseInt(req.params.caseId, 10);
+        const body = req.body || {};
+        const from = parseDateInput(body.available_from);
+        const until = parseDateInput(body.available_until);
+        if (from === false || until === false) {
+            return res.status(400).json({ error: 'available_from / available_until must be valid dates' });
+        }
+        if (from && until && Date.parse(from) > Date.parse(until)) {
+            return res.status(400).json({ error: 'available_from must be on or before available_until' });
+        }
+        const result = await dbAdapter.run(
+            `UPDATE cohort_cases SET available_from = ?, available_until = ?
+              WHERE cohort_id = ? AND case_id = ? AND deleted_at IS NULL`,
+            [from ?? null, until ?? null, cohort.id, caseId]
+        );
+        if (!result.changes) return res.status(404).json({ error: 'Case assignment not found' });
+        auditSuccess(req, {
+            action: 'cohort.cases.window',
+            resourceType: 'cohort',
+            resourceId: cohort.id,
+            metadata: { case_id: caseId, available_from: from ?? null, available_until: until ?? null },
+        });
+        res.json({ updated: true, case_id: caseId, available_from: from ?? null, available_until: until ?? null });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Update a member's enrollment status ('active'|'completed'|'dropped') and/or
+// enrollment window. 'dropped'/'completed' revoke case access (the enforcement
+// predicate requires status='active') while keeping the roster row for history.
+router.patch('/cohorts/:id/members/:userId', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const userId = Number.parseInt(req.params.userId, 10);
+        const body = req.body || {};
+        if (body.status !== undefined && !['active', 'completed', 'dropped'].includes(body.status)) {
+            return res.status(400).json({ error: "status must be 'active', 'completed', or 'dropped'" });
+        }
+        let from;
+        let until;
+        if (body.enrolled_from !== undefined) {
+            from = parseDateInput(body.enrolled_from);
+            if (from === false) return res.status(400).json({ error: 'enrolled_from must be a valid date' });
+        }
+        if (body.enrolled_until !== undefined) {
+            until = parseDateInput(body.enrolled_until);
+            if (until === false) return res.status(400).json({ error: 'enrolled_until must be a valid date' });
+        }
+        if (body.status === undefined && body.enrolled_from === undefined && body.enrolled_until === undefined) {
+            return res.status(400).json({ error: 'nothing to update' });
+        }
+        // Read-merge then a FIXED update statement (no SQL interpolation): keep
+        // fields the caller didn't send, overwrite the ones they did.
+        const current = await dbAdapter.get(
+            `SELECT status, enrolled_from, enrolled_until FROM cohort_members
+              WHERE cohort_id = ? AND user_id = ? AND deleted_at IS NULL`,
+            [cohort.id, userId]
+        );
+        if (!current) return res.status(404).json({ error: 'Member not found' });
+        const newStatus = body.status !== undefined ? body.status : current.status;
+        const newFrom = body.enrolled_from !== undefined ? (from ?? null) : current.enrolled_from;
+        const newUntil = body.enrolled_until !== undefined ? (until ?? null) : current.enrolled_until;
+        await dbAdapter.run(
+            `UPDATE cohort_members SET status = ?, enrolled_from = ?, enrolled_until = ?
+              WHERE cohort_id = ? AND user_id = ? AND deleted_at IS NULL`,
+            [newStatus, newFrom, newUntil, cohort.id, userId]
+        );
+        auditSuccess(req, {
+            action: 'cohort.member.update',
+            resourceType: 'cohort',
+            resourceId: cohort.id,
+            targetType: 'user',
+            targetId: userId,
+            metadata: { status: body.status, enrolled_from: body.enrolled_from, enrolled_until: body.enrolled_until },
+        });
+        res.json({ updated: true });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Bulk-enrol students by username/email. Idempotent + revive-aware; unknown
+// identifiers are reported, not fatal. Backs the drawer enroll + import class step.
+router.post('/cohorts/:id/members/bulk', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+        const raw = req.body?.identifiers;
+        if (!Array.isArray(raw) || raw.length === 0) {
+            return res.status(400).json({ error: 'identifiers must be a non-empty array' });
+        }
+        const identifiers = [...new Set(raw.map(s => (typeof s === 'string' ? s.trim() : '')).filter(Boolean))];
+        const results = { enrolled: [], revived: [], already: [], notFound: [] };
+        for (const identifier of identifiers) {
+            const target = await resolveTenantUser(identifier, req);
+            if (!target) { results.notFound.push(identifier); continue; }
+            const { created, revived } = await addMember(cohort.id, target.id);
+            if (created) results.enrolled.push({ identifier, user_id: target.id });
+            else if (revived) results.revived.push({ identifier, user_id: target.id });
+            else results.already.push({ identifier, user_id: target.id });
+        }
+        auditSuccess(req, {
+            action: 'cohort.members.bulk_add',
+            resourceType: 'cohort',
+            resourceId: cohort.id,
+            metadata: {
+                count: identifiers.length,
+                enrolled: results.enrolled.length,
+                revived: results.revived.length,
+                not_found: results.notFound.length,
+            },
+        });
+        res.status(201).json({ results });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Bulk enroll/unenroll a SET of users across a SET of classes in one call —
+// the "bulk module" primitive. requireEducator; every cohort is permission-
+// checked (owner/admin/co-teacher) and a denied/missing one is reported, not
+// fatal. Returns a full per-(user,cohort) report the UI can render + download.
+router.post('/cohorts/bulk-enroll', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const body = req.body || {};
+        const action = body.action === 'unenroll' ? 'unenroll' : 'enroll';
+        const userIds = [...new Set((Array.isArray(body.user_ids) ? body.user_ids : []).map(Number).filter(n => Number.isInteger(n) && n > 0))];
+        const cohortIds = [...new Set((Array.isArray(body.cohort_ids) ? body.cohort_ids : []).map(Number).filter(n => Number.isInteger(n) && n > 0))];
+        if (userIds.length === 0 || cohortIds.length === 0) {
+            return res.status(400).json({ error: 'user_ids and cohort_ids must each be non-empty arrays' });
+        }
+        const tid = tenantId(req);
+        const placeholders = userIds.map(() => '?').join(',');
+        const foundUsers = await dbAdapter.all(
+            `SELECT id, username, name FROM users WHERE id IN (${placeholders}) AND tenant_id = ? AND deleted_at IS NULL`,
+            [...userIds, tid]
+        );
+        const userById = new Map(foundUsers.map(u => [u.id, u]));
+
+        const summary = { enrolled: 0, revived: 0, already: 0, unenrolled: 0, not_member: 0, user_not_found: 0, cohort_denied: 0 };
+        const results = [];
+        for (const cohortId of cohortIds) {
+            const cohort = await resolveManageableCohort(cohortId, req);
+            if (!cohort) {
+                summary.cohort_denied++;
+                results.push({ cohort_id: cohortId, cohort_name: null, user_id: null, username: null, outcome: 'cohort_denied' });
+                continue;
+            }
+            for (const userId of userIds) {
+                const u = userById.get(userId);
+                if (!u) {
+                    summary.user_not_found++;
+                    results.push({ cohort_id: cohort.id, cohort_name: cohort.name, user_id: userId, username: null, outcome: 'user_not_found' });
+                    continue;
+                }
+                let outcome;
+                if (action === 'enroll') {
+                    const r = await upsertMember(cohort.id, userId, 'student');
+                    outcome = r.created ? 'enrolled' : r.revived ? 'revived' : 'already';
+                } else {
+                    const result = await dbAdapter.run(
+                        `UPDATE cohort_members SET deleted_at = ${dbAdapter.now()}
+                          WHERE cohort_id = ? AND user_id = ? AND deleted_at IS NULL`,
+                        [cohort.id, userId]
+                    );
+                    outcome = result.changes ? 'unenrolled' : 'not_member';
+                }
+                summary[outcome]++;
+                results.push({ cohort_id: cohort.id, cohort_name: cohort.name, user_id: userId, username: u.username, outcome });
+            }
+        }
+        auditSuccess(req, {
+            action: `cohort.bulk_${action}`,
+            resourceType: 'cohort',
+            metadata: { action, users: userIds.length, cohorts: cohortIds.length, summary },
+        });
+        res.json({ action, summary, results });
     } catch (err) {
         next(err);
     }

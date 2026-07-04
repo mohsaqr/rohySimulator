@@ -23,6 +23,7 @@ import {
     auditSuccess,
     redactAuditSetting,
     redactRows,
+    resetCohortCaseEnforcementCache,
     verifySessionOwnership
 } from './_helpers.js';
 
@@ -1112,6 +1113,30 @@ const setAuditedPlatformSetting = async (req, key, value, action = 'update_platf
         newValue: { [key]: redactAuditSetting(key, value) }
     });
 };
+
+// --- Cohort-case access enforcement flag ------------------------------------
+// The master switch for class-centric, date-windowed case access (default OFF
+// so existing installs are unaffected until an admin opts in). Reads/writes the
+// `enforce_cohort_case_access` platform setting and busts the in-process cache.
+router.get('/platform-settings/cohort-case-enforcement', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const value = await getPlatformSetting('enforce_cohort_case_access');
+        res.json({ enabled: value === 'true' || value === '1' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.put('/platform-settings/cohort-case-enforcement', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const enabled = req.body?.enabled === true || req.body?.enabled === 'true';
+        await setAuditedPlatformSetting(req, 'enforce_cohort_case_access', enabled ? 'true' : 'false', 'update_cohort_case_enforcement');
+        resetCohortCaseEnforcementCache();
+        res.json({ enabled });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // Default LLM settings
 const DEFAULT_LLM_SETTINGS = {
