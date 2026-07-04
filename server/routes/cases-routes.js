@@ -20,7 +20,6 @@ import {
     canManageOwnedResource,
     canReadAcrossUsers,
     clampInitialVitals,
-    cohortCaseEnforcementOn,
     cohortCaseVisibleExists,
     createCaseVersion,
     isEnforcedStudent,
@@ -65,7 +64,7 @@ router.get('/cases', authenticateToken, async (req, res) => {
     if (canReview) {
         sql = "SELECT * FROM cases WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, created_at DESC";
         params = [tenantId(req)];
-    } else if (isEnforcedStudent(req.user) && await cohortCaseEnforcementOn()) {
+    } else if (isEnforcedStudent(req.user)) {
         sql = `SELECT c.* FROM cases c
                WHERE c.tenant_id = ? AND c.deleted_at IS NULL AND c.is_available = 1
                  AND ( c.is_default = 1 OR ${cohortCaseVisibleExists('c')} )
@@ -118,7 +117,7 @@ router.get('/cases/:id', authenticateToken, async (req, res) => {
     if (canReadAcrossUsers(req.user)) {
         sql = `SELECT * FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`;
         params = [req.params.id, tenantId(req)];
-    } else if (isEnforcedStudent(req.user) && await cohortCaseEnforcementOn()) {
+    } else if (isEnforcedStudent(req.user)) {
         // Same gate as GET /cases; a hidden case returns the existing 404 (no
         // existence leak — "not assigned" is indistinguishable from "not found").
         sql = `SELECT c.* FROM cases c

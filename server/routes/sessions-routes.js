@@ -15,7 +15,6 @@ import {
 import { logger } from '../logger.js';
 import {
     canReadAcrossUsers,
-    cohortCaseEnforcementOn,
     cohortCaseVisibleExists,
     isEnforcedStudent,
     redactRow,
@@ -46,10 +45,9 @@ router.post('/sessions', authenticateToken, async (req, res) => {
     const { case_id, student_name, llm_settings, monitor_settings } = req.body;
     const user_id = req.user.id;
 
-    // Kick off the enforcement-flag read in PARALLEL with the case/prefs fetches
-    // below so the launch gate adds no serial latency to the hot path (important
-    // for the concurrent-start dedup). Null when the caller bypasses enforcement.
-    const enforcePromise = isEnforcedStudent(req.user) ? cohortCaseEnforcementOn() : null;
+    // Students are always limited to the default case plus cases assigned
+    // through active course enrolments/date windows. Reviewer+ bypass.
+    const enforceLaunchAccess = isEnforcedStudent(req.user);
 
     // If no llm_settings provided, check user preferences for default settings
     let effectiveLlmSettings = llm_settings || {};
@@ -113,13 +111,10 @@ router.post('/sessions', authenticateToken, async (req, res) => {
         return res.status(404).json({ error: 'Case not found' });
     }
 
-    // Launch gate: a direct case id must not bypass catalog filtering when
-    // cohort-case enforcement is on. Only enforced students are gated (reviewer+
-    // bypass), and only when the flag is ON — so with the flag off this route
-    // behaves exactly as before (fully non-breaking). Mirrors GET /cases/:id:
-    // the default case or an in-window class assignment is required. The flag
-    // read was started in parallel above, so it's already resolved here.
-    if (enforcePromise && await enforcePromise) {
+    // Launch gate: a direct case id must not bypass catalog filtering. Mirrors
+    // GET /cases/:id: the default case or an in-window course assignment is
+    // required for students.
+    if (enforceLaunchAccess) {
         const allowed = await new Promise((resolve, reject) => {
             dbAdapter.get(
                 `SELECT 1 FROM cases c

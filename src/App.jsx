@@ -60,7 +60,7 @@ function MainApp() {
    // round-trip back to a specific surface (eg. case wizard step 11) so
    // the user isn't displaced when they launched from a deeper context.
    const [personaEditorReturn, setPersonaEditorReturn] = useState(null);
-   const [settingsInitialTab, setSettingsInitialTab] = useState('cases');
+   const [settingsInitialTab, setSettingsInitialTab] = useState('overview');
    const [settingsInitialStep, setSettingsInitialStep] = useState(1);
    // Bumped by the Oyon pill's analytics shortcut. ConfigPanel keeps its
    // active tab in local state seeded from `initialTab`, so a tab request

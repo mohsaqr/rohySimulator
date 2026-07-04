@@ -4,7 +4,7 @@ import {
     Check, Loader2, UserPlus, X, ChevronDown, ChevronRight,
     GraduationCap, BookOpen, Save,
     ListChecks, LayoutGrid, BarChart3, Download, Activity,
-    Target, Percent, SlidersHorizontal, Info, ShieldCheck,
+    Target, Percent, SlidersHorizontal, Info,
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError } from '../../services/apiClient';
@@ -15,7 +15,6 @@ import {
     updateCohort, assignCohortCases, unassignCohortCase,
     addCohortTeacher, removeCohortTeacher,
 } from '../../services/cohortsService';
-import * as userService from '../../services/userService';
 import CohortReports from './CohortReports';
 import { CasePicker, PeoplePicker } from './CohortPickers';
 
@@ -234,8 +233,6 @@ export default function CohortsManagementTab() {
                 <Stat label="Enrolled students" value={summary.members} />
                 <Stat label="Active registration codes" value={summary.codes} />
             </div>
-
-            <CourseAccessPolicyCard />
 
             <form onSubmit={handleCreate} className="mb-8 space-y-3">
                 <div className="flex gap-2">
@@ -480,70 +477,6 @@ function Stat({ label, value }) {
         <div className="p-3 bg-neutral-800/50 border border-neutral-700 rounded-lg">
             <div className="text-xl font-bold text-white">{value}</div>
             <div className="text-xs text-neutral-400 uppercase tracking-wide font-semibold">{label}</div>
-        </div>
-    );
-}
-
-function CourseAccessPolicyCard() {
-    const toast = useToast();
-    const [enabled, setEnabled] = useState(null);
-    const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-        let alive = true;
-        userService.getEnforcementFlag()
-            .then((r) => { if (alive) setEnabled(!!r.enabled); })
-            .catch(() => { if (alive) setEnabled(null); });
-        return () => { alive = false; };
-    }, []);
-
-    const toggle = async () => {
-        if (enabled == null || saving) return;
-        const next = !enabled;
-        const ok = await toast.confirm(
-            next
-                ? 'Turn on course-restricted access? Students will only see the default case plus cases assigned through active course enrolments and date windows.'
-                : 'Turn off course-restricted access? Students will see all available cases again.',
-            { title: 'Course access policy', confirmText: next ? 'Enable' : 'Disable' },
-        );
-        if (!ok) return;
-        setSaving(true);
-        try {
-            const r = await userService.setEnforcementFlag(next);
-            setEnabled(!!r.enabled);
-            toast.success(`Course-restricted access ${r.enabled ? 'enabled' : 'disabled'}`);
-        } catch (err) {
-            toast.error(errMsg(err, 'Failed to update access policy'));
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (enabled == null) return null;
-
-    return (
-        <div className="mb-6 p-4 bg-neutral-800/50 border border-neutral-700 rounded-lg flex items-center justify-between gap-3">
-            <div className="flex items-start gap-3 min-w-0">
-                <ShieldCheck className={`w-5 h-5 mt-0.5 shrink-0 ${enabled ? 'text-green-400' : 'text-neutral-500'}`} />
-                <div className="min-w-0">
-                    <div className="text-sm font-bold text-white">Course access policy</div>
-                    <div className="text-xs text-neutral-400 mt-0.5">
-                        {enabled
-                            ? 'Course-restricted: students see assigned cases through active enrolments and date windows.'
-                            : 'Open access: students see every available case. Course assignment still powers reports.'}
-                    </div>
-                </div>
-            </div>
-            <button
-                type="button"
-                onClick={toggle}
-                disabled={saving}
-                className={`shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${enabled ? 'bg-green-600' : 'bg-neutral-600'}`}
-                aria-pressed={enabled}
-                aria-label="Toggle course access policy"
-            >
-                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </button>
         </div>
     );
 }

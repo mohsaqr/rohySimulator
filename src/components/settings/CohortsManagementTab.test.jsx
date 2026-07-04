@@ -102,19 +102,6 @@ describe('CohortsManagementTab — list view', () => {
         expect(screen.getByText(/no registration code/)).toBeTruthy();
     });
 
-    it('renders and toggles course access policy when admin setting is available', async () => {
-        userSvc.getEnforcementFlag.mockResolvedValue({ enabled: false });
-        userSvc.setEnforcementFlag.mockResolvedValue({ enabled: true });
-        renderWithProviders(<CohortsManagementTab />);
-        await waitFor(() => expect(screen.getByText('Course access policy')).toBeTruthy());
-        expect(screen.getByText(/Open access/i)).toBeTruthy();
-
-        fireEvent.click(screen.getByLabelText('Toggle course access policy'));
-
-        await waitFor(() => expect(userSvc.setEnforcementFlag).toHaveBeenCalledWith(true));
-        expect(toast.success).toHaveBeenCalledWith('Course-restricted access enabled');
-    });
-
     it('creates a course, clears the input, and reloads', async () => {
         svc.listCohorts.mockResolvedValue({ cohorts: [] });
         svc.createCohort.mockResolvedValue({});
