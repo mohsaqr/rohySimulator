@@ -122,7 +122,163 @@ function NavGroupLabel({ group }) {
     return <div className="rohy-settings-nav-group">{group}</div>;
 }
 
-export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'cases', initialWizardStep = 1, onOpenPersonaEditor, onCaseSaved }) {
+const SETTINGS_CARD_COPY = {
+    cases: {
+        description: 'Build, review, import, and launch simulation cases.',
+        accent: 'from-sky-500 to-cyan-500',
+        metric: 'Case library',
+    },
+    scenarios: {
+        description: 'Reusable clinical timelines for case progression.',
+        accent: 'from-amber-500 to-orange-500',
+        metric: 'Timeline design',
+    },
+    agents: {
+        description: 'Configure clinical team personas and agent templates.',
+        accent: 'from-violet-500 to-fuchsia-500',
+        metric: 'Persona layer',
+    },
+    avatars: {
+        description: 'Manage visual identities for patients and team roles.',
+        accent: 'from-rose-500 to-pink-500',
+        metric: 'Visual identity',
+    },
+    voice: {
+        description: 'Tune speech, provider, and voice behavior.',
+        accent: 'from-indigo-500 to-blue-500',
+        metric: 'Voice runtime',
+    },
+    users: {
+        description: 'Create users, import rosters, and run bulk actions.',
+        accent: 'from-emerald-500 to-teal-500',
+        metric: 'Identity ops',
+    },
+    cohorts: {
+        description: 'Manage courses, enrollment, reports, and registration codes.',
+        accent: 'from-teal-500 to-cyan-500',
+        metric: 'Course ops',
+    },
+    analytics: {
+        description: 'Review activity, logs, course signals, and learning traces.',
+        accent: 'from-purple-500 to-indigo-500',
+        metric: 'Evidence layer',
+    },
+    oyon: {
+        description: 'Configure gaze/emotion capture and student consent surfaces.',
+        accent: 'from-lime-500 to-emerald-500',
+        metric: 'Capture stack',
+    },
+    bodymap: {
+        description: 'Edit physical exam body regions and body map assets.',
+        accent: 'from-orange-500 to-red-500',
+        metric: 'Exam mapping',
+    },
+    labdb: {
+        description: 'Curate lab references, templates, and turnaround behavior.',
+        accent: 'from-blue-500 to-sky-500',
+        metric: 'Lab catalogue',
+    },
+    medications: {
+        description: 'Maintain medication catalogues and treatment metadata.',
+        accent: 'from-green-500 to-emerald-500',
+        metric: 'Medication library',
+    },
+    platform: {
+        description: 'Control global runtime, defaults, AI, and monitor settings.',
+        accent: 'from-slate-600 to-slate-900',
+        metric: 'System control',
+    },
+    notifications: {
+        description: 'Manage notification preferences and operational alerts.',
+        accent: 'from-yellow-500 to-amber-500',
+        metric: 'Alerting',
+    },
+    logs: {
+        description: 'Inspect system, activity, chat, session, and audit logs.',
+        accent: 'from-zinc-500 to-stone-700',
+        metric: 'Audit trail',
+    },
+};
+
+function SettingsOverviewCard({ item, group, onSelect, featured = false }) {
+    const Icon = item.icon;
+    const copy = SETTINGS_CARD_COPY[item.id] || {};
+    return (
+        <button
+            type="button"
+            onClick={() => onSelect(item.id)}
+            className={`group relative flex min-h-[104px] flex-col rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-lg ${
+                featured ? 'md:col-span-2 xl:col-span-1' : ''
+            }`}
+        >
+            <div className={`absolute inset-y-0 left-0 w-1 bg-gradient-to-b ${copy.accent || 'from-slate-500 to-slate-800'}`} />
+            <div className="flex items-start justify-between gap-3">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-800 ring-1 ring-slate-200 transition-colors group-hover:bg-slate-950 group-hover:text-white">
+                    <Icon className="h-3.5 w-3.5" />
+                </span>
+                <span className="max-w-[46%] truncate rounded-full bg-slate-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-400 ring-1 ring-slate-200">
+                    {group}
+                </span>
+            </div>
+            <div className="mt-2 min-w-0 flex-1">
+                <h4 className="text-sm font-black tracking-tight text-slate-950">{item.label}</h4>
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                    {copy.description || 'Open this settings workspace.'}
+                </p>
+            </div>
+            <span className="mt-1 text-[9px] font-black uppercase tracking-[0.12em] text-teal-700 opacity-0 transition-opacity group-hover:opacity-100">
+                Open {copy.metric || 'workspace'}
+            </span>
+        </button>
+    );
+}
+
+function SettingsOverview({ sections, onSelect }) {
+    const visibleSections = sections
+        .map(({ group, items }) => ({ group, items: items.filter((item) => item.visible) }))
+        .filter(({ items }) => items.length > 0);
+
+    return (
+        <div className="space-y-5">
+            <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                <h3 className="text-2xl font-black tracking-tight text-slate-950">Control Center</h3>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-4 flex items-center justify-between gap-4">
+                    <div>
+                        <h3 className="text-xl font-black text-slate-950">Settings areas</h3>
+                        <p className="text-sm text-slate-500">One surface, framed by domain. Existing tabs remain unchanged.</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => onSelect('cases')}
+                        className="rounded-xl border border-slate-200 bg-slate-950 px-3 py-2 text-sm font-bold text-white shadow-sm hover:bg-slate-800"
+                    >
+                        Go to cases
+                    </button>
+                </div>
+
+                <div className="grid gap-3">
+                    {visibleSections.map(({ group, items }) => (
+                        <fieldset key={group} className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-3 pt-2">
+                            <legend className="ml-2 px-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                                {group}
+                            </legend>
+                            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+                                {items.map((item) => (
+                                    <SettingsOverviewCard key={item.id} item={item} group={group} onSelect={onSelect} />
+                                ))}
+                            </div>
+                        </fieldset>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'overview', initialWizardStep = 1, onOpenPersonaEditor, onCaseSaved }) {
     const { isAdmin, user } = useAuth();
     // Educator+ gate for the Analytics tab (formerly split into an admin-only
     // "Case Analytics" and an educator+ "Emotion & Attention" Oyon tab — the
@@ -364,12 +520,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             group: 'Analytics',
             items: [
                 { id: 'analytics', label: 'Analytics', icon: Activity, visible: canSeeAnalytics },
-            ],
-        },
-        {
-            group: 'Capture',
-            items: [
                 { id: 'oyon', label: 'Oyon', icon: Camera, visible: true },
+                { id: 'logs', label: 'Logs', icon: ClipboardList, visible: admin },
             ],
         },
         {
@@ -385,7 +537,6 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             items: [
                 { id: 'platform', label: 'Platform', icon: Settings, visible: admin },
                 { id: 'notifications', label: 'Notifications', icon: BellIcon, visible: true },
-                { id: 'logs', label: 'Logs', icon: ClipboardList, visible: admin },
             ],
         },
     ];
@@ -437,6 +588,13 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     >
                         <Monitor className="w-4 h-4" /> Simulation
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('overview')}
+                        className={`rohy-settings-nav-item ${activeTab === 'overview' ? 'rohy-settings-nav-item--active' : ''}`}
+                    >
+                        <Settings className="w-4 h-4" /> Overview
+                    </button>
                     {SECTIONS.map(({ group, items }) => {
                         const visibleItems = items.filter((item) => item.visible);
                         if (visibleItems.length === 0) return null;
@@ -458,6 +616,14 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
                 {/* Content Area */}
                 <div className="rohy-admin-page flex-1 p-8 overflow-y-auto">
+
+                    {/* --- TEMP SETTINGS OVERVIEW --- Card-page prototype; all existing tabs remain unchanged. */}
+                    {activeTab === 'overview' && (
+                        <SettingsOverview
+                            sections={SECTIONS}
+                            onSelect={setActiveTab}
+                        />
+                    )}
 
                     {/* --- ANALYTICS TAB (educator+) --- TNA dashboard embedded inside settings */}
                     {activeTab === 'analytics' && canSeeAnalytics && (
