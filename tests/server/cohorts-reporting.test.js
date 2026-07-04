@@ -243,6 +243,48 @@ describe('/api/cohorts/* Phase 4 reporting', () => {
         expect((await res2.json()).events.length).toBe(0);
     });
 
+    // ---- pulse analytics ----
+    it('pulse: course-native summary, frequencies, student and case progress stay member-scoped', async () => {
+        const res = await teacherA(`/api/cohorts/${cohortAId}/analytics/pulse`);
+        expect(res.status, await res.clone().text()).toBe(200);
+        const body = await res.json();
+
+        expect(body.summary).toMatchObject({
+            students: 2,
+            total_sessions: 3,
+            total_events: 4,
+            completion_rate: 33,
+        });
+
+        expect(body.students.map(s => s.username).sort()).toEqual(['rep-student-1', 'rep-student-2']);
+        const s1 = body.students.find(s => s.username === 'rep-student-1');
+        expect(s1).toMatchObject({
+            session_count: 2,
+            cases_attempted: 2,
+            cases_completed: 1,
+            event_count: 3,
+            status: 'In progress',
+        });
+
+        const alpha = body.cases.find(c => c.name === 'Alpha Case');
+        expect(alpha).toMatchObject({
+            sessions: 2,
+            students_attempted: 2,
+            students_completed: 1,
+            completion_rate: 50,
+        });
+        const beta = body.cases.find(c => c.name === 'Beta Case');
+        expect(beta).toMatchObject({
+            sessions: 1,
+            students_attempted: 1,
+            students_completed: 0,
+        });
+
+        expect(body.activity_frequencies.map(f => f.label)).toEqual(expect.arrayContaining(['Communication', 'Debrief']));
+        expect(body.recent_events.every(e => e.user_id === ids.s1 || e.user_id === ids.s2)).toBe(true);
+        expect(body.recent_events.some(e => e.user_id === ids.sB)).toBe(false);
+    });
+
     // ---- export ----
     it('export: json default flattens roster × cases', async () => {
         const res = await teacherA(`/api/cohorts/${cohortAId}/export`);

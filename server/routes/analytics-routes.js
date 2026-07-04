@@ -53,6 +53,51 @@ const clientLogLimiter = rateLimit({
     keyGenerator: (req) => `${req.user?.tenant_id || 'tenant'}:${req.user?.id || 'user'}`
 });
 
+const COURSE_META_SQL = (userExpr, tenantExpr) => `
+    (SELECT GROUP_CONCAT(DISTINCT cm.cohort_id)
+       FROM cohort_members cm
+       JOIN cohorts co ON co.id = cm.cohort_id
+      WHERE cm.user_id = ${userExpr}
+        AND cm.deleted_at IS NULL
+        AND co.deleted_at IS NULL
+        AND co.tenant_id = ${tenantExpr}) AS course_ids,
+    (SELECT GROUP_CONCAT(DISTINCT co.name)
+       FROM cohort_members cm
+       JOIN cohorts co ON co.id = cm.cohort_id
+      WHERE cm.user_id = ${userExpr}
+        AND cm.deleted_at IS NULL
+        AND co.deleted_at IS NULL
+        AND co.tenant_id = ${tenantExpr}) AS course_names
+`;
+
+async function enrichRowsWithCourses(rows, tenant) {
+    const ids = [...new Set((rows || []).map((r) => r.user_id).filter((id) => id !== null && id !== undefined && id !== ''))];
+    if (ids.length === 0) return rows || [];
+    const placeholders = ids.map(() => '?').join(',');
+    const courseRows = await new Promise((resolve, reject) => {
+        dbAdapter.all(
+            `SELECT cm.user_id,
+                    GROUP_CONCAT(DISTINCT cm.cohort_id) AS course_ids,
+                    GROUP_CONCAT(DISTINCT co.name) AS course_names
+               FROM cohort_members cm
+               JOIN cohorts co ON co.id = cm.cohort_id
+              WHERE cm.deleted_at IS NULL
+                AND co.deleted_at IS NULL
+                AND co.tenant_id = ?
+                AND cm.user_id IN (${placeholders})
+              GROUP BY cm.user_id`,
+            [tenant, ...ids],
+            (err, found) => err ? reject(err) : resolve(found || []),
+        );
+    });
+    const byUser = new Map(courseRows.map((row) => [String(row.user_id), row]));
+    return (rows || []).map((row) => ({
+        ...row,
+        course_ids: byUser.get(String(row.user_id))?.course_ids || null,
+        course_names: byUser.get(String(row.user_id))?.course_names || null,
+    }));
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -120,7 +165,8 @@ router.get('/analytics/sessions', authenticateToken, (req, res) => {
     if (canReadAcrossUsers(req.user)) {
         // Reviewer+ sees all sessions
         sql = `
-            SELECT s.*, c.name as case_name, u.username
+            SELECT s.*, c.name as case_name, u.username,
+                   ${COURSE_META_SQL('s.user_id', 's.tenant_id')}
             FROM sessions s
             LEFT JOIN cases c ON s.case_id = c.id
             LEFT JOIN users u ON s.user_id = u.id
@@ -131,7 +177,8 @@ router.get('/analytics/sessions', authenticateToken, (req, res) => {
     } else {
         // Users see only their own sessions
         sql = `
-            SELECT s.*, c.name as case_name
+            SELECT s.*, c.name as case_name,
+                   ${COURSE_META_SQL('s.user_id', 's.tenant_id')}
             FROM sessions s
             LEFT JOIN cases c ON s.case_id = c.id
             WHERE s.tenant_id = ? AND s.user_id = ? AND s.deleted_at IS NULL
@@ -448,6 +495,8 @@ const LEARNING_VERBS = [
     // Lab/Investigation actions
     'ORDERED_LAB', 'CANCELLED_LAB', 'VIEWED_LAB_RESULT', 'SEARCHED_LABS',
     'FILTERED_LABS', 'LAB_RESULT_READY',
+    // Radiology / imaging actions
+    'ORDERED_IMAGING', 'CANCELLED_IMAGING', 'VIEWED_RADIOLOGY_RESULT',
     // Medication/treatment actions
     'ORDERED_MEDICATION', 'ADMINISTERED_MEDICATION', 'CANCELLED_MEDICATION',
     'ORDERED_TREATMENT', 'PERFORMED_INTERVENTION', 'ORDERED_IV_FLUID',
@@ -469,6 +518,8 @@ const LEARNING_VERBS = [
     // Patient record
     'VIEWED_PATIENT_SUMMARY', 'VIEWED_HISTORY', 'VIEWED_MEDICATIONS',
     'VIEWED_ALLERGIES',
+    // Documentation / debrief
+    'WROTE_NOTE', 'SAVED_NOTE', 'UPDATED_NOTE', 'SUBMITTED_DEBRIEF',
     // Settings
     'CHANGED_SETTING', 'SAVED_SETTING', 'RESET_SETTING',
     // Case interactions
@@ -1007,7 +1058,8 @@ router.get('/learning-events/all', authenticateToken, (req, res) => {
         SELECT le.*,
                s.case_id,
                c.name as case_name,
-               u.username
+               u.username,
+               ${COURSE_META_SQL('le.user_id', 'le.tenant_id')}
         FROM learning_events le
         LEFT JOIN sessions s ON le.session_id = s.id
         LEFT JOIN cases c ON s.case_id = c.id
@@ -1019,7 +1071,8 @@ router.get('/learning-events/all', authenticateToken, (req, res) => {
         SELECT le.*,
                s.case_id,
                c.name as case_name,
-               u.username
+               u.username,
+               ${COURSE_META_SQL('le.user_id', 'le.tenant_id')}
         FROM learning_events le
         LEFT JOIN sessions s ON le.session_id = s.id
         LEFT JOIN cases c ON s.case_id = c.id
@@ -2053,11 +2106,11 @@ router.get('/chat-log/feed', authenticateToken, requireAdmin, (req, res) => {
         `, [tenant, ...f.params, ...sessionParam(), limit]);
     });
 
-    Promise.all(queries.map(q => q())).then((results) => {
+    Promise.all(queries.map(q => q())).then(async (results) => {
         const flat = results.flat();
-        const events = flat
+        const events = await enrichRowsWithCourses(flat
             .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))
-            .slice(0, limit);
+            .slice(0, limit), tenant);
         const sources = {};
         for (const r of flat) sources[r.source] = (sources[r.source] || 0) + 1;
         res.json({ events, sources });
@@ -2524,11 +2577,11 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
         `, [...f.params, perSource]);
     });
 
-    Promise.all(queries.map(q => q())).then((results) => {
+    Promise.all(queries.map(q => q())).then(async (results) => {
         const flat = results.flat();
-        const events = flat
+        const events = await enrichRowsWithCourses(flat
             .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))
-            .slice(0, limit);
+            .slice(0, limit), tenant);
         // Per-source counts so you can see what fired and what was empty.
         const sources = {};
         for (const r of flat) {
@@ -2792,10 +2845,11 @@ router.post('/alarms/config', authenticateToken, requireAdmin, (req, res) => {
 // exactly as before — behaviour is unchanged (regression-locked by
 // tests/server/analytics-tna.test.js).
 function buildLearningEventWhere(req, { alias = '', includeUser = true } = {}) {
-    const { case_id, user_id, start_date, end_date } = req.query || {};
+    const { case_id, course_id, user_id, start_date, end_date } = req.query || {};
     return buildEventFilter({
         tenantId: tenantId(req),
         caseId: case_id,
+        courseId: course_id,
         userId: includeUser ? user_id : undefined,
         startDate: start_date,
         endDate: end_date,
@@ -2908,7 +2962,7 @@ router.get('/analytics/top-resources', authenticateToken, requireAdmin, async (r
     }
 });
 
-// GET /api/analytics/filter-options — courses + students for dropdown filters.
+// GET /api/analytics/filter-options — courses, cases + students for dropdown filters.
 router.get('/analytics/filter-options', authenticateToken, requireAdmin, (req, res) => {
     dbAdapter.all(
         `SELECT id, name AS title FROM cases WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY name`,
@@ -2916,15 +2970,25 @@ router.get('/analytics/filter-options', authenticateToken, requireAdmin, (req, r
         (err1, cases) => {
             if (err1) return res.status(500).json({ error: err1.message });
             dbAdapter.all(
-                `SELECT DISTINCT u.id, u.username, u.name AS fullname, u.email
-                   FROM users u
-                   JOIN learning_events le ON le.user_id = u.id AND le.tenant_id = ?
-                  WHERE u.tenant_id = ?
-                  ORDER BY u.username`,
-                [tenantId(req), tenantId(req)],
-                (err2, users) => {
+                `SELECT id, name AS title
+                   FROM cohorts
+                  WHERE tenant_id = ? AND deleted_at IS NULL
+                  ORDER BY name`,
+                [tenantId(req)],
+                (err2, courses) => {
                     if (err2) return res.status(500).json({ error: err2.message });
-                    res.json({ cases: cases || [], users: users || [] });
+                    dbAdapter.all(
+                        `SELECT DISTINCT u.id, u.username, u.name AS fullname, u.email
+                           FROM users u
+                           JOIN learning_events le ON le.user_id = u.id AND le.tenant_id = ?
+                          WHERE u.tenant_id = ?
+                          ORDER BY u.username`,
+                        [tenantId(req), tenantId(req)],
+                        (err3, users) => {
+                            if (err3) return res.status(500).json({ error: err3.message });
+                            res.json({ cases: cases || [], courses: courses || [], users: users || [] });
+                        }
+                    );
                 }
             );
         }

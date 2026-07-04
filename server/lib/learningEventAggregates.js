@@ -32,6 +32,7 @@ function isDateOnly(value) {
 //   userId     filter by le.user_id (single student)
 //   sessionId  filter by le.session_id (per-session deep dive — NEW;
 //              the admin path never set this before)
+//   courseId   filter by active course enrolment (cohort_members)
 //   memberIds  array → le.user_id IN (...). [] means "no members" and
 //              yields 1=0 so an empty cohort returns zero rows instead
 //              of (wrongly) the whole tenant.
@@ -43,6 +44,7 @@ function buildEventFilter({
     caseId,
     userId,
     sessionId,
+    courseId,
     memberIds,
     startDate,
     endDate,
@@ -64,6 +66,19 @@ function buildEventFilter({
     if (sessionId) {
         clauses.push(`${col('session_id')} = ?`);
         params.push(sessionId);
+    }
+    if (courseId) {
+        clauses.push(`EXISTS (
+            SELECT 1
+              FROM cohort_members cm
+              JOIN cohorts co ON co.id = cm.cohort_id
+             WHERE cm.user_id = ${col('user_id')}
+               AND cm.cohort_id = ?
+               AND cm.deleted_at IS NULL
+               AND co.deleted_at IS NULL
+               AND co.tenant_id = ?
+        )`);
+        params.push(courseId, tenantId);
     }
     if (Array.isArray(memberIds)) {
         if (memberIds.length === 0) {

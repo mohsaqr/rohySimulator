@@ -77,6 +77,10 @@ export const getCohortRoster = (id) => apiGet(`/cohorts/${id}/roster`);
 //     last_activity} } } }
 export const getCohortGrid = (id) => apiGet(`/cohorts/${id}/grid`);
 
+// → { cohort, summary, students, cases, activity_frequencies,
+//     top_activities, recent_events }
+export const getCohortPulse = (id) => apiGet(`/cohorts/${id}/analytics/pulse`);
+
 // → { cohort:{id,name}, student:{id,username,name,role},
 //     sessions:[{id,case_id,case_name,start_time,end_time,status,completed}],
 //     events:[{id,session_id,case_id,timestamp,verb,object_type,object_id,

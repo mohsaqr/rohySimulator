@@ -71,4 +71,42 @@ describe('clinicalStates resolver', () => {
             expect(canonical.has(state)).toBe(true);
         }
     });
+
+    // --- Regression: clinical actions must not resolve to `navigating` ---
+    // Before the 2026-07 fix, treatment/medication convenience methods logged
+    // object_type 'component', and OBJECT_OVERRIDES.component = 'navigating'
+    // beat the verb — so every ordered drug showed up as UI navigation. The
+    // fix gives those events real object_types; this locks the outcome.
+    it('treatment / medication object types resolve to treating', () => {
+        expect(resolveClinicalState('ORDERED_TREATMENT', 'treatment')).toBe('treating');
+        expect(resolveClinicalState('ORDERED_MEDICATION', 'medication')).toBe('treating');
+        expect(resolveClinicalState('ORDERED_IV_FLUID', 'iv_fluid')).toBe('treating');
+        expect(resolveClinicalState('STARTED_OXYGEN', 'oxygen_therapy')).toBe('treating');
+        expect(resolveClinicalState('ORDERED_NURSING', 'nursing_intervention')).toBe('treating');
+        expect(resolveClinicalState('DISCONTINUED_TREATMENT', 'treatment')).toBe('treating');
+    });
+
+    it('reading the patient record resolves to assessing', () => {
+        expect(resolveClinicalState('VIEWED_HISTORY', 'patient_record')).toBe('assessing');
+        expect(resolveClinicalState('VIEWED_MEDICATIONS', 'patient_record')).toBe('assessing');
+        expect(resolveClinicalState('VIEWED_RECORDS', 'patient_record')).toBe('assessing');
+    });
+
+    it('imaging orders + radiology reads resolve to investigating / assessing', () => {
+        expect(resolveClinicalState('ORDERED_IMAGING', 'radiology_order')).toBe('investigating');
+        expect(resolveClinicalState('VIEWED_RADIOLOGY_RESULT', 'radiology_result')).toBe('assessing');
+    });
+
+    it('debrief turns resolve to reflecting (distinct from bedside chat)', () => {
+        expect(resolveClinicalState('SENT_MESSAGE', 'debrief')).toBe('reflecting');
+        expect(resolveClinicalState('RECEIVED_MESSAGE', 'debrief')).toBe('reflecting');
+        // Patient chat stays communicating.
+        expect(resolveClinicalState('SENT_MESSAGE', 'chat_message')).toBe('communicating');
+    });
+
+    it('auth events resolve to regulating (no raw LOGGED_IN_auth literal)', () => {
+        expect(resolveClinicalState('LOGGED_IN', 'auth')).toBe('regulating');
+        expect(resolveClinicalState('LOGGED_OUT', 'auth')).toBe('regulating');
+        expect(resolveClinicalState('FAILED_LOGIN', 'auth')).toBe('regulating');
+    });
 });

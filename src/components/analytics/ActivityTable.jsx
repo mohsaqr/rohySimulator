@@ -88,6 +88,12 @@ const COLUMNS = [
             <CopyableCell value={info.getValue()} className="font-mono text-neutral-400" />
         ),
     },
+    { accessorKey: 'course_names', header: 'course', size: 180,
+      cell: (info) => (
+          <div className="truncate max-w-[180px]" title={info.getValue() ?? ''}>
+              <CopyableCell value={info.getValue()} className="text-neutral-300" />
+          </div>
+      ) },
     {
         accessorKey: 'case_name',
         header: 'case',
@@ -217,7 +223,7 @@ const INITIAL_HIDDEN = {
 // Client-side CSV field order — the /learning-events/all row shape.
 const CSV_FIELDS = [
     'id', 'timestamp', 'user_id', 'username', 'case_id', 'case_name',
-    'session_id', 'verb', 'object_type', 'object_id', 'object_name',
+    'course_ids', 'course_names', 'session_id', 'verb', 'object_type', 'object_id', 'object_name',
     'component', 'parent_component', 'result', 'duration_ms',
     'message_role', 'message_content', 'severity', 'category', 'context',
     'vital_hr', 'vital_spo2', 'vital_bp_sys', 'vital_bp_dia',
@@ -225,7 +231,7 @@ const CSV_FIELDS = [
 ];
 
 const EMPTY_FILTERS = {
-    user_id: '', case_id: '', session_id: '',
+    user_id: '', course_id: '', case_id: '', session_id: '',
     verb: '', category: '', severity: '',
     from: '', to: '',
 };
@@ -233,12 +239,26 @@ const EMPTY_FILTERS = {
 // FilterBar equality filters → row accessors (dates handled separately).
 const FILTER_ACCESSORS = {
     user_id: (r) => r.user_id,
+    course_id: (r) => csvList(r.course_ids),
     case_id: (r) => r.case_id,
     session_id: (r) => r.session_id,
     verb: (r) => r.verb,
     category: (r) => r.category,
     severity: (r) => r.severity,
 };
+
+function csvList(value) {
+    if (Array.isArray(value)) return value;
+    if (value === null || value === undefined || value === '') return [];
+    return String(value).split(',').map((v) => v.trim()).filter(Boolean);
+}
+
+function courseLabel(row, value) {
+    const ids = csvList(row.course_ids);
+    const names = csvList(row.course_names);
+    const idx = ids.indexOf(String(value));
+    return names[idx] || `Course #${value}`;
+}
 
 export default function ActivityTable({ sessionId = null }) {
     const { user } = useAuth();
@@ -270,8 +290,8 @@ export default function ActivityTable({ sessionId = null }) {
     const setFilter = useCallback((key, value) => {
         setFilters((prev) => {
             const next = { ...prev, [key]: value ?? '' };
-            // A different student / case invalidates the attempt selection.
-            if (key === 'user_id' || key === 'case_id') next.session_id = '';
+            // A different course / student / case invalidates the attempt selection.
+            if (key === 'course_id' || key === 'user_id' || key === 'case_id') next.session_id = '';
             return next;
         });
     }, []);
@@ -296,6 +316,10 @@ export default function ActivityTable({ sessionId = null }) {
         const defs = [];
         if (canReview) {
             defs.push({
+                key: 'course_id', label: 'Course', width: 'w-52',
+                options: contextualOptions(dated, FILTER_ACCESSORS, filters, 'course_id', courseLabel),
+            });
+            defs.push({
                 key: 'user_id', label: 'Student',
                 options: contextualOptions(dated, FILTER_ACCESSORS, filters, 'user_id',
                     (r) => r.username || `#${r.user_id}`),
@@ -307,7 +331,7 @@ export default function ActivityTable({ sessionId = null }) {
                 (r) => r.case_name || `#${r.case_id}`),
         });
         if (!sessionId) {
-            const others = { user_id: FILTER_ACCESSORS.user_id, case_id: FILTER_ACCESSORS.case_id };
+            const others = { course_id: FILTER_ACCESSORS.course_id, user_id: FILTER_ACCESSORS.user_id, case_id: FILTER_ACCESSORS.case_id };
             defs.push({
                 key: 'session_id', label: 'Attempt', width: 'w-56',
                 options: deriveSessionOptions(
@@ -331,7 +355,7 @@ export default function ActivityTable({ sessionId = null }) {
         // Category / severity aren't /export/learning-events params — when
         // either is active, export exactly the filtered loaded view instead
         // of a server stream that couldn't honor them.
-        if (filters.category || filters.severity) {
+        if (filters.course_id || filters.category || filters.severity) {
             downloadCsv(
                 buildCsv(filteredEvents.map((r) => ({ ...r, context: fmtCtx(r.context) })), CSV_FIELDS),
                 `learning-events_${new Date().toISOString().slice(0, 10)}.csv`,

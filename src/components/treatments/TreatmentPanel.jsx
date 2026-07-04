@@ -194,7 +194,9 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
     const handleDiscontinue = async (orderId) => {
         try {
             await apiPut(`/sessions/${sessionId}/discontinue/${orderId}`);
+            const order = orders.find(o => o.id === orderId);
             toast.info('Treatment discontinued');
+            EventLogger.treatmentDiscontinued(orderId, order?.treatment_item, COMPONENTS.TREATMENT_PANEL);
             fetchOrders();
             onEffectsUpdate?.();
         } catch (error) {

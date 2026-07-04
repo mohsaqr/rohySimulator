@@ -77,8 +77,13 @@ export default function BulkOperationsModal({
             if (roleF !== 'all' && u.role !== roleF) return false;
             if (statusF !== 'all' && (u.status || 'active') !== statusF) return false;
             if (classF !== 'all') {
-                const inClass = (u.memberships || []).some(m => String(m.cohort_id) === String(classF));
-                if (!inClass) return false;
+                const memberships = u.memberships || [];
+                if (classF === 'none') {
+                    if (memberships.length > 0) return false;
+                } else {
+                    const inClass = memberships.some(m => String(m.cohort_id) === String(classF));
+                    if (!inClass) return false;
+                }
             }
             if (q) {
                 const hay = `${u.username} ${u.name || ''} ${u.email || ''}`.toLowerCase();
@@ -90,6 +95,14 @@ export default function BulkOperationsModal({
 
     const filteredIds = useMemo(() => filtered.map(u => u.id), [filtered]);
     const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selected.has(id));
+    const studentIds = useMemo(
+        () => users.filter(u => u.role === 'student' || u.role === 'user').map(u => u.id),
+        [users],
+    );
+    const unassignedIds = useMemo(
+        () => users.filter(u => (u.role === 'student' || u.role === 'user') && !(u.memberships || []).length).map(u => u.id),
+        [users],
+    );
 
     const toggleUser = (id) => setSelected(prev => {
         const n = new Set(prev);
@@ -103,6 +116,7 @@ export default function BulkOperationsModal({
         return n;
     });
     const clearSelection = () => setSelected(new Set());
+    const replaceSelection = (ids) => setSelected(new Set(ids));
 
     const toggleCohort = (id) => setCohortSel(prev => {
         const n = new Set(prev);
@@ -226,7 +240,7 @@ export default function BulkOperationsModal({
                             <Layers className="w-4 h-4 text-teal-700" /> Bulk operations
                         </h3>
                         <p className="text-xs text-neutral-500 mt-0.5">
-                            Build a target set, pick an action, preview, then run — with a downloadable report.
+                            Select users, choose one operation, preview, then run with a downloadable report.
                         </p>
                     </div>
                     <button className="rohy-subtle-button p-1.5 rounded" onClick={onClose} aria-label="Close">
@@ -273,8 +287,20 @@ export default function BulkOperationsModal({
                                         </select>
                                         <select className="rohy-field px-2 py-1.5 rounded text-xs flex-1 min-w-[90px]" value={classF} onChange={e => setClassF(e.target.value)}>
                                             <option value="all">All classes</option>
+                                            <option value="none">Unassigned</option>
                                             {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                         </select>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-1.5">
+                                        <button type="button" className="rohy-subtle-button px-2 py-1.5 rounded text-xs font-semibold" onClick={() => replaceSelection(filteredIds)} disabled={filteredIds.length === 0}>
+                                            Shown ({filteredIds.length})
+                                        </button>
+                                        <button type="button" className="rohy-subtle-button px-2 py-1.5 rounded text-xs font-semibold" onClick={() => replaceSelection(studentIds)} disabled={studentIds.length === 0}>
+                                            Students ({studentIds.length})
+                                        </button>
+                                        <button type="button" className="rohy-subtle-button px-2 py-1.5 rounded text-xs font-semibold" onClick={() => replaceSelection(unassignedIds)} disabled={unassignedIds.length === 0}>
+                                            Unassigned ({unassignedIds.length})
+                                        </button>
                                     </div>
                                     <div className="flex items-center justify-between text-xs">
                                         <label className="inline-flex items-center gap-2 font-semibold text-neutral-700 cursor-pointer">

@@ -66,6 +66,12 @@ const COLUMNS = [
               </span>
           );
       } },
+    { accessorKey: 'course_names', header: 'course', size: 180,
+      cell: (info) => (
+          <div className="truncate max-w-[180px]" title={info.getValue() ?? ''}>
+              <CopyableCell value={info.getValue()} className="text-neutral-300" />
+          </div>
+      ) },
     {
         accessorKey: 'component', header: 'component', size: 110,
         cell: (info) => {
@@ -106,12 +112,26 @@ const COLUMNS = [
       cell: (info) => <CopyableCell value={info.getValue()} className="font-mono text-neutral-400" /> },
 ];
 
-const EMPTY_FILTERS = { user_id: '', component: '', from: '', to: '' };
+const EMPTY_FILTERS = { user_id: '', course_id: '', component: '', from: '', to: '' };
 
 const FILTER_ACCESSORS = {
     user_id: (r) => r.user_id,
+    course_id: (r) => csvList(r.course_ids),
     component: (r) => r.component,
 };
+
+function csvList(value) {
+    if (Array.isArray(value)) return value;
+    if (value === null || value === undefined || value === '') return [];
+    return String(value).split(',').map((v) => v.trim()).filter(Boolean);
+}
+
+function courseLabel(row, value) {
+    const ids = csvList(row.course_ids);
+    const names = csvList(row.course_names);
+    const idx = ids.indexOf(String(value));
+    return names[idx] || `Course #${value}`;
+}
 
 export default function SystemLogTable() {
     const [events, setEvents] = useState([]);
@@ -161,6 +181,10 @@ export default function SystemLogTable() {
             key: 'user_id', label: 'User',
             options: contextualOptions(events, FILTER_ACCESSORS, filters, 'user_id',
                 (r) => r.username || `#${r.user_id}`),
+        },
+        {
+            key: 'course_id', label: 'Course', width: 'w-52',
+            options: contextualOptions(events, FILTER_ACCESSORS, filters, 'course_id', courseLabel),
         },
         {
             key: 'component', label: 'Component', width: 'w-36',

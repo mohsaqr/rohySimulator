@@ -61,6 +61,21 @@ describe('deriveOptions', () => {
         );
         expect(options.map((o) => o.label)).toEqual(['alice', 'bob']);
     });
+
+    it('explodes array-valued options for multi-course rows', () => {
+        const rows = [
+            { course_ids: ['1', '2'], course_names: ['Cardio', 'Neuro'] },
+            { course_ids: ['2'], course_names: ['Neuro'] },
+        ];
+        const options = deriveOptions(rows, (r) => r.course_ids, (r, value) => {
+            const idx = r.course_ids.indexOf(value);
+            return r.course_names[idx];
+        });
+        expect(options).toEqual([
+            { value: '1', label: 'Cardio', count: 1 },
+            { value: '2', label: 'Neuro', count: 2 },
+        ]);
+    });
 });
 
 describe('uniqueValues', () => {
@@ -80,6 +95,15 @@ describe('applyClientFilters', () => {
         const out = applyClientFilters(ROWS, ACCESSORS, { user_id: '9', verb: 'VIEWED', case_id: '' });
         expect(out).toHaveLength(1);
         expect(out[0].session_id).toBe(14);
+    });
+
+    it('matches array-valued accessors by membership', () => {
+        const rows = [
+            { id: 1, course_ids: ['1', '2'] },
+            { id: 2, course_ids: ['3'] },
+        ];
+        const out = applyClientFilters(rows, { course_id: (r) => r.course_ids }, { course_id: '2' });
+        expect(out.map((r) => r.id)).toEqual([1]);
     });
 
     it('returns rows untouched when nothing is active', () => {

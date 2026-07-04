@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import Papa from 'papaparse';
-import { X, Upload, Download, CheckCircle2, AlertTriangle, ArrowRight, ArrowLeft } from 'lucide-react';
+import { X, Upload, Download, CheckCircle2, AlertTriangle, ArrowRight, ArrowLeft, ClipboardPaste, GraduationCap } from 'lucide-react';
 import { useToast } from '../../../contexts/ToastContext';
 import { ApiError } from '../../../services/apiClient';
 import * as userService from '../../../services/userService';
@@ -12,7 +12,7 @@ const SYNONYMS = {
     email: ['email', 'e-mail', 'mail', 'emailaddress'],
     password: ['password', 'pass', 'pwd'],
     role: ['role', 'type', 'usertype'],
-    class: ['class', 'cohort', 'section', 'group', 'classroom', 'course'],
+    class: ['class', 'cohort', 'section', 'group', 'classroom', 'course', 'course code', 'course_code', 'join code', 'join_code', 'registration code', 'registration_code'],
 };
 const VALID_ROLES = ['guest', 'student', 'user', 'reviewer', 'educator', 'admin'];
 const ROLE_RANK = { guest: 0, student: 1, user: 1, reviewer: 2, educator: 3, admin: 4 };
@@ -33,7 +33,10 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
     const [rawRows, setRawRows] = useState([]);
     const [mapping, setMapping] = useState({});
     const [cohortId, setCohortId] = useState('');
+    const [pasteText, setPasteText] = useState('');
     const [committing, setCommitting] = useState(false);
+    const [validating, setValidating] = useState(false);
+    const [serverPreview, setServerPreview] = useState(null);
     const [result, setResult] = useState(null);
 
     const existingUsernames = useMemo(() => new Set(existingUsers.map(u => String(u.username).toLowerCase())), [existingUsers]);
@@ -98,7 +101,27 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
     }, [mapped, existingUsernames, existingEmails, knownClasses, myRank, cohortId]);
 
     const counts = useMemo(() => validated.reduce((a, v) => { a[v.status] = (a[v.status] || 0) + 1; return a; }, {}), [validated]);
-    const commitRows = useMemo(() => validated.filter(v => v.status !== 'error').map(v => v.row), [validated]);
+    const serverFailedRows = useMemo(
+        () => new Set((serverPreview?.failed || []).map(f => Number(f.row)).filter(Boolean)),
+        [serverPreview],
+    );
+    const commitRows = useMemo(
+        () => validated
+            .filter(v => v.status !== 'error' && !serverFailedRows.has(v.i + 1))
+            .map(v => v.row),
+        [validated, serverFailedRows],
+    );
+    const defaultCohort = useMemo(
+        () => cohorts.find(c => String(c.id) === String(cohortId)),
+        [cohorts, cohortId],
+    );
+    const assignmentMode = useMemo(() => {
+        const hasMappedClass = !!mapping.class;
+        const rowsWithClass = mapped.filter(r => r.class).length;
+        if (hasMappedClass && rowsWithClass) return `${rowsWithClass} rows use their CSV course/code`;
+        if (defaultCohort) return `All valid rows go to ${defaultCohort.name}`;
+        return 'No automatic course assignment';
+    }, [mapping.class, mapped, defaultCohort]);
 
     const commit = async () => {
         setCommitting(true);
@@ -118,8 +141,26 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
         }
     };
 
+    const reviewWithServer = async () => {
+        if (!mapping.username || !mapping.email) return;
+        setValidating(true);
+        try {
+            const { results } = await userService.importUsers({
+                rows: mapped,
+                cohortId: cohortId ? Number(cohortId) : undefined,
+                dryRun: true,
+            });
+            setServerPreview(results);
+            setStep(3);
+        } catch (err) {
+            toast.error(err instanceof ApiError ? err.message : 'Import validation failed');
+        } finally {
+            setValidating(false);
+        }
+    };
+
     const downloadTemplate = () => downloadCsv('user_import_template.csv',
-        'username,name,email,password,role,class\njdoe,Jane Doe,jane@school.edu,Passw0rd!,student,Basic course\n');
+        'username,name,email,password,role,class\njdoe,Jane Doe,jane@school.edu,Passw0rd!,student,Basic course\nasmith,Amina Smith,amina@school.edu,Passw0rd!,student,ABC123\n');
 
     const downloadErrors = () => {
         const lines = ['row,username,email,role,class,error'];
@@ -147,13 +188,41 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
                 <div className="p-5 overflow-y-auto flex-1">
                     {step === 1 && (
                         <div className="space-y-4">
-                            <p className="text-sm text-neutral-600">Upload a CSV of users. Columns are auto-detected next; new users need a password, existing ones can just be enrolled into a class.</p>
-                            <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-xl p-8 cursor-pointer hover:border-teal-400">
-                                <Upload className="w-7 h-7 text-neutral-400" />
-                                <span className="text-sm font-semibold">Choose a CSV file</span>
-                                <input type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
+                            <div className="grid md:grid-cols-2 gap-3">
+                                <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-xl p-7 cursor-pointer hover:border-teal-400">
+                                    <Upload className="w-7 h-7 text-neutral-400" />
+                                    <span className="text-sm font-semibold">Choose CSV</span>
+                                    <span className="text-xs text-neutral-500">Headers are mapped automatically</span>
+                                    <input type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
+                                </label>
+                                <div className="border border-neutral-200 rounded-xl p-3 space-y-2">
+                                    <div className="flex items-center gap-2 text-sm font-semibold">
+                                        <ClipboardPaste className="w-4 h-4 text-teal-700" /> Paste CSV
+                                    </div>
+                                    <textarea
+                                        className="rohy-field w-full px-3 py-2 rounded-lg text-xs font-mono min-h-28"
+                                        value={pasteText}
+                                        onChange={e => setPasteText(e.target.value)}
+                                        placeholder="username,name,email,password,role,class"
+                                    />
+                                    <button className="rohy-btn rohy-btn-secondary !text-xs" disabled={!pasteText.trim()} onClick={() => parseText(pasteText)}>
+                                        Parse pasted rows
+                                    </button>
+                                </div>
+                            </div>
+                            <label className="block text-sm">
+                                <span className="flex items-center gap-1.5 font-semibold mb-1">
+                                    <GraduationCap className="w-4 h-4 text-teal-700" /> Default course assignment
+                                </span>
+                                <select className="rohy-field w-full px-2 py-1.5 rounded text-sm" value={cohortId} onChange={e => setCohortId(e.target.value)}>
+                                    <option value="">— use CSV class/code column, or leave unassigned —</option>
+                                    {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}{c.join_code ? ` · code ${c.join_code}` : ''}</option>)}
+                                </select>
                             </label>
-                            <button className="rohy-btn rohy-btn-ghost !text-xs" onClick={downloadTemplate}><Download className="w-3.5 h-3.5" /> Download template</button>
+                            <div className="flex flex-wrap gap-2">
+                                <button className="rohy-btn rohy-btn-ghost !text-xs" onClick={downloadTemplate}><Download className="w-3.5 h-3.5" /> Download template</button>
+                                <span className="rohy-badge-neutral">Supports class names and registration codes</span>
+                            </div>
                         </div>
                     )}
 
@@ -175,9 +244,12 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
                                 <span className="block font-semibold mb-1">Enroll all imported users into a class (optional)</span>
                                 <select className="rohy-field w-full px-2 py-1.5 rounded text-sm" value={cohortId} onChange={e => setCohortId(e.target.value)}>
                                     <option value="">— none (or use a per-row "class" column) —</option>
-                                    {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}{c.join_code ? ` · code ${c.join_code}` : ''}</option>)}
                                 </select>
                             </label>
+                            <div className="rohy-detail-panel rounded-lg p-3 text-sm">
+                                <span className="font-semibold">Auto assignment:</span> {assignmentMode}
+                            </div>
                         </div>
                     )}
 
@@ -189,6 +261,20 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
                                 <Pill tone="neutral">{(counts.skip || 0)} skip</Pill>
                                 <Pill tone="red">{(counts.error || 0)} errors</Pill>
                             </div>
+                            <div className="rohy-detail-panel rounded-lg p-3 text-sm">
+                                <span className="font-semibold">Auto assignment:</span> {assignmentMode}
+                            </div>
+                            {serverPreview && (
+                                <div className="rohy-detail-panel rounded-lg p-3 text-sm">
+                                    <div className="font-semibold mb-1">Server preview</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        <Pill tone="green">{serverPreview.created.length} create</Pill>
+                                        <Pill tone="teal">{serverPreview.enrolled.length} assign</Pill>
+                                        <Pill tone="neutral">{serverPreview.skipped.length} skip</Pill>
+                                        <Pill tone="red">{serverPreview.failed.length} fail</Pill>
+                                    </div>
+                                </div>
+                            )}
                             <div className="rohy-table-shell rounded-lg overflow-hidden max-h-[40vh] overflow-y-auto">
                                 <table className="w-full text-xs">
                                     <thead className="rohy-table-head sticky top-0"><tr>
@@ -206,7 +292,9 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
                                                 <td className="px-2 py-1.5 rohy-table-muted">{v.row.email}</td>
                                                 <td className="px-2 py-1.5">{v.row.role || 'student'}</td>
                                                 <td className="px-2 py-1.5">{v.row.class || (cohortId ? cohorts.find(c => String(c.id) === cohortId)?.name : '')}</td>
-                                                <td className="px-2 py-1.5 text-red-600">{v.errors.join(', ')}</td>
+                                                <td className="px-2 py-1.5 text-red-600">
+                                                    {[...v.errors, ...(serverPreview?.failed || []).filter(f => Number(f.row) === v.i + 1).map(f => f.error)].join(', ')}
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -239,7 +327,9 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
                         {step > 1 && step < 4 ? <><ArrowLeft className="w-4 h-4" /> Back</> : 'Close'}
                     </button>
                     {step === 2 && (
-                        <button className="rohy-btn rohy-btn-primary" disabled={!mapping.username || !mapping.email} onClick={() => setStep(3)}>Review <ArrowRight className="w-4 h-4" /></button>
+                        <button className="rohy-btn rohy-btn-primary" disabled={validating || !mapping.username || !mapping.email} onClick={reviewWithServer}>
+                            {validating ? 'Validating...' : 'Review'} <ArrowRight className="w-4 h-4" />
+                        </button>
                     )}
                     {step === 3 && (
                         <button className="rohy-btn rohy-btn-primary" disabled={committing || commitRows.length === 0} onClick={commit}>

@@ -1,6 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileText, Stethoscope, Pill, Image, Syringe, ClipboardList, ChevronDown, ChevronUp, ChevronRight, X, ZoomIn } from 'lucide-react';
 import { HISTORY_GROUPS as CANONICAL_HISTORY_GROUPS } from '../../data/historyGroups';
+import EventLogger from '../../services/eventLogger';
+
+// Tab id → readable label for the analytics event (mirrors RECORD_TABS).
+const RECORD_TAB_LABELS = {
+    history: 'History', physical: 'Past Physical Exam', medications: 'Medications',
+    radiology: 'Radiology', procedures: 'Procedures', notes: 'Notes',
+};
 
 const RECORD_TABS = [
     { id: 'history', label: 'History', icon: FileText },
@@ -26,6 +33,14 @@ const HISTORY_GROUPS = CANONICAL_HISTORY_GROUPS.map(group => ({
 
 export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history' }) {
     const [activeTab, setActiveTab] = useState(initialTab);
+
+    // Record review is `assessing` activity. Log the tab the trainee is
+    // reading — on first mount and whenever they switch tabs — so "reading the
+    // history / medications" actually shows up in the activity analytics
+    // instead of being invisible (this panel logged nothing before).
+    useEffect(() => {
+        EventLogger.recordTabViewed(activeTab, RECORD_TAB_LABELS[activeTab], 'ClinicalRecordsPanel');
+    }, [activeTab]);
     const [expandedSection, setExpandedSection] = useState(null);
     const [openHistoryGroups, setOpenHistoryGroups] = useState({
         presentHistory: true,

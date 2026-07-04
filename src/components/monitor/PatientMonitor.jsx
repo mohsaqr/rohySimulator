@@ -969,8 +969,10 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    };
 
    const handleAcknowledgeAll = () => {
+      // Acknowledging alarms is `monitoring` activity, not a UI click — log it
+      // as ACKNOWLEDGED_ALARM so it lands in the right activity state.
       alarmSystem.acknowledgeAll();
-      EventLogger.buttonClicked('Acknowledge All Alarms', COMPONENTS.PATIENT_MONITOR);
+      EventLogger.alarmAcknowledged('all-alarms', COMPONENTS.PATIENT_MONITOR);
       // Record to PatientRecord
       alarmSystem.activeAlarms.forEach(alarmKey => {
          noted('alarm', alarmKey.replace('_', ' ').toUpperCase(), 'alarm_fired', 'acknowledged');
@@ -2106,8 +2108,9 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                               </button>
                               <button
                                  onClick={() => {
+                                    // Snoozing alarms is `monitoring`, not navigation.
                                     alarmSystem.snoozeAll();
-                                    EventLogger.buttonClicked('Snooze All Alarms', COMPONENTS.PATIENT_MONITOR);
+                                    EventLogger.alarmSilenced('all-alarms', COMPONENTS.PATIENT_MONITOR);
                                  }}
                                  className="flex-1 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm font-bold"
                               >

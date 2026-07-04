@@ -6,8 +6,12 @@
 //     { caseId, userId, startDate, endDate }, every fetch uses those values
 //     (undefined/null fields treated as ''), the four Case/Student/Start/End
 //     input groups are NOT rendered, and the per-tab controls (Source,
-//     Group by, Mode / Emotion states) still are. Changing externalFilters
-//     re-fetches with the new params.
+//     Group by, Mapping / Emotion states) still are. Changing externalFilters
+//     re-slices the cached rows client-side.
+//   - Activity source (default) builds ALL its screens — Activity charts AND
+//     the Network/Process/Clusters/Patterns sequences — from ONE client-side
+//     /learning-events/all fetch, filtered by case/student/date/room/mapping.
+//     There is NO /analytics/tna-sequences fetch for the activity source.
 //   - `hideHeader` (default false): suppresses V2's own header row (title +
 //     close/refresh buttons); the tab strip still renders.
 //   - Defaults preserve standalone behavior exactly: local filter inputs
@@ -97,8 +101,6 @@ const seqUrls = () => apiFetchMock.mock.calls
     .map((c) => c[0])
     .filter((u) => u.startsWith('/analytics/tna-sequences?'));
 
-const lastSeqParams = () => new URLSearchParams(seqUrls().at(-1).split('?')[1]);
-
 beforeEach(() => {
     apiFetchMock.mockReset();
     routeApi();
@@ -131,38 +133,44 @@ describe('TnaDashboardV2 externalFilters', () => {
         expect(screen.queryByText('End')).toBeNull();
 
         fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
-        await waitFor(() => expect(seqUrls().length).toBe(1));
-        // V2-owned per-tab controls stay.
+        // Activity source builds client-side — NO server sequence fetch, and
+        // the landing Activity tab already loaded the rows so no refetch.
+        await waitFor(() => expect(screen.getByText('Mapping')).toBeTruthy());
+        expect(seqUrls().length).toBe(0);
+        expect(eventUrls().length).toBe(1);
+        // V2-owned per-tab controls stay (Mode was renamed Mapping; Room added).
         expect(screen.getByText('Source')).toBeTruthy();
         expect(screen.getByText('Group by')).toBeTruthy();
-        expect(screen.getByText('Mode')).toBeTruthy();
+        expect(screen.getByText('Room')).toBeTruthy();
+        expect(screen.queryByText('Mode')).toBeNull();
     });
 
-    it('feeds the external values into the sequence fetch, treating missing fields as empty', async () => {
+    it('builds the network tab from the client event cache, not a server sequence fetch', async () => {
         render(
             <TnaDashboardV2
-                externalFilters={{ caseId: '7', userId: '42', startDate: '2026-01-01', endDate: undefined }}
+                externalFilters={{ caseId: 'c1', userId: '42', startDate: '2026-01-01', endDate: undefined }}
             />,
         );
+        await waitFor(() => expect(eventUrls()).toEqual(['/learning-events/all?limit=5000']));
         fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
-        await waitFor(() => expect(seqUrls().length).toBe(1));
-
-        const params = lastSeqParams();
-        expect(params.get('case_id')).toBe('7');
-        expect(params.get('user_id')).toBe('42');
-        expect(params.get('start_date')).toBe('2026-01-01');
-        expect(params.has('end_date')).toBe(false);
+        await waitFor(() => expect(screen.getByText('Mapping')).toBeTruthy());
+        // Never touches the removed /analytics/tna-sequences endpoint, and the
+        // single cached fetch is reused (client-side filtering).
+        expect(seqUrls().length).toBe(0);
+        expect(eventUrls().length).toBe(1);
     });
 
-    it('refetches with the new case_id when externalFilters changes', async () => {
-        const { rerender } = render(<TnaDashboardV2 externalFilters={{ caseId: '1' }} />);
+    it('re-slices client-side when externalFilters changes — no refetch, no sequence call', async () => {
+        const { rerender } = render(<TnaDashboardV2 externalFilters={{ caseId: 'c1' }} />);
         fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
-        await waitFor(() => expect(seqUrls().length).toBe(1));
-        expect(lastSeqParams().get('case_id')).toBe('1');
+        await waitFor(() => expect(screen.getByText('Mapping')).toBeTruthy());
+        expect(eventUrls().length).toBe(1);
 
-        rerender(<TnaDashboardV2 externalFilters={{ caseId: '2' }} />);
-        await waitFor(() => expect(seqUrls().length).toBe(2));
-        expect(lastSeqParams().get('case_id')).toBe('2');
+        rerender(<TnaDashboardV2 externalFilters={{ caseId: 'c2' }} />);
+        // The 5000-row cache is filtered in memory; no new fetch of either kind.
+        await waitFor(() => expect(screen.getByText('Mapping')).toBeTruthy());
+        expect(eventUrls().length).toBe(1);
+        expect(seqUrls().length).toBe(0);
     });
 });
 
@@ -219,7 +227,9 @@ describe('TnaDashboardV2 window-record sources (Locations / Gaze targets)', () =
     it('offers all four sources and switching to Locations uses the records fetch, not tna-sequences', async () => {
         render(<TnaDashboardV2 />);
         fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
-        await waitFor(() => expect(seqUrls().length).toBe(1));
+        await waitFor(() => expect(screen.getByText('Source')).toBeTruthy());
+        // Activity source never calls the server sequence endpoint.
+        expect(seqUrls().length).toBe(0);
 
         const sourceSelect = screen.getByText('Source').parentElement.querySelector('select');
         expect([...sourceSelect.options].map((o) => o.value))
@@ -228,21 +238,22 @@ describe('TnaDashboardV2 window-record sources (Locations / Gaze targets)', () =
         fireEvent.change(sourceSelect, { target: { value: 'rooms' } });
         await waitFor(() => expect(apiFetchMock.mock.calls
             .filter((c) => c[0].startsWith('/addons/oyon/emotion-records')).length).toBeGreaterThan(0));
-        // No additional tna-sequences fetch for a records source.
-        expect(seqUrls().length).toBe(1);
+        // Still no tna-sequences fetch.
+        expect(seqUrls().length).toBe(0);
         // Stat cards flip to the Locations vocabulary (the source <option>
         // also says 'Locations', so expect a second occurrence = the card).
         await waitFor(() => expect(screen.getAllByText('Locations').length).toBeGreaterThan(1));
-        // Emotion-only + activity-only controls are hidden.
+        // Emotion-only + activity-only controls are hidden for a records source.
         expect(screen.queryByText('Emotion states')).toBeNull();
-        expect(screen.queryByText('Mode')).toBeNull();
+        expect(screen.queryByText('Mapping')).toBeNull();
+        expect(screen.queryByText('Room')).toBeNull();
         expect(screen.queryByText('Group by')).toBeNull();
     });
 
     it('Gaze targets source builds sequences from AOI dwell', async () => {
         render(<TnaDashboardV2 />);
         fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
-        await waitFor(() => expect(seqUrls().length).toBe(1));
+        await waitFor(() => expect(screen.getByText('Source')).toBeTruthy());
         const sourceSelect = screen.getByText('Source').parentElement.querySelector('select');
         fireEvent.change(sourceSelect, { target: { value: 'gaze-targets' } });
         await waitFor(() => expect(screen.getAllByText('Gaze targets').length).toBeGreaterThan(1));

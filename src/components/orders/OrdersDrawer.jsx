@@ -206,7 +206,10 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         try {
             await apiPost(`/sessions/${sessionId}/order-radiology`, {
                 radiology_ids: selectedRadiology,
-                instant: labSettings.instantResults
+                instant: labSettings.instantResults,
+                // Stamp the active room so the server-side ORDERED_IMAGING
+                // learning_events row records where the study was ordered.
+                room: EventLogger.getStatus?.()?.room || null,
             });
             toast.success(`Ordered ${selectedRadiology.length} radiology study(s)`);
             selectedRadiology.forEach(radId => {

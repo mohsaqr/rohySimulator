@@ -19,7 +19,7 @@ import { normalizeAoiDwell, windowZones, dominantZoneOf, zoneTargetLabel } from 
 import { aoiLabel } from '../../oyon/screenAois.js';
 
 // Same readable room names the Gaze view uses.
-const ROOM_LABELS = {
+export const ROOM_LABELS = {
     chat: 'Patient (main)',
     examination: 'Examination',
     lab: 'Lab',

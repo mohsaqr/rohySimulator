@@ -91,6 +91,12 @@ const COLUMNS = [
               <CopyableCell value={info.getValue()} className="text-neutral-200" />
           </span>
       ) },
+    { accessorKey: 'course_names', header: 'course', size: 180,
+      cell: (info) => (
+          <div className="truncate max-w-[180px]" title={info.getValue() ?? ''}>
+              <CopyableCell value={info.getValue()} className="text-neutral-300" />
+          </div>
+      ) },
     { accessorKey: 'session_id', header: 'sess', size: 60,
       cell: (info) => {
           const v = info.getValue();
@@ -133,17 +139,31 @@ const INITIAL_HIDDEN = {
 };
 
 const EMPTY_FILTERS = {
-    user_id: '', case_id: '', session_id: '',
+    user_id: '', course_id: '', case_id: '', session_id: '',
     source: '', role: '', from: '', to: '',
 };
 
 // Client-side equality filters (session_id is a SERVER param, not listed).
 const FILTER_ACCESSORS = {
     user_id: (r) => r.user_id,
+    course_id: (r) => csvList(r.course_ids),
     case_id: (r) => r.case_id,
     source: (r) => r.source,
     role: (r) => r.role,
 };
+
+function csvList(value) {
+    if (Array.isArray(value)) return value;
+    if (value === null || value === undefined || value === '') return [];
+    return String(value).split(',').map((v) => v.trim()).filter(Boolean);
+}
+
+function courseLabel(row, value) {
+    const ids = csvList(row.course_ids);
+    const names = csvList(row.course_names);
+    const idx = ids.indexOf(String(value));
+    return names[idx] || `Course #${value}`;
+}
 
 export default function ChatLogTable() {
     const [events, setEvents] = useState([]);
@@ -180,8 +200,8 @@ export default function ChatLogTable() {
     const setFilter = useCallback((key, value) => {
         setFilters((prev) => {
             const next = { ...prev, [key]: value ?? '' };
-            // A different user / case invalidates the session selection.
-            if (key === 'user_id' || key === 'case_id') next.session_id = '';
+            // A different course / user / case invalidates the session selection.
+            if (key === 'course_id' || key === 'user_id' || key === 'case_id') next.session_id = '';
             return next;
         });
     }, []);
@@ -197,7 +217,7 @@ export default function ChatLogTable() {
     // refetch narrows the rows to one session, and without memory the
     // dropdown would collapse to a single choice).
     const sessionOptions = useOptionMemory(useMemo(() => {
-        const narrowing = { user_id: FILTER_ACCESSORS.user_id, case_id: FILTER_ACCESSORS.case_id };
+        const narrowing = { course_id: FILTER_ACCESSORS.course_id, user_id: FILTER_ACCESSORS.user_id, case_id: FILTER_ACCESSORS.case_id };
         return deriveSessionOptions(
             applyClientFilters(events, narrowing, filters),
             { id: (r) => r.session_id, ts: (r) => r.ts, caseName: (r) => r.case_name },
@@ -216,8 +236,13 @@ export default function ChatLogTable() {
             (r) => r.case_name || `#${r.case_id}`),
         [events, filters],
     ));
+    const courseOptions = useOptionMemory(useMemo(
+        () => contextualOptions(events, FILTER_ACCESSORS, filters, 'course_id', courseLabel),
+        [events, filters],
+    ));
 
     const filterDefs = useMemo(() => [
+        { key: 'course_id', label: 'Course', width: 'w-52', options: courseOptions },
         { key: 'user_id', label: 'User', options: userOptions },
         { key: 'case_id', label: 'Case', options: caseOptions },
         { key: 'session_id', label: 'Session', width: 'w-56', options: sessionOptions },
@@ -229,7 +254,7 @@ export default function ChatLogTable() {
             key: 'role', label: 'Role', width: 'w-32',
             options: contextualOptions(events, FILTER_ACCESSORS, filters, 'role'),
         },
-    ], [events, filters, userOptions, caseOptions, sessionOptions]);
+    ], [events, filters, courseOptions, userOptions, caseOptions, sessionOptions]);
 
     // Expanded panel: full content verbatim, plus the secondary fields
     // that are hidden in the row by default. Lets a reviewer see the

@@ -58,6 +58,15 @@ describe('filterEvents', () => {
         expect(filterEvents(rows, { caseId: 'c1', userId: '2' })).toHaveLength(1);
     });
 
+    it('filters by course membership from comma-separated course ids', () => {
+        const courseRows = [
+            ev({ id: 1, course_ids: '1,2' }),
+            ev({ id: 2, course_ids: '3' }),
+            ev({ id: 3, course_ids: null }),
+        ];
+        expect(filterEvents(courseRows, { courseId: '2' }).map((r) => r.id)).toEqual([1]);
+    });
+
     it('date bounds are inclusive on the ISO day, including sqlite timestamps', () => {
         expect(filterEvents(rows, { startDate: '2026-06-03' })).toHaveLength(2);
         expect(filterEvents(rows, { endDate: '2026-06-03' })).toHaveLength(2);

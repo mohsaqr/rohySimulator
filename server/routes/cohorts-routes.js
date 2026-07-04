@@ -305,7 +305,7 @@ router.get('/cohorts/:id', authenticateToken, requireEducator, async (req, res, 
               ORDER BY u.username ASC`,
             [cohort.id]
         );
-        const students = allMembers.filter(m => m.member_role !== 'teacher');
+        const students = allMembers.filter(m => m.member_role !== 'teacher' && m.role === 'student');
         const teachers = allMembers.filter(m => m.member_role === 'teacher');
         const cases = await dbAdapter.all(
             `SELECT cc.case_id AS id, c.name AS name, cc.created_at AS assigned_at,
@@ -1046,14 +1046,17 @@ const DEBRIEF_COMPLETED_SQL = `
            AND le.component = 'DiscussionScreen'
     )`;
 
-// Live members of an owned cohort, with stable ordering. Reused by every
-// reporting endpoint so the member set is defined in exactly one place.
-async function liveMembers(cohortId) {
+// Live student enrolments of an owned course, with stable ordering. Reporting
+// endpoints must not include admins/educators who manage or audit the course.
+async function liveStudents(cohortId) {
     return dbAdapter.all(
-        `SELECT u.id, u.username, u.name, u.role
+        `SELECT u.id, u.username, u.name, u.role, m.member_role
            FROM cohort_members m
            JOIN users u ON u.id = m.user_id
-          WHERE m.cohort_id = ? AND m.deleted_at IS NULL
+          WHERE m.cohort_id = ?
+            AND m.deleted_at IS NULL
+            AND m.member_role = 'student'
+            AND u.role = 'student'
           ORDER BY u.username ASC`,
         [cohortId]
     );
@@ -1063,6 +1066,57 @@ const FEED_DEFAULT_LIMIT = 50;
 const FEED_MAX_LIMIT = 200;
 const STUDENT_EVENTS_DEFAULT_LIMIT = 100;
 const STUDENT_EVENTS_MAX_LIMIT = 500;
+
+function pulseNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+}
+
+function pulsePct(part, total) {
+    const t = pulseNumber(total);
+    if (t <= 0) return 0;
+    return Math.round((pulseNumber(part) / t) * 100);
+}
+
+function daysBack(days) {
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function laterIso(a, b) {
+    if (!a) return b || null;
+    if (!b) return a;
+    return new Date(a).getTime() >= new Date(b).getTime() ? a : b;
+}
+
+function pulseActivityBucket(row) {
+    const text = [
+        row.category,
+        row.component,
+        row.verb,
+        row.object_type,
+        row.object_name,
+    ].filter(Boolean).join(' ').toLowerCase();
+    if (text.includes('discussion') || text.includes('debrief') || text.includes('reflection')) return 'Debrief';
+    if (text.includes('chat') || text.includes('message') || text.includes('voice') || text.includes('speech') || text.includes('communication')) return 'Communication';
+    if (text.includes('lab') || text.includes('radiology') || text.includes('xray') || text.includes('scan') || text.includes('investigation')) return 'Investigations';
+    if (text.includes('exam') || text.includes('physical') || text.includes('vital') || text.includes('assessment')) return 'Assessment';
+    if (text.includes('medication') || text.includes('treatment') || text.includes('order') || text.includes('therapy')) return 'Orders & treatment';
+    return 'Navigation';
+}
+
+function pulseActivityLabel(row) {
+    const verb = String(row.verb || '').replace(/_/g, ' ').toLowerCase();
+    const object = row.object_name || row.component || row.object_type || row.category || 'activity';
+    return `${verb || 'activity'} · ${object}`;
+}
+
+function pulseStudentStatus(stats, assignedCaseCount) {
+    if (!stats.last_activity) return 'Not started';
+    if (assignedCaseCount > 0 && stats.cases_completed >= assignedCaseCount) return 'Complete';
+    if (stats.recent_events === 0 && stats.recent_sessions === 0) return 'Quiet';
+    if (stats.cases_attempted > stats.cases_completed) return 'In progress';
+    return 'Active';
+}
 
 function clampLimit(raw, def, max) {
     const n = Number.parseInt(raw, 10);
@@ -1075,7 +1129,7 @@ router.get('/cohorts/:id/roster', authenticateToken, requireEducator, async (req
     try {
         const cohort = await loadOwnedCohort(req, res);
         if (!cohort) return;
-        const members = await liveMembers(cohort.id);
+        const members = await liveStudents(cohort.id);
         if (members.length === 0) {
             return res.json({ cohort: { id: cohort.id, name: cohort.name }, roster: [] });
         }
@@ -1121,7 +1175,7 @@ router.get('/cohorts/:id/grid', authenticateToken, requireEducator, async (req, 
     try {
         const cohort = await loadOwnedCohort(req, res);
         if (!cohort) return;
-        const members = await liveMembers(cohort.id);
+        const members = await liveStudents(cohort.id);
         const students = members.map(m => ({ id: m.id, username: m.username, name: m.name }));
         if (members.length === 0) {
             return res.json({ cohort: { id: cohort.id, name: cohort.name }, students: [], cases: [], cells: {} });
@@ -1177,7 +1231,11 @@ router.get('/cohorts/:id/student/:userId', authenticateToken, requireEducator, a
             `SELECT u.id, u.username, u.name, u.role
                FROM cohort_members m
                JOIN users u ON u.id = m.user_id
-              WHERE m.cohort_id = ? AND m.user_id = ? AND m.deleted_at IS NULL`,
+              WHERE m.cohort_id = ?
+                AND m.user_id = ?
+                AND m.deleted_at IS NULL
+                AND m.member_role = 'student'
+                AND u.role = 'student'`,
             [cohort.id, studentId]
         );
         if (!member) {
@@ -1230,7 +1288,7 @@ router.get('/cohorts/:id/feed', authenticateToken, requireEducator, async (req, 
     try {
         const cohort = await loadOwnedCohort(req, res);
         if (!cohort) return;
-        const members = await liveMembers(cohort.id);
+        const members = await liveStudents(cohort.id);
         if (members.length === 0) {
             return res.json({ cohort: { id: cohort.id, name: cohort.name }, events: [], next_since: null });
         }
@@ -1281,7 +1339,7 @@ router.get('/cohorts/:id/export', authenticateToken, requireEducator, async (req
     try {
         const cohort = await loadOwnedCohort(req, res);
         if (!cohort) return;
-        const members = await liveMembers(cohort.id);
+        const members = await liveStudents(cohort.id);
         const format = req.query.format === 'csv' ? 'csv' : 'json';
         let rows = [];
         if (members.length > 0) {
@@ -1370,7 +1428,7 @@ router.get('/cohorts/:id/export', authenticateToken, requireEducator, async (req
 async function cohortEventFilter(req, res, { alias = '' } = {}) {
     const cohort = await loadOwnedCohort(req, res);
     if (!cohort) return null;
-    const members = await liveMembers(cohort.id);
+    const members = await liveStudents(cohort.id);
     const filter = buildEventFilter({
         tenantId: tenantId(req),
         caseId: req.query.case_id,
@@ -1392,12 +1450,15 @@ router.get('/cohorts/:id/analytics/filter-options', authenticateToken, requireEd
     try {
         const cohort = await loadOwnedCohort(req, res);
         if (!cohort) return;
-        const members = await liveMembers(cohort.id);
+        const members = await liveStudents(cohort.id);
         const users = await dbAdapter.all(
             `SELECT u.id, u.username, u.name AS fullname, u.email
                FROM cohort_members m
                JOIN users u ON u.id = m.user_id
-              WHERE m.cohort_id = ? AND m.deleted_at IS NULL
+              WHERE m.cohort_id = ?
+                AND m.deleted_at IS NULL
+                AND m.member_role = 'student'
+                AND u.role = 'student'
               ORDER BY u.username ASC`,
             [cohort.id]
         );
@@ -1419,6 +1480,303 @@ router.get('/cohorts/:id/analytics/filter-options', authenticateToken, requireEd
             );
         }
         res.json({ cases, users });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET /api/cohorts/:id/analytics/pulse
+// Course-native analytics: concise student progress, activity frequencies,
+// case completion, and recent evidence. This is intentionally not the global
+// analytics dashboard embedded in a course page.
+router.get('/cohorts/:id/analytics/pulse', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const cohort = await loadOwnedCohort(req, res);
+        if (!cohort) return;
+
+        const tenant = tenantId(req);
+        const members = await liveStudents(cohort.id);
+        const assignedCases = await dbAdapter.all(
+            `SELECT c.id, c.name
+               FROM cohort_cases cc
+               JOIN cases c ON c.id = cc.case_id
+              WHERE cc.cohort_id = ?
+                AND cc.deleted_at IS NULL
+                AND c.deleted_at IS NULL
+              ORDER BY c.name ASC`,
+            [cohort.id]
+        );
+
+        if (members.length === 0) {
+            return res.json({
+                cohort: { id: cohort.id, name: cohort.name },
+                summary: {
+                    students: 0,
+                    active_students: 0,
+                    attention_students: 0,
+                    total_sessions: 0,
+                    total_events: 0,
+                    completion_rate: 0,
+                    current_events: 0,
+                    previous_events: 0,
+                    trend_delta_pct: 0,
+                },
+                students: [],
+                cases: assignedCases.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    sessions: 0,
+                    students_attempted: 0,
+                    students_completed: 0,
+                    completion_rate: 0,
+                    last_activity: null,
+                })),
+                activity_frequencies: [],
+                top_activities: [],
+                recent_events: [],
+            });
+        }
+
+        const memberIds = members.map(m => m.id);
+        const placeholders = memberIds.map(() => '?').join(',');
+        const since7 = daysBack(7);
+        const since14 = daysBack(14);
+
+        const [
+            sessionRows,
+            eventRows,
+            activityRows,
+            studentActivityRows,
+            caseRows,
+            recentEvents,
+            trendRows,
+        ] = await Promise.all([
+            dbAdapter.all(
+                `SELECT s.user_id,
+                        COUNT(*) AS session_count,
+                        COUNT(DISTINCT s.case_id) AS cases_attempted,
+                        COUNT(DISTINCT CASE WHEN ${DEBRIEF_COMPLETED_SQL} THEN s.case_id END) AS cases_completed,
+                        MAX(COALESCE(s.end_time, s.start_time)) AS last_activity,
+                        SUM(CASE WHEN COALESCE(s.end_time, s.start_time) >= ? THEN 1 ELSE 0 END) AS recent_sessions
+                   FROM sessions s
+                  WHERE s.tenant_id = ?
+                    AND s.deleted_at IS NULL
+                    AND s.user_id IN (${placeholders})
+                  GROUP BY s.user_id`,
+                [since7, tenant, ...memberIds]
+            ),
+            dbAdapter.all(
+                `SELECT le.user_id,
+                        COUNT(*) AS event_count,
+                        SUM(CASE WHEN le.timestamp >= ? THEN 1 ELSE 0 END) AS recent_events,
+                        MAX(le.timestamp) AS last_event
+                  FROM learning_events le
+                 WHERE le.tenant_id = ?
+                    AND le.user_id IN (${placeholders})
+                    AND (le.session_id IS NOT NULL OR le.case_id IS NOT NULL)
+                  GROUP BY le.user_id`,
+                [since7, tenant, ...memberIds]
+            ),
+            dbAdapter.all(
+                `SELECT COALESCE(le.category, '') AS category,
+                        COALESCE(le.component, '') AS component,
+                        COALESCE(le.verb, '') AS verb,
+                        COALESCE(le.object_type, '') AS object_type,
+                        COALESCE(le.object_name, '') AS object_name,
+                        COUNT(*) AS count
+                  FROM learning_events le
+                 WHERE le.tenant_id = ?
+                    AND le.user_id IN (${placeholders})
+                    AND (le.session_id IS NOT NULL OR le.case_id IS NOT NULL)
+                  GROUP BY le.category, le.component, le.verb, le.object_type, le.object_name
+                  ORDER BY count DESC
+                  LIMIT 60`,
+                [tenant, ...memberIds]
+            ),
+            dbAdapter.all(
+                `SELECT le.user_id,
+                        COALESCE(le.category, '') AS category,
+                        COALESCE(le.component, '') AS component,
+                        COALESCE(le.verb, '') AS verb,
+                        COALESCE(le.object_type, '') AS object_type,
+                        COALESCE(le.object_name, '') AS object_name,
+                        COUNT(*) AS count
+                  FROM learning_events le
+                 WHERE le.tenant_id = ?
+                    AND le.user_id IN (${placeholders})
+                    AND (le.session_id IS NOT NULL OR le.case_id IS NOT NULL)
+                  GROUP BY le.user_id, le.category, le.component, le.verb, le.object_type, le.object_name
+                  ORDER BY le.user_id ASC, count DESC`,
+                [tenant, ...memberIds]
+            ),
+            dbAdapter.all(
+                `SELECT s.case_id AS id,
+                        COALESCE(c.name, 'Case ' || s.case_id) AS name,
+                        COUNT(*) AS sessions,
+                        COUNT(DISTINCT s.user_id) AS students_attempted,
+                        COUNT(DISTINCT CASE WHEN ${DEBRIEF_COMPLETED_SQL} THEN s.user_id END) AS students_completed,
+                        MAX(COALESCE(s.end_time, s.start_time)) AS last_activity
+                   FROM sessions s
+                   LEFT JOIN cases c ON c.id = s.case_id
+                  WHERE s.tenant_id = ?
+                    AND s.deleted_at IS NULL
+                    AND s.user_id IN (${placeholders})
+                  GROUP BY s.case_id, c.name
+                  ORDER BY students_attempted DESC, name ASC`,
+                [tenant, ...memberIds]
+            ),
+            dbAdapter.all(
+                `SELECT le.id, le.timestamp, le.user_id,
+                        u.username, u.name AS user_name,
+                        le.case_id, COALESCE(c.name, 'Case ' || le.case_id) AS case_name,
+                        le.verb, le.object_type, le.object_name,
+                        le.component, le.room, le.category
+                   FROM learning_events le
+                   JOIN users u ON u.id = le.user_id
+                  LEFT JOIN cases c ON c.id = le.case_id
+                 WHERE le.tenant_id = ?
+                    AND le.user_id IN (${placeholders})
+                    AND (le.session_id IS NOT NULL OR le.case_id IS NOT NULL)
+                  ORDER BY le.timestamp DESC, le.id DESC
+                  LIMIT 12`,
+                [tenant, ...memberIds]
+            ),
+            dbAdapter.all(
+                `SELECT SUM(CASE WHEN le.timestamp >= ? THEN 1 ELSE 0 END) AS current_events,
+                        SUM(CASE WHEN le.timestamp >= ? AND le.timestamp < ? THEN 1 ELSE 0 END) AS previous_events
+                  FROM learning_events le
+                 WHERE le.tenant_id = ?
+                    AND le.user_id IN (${placeholders})
+                    AND (le.session_id IS NOT NULL OR le.case_id IS NOT NULL)`,
+                [since7, since14, since7, tenant, ...memberIds]
+            ),
+        ]);
+
+        const bySessionUser = new Map(sessionRows.map(r => [r.user_id, r]));
+        const byEventUser = new Map(eventRows.map(r => [r.user_id, r]));
+        const primaryActivityByUser = new Map();
+        for (const row of studentActivityRows) {
+            if (!primaryActivityByUser.has(row.user_id)) {
+                primaryActivityByUser.set(row.user_id, pulseActivityBucket(row));
+            }
+        }
+
+        const assignedCaseCount = assignedCases.length;
+        const students = members.map((member) => {
+            const s = bySessionUser.get(member.id) || {};
+            const e = byEventUser.get(member.id) || {};
+            const stats = {
+                session_count: pulseNumber(s.session_count),
+                cases_attempted: pulseNumber(s.cases_attempted),
+                cases_completed: pulseNumber(s.cases_completed),
+                event_count: pulseNumber(e.event_count),
+                recent_sessions: pulseNumber(s.recent_sessions),
+                recent_events: pulseNumber(e.recent_events),
+                last_activity: laterIso(s.last_activity, e.last_event),
+            };
+            const denominator = assignedCaseCount || stats.cases_attempted;
+            const status = pulseStudentStatus(stats, assignedCaseCount);
+            return {
+                id: member.id,
+                username: member.username,
+                name: member.name,
+                session_count: stats.session_count,
+                cases_attempted: stats.cases_attempted,
+                cases_completed: stats.cases_completed,
+                event_count: stats.event_count,
+                recent_events: stats.recent_events,
+                recent_sessions: stats.recent_sessions,
+                last_activity: stats.last_activity,
+                completion_rate: pulsePct(stats.cases_completed, denominator),
+                status,
+                needs_attention: ['Not started', 'Quiet'].includes(status),
+                primary_activity: primaryActivityByUser.get(member.id) || 'No activity',
+            };
+        });
+
+        const caseById = new Map(assignedCases.map(c => [String(c.id), {
+            id: c.id,
+            name: c.name,
+            sessions: 0,
+            students_attempted: 0,
+            students_completed: 0,
+            completion_rate: 0,
+            last_activity: null,
+        }]));
+        for (const row of caseRows) {
+            caseById.set(String(row.id), {
+                id: row.id,
+                name: row.name,
+                sessions: pulseNumber(row.sessions),
+                students_attempted: pulseNumber(row.students_attempted),
+                students_completed: pulseNumber(row.students_completed),
+                completion_rate: pulsePct(row.students_completed, members.length),
+                last_activity: row.last_activity || null,
+            });
+        }
+
+        const frequencyMap = new Map();
+        for (const row of activityRows) {
+            const bucket = pulseActivityBucket(row);
+            frequencyMap.set(bucket, (frequencyMap.get(bucket) || 0) + pulseNumber(row.count));
+        }
+        const activityFrequencies = Array.from(frequencyMap.entries())
+            .map(([label, count]) => ({ label, count }))
+            .sort((a, b) => b.count - a.count);
+
+        const totalEvents = eventRows.reduce((sum, r) => sum + pulseNumber(r.event_count), 0);
+        const totalSessions = sessionRows.reduce((sum, r) => sum + pulseNumber(r.session_count), 0);
+        const activeStudents = students.filter(s => s.recent_events > 0 || s.recent_sessions > 0).length;
+        const completedSlots = students.reduce((sum, s) => sum + s.cases_completed, 0);
+        const totalSlots = assignedCaseCount
+            ? assignedCaseCount * members.length
+            : students.reduce((sum, s) => sum + s.cases_attempted, 0);
+        const trend = trendRows[0] || {};
+        const currentEvents = pulseNumber(trend.current_events);
+        const previousEvents = pulseNumber(trend.previous_events);
+        const trendDelta = previousEvents > 0
+            ? Math.round(((currentEvents - previousEvents) / previousEvents) * 100)
+            : currentEvents > 0 ? 100 : 0;
+
+        res.json({
+            cohort: { id: cohort.id, name: cohort.name },
+            summary: {
+                students: members.length,
+                active_students: activeStudents,
+                attention_students: students.filter(s => s.needs_attention).length,
+                total_sessions: totalSessions,
+                total_events: totalEvents,
+                completion_rate: pulsePct(completedSlots, totalSlots),
+                current_events: currentEvents,
+                previous_events: previousEvents,
+                trend_delta_pct: trendDelta,
+            },
+            students,
+            cases: Array.from(caseById.values()).sort((a, b) => b.students_attempted - a.students_attempted || a.name.localeCompare(b.name)),
+            activity_frequencies: activityFrequencies,
+            top_activities: activityRows.slice(0, 10).map(row => ({
+                label: pulseActivityLabel(row),
+                bucket: pulseActivityBucket(row),
+                count: pulseNumber(row.count),
+            })),
+            recent_events: recentEvents.map(row => ({
+                id: row.id,
+                timestamp: row.timestamp,
+                user_id: row.user_id,
+                user_name: row.user_name || row.username,
+                username: row.username,
+                case_id: row.case_id,
+                case_name: row.case_name,
+                verb: row.verb,
+                object_type: row.object_type,
+                object_name: row.object_name,
+                component: row.component,
+                room: row.room,
+                category: row.category,
+                activity: pulseActivityLabel(row),
+                bucket: pulseActivityBucket(row),
+            })),
+        });
     } catch (err) {
         next(err);
     }

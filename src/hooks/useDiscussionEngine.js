@@ -126,7 +126,9 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
         setBusy(true);
         if (!silentUser) {
             logTurn(sessionId, 'user', trimmed);
-            EventLogger.messageSent(trimmed, COMPONENTS.DISCUSSION_SCREEN);
+            // Debrief turns log as `debrief` (→ reflecting), keeping post-case
+            // discussion distinct from bedside patient chat (→ communicating).
+            EventLogger.debriefMessageSent(trimmed, COMPONENTS.DISCUSSION_SCREEN);
         }
 
         const controller = new AbortController();
@@ -215,7 +217,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
             // the learner could never reply.
             speech?.flush?.();
             logTurn(sessionId, 'assistant', finalText);
-            EventLogger.messageReceived(finalText, COMPONENTS.DISCUSSION_SCREEN);
+            EventLogger.debriefMessageReceived(finalText, COMPONENTS.DISCUSSION_SCREEN);
         } catch (err) {
             // LLM stream failed mid-utterance — cancel any in-flight TTS
             // so we don't leave speaking=true forever on an abort path.

@@ -1513,6 +1513,12 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
         let skipped = 0;
         let pending = radiology_ids.length;
         const orderIds = [];
+        // Parallel to orderIds but carries the study name/modality so the
+        // finalize() step can write one ORDERED_IMAGING learning_events row
+        // per study (labs do the same at order-labs — radiology used to log
+        // nothing, so imaging never appeared in the activity analytics).
+        const loggableOrders = [];
+        const orderRoom = req.body?.room || null;
 
         if (pending === 0) {
             return res.json({ message: '0 radiology studies ordered', orders: [] });
@@ -1532,6 +1538,32 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
         `;
 
         const finalize = () => {
+            // Canonical activity record — one xAPI row per ordered study.
+            if (loggableOrders.length > 0) {
+                const logSql = `
+                    INSERT INTO learning_events (
+                        session_id, user_id, case_id, verb, object_type, object_id, object_name,
+                        component, result, context, room
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `;
+                loggableOrders.forEach(o => {
+                    dbAdapter.run(logSql, [
+                        sessionId,
+                        session.user_id,
+                        session.case_id,
+                        'ORDERED_IMAGING',
+                        'radiology_order',
+                        String(o.orderId),
+                        o.testName,
+                        'OrdersDrawer',
+                        o.modality ? `Modality: ${o.modality}` : null,
+                        JSON.stringify({ modality: o.modality || null, order_id: o.orderId }),
+                        orderRoom,
+                    ], (logErr) => {
+                        if (logErr) (req.log || routesOrdersLog).warn('radiology order learning_events failed', { error: logErr.message });
+                    });
+                });
+            }
             res.json({
                 message: `${inserted} radiology studies ordered`,
                 orders: orderIds,
@@ -1639,6 +1671,7 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
                         if (!orderErr) {
                             inserted++;
                             orderIds.push(this.lastID);
+                            loggableOrders.push({ orderId: this.lastID, testName, modality });
                         }
                         if (pending === 0) finalize();
                     });

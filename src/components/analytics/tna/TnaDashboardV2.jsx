@@ -22,7 +22,7 @@
 //   raw          → join verb + ':' + object as state literals
 //   combined     → resolve via clinicalStates (explicit → object → verb fallback)
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ArrowLeft, RefreshCw, Settings2, Users, Activity, Hash, Network, GitBranch,
     Workflow, Layers, Eye, ScanEye, ListVideo, Smile,
@@ -54,14 +54,14 @@ import ProcessMap from './laila/ProcessMap';
 import StackedAreaChart from '../charts/StackedAreaChart';
 import DayHourMatrix from '../charts/DayHourMatrix';
 
-import {
-    DEFAULT_INTERPRETATIONS, OBJECT_OVERRIDES, VERB_FALLBACKS,
-} from './clinicalStates';
+import { DEFAULT_INTERPRETATIONS } from './clinicalStates';
 import {
     eventStateLabels, filterEvents, toDailyStateSeries, toMatrixEvents,
+    eventsToSequences, eventRoomCounts,
 } from './activityEvents';
+import { ACTIVITY_MAPPINGS, resolveActivityLabel } from './activityMappings';
 import { recordsToEmotionSequences } from './emotionSequences';
-import { recordsToRoomSequences, recordsToGazeTargetSequences } from './windowSequences';
+import { recordsToRoomSequences, recordsToGazeTargetSequences, ROOM_LABELS } from './windowSequences';
 import { observedDominantLabels, probabilityChannelLabels } from '../../oyon/emotionVocabulary';
 
 const MODEL_BUILDERS = { relative: tna, frequency: ftna, 'co-occurrence': ctna, attention: atna };
@@ -83,15 +83,6 @@ const NODE_SIZE_OPTIONS = [
     { value: 'fixed',      label: 'Fixed' },
     { value: 'InStrength', label: 'In-strength' },
 ];
-
-function resolveInterpretation(key, customMap) {
-    if (customMap && customMap[key]) return customMap[key];
-    if (DEFAULT_INTERPRETATIONS[key]) return DEFAULT_INTERPRETATIONS[key];
-    const [verb, obj] = key.split(':');
-    if (obj && OBJECT_OVERRIDES[obj]) return OBJECT_OVERRIDES[obj];
-    if (verb && VERB_FALLBACKS[verb]) return VERB_FALLBACKS[verb];
-    return null;
-}
 
 function StatCard({ icon, label, value, accent = 'cyan' }) {
     const colors = {
@@ -208,18 +199,27 @@ function hasGazePayload(record) {
 // when the parent provides its own header; the tab strip still renders.
 export default function TnaDashboardV2({ onClose, embedded = false, defaultSource = 'activity', defaultEmotionDimension = 'affective', externalFilters = null, hideHeader = false }) {
     // --- Filters ---
+    const [courseId, setCourseId] = useState('');
     const [caseId, setCaseId] = useState('');
     const [userId, setUserId] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [groupBy, setGroupBy] = useState('actor-session');
+    // Room filter — narrows the activity dataset to one simulator room. Empty
+    // = all rooms. Applies to EVERY activity screen (charts + network + process
+    // + clusters + patterns) because they all build off the same filtered rows.
+    const [roomFilter, setRoomFilter] = useState('');
 
     // Effective filter values: external (hub-driven) when provided,
     // otherwise the local state above. All fetches and memos read these.
+    const effCourseId = externalFilters ? (externalFilters.courseId ?? '') : courseId;
     const effCaseId = externalFilters ? (externalFilters.caseId ?? '') : caseId;
     const effUserId = externalFilters ? (externalFilters.userId ?? '') : userId;
     const effStartDate = externalFilters ? (externalFilters.startDate ?? '') : startDate;
     const effEndDate = externalFilters ? (externalFilters.endDate ?? '') : endDate;
+    // Room isn't part of the hub's external filter set, so fall back to the
+    // dashboard's own Room control even when other filters are hub-driven.
+    const effRoom = externalFilters ? (externalFilters.room ?? roomFilter) : roomFilter;
 
     // --- Active tab ---
     const [activeTab, setActiveTab] = useState('activity');
@@ -242,8 +242,12 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     const [shortLengths, setShortLengths] = useState({ 2: true, 3: true });
     const [longLengths, setLongLengths] = useState({ 4: true, 5: true });
 
-    // --- Sequence mode + verb editing ---
-    const [sequenceMode, setSequenceMode] = useState('combined');
+    // --- Activity mapping (how each event is labelled) + verb editing ---
+    // Replaces the old 'combined/verb/objectType/raw' sequence mode with the
+    // seven-lens registry in activityMappings.js. Drives BOTH the Activity
+    // charts and the Network/Process/Clusters/Patterns sequences so switching
+    // lens re-labels every screen at once.
+    const [activityMapping, setActivityMapping] = useState('clinical-state');
     const [interpretations] = useState({ ...DEFAULT_INTERPRETATIONS });
     const [verbRenames, setVerbRenames] = useState({});
     const [verbExcludes, setVerbExcludes] = useState({});
@@ -258,8 +262,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     const [emotionTruncated, setEmotionTruncated] = useState(false);
 
     // --- Server data ---
-    const [filterOptions, setFilterOptions] = useState({ cases: [], users: [] });
-    const [tnaData, setTnaData] = useState(null);
+    const [filterOptions, setFilterOptions] = useState({ courses: [], cases: [], users: [] });
     const [activityBundle, setActivityBundle] = useState(null);
     // Raw learning-event rows for the Activity-tab charts (educator-accessible,
     // unlike the admin-only aggregate bundle). Fetched once per mount, capped
@@ -277,6 +280,15 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     // all analyse the SAME /addons/oyon/emotion-records rows — only the
     // per-window state extractor differs.
     const isRecordsSource = isEmotionSource || seqSource === 'rooms' || seqSource === 'gaze-targets';
+    // Activity source needs the raw learning-event rows — on the Activity tab
+    // (charts) AND on the network-family tabs, which now build their sequences
+    // client-side from the same rows (unified filtering). Records sources use
+    // the Oyon window fetch instead.
+    const isActivitySource = seqSource === 'activity';
+    // The Activity tab always wants the raw rows (its charts are activity-only,
+    // independent of the sequence Source); the network-family tabs want them
+    // only when the Source is Activity.
+    const wantsActivityEvents = isActivityTab || (isActivitySource && isAnalyticsRelated);
     // Oyon signal tabs — first-class dashboards over the SAME shared
     // emotion-record fetch below.
     const isSignalTab = activeTab === 'attention'
@@ -297,28 +309,18 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
         // analytics. apiFetch handles the no-token case by falling
         // through to the rohy_auth cookie.
         apiFetch('/analytics/filter-options')
-            .then((d) => setFilterOptions({ cases: d?.cases || [], users: d?.users || [] }))
+            .then((d) => setFilterOptions({ courses: d?.courses || [], cases: d?.cases || [], users: d?.users || [] }))
             .catch(() => {});
     }, []);
 
     // --- Fetch TNA sequences when filters change and we're on an analytics-style tab ---
-    useEffect(() => {
-        if (!isAnalyticsRelated || isRecordsSource) return;
-        const params = new URLSearchParams();
-        if (effCaseId) params.set('case_id', effCaseId);
-        if (effUserId) params.set('user_id', effUserId);
-        if (effStartDate) params.set('start_date', effStartDate);
-        if (effEndDate) params.set('end_date', effEndDate);
-        params.set('group_by', groupBy);
-        params.set('skip_merges', 'true'); // client resolver chain handles merging
-
-        setLoading(true);
-        setError(null);
-        apiFetch(`/analytics/tna-sequences?${params}`)
-            .then((d) => { setTnaData(d); setLastUpdated(Date.now()); })
-            .catch((err) => setError(err.message))
-            .finally(() => setLoading(false));
-    }, [effCaseId, effUserId, effStartDate, effEndDate, groupBy, isAnalyticsRelated, isRecordsSource]);
+    // NOTE: the activity source no longer uses this server endpoint — its
+    // sequences are built client-side from the learning-event rows (see
+    // transformedData) so the Room + Mapping + date filters apply uniformly.
+    // This fetch now only serves any future server-sequence source; records
+    // sources use the Oyon window fetch. The activity source builds its
+    // sequences client-side from the learning-event rows (see transformedData),
+    // so there is no server sequence fetch for it any more.
 
     // --- Fetch Oyon emotion windows (shared by the Emotions sequence source
     // AND the signal tabs) ---
@@ -332,6 +334,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
         let cancelled = false;
 
         const params = new URLSearchParams();
+        if (effCourseId) params.set('course_id', effCourseId);
         if (effCaseId) params.set('case_id', effCaseId);
         if (effUserId) params.set('user_id', effUserId);
         if (effStartDate) params.set('from', effStartDate);
@@ -366,12 +369,13 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
             }
         })();
         return () => { cancelled = true; };
-    }, [effCaseId, effUserId, effStartDate, effEndDate, wantsEmotionRecords]);
+    }, [effCourseId, effCaseId, effUserId, effStartDate, effEndDate, wantsEmotionRecords]);
 
     // --- Fetch activity bundle for the Activity tab ---
     useEffect(() => {
         if (!isActivityTab) return;
         const params = new URLSearchParams();
+        if (effCourseId) params.set('course_id', effCourseId);
         if (effCaseId) params.set('case_id', effCaseId);
         if (effUserId) params.set('user_id', effUserId);
         if (effStartDate) params.set('start_date', effStartDate);
@@ -393,44 +397,65 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
             });
             setLastUpdated(Date.now());
         }).catch((err) => setError(err.message));
-    }, [effCaseId, effUserId, effStartDate, effEndDate, isActivityTab]);
+    }, [effCourseId, effCaseId, effUserId, effStartDate, effEndDate, isActivityTab]);
 
-    // --- Fetch raw learning events for the Activity-tab charts ---
+    // --- Fetch raw learning events for the activity screens ---
     // The endpoint only takes `limit` (reviewer+ reads tenant-wide, others
-    // their own rows), so this fires ONCE per mount when the tab first
-    // activates; the dashboard filters re-slice the cached rows client-side
-    // in the memos below instead of re-fetching.
+    // their own rows), so this fires ONCE per mount when the activity source is
+    // first needed (Activity tab OR any network-family tab). Every filter —
+    // case / student / date / room — then re-slices these cached rows
+    // client-side, so the Activity charts and the Network/Process/Clusters/
+    // Patterns screens all read from ONE consistently-filtered dataset.
     useEffect(() => {
-        if (!isActivityTab || learningEvents !== null) return;
+        if (!wantsActivityEvents || learningEvents !== null) return;
         apiFetch(`/learning-events/all?limit=${EVENTS_FETCH_LIMIT}`)
             .then((d) => setLearningEvents(d?.events || []))
             .catch((err) => setEventsError(err.message));
-    }, [isActivityTab, learningEvents]);
+    }, [wantsActivityEvents, learningEvents]);
 
-    // --- Activity-tab chart inputs (client-side re-filter of the cached
-    // learning-event rows; see activityEvents.js for the pure mappers) ---
+    // Label function for the currently-selected mapping lens. Every activity
+    // screen resolves its events through this ONE function, so a lens switch
+    // re-labels charts, network, process, clusters and patterns together.
+    const labelOf = useCallback(
+        (e) => resolveActivityLabel(e?.verb, e?.object_type, activityMapping, interpretations),
+        [activityMapping, interpretations],
+    );
+
+    // --- Activity dataset: cached rows filtered by case/student/date/ROOM.
+    // Shared by the Activity-tab charts AND the network-family sequences. ---
     const filteredEvents = useMemo(() => (
         learningEvents
             ? filterEvents(learningEvents, {
-                caseId: effCaseId, userId: effUserId,
-                startDate: effStartDate, endDate: effEndDate,
+                courseId: effCourseId, caseId: effCaseId, userId: effUserId,
+                startDate: effStartDate, endDate: effEndDate, room: effRoom,
             })
             : null
-    ), [learningEvents, effCaseId, effUserId, effStartDate, effEndDate]);
+    ), [learningEvents, effCourseId, effCaseId, effUserId, effStartDate, effEndDate, effRoom]);
+
+    // Rooms present in the loaded dataset (ignores the room filter itself) so
+    // the Room dropdown only offers rooms that actually have events.
+    const availableRooms = useMemo(() => {
+        if (!learningEvents) return [];
+        const pre = filterEvents(learningEvents, {
+            courseId: effCourseId, caseId: effCaseId, userId: effUserId, startDate: effStartDate, endDate: effEndDate,
+        });
+        return eventRoomCounts(pre).filter((r) => r.id !== '');
+    }, [learningEvents, effCourseId, effCaseId, effUserId, effStartDate, effEndDate]);
 
     const activityCharts = useMemo(() => {
         if (!filteredEvents) return null;
         // Same palette machinery as the network tab (createColorMap over the
-        // sorted state list) so states share colors across tabs.
-        const colorMap = createColorMap(eventStateLabels(filteredEvents), palette);
-        const daily = toDailyStateSeries(filteredEvents);
+        // sorted label list) so labels share colors across tabs — under the
+        // SELECTED mapping lens, not just clinical state.
+        const colorMap = createColorMap(eventStateLabels(filteredEvents, labelOf), palette);
+        const daily = toDailyStateSeries(filteredEvents, labelOf);
         return {
             daily,
             dailyColors: daily.series.map((s) => colorMap[s.label]),
-            matrixEvents: toMatrixEvents(filteredEvents),
+            matrixEvents: toMatrixEvents(filteredEvents, labelOf),
             colorMap,
         };
-    }, [filteredEvents, palette]);
+    }, [filteredEvents, palette, labelOf]);
 
     // --- Transform sequences by source + mode + renames + excludes ---
     const transformedData = useMemo(() => {
@@ -455,33 +480,13 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
             return { sequences: seqs, labels: [...labelSet].sort() };
         }
 
-        if (!tnaData?.sequences?.length) return null;
-        const verbSeqs = tnaData.sequences;
-        const objSeqs = tnaData.objectTypeSequences ?? [];
-
-        let baseSeqs;
-        if (sequenceMode === 'objectType') {
-            baseSeqs = objSeqs.length ? objSeqs : verbSeqs;
-        } else if (sequenceMode === 'raw') {
-            baseSeqs = verbSeqs.map((seq, i) => {
-                const objSeq = objSeqs[i] ?? [];
-                return seq.map((verb, j) => {
-                    const obj = objSeq[j] ?? '';
-                    return obj ? `${verb}:${obj}` : verb;
-                });
-            });
-        } else if (sequenceMode === 'combined') {
-            baseSeqs = verbSeqs.map((seq, i) => {
-                const objSeq = objSeqs[i] ?? [];
-                return seq.map((verb, j) => {
-                    const obj = objSeq[j] ?? '';
-                    const key = `${verb}:${obj}`;
-                    return resolveInterpretation(key, interpretations) ?? `${verb}_${obj}`;
-                });
-            });
-        } else {
-            baseSeqs = verbSeqs;
-        }
+        // Activity source — build sequences client-side from the SAME
+        // filtered rows the charts use (case/student/date/room already
+        // applied), grouped per session or per student, each event mapped
+        // through the selected lens. This is what makes every activity screen
+        // agree and honour the Room + Mapping filters.
+        if (!filteredEvents?.length) return null;
+        const baseSeqs = eventsToSequences(filteredEvents, { groupBy, labelOf });
 
         const seqs = baseSeqs.map((seq) =>
             seq
@@ -494,8 +499,29 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
         const labels = [...labelSet].sort();
 
         return { sequences: seqs, labels };
-    }, [tnaData, sequenceMode, interpretations, verbRenames, verbExcludes,
+    }, [filteredEvents, groupBy, labelOf, verbRenames, verbExcludes,
         isRecordsSource, seqSource, emotionRecords, emotionDimension]);
+
+    // Client-computed metadata for the activity source (the header + stat cards
+    // used the server's tnaData.metadata before sequences were built locally).
+    const activityMeta = useMemo(() => {
+        if (!isActivitySource || !transformedData) return null;
+        const totalSequences = transformedData.sequences.length;
+        const totalEvents = transformedData.sequences.reduce((s, seq) => s + seq.length, 0);
+        const caseTitle = effCaseId
+            ? (filterOptions.cases.find((c) => String(c.id) === String(effCaseId))?.title || '')
+            : '';
+        return { totalSequences, totalEvents, caseTitle };
+    }, [isActivitySource, transformedData, effCaseId, filterOptions]);
+
+    // Unit noun for the "N labels" stat card, per active mapping lens.
+    const mappingUnitLabel = ({
+        'clinical-state': 'States', 'clinical-action': 'Actions', 'medical-domain': 'Domains',
+        fine: 'Actions', verb: 'Verbs', object: 'Object types', raw: 'Pairs',
+    })[activityMapping] || 'Labels';
+    // True while the activity rows are still loading (drives the spinner now
+    // that the activity source has no server sequence fetch).
+    const activityLoading = wantsActivityEvents && learningEvents === null && !eventsError;
 
     // --- Build TNA model ---
     const analysis = useMemo(() => {
@@ -643,8 +669,8 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                             </button>
                         )}
                         <h1 className="text-2xl font-bold">Analytics</h1>
-                        {tnaData?.metadata?.caseTitle && (
-                            <span className="text-sm text-gray-600">{tnaData.metadata.caseTitle}</span>
+                        {activityMeta?.caseTitle && (
+                            <span className="text-sm text-gray-600">{activityMeta.caseTitle}</span>
                         )}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -692,6 +718,13 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                     {!externalFilters && (
                         <>
                             <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-600">Course</label>
+                                <select value={courseId} onChange={(e) => setCourseId(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
+                                    <option value="">All courses</option>
+                                    {filterOptions.courses.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex flex-col gap-1">
                                 <label className="text-xs text-gray-600">Case</label>
                                 <select value={caseId} onChange={(e) => setCaseId(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
                                     <option value="">All cases</option>
@@ -715,8 +748,11 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                             </div>
                         </>
                     )}
-                    {isAnalyticsRelated && (
-                        <>
+                    {/* Mapping + Room + Source — right-aligned so they fill the
+                        toolbar. Mapping (the activity lens) and Room now show on
+                        the Activity tab too, and drive every activity screen. */}
+                    <div className="flex flex-wrap items-end gap-3 ml-auto">
+                        {isAnalyticsRelated && (
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-gray-600">Source</label>
                                 <select value={seqSource} onChange={(e) => setSeqSource(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
@@ -726,46 +762,59 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                     <option value="gaze-targets">Gaze targets</option>
                                 </select>
                             </div>
-                            {seqSource === 'activity' && (
-                                <div className="flex flex-col gap-1">
-                                    <label className="text-xs text-gray-600">Group by</label>
-                                    <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
-                                        <option value="actor-session">Per session</option>
-                                        <option value="actor">Per student</option>
-                                    </select>
-                                </div>
-                            )}
-                            {seqSource === 'activity' && (
-                                <div className="flex flex-col gap-1">
-                                    <label className="text-xs text-gray-600">Mode</label>
-                                    <select value={sequenceMode} onChange={(e) => setSequenceMode(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
-                                        <option value="combined">Clinical state</option>
-                                        <option value="verb">Verb only</option>
-                                        <option value="objectType">Object only</option>
-                                        <option value="raw">Raw verb:object</option>
-                                    </select>
-                                </div>
-                            )}
-                            {isEmotionSource && (
-                                <div className="flex flex-col gap-1">
-                                    <label className="text-xs text-gray-600">Emotion states</label>
-                                    <select value={emotionDimension} onChange={(e) => setEmotionDimension(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
-                                        <option value="affective">Affective (grouped)</option>
-                                        <option value="raw">Raw emotions</option>
-                                    </select>
-                                </div>
-                            )}
-                        </>
-                    )}
+                        )}
+                        {wantsActivityEvents && (
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-600">Mapping</label>
+                                <select
+                                    value={activityMapping}
+                                    onChange={(e) => setActivityMapping(e.target.value)}
+                                    title={ACTIVITY_MAPPINGS.find((m) => m.id === activityMapping)?.hint}
+                                    className="px-2 py-1 text-sm bg-white border border-gray-300 rounded"
+                                >
+                                    {ACTIVITY_MAPPINGS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                                </select>
+                            </div>
+                        )}
+                        {wantsActivityEvents && (
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-600">Room</label>
+                                <select value={effRoom} onChange={(e) => setRoomFilter(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
+                                    <option value="">All rooms</option>
+                                    {availableRooms.map((r) => (
+                                        <option key={r.id} value={r.id}>{(ROOM_LABELS[r.id] || r.id)} ({r.count})</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                        {isActivitySource && isAnalyticsRelated && (
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-600">Group by</label>
+                                <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
+                                    <option value="actor-session">Per session</option>
+                                    <option value="actor">Per student</option>
+                                </select>
+                            </div>
+                        )}
+                        {isEmotionSource && (
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-gray-600">Emotion states</label>
+                                <select value={emotionDimension} onChange={(e) => setEmotionDimension(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
+                                    <option value="affective">Affective (grouped)</option>
+                                    <option value="raw">Raw emotions</option>
+                                </select>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Stat cards */}
-                {!isRecordsSource && tnaData?.metadata && isAnalyticsRelated && (
+                {!isRecordsSource && activityMeta && isAnalyticsRelated && (
                     <div className="mb-4">
                     <MetricGrid>
-                        <StatCard icon={<Users className="w-5 h-5" />} value={tnaData.metadata.totalSequences} label="Sequences" accent="cyan" />
-                        <StatCard icon={<Activity className="w-5 h-5" />} value={tnaData.metadata.totalEvents} label="Events" accent="green" />
-                        <StatCard icon={<Hash className="w-5 h-5" />} value={transformedData?.labels.length ?? '—'} label={sequenceMode === 'combined' ? 'States' : sequenceMode === 'objectType' ? 'Object types' : 'Verbs'} accent="amber" />
+                        <StatCard icon={<Users className="w-5 h-5" />} value={activityMeta.totalSequences} label="Sequences" accent="cyan" />
+                        <StatCard icon={<Activity className="w-5 h-5" />} value={activityMeta.totalEvents} label="Events" accent="green" />
+                        <StatCard icon={<Hash className="w-5 h-5" />} value={transformedData?.labels.length ?? '—'} label={mappingUnitLabel} accent="amber" />
                         {analysis?.summaryData?.density != null && (
                             <StatCard icon={<Network className="w-5 h-5" />} value={`${(analysis.summaryData.density * 100).toFixed(1)}%`} label="Density" accent="teal" />
                         )}
@@ -801,8 +850,8 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                 )}
 
                 {/* Content — signal tabs render their own loading card below */}
-                {loading && !isSignalTab && (isRecordsSource ? !emotionRecords : !tnaData) && (
-                    <Loading text={isRecordsSource ? 'Loading capture windows…' : 'Loading sequences…'} />
+                {!isSignalTab && (isRecordsSource ? (loading && !emotionRecords) : activityLoading) && (
+                    <Loading text={isRecordsSource ? 'Loading capture windows…' : 'Loading activity events…'} />
                 )}
                 {isRecordsSource && isAnalyticsRelated && !loading && emotionRecords && !transformedData && (
                     <div className="mb-3 p-3 rounded bg-white border border-gray-200 text-sm text-gray-600">

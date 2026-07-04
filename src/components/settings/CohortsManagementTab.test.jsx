@@ -40,6 +40,10 @@ const svc = {
     addCohortTeacher: vi.fn(),
     removeCohortTeacher: vi.fn(),
 };
+const userSvc = {
+    getEnforcementFlag: vi.fn(),
+    setEnforcementFlag: vi.fn(),
+};
 
 vi.mock('../../services/cohortsService', () => {
     const proxy = {};
@@ -52,12 +56,18 @@ vi.mock('../../services/cohortsService', () => {
     ]) proxy[k] = (...a) => svc[k](...a);
     return proxy;
 });
+vi.mock('../../services/userService', () => ({
+    getEnforcementFlag: (...a) => userSvc.getEnforcementFlag(...a),
+    setEnforcementFlag: (...a) => userSvc.setEnforcementFlag(...a),
+}));
 
 beforeEach(() => {
     Object.values(toast).forEach((f) => f.mockReset());
     Object.values(svc).forEach((f) => f.mockReset());
+    Object.values(userSvc).forEach((f) => f.mockReset());
     toast.confirm.mockResolvedValue(true);
     svc.listCohorts.mockResolvedValue({ cohorts: [] });
+    userSvc.getEnforcementFlag.mockRejectedValue(new ApiError('forbidden', 403));
 });
 
 afterEach(() => {
@@ -65,10 +75,10 @@ afterEach(() => {
 });
 
 describe('CohortsManagementTab — list view', () => {
-    it('shows the empty state when there are no classes', async () => {
+    it('shows the empty state when there are no courses', async () => {
         renderWithProviders(<CohortsManagementTab />);
         await waitFor(() =>
-            expect(screen.getByText(/No classes yet/i)).toBeTruthy());
+            expect(screen.getByText(/No courses yet/i)).toBeTruthy());
     });
 
     it('surfaces a load error via toast', async () => {
@@ -77,7 +87,7 @@ describe('CohortsManagementTab — list view', () => {
         await waitFor(() => expect(toast.error).toHaveBeenCalledWith('boom'));
     });
 
-    it('renders cohorts with member-count pluralisation and join-code state', async () => {
+    it('renders courses with student-count pluralisation and registration-code state', async () => {
         svc.listCohorts.mockResolvedValue({
             cohorts: [
                 { id: 1, name: 'Cardio', member_count: 1, join_code: 'ABC123' },
@@ -86,19 +96,32 @@ describe('CohortsManagementTab — list view', () => {
         });
         renderWithProviders(<CohortsManagementTab />);
         await waitFor(() => expect(screen.getByText('Cardio')).toBeTruthy());
-        expect(screen.getByText(/1 member ·/)).toBeTruthy();
-        expect(screen.getByText(/join code active/)).toBeTruthy();
-        expect(screen.getByText(/0 members ·/)).toBeTruthy();
-        expect(screen.getByText(/no join code/)).toBeTruthy();
+        expect(screen.getByText(/1 enrolled student ·/)).toBeTruthy();
+        expect(screen.getByText(/registration code active/)).toBeTruthy();
+        expect(screen.getByText(/0 enrolled students ·/)).toBeTruthy();
+        expect(screen.getByText(/no registration code/)).toBeTruthy();
     });
 
-    it('creates a class, clears the input, and reloads', async () => {
+    it('renders and toggles course access policy when admin setting is available', async () => {
+        userSvc.getEnforcementFlag.mockResolvedValue({ enabled: false });
+        userSvc.setEnforcementFlag.mockResolvedValue({ enabled: true });
+        renderWithProviders(<CohortsManagementTab />);
+        await waitFor(() => expect(screen.getByText('Course access policy')).toBeTruthy());
+        expect(screen.getByText(/Open access/i)).toBeTruthy();
+
+        fireEvent.click(screen.getByLabelText('Toggle course access policy'));
+
+        await waitFor(() => expect(userSvc.setEnforcementFlag).toHaveBeenCalledWith(true));
+        expect(toast.success).toHaveBeenCalledWith('Course-restricted access enabled');
+    });
+
+    it('creates a course, clears the input, and reloads', async () => {
         svc.listCohorts.mockResolvedValue({ cohorts: [] });
         svc.createCohort.mockResolvedValue({});
         renderWithProviders(<CohortsManagementTab />);
-        await waitFor(() => expect(screen.getByText(/No classes yet/i)).toBeTruthy());
+        await waitFor(() => expect(screen.getByText(/No courses yet/i)).toBeTruthy());
 
-        const input = screen.getByPlaceholderText('New class name');
+        const input = screen.getByPlaceholderText('New course name');
         fireEvent.change(input, { target: { value: '  Cardio  ' } });
         fireEvent.click(screen.getByRole('button', { name: /Create/i }));
 
@@ -111,8 +134,8 @@ describe('CohortsManagementTab — list view', () => {
     it('toasts on create failure', async () => {
         svc.createCohort.mockRejectedValue(new ApiError('dup name', 409));
         renderWithProviders(<CohortsManagementTab />);
-        await waitFor(() => expect(screen.getByText(/No classes yet/i)).toBeTruthy());
-        fireEvent.change(screen.getByPlaceholderText('New class name'), {
+        await waitFor(() => expect(screen.getByText(/No courses yet/i)).toBeTruthy());
+        fireEvent.change(screen.getByPlaceholderText('New course name'), {
             target: { value: 'X' },
         });
         fireEvent.click(screen.getByRole('button', { name: /Create/i }));
@@ -137,7 +160,7 @@ describe('CohortsManagementTab — list view', () => {
         // field (the rename home) and the new educational fields render,
         // and no window.prompt is used.
         await waitFor(() =>
-            expect(screen.getByText('Back to classes')).toBeTruthy());
+            expect(screen.getByText('Back to courses')).toBeTruthy());
         expect(await screen.findByDisplayValue('Old')).toBeTruthy();
         expect(screen.getByText('Classroom policy')).toBeTruthy();
         expect(screen.getByText('Learning objectives')).toBeTruthy();
@@ -181,21 +204,23 @@ describe('CohortsManagementTab — roster drill-down', () => {
         await waitFor(() => expect(screen.getByText(cohort.name)).toBeTruthy());
         fireEvent.click(screen.getByText(cohort.name));
         await waitFor(() =>
-            expect(screen.getByText('Back to classes')).toBeTruthy());
+            expect(screen.getByText('Back to courses')).toBeTruthy());
     }
 
     it('opens the roster and shows the no-members state + generate-code CTA', async () => {
         await openRoster();
-        expect(screen.getByText('No members yet.')).toBeTruthy();
-        expect(screen.getByText(/Generate join code/i)).toBeTruthy();
+        expect(screen.getByText('No students enrolled yet.')).toBeTruthy();
+        expect(screen.getByText(/Generate registration code/i)).toBeTruthy();
     });
 
-    it('renders members with role label via roleLabel()', async () => {
+    it('renders enrolled students with role label via roleLabel()', async () => {
         await openRoster({ id: 1, name: 'Cardio', join_code: 'XYZ999' }, [
-            { id: 5, username: 'alice', name: 'Alice A', role: 'educator' },
+            { id: 5, username: 'alice', name: 'Alice A', role: 'student' },
+            { id: 6, username: 'teacher', name: 'Teacher T', role: 'educator' },
         ]);
         expect(screen.getByText('Alice A')).toBeTruthy();
-        expect(screen.getByText(/alice · Teacher/)).toBeTruthy();
+        expect(screen.getByText(/alice · Student/)).toBeTruthy();
+        expect(screen.queryByText('Teacher T')).toBeNull();
         // join code is shown when present
         expect(screen.getByText('XYZ999')).toBeTruthy();
     });
@@ -204,10 +229,10 @@ describe('CohortsManagementTab — roster drill-down', () => {
         await openRoster();
         svc.addCohortMember.mockResolvedValue({});
         fireEvent.change(
-            screen.getByPlaceholderText(/Add member by username or email/i),
+            screen.getByPlaceholderText(/Add student by username or email/i),
             { target: { value: ' bob ' } },
         );
-        fireEvent.click(screen.getByRole('button', { name: /^Add$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^Add student$/i }));
         await waitFor(() =>
             expect(svc.addCohortMember).toHaveBeenCalledWith(1, 'bob'));
         expect(toast.success).toHaveBeenCalledWith('Member added');
@@ -218,7 +243,7 @@ describe('CohortsManagementTab — roster drill-down', () => {
             { id: 7, username: 'carol', name: 'Carol' },
         ]);
         svc.removeCohortMember.mockResolvedValue({});
-        fireEvent.click(screen.getByTitle('Remove member'));
+        fireEvent.click(screen.getByTitle('Remove student'));
         await waitFor(() =>
             expect(svc.removeCohortMember).toHaveBeenCalledWith(1, 7));
         expect(toast.success).toHaveBeenCalledWith('Member removed');
@@ -227,7 +252,7 @@ describe('CohortsManagementTab — roster drill-down', () => {
     it('generates a join code when none exists', async () => {
         await openRoster();
         svc.rotateJoinCode.mockResolvedValue({ join_code: 'NEW777' });
-        fireEvent.click(screen.getByText(/Generate join code/i));
+        fireEvent.click(screen.getByText(/Generate registration code/i));
         await waitFor(() => expect(screen.getByText('NEW777')).toBeTruthy());
         expect(toast.success).toHaveBeenCalledWith('Join code generated');
     });
@@ -251,7 +276,7 @@ describe('CohortsManagementTab — roster drill-down', () => {
             configurable: true,
         });
         await openRoster({ id: 1, name: 'Cardio', join_code: 'CPY333' }, []);
-        fireEvent.click(screen.getByTitle('Copy join code'));
+        fireEvent.click(screen.getByTitle('Copy registration code'));
         await waitFor(() => expect(writeText).toHaveBeenCalledWith('CPY333'));
     });
 
@@ -265,16 +290,16 @@ describe('CohortsManagementTab — roster drill-down', () => {
 
     it('navigates back to the class list', async () => {
         await openRoster({ id: 1, name: 'Cardio' }, []);
-        fireEvent.click(screen.getByText('Back to classes'));
+        fireEvent.click(screen.getByText('Back to courses'));
         // Back returns to the list; the class row (not the roster header)
         // is shown again and the roster "Back" affordance is gone.
         await waitFor(() =>
-            expect(screen.queryByText('Back to classes')).toBeNull());
+            expect(screen.queryByText('Back to courses')).toBeNull());
         expect(screen.getByText('Cardio')).toBeTruthy();
-        expect(screen.getByPlaceholderText('New class name')).toBeTruthy();
+        expect(screen.getByPlaceholderText('New course name')).toBeTruthy();
     });
 
-    it('shows "Class not found" when getCohort returns no cohort', async () => {
+    it('shows "Course not found" when getCohort returns no cohort', async () => {
         svc.listCohorts.mockResolvedValue({
             cohorts: [{ id: 1, name: 'Ghost', member_count: 0 }],
         });
@@ -283,6 +308,6 @@ describe('CohortsManagementTab — roster drill-down', () => {
         await waitFor(() => expect(screen.getByText('Ghost')).toBeTruthy());
         fireEvent.click(screen.getByText('Ghost'));
         await waitFor(() =>
-            expect(screen.getByText('Class not found.')).toBeTruthy());
+            expect(screen.getByText('Course not found.')).toBeTruthy());
     });
 });

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import {
-    Users, UserPlus, Upload, Search, ShieldCheck, ChevronDown, ChevronRight,
-    Pencil, Trash2, X, ArrowUpDown, Layers,
+    Users, UserPlus, UserMinus, Upload, Search, ShieldCheck, ChevronDown, ChevronRight,
+    Pencil, Trash2, X, ArrowUpDown, Layers, Ban, RotateCcw, GraduationCap,
+    KeyRound, Copy, Check, UserCheck,
 } from 'lucide-react';
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -26,7 +27,6 @@ export default function UsersWorkspace() {
     const [users, setUsers] = useState([]);
     const [cohorts, setCohorts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [enforcement, setEnforcement] = useState(false);
 
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
@@ -41,6 +41,8 @@ export default function UsersWorkspace() {
     const [bulkOpsOpen, setBulkOpsOpen] = useState(false);
     const [bulkRole, setBulkRole] = useState('student');
     const [barCohort, setBarCohort] = useState('');
+    const [assignmentCohort, setAssignmentCohort] = useState('');
+    const [copiedCode, setCopiedCode] = useState(false);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -59,9 +61,6 @@ export default function UsersWorkspace() {
     }, [toast]);
 
     useEffect(() => { load(); }, [load]);
-    useEffect(() => {
-        userService.getEnforcementFlag().then(r => setEnforcement(!!r.enabled)).catch(() => {});
-    }, []);
 
     const canActOn = useCallback((u) => u.id !== me?.id && rank(u.role) < myRank, [me, myRank]);
 
@@ -85,8 +84,13 @@ export default function UsersWorkspace() {
             if (roleFilter !== 'all' && u.role !== roleFilter) return false;
             if (statusFilter !== 'all' && (u.status || 'active') !== statusFilter) return false;
             if (classFilter !== 'all') {
-                const inClass = (u.memberships || []).some(m => String(m.cohort_id) === String(classFilter));
-                if (!inClass) return false;
+                const memberships = u.memberships || [];
+                if (classFilter === 'none') {
+                    if (memberships.length > 0) return false;
+                } else {
+                    const inClass = memberships.some(m => String(m.cohort_id) === String(classFilter));
+                    if (!inClass) return false;
+                }
             }
             if (q) {
                 const hay = `${u.username} ${u.name || ''} ${u.email}`.toLowerCase();
@@ -108,6 +112,24 @@ export default function UsersWorkspace() {
 
     const selectableIds = useMemo(() => filtered.filter(canActOn).map(u => u.id), [filtered, canActOn]);
     const allSelected = selectableIds.length > 0 && selectableIds.every(id => selected.has(id));
+    const activeAssignmentCohort = useMemo(
+        () => cohorts.find(c => String(c.id) === String(assignmentCohort)) || null,
+        [cohorts, assignmentCohort],
+    );
+    const unassignedIds = useMemo(
+        () => users.filter(u => canActOn(u) && (u.role === 'student' || u.role === 'user') && !(u.memberships || []).length).map(u => u.id),
+        [users, canActOn],
+    );
+    const assignmentMemberIds = useMemo(
+        () => assignmentCohort
+            ? users.filter(u => canActOn(u) && (u.memberships || []).some(m => String(m.cohort_id) === String(assignmentCohort))).map(u => u.id)
+            : [],
+        [users, canActOn, assignmentCohort],
+    );
+    const selectedForAssignment = useMemo(
+        () => [...selected].filter(id => users.some(u => u.id === id && canActOn(u))),
+        [selected, users, canActOn],
+    );
 
     const toggleSort = (key) => setSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
     const toggleSelect = (id) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -153,6 +175,42 @@ export default function UsersWorkspace() {
         }
     };
 
+    const runAssignmentEnroll = async (action) => {
+        if (!assignmentCohort || selectedForAssignment.length === 0) return;
+        try {
+            const { summary } = await userService.bulkEnroll({
+                userIds: selectedForAssignment,
+                cohortIds: [Number(assignmentCohort)],
+                action,
+            });
+            const cls = activeAssignmentCohort?.name || 'course';
+            const done = action === 'enroll' ? (summary.enrolled + summary.revived) : summary.unenrolled;
+            const noop = action === 'enroll' ? summary.already : summary.not_member;
+            toast.success(
+                action === 'enroll'
+                    ? `Assigned ${done} to ${cls}${noop ? `, ${noop} already assigned` : ''}`
+                    : `Removed ${done} from ${cls}${noop ? `, ${noop} not assigned` : ''}`,
+            );
+            clearSelection();
+            load();
+        } catch (err) {
+            toast.error(err instanceof ApiError ? err.message : 'Assignment failed');
+        }
+    };
+
+    const selectIds = (ids) => setSelected(new Set(ids));
+
+    const copyAssignmentCode = async () => {
+        if (!activeAssignmentCohort?.join_code) return;
+        try {
+            await navigator.clipboard.writeText(activeAssignmentCohort.join_code);
+            setCopiedCode(true);
+            setTimeout(() => setCopiedCode(false), 1500);
+        } catch {
+            toast.error('Could not copy registration code');
+        }
+    };
+
     const onDelete = async (u) => {
         const ok = await toast.confirm(`Delete ${u.username}? This cannot be undone.`, { title: 'Delete user', type: 'danger', confirmText: 'Delete' });
         if (!ok) return;
@@ -163,24 +221,6 @@ export default function UsersWorkspace() {
             load();
         } catch (err) {
             toast.error(err instanceof ApiError ? err.message : 'Delete failed');
-        }
-    };
-
-    const toggleEnforcement = async () => {
-        const next = !enforcement;
-        const ok = await toast.confirm(
-            next
-                ? 'Turn ON class-based access? Students will only see cases assigned to their classes (within date windows). Everyone stays in "Basic course" with the default case, so no one is locked out.'
-                : 'Turn OFF class-based access? Students will again see all available cases.',
-            { title: 'Class access enforcement', confirmText: next ? 'Enable' : 'Disable' }
-        );
-        if (!ok) return;
-        try {
-            const r = await userService.setEnforcementFlag(next);
-            setEnforcement(!!r.enabled);
-            toast.success(`Class-based access ${r.enabled ? 'enabled' : 'disabled'}`);
-        } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to update setting');
         }
     };
 
@@ -230,30 +270,6 @@ export default function UsersWorkspace() {
                 <Stat label="Suspended" value={stats.suspended} tone={stats.suspended ? 'warn' : undefined} />
             </div>
 
-            {/* Access-enforcement banner */}
-            <div className="rohy-card rounded-lg px-4 py-3 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                    <ShieldCheck className={`w-5 h-5 shrink-0 ${enforcement ? 'text-teal-700' : 'text-neutral-400'}`} />
-                    <div className="min-w-0">
-                        <div className="text-sm font-semibold">Class-based case access {enforcement ? 'is ON' : 'is OFF'}</div>
-                        <div className="text-xs text-neutral-600 truncate">
-                            {enforcement
-                                ? 'Students see only cases assigned to their classes, within date windows. "Basic course" keeps everyone covered.'
-                                : 'Students currently see all available cases. Turn on to enforce class + date assignments.'}
-                        </div>
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    onClick={toggleEnforcement}
-                    className={`shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enforcement ? 'bg-teal-600' : 'bg-neutral-300'}`}
-                    aria-pressed={enforcement}
-                    aria-label="Toggle class-based access enforcement"
-                >
-                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${enforcement ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                </button>
-            </div>
-
             {/* Toolbar */}
             <div className="flex flex-wrap items-center gap-2">
                 <div className="relative flex-1 min-w-[200px]">
@@ -280,33 +296,121 @@ export default function UsersWorkspace() {
                 </select>
                 <select className="rohy-field px-3 py-2 rounded-lg text-sm max-w-[180px]" value={classFilter} onChange={e => setClassFilter(e.target.value)}>
                     <option value="all">All classes</option>
+                    <option value="none">Unassigned</option>
                     {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
+            </div>
+
+            {/* Assignment workspace */}
+            <div className="rohy-card rounded-lg px-4 py-3 space-y-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <GraduationCap className="w-5 h-5 text-teal-700 shrink-0" />
+                        <div className="min-w-0">
+                            <div className="text-sm font-bold">Course assignment</div>
+                            <div className="text-xs text-neutral-600 truncate">
+                                Pick a course, select users, then assign or remove in one step.
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <button className="rohy-btn rohy-btn-secondary" onClick={() => selectIds(unassignedIds)} disabled={unassignedIds.length === 0}>
+                            <UserCheck className="w-4 h-4" /> Select unassigned ({unassignedIds.length})
+                        </button>
+                        <button className="rohy-btn rohy-btn-secondary" onClick={() => selectIds(assignmentMemberIds)} disabled={!assignmentCohort || assignmentMemberIds.length === 0}>
+                            <Users className="w-4 h-4" /> Select course users
+                        </button>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <select className="rohy-field px-3 py-2 rounded-lg text-sm min-w-[220px]" value={assignmentCohort} onChange={e => setAssignmentCohort(e.target.value)}>
+                        <option value="">Choose course / class…</option>
+                        {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <button className="rohy-btn rohy-btn-primary" disabled={!assignmentCohort || selectedForAssignment.length === 0} onClick={() => runAssignmentEnroll('enroll')}>
+                        <UserPlus className="w-4 h-4" /> Assign {selectedForAssignment.length || ''}
+                    </button>
+                    <button className="rohy-btn rohy-btn-secondary" disabled={!assignmentCohort || selectedForAssignment.length === 0} onClick={() => runAssignmentEnroll('unenroll')}>
+                        <UserMinus className="w-4 h-4" /> Remove
+                    </button>
+                    {activeAssignmentCohort?.join_code && (
+                        <button className="rohy-btn rohy-btn-ghost" onClick={copyAssignmentCode}>
+                            {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                            Code {activeAssignmentCohort.join_code}
+                        </button>
+                    )}
+                    {assignmentCohort && !activeAssignmentCohort?.join_code && (
+                        <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
+                            <KeyRound className="w-3.5 h-3.5" /> No registration code
+                        </span>
+                    )}
+                </div>
             </div>
 
             {/* Table */}
             <div className="rohy-table-shell rounded-lg overflow-hidden">
                 {selected.size > 0 && (
-                    <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-teal-50 border-b border-teal-200 flex-wrap">
-                        <span className="text-sm font-semibold text-teal-900">{selected.size} selected</span>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <select className="rohy-field px-2 py-1 rounded text-xs" value={bulkRole} onChange={e => setBulkRole(e.target.value)}>
+                    <div className="flex items-center gap-x-5 gap-y-3 px-4 py-3 bg-teal-50 border-b-2 border-teal-300 flex-wrap">
+                        {/* Selection count — bold pill so the whole bar reads as an action mode */}
+                        <div className="flex items-center gap-2 shrink-0">
+                            <span className="inline-flex items-center justify-center min-w-[2.25rem] h-8 px-2 rounded-full bg-teal-600 text-white text-sm font-bold tabular-nums">{selected.size}</span>
+                            <span className="text-sm font-semibold text-teal-900">selected</span>
+                        </div>
+
+                        {/* Role */}
+                        <div className="flex items-center gap-2">
+                            <span className="text-[11px] uppercase tracking-wider font-bold text-teal-700/80">Role</span>
+                            <select className="rohy-field px-2.5 py-1.5 rounded-lg text-sm" value={bulkRole} onChange={e => setBulkRole(e.target.value)}>
                                 <option value="student">Student</option>
                                 <option value="reviewer">Reviewer</option>
                                 <option value="educator">Teacher</option>
                                 {myRank >= 4 && <option value="admin">Admin</option>}
                             </select>
-                            <button className="rohy-btn rohy-btn-secondary !py-1 !text-xs" onClick={() => runBulk('role', bulkRole)}>Set role</button>
-                            <button className="rohy-btn rohy-btn-secondary !py-1 !text-xs" onClick={() => runBulk('suspend')}>Suspend</button>
-                            <button className="rohy-btn rohy-btn-secondary !py-1 !text-xs" onClick={() => runBulk('reactivate')}>Reactivate</button>
-                            <span className="w-px h-5 bg-teal-200" aria-hidden="true" />
-                            <select className="rohy-field px-2 py-1 rounded text-xs max-w-[150px]" value={barCohort} onChange={e => setBarCohort(e.target.value)}>
+                            <button className="rohy-btn rohy-btn-secondary" onClick={() => runBulk('role', bulkRole)}>
+                                <ShieldCheck className="w-4 h-4" /> Set role
+                            </button>
+                        </div>
+
+                        <span className="w-px h-8 bg-teal-200 shrink-0" aria-hidden="true" />
+
+                        {/* Status */}
+                        <div className="flex items-center gap-2">
+                            <span className="text-[11px] uppercase tracking-wider font-bold text-teal-700/80">Status</span>
+                            <button className="rohy-btn rohy-btn-danger" onClick={() => runBulk('suspend')}>
+                                <Ban className="w-4 h-4" /> Suspend
+                            </button>
+                            <button className="rohy-btn rohy-btn-secondary" onClick={() => runBulk('reactivate')}>
+                                <RotateCcw className="w-4 h-4" /> Reactivate
+                            </button>
+                        </div>
+
+                        <span className="w-px h-8 bg-teal-200 shrink-0" aria-hidden="true" />
+
+                        {/* Class enrollment */}
+                        <div className="flex items-center gap-2">
+                            <span className="text-[11px] uppercase tracking-wider font-bold text-teal-700/80 flex items-center gap-1">
+                                <GraduationCap className="w-3.5 h-3.5" /> Class
+                            </span>
+                            <select className="rohy-field px-2.5 py-1.5 rounded-lg text-sm max-w-[170px]" value={barCohort} onChange={e => setBarCohort(e.target.value)}>
                                 <option value="">Choose class…</option>
                                 {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
-                            <button className="rohy-btn rohy-btn-secondary !py-1 !text-xs" disabled={!barCohort} onClick={() => runQuickEnroll('enroll')}>Add to class</button>
-                            <button className="rohy-btn rohy-btn-secondary !py-1 !text-xs" disabled={!barCohort} onClick={() => runQuickEnroll('unenroll')}>Remove from class</button>
-                            <button className="rohy-btn rohy-btn-ghost !py-1 !text-xs" onClick={clearSelection}><X className="w-3.5 h-3.5" /></button>
+                            <button className="rohy-btn rohy-btn-secondary" disabled={!barCohort} onClick={() => runQuickEnroll('enroll')}>
+                                <UserPlus className="w-4 h-4" /> Add
+                            </button>
+                            <button className="rohy-btn rohy-btn-secondary" disabled={!barCohort} onClick={() => runQuickEnroll('unenroll')}>
+                                <UserMinus className="w-4 h-4" /> Remove
+                            </button>
+                        </div>
+
+                        {/* Advanced + clear, pushed to the right */}
+                        <div className="flex items-center gap-2 ml-auto shrink-0">
+                            <button className="rohy-btn rohy-btn-primary" onClick={() => setBulkOpsOpen(true)}>
+                                <Layers className="w-4 h-4" /> More actions…
+                            </button>
+                            <button className="rohy-btn rohy-btn-ghost" onClick={clearSelection}>
+                                <X className="w-4 h-4" /> Clear
+                            </button>
                         </div>
                     </div>
                 )}

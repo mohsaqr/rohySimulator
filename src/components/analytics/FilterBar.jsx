@@ -57,14 +57,18 @@ export function deriveOptions(rows, getValue, getLabel = null) {
     (rows || []).forEach((row) => {
         const raw = getValue(row);
         if (raw === null || raw === undefined || raw === '') return;
-        const value = String(raw);
-        const existing = map.get(value);
-        if (existing) {
-            existing.count += 1;
-        } else {
-            const label = getLabel ? getLabel(row) : raw;
-            map.set(value, { value, label: String(label ?? raw), count: 1 });
-        }
+        const values = Array.isArray(raw) ? raw : [raw];
+        values.forEach((one) => {
+            if (one === null || one === undefined || one === '') return;
+            const value = String(one);
+            const existing = map.get(value);
+            if (existing) {
+                existing.count += 1;
+            } else {
+                const label = getLabel ? getLabel(row, value) : one;
+                map.set(value, { value, label: String(label ?? one), count: 1 });
+            }
+        });
     });
     return [...map.values()].sort(labelSort);
 }
@@ -91,7 +95,11 @@ export function applyClientFilters(rows, accessors, values) {
         .filter(([key]) => values[key] !== undefined && values[key] !== null && values[key] !== '');
     if (active.length === 0) return rows;
     return rows.filter((row) =>
-        active.every(([key, get]) => String(get(row) ?? '') === String(values[key])));
+        active.every(([key, get]) => {
+            const raw = get(row);
+            if (Array.isArray(raw)) return raw.map(String).includes(String(values[key]));
+            return String(raw ?? '') === String(values[key]);
+        }));
 }
 
 /**

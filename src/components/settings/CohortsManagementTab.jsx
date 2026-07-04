@@ -4,7 +4,7 @@ import {
     Check, Loader2, UserPlus, X, ChevronDown, ChevronRight,
     GraduationCap, BookOpen, Save,
     ListChecks, LayoutGrid, BarChart3, Download, Activity,
-    Target, Percent, SlidersHorizontal, Info,
+    Target, Percent, SlidersHorizontal, Info, ShieldCheck,
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError } from '../../services/apiClient';
@@ -15,6 +15,7 @@ import {
     updateCohort, assignCohortCases, unassignCohortCase,
     addCohortTeacher, removeCohortTeacher,
 } from '../../services/cohortsService';
+import * as userService from '../../services/userService';
 import CohortReports from './CohortReports';
 import { CasePicker, PeoplePicker } from './CohortPickers';
 
@@ -82,6 +83,8 @@ export default function CohortsManagementTab() {
     const [caseSel, setCaseSel] = useState(() => new Set());
     const [coteacherIds, setCoteacherIds] = useState([]);
     const [studentIds, setStudentIds] = useState([]);
+    const [busyCodeId, setBusyCodeId] = useState(null);
+    const [copiedCodeId, setCopiedCodeId] = useState(null);
 
     const loadCohorts = useCallback(async () => {
         setLoading(true);
@@ -175,6 +178,36 @@ export default function CohortsManagementTab() {
         }
     };
 
+    const handleListCode = async (cohort) => {
+        setBusyCodeId(cohort.id);
+        try {
+            const data = await rotateJoinCode(cohort.id);
+            setCohorts((rows) => rows.map((c) => c.id === cohort.id ? { ...c, join_code: data.join_code } : c));
+            toast.success('Registration code generated');
+        } catch (err) {
+            toast.error(errMsg(err, 'Failed to generate registration code'));
+        } finally {
+            setBusyCodeId(null);
+        }
+    };
+
+    const copyListCode = async (cohort) => {
+        if (!cohort.join_code) return;
+        try {
+            await navigator.clipboard.writeText(cohort.join_code);
+            setCopiedCodeId(cohort.id);
+            setTimeout(() => setCopiedCodeId(null), 1500);
+        } catch {
+            toast.error('Could not copy registration code');
+        }
+    };
+
+    const summary = {
+        courses: cohorts.length,
+        members: cohorts.reduce((n, c) => n + Number(c.student_count ?? c.students_count ?? c.member_count ?? 0), 0),
+        codes: cohorts.filter(c => c.join_code).length,
+    };
+
     if (open != null) {
         return (
             <CohortRoster
@@ -190,12 +223,19 @@ export default function CohortsManagementTab() {
         <div className="max-w-5xl">
             <div className="flex items-center gap-2 mb-1">
                 <Users className="w-5 h-5 text-purple-400" />
-                <h3 className="text-lg font-bold">Classes</h3>
+                <h3 className="text-lg font-bold">Courses</h3>
             </div>
             <p className="text-sm text-neutral-400 mb-6">
-                Group students into classes. Students join with a join code
-                under My Profile → Join a class.
+                Group students, assign cases, and share registration codes.
             </p>
+
+            <div className="grid grid-cols-3 gap-2 mb-6">
+                <Stat label="Courses" value={summary.courses} />
+                <Stat label="Enrolled students" value={summary.members} />
+                <Stat label="Active registration codes" value={summary.codes} />
+            </div>
+
+            <CourseAccessPolicyCard />
 
             <form onSubmit={handleCreate} className="mb-8 space-y-3">
                 <div className="flex gap-2">
@@ -203,7 +243,7 @@ export default function CohortsManagementTab() {
                         type="text"
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
-                        placeholder="New class name"
+                        placeholder="New course name"
                         className={`flex-1 ${INPUT}`}
                     />
                     <button
@@ -214,7 +254,7 @@ export default function CohortsManagementTab() {
                         {creating
                             ? <Loader2 className="w-4 h-4 animate-spin" />
                             : <Plus className="w-4 h-4" />}
-                        Create
+                        Create course
                     </button>
                 </div>
 
@@ -226,7 +266,7 @@ export default function CohortsManagementTab() {
                     {showAdvanced
                         ? <ChevronDown className="w-4 h-4" />
                         : <ChevronRight className="w-4 h-4" />}
-                    Add details, cases, co-teachers &amp; students
+                    Add details, cases, co-teachers, students &amp; registration code
                 </button>
 
                 {showAdvanced && (
@@ -267,15 +307,15 @@ export default function CohortsManagementTab() {
                                 />
                             </div>
                         </div>
-                        <label className="flex items-center gap-2.5 text-sm text-neutral-200 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={withJoinCode}
+                                <label className="flex items-center gap-2.5 text-sm text-neutral-200 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={withJoinCode}
                                 onChange={(e) => setWithJoinCode(e.target.checked)}
                                 className="w-4 h-4 accent-purple-600"
                             />
-                            Generate a join code now (students self-enrol with it)
-                        </label>
+                                    Generate a join code now (registration code)
+                                </label>
                         <div>
                             <div className="flex items-center gap-1.5 text-xs font-medium text-neutral-300 mb-2">
                                 <BookOpen className="w-3.5 h-3.5" /> Assign cases from the library
@@ -311,7 +351,7 @@ export default function CohortsManagementTab() {
                     <Loader2 className="w-5 h-5 animate-spin" />
                 </div>
             ) : cohorts.length === 0 ? (
-                <p className="text-sm text-neutral-500">No classes yet. Create one above.</p>
+                <p className="text-sm text-neutral-500">No courses yet. Create one above.</p>
             ) : (
                 <div className="space-y-2">
                     {cohorts.map((c) => (
@@ -322,15 +362,39 @@ export default function CohortsManagementTab() {
                             <button
                                 onClick={() => openCohort(c.id)}
                                 className="flex-1 min-w-0 text-left"
-                                title="Manage this class"
+                                title="Manage this course"
                             >
                                 <div className="font-bold text-white truncate">{c.name}</div>
                                 <div className="text-xs text-neutral-400 mt-0.5">
-                                    {c.member_count ?? 0} member{(c.member_count ?? 0) === 1 ? '' : 's'}
+                                    {c.student_count ?? c.students_count ?? c.member_count ?? 0} enrolled student{(c.student_count ?? c.students_count ?? c.member_count ?? 0) === 1 ? '' : 's'}
                                     {' · '}
-                                    {c.join_code ? 'join code active' : 'no join code'}
+                                    {c.join_code ? 'registration code active' : 'no registration code'}
                                 </div>
                             </button>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                                {c.join_code ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => copyListCode(c)}
+                                        title="Copy registration code"
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-900 border border-neutral-700 text-xs font-mono text-purple-300 hover:border-purple-500"
+                                    >
+                                        {copiedCodeId === c.id ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                        {c.join_code}
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleListCode(c)}
+                                        disabled={busyCodeId === c.id}
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 text-xs text-white"
+                                    >
+                                        {busyCodeId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                                        Generate code
+                                    </button>
+                                )}
+                            </div>
 
                             {/* One-click report shortcuts — the whole point:
                                 no more class → Reports → sub-tab drilling. */}
@@ -411,6 +475,79 @@ function summarise(results) {
     return parts.join(', ') + '.';
 }
 
+function Stat({ label, value }) {
+    return (
+        <div className="p-3 bg-neutral-800/50 border border-neutral-700 rounded-lg">
+            <div className="text-xl font-bold text-white">{value}</div>
+            <div className="text-xs text-neutral-400 uppercase tracking-wide font-semibold">{label}</div>
+        </div>
+    );
+}
+
+function CourseAccessPolicyCard() {
+    const toast = useToast();
+    const [enabled, setEnabled] = useState(null);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        let alive = true;
+        userService.getEnforcementFlag()
+            .then((r) => { if (alive) setEnabled(!!r.enabled); })
+            .catch(() => { if (alive) setEnabled(null); });
+        return () => { alive = false; };
+    }, []);
+
+    const toggle = async () => {
+        if (enabled == null || saving) return;
+        const next = !enabled;
+        const ok = await toast.confirm(
+            next
+                ? 'Turn on course-restricted access? Students will only see the default case plus cases assigned through active course enrolments and date windows.'
+                : 'Turn off course-restricted access? Students will see all available cases again.',
+            { title: 'Course access policy', confirmText: next ? 'Enable' : 'Disable' },
+        );
+        if (!ok) return;
+        setSaving(true);
+        try {
+            const r = await userService.setEnforcementFlag(next);
+            setEnabled(!!r.enabled);
+            toast.success(`Course-restricted access ${r.enabled ? 'enabled' : 'disabled'}`);
+        } catch (err) {
+            toast.error(errMsg(err, 'Failed to update access policy'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (enabled == null) return null;
+
+    return (
+        <div className="mb-6 p-4 bg-neutral-800/50 border border-neutral-700 rounded-lg flex items-center justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+                <ShieldCheck className={`w-5 h-5 mt-0.5 shrink-0 ${enabled ? 'text-green-400' : 'text-neutral-500'}`} />
+                <div className="min-w-0">
+                    <div className="text-sm font-bold text-white">Course access policy</div>
+                    <div className="text-xs text-neutral-400 mt-0.5">
+                        {enabled
+                            ? 'Course-restricted: students see assigned cases through active enrolments and date windows.'
+                            : 'Open access: students see every available case. Course assignment still powers reports.'}
+                    </div>
+                </div>
+            </div>
+            <button
+                type="button"
+                onClick={toggle}
+                disabled={saving}
+                className={`shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${enabled ? 'bg-green-600' : 'bg-neutral-600'}`}
+                aria-pressed={enabled}
+                aria-label="Toggle course access policy"
+            >
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+        </div>
+    );
+}
+
 // Roster + join-code + Phase-8 Settings management for a single cohort.
 function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialReportView = 'roster' }) {
     const toast = useToast();
@@ -430,13 +567,14 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
         setLoading(true);
         try {
             const data = await getCohort(cohortId);
+            const studentRows = (data.students || data.members || []).filter((m) => !m.role || m.role === 'student');
             setCohort(data.cohort || null);
             setMembers(data.members || []);
-            setStudents(data.students || data.members || []);
+            setStudents(studentRows);
             setTeachers(data.teachers || []);
             setCases(data.cases || []);
         } catch (e) {
-            toast.error(errMsg(e, 'Failed to load class'));
+            toast.error(errMsg(e, 'Failed to load course'));
         } finally {
             setLoading(false);
         }
@@ -517,9 +655,9 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
         <div className="max-w-6xl">
             <button
                 onClick={onBack}
-                className="flex items-center gap-2 text-sm text-neutral-400 hover:text-white mb-4 transition-colors"
+                className="flex items-center gap-2 text-sm text-neutral-400 hover:text-white mb-5 transition-colors"
             >
-                <ArrowLeft className="w-4 h-4" /> Back to classes
+                <ArrowLeft className="w-4 h-4" /> Back to courses
             </button>
 
             {loading ? (
@@ -527,15 +665,38 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                     <Loader2 className="w-5 h-5 animate-spin" />
                 </div>
             ) : !cohort ? (
-                <p className="text-sm text-neutral-500">Class not found.</p>
+                <p className="text-sm text-neutral-500">Course not found.</p>
             ) : (
                 <>
-                    <h3 className="text-lg font-bold mb-4">{cohort.name}</h3>
+                    <div className="mb-5 rounded-2xl border border-neutral-700 bg-neutral-900/60 p-5 shadow-xl shadow-black/20">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">
+                                    Course workspace
+                                </div>
+                                <h3 className="mt-1 text-2xl font-bold text-white">{cohort.name}</h3>
+                                <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-400">
+                                    <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2.5 py-1">
+                                        {students.length} enrolled student{students.length === 1 ? '' : 's'}
+                                    </span>
+                                    <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2.5 py-1">
+                                        {teachers.length} instructor{teachers.length === 1 ? '' : 's'}
+                                    </span>
+                                    <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2.5 py-1">
+                                        {cases.length} assigned case{cases.length === 1 ? '' : 's'}
+                                    </span>
+                                    <span className={`rounded-full border px-2.5 py-1 ${cohort.join_code ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300' : 'border-neutral-700 bg-neutral-800 text-neutral-400'}`}>
+                                        {cohort.join_code ? 'Registration code active' : 'No registration code'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     {/* Manage (Phase-3b) | Reports (Phase-5) | Settings
                         (Phase-9). The Manage body is unchanged; it just no
                         longer renders while another section is active. */}
-                    <div className="flex gap-1 mb-6">
+                    <div className="mb-6 inline-flex rounded-xl border border-neutral-700 bg-neutral-900 p-1">
                         {[
                             { id: 'manage', label: 'Manage' },
                             { id: 'reports', label: 'Reports' },
@@ -544,9 +705,9 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                             <button
                                 key={s.id}
                                 onClick={() => setSection(s.id)}
-                                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
                                     section === s.id
-                                        ? 'bg-neutral-700 text-white'
+                                        ? 'bg-white text-neutral-950 shadow-sm'
                                         : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
                                 }`}
                             >
@@ -578,7 +739,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                     <div className="p-4 bg-neutral-800/50 border border-neutral-700 rounded-lg mb-8">
                         <div className="flex items-center gap-2 mb-2">
                             <KeyRound className="w-4 h-4 text-purple-400" />
-                            <span className="text-sm font-bold text-neutral-200">Join code</span>
+                        <span className="text-sm font-bold text-neutral-200">Registration code</span>
                         </div>
                         {cohort.join_code ? (
                             <div className="flex items-center gap-2">
@@ -587,7 +748,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                                 </code>
                                 <button
                                     onClick={handleCopy}
-                                    title="Copy join code"
+                                    title="Copy registration code"
                                     className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-700 rounded-lg transition-colors"
                                 >
                                     {copied
@@ -618,12 +779,12 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                                 {busyCode
                                     ? <Loader2 className="w-4 h-4 animate-spin" />
                                     : <KeyRound className="w-4 h-4" />}
-                                Generate join code
+                                Generate registration code
                             </button>
                         )}
                         <p className="text-xs text-neutral-500 mt-2">
-                            Students enter this under My Profile → Join a class.
-                            Anyone with this code can join — rotate or disable it
+                            Students enter this under My Profile → Join a course.
+                            Anyone with this code can enrol — rotate or disable it
                             if it leaks.
                         </p>
                     </div>
@@ -634,7 +795,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                             type="text"
                             value={identifier}
                             onChange={(e) => setIdentifier(e.target.value)}
-                            placeholder="Add member by username or email"
+                            placeholder="Add student by username or email"
                             className={`flex-1 ${INPUT}`}
                         />
                         <button
@@ -645,7 +806,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                             {adding
                                 ? <Loader2 className="w-4 h-4 animate-spin" />
                                 : <UserPlus className="w-4 h-4" />}
-                            Add
+                            Add student
                         </button>
                     </form>
 
@@ -661,9 +822,9 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                     </h4>
                     {students.length === 0 ? (
                         <p className="text-sm text-neutral-500">
-                            <span>No members yet.</span>{' '}
+                            <span>No students enrolled yet.</span>{' '}
                             Add them above by username/email, in bulk, or
-                            share the join code.
+                            share the registration code.
                         </p>
                     ) : (
                         <div className="space-y-2">
@@ -683,7 +844,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                                     </div>
                                     <button
                                         onClick={() => handleRemove(m)}
-                                        title="Remove member"
+                                        title="Remove student"
                                         className="p-2 text-neutral-400 hover:text-red-400 hover:bg-neutral-700 rounded-lg transition-colors"
                                     >
                                         <X className="w-4 h-4" />

@@ -43,14 +43,21 @@ function dayKey(timestamp) {
  * matching the date-only <input type="date"> values.
  *
  * @param {object[]} events rows from /learning-events/all
- * @param {{caseId?:string, userId?:string, startDate?:string, endDate?:string}} filters
+ * @param {{courseId?:string, caseId?:string, userId?:string, startDate?:string, endDate?:string}} filters
  * @returns {object[]} the surviving rows (original order preserved)
  */
-export function filterEvents(events, { caseId = '', userId = '', startDate = '', endDate = '' } = {}) {
+export function filterEvents(events, { courseId = '', caseId = '', userId = '', startDate = '', endDate = '', room = '' } = {}) {
     return (events ?? []).filter((e) => {
         if (!e) return false;
+        if (courseId) {
+            const ids = Array.isArray(e.course_ids)
+                ? e.course_ids
+                : String(e.course_ids ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+            if (!ids.map(String).includes(String(courseId))) return false;
+        }
         if (caseId && String(e.case_id ?? '') !== String(caseId)) return false;
         if (userId && String(e.user_id ?? '') !== String(userId)) return false;
+        if (room && String(e.room ?? '') !== String(room)) return false;
         if (startDate || endDate) {
             const day = dayKey(e.timestamp);
             if (!day) return false;
@@ -59,6 +66,62 @@ export function filterEvents(events, { caseId = '', userId = '', startDate = '',
         }
         return true;
     });
+}
+
+/**
+ * The set of rooms actually present in a batch of events, as
+ * {id, label, count} rows sorted by count desc — feeds the Room filter
+ * dropdown so it only offers rooms that have data. Rows with no room
+ * (`data.room` null — pre-session events) are grouped under id ''.
+ * @param {object[]} events rows from /learning-events/all
+ * @returns {{id:string, count:number}[]}
+ */
+export function eventRoomCounts(events) {
+    const counts = new Map();
+    for (const e of events ?? []) {
+        if (!e) continue;
+        const id = e.room == null ? '' : String(e.room);
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+        .map(([id, count]) => ({ id, count }))
+        .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Group events into per-actor sequences of labels — the client-side analogue
+ * of the server's /analytics/tna-sequences, so the Network/Process/Clusters
+ * screens can build from the SAME filtered rows the Activity charts use (one
+ * filtered dataset, every screen agrees).
+ *
+ * @param {object[]} events already-filtered rows
+ * @param {{groupBy?:'actor-session'|'actor', labelOf:(e:object)=>string}} opts
+ *        groupBy 'actor-session' = one sequence per session (default),
+ *        'actor' = one sequence per student across their sessions.
+ * @returns {string[][]} label sequences (order = chronological within a group)
+ */
+export function eventsToSequences(events, { groupBy = 'actor-session', labelOf } = {}) {
+    const toLabel = labelOf || eventState;
+    const groups = new Map();
+    for (const e of events ?? []) {
+        if (!e) continue;
+        const key = groupBy === 'actor'
+            ? `u:${e.user_id ?? 'unknown'}`
+            : `s:${e.session_id ?? `u${e.user_id ?? 'unknown'}`}`;
+        let arr = groups.get(key);
+        if (!arr) { arr = []; groups.set(key, arr); }
+        arr.push(e);
+    }
+    const seqs = [];
+    for (const arr of groups.values()) {
+        arr.sort((a, b) => {
+            const ta = a.timestamp ?? '';
+            const tb = b.timestamp ?? '';
+            return ta < tb ? -1 : ta > tb ? 1 : 0;
+        });
+        seqs.push(arr.map((e) => toLabel(e)).filter((v) => v != null && v !== ''));
+    }
+    return seqs;
 }
 
 /**
@@ -120,7 +183,7 @@ function bucketRange(firstKey, lastKey, stepMs) {
  * @returns {{series:{label:string,x:number[],y:number[]}[], xLabels:string[],
  *   granularity:'day'|'hour'|'5min'}} x = bucket index into xLabels
  */
-export function toDailyStateSeries(events) {
+export function toDailyStateSeries(events, labelOf = eventState) {
     const rows = (events ?? []).filter((e) => e && dayKey(e.timestamp));
     const daySet = new Set(rows.map((e) => dayKey(e.timestamp)));
     let granularity = daySet.size >= 3 ? 'day' : 'hour';
@@ -140,7 +203,7 @@ export function toDailyStateSeries(events) {
         const bucket = keyOf(e);
         if (!bucket) return;
         bucketSet.add(bucket);
-        const state = eventState(e);
+        const state = labelOf(e);
         let buckets = byState.get(state);
         if (!buckets) { buckets = new Map(); byState.set(state, buckets); }
         buckets.set(bucket, (buckets.get(bucket) ?? 0) + 1);
@@ -184,14 +247,14 @@ export function toDailyStateSeries(events) {
  * @param {object[]} events rows from /learning-events/all
  * @returns {{ts:number, student:string, state:string}[]}
  */
-export function toMatrixEvents(events) {
+export function toMatrixEvents(events, labelOf = eventState) {
     return (events ?? [])
         .map((e) => {
             if (!e) return null;
             const ts = new Date(e.timestamp).getTime();
             if (!(ts > 0)) return null;
             const student = e.username || (e.user_id != null ? `user ${e.user_id}` : 'unknown');
-            return { ts, student, state: eventState(e) };
+            return { ts, student, state: labelOf(e) };
         })
         .filter((e) => e !== null);
 }
@@ -202,7 +265,7 @@ export function toMatrixEvents(events) {
  * @param {object[]} events rows from /learning-events/all
  * @returns {string[]}
  */
-export function eventStateLabels(events) {
-    const set = new Set((events ?? []).filter(Boolean).map((e) => eventState(e)));
+export function eventStateLabels(events, labelOf = eventState) {
+    const set = new Set((events ?? []).filter(Boolean).map((e) => labelOf(e)));
     return [...set].sort();
 }

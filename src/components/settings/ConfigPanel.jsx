@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, Download, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
@@ -13,7 +13,6 @@ import TurnsTable from '../analytics/TurnsTable';
 import CaseInsightsPanel from '../analytics/CaseInsightsPanel';
 import ScenarioRepository from './ScenarioRepository';
 import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
-import { roleLabel } from '../../constants/roleLabels';
 import BodyMapDebug from '../examination/BodyMapDebug';
 import LabInvestigationEditor from './LabInvestigationEditor';
 import RadiologyEditor from './RadiologyEditor';
@@ -358,7 +357,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             group: 'People',
             items: [
                 { id: 'users', label: 'Users', icon: Users, visible: admin },
-                { id: 'cohorts', label: 'Cohorts', icon: Users, visible: canManageCohorts },
+                { id: 'cohorts', label: 'Courses', icon: Users, visible: canManageCohorts },
             ],
         },
         {

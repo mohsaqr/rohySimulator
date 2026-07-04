@@ -56,6 +56,12 @@ export const VERB_FALLBACKS = {
     STARTED_SCENARIO: 'regulating',
     LOADED_CASE: 'regulating',
     IDLE_TIMEOUT: 'regulating',
+    // Authentication (auth-routes writes these straight into learning_events).
+    // They're account/session control, not clinical work → regulating, so they
+    // stop rendering as raw `LOGGED_IN_auth` / `LOGGED_OUT_auth` literals.
+    LOGGED_IN: 'regulating',
+    LOGGED_OUT: 'regulating',
+    FAILED_LOGIN: 'regulating',
 
     // Documentation
     WROTE_NOTE: 'documenting',
@@ -158,7 +164,13 @@ export const OBJECT_OVERRIDES = {
     treatment: 'treating',
     iv_fluid: 'treating',
     oxygen: 'treating',
+    oxygen_therapy: 'treating',
     nursing: 'treating',
+    nursing_intervention: 'treating',
+
+    // Reading the patient record (History / Meds / Allergies / past exam) is
+    // taking in information — assessing, not navigating.
+    patient_record: 'assessing',
 
     chat_message: 'communicating',
     discussion: 'communicating',
@@ -172,6 +184,7 @@ export const OBJECT_OVERRIDES = {
     session: 'regulating',
     scenario: 'regulating',
     case: 'regulating',
+    auth: 'regulating',
 
     drawer: 'navigating',
     panel: 'navigating',

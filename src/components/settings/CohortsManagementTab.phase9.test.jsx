@@ -29,6 +29,10 @@ const svc = {
     listLibraryCases: vi.fn(),
     listTenantUsers: vi.fn(),
 };
+const userSvc = {
+    getEnforcementFlag: vi.fn(),
+    setEnforcementFlag: vi.fn(),
+};
 vi.mock('../../services/cohortsService', () => {
     const proxy = {};
     for (const k of [
@@ -40,16 +44,22 @@ vi.mock('../../services/cohortsService', () => {
     ]) proxy[k] = (...a) => svc[k](...a);
     return proxy;
 });
+vi.mock('../../services/userService', () => ({
+    getEnforcementFlag: (...a) => userSvc.getEnforcementFlag(...a),
+    setEnforcementFlag: (...a) => userSvc.setEnforcementFlag(...a),
+}));
 
 beforeEach(() => {
     Object.values(toast).forEach((f) => f.mockReset());
     Object.values(svc).forEach((f) => f.mockReset());
+    Object.values(userSvc).forEach((f) => f.mockReset());
     toast.confirm.mockResolvedValue(true);
     svc.listCohorts.mockResolvedValue({ cohorts: [] });
     svc.listLibraryCases.mockResolvedValue({ cases: [{ id: 11, name: 'Sepsis' }] });
     svc.listTenantUsers.mockResolvedValue({
         users: [{ id: 3, username: 'sam', name: 'Sam', role: 'student' }],
     });
+    userSvc.getEnforcementFlag.mockRejectedValue(Object.assign(new Error('forbidden'), { status: 403 }));
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -57,9 +67,9 @@ describe('Phase-9 rich create form', () => {
     it('sends a single rich POST with description, dates, join code and cases', async () => {
         svc.createCohort.mockResolvedValue({ cohort: { id: 99 } });
         renderWithProviders(<CohortsManagementTab />);
-        await waitFor(() => expect(screen.getByText(/No classes yet/i)).toBeTruthy());
+        await waitFor(() => expect(screen.getByText(/No courses yet/i)).toBeTruthy());
 
-        fireEvent.change(screen.getByPlaceholderText('New class name'), {
+        fireEvent.change(screen.getByPlaceholderText('New course name'), {
             target: { value: 'Block A' },
         });
         fireEvent.click(screen.getByText(/Add details, cases, co-teachers/i));
@@ -70,7 +80,7 @@ describe('Phase-9 rich create form', () => {
         await waitFor(() => expect(screen.getByText('Sepsis')).toBeTruthy());
         fireEvent.click(screen.getByText('Sepsis'));
 
-        fireEvent.click(screen.getByRole('button', { name: /^Create$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^Create course$/i }));
         await waitFor(() => expect(svc.createCohort).toHaveBeenCalledTimes(1));
         const payload = svc.createCohort.mock.calls[0][0];
         expect(payload).toMatchObject({
@@ -85,19 +95,19 @@ describe('Phase-9 rich create form', () => {
     it('keeps the minimal name-only path (string arg, legacy contract)', async () => {
         svc.createCohort.mockResolvedValue({});
         renderWithProviders(<CohortsManagementTab />);
-        await waitFor(() => expect(screen.getByText(/No classes yet/i)).toBeTruthy());
-        fireEvent.change(screen.getByPlaceholderText('New class name'), {
+        await waitFor(() => expect(screen.getByText(/No courses yet/i)).toBeTruthy());
+        fireEvent.change(screen.getByPlaceholderText('New course name'), {
             target: { value: 'Plain' },
         });
-        fireEvent.click(screen.getByRole('button', { name: /^Create$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^Create course$/i }));
         await waitFor(() =>
             expect(svc.createCohort).toHaveBeenCalledWith('Plain'));
     });
 
     it('blocks create when start date is after end date', async () => {
         renderWithProviders(<CohortsManagementTab />);
-        await waitFor(() => expect(screen.getByText(/No classes yet/i)).toBeTruthy());
-        fireEvent.change(screen.getByPlaceholderText('New class name'), {
+        await waitFor(() => expect(screen.getByText(/No courses yet/i)).toBeTruthy());
+        fireEvent.change(screen.getByPlaceholderText('New course name'), {
             target: { value: 'Bad Dates' },
         });
         fireEvent.click(screen.getByText(/Add details, cases, co-teachers/i));
@@ -106,7 +116,7 @@ describe('Phase-9 rich create form', () => {
         );
         fireEvent.change(start, { target: { value: '2026-06-10' } });
         fireEvent.change(end, { target: { value: '2026-06-01' } });
-        fireEvent.click(screen.getByRole('button', { name: /^Create$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^Create course$/i }));
         await waitFor(() =>
             expect(toast.error).toHaveBeenCalledWith(
                 'Start date must be on or before the end date',
@@ -129,7 +139,7 @@ async function openSettings() {
     renderWithProviders(<CohortsManagementTab />);
     await waitFor(() => expect(screen.getByText('Cardio')).toBeTruthy());
     fireEvent.click(screen.getByText('Cardio'));
-    await waitFor(() => expect(screen.getByText('Back to classes')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Back to courses')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: /^Settings$/i }));
 }
 
@@ -185,7 +195,7 @@ describe('Phase-9 bulk student add', () => {
         renderWithProviders(<CohortsManagementTab />);
         await waitFor(() => expect(screen.getByText('Cardio')).toBeTruthy());
         fireEvent.click(screen.getByText('Cardio'));
-        await waitFor(() => expect(screen.getByText('Back to classes')).toBeTruthy());
+        await waitFor(() => expect(screen.getByText('Back to courses')).toBeTruthy());
 
         fireEvent.click(screen.getByText(/Add students in bulk/i));
         const ta = await screen.findByLabelText(

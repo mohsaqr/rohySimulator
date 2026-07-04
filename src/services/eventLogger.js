@@ -55,6 +55,8 @@ export const VERBS = {
     ORDERED_LAB: 'ORDERED_LAB', CANCELLED_LAB: 'CANCELLED_LAB',
     VIEWED_LAB_RESULT: 'VIEWED_LAB_RESULT', SEARCHED_LABS: 'SEARCHED_LABS',
     FILTERED_LABS: 'FILTERED_LABS', LAB_RESULT_READY: 'LAB_RESULT_READY',
+    ORDERED_IMAGING: 'ORDERED_IMAGING', CANCELLED_IMAGING: 'CANCELLED_IMAGING',
+    VIEWED_RADIOLOGY_RESULT: 'VIEWED_RADIOLOGY_RESULT',
     ORDERED_MEDICATION: 'ORDERED_MEDICATION', ADMINISTERED_MEDICATION: 'ADMINISTERED_MEDICATION',
     CANCELLED_MEDICATION: 'CANCELLED_MEDICATION', ORDERED_TREATMENT: 'ORDERED_TREATMENT',
     PERFORMED_INTERVENTION: 'PERFORMED_INTERVENTION', ORDERED_IV_FLUID: 'ORDERED_IV_FLUID',
@@ -76,6 +78,8 @@ export const VERBS = {
     EDITED_LAB_VALUE: 'EDITED_LAB_VALUE',
     VIEWED_PATIENT_SUMMARY: 'VIEWED_PATIENT_SUMMARY', VIEWED_HISTORY: 'VIEWED_HISTORY',
     VIEWED_MEDICATIONS: 'VIEWED_MEDICATIONS', VIEWED_ALLERGIES: 'VIEWED_ALLERGIES',
+    WROTE_NOTE: 'WROTE_NOTE', SAVED_NOTE: 'SAVED_NOTE', UPDATED_NOTE: 'UPDATED_NOTE',
+    SUBMITTED_DEBRIEF: 'SUBMITTED_DEBRIEF',
     CHANGED_SETTING: 'CHANGED_SETTING', SAVED_SETTING: 'SAVED_SETTING',
     RESET_SETTING: 'RESET_SETTING',
     LOADED_CASE: 'LOADED_CASE', VIEWED_PATIENT_INFO: 'VIEWED_PATIENT_INFO',
@@ -114,6 +118,9 @@ const VERB_METADATA = {
     SEARCHED_LABS: { severity: SEVERITY.DEBUG, category: CATEGORIES.CLINICAL },
     FILTERED_LABS: { severity: SEVERITY.DEBUG, category: CATEGORIES.CLINICAL },
     LAB_RESULT_READY: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
+    ORDERED_IMAGING: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
+    CANCELLED_IMAGING: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
+    VIEWED_RADIOLOGY_RESULT: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
     ORDERED_MEDICATION: { severity: SEVERITY.CRITICAL, category: CATEGORIES.CLINICAL },
     ADMINISTERED_MEDICATION: { severity: SEVERITY.CRITICAL, category: CATEGORIES.CLINICAL },
     CANCELLED_MEDICATION: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
@@ -149,6 +156,10 @@ const VERB_METADATA = {
     VIEWED_HISTORY: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
     VIEWED_MEDICATIONS: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
     VIEWED_ALLERGIES: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
+    WROTE_NOTE: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
+    SAVED_NOTE: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
+    UPDATED_NOTE: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
+    SUBMITTED_DEBRIEF: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.ASSESSMENT },
     CHANGED_SETTING: { severity: SEVERITY.INFO, category: CATEGORIES.CONFIGURATION },
     SAVED_SETTING: { severity: SEVERITY.INFO, category: CATEGORIES.CONFIGURATION },
     RESET_SETTING: { severity: SEVERITY.INFO, category: CATEGORIES.CONFIGURATION },
@@ -175,12 +186,20 @@ const VERB_METADATA = {
 
 export const OBJECT_TYPES = {
     SESSION: 'session', CASE: 'case', LAB_TEST: 'lab_test', LAB_RESULT: 'lab_result',
+    RADIOLOGY_ORDER: 'radiology_order', RADIOLOGY_RESULT: 'radiology_result',
     CHAT_MESSAGE: 'chat_message', VITAL_SIGN: 'vital_sign', ALARM: 'alarm',
     SETTING: 'setting', BUTTON: 'button', TAB: 'tab', MODAL: 'modal',
     DRAWER: 'drawer', PANEL: 'panel', SCENARIO: 'scenario', COMPONENT: 'component',
     PHYSICAL_EXAM: 'physical_exam', TREATMENT: 'treatment', MEDICATION: 'medication',
     IV_FLUID: 'iv_fluid', OXYGEN_THERAPY: 'oxygen_therapy',
     NURSING_INTERVENTION: 'nursing_intervention', EMOTION: 'emotion',
+    // Patient-record reading (History / Meds / Allergies / past exam …) — a
+    // dedicated type so record review resolves to `assessing`, not the
+    // generic `component` → `navigating` bucket.
+    PATIENT_RECORD: 'patient_record',
+    // Debrief / discussant participation — distinct from bedside chat so it
+    // resolves to `reflecting` instead of `communicating`.
+    DEBRIEF: 'debrief', CLINICAL_NOTE: 'clinical_note',
     ROOM: 'room',
 };
 
@@ -444,25 +463,48 @@ class EventLoggerService {
     labPanelOpened(c) { this.startTiming('labPanel'); this.log(VERBS.OPENED, OBJECT_TYPES.PANEL, { objectId: 'investigation_panel', objectName: 'Investigation Panel', component: c }); }
     labPanelClosed(c) { this.log(VERBS.CLOSED, OBJECT_TYPES.PANEL, { objectId: 'investigation_panel', objectName: 'Investigation Panel', component: c, timingMark: 'labPanel' }); }
     labResultReady(id, name, c, abnormal = false) { this.log(VERBS.LAB_RESULT_READY, OBJECT_TYPES.LAB_RESULT, { objectId: String(id), objectName: name, component: c, context: { isAbnormal: abnormal }, severity: abnormal ? SEVERITY.IMPORTANT : SEVERITY.INFO }); }
-    medicationOrdered(id, name, dose, route, c) { this.log(VERBS.ORDERED_MEDICATION, OBJECT_TYPES.COMPONENT, { objectId: String(id), objectName: name, component: c, context: { dose, route } }); }
-    treatmentOrdered(id, name, c, ctx = null) { this.log(VERBS.ORDERED_TREATMENT, OBJECT_TYPES.COMPONENT, { objectId: String(id), objectName: name, component: c, context: ctx }); }
-    interventionPerformed(name, c, result = null) { this.log(VERBS.PERFORMED_INTERVENTION, OBJECT_TYPES.COMPONENT, { objectName: name, component: c, result }); }
-    ivFluidOrdered(id, name, rate, c) { this.log(VERBS.ORDERED_IV_FLUID, OBJECT_TYPES.COMPONENT, { objectId: String(id), objectName: name, component: c, context: { rate } }); }
-    oxygenStarted(id, type, flow, c) { this.log(VERBS.STARTED_OXYGEN, OBJECT_TYPES.COMPONENT, { objectId: String(id), objectName: type, component: c, context: { flowRate: flow } }); }
-    oxygenStopped(id, type, c) { this.log(VERBS.STOPPED_OXYGEN, OBJECT_TYPES.COMPONENT, { objectId: String(id), objectName: type, component: c }); }
-    nursingOrdered(id, name, c) { this.log(VERBS.ORDERED_NURSING, OBJECT_TYPES.COMPONENT, { objectId: String(id), objectName: name, component: c }); }
-    treatmentDiscontinued(id, name, c, reason = null) { this.log(VERBS.DISCONTINUED_TREATMENT, OBJECT_TYPES.COMPONENT, { objectId: String(id), objectName: name, component: c, context: { reason } }); }
-    treatmentEffectStarted(name, effects, c) { this.log(VERBS.TREATMENT_EFFECT_STARTED, OBJECT_TYPES.COMPONENT, { objectName: name, component: c, context: effects }); }
-    treatmentEffectPeaked(name, effects, c) { this.log(VERBS.TREATMENT_EFFECT_PEAKED, OBJECT_TYPES.COMPONENT, { objectName: name, component: c, context: effects }); }
-    treatmentEffectEnded(name, c) { this.log(VERBS.TREATMENT_EFFECT_ENDED, OBJECT_TYPES.COMPONENT, { objectName: name, component: c }); }
-    contraindicatedTreatmentOrdered(id, name, fb, c) { this.log(VERBS.CONTRAINDICATED_TREATMENT_ORDERED, OBJECT_TYPES.COMPONENT, { objectId: String(id), objectName: name, component: c, context: { feedback: fb }, severity: SEVERITY.CRITICAL }); }
-    expectedTreatmentGiven(name, points, c) { this.log(VERBS.EXPECTED_TREATMENT_GIVEN, OBJECT_TYPES.COMPONENT, { objectName: name, component: c, context: { points } }); }
-    expectedTreatmentMissed(name, fb, c) { this.log(VERBS.EXPECTED_TREATMENT_MISSED, OBJECT_TYPES.COMPONENT, { objectName: name, component: c, context: { feedback: fb } }); }
+    // Treatment / medication actions carry a real clinical object_type so the
+    // activity resolver lands them in `treating` — NOT `component`, which the
+    // clinical-state map overrides to `navigating` (the old bug that painted
+    // every ordered drug as a UI navigation event).
+    medicationOrdered(id, name, dose, route, c) { this.log(VERBS.ORDERED_MEDICATION, OBJECT_TYPES.MEDICATION, { objectId: String(id), objectName: name, component: c, context: { dose, route } }); }
+    treatmentOrdered(id, name, c, ctx = null) { this.log(VERBS.ORDERED_TREATMENT, OBJECT_TYPES.TREATMENT, { objectId: String(id), objectName: name, component: c, context: ctx }); }
+    interventionPerformed(name, c, result = null) { this.log(VERBS.PERFORMED_INTERVENTION, OBJECT_TYPES.TREATMENT, { objectName: name, component: c, result }); }
+    ivFluidOrdered(id, name, rate, c) { this.log(VERBS.ORDERED_IV_FLUID, OBJECT_TYPES.IV_FLUID, { objectId: String(id), objectName: name, component: c, context: { rate } }); }
+    oxygenStarted(id, type, flow, c) { this.log(VERBS.STARTED_OXYGEN, OBJECT_TYPES.OXYGEN_THERAPY, { objectId: String(id), objectName: type, component: c, context: { flowRate: flow } }); }
+    oxygenStopped(id, type, c) { this.log(VERBS.STOPPED_OXYGEN, OBJECT_TYPES.OXYGEN_THERAPY, { objectId: String(id), objectName: type, component: c }); }
+    nursingOrdered(id, name, c) { this.log(VERBS.ORDERED_NURSING, OBJECT_TYPES.NURSING_INTERVENTION, { objectId: String(id), objectName: name, component: c }); }
+    treatmentDiscontinued(id, name, c, reason = null) { this.log(VERBS.DISCONTINUED_TREATMENT, OBJECT_TYPES.TREATMENT, { objectId: String(id), objectName: name, component: c, context: { reason } }); }
+    treatmentEffectStarted(name, effects, c) { this.log(VERBS.TREATMENT_EFFECT_STARTED, OBJECT_TYPES.TREATMENT, { objectName: name, component: c, context: effects }); }
+    treatmentEffectPeaked(name, effects, c) { this.log(VERBS.TREATMENT_EFFECT_PEAKED, OBJECT_TYPES.TREATMENT, { objectName: name, component: c, context: effects }); }
+    treatmentEffectEnded(name, c) { this.log(VERBS.TREATMENT_EFFECT_ENDED, OBJECT_TYPES.TREATMENT, { objectName: name, component: c }); }
+    contraindicatedTreatmentOrdered(id, name, fb, c) { this.log(VERBS.CONTRAINDICATED_TREATMENT_ORDERED, OBJECT_TYPES.MEDICATION, { objectId: String(id), objectName: name, component: c, context: { feedback: fb }, severity: SEVERITY.CRITICAL }); }
+    expectedTreatmentGiven(name, points, c) { this.log(VERBS.EXPECTED_TREATMENT_GIVEN, OBJECT_TYPES.TREATMENT, { objectName: name, component: c, context: { points } }); }
+    expectedTreatmentMissed(name, fb, c) { this.log(VERBS.EXPECTED_TREATMENT_MISSED, OBJECT_TYPES.TREATMENT, { objectName: name, component: c, context: { feedback: fb } }); }
     alarmTriggered(t, vital, value, threshold, c) { this.log(VERBS.ALARM_TRIGGERED, OBJECT_TYPES.ALARM, { objectId: t, objectName: `${vital} Alarm`, component: c, context: { vitalSign: vital, value, threshold }, severity: SEVERITY.CRITICAL }); }
-    patientSummaryViewed(c) { this.log(VERBS.VIEWED_PATIENT_SUMMARY, OBJECT_TYPES.COMPONENT, { objectName: 'Patient Summary', component: c }); }
-    patientHistoryViewed(c) { this.log(VERBS.VIEWED_HISTORY, OBJECT_TYPES.COMPONENT, { objectName: 'Patient History', component: c }); }
-    patientMedicationsViewed(c) { this.log(VERBS.VIEWED_MEDICATIONS, OBJECT_TYPES.COMPONENT, { objectName: 'Patient Medications', component: c }); }
-    patientAllergiesViewed(c) { this.log(VERBS.VIEWED_ALLERGIES, OBJECT_TYPES.COMPONENT, { objectName: 'Patient Allergies', component: c }); }
+    // Imaging orders + radiology-result reads (labs have a server-side event;
+    // radiology previously logged nothing at all — see order-radiology route).
+    radiologyOrdered(id, name, c, ctx = null) { this.log(VERBS.ORDERED_IMAGING, OBJECT_TYPES.RADIOLOGY_ORDER, { objectId: String(id), objectName: name, component: c, context: ctx }); }
+    radiologyResultViewed(id, name, result, c) { this.log(VERBS.VIEWED_RADIOLOGY_RESULT, OBJECT_TYPES.RADIOLOGY_RESULT, { objectId: String(id), objectName: name, result, component: c }); }
+    // Reading the patient record. object_type `patient_record` resolves to
+    // `assessing`; the generic `component` type it used before was silently
+    // reclassified as `navigating`, so record review never showed up.
+    patientSummaryViewed(c) { this.log(VERBS.VIEWED_PATIENT_SUMMARY, OBJECT_TYPES.PATIENT_RECORD, { objectName: 'Patient Summary', component: c }); }
+    patientHistoryViewed(c) { this.log(VERBS.VIEWED_HISTORY, OBJECT_TYPES.PATIENT_RECORD, { objectName: 'Patient History', component: c }); }
+    patientMedicationsViewed(c) { this.log(VERBS.VIEWED_MEDICATIONS, OBJECT_TYPES.PATIENT_RECORD, { objectName: 'Patient Medications', component: c }); }
+    patientAllergiesViewed(c) { this.log(VERBS.VIEWED_ALLERGIES, OBJECT_TYPES.PATIENT_RECORD, { objectName: 'Patient Allergies', component: c }); }
+    // One record tab was viewed — maps the tab id to the right VIEWED_* verb so
+    // History/Meds/etc. all land in `assessing` with a specific, readable verb.
+    recordTabViewed(tabId, label, c) {
+        const verb = { history: VERBS.VIEWED_HISTORY, medications: VERBS.VIEWED_MEDICATIONS,
+            allergies: VERBS.VIEWED_ALLERGIES, radiology: VERBS.VIEWED_RADIOLOGY_RESULT }[tabId]
+            || VERBS.VIEWED_RECORDS;
+        this.log(verb, OBJECT_TYPES.PATIENT_RECORD, { objectId: tabId, objectName: label || tabId, component: c });
+    }
+    // Debrief / discussant turns. object_type `debrief` resolves to
+    // `reflecting`, keeping post-case discussion distinct from bedside chat.
+    debriefMessageSent(content, c) { this.log(VERBS.SENT_MESSAGE, OBJECT_TYPES.DEBRIEF, { component: c, messageContent: content, messageRole: 'user' }); }
+    debriefMessageReceived(content, c) { this.log(VERBS.RECEIVED_MESSAGE, OBJECT_TYPES.DEBRIEF, { component: c, messageContent: content, messageRole: 'assistant' }); }
     viewModeChanged(oldM, newM, c) { this.log(VERBS.SWITCHED_TAB, OBJECT_TYPES.COMPONENT, { objectId: newM, objectName: `View Mode: ${newM}`, component: c, context: { oldMode: oldM, newMode: newM } }); }
     groupExpanded(g, c) { this.log(VERBS.EXPANDED, OBJECT_TYPES.COMPONENT, { objectId: g, objectName: g, component: c }); }
     groupCollapsed(g, c) { this.log(VERBS.COLLAPSED, OBJECT_TYPES.COMPONENT, { objectId: g, objectName: g, component: c }); }

@@ -50,6 +50,12 @@ const COLUMNS = [
               <CopyableCell value={info.getValue()} className="text-neutral-300" />
           </span>
       ) },
+    { accessorKey: 'course_names', header: 'course', size: 180,
+      cell: (info) => (
+          <div className="truncate max-w-[180px]" title={info.getValue() ?? ''}>
+              <CopyableCell value={info.getValue()} className="text-neutral-300" />
+          </div>
+      ) },
     { accessorKey: 'start_time', header: 'started', size: 165,
       cell: (info) => <CopyableCell value={info.getValue()} className="font-mono text-neutral-400 whitespace-nowrap">{fmtTime(info.getValue())}</CopyableCell> },
     {
@@ -109,12 +115,26 @@ const COLUMNS = [
     },
 ];
 
-const EMPTY_FILTERS = { user_id: '', case_id: '', from: '', to: '' };
+const EMPTY_FILTERS = { user_id: '', course_id: '', case_id: '', from: '', to: '' };
 
 const FILTER_ACCESSORS = {
     user_id: (r) => r.user_id,
+    course_id: (r) => csvList(r.course_ids),
     case_id: (r) => r.case_id,
 };
+
+function csvList(value) {
+    if (Array.isArray(value)) return value;
+    if (value === null || value === undefined || value === '') return [];
+    return String(value).split(',').map((v) => v.trim()).filter(Boolean);
+}
+
+function courseLabel(row, value) {
+    const ids = csvList(row.course_ids);
+    const names = csvList(row.course_names);
+    const idx = ids.indexOf(String(value));
+    return names[idx] || `Course #${value}`;
+}
 
 export default function SessionsTable() {
     const { user } = useAuth();
@@ -162,6 +182,10 @@ export default function SessionsTable() {
     const filterDefs = useMemo(() => {
         const defs = [];
         if (canReview) {
+            defs.push({
+                key: 'course_id', label: 'Course', width: 'w-52',
+                options: contextualOptions(dated, FILTER_ACCESSORS, filters, 'course_id', courseLabel),
+            });
             defs.push({
                 key: 'user_id', label: 'Student',
                 options: contextualOptions(dated, FILTER_ACCESSORS, filters, 'user_id',

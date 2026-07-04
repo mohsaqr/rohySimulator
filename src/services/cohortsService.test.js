@@ -25,6 +25,7 @@ import {
     joinCohort,
     getCohortRoster,
     getCohortGrid,
+    getCohortPulse,
     getCohortStudent,
     getCohortFeed,
     downloadCohortExport,
@@ -100,6 +101,11 @@ describe('cohortsService — reporting helpers', () => {
     it('getCohortGrid → GET /cohorts/:id/grid', async () => {
         await getCohortGrid(8);
         expect(apiGet).toHaveBeenCalledWith('/cohorts/8/grid');
+    });
+
+    it('getCohortPulse → GET /cohorts/:id/analytics/pulse', async () => {
+        await getCohortPulse(8);
+        expect(apiGet).toHaveBeenCalledWith('/cohorts/8/analytics/pulse');
     });
 
     it('getCohortStudent without limit omits the query string', async () => {
