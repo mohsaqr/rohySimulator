@@ -58,5 +58,70 @@ download \
   "$MODELS/emotion/enet_b0_8_va_mtl.onnx" \
   "HSEmotion EfficientNet-B0 MTL"
 
+# ---------------------------------------------------------------------------
+# Vendor the browser WASM runtimes from the installed peer deps.
+#
+# onnxruntime-web and @mediapipe/tasks-vision ship their .wasm/.mjs under
+# node_modules; the standalone dashboard hard-imports them from
+# standalone/vendor/<pkg>/ (see standalone/app/src/lib/runtime.ts), and
+# .gitignore keeps the heavy binaries (a single ORT .wasm is ~13 MB) out of
+# the repo. So a fresh clone / Docker build must COPY them here from the
+# installed packages, or the Oyon camera widget 404s at load — exactly the
+# fresh-install gap install-from-scratch.yml exists to catch. Copying from
+# node_modules (rather than a pinned CDN URL) guarantees the loader .mjs and
+# its runtime .wasm are the SAME resolved version — ORT breaks silently on
+# loader/runtime version skew.
+#
+# npm may hoist these to the repo-root node_modules or keep them under
+# OyonR/node_modules, so probe both. Runs after `npm install` (the postinstall
+# hook + the Dockerfile's explicit re-run), so the packages are present.
+
+# Echo the first existing "<node_modules>/<rel>" among the candidate roots.
+resolve_in_node_modules() {
+  local rel="$1" nm
+  for nm in "$ROOT/../node_modules" "$ROOT/node_modules" "$ROOT/../../node_modules"; do
+    if [[ -e "$nm/$rel" ]]; then printf '%s\n' "$nm/$rel"; return 0; fi
+  done
+  return 1
+}
+
+copy_vendor() {
+  local src="$1" dest="$2" label="$3"
+  printf '→ %s\n' "$label"
+  if [[ -f "$dest" && -s "$dest" && "$FORCE" -eq 0 ]]; then
+    printf '  ✓ already present, skipping\n'
+    return 0
+  fi
+  mkdir -p "$(dirname "$dest")"
+  cp -f "$src" "$dest"
+  printf '  ✓ %s\n' "$dest"
+}
+
+# ONNX Runtime Web — only the files the default SIMD+threaded wasm backend
+# loads. The app never loads the jsep/asyncify/webgpu variants (tech-test.sh
+# treats those as optional), so shipping them would just bloat the image by
+# ~50 MB of unused .wasm.
+if ort_dist="$(resolve_in_node_modules onnxruntime-web/dist)"; then
+  for f in ort.min.mjs ort-wasm-simd-threaded.mjs ort-wasm-simd-threaded.wasm; do
+    copy_vendor "$ort_dist/$f" "$VENDOR/onnxruntime-web/$f" "onnxruntime-web/$f"
+  done
+else
+  echo "  ⚠ onnxruntime-web not found in node_modules — run 'npm install' first (skipping ORT vendor)" >&2
+fi
+
+# MediaPipe tasks-vision WASM (the face-landmarker runtime the pipeline needs).
+if mp_wasm="$(resolve_in_node_modules @mediapipe/tasks-vision/wasm)"; then
+  printf '→ %s\n' "@mediapipe/tasks-vision wasm"
+  if [[ -d "$VENDOR/mediapipe/wasm" && "$FORCE" -eq 0 && -n "$(ls -A "$VENDOR/mediapipe/wasm" 2>/dev/null)" ]]; then
+    printf '  ✓ already present, skipping\n'
+  else
+    mkdir -p "$VENDOR/mediapipe/wasm"
+    cp -f "$mp_wasm"/* "$VENDOR/mediapipe/wasm/"
+    printf '  ✓ %s\n' "$VENDOR/mediapipe/wasm"
+  fi
+else
+  echo "  ⚠ @mediapipe/tasks-vision not found in node_modules (skipping MediaPipe vendor)" >&2
+fi
+
 echo
 echo "Done. Models live under standalone/models/ and standalone/vendor/."
