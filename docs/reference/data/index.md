@@ -23,7 +23,7 @@ These columns recur across many tables and carry platform-wide semantics (see `C
 
 Schema evolves only through versioned `migrations/*.sql`. Each migration is classified **additive** (previous-version code still runs) or **destructive** in `migrations/MANIFEST.md`, which `bin/rohy-update` reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.
 
-Parsed **26 migration files** beyond the base schema (`0001_initial.sql`).
+Parsed **28 migration files** beyond the base schema (`0001_initial.sql`).
 
 | Migration | Class | Note |
 | --- | --- | --- |
@@ -54,6 +54,8 @@ Parsed **26 migration files** beyond the base schema (`0001_initial.sql`).
 | `0025_cohorts.sql` | additive | Two new tables for teacher-owned cohorts: `cohorts` (teacher-owned class with optional join_code) + `cohort_members` (student membership). Partial unique indexes (live join_code, live cohort_id+user_id) plus owner/tenant/lookup indexes. Strictly additive — nothing on existing tables changes; pre-migration code never touches these tables. No endpoints/UI yet (Phase 2 = schema only). |
 | `0026_base_class_backfill.sql` | additive | Data backfill — per tenant with sessions, seeds one "Base Class" cohort (owned by that tenant's lowest-id admin, else educator) and enrolls every distinct user with a live session, so pre-feature activity is visible in the teacher dashboard out of the box. Only INSERTs into cohorts/cohort_members; no schema change; NOT EXISTS guards + 0025 partial-uniques make it re-run-safe. Tenants with sessions but no admin/educator are skipped (NOT NULL owner FK). |
 | `0027_cohort_entity.sql` | additive | Fleshes out the cohort entity. Adds 4 nullable `cohorts` columns (`description TEXT`, `starts_at DATETIME`, `ends_at DATETIME`, `settings JSON`), adds `cohort_members.member_role TEXT NOT NULL DEFAULT 'student'` (DEFAULT classifies the ~10 Base Class rows as students with no data step; allowed set 'student'\\|'teacher' enforced at app layer since SQLite can't ALTER-add a CHECK) + partial role index, and creates the new `cohort_cases` table (cohort↔case assignment, soft-delete, partial-unique on live (cohort_id,case_id) + cohort_id/case_id lookup indexes). Strictly additive: every column add is nullable or defaulted and the table is new — nothing dropped/renamed/narrowed; pre-migration code keeps working since it never selects these columns or touches the new table. |
+| `0028_oyon_records_gaze_engagement.sql` | additive | Oyon v2: two nullable JSON columns on `oyon_emotion_records` — `gaze_json` (zone shares, AOI dwell, centroid stats; aggregates only, never a raw point stream) and `engagement_json` (eye-openness/blink/on-task aggregates). The v1 ingest silently dropped these window blocks; the v2 Analyze dashboards need them server-side. Nullable ADD COLUMNs only — pre-migration code never selects them. |
+| `0029_oyon_records_room.sql` | additive | Oyon v2: nullable `room TEXT` on `oyon_emotion_records` — the simulator room active when the window was captured (stamped client-side by the capture widget). Feeds the per-room gaze breakdown in Settings → Oyon Learning Analytics → Gaze. Single nullable ADD COLUMN. |
 
 ## Tables by concern
 
