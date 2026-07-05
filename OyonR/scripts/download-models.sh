@@ -109,14 +109,19 @@ else
   echo "  ⚠ onnxruntime-web not found in node_modules — run 'npm install' first (skipping ORT vendor)" >&2
 fi
 
-# MediaPipe tasks-vision WASM (the face-landmarker runtime the pipeline needs).
-if mp_wasm="$(resolve_in_node_modules @mediapipe/tasks-vision/wasm)"; then
+# MediaPipe tasks-vision — the standalone hard-imports the ESM entry
+# (vision_bundle.mjs, at the package root) AND loads the face-landmarker WASM
+# from the wasm/ subdir. Vendor BOTH: the loader to mediapipe/vision_bundle.mjs
+# and the runtime to mediapipe/wasm/ (see standalone/app/src/lib/runtime.ts and
+# the install-from-scratch probe list).
+if mp_root="$(resolve_in_node_modules @mediapipe/tasks-vision)"; then
+  copy_vendor "$mp_root/vision_bundle.mjs" "$VENDOR/mediapipe/vision_bundle.mjs" "mediapipe/vision_bundle.mjs"
   printf '→ %s\n' "@mediapipe/tasks-vision wasm"
   if [[ -d "$VENDOR/mediapipe/wasm" && "$FORCE" -eq 0 && -n "$(ls -A "$VENDOR/mediapipe/wasm" 2>/dev/null)" ]]; then
     printf '  ✓ already present, skipping\n'
   else
     mkdir -p "$VENDOR/mediapipe/wasm"
-    cp -f "$mp_wasm"/* "$VENDOR/mediapipe/wasm/"
+    cp -f "$mp_root/wasm"/* "$VENDOR/mediapipe/wasm/"
     printf '  ✓ %s\n' "$VENDOR/mediapipe/wasm"
   fi
 else
