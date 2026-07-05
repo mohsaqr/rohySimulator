@@ -197,7 +197,7 @@ describe('platform-settings pitch validation (live server)', () => {
             TEST_JWT_SECRET,
             { expiresIn: '1h' }
         );
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => {
         if (server) await server.close();

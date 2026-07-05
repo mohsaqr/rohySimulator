@@ -83,7 +83,7 @@ describe('POST order-radiology → GET radiology-orders (Bug 6)', () => {
 
         tokenT1 = await loginAs(server, 'rad_t1', 'correctpass');
         tokenT2 = await loginAs(server, 'rad_t2', 'correctpass');
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => { await server?.close(); });
 

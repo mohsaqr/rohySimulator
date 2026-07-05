@@ -69,7 +69,8 @@ describe('CohortReports — RosterView + StudentDetail', () => {
         renderWithProviders(<CohortReports cohortId={1} />);
         await waitFor(() => expect(screen.getByText('Stu')).toBeTruthy());
 
-        fireEvent.click(screen.getByText('Stu'));
+        // Drill-down is triggered by the row's "View activity" button.
+        fireEvent.click(screen.getByText('View activity'));
         await waitFor(() =>
             expect(screen.getByText('Back to roster')).toBeTruthy());
         // Activity grouped per case/session: named + fallback "Case c2".
@@ -104,7 +105,7 @@ describe('CohortReports — RosterView + StudentDetail', () => {
         });
         renderWithProviders(<CohortReports cohortId={1} />);
         await waitFor(() => expect(screen.getByText('Stu Dent')).toBeTruthy());
-        fireEvent.click(screen.getByText('Stu Dent'));
+        fireEvent.click(screen.getByText('View activity'));
         await waitFor(() =>
             expect(screen.getByText('No activity yet.')).toBeTruthy());
     });
@@ -121,7 +122,7 @@ describe('CohortReports — RosterView + StudentDetail', () => {
             Promise.resolve(jsonResponse({ roster: [] })));
         renderWithProviders(<CohortReports cohortId={1} />);
         await waitFor(() =>
-            expect(screen.getByText(/No members in this class yet/)).toBeTruthy());
+            expect(screen.getByText(/No students enrolled/)).toBeTruthy());
     });
 });
 
@@ -149,7 +150,7 @@ describe('CohortReports — GridView', () => {
             return Promise.resolve(jsonResponse({ roster: [] }));
         });
         renderWithProviders(<CohortReports cohortId={1} />);
-        fireEvent.click(screen.getByText('Completion grid'));
+        fireEvent.click(screen.getByText('Completion'));
         await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
         expect(screen.getByText('Bob')).toBeTruthy();
         expect(screen.getAllByText('Chest pain').length).toBeGreaterThan(0);
@@ -163,9 +164,9 @@ describe('CohortReports — GridView', () => {
             return Promise.resolve(jsonResponse({ roster: [] }));
         });
         renderWithProviders(<CohortReports cohortId={1} />);
-        fireEvent.click(screen.getByText('Completion grid'));
+        fireEvent.click(screen.getByText('Completion'));
         await waitFor(() =>
-            expect(screen.getByText(/No members in this class yet/)).toBeTruthy());
+            expect(screen.getByText(/No students enrolled/)).toBeTruthy());
     });
 
     it('toasts when the grid request fails', async () => {
@@ -176,7 +177,7 @@ describe('CohortReports — GridView', () => {
             return Promise.resolve(jsonResponse({ roster: [] }));
         });
         renderWithProviders(<CohortReports cohortId={1} />);
-        fireEvent.click(screen.getByText('Completion grid'));
+        fireEvent.click(screen.getByText('Completion'));
         await waitFor(() => expect(toast.error).toHaveBeenCalled());
     });
 });
@@ -264,6 +265,6 @@ describe('CohortReports — FeedView', () => {
         fireEvent.click(screen.getByText('Live feed'));
         await waitFor(() => expect(toast.error).toHaveBeenCalled());
         await waitFor(() =>
-            expect(screen.getByText('No activity yet.')).toBeTruthy());
+            expect(screen.getByText(/No live activity yet/)).toBeTruthy());
     });
 });

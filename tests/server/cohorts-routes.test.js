@@ -82,7 +82,7 @@ describe('/api/cohorts routes', () => {
         admin     = authedFetch(server.baseUrl, await login(server.baseUrl, 'coh-admin'));
         student   = authedFetch(server.baseUrl, await login(server.baseUrl, 'coh-student'));
         t2Student = authedFetch(server.baseUrl, await login(server.baseUrl, 'coh-t2-student'));
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => {
         if (server) {

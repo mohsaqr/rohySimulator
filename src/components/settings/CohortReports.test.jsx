@@ -75,7 +75,7 @@ describe('CohortReports', () => {
 
         renderWithProviders(<CohortReports cohortId={1} />);
 
-        expect(screen.getByText('Completion grid')).toBeTruthy();
+        expect(screen.getByText('Completion')).toBeTruthy();
         expect(screen.getByText('Live feed')).toBeTruthy();
         await waitFor(() => expect(screen.getByText('Stu')).toBeTruthy());
     });
@@ -164,8 +164,8 @@ describe('CohortReports', () => {
         });
 
         renderWithProviders(<CohortReports cohortId={1} />);
-        fireEvent.click(screen.getByText('Completion grid'));
+        fireEvent.click(screen.getByText('Completion'));
         await waitFor(() =>
-            expect(screen.getByText(/No cases attempted/)).toBeTruthy());
+            expect(screen.getByText(/No case activity yet/)).toBeTruthy());
     });
 });

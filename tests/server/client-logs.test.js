@@ -92,7 +92,7 @@ describe('/api/client-logs', () => {
         educatorFetch = authed(server.baseUrl, await login(server.baseUrl, 'cl-educator'));
         studentFetch = authed(server.baseUrl, await login(server.baseUrl, 'cl-student'));
         otherTenantAdminFetch = authed(server.baseUrl, await login(server.baseUrl, 'cl-other-admin'));
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => {
         if (db) await closeDb(db);

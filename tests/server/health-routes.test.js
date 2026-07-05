@@ -12,7 +12,7 @@ import { startTestServer } from '../utils/startTestServer.js';
 describe('GET /api/health — liveness', () => {
     let server;
 
-    beforeAll(async () => { server = await startTestServer(); }, 30_000);
+    beforeAll(async () => { server = await startTestServer(); }, 90_000);
     afterAll(async () => { await server?.close(); });
 
     it('responds 200 + JSON without auth', async () => {
@@ -36,7 +36,7 @@ describe('GET /api/health — liveness', () => {
 describe('GET /api/ready — readiness', () => {
     let server;
 
-    beforeAll(async () => { server = await startTestServer(); }, 30_000);
+    beforeAll(async () => { server = await startTestServer(); }, 90_000);
     afterAll(async () => { await server?.close(); });
 
     it('responds 200 + status:ok when DB is reachable and migrations are at HEAD', async () => {

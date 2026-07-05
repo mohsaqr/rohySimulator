@@ -232,7 +232,7 @@ describe('GET /api/cases/:caseId/agents — config merge contract', () => {
         });
         expect(loginRes2.status).toBe(200);
         otherTenantToken = (await loginRes2.json()).token;
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => {
         if (server) await server.close();

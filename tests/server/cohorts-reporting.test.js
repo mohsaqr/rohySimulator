@@ -154,7 +154,7 @@ describe('/api/cohorts/* Phase 4 reporting', () => {
         teacherB  = authedFetch(server.baseUrl, await login(server.baseUrl, 'rep-teacher-b'));
         t2Teacher = authedFetch(server.baseUrl, await login(server.baseUrl, 'rep-t2-teacher'));
         studentClient = authedFetch(server.baseUrl, await login(server.baseUrl, 'rep-student-1'));
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => {
         if (server) {

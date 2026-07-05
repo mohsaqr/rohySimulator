@@ -64,10 +64,14 @@ describe('POST /api/sessions — concurrency', () => {
         const u = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['concurrent_user']);
         userId = u.id;
 
-        // Create a case for the sessions to attach to.
+        // Create a case for the sessions to attach to. It must be a launchable
+        // DEFAULT case (is_default=1, is_available=1): the POST /sessions
+        // student launch gate (enforce-student-case-access, commit d8e0a04)
+        // 403s any case that is neither the default nor an in-window course
+        // assignment, and this test's user is a plain student.
         await dbRun(db,
-            `INSERT INTO cases (name, description, config, created_by, tenant_id)
-             VALUES (?, ?, ?, ?, 1)`,
+            `INSERT INTO cases (name, description, config, created_by, tenant_id, is_default, is_available)
+             VALUES (?, ?, ?, ?, 1, 1, 1)`,
             ['Concurrency Test Case', 'For session race tests', '{}', userId]);
         const c = await dbGet(db, "SELECT id FROM cases WHERE name = 'Concurrency Test Case'");
         caseId = c.id;

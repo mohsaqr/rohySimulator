@@ -305,7 +305,12 @@ router.get('/cohorts/:id', authenticateToken, requireEducator, async (req, res, 
               ORDER BY u.username ASC`,
             [cohort.id]
         );
-        const students = allMembers.filter(m => m.member_role !== 'teacher' && m.role === 'student');
+        // Partition the roster by MEMBERSHIP role, not the user's platform
+        // role: an educator-rank user enrolled as a plain student member must
+        // still appear in `students` (they're a learner in THIS cohort), while
+        // never gaining owner access — that boundary is enforced separately in
+        // loadOwnedCohort(), which only admits member_role='teacher'.
+        const students = allMembers.filter(m => m.member_role !== 'teacher');
         const teachers = allMembers.filter(m => m.member_role === 'teacher');
         const cases = await dbAdapter.all(
             `SELECT cc.case_id AS id, c.name AS name, cc.created_at AS assigned_at,

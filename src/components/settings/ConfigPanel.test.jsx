@@ -210,7 +210,7 @@ describe('ConfigPanel', () => {
         const everyTab = [
             /^Cases$/i, /^Scenarios$/i, /^Body Map$/i, /^Lab Database$/i, /^Medications$/i,
             /^Agents$/i, /^Avatars$/i, /^Voice$/i,
-            /^Users$/i, /^Cohorts$/i,
+            /^Users$/i, /^Courses$/i,
             /^Oyon$/i,
             /^Platform$/i, /^Notifications$/i, /^Logs$/i,
         ];

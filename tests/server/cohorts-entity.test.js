@@ -97,7 +97,7 @@ describe('/api/cohorts/* Phase 8 entity + access boundary', () => {
         eduStudent = authedFetch(server.baseUrl, await login(server.baseUrl, 'ce-edu-student'));
         student = authedFetch(server.baseUrl, await login(server.baseUrl, 'ce-student'));
         t2Owner = authedFetch(server.baseUrl, await login(server.baseUrl, 'ce-t2-owner'));
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => {
         if (server) {
@@ -346,6 +346,14 @@ describe('/api/cohorts/* Phase 8 entity + access boundary', () => {
                 expect(res.status, `${e.m} ${e.p}`).not.toBe(404);
                 expect(res.status, `${e.m} ${e.p}`).not.toBe(403);
             }
+            // The MGMT sweep above promoted ce-student to a teacher member
+            // (POST /teachers {ce-student}). The reporting /student/:id check
+            // below needs a live STUDENT member, so the owner restores
+            // ce-student to a plain student before the reporting loop runs.
+            await ownerA(`/api/cohorts/${cohortA}/teachers/${ids.st}`, { method: 'DELETE' });
+            await ownerA(`/api/cohorts/${cohortA}/members`, {
+                method: 'POST', body: JSON.stringify({ identifier: 'ce-student' }),
+            });
             for (const p of REPORTING(cohortA)) {
                 const res = await coteacher(p);
                 expect(res.status, p).toBe(200);

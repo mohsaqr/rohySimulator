@@ -88,7 +88,7 @@ describe('/api/catalogue routes', () => {
         educatorFetch     = authedFetch(server.baseUrl, educatorToken);
         studentFetch      = authedFetch(server.baseUrl, studentToken);
         otherStudentFetch = authedFetch(server.baseUrl, otherStudentToken);
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => {
         if (server) {

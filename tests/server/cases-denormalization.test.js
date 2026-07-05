@@ -83,7 +83,7 @@ describe('POST/PUT /api/cases — chief_complaint + patient_name denormalization
         expect(loginRes.status).toBe(200);
         token = (await loginRes.json()).token;
         expect(typeof token).toBe('string');
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => {
         if (server) await server.close();

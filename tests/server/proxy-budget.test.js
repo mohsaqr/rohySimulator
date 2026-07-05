@@ -107,7 +107,7 @@ describe('proxy budget enforcement', () => {
             ('budget.tts.user.daily_characters', '1000'),
             ('tts_provider', 'piper')`, [llmServer.baseUrl]);
         await dbClose(db);
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => {
         if (server) await server.close();

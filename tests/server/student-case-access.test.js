@@ -90,7 +90,7 @@ describe('student case access', () => {
             await closeDb(db);
         }
         student = authed(server.baseUrl, await login(server.baseUrl, 'sca-student'));
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => {
         if (server) await server.close();

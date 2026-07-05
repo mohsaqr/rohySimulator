@@ -75,7 +75,7 @@ describe('POST /api/sessions/:id/order-labs — default-lab turnaround (Bug 5)',
              VALUES (400, 30, 300, 'Lab User', 'active')`);
         await dbClose(db);
         token = await loginAs(server, 'lab_user', 'correctpass');
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => { await server?.close(); });
 

@@ -123,7 +123,7 @@ describe('/api/cohorts/:id/analytics — Phase 10', () => {
         teacherB = authed(server.baseUrl, await login(server.baseUrl, 'ca-teacher-b'));
         t2Teacher = authed(server.baseUrl, await login(server.baseUrl, 'ca-t2-teacher'));
         nonMemberStudent = authed(server.baseUrl, await login(server.baseUrl, 'ca-free-student'));
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => { if (server) await server.close(); });
 

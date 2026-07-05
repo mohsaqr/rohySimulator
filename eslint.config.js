@@ -21,6 +21,12 @@ export default defineConfig([
     'test-results/**',
     'node_modules/**',
     '.vitest-cache/**',
+    // VitePress build output + dep-optimizer cache. Gitignored, so a fresh
+    // CI checkout never sees them, but a local `npm run docs:build` leaves
+    // ~1,500 lines of bundled/minified JS behind that `eslint .` would
+    // otherwise choke on — masking real lint errors under the noise.
+    'docs/.vitepress/dist/**',
+    'docs/.vitepress/cache/**',
   ]),
   {
     files: ['**/*.{js,jsx}'],

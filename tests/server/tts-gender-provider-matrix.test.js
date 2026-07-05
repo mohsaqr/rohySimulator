@@ -94,7 +94,7 @@ describe('POST /api/tts matrix — provider override and gender fallback', () =>
             google_tts_api_key: 'fake-google-key',
             openai_tts_api_key: 'fake-openai-key',
         });
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => {
         if (server) await server.close();

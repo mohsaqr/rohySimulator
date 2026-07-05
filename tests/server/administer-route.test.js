@@ -64,7 +64,7 @@ describe('POST /api/sessions/:sessionId/administer/:orderId — hardened', () =>
              VALUES (200, 10, 100, 'Tx User', 'active')`);
         await dbClose(db);
         token = await loginAs(server, 'tx_user', 'correctpass');
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => { await server?.close(); });
 

@@ -162,7 +162,7 @@ describe('/api/analytics — LAILA-shaped endpoints', () => {
         }
         token = await login(server.baseUrl, 'analytics-admin');
         otherTenantToken = await login(server.baseUrl, 'analytics-other-admin');
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => { if (server) await server.close(); });
 

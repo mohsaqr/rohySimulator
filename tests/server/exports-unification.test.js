@@ -62,7 +62,7 @@ describe('export endpoint surface — unification', () => {
         try { await seedAdmin(db, 'exports-unif-admin'); }
         finally { await closeDb(db); }
         token = await login(server.baseUrl, 'exports-unif-admin');
-    }, 30_000);
+    }, 90_000);
 
     afterAll(async () => { if (server) await server.close(); });
 

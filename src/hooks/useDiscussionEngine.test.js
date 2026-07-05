@@ -77,8 +77,10 @@ vi.mock('../utils/personaBlocks', () => ({
 
 vi.mock('../services/eventLogger', () => ({
     default: {
-        messageSent: vi.fn(),
-        messageReceived: vi.fn(),
+        // The debrief engine logs turns via the debrief-specific verbs
+        // (object_type=DEBRIEF → reflecting), not the bedside chat ones.
+        debriefMessageSent: vi.fn(),
+        debriefMessageReceived: vi.fn(),
     },
     COMPONENTS: { DISCUSSION_SCREEN: 'discussion_screen' },
 }));
