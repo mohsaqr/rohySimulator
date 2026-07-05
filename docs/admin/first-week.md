@@ -7,12 +7,6 @@ populate the platform for a class.
 Work top to bottom. Each step says where it lives in the app and what
 "done" looks like.
 
-::: warning Medical-education tool
-Rohy is a simulation tool for training. It does not provide medical advice
-and must not be used for real patient care. Make this clear to every
-learner before you open the platform to a class.
-:::
-
 ## 1. Set the LLM provider and key (required)
 
 Open **Settings → Platform → LLM Settings**.

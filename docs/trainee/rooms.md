@@ -3,11 +3,6 @@
 The simulator is organised into five **rooms**. They are peers — none is
 "deeper" than another, and moving between them does not lose your work.
 
-::: warning Training only
-The patient and everything in these rooms are simulated. Nothing here is
-medical advice.
-:::
-
 ## The rooms
 
 | Room | Bottom-bar label | What it is for |

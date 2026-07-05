@@ -34,9 +34,12 @@ Re-assigning the same case later revives the link.
 
 - It records the case as belonging to the class and shows it under
   **Assigned cases**.
-- It does **not** restrict which cases a student can run, hide unassigned
-  cases, or change scoring. Reporting (roster, grid, export) is driven by the
-  sessions your students actually ran, not by the assignment list.
+- It **does** control routine student access to course cases. Students see the
+  default case in the default course plus live cases assigned through their
+  active class memberships. Unassigned live cases are not exposed as normal
+  student-startable cases.
+- It does **not** change scoring. Reporting (roster, grid, export) is driven
+  by the sessions your students actually ran, not by the assignment list.
 - It does **not** snapshot the case. When a student starts a session the case
   is frozen into that session independently — see
   [Glossary — Case snapshot](/reference/glossary).

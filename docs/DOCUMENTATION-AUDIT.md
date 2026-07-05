@@ -20,7 +20,7 @@
 | `CLAUDE.md` | **Reference only**, never publish | Integrator (G5) source |
 | OyonR doc set (9 files) | **Reuse selectively** | Security (G6) + Integrator |
 | `docs/audits/*` | **Retire from site** (point-in-time) | keep in repo only |
-| `landing/README.md` | **Out of scope** (marketing) | unchanged |
+| `website/README.md` | **Out of scope** (marketing) | unchanged |
 | Session artifacts (HANDOFF/LEARNINGS/CHANGES) | **Never publish** | local-only |
 
 ## A2 — Task-to-screen matrix (product surface → guide pages)

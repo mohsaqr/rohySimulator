@@ -3,11 +3,6 @@
 The **Examination** room lets you perform a focused physical exam on a body
 map and see the findings for what you examine.
 
-::: warning Training only
-Findings are configured for the scenario, not measured on a real person.
-Nothing here is medical advice.
-:::
-
 ## Open the Examination room
 
 Click **Examination** in the bottom navigation bar. The room shows a body

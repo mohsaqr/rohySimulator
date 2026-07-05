@@ -64,11 +64,6 @@ the timeline; you can then edit keyframes. See
   case do not bleed into a session already in progress
   ([Glossary — Case snapshot](/reference/glossary)).
 
-::: warning
-Rohy is a simulation for education. Authored cases are teaching artefacts,
-not clinical guidance, and must never be used for real patient care.
-:::
-
 ## Reference
 
 - API: [cases endpoints](/reference/api/cases)

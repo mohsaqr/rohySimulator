@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>What's new in Rohy since version 1</title>
+    <meta name="description" content="An extensive overview of what changed in Rohy from v1.0.0 to the current 2.5.1 line: voice, avatars, courses, analytics, Oyon, research logs, enterprise settings, and security hardening.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="What's new in Rohy since version 1">
+    <meta property="og:description" content="From virtual-patient chat to an enterprise clinical simulation, teaching, and research platform.">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #09090b;
+            --bg-elev: #18181b;
+            --bg-elev-2: #1f1f23;
+            --border: #27272a;
+            --border-bright: #3f3f46;
+            --text: #fafafa;
+            --text-dim: #a1a1aa;
+            --text-dimmer: #71717a;
+            --cyan: #22d3ee;
+            --indigo: #818cf8;
+            --indigo-600: #6366f1;
+            --emerald: #10b981;
+            --amber: #fbbf24;
+            --rose: #fb7185;
+            --content-w: 1180px;
+        }
+        *, *::before, *::after { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            margin: 0;
+            background:
+                radial-gradient(900px 520px at 15% -10%, rgba(34, 211, 238, 0.12), transparent 60%),
+                radial-gradient(900px 560px at 90% 0%, rgba(129, 140, 248, 0.11), transparent 58%),
+                var(--bg);
+            color: var(--text);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-size: 17px;
+            line-height: 1.62;
+            -webkit-font-smoothing: antialiased;
+            font-feature-settings: 'ss01', 'cv11';
+        }
+        a { color: inherit; text-decoration: none; }
+        h1, h2, h3, p { margin: 0; }
+        p { color: var(--text-dim); }
+        .wrap { max-width: var(--content-w); margin: 0 auto; padding: 0 24px; }
+        .nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+            background: rgba(9, 9, 11, 0.78);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(39, 39, 42, 0.7);
+        }
+        .nav .wrap {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            font-size: 20px;
+        }
+        .brand-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--cyan), var(--indigo));
+            box-shadow: 0 0 12px rgba(34, 211, 238, 0.5);
+        }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+        }
+        .nav-links a {
+            color: var(--text-dim);
+            font-size: 14px;
+            transition: color 0.15s;
+        }
+        .nav-links a:hover { color: var(--text); }
+        .nav-cta {
+            padding: 8px 14px;
+            border-radius: 8px;
+            background: var(--indigo-600);
+            color: white !important;
+            font-weight: 700;
+        }
+        @media (max-width: 820px) {
+            .nav-links a:not(.nav-cta) { display: none; }
+        }
+        .hero {
+            padding: 150px 0 72px;
+            border-bottom: 1px solid var(--border);
+        }
+        .eyebrow {
+            display: inline-block;
+            margin-bottom: 16px;
+            color: var(--cyan);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+        h1 {
+            max-width: 12ch;
+            font-size: clamp(42px, 7vw, 78px);
+            line-height: 0.98;
+            letter-spacing: -0.045em;
+            font-weight: 900;
+        }
+        h1 .accent {
+            background: linear-gradient(110deg, var(--cyan), var(--indigo) 70%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .hero-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 420px;
+            gap: 56px;
+            align-items: end;
+        }
+        .hero-copy {
+            max-width: 46rem;
+            font-size: 20px;
+            color: var(--text);
+            margin-top: 28px;
+        }
+        .baseline-card {
+            border: 1px solid rgba(34, 211, 238, 0.28);
+            background:
+                linear-gradient(180deg, rgba(34, 211, 238, 0.08), rgba(24, 24, 27, 0.78)),
+                var(--bg-elev);
+            border-radius: 18px;
+            padding: 28px;
+            box-shadow: 0 26px 70px -35px rgba(34, 211, 238, 0.55);
+        }
+        .baseline-card h2 {
+            font-size: 17px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+        }
+        .baseline-card p {
+            font-size: 15px;
+            margin-bottom: 16px;
+        }
+        .baseline-card ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 9px;
+        }
+        .baseline-card li {
+            color: var(--text);
+            font-size: 14px;
+            padding-left: 18px;
+            position: relative;
+        }
+        .baseline-card li::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 10px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--cyan);
+        }
+        .summary-strip {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-top: 54px;
+        }
+        .metric {
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px 20px;
+            background: rgba(24, 24, 27, 0.68);
+        }
+        .metric strong {
+            display: block;
+            font-size: 26px;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+        .metric span {
+            color: var(--text-dim);
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        section { padding: 80px 0; }
+        section.band {
+            background: rgba(24, 24, 27, 0.35);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+        .section-head {
+            max-width: 760px;
+            margin-bottom: 34px;
+        }
+        .section-head h2 {
+            font-size: clamp(30px, 4vw, 48px);
+            line-height: 1.05;
+            letter-spacing: -0.025em;
+            margin-bottom: 14px;
+        }
+        .section-head p {
+            font-size: 18px;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+        }
+        .card {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background:
+                radial-gradient(360px 180px at 0% 0%, rgba(34, 211, 238, 0.05), transparent),
+                var(--bg-elev);
+            padding: 24px;
+        }
+        .card h3 {
+            font-size: 19px;
+            line-height: 1.2;
+            margin-bottom: 12px;
+        }
+        .card p {
+            font-size: 15px;
+            margin-bottom: 14px;
+        }
+        .card ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 10px;
+        }
+        .card li {
+            color: var(--text-dim);
+            font-size: 14px;
+            line-height: 1.48;
+            padding-left: 18px;
+            position: relative;
+        }
+        .card li::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 8px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--emerald);
+        }
+        .timeline {
+            display: grid;
+            gap: 18px;
+        }
+        .release {
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            gap: 22px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 22px;
+            background: var(--bg-elev);
+        }
+        .release-version {
+            color: var(--cyan);
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            font-size: 24px;
+        }
+        .release-date {
+            color: var(--text-dimmer);
+            font-size: 13px;
+            margin-top: 4px;
+        }
+        .release h3 {
+            font-size: 21px;
+            margin-bottom: 8px;
+        }
+        .release p {
+            margin-bottom: 12px;
+        }
+        .release ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 8px;
+        }
+        .release li {
+            color: var(--text-dim);
+            padding-left: 18px;
+            position: relative;
+            font-size: 14px;
+        }
+        .release li::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 9px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--amber);
+        }
+        .closing {
+            border: 1px solid rgba(129, 140, 248, 0.28);
+            border-radius: 20px;
+            padding: 38px;
+            background:
+                radial-gradient(600px 280px at 100% 0%, rgba(129, 140, 248, 0.11), transparent),
+                var(--bg-elev);
+        }
+        .closing h2 {
+            font-size: clamp(28px, 4vw, 44px);
+            line-height: 1.08;
+            letter-spacing: -0.025em;
+            margin-bottom: 14px;
+        }
+        .closing p {
+            max-width: 760px;
+            color: var(--text);
+            font-size: 19px;
+        }
+        .cta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 10px;
+            padding: 12px 18px;
+            border: 1px solid var(--border-bright);
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .btn.primary {
+            border-color: var(--indigo-600);
+            background: var(--indigo-600);
+            color: white;
+        }
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 36px 0 44px;
+            color: var(--text-dimmer);
+            font-size: 13px;
+        }
+        footer .wrap {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        footer a { color: var(--text-dim); }
+        @media (max-width: 980px) {
+            .hero-grid { grid-template-columns: 1fr; align-items: start; }
+            .summary-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 680px) {
+            body { font-size: 16px; }
+            .hero { padding-top: 120px; }
+            .summary-strip, .cards { grid-template-columns: 1fr; }
+            .release { grid-template-columns: 1fr; }
+            .closing { padding: 28px 22px; }
+        }
+    </style>
+</head>
+<body>
+    <header class="nav">
+        <div class="wrap">
+            <a class="brand" href="index.html">
+                <span class="brand-dot"></span>
+                <span>rohy</span>
+            </a>
+            <nav class="nav-links">
+                <a href="index.html">Landing</a>
+                <a href="#platform">Platform</a>
+                <a href="#teaching">Teaching</a>
+                <a href="#research">Research</a>
+                <a href="#timeline">Timeline</a>
+                <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="wrap">
+                <div class="hero-grid">
+                    <div>
+                        <span class="eyebrow">WHAT'S NEW SINCE V1.0.0</span>
+                        <h1>From virtual patient to <span class="accent">clinical simulation platform.</span></h1>
+                        <p class="hero-copy">
+                            Version 1 was a strong starting point: text chat, basic monitor,
+                            single-room workflow, session persistence, admin case editing, and
+                            multi-tenant auth. The current 2.5.1 line is substantially broader:
+                            multimodal patient interaction, multi-agent care teams, course-aware
+                            teaching operations, Oyon research capture, learning analytics, and
+                            enterprise-grade access control.
+                        </p>
+                    </div>
+                    <aside class="baseline-card">
+                        <h2>Version 1 baseline</h2>
+                        <p>The original public release shipped the core virtual-patient experience.</p>
+                        <ul>
+                            <li>Text-based virtual patient chat</li>
+                            <li>Case-bound system prompts</li>
+                            <li>Basic monitor</li>
+                            <li>Single-room layout</li>
+                            <li>Session persistence</li>
+                            <li>Admin case editor</li>
+                            <li>Multi-tenant authentication</li>
+                        </ul>
+                    </aside>
+                </div>
+
+                <div class="summary-strip">
+                    <div class="metric"><strong>2.5.1</strong><span>Current local product line</span></div>
+                    <div class="metric"><strong>5</strong><span>Simulation rooms replacing the single-room flow</span></div>
+                    <div class="metric"><strong>130+</strong><span>Canonical learning-event verbs</span></div>
+                    <div class="metric"><strong>Courses</strong><span>Registration, assignment, roster, reports, and access control</span></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="platform">
+            <div class="wrap">
+                <div class="section-head">
+                    <span class="eyebrow">SIMULATION PLATFORM</span>
+                    <h2>The clinical encounter is now multimodal and multi-agent.</h2>
+                    <p>Rohy moved from a patient chat surface into a structured clinical environment with voice, avatars, rooms, investigations, treatments, and debrief.</p>
+                </div>
+                <div class="cards">
+                    <article class="card">
+                        <h3>Voice, avatars, and lipsync</h3>
+                        <p>Students can interact by text or voice with animated 3D patient avatars.</p>
+                        <ul>
+                            <li>Google, OpenAI, Kokoro, and Piper TTS support.</li>
+                            <li>Local-first TTS options for institutional deployments.</li>
+                            <li>Viseme-driven lipsync and voice-mode subtitles.</li>
+                            <li>Per-case and per-persona voice configuration.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Multi-agent care team</h3>
+                        <p>The learner now encounters a team, not only a chatbot.</p>
+                        <ul>
+                            <li>Patient, nurse, consultant, family, and debrief tutor personas.</li>
+                            <li>Page/call flows with server-anchored arrival timing.</li>
+                            <li>Separate LLM routing per persona.</li>
+                            <li>Knowledge scope controlled per agent and per case.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Five-room workflow</h3>
+                        <p>The single-room layout became a full clinical workspace.</p>
+                        <ul>
+                            <li>Patient, examination, laboratory, radiology, and consultant rooms.</li>
+                            <li>Room activity badges for unread or ready work.</li>
+                            <li>Room-stamped learning events for later analysis.</li>
+                            <li>Unified navigation state across the simulation.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Richer investigations</h3>
+                        <p>Labs and radiology now behave like first-class clinical tasks.</p>
+                        <ul>
+                            <li>225 labs across 33 groups.</li>
+                            <li>74 radiology studies.</li>
+                            <li>Gender-specific reference ranges.</li>
+                            <li>Realistic turnaround timing and report viewing.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Structured examination</h3>
+                        <p>The physical exam surface became more specific and teachable.</p>
+                        <ul>
+                            <li>67 named exam regions.</li>
+                            <li>Anterior, posterior, and lateral anatomy support.</li>
+                            <li>Inspection, palpation, percussion, and auscultation.</li>
+                            <li>Special-test and body-map fixes for production use.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Live physiology and debrief</h3>
+                        <p>The monitor and post-case experience became more realistic.</p>
+                        <ul>
+                            <li>Physiologic ECG generator and multi-parameter vitals.</li>
+                            <li>Treatment engine with 33 default treatments.</li>
+                            <li>Alarm routing through a central notification system.</li>
+                            <li>Separate Socratic discussant for End &amp; Debrief.</li>
+                        </ul>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section id="teaching" class="band">
+            <div class="wrap">
+                <div class="section-head">
+                    <span class="eyebrow">TEACHING OPERATIONS</span>
+                    <h2>Courses, users, enrollment, and assignment are now core product areas.</h2>
+                    <p>The platform now supports real teaching administration: rosters, registration codes, assignment, bulk operations, course reports, and controlled learner access.</p>
+                </div>
+                <div class="cards">
+                    <article class="card">
+                        <h3>Courses and cohorts</h3>
+                        <p>Teachers can manage classes instead of relying on informal case access.</p>
+                        <ul>
+                            <li>Teacher-owned courses/classes.</li>
+                            <li>Join and registration codes.</li>
+                            <li>Co-teachers and course settings.</li>
+                            <li>Per-course case assignment.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Roster and completion tools</h3>
+                        <p>Course-level reporting is built around the people actually enrolled.</p>
+                        <ul>
+                            <li>Roster views.</li>
+                            <li>Completion grid.</li>
+                            <li>Live feed.</li>
+                            <li>Course export.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Enterprise user operations</h3>
+                        <p>User administration is more scalable for larger deployments.</p>
+                        <ul>
+                            <li>Bulk operations.</li>
+                            <li>Bulk import workflow.</li>
+                            <li>Better enrollment and assignment flows.</li>
+                            <li>Improved alignment between users, courses, and cases.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Controlled student access</h3>
+                        <p>Students now see the right cases, not the entire catalogue.</p>
+                        <ul>
+                            <li>Default course/default case remains available.</li>
+                            <li>Assigned course cases are visible to enrolled students.</li>
+                            <li>Unassigned cases are blocked from direct API access.</li>
+                            <li>Unassigned session launch is blocked.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Settings Control Center</h3>
+                        <p>Administration now starts from a clearer command deck.</p>
+                        <ul>
+                            <li>Card-based settings landing page.</li>
+                            <li>Courses restored as a first-class settings area.</li>
+                            <li>Oyon and Logs grouped under Analytics.</li>
+                            <li>Existing settings workspaces preserved underneath.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Documentation and help</h3>
+                        <p>Operators and educators now have a real support surface.</p>
+                        <ul>
+                            <li>VitePress documentation site.</li>
+                            <li>Role-filtered in-app Help &amp; Support drawer.</li>
+                            <li>Release notes and diagnostics bundle.</li>
+                            <li>Trainee, educator, admin, operator, integrator, and security guides.</li>
+                        </ul>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section id="research">
+            <div class="wrap">
+                <div class="section-head">
+                    <span class="eyebrow">RESEARCH AND ANALYTICS</span>
+                    <h2>Rohy now produces analyzable multimodal learning traces.</h2>
+                    <p>The analytics layer connects user activity, course context, rooms, cases, vitals, Oyon signals, logs, and learning sequences.</p>
+                </div>
+                <div class="cards">
+                    <article class="card">
+                        <h3>Oyon capture and analytics</h3>
+                        <p>Browser-side gaze and affect capture is integrated into the simulation.</p>
+                        <ul>
+                            <li>MediaPipe and ONNX Web inference.</li>
+                            <li>Aggregated 10-second windows.</li>
+                            <li>Gaze AOI normalization.</li>
+                            <li>Gaze maps by simulator room.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Patient eye contact</h3>
+                        <p>The avatar can now react to the learner's face position.</p>
+                        <ul>
+                            <li>Patient and discussant track the learner's face.</li>
+                            <li>Avatar glances at the monitor when alarms fire.</li>
+                            <li>Eye contact resumes when the learner is still.</li>
+                            <li>Oyon face stream powers the behavior.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Learning-event log</h3>
+                        <p>Simulation activity is encoded for research-grade analysis.</p>
+                        <ul>
+                            <li>130+ canonical verbs.</li>
+                            <li>Room-stamped and vitals-enriched events.</li>
+                            <li>Session activity feed.</li>
+                            <li>Course-aware analytics and logs.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Course analytics</h3>
+                        <p>Teachers get useful course and student glimpses, not only global analytics.</p>
+                        <ul>
+                            <li>Course filters in analytics and logs.</li>
+                            <li>Student activity frequencies.</li>
+                            <li>Course-level signals.</li>
+                            <li>Case/session drill-downs.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Sequence and network analysis</h3>
+                        <p>The analytics stack supports research patterns directly.</p>
+                        <ul>
+                            <li>Transition-network analytics.</li>
+                            <li>Timeline and hourly views.</li>
+                            <li>TNA sequence support.</li>
+                            <li>Cluster and state-distribution summaries.</li>
+                        </ul>
+                    </article>
+                    <article class="card">
+                        <h3>Data safety and visibility</h3>
+                        <p>Research data exposure is controlled more carefully.</p>
+                        <ul>
+                            <li>Frozen-at-write Oyon visibility flags.</li>
+                            <li>Tenant and ownership gates.</li>
+                            <li>Centralized response redaction.</li>
+                            <li>Role-aware access checks.</li>
+                        </ul>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section id="timeline" class="band">
+            <div class="wrap">
+                <div class="section-head">
+                    <span class="eyebrow">RELEASE ARC</span>
+                    <h2>The change by product generation.</h2>
+                    <p>This is the practical progression from the original public release to the current local 2.5.1 line.</p>
+                </div>
+                <div class="timeline">
+                    <article class="release">
+                        <div>
+                            <div class="release-version">v1.0.0</div>
+                            <div class="release-date">2026-04</div>
+                        </div>
+                        <div>
+                            <h3>Initial public release</h3>
+                            <p>Virtual-patient chat, basic monitor, single-room workflow, session persistence, case editor, and multi-tenant auth.</p>
+                        </div>
+                    </article>
+                    <article class="release">
+                        <div>
+                            <div class="release-version">v2.0.0</div>
+                            <div class="release-date">2026-05-14</div>
+                        </div>
+                        <div>
+                            <h3>Major simulation expansion</h3>
+                            <ul>
+                                <li>Voice, avatars, multi-agent care team, multi-room navigation, Oyon emotion capture, richer investigations, real monitor, event logging, case snapshots, landing site, and operator update CLI.</li>
+                                <li>Prompt stability, notification consolidation, tenant middleware, TTS routing fixes, deployment fixes, and May-2026 security hardening.</li>
+                            </ul>
+                        </div>
+                    </article>
+                    <article class="release">
+                        <div>
+                            <div class="release-version">v2.1.x</div>
+                            <div class="release-date">2026-05-14</div>
+                        </div>
+                        <div>
+                            <h3>Persona-level model routing</h3>
+                            <ul>
+                                <li>Patient, discussant, and agents route through their own configured LLM settings.</li>
+                                <li>The version badge, prompt hardening, and default turnaround-time cleanup landed in this line.</li>
+                            </ul>
+                        </div>
+                    </article>
+                    <article class="release">
+                        <div>
+                            <div class="release-version">v2.3.x</div>
+                            <div class="release-date">2026-05-16 onward</div>
+                        </div>
+                        <div>
+                            <h3>Teacher cohorts and documentation</h3>
+                            <ul>
+                                <li>Teacher-owned classes, join codes, roster, completion grid, cohort analytics, per-course assignment, and co-teachers.</li>
+                                <li>Enterprise documentation site, in-app Help &amp; Support, bug-fix pass, CI hardening, docs serving fixes, and lockfile/install fixes.</li>
+                            </ul>
+                        </div>
+                    </article>
+                    <article class="release">
+                        <div>
+                            <div class="release-version">v2.4.x</div>
+                            <div class="release-date">Oyon integration line</div>
+                        </div>
+                        <div>
+                            <h3>Oyon v2 analytics and gaze</h3>
+                            <ul>
+                                <li>Oyon v2 analytics, gaze capture, room-specific gaze maps, transition heatmaps, shared TNA graphs, normalized gaze targets, and better Oyon logs.</li>
+                                <li>Capture persistence through session start and debrief was improved.</li>
+                            </ul>
+                        </div>
+                    </article>
+                    <article class="release">
+                        <div>
+                            <div class="release-version">v2.5.1</div>
+                            <div class="release-date">Current local line</div>
+                        </div>
+                        <div>
+                            <h3>Enterprise courses, settings, and access</h3>
+                            <ul>
+                                <li>Patient eye contact, monitor/header redesign, flattened settings, Settings Control Center, enterprise user/enrollment work, course analytics, roster/report improvements, and class-based case access.</li>
+                                <li>Students now see the default case plus assigned course cases only; direct unassigned access is blocked.</li>
+                            </ul>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <div class="wrap">
+                <div class="closing">
+                    <span class="eyebrow">BOTTOM LINE</span>
+                    <h2>Version 1 was a simulator. The current line is a course-aware, research-ready clinical simulation platform.</h2>
+                    <p>
+                        The important shift is not one feature. It is the integration:
+                        cases, courses, users, assigned access, agents, rooms, vitals,
+                        voice, Oyon, logs, analytics, exports, and documentation now work
+                        as one platform surface.
+                    </p>
+                    <div class="cta-row">
+                        <a class="btn primary" href="index.html">Back to landing</a>
+                        <a class="btn" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">View repository</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="wrap">
+            <span>© 2026 Mohammed Saqr · Rohy</span>
+            <span><a href="index.html">Landing</a> · <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a></span>
+        </div>
+    </footer>
+</body>
+</html>

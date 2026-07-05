@@ -592,8 +592,9 @@
             <span>rohy</span>
         </a>
         <nav class="nav-links">
+            <a href="whats-new.html">What's new</a>
             <a href="#agents">Agents</a>
-            <a href="#monitor">Monitor</a>
+            <a href="#monitor">Simulated monitor</a>
             <a href="#scenarios">Scenarios</a>
             <a href="#labs">Lab &amp; Radiology</a>
             <a href="#analytics">Affect &amp; Analytics</a>
@@ -609,11 +610,12 @@
         <span class="eyebrow accent">VIRTUAL PATIENT · CRETIC PROJECT</span>
         <h1>Artificial Intelligence<br>for <span class="accent">clinical reasoning research.</span></h1>
         <p class="sub">
-            A multimodal AI-driven simulation environment. A multi-agent care team
-            converses with the trainee; a real-rhythm physiologic monitor runs against
-            emergency-driven scenarios with down-going trajectories; real-time affect
-            capture and live process / sequence / transition-network analytics turn the
-            session into a research-grade learning-analytics stream — every event row
+            A high-fidelity, multi-agent, AI-powered simulation environment. A
+            multi-agent care team converses with the trainee; a real-rhythm simulated
+            monitor runs against emergency-driven scenarios with down-going trajectories;
+            real-time emotion capture and gaze tracking run on-device; and live process,
+            sequence and transition-network analytics turn every session into a
+            research-grade, process-oriented learning-analytics stream — every event row
             enriched with the contemporary vital signs.
         </p>
         <div class="cta-row">
@@ -622,6 +624,9 @@
             </a>
             <a class="btn btn-ghost" href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">
                 Read the docs
+            </a>
+            <a class="btn btn-ghost" href="whats-new.html">
+                What's new since v1
             </a>
         </div>
 
@@ -635,7 +640,9 @@
             <span class="item">Multimodal</span>
             <span class="item">Real rhythm engine</span>
             <span class="item">Emergency scenarios</span>
-            <span class="item">Real-time affect</span>
+            <span class="item">Real-time emotions</span>
+            <span class="item">Gaze tracking</span>
+            <span class="item">Process-oriented analytics</span>
             <span class="item">Transition network analytics</span>
             <span class="item">Vital-enriched event log</span>
         </div>
@@ -711,8 +718,8 @@
 <section id="monitor" class="band">
     <div class="wrap reveal">
         <div class="single">
-            <span class="eyebrow">PATIENT MONITOR</span>
-            <h2>A real monitor, with a real rhythm engine.</h2>
+            <span class="eyebrow">SIMULATED PATIENT MONITOR</span>
+            <h2>A simulated monitor, with a real rhythm engine.</h2>
             <p class="lead">
                 Sum-of-Gaussians waveform synthesis renders morphologically correct
                 PQRST-T at any heart rate. Rhythms compose with modifier overlays — ST
@@ -861,31 +868,61 @@
     </div>
 </section>
 
-<!-- ── Real-time emotion capture ─────────────────────────────── -->
+<!-- ── Real-time emotions ────────────────────────────────────── -->
 <section id="affect" class="band">
     <div class="wrap reveal">
         <div class="pillar reverse">
             <div class="pillar-text">
-                <span class="eyebrow accent">REAL-TIME EMOTION CAPTURE</span>
-                <h2>Affect on-device. Joined to the action stream.</h2>
+                <span class="eyebrow accent">REAL-TIME EMOTIONS</span>
+                <h2>Facial affect, valence and arousal — captured on-device, joined to the action stream.</h2>
                 <p>
                     Camera-side emotion analytics runs entirely in the browser.
-                    Multi-task affect models produce dominant-emotion estimates and
+                    Multi-task affect models produce a dominant-emotion estimate and
                     valence/arousal regression at a configurable sample rate; only
-                    aggregated windows leave the device. The affect stream shares the
-                    session, the time base, and the active room with the action
-                    stream — so behavioural trajectories and affective trajectories
-                    can be analysed jointly without an offline join.
+                    aggregated windows ever leave the device. The affect stream shares
+                    the session, the time base, and the active room with the action
+                    stream, so behavioural and affective trajectories are analysed
+                    jointly with no offline join.
                 </p>
                 <ul class="pillar-list">
-                    <li>Browser-only inference (MediaPipe face landmarker + ONNX Runtime Web). Aggregated windows only — raw frames and landmarks never leave the device; the server validator rejects either at the wire.</li>
-                    <li>Valence and arousal as time series; dominant emotion as a categorical estimate; a transition network on the affect side mirrors the one on the action side.</li>
-                    <li>Per-tenant capture configuration: window length, sample interval, minimum valid frames, smoothing alpha, hold time, switch confidence.</li>
-                    <li>Frozen-at-write row-visibility flags — flipping a tenant toggle never retroactively exposes data captured under stricter rules.</li>
+                    <li><strong>Emotion co-occurrence map</strong> and an <strong>emotion heat strip</strong> — per-emotion totals and session share, laid out over the timeline so shifts against the baseline are legible at a glance.</li>
+                    <li><strong>Affect plane</strong> — every window placed on a valence × arousal field, with the trajectory drawn between consecutive windows.</li>
+                    <li><strong>Dynamics &amp; arousal–valence mix</strong> — affect speed and instability as time series, plus the split across positive / negative × active / calm quadrants.</li>
+                    <li>Browser-only inference (MediaPipe face landmarker + ONNX Runtime Web); the server validator rejects raw frames or landmarks at the wire. Per-tenant capture config and frozen-at-write visibility flags.</li>
                 </ul>
             </div>
             <figure class="pillar-shot">
-                <img src="assets/oyon.png" alt="Real-time emotion-capture dashboard. Top-left: capture timeline with valence and arousal traces over hundreds of windows. Top-right: emotion-distribution bar chart across six states. A statistics strip below reports analyzed windows, latest state, instability, and phase. Bottom: a circular transition-network graph with weighted edges between emotion nodes and self-loops on most nodes.">
+                <img src="assets/real-time-emotions.png" alt="Real-time emotions dashboard, four panels. Top-left: an emotion co-occurrence map — emotions arranged in a ring with weighted arcs between those that co-occur. Top-right: an emotion heat strip over the timeline with per-emotion totals and session share, neutral dominant with disgust, anger and sadness against the baseline. Bottom-left: an affect plane scattering windows across high/low arousal and negative/positive valence, mostly clustered negative. Bottom-right: Dynamics & Arousal-Valence Mix — affect-speed and instability traces above a positive/negative × active/calm quadrant breakdown.">
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── Gaze & attention tracking ─────────────────────────────── -->
+<section id="gaze">
+    <div class="wrap reveal">
+        <div class="pillar">
+            <div class="pillar-text">
+                <span class="eyebrow accent">GAZE &amp; ATTENTION TRACKING</span>
+                <h2>Where the trainee looked — per screen, per room, over time.</h2>
+                <p>
+                    The same on-device camera stream estimates gaze. Rohy never keeps a
+                    raw point stream — only aggregated windows: a screen-shaped centroid
+                    per window, a nine-zone share of attention, and dwell on the
+                    on-screen targets that matter — the patient's face, the vitals
+                    monitor, the chat. Because every window is room-stamped, attention
+                    resolves per screen — the patient room, examination, laboratory —
+                    not just for the session as a whole.
+                </p>
+                <ul class="pillar-list">
+                    <li><strong>Screen zones</strong> — point-weighted share of gaze across a 3×3 grid of screen ninths, so a centre-weighted “eyes on the patient” pattern reads at a glance.</li>
+                    <li><strong>Gaze centroids</strong> — each window's centroid on a screen-shaped canvas (dot size ∝ √points). Aggregates only — never a raw point stream.</li>
+                    <li><strong>Gaze maps by screen</strong> — a separate zone map per room (Patient · Examination · Laboratory · …), each labelled with its window count, so attention is compared across settings.</li>
+                    <li><strong>Attention targets &amp; dynamics</strong> — AOI dwell on the patient's face, monitor and chat with a room × target table; gaze-target and location transition networks; per-window dispersion, calibration quality, off-screen share and time-at-patient.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/gaze-tracking.png" alt="Gaze-tracking dashboard. Top-left 'Screen zones' — point-weighted share of gaze across a 3×3 grid of screen ninths, concentrated on middle-center 61% and top-center 28%. Top-right 'Gaze centroids' — hundreds of translucent circles clustered left-of-centre on a screen-shaped canvas labelled screen top-left to bottom-right, dot size proportional to the square root of tracked points; aggregates only, never a raw point stream. Bottom 'Gaze maps by screen' — three per-room 3×3 zone maps: Patient (main) · 89 windows (50% middle-center, 42% top-center), Examination · 63 windows (59% middle-center, 41% top-center), and Lab · 2 windows (64% middle-center, 28% top-center).">
             </figure>
         </div>
     </div>
@@ -1150,6 +1187,7 @@
                 <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="whats-new.html">What's new</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
             </div>
             <div class="footer-col">

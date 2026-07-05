@@ -4,11 +4,6 @@ The patient monitor fills the right side of the **Patient** screen. It runs
 the patient's vital signs in real time and raises alarms when a vital goes
 out of range — exactly the signal you act on during the case.
 
-::: warning Training only
-The monitor and its alarms are simulated. Waveforms and numbers are
-generated for the scenario and are not medical advice.
-:::
-
 ## Reading the monitor
 
 The monitor shows the patient's vital signs, typically:

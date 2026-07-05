@@ -3,11 +3,6 @@
 Common questions and fixes when running a case. If something here does not
 match what you see, ask your instructor.
 
-::: warning Training only
-The simulator is a training tool. It does not provide medical advice and the
-patient is not real.
-:::
-
 ## Sessions and progress
 
 ### Did I lose my session when I refreshed?

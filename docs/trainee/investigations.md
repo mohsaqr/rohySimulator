@@ -4,10 +4,6 @@ You order blood and other lab tests in the **Laboratory** room and imaging
 studies in the **Radiology** room. Both work the same way: pick from a
 catalogue, place the order, wait for the turnaround, then read the report.
 
-::: warning Training only
-Results are configured for the scenario. Nothing here is medical advice.
-:::
-
 ## Open the room
 
 Click **Laboratory** or **Radiology** in the bottom navigation bar. Each

@@ -4,11 +4,6 @@ You order and give treatments from the **Treatments** panel on the patient
 screen. Treatments act on the patient over time and feed into the vitals
 engine, so what you give — and when — matters.
 
-::: warning Training only
-The patient, the drugs and their effects are simulated. Dosing, routes and
-warnings here are for the scenario only and are not medical advice.
-:::
-
 ## Open the Treatments panel
 
 On the **Patient** screen, a strip of buttons floats just above the bottom

@@ -4,11 +4,6 @@ The **Consultant** room is where you reflect on the case after it ends. You
 review the transcript, talk through your reasoning with a consultant, and
 look at a summary of what you did.
 
-::: warning Training only
-The debrief and the consultant are simulated. Nothing here is medical
-advice.
-:::
-
 ## Ending vs. leaving
 
 These are two different things — knowing the difference matters.

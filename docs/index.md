@@ -6,6 +6,9 @@ hero:
   tagline: Enterprise documentation — pick the path that matches your role.
   actions:
     - theme: brand
+      text: Product features
+      link: /product/
+    - theme: alt
       text: I'm a trainee
       link: /trainee/
     - theme: alt
@@ -15,6 +18,9 @@ hero:
       text: API reference
       link: /reference/api/
 features:
+  - title: Product features
+    details: A scientific feature description of Rohy's modules, technologies, evidence streams and platform architecture.
+    link: /product/
   - title: Trainee
     details: Run a virtual-patient case — history, examination, investigations, treatment, vitals, voice mode and debrief.
     link: /trainee/
@@ -35,25 +41,12 @@ features:
     link: /security/
 ---
 
-## What Rohy is
-
-Rohy is a virtual-patient medical-simulation platform. A trainee takes a
-history from a simulated patient, performs a physical examination, orders
-labs and imaging, administers treatments, and watches vital signs respond in
-real time — then reflects in a voice-driven debrief. Educators build the
-cases and classes; administrators run the platform; operators host it.
-
 This documentation is organised by **who you are and what you are trying to
 do**, not by feature. Start from the card that matches your role.
-
-::: warning Medical-education tool only
-Rohy is for training. It does not provide medical advice and must never be
-used for real patient care or decision-making.
-:::
 
 ## New here?
 
 - **Trainees:** [Getting started](/trainee/getting-started) — your first case in 10 minutes.
 - **Educators:** [Classes & join codes](/educator/cohorts) — set up a cohort and invite students.
-- **Operators:** [Install ↗](https://github.com/mohsaqr/rohy/blob/main/docs/INSTALL.md) → [Deploy ↗](https://github.com/mohsaqr/rohy/blob/main/docs/DEPLOY.md) → [Update ↗](https://github.com/mohsaqr/rohy/blob/main/docs/UPDATING.md).
+- **Operators:** [Install](/operator/install) → [Deploy](/operator/deploy) → [Update](/operator/updating).
 - **Integrators:** [API authentication](/integrator/api-auth) and the [API reference](/reference/api/).

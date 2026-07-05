@@ -4,11 +4,6 @@ You take the history by chatting with the patient in the **Patient** room.
 The patient is driven by a language model and answers in character — ask the
 way you would ask a real person.
 
-::: warning Training only
-The patient is simulated. Their answers are generated and may be incomplete
-or inconsistent. Nothing said here is medical advice.
-:::
-
 ## Talk to the patient
 
 1. Go to the **Patient** room (the bottom-bar room you start in).

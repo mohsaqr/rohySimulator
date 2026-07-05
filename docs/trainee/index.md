@@ -27,8 +27,4 @@ vitals respond in real time.
 | [Debrief](/trainee/debrief) | The consultant room and reflection |
 | [FAQ & troubleshooting](/trainee/faq) | Common questions and fixes |
 
-::: warning Training only
-The simulated patient is not real. Nothing here is medical advice.
-:::
-
 > Authored in **Stage 3 (G1)** — milestone **M1**.

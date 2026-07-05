@@ -52,6 +52,7 @@ export default defineConfig({
       provider: 'local',
     },
     nav: [
+      { text: 'Product', link: '/product/' },
       { text: 'Trainee', link: '/trainee/' },
       { text: 'Educator', link: '/educator/' },
       { text: 'Admin', link: '/admin/' },
@@ -72,6 +73,19 @@ export default defineConfig({
       { text: 'Release notes', link: '/release-notes/' },
     ],
     sidebar: {
+      '/product/': [
+        {
+          text: 'Rohy product architecture',
+          items: [
+            { text: 'Overview', link: '/product/' },
+            { text: 'Analytics, evidence & research traces', link: '/product/analytics' },
+            { text: 'Clinical simulation infrastructure', link: '/product/clinical-infrastructure' },
+            { text: 'Case building & scenario authoring', link: '/product/case-authoring' },
+            { text: 'Users, courses & management', link: '/product/users-courses-management' },
+            { text: 'Platform technologies & operations', link: '/product/platform-technologies-operations' },
+          ],
+        },
+      ],
       '/trainee/': [
         {
           text: 'Using the Simulator',
