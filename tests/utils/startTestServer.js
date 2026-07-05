@@ -43,7 +43,7 @@ function pickPort() {
     return 3900 + Math.floor(Math.random() * 500);
 }
 
-async function waitForReady(baseUrl, child, { timeoutMs = 20_000 } = {}) {
+async function waitForReady(baseUrl, child, { timeoutMs = 60_000 } = {}) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         if (child.exitCode !== null) {

@@ -143,9 +143,14 @@ export default defineConfig({
                     // (administer-route, auth-refresh, auth-lockout, tts,
                     // analytics, …) parallel server boots contend for ports
                     // + sqlite migrations, occasionally pushing a beforeAll
-                    // past the 10s default. 30s gives slow CI runs headroom
-                    // without masking a genuinely-stuck hook.
-                    hookTimeout: 30_000,
+                    // past the default. Under `test:ci` (--coverage), v8
+                    // instrumentation slows startup further, so 30s still
+                    // timed out intermittently ("server did not become ready
+                    // within 20000ms" → flaky cascade of empty/404 assertions
+                    // in whichever files lost the race). Must stay above
+                    // startTestServer's waitForReady budget (60s) so the hook
+                    // doesn't abort before readiness reports.
+                    hookTimeout: 90_000,
                     // Phase 7 benchmarks: bench files run in this (node)
                     // project so kokoro-js / child_process / fs imports
                     // resolve correctly. `vitest bench` reads benchmark.*
