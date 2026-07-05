@@ -9,10 +9,10 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `POST` | `/api/sessions` | `authenticateToken` | `server/routes/sessions-routes.js:42` |
-| `GET` | `/api/sessions/:id` | `authenticateToken` | `server/routes/sessions-routes.js:182` |
-| `PUT` | `/api/sessions/:id/end` | `authenticateToken` | `server/routes/sessions-routes.js:211` |
-| `GET` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:283` |
-| `POST` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:255` |
-| `GET` | `/api/sessions/:sessionId/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:324` |
-| `POST` | `/api/sessions/:sessionId/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:302` |
+| `POST` | `/api/sessions` | `authenticateToken` | `server/routes/sessions-routes.js:44` |
+| `GET` | `/api/sessions/:id` | `authenticateToken` | `server/routes/sessions-routes.js:204` |
+| `PUT` | `/api/sessions/:id/end` | `authenticateToken` | `server/routes/sessions-routes.js:233` |
+| `GET` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:305` |
+| `POST` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:277` |
+| `GET` | `/api/sessions/:sessionId/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:346` |
+| `POST` | `/api/sessions/:sessionId/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:324` |

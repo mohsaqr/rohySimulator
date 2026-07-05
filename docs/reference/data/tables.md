@@ -414,6 +414,8 @@ Stores cohort cases records.
 | `case_id` | INTEGER | NOT NULL REFERENCES cases(id) | — |
 | `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
 | `deleted_at` | DATETIME | — | — |
+| `available_from` | DATETIME | — | `0030_cohort_case_windows.sql` |
+| `available_until` | DATETIME | — | `0030_cohort_case_windows.sql` |
 
 ## `cohort_members`
 
@@ -431,6 +433,9 @@ Stores cohort members records.
 | `joined_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
 | `deleted_at` | DATETIME | — | — |
 | `member_role` | TEXT | NOT NULL DEFAULT 'student' | `0027_cohort_entity.sql` |
+| `status` | TEXT | NOT NULL DEFAULT 'active' | `0030_cohort_case_windows.sql` |
+| `enrolled_from` | DATETIME | — | `0030_cohort_case_windows.sql` |
+| `enrolled_until` | DATETIME | — | `0030_cohort_case_windows.sql` |
 
 ## `cohorts`
 
@@ -1122,6 +1127,9 @@ Stores oyon emotion records records.
 | `settings_hash` | TEXT | — | `0017_oyon_records_window_metadata.sql` |
 | `settings_snapshot_json` | TEXT | — | `0017_oyon_records_window_metadata.sql` |
 | `dynamics_json` | TEXT | — | `0017_oyon_records_window_metadata.sql` |
+| `gaze_json` | TEXT | — | `0028_oyon_records_gaze_engagement.sql` |
+| `engagement_json` | TEXT | — | `0028_oyon_records_gaze_engagement.sql` |
+| `room` | TEXT | — | `0029_oyon_records_room.sql` |
 
 ## `oyon_settings`
 

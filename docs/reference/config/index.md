@@ -31,10 +31,10 @@ The following variables carry credentials or signing material. Never commit them
 | `ALLOW_DEFAULT_USERS` | No | — | Bootstrap-only flag to seed default users on first boot. | `server/seeders/users.js:38` |
 | `JWT_EXPIRY` | No | `4h` | Lifetime of issued JWTs. | `server/middleware/auth.js:321` |
 | `JWT_SECRET` | Yes | — | Secret used to sign/verify auth + audit tokens. Fatal if unset. _Fatal if unset (validateEnv pushes an error)._ **⚠ secret — see security note above.** | `server/middleware/auth.js:16` |
-| `ROHY_DISABLE_AUTH_RATE_LIMIT` | No | — | Disables the auth-endpoint rate limiter (dev/test). | `server/routes/auth-routes.js:63` |
+| `ROHY_DISABLE_AUTH_RATE_LIMIT` | No | — | Disables the auth-endpoint rate limiter (dev/test). | `server/routes/auth-routes.js:64` |
 | `ROHY_TRUST_PROXY` | No | `loopback` | Express `trust proxy` setting (proxy hop count / IP / preset). | `server/server.js:59` |
-| `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:123`<br>`server/server.js:51` |
-| `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:123`<br>`server/server.js:52` |
+| `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:51` |
+| `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:52` |
 
 ## Database
 
@@ -67,8 +67,8 @@ The following variables carry credentials or signing material. Never commit them
 | --- | --- | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | No | — | Anthropic API credential (LLM). **⚠ secret — see security note above.** | `server/routes/proxy-routes.js:364` |
 | `GOOGLE_API_KEY` | No | — | Google API credential. **⚠ secret — see security note above.** | `server/services/googleTts.js:79` |
-| `GOOGLE_TTS_API_KEY` | No | — | Google Text-to-Speech API credential. **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1434`<br>`server/routes/admin-routes.js:1461`<br>`server/routes/admin-routes.js:1462`<br>_+1 more_ |
-| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1463`<br>`server/routes/admin-routes.js:1464`<br>`server/routes/proxy-routes.js:370`<br>_+1 more_ |
+| `GOOGLE_TTS_API_KEY` | No | — | Google Text-to-Speech API credential. **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1459`<br>`server/routes/admin-routes.js:1486`<br>`server/routes/admin-routes.js:1487`<br>_+1 more_ |
+| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1488`<br>`server/routes/admin-routes.js:1489`<br>`server/routes/proxy-routes.js:370`<br>_+1 more_ |
 | `PIPER_BIN` | No | — | Path to the Piper TTS binary. | `server/routes/proxy-routes.js:881` |
 | `ROHY_TEST_FAKE_GOOGLE_TTS` | No | — | Test hook: stub Google TTS instead of calling the API. | `server/services/googleTts.js:116` |
 | `ROHY_TEST_FAKE_OPENAI_TTS` | No | — | Test hook: stub OpenAI TTS instead of calling the API. | `server/services/openaiTts.js:74` |
@@ -77,7 +77,7 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `OYON_ENABLED` | No | — | Mounts the Oyon emotion-capture addon as a live router (vs 503 stub). | `server/routes.js:33`<br>`server/routes/help-routes.js:122` |
+| `OYON_ENABLED` | No | — | Mounts the Oyon emotion-capture addon as a live router (vs 503 stub). | `server/routes.js:33`<br>`server/routes/help-routes.js:129` |
 
 ## Retention
 
