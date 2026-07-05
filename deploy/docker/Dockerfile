@@ -137,6 +137,12 @@ COPY --from=builder --chown=node:node /workspace/rohy/scripts ./scripts
 COPY --from=builder --chown=node:node /workspace/rohy/migrations ./migrations
 COPY --from=builder --chown=node:node /workspace/rohy/frontend ./frontend
 COPY --from=builder --chown=node:node /workspace/rohy/dist ./dist
+# server/routes/analytics-routes.js imports shared analytics + oyon logic from
+# src/ (momentsJoin.js, turnRows.js, caseInsights.js and their transitive
+# src/components/oyon/* deps). These live under src/, not server/, so the
+# directory-level COPYs above miss them — without this the container crashes on
+# boot with ERR_MODULE_NOT_FOUND for momentsJoin.js and never becomes healthy.
+COPY --from=builder --chown=node:node /workspace/rohy/src ./src
 # OyonR/ ships the standalone HTML/JS/wasm/onnx assets that Express
 # serves at /oyon/* and /standalone/*; without it those routes 404
 # in the container.
