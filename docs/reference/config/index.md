@@ -33,8 +33,8 @@ The following variables carry credentials or signing material. Never commit them
 | `JWT_SECRET` | Yes | — | Secret used to sign/verify auth + audit tokens. Fatal if unset. _Fatal if unset (validateEnv pushes an error)._ **⚠ secret — see security note above.** | `server/middleware/auth.js:16` |
 | `ROHY_DISABLE_AUTH_RATE_LIMIT` | No | — | Disables the auth-endpoint rate limiter (dev/test). | `server/routes/auth-routes.js:63` |
 | `ROHY_TRUST_PROXY` | No | `loopback` | Express `trust proxy` setting (proxy hop count / IP / preset). | `server/server.js:59` |
-| `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:123`<br>`server/server.js:51` |
-| `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:123`<br>`server/server.js:52` |
+| `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:51` |
+| `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:52` |
 
 ## Database
 
@@ -77,7 +77,7 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `OYON_ENABLED` | No | — | Mounts the Oyon emotion-capture addon as a live router (vs 503 stub). | `server/routes.js:33`<br>`server/routes/help-routes.js:122` |
+| `OYON_ENABLED` | No | — | Mounts the Oyon emotion-capture addon as a live router (vs 503 stub). | `server/routes.js:33`<br>`server/routes/help-routes.js:129` |
 
 ## Retention
 

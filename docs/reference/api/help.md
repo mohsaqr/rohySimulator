@@ -9,5 +9,5 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/help/diagnostics` | `authenticateToken, requireAuth` | `server/routes/help-routes.js:100` |
+| `GET` | `/api/help/diagnostics` | `authenticateToken, requireAuth` | `server/routes/help-routes.js:107` |
 | `GET` | `/api/help/release-notes` | `authenticateToken, requireAuth` | `server/routes/help-routes.js:88` |

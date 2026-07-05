@@ -1122,6 +1122,9 @@ Stores oyon emotion records records.
 | `settings_hash` | TEXT | — | `0017_oyon_records_window_metadata.sql` |
 | `settings_snapshot_json` | TEXT | — | `0017_oyon_records_window_metadata.sql` |
 | `dynamics_json` | TEXT | — | `0017_oyon_records_window_metadata.sql` |
+| `gaze_json` | TEXT | — | `0028_oyon_records_gaze_engagement.sql` |
+| `engagement_json` | TEXT | — | `0028_oyon_records_gaze_engagement.sql` |
+| `room` | TEXT | — | `0029_oyon_records_room.sql` |
 
 ## `oyon_settings`
 
