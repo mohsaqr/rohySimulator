@@ -127,3 +127,11 @@ tests/e2e/.auth/
 # index.js / index.d.ts / package.json from the vendored copy.
 /OyonR/standalone/vendor/dynajs/README.md
 /OyonR/standalone/vendor/dynajs/LEARNINGS.md
+
+# i18n change-detection sidecar: a per-key sha256 manifest of the English
+# source strings, consumed by scripts/translate-locales.mjs (delta
+# re-translation) and `npm run i18n:check`. It is derived data, regenerated
+# from src/locales/en/*.json — not source. Kept untracked because its
+# "key": "<hex>" shape trips secret scanners (the hexes are hashes of UI
+# labels like "Password"/"API key", never credentials).
+/src/locales/.en-hashes.json
