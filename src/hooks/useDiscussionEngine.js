@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import { LLMService } from '../services/llmService';
 import { VoiceService } from '../services/voiceService';
 import { apiPost } from '../services/apiClient';
@@ -44,6 +45,11 @@ async function logTurn(sessionId, role, content) {
 //   - viseme + speaking state for the avatar
 //   - lifecycle cleanup so leaving mid-stream cancels everything
 export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMode, voiceSettings }) {
+    // Session dialogue language — threaded into every discussant LLM call so
+    // the server appends the output-language directive (same contract as the
+    // patient chat). Without it a non-English learner gets an English
+    // discussant behind a localized UI.
+    const { caseLanguage } = useLanguage();
     const [messages, setMessages] = useState([]);
     const [busy, setBusy] = useState(false);
     const [speaking, setSpeaking] = useState(false);
@@ -181,6 +187,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
                     signal: controller.signal,
                     silent: silentUser,
                     agentTemplateId: discussant.templateId || null,
+                    caseLanguage,
                     // The discussant owns its transcript via logTurn() →
                     // agent_conversations. It must NOT also write to the
                     // patient `interactions` thread, or the debrief bleeds
@@ -236,7 +243,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
             abortRef.current = null;
             speechRef.current = null;
         }
-    }, [sessionId, activeCase, discussant, voiceMode, voiceSettings, busy, messages]);
+    }, [sessionId, activeCase, discussant, voiceMode, voiceSettings, busy, messages, caseLanguage]);
 
     const startConversation = useCallback(() => {
         // Opening turn: the instruction "your first reply opens the debrief"

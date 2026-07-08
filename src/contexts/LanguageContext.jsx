@@ -48,6 +48,11 @@ export function LanguageProvider({ children }) {
     const [uiLanguage, setUiLanguageState] = useState(DEFAULT_LANGUAGE);
     // null = follow uiLanguage; a code = explicit per-session override.
     const [caseOverride, setCaseOverride] = useState(null);
+    // Gates the first authenticated render until the stored preference has
+    // been fetched (success OR failure — never blocks indefinitely). Without
+    // this, a message sent while /users/preferences is in flight would carry
+    // caseLanguage 'en' and skip the LLM directive for an it/fi/sv user.
+    const [hydrated, setHydrated] = useState(false);
 
     // Hydrate from the users API at login; reset on logout/user switch so a
     // shared workstation never leaks user A's language to user B.
@@ -56,8 +61,10 @@ export function LanguageProvider({ children }) {
         setCaseOverride(null);
         if (!user) {
             setUiLanguageState(DEFAULT_LANGUAGE);
+            setHydrated(true);
             return undefined;
         }
+        setHydrated(false);
         apiFetch('/users/preferences')
             .then(prefs => {
                 if (cancelled) return;
@@ -65,6 +72,9 @@ export function LanguageProvider({ children }) {
             })
             .catch(err => {
                 console.error('[Language] Failed to load preference, staying on default:', err);
+            })
+            .finally(() => {
+                if (!cancelled) setHydrated(true);
             });
         return () => { cancelled = true; };
     }, [user?.id]);
@@ -104,6 +114,11 @@ export function LanguageProvider({ children }) {
         setUiLanguage,
         setCaseLanguage
     };
+
+    // One brief gate per login, mirroring AuthProvider's own loading gate —
+    // children never render with a stale default language for a user whose
+    // stored preference is non-English.
+    if (user && !hydrated) return null;
 
     return (
         <LanguageContext.Provider value={value}>

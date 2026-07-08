@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Keyboard, GraduationCap, MessagesSquare, NotebookPen, Play } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { sttLocaleFor, DEFAULT_LANGUAGE } from '../../i18n/languages';
 import { caseDisplayLabel } from '../../utils/caseDisplayLabel';
 import { fetchDiscussantForCase } from '../../services/discussionService';
 import { useDiscussionEngine } from '../../hooks/useDiscussionEngine';
@@ -20,6 +22,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
     const { t } = useTranslation('discussion');
     const { headManifest, platformAvatars, voiceSettings } = useVoice();
     const { user } = useAuth();
+    const { caseLanguage } = useLanguage();
     // Debrief is fully student-facing — the authoring title is the diagnosis.
     // Gate it through the same role rule as every other room header (Bug 14,
     // 18.5.2026: this screen was the surface that bypassed caseDisplayLabel).
@@ -113,7 +116,12 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
         setInterim(currentInterim || '');
     }, []);
 
-    const sttLang = voiceSettings?.stt_language || 'en-US';
+    // Session language wins over the platform-wide STT locale, mirroring the
+    // patient-chat rule in ChatInterface.startVoiceTurn: an Italian debrief
+    // listens in Italian; English sessions keep the platform setting.
+    const sttLang = caseLanguage !== DEFAULT_LANGUAGE
+        ? sttLocaleFor(caseLanguage)
+        : (voiceSettings?.stt_language || 'en-US');
 
     return (
         <div className="h-screen w-screen bg-gradient-to-br from-slate-700 to-slate-900 text-slate-100 flex flex-col overflow-hidden">

@@ -1391,7 +1391,8 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 teamLog,
                 currentVitals,
                 currentConversation,
-                caseSnapshot || activeCase
+                caseSnapshot || activeCase,
+                { caseLanguage }
             );
 
             // Use functional update with fallback to empty array

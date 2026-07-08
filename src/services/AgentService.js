@@ -337,7 +337,7 @@ export const AgentService = {
    * Send a message to an agent via the LLM proxy
    * Handles the full flow: build context, send message, log response
    */
-  async sendAgentMessage(sessionId, agent, userMessage, patientRecord, teamLog, currentVitals, conversationHistory = [], activeCase = null) {
+  async sendAgentMessage(sessionId, agent, userMessage, patientRecord, teamLog, currentVitals, conversationHistory = [], activeCase = null, { caseLanguage = null } = {}) {
     try {
       await this.addMessage(sessionId, agent.agent_type, 'user', userMessage);
 
@@ -354,6 +354,11 @@ export const AgentService = {
         messages,
         system_prompt: systemPrompt
       };
+      // Session dialogue language — the server appends the registry's
+      // output-language directive (systemPromptAssembly), same contract as
+      // the patient chat in llmService. Without this, nurse/consultant/
+      // relative replies stay English in a non-English session.
+      if (caseLanguage) requestBody.case_language = caseLanguage;
 
       // Per-persona LLM routing — send only the template id. The server
       // (proxy-routes.js) reads the template by id and applies its LLM

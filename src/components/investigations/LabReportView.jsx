@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Building2, FlaskConical, X } from 'lucide-react';
 import { apiPut } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
-import { formatDate, formatTime, formatDateTime } from '../../utils/formatters';
+import { formatDate, formatTime, formatDateTime, formatNumber } from '../../utils/formatters';
 
 // Pure lab-report content. The hospital-style chrome (gradient header,
 // patient info bar, results table, signature) is identical to what
@@ -176,15 +176,15 @@ export default function LabReportView({ result, patientInfo, onClose }) {
                                 <td className={`py-4 px-4 text-right text-xl font-bold border-b border-slate-100 ${
                                     status === 'high' ? 'text-orange-600' : status === 'low' ? 'text-blue-600' : 'text-green-600'
                                 }`}>
-                                    {result.current_value !== null && result.current_value !== undefined
-                                        ? Number(result.current_value).toFixed(2)
+                                    {Number.isFinite(Number(result.current_value)) && result.current_value !== null && result.current_value !== ''
+                                        ? formatNumber(result.current_value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                         : t('not_available_short')}
                                 </td>
                                 <td className="py-4 px-4 text-sm text-slate-500 border-b border-slate-100">{result.unit || '-'}</td>
                                 {showRanges && (
                                     <td className="py-4 px-4 text-sm text-slate-500 font-mono border-b border-slate-100">
                                         {result.min_value !== null && result.max_value !== null
-                                            ? `${result.min_value} - ${result.max_value}`
+                                            ? `${formatNumber(result.min_value)} - ${formatNumber(result.max_value)}`
                                             : t('range_not_available')}
                                     </td>
                                 )}
