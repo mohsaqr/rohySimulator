@@ -1,6 +1,8 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, CheckCircle, Search, Stethoscope } from 'lucide-react';
 import { BODY_REGIONS, EXAM_TECHNIQUES } from '../../data/examRegions';
+import { regionLabel, techniqueLabel } from './examinationLabels';
 import AuscultationPanel from './AuscultationPanel';
 
 /**
@@ -18,13 +20,14 @@ export default function FindingDisplay({
     heartAudio,
     lungAudio
 }) {
+    const { t } = useTranslation('examination');
     // No region selected
     if (!selectedRegion) {
         return (
             <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6 text-center">
                 <Search className="w-10 h-10 mx-auto mb-3 text-slate-500" />
                 <p className="text-slate-400">
-                    Click on a body region to begin examination
+                    {t('click_region_to_begin')}
                 </p>
             </div>
         );
@@ -39,10 +42,10 @@ export default function FindingDisplay({
             <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6 text-center">
                 <Stethoscope className="w-10 h-10 mx-auto mb-3 text-cyan-500" />
                 <p className="text-white font-medium mb-1">
-                    {region?.name || selectedRegion}
+                    {regionLabel(t, selectedRegion, region?.name)}
                 </p>
                 <p className="text-slate-400 text-sm">
-                    Select an examination technique
+                    {t('select_technique')}
                 </p>
             </div>
         );
@@ -67,7 +70,7 @@ export default function FindingDisplay({
                 lungAudio={lungAudio}
                 selectedRegion={selectedRegion}
                 auscultationProfile={region?.auscultationProfile}
-                regionName={region?.name || selectedRegion}
+                regionName={regionLabel(t, selectedRegion, region?.name)}
             />
         );
     }
@@ -84,19 +87,19 @@ export default function FindingDisplay({
             {/* Header */}
             <div className="flex items-center justify-between mb-3">
                 <div>
-                    <span className="text-sm text-slate-400">{region?.name}</span>
+                    <span className="text-sm text-slate-400">{region && regionLabel(t, selectedRegion, region.name)}</span>
                     <span className="text-slate-600 mx-2">/</span>
-                    <span className="text-sm text-cyan-400">{examType?.name}</span>
+                    <span className="text-sm text-cyan-400">{examType && techniqueLabel(t, selectedExamType, examType.name)}</span>
                 </div>
                 {isAbnormal ? (
                     <span className="flex items-center gap-1 text-xs px-2 py-1 bg-red-900/50 text-red-400 rounded">
                         <AlertTriangle className="w-3 h-3" />
-                        Abnormal
+                        {t('abnormal')}
                     </span>
                 ) : (
                     <span className="flex items-center gap-1 text-xs px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded">
                         <CheckCircle className="w-3 h-3" />
-                        Normal
+                        {t('normal')}
                     </span>
                 )}
             </div>
@@ -106,7 +109,7 @@ export default function FindingDisplay({
                 text-sm leading-relaxed p-3 rounded bg-slate-900/50
                 ${isAbnormal ? 'text-red-200' : 'text-slate-200'}
             `}>
-                {finding || 'No finding recorded'}
+                {finding || t('no_finding')}
             </div>
         </div>
     );

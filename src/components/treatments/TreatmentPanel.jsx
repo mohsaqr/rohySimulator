@@ -5,10 +5,22 @@ import {
     Play, Pause, X, ChevronDown, ChevronUp,
     Loader2, Info
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useToast } from '../../contexts/ToastContext';
 import { usePatientRecord } from '../../services/PatientRecord';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { ApiError, apiFetch, apiPost, apiPut } from '../../services/apiClient';
+
+// Backend order statuses -> static i18n keys (never t(variable) — every
+// enum value gets an explicit key; unknown values fall back to the raw
+// backend string).
+const STATUS_LABEL_KEYS = {
+    ordered: 'status_ordered',
+    in_progress: 'status_in_progress',
+    administered: 'status_administered',
+    completed: 'status_completed',
+    discontinued: 'status_discontinued'
+};
 
 /**
  * TreatmentPanel - Main component for ordering treatments
@@ -27,6 +39,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedTreatment, setSelectedTreatment] = useState(null);
     const [orderingInProgress, setOrderingInProgress] = useState(false);
+    const { t } = useTranslation('treatments');
     const toast = useToast();
     const { ordered, administered } = usePatientRecord();
 
@@ -43,10 +56,10 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
     });
 
     const categories = [
-        { id: 'medication', label: 'Medications', icon: Pill, color: 'pink' },
-        { id: 'iv_fluid', label: 'IV Fluids', icon: Droplets, color: 'blue' },
-        { id: 'oxygen', label: 'Oxygen', icon: Wind, color: 'cyan' },
-        { id: 'nursing', label: 'Nursing', icon: HeartPulse, color: 'green' }
+        { id: 'medication', label: t('category_medications'), icon: Pill, color: 'pink' },
+        { id: 'iv_fluid', label: t('category_iv_fluids'), icon: Droplets, color: 'blue' },
+        { id: 'oxygen', label: t('category_oxygen'), icon: Wind, color: 'cyan' },
+        { id: 'nursing', label: t('category_nursing'), icon: HeartPulse, color: 'green' }
     ];
 
     // Fetch available treatments
@@ -62,7 +75,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
             setTreatments(data?.treatments || []);
         } catch (error) {
             console.error('[TreatmentPanel] Error fetching treatments:', error);
-            toast.error('Failed to load treatments: ' + error.message);
+            toast.error(t('failed_load_treatments', { error: error.message }));
         } finally {
             setLoading(false);
         }
@@ -114,7 +127,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                 result = await apiPost(`/sessions/${sessionId}/order-treatment`, orderData);
             } catch (err) {
                 if (err instanceof ApiError) {
-                    toast.error(err.message || 'Failed to order treatment');
+                    toast.error(err.message || t('failed_order_treatment'));
                     return;
                 }
                 throw err;
@@ -134,15 +147,15 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
             });
 
             if (result.is_contraindicated) {
-                toast.warning(`Warning: ${result.contraindication_feedback || 'This treatment may be contraindicated for this patient.'}`);
+                toast.warning(t('warning_prefix', { message: result.contraindication_feedback || t('contraindication_default') }));
             } else if (result.is_expected) {
-                toast.success(`Ordered ${selectedTreatment.treatment_name} (+${result.points_awarded} points)`);
+                toast.success(t('ordered_with_points', { name: selectedTreatment.treatment_name, points: result.points_awarded }));
             } else {
-                toast.success(`Ordered ${selectedTreatment.treatment_name}`);
+                toast.success(t('ordered_treatment', { name: selectedTreatment.treatment_name }));
             }
 
             if (result.is_high_alert) {
-                toast.info('High-alert medication - verify dose and route');
+                toast.info(t('high_alert_warning'));
             }
 
             setSelectedTreatment(null);
@@ -158,7 +171,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
             });
             fetchOrders();
         } catch (error) {
-            toast.error('Failed to order treatment: ' + error.message);
+            toast.error(t('failed_order_treatment_error', { error: error.message }));
         } finally {
             setOrderingInProgress(false);
         }
@@ -169,7 +182,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
         try {
             const result = await apiPost(`/sessions/${sessionId}/administer/${orderId}`);
             const order = orders.find(o => o.id === orderId);
-            toast.success(`Administered ${order?.treatment_item || 'treatment'}`);
+            toast.success(t('administered_treatment', { name: order?.treatment_item || t('treatment_generic') }));
 
             administered(order?.treatment_type || 'treatment', order?.treatment_item, {
                 dose: order?.dose,
@@ -186,7 +199,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
             fetchOrders();
             onEffectsUpdate?.();
         } catch (error) {
-            toast.error('Failed to administer: ' + error.message);
+            toast.error(t('failed_administer', { error: error.message }));
         }
     };
 
@@ -195,12 +208,12 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
         try {
             await apiPut(`/sessions/${sessionId}/discontinue/${orderId}`);
             const order = orders.find(o => o.id === orderId);
-            toast.info('Treatment discontinued');
+            toast.info(t('treatment_discontinued'));
             EventLogger.treatmentDiscontinued(orderId, order?.treatment_item, COMPONENTS.TREATMENT_PANEL);
             fetchOrders();
             onEffectsUpdate?.();
         } catch (error) {
-            toast.error('Failed to discontinue: ' + error.message);
+            toast.error(t('failed_discontinue', { error: error.message }));
         }
     };
 
@@ -230,7 +243,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                 {is_contraindicated && (
                     <div className="flex items-center gap-2 p-2 bg-red-900/30 border border-red-600 rounded text-red-300 text-sm">
                         <AlertTriangle className="w-4 h-4" />
-                        <span>Potentially contraindicated for this patient</span>
+                        <span>{t('contraindicated_warning')}</span>
                     </div>
                 )}
 
@@ -238,7 +251,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                 {treatment_type === 'medication' && (
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="text-xs text-neutral-400">Dose</label>
+                            <label className="text-xs text-neutral-400">{t('dose')}</label>
                             <div className="flex gap-1">
                                 <input
                                     type="number"
@@ -252,7 +265,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                                     onChange={(e) => setOrderForm(f => ({ ...f, dose_unit: e.target.value }))}
                                     className="px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                                 >
-                                    <option value="">{base_dose_unit || 'unit'}</option>
+                                    <option value="">{base_dose_unit || t('unit_fallback')}</option>
                                     <option value="mg">mg</option>
                                     <option value="mcg">mcg</option>
                                     <option value="g">g</option>
@@ -262,50 +275,50 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs text-neutral-400">Route</label>
+                            <label className="text-xs text-neutral-400">{t('route')}</label>
                             <select
                                 value={orderForm.route}
                                 onChange={(e) => setOrderForm(f => ({ ...f, route: e.target.value }))}
                                 className="w-full px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                             >
-                                <option value="">{route || 'Select route'}</option>
-                                <option value="IV">IV Push</option>
-                                <option value="IV infusion">IV Infusion</option>
-                                <option value="IM">IM</option>
-                                <option value="SC">SC</option>
-                                <option value="PO">PO</option>
-                                <option value="SL">SL</option>
-                                <option value="inhaled">Inhaled</option>
+                                <option value="">{route || t('select_route')}</option>
+                                <option value="IV">{t('route_iv_push')}</option>
+                                <option value="IV infusion">{t('route_iv_infusion')}</option>
+                                <option value="IM">{t('route_im')}</option>
+                                <option value="SC">{t('route_sc')}</option>
+                                <option value="PO">{t('route_po')}</option>
+                                <option value="SL">{t('route_sl')}</option>
+                                <option value="inhaled">{t('route_inhaled')}</option>
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs text-neutral-400">Frequency</label>
+                            <label className="text-xs text-neutral-400">{t('frequency')}</label>
                             <select
                                 value={orderForm.frequency}
                                 onChange={(e) => setOrderForm(f => ({ ...f, frequency: e.target.value }))}
                                 className="w-full px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                             >
-                                <option value="once">Once</option>
-                                <option value="stat">STAT</option>
-                                <option value="q4h">Q4H</option>
-                                <option value="q6h">Q6H</option>
-                                <option value="q8h">Q8H</option>
-                                <option value="daily">Daily</option>
-                                <option value="bid">BID</option>
-                                <option value="tid">TID</option>
-                                <option value="prn">PRN</option>
+                                <option value="once">{t('freq_once')}</option>
+                                <option value="stat">{t('freq_stat')}</option>
+                                <option value="q4h">{t('freq_q4h')}</option>
+                                <option value="q6h">{t('freq_q6h')}</option>
+                                <option value="q8h">{t('freq_q8h')}</option>
+                                <option value="daily">{t('freq_daily')}</option>
+                                <option value="bid">{t('freq_bid')}</option>
+                                <option value="tid">{t('freq_tid')}</option>
+                                <option value="prn">{t('freq_prn')}</option>
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs text-neutral-400">Urgency</label>
+                            <label className="text-xs text-neutral-400">{t('urgency')}</label>
                             <select
                                 value={orderForm.urgency}
                                 onChange={(e) => setOrderForm(f => ({ ...f, urgency: e.target.value }))}
                                 className="w-full px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                             >
-                                <option value="routine">Routine</option>
-                                <option value="stat">STAT</option>
-                                <option value="prn">PRN</option>
+                                <option value="routine">{t('urgency_routine')}</option>
+                                <option value="stat">{t('urgency_stat')}</option>
+                                <option value="prn">{t('urgency_prn')}</option>
                             </select>
                         </div>
                     </div>
@@ -315,7 +328,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                 {treatment_type === 'iv_fluid' && (
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="text-xs text-neutral-400">Rate</label>
+                            <label className="text-xs text-neutral-400">{t('rate')}</label>
                             <div className="flex gap-1">
                                 <input
                                     type="number"
@@ -330,19 +343,19 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                                     className="px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                                 >
                                     <option value="ml/hr">ml/hr</option>
-                                    <option value="bolus">Bolus</option>
+                                    <option value="bolus">{t('rate_bolus')}</option>
                                 </select>
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs text-neutral-400">Urgency</label>
+                            <label className="text-xs text-neutral-400">{t('urgency')}</label>
                             <select
                                 value={orderForm.urgency}
                                 onChange={(e) => setOrderForm(f => ({ ...f, urgency: e.target.value }))}
                                 className="w-full px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                             >
-                                <option value="routine">Routine</option>
-                                <option value="stat">STAT (Bolus)</option>
+                                <option value="routine">{t('urgency_routine')}</option>
+                                <option value="stat">{t('urgency_stat_bolus')}</option>
                             </select>
                         </div>
                     </div>
@@ -352,7 +365,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                 {treatment_type === 'oxygen' && (
                     <div className="text-sm text-neutral-400">
                         <Info className="w-4 h-4 inline mr-1" />
-                        This will start continuous oxygen therapy at the selected level.
+                        {t('oxygen_info')}
                     </div>
                 )}
 
@@ -360,18 +373,18 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                 {treatment_type === 'nursing' && (
                     <div className="text-sm text-neutral-400">
                         <Info className="w-4 h-4 inline mr-1" />
-                        This nursing intervention will be applied immediately.
+                        {t('nursing_info')}
                     </div>
                 )}
 
                 {/* Notes field */}
                 <div>
-                    <label className="text-xs text-neutral-400">Notes (optional)</label>
+                    <label className="text-xs text-neutral-400">{t('notes_optional')}</label>
                     <input
                         type="text"
                         value={orderForm.notes}
                         onChange={(e) => setOrderForm(f => ({ ...f, notes: e.target.value }))}
-                        placeholder="Additional instructions..."
+                        placeholder={t('additional_instructions_placeholder')}
                         className="w-full px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                     />
                 </div>
@@ -379,12 +392,12 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                 {/* Effect preview */}
                 {(selectedTreatment.hr_effect || selectedTreatment.bp_sys_effect || selectedTreatment.spo2_effect) && (
                     <div className="text-xs text-neutral-400 p-2 bg-neutral-900 rounded">
-                        <span className="font-bold">Expected Effects:</span>
+                        <span className="font-bold">{t('expected_effects')}</span>
                         {selectedTreatment.hr_effect !== 0 && <span className="ml-2">HR {selectedTreatment.hr_effect > 0 ? '+' : ''}{selectedTreatment.hr_effect}</span>}
                         {selectedTreatment.bp_sys_effect !== 0 && <span className="ml-2">BP {selectedTreatment.bp_sys_effect > 0 ? '+' : ''}{selectedTreatment.bp_sys_effect}/{selectedTreatment.bp_dia_effect > 0 ? '+' : ''}{selectedTreatment.bp_dia_effect}</span>}
                         {selectedTreatment.spo2_effect !== 0 && <span className="ml-2">SpO2 {selectedTreatment.spo2_effect > 0 ? '+' : ''}{selectedTreatment.spo2_effect}%</span>}
                         {selectedTreatment.rr_effect !== 0 && <span className="ml-2">RR {selectedTreatment.rr_effect > 0 ? '+' : ''}{selectedTreatment.rr_effect}</span>}
-                        <span className="ml-2 text-neutral-500">| Onset: {selectedTreatment.onset_minutes}min, Peak: {selectedTreatment.peak_minutes}min</span>
+                        <span className="ml-2 text-neutral-500">{t('onset_peak', { onset: selectedTreatment.onset_minutes, peak: selectedTreatment.peak_minutes })}</span>
                     </div>
                 )}
 
@@ -399,9 +412,9 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                     } disabled:opacity-50`}
                 >
                     {orderingInProgress ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> Ordering...</>
+                        <><Loader2 className="w-4 h-4 animate-spin" /> {t('ordering')}</>
                     ) : (
-                        <>Order {treatment_name}</>
+                        <>{t('order_treatment', { name: treatment_name })}</>
                     )}
                 </button>
             </div>
@@ -417,7 +430,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
             <div className="space-y-2">
                 <h4 className="text-sm font-bold text-white flex items-center gap-2">
                     <Clock className="w-4 h-4" />
-                    Active Orders ({activeOrders.length})
+                    {t('active_orders', { count: activeOrders.length })}
                 </h4>
                 {activeOrders.map(order => (
                     <div
@@ -446,7 +459,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                                         onClick={() => handleAdminister(order.id)}
                                         className="px-2 py-1 bg-green-600 hover:bg-green-500 text-white text-xs rounded flex items-center gap-1"
                                     >
-                                        <Play className="w-3 h-3" /> Give
+                                        <Play className="w-3 h-3" /> {t('give')}
                                     </button>
                                 )}
                                 {order.status === 'in_progress' && (
@@ -454,7 +467,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                                         onClick={() => handleDiscontinue(order.id)}
                                         className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white text-xs rounded flex items-center gap-1"
                                     >
-                                        <Pause className="w-3 h-3" /> Stop
+                                        <Pause className="w-3 h-3" /> {t('stop')}
                                     </button>
                                 )}
                                 <span className={`text-xs px-2 py-0.5 rounded ${
@@ -463,7 +476,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                                     order.status === 'administered' ? 'bg-blue-600/30 text-blue-300' :
                                     'bg-neutral-600/30 text-neutral-300'
                                 }`}>
-                                    {order.status}
+                                    {STATUS_LABEL_KEYS[order.status] ? t(STATUS_LABEL_KEYS[order.status]) : order.status}
                                 </span>
                             </div>
                         </div>
@@ -513,7 +526,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={`Search ${categories.find(c => c.id === activeCategory)?.label.toLowerCase()}...`}
+                        placeholder={t('search_category_placeholder', { category: categories.find(c => c.id === activeCategory)?.label.toLowerCase() })}
                         className="w-full pl-10 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder-neutral-500 focus:border-neutral-500 focus:outline-none"
                     />
                 </div>
@@ -525,7 +538,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
                     {filteredTreatments.length === 0 ? (
                         <div className="text-center py-8 text-neutral-500">
-                            <p>No {categories.find(c => c.id === activeCategory)?.label.toLowerCase()} available</p>
+                            <p>{t('no_category_available', { category: categories.find(c => c.id === activeCategory)?.label.toLowerCase() })}</p>
                         </div>
                     ) : (
                         filteredTreatments.map(treatment => {
@@ -550,17 +563,17 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                                             <div className="font-medium text-white flex items-center gap-2">
                                                 {treatment.treatment_name}
                                                 {treatment.is_contraindicated && (
-                                                    <span className="text-xs px-1.5 py-0.5 bg-red-600/30 text-red-300 rounded">CI</span>
+                                                    <span className="text-xs px-1.5 py-0.5 bg-red-600/30 text-red-300 rounded">{t('badge_ci')}</span>
                                                 )}
                                                 {treatment.is_expected && (
-                                                    <span className="text-xs px-1.5 py-0.5 bg-green-600/30 text-green-300 rounded">Expected</span>
+                                                    <span className="text-xs px-1.5 py-0.5 bg-green-600/30 text-green-300 rounded">{t('badge_expected')}</span>
                                                 )}
                                             </div>
                                             {treatment.description && (
                                                 <p className="text-xs text-neutral-400 mt-1">{treatment.description}</p>
                                             )}
                                             {treatment.route && (
-                                                <span className="text-xs text-neutral-500 mt-1 inline-block">Route: {treatment.route}</span>
+                                                <span className="text-xs text-neutral-500 mt-1 inline-block">{t('route_label', { route: treatment.route })}</span>
                                             )}
                                         </div>
                                         {isSelected ? (
@@ -586,7 +599,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                     {orders.filter(o => o.status !== 'discontinued' && o.status !== 'completed').length === 0 && (
                         <div className="text-center py-8 text-neutral-500">
                             <Clock className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                            <p className="text-sm">No active orders</p>
+                            <p className="text-sm">{t('no_active_orders')}</p>
                         </div>
                     )}
                 </div>

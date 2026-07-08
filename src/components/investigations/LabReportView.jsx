@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import {
-    AlertTriangle, Building2, FlaskConical, Minus,
-    TrendingDown, TrendingUp, X,
-} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { AlertTriangle, Building2, FlaskConical, X } from 'lucide-react';
 import { apiPut } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
+import { formatDate, formatTime, formatDateTime } from '../../utils/formatters';
 
 // Pure lab-report content. The hospital-style chrome (gradient header,
 // patient info bar, results table, signature) is identical to what
@@ -18,6 +17,7 @@ import { usePatientRecord } from '../../services/PatientRecord';
 // mark-as-viewed + PatientRecord.elicited writes that the modal used to
 // fire on open.
 export default function LabReportView({ result, patientInfo, onClose }) {
+    const { t } = useTranslation('investigations');
     const { elicited } = usePatientRecord();
     const [showRanges, setShowRanges] = useState(() => {
         const saved = localStorage.getItem('rohy_show_lab_ranges');
@@ -74,9 +74,9 @@ export default function LabReportView({ result, patientInfo, onClose }) {
                             <Building2 className="w-8 h-8 text-purple-300" />
                         </div>
                         <div>
-                            <h1 className="text-xl font-bold tracking-wide">LABORATORY REPORT</h1>
-                            <p className="text-purple-300 text-sm font-medium mt-1">VipSim Medical Center</p>
-                            <p className="text-purple-400 text-xs mt-0.5">Clinical Laboratory Services</p>
+                            <h1 className="text-xl font-bold tracking-wide">{t('lab_report_title')}</h1>
+                            <p className="text-purple-300 text-sm font-medium mt-1">{t('medical_center')}</p>
+                            <p className="text-purple-400 text-xs mt-0.5">{t('lab_services')}</p>
                         </div>
                     </div>
                     {onClose && (
@@ -92,30 +92,30 @@ export default function LabReportView({ result, patientInfo, onClose }) {
 
             <div className="bg-slate-100 border-b border-slate-200 p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
-                    <div className="text-slate-500 text-xs uppercase tracking-wide">Patient</div>
-                    <div className="font-semibold text-slate-800">{patientInfo?.name || 'Unknown Patient'}</div>
+                    <div className="text-slate-500 text-xs uppercase tracking-wide">{t('patient')}</div>
+                    <div className="font-semibold text-slate-800">{patientInfo?.name || t('unknown_patient')}</div>
                     <div className="text-slate-600 text-xs">
-                        {patientInfo?.age && `${patientInfo.age} yo`} {patientInfo?.gender}
+                        {patientInfo?.age && t('age_yo', { age: patientInfo.age })} {patientInfo?.gender}
                     </div>
                 </div>
                 <div>
-                    <div className="text-slate-500 text-xs uppercase tracking-wide">Accession #</div>
+                    <div className="text-slate-500 text-xs uppercase tracking-wide">{t('accession_number')}</div>
                     <div className="font-mono font-semibold text-slate-800">{accessionNumber}</div>
                 </div>
                 <div>
-                    <div className="text-slate-500 text-xs uppercase tracking-wide">Report Date</div>
+                    <div className="text-slate-500 text-xs uppercase tracking-wide">{t('report_date')}</div>
                     <div className="font-semibold text-slate-800">
-                        {reportDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {formatDate(reportDate, { month: 'short', day: 'numeric', year: 'numeric' })}
                     </div>
                     <div className="text-slate-600 text-xs">
-                        {reportDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        {formatTime(reportDate, { hour: '2-digit', minute: '2-digit' })}
                     </div>
                 </div>
                 <div>
-                    <div className="text-slate-500 text-xs uppercase tracking-wide">Status</div>
+                    <div className="text-slate-500 text-xs uppercase tracking-wide">{t('status')}</div>
                     <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
                         <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                        FINAL
+                        {t('final')}
                     </div>
                 </div>
             </div>
@@ -124,11 +124,11 @@ export default function LabReportView({ result, patientInfo, onClose }) {
                 <div className="flex items-center gap-4">
                     <label className="flex items-center gap-2 cursor-pointer text-sm">
                         <input type="checkbox" checked={showRanges} onChange={toggleRanges} className="w-4 h-4 rounded" />
-                        <span className="text-slate-600">Show Ranges</span>
+                        <span className="text-slate-600">{t('show_ranges')}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer text-sm">
                         <input type="checkbox" checked={showFlags} onChange={toggleFlags} className="w-4 h-4 rounded" />
-                        <span className="text-slate-600">Show Flags</span>
+                        <span className="text-slate-600">{t('show_flags')}</span>
                     </label>
                 </div>
             </div>
@@ -143,11 +143,11 @@ export default function LabReportView({ result, patientInfo, onClose }) {
                             <h2 className="text-xl font-bold text-slate-800">{result.test_name}</h2>
                             <div className="flex items-center gap-3 mt-2 flex-wrap">
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
-                                    {result.test_group || 'General'}
+                                    {result.test_group || t('group_general')}
                                 </span>
                                 {result.gender_category && (
                                     <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full text-xs">
-                                        Reference: {result.gender_category}
+                                        {t('reference_category', { category: result.gender_category })}
                                     </span>
                                 )}
                             </div>
@@ -159,14 +159,14 @@ export default function LabReportView({ result, patientInfo, onClose }) {
                     <table className="w-full border-collapse">
                         <thead>
                             <tr className="bg-slate-100">
-                                <th className="text-left py-3 px-4 text-xs uppercase tracking-wider text-slate-600 font-semibold border-b border-slate-200">Test</th>
-                                <th className="text-right py-3 px-4 text-xs uppercase tracking-wider text-slate-600 font-semibold border-b border-slate-200">Result</th>
-                                <th className="text-left py-3 px-4 text-xs uppercase tracking-wider text-slate-600 font-semibold border-b border-slate-200">Unit</th>
+                                <th className="text-left py-3 px-4 text-xs uppercase tracking-wider text-slate-600 font-semibold border-b border-slate-200">{t('th_test')}</th>
+                                <th className="text-right py-3 px-4 text-xs uppercase tracking-wider text-slate-600 font-semibold border-b border-slate-200">{t('th_result')}</th>
+                                <th className="text-left py-3 px-4 text-xs uppercase tracking-wider text-slate-600 font-semibold border-b border-slate-200">{t('th_unit')}</th>
                                 {showRanges && (
-                                    <th className="text-left py-3 px-4 text-xs uppercase tracking-wider text-slate-600 font-semibold border-b border-slate-200">Reference Range</th>
+                                    <th className="text-left py-3 px-4 text-xs uppercase tracking-wider text-slate-600 font-semibold border-b border-slate-200">{t('th_reference_range')}</th>
                                 )}
                                 {showFlags && (
-                                    <th className="text-center py-3 px-4 text-xs uppercase tracking-wider text-slate-600 font-semibold border-b border-slate-200">Flag</th>
+                                    <th className="text-center py-3 px-4 text-xs uppercase tracking-wider text-slate-600 font-semibold border-b border-slate-200">{t('th_flag')}</th>
                                 )}
                             </tr>
                         </thead>
@@ -178,14 +178,14 @@ export default function LabReportView({ result, patientInfo, onClose }) {
                                 }`}>
                                     {result.current_value !== null && result.current_value !== undefined
                                         ? Number(result.current_value).toFixed(2)
-                                        : 'N/A'}
+                                        : t('not_available_short')}
                                 </td>
                                 <td className="py-4 px-4 text-sm text-slate-500 border-b border-slate-100">{result.unit || '-'}</td>
                                 {showRanges && (
                                     <td className="py-4 px-4 text-sm text-slate-500 font-mono border-b border-slate-100">
                                         {result.min_value !== null && result.max_value !== null
                                             ? `${result.min_value} - ${result.max_value}`
-                                            : 'Not available'}
+                                            : t('range_not_available')}
                                     </td>
                                 )}
                                 {showFlags && (
@@ -197,11 +197,11 @@ export default function LabReportView({ result, patientInfo, onClose }) {
                                                 'bg-slate-100 text-slate-600'
                                             }`}>
                                                 <span className="text-base">{flag.symbol}</span>
-                                                {flag.text}
+                                                {t(flag.textKey)}
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                                ✓ Normal
+                                                {t('flag_normal_check')}
                                             </span>
                                         )}
                                     </td>
@@ -228,10 +228,10 @@ export default function LabReportView({ result, patientInfo, onClose }) {
                                         status === 'low' ? 'text-blue-800' :
                                         'text-slate-800'
                                     }`}>
-                                        {status === 'low' ? 'Below Normal Range' : status === 'high' ? 'Above Normal Range' : 'Value Status Unknown'}
+                                        {status === 'low' ? t('below_normal_range') : status === 'high' ? t('above_normal_range') : t('value_status_unknown')}
                                     </div>
                                     <div className="text-sm text-slate-600">
-                                        This value is outside the normal reference range. Clinical correlation is recommended.
+                                        {t('outside_range_note')}
                                     </div>
                                 </div>
                             </div>
@@ -240,11 +240,11 @@ export default function LabReportView({ result, patientInfo, onClose }) {
 
                     <div className="mt-8 pt-4 border-t border-slate-200">
                         <div className="text-xs text-slate-500 space-y-1">
-                            <div className="font-semibold text-slate-600 mb-2">Legend</div>
+                            <div className="font-semibold text-slate-600 mb-2">{t('legend')}</div>
                             <div className="flex gap-6 flex-wrap">
-                                <span className="flex items-center gap-1"><span className="text-orange-500">↑</span> HIGH - Above reference range</span>
-                                <span className="flex items-center gap-1"><span className="text-blue-500">↓</span> LOW - Below reference range</span>
-                                <span className="flex items-center gap-1"><span className="text-green-500">✓</span> Normal - Within reference range</span>
+                                <span className="flex items-center gap-1"><span className="text-orange-500">↑</span> {t('legend_high')}</span>
+                                <span className="flex items-center gap-1"><span className="text-blue-500">↓</span> {t('legend_low')}</span>
+                                <span className="flex items-center gap-1"><span className="text-green-500">✓</span> {t('legend_normal')}</span>
                             </div>
                         </div>
                     </div>
@@ -252,36 +252,36 @@ export default function LabReportView({ result, patientInfo, onClose }) {
                     <div className="pt-6 border-t border-slate-200 mt-8">
                         <div className="flex items-end justify-between">
                             <div>
-                                <div className="text-slate-800 font-semibold">Electronically Verified</div>
+                                <div className="text-slate-800 font-semibold">{t('electronically_verified')}</div>
                                 <div className="text-slate-600 text-sm">
-                                    {reportDate.toLocaleDateString('en-US', {
+                                    {formatDateTime(reportDate, {
                                         weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
                                         hour: '2-digit', minute: '2-digit',
                                     })}
                                 </div>
                             </div>
                             <div className="text-right">
-                                <div className="font-serif italic text-xl text-slate-700">Clinical Laboratory</div>
-                                <div className="text-slate-500 text-sm">CAP Accredited</div>
-                                <div className="text-slate-400 text-xs">Quality Assured Results</div>
+                                <div className="font-serif italic text-xl text-slate-700">{t('clinical_laboratory')}</div>
+                                <div className="text-slate-500 text-sm">{t('cap_accredited')}</div>
+                                <div className="text-slate-400 text-xs">{t('quality_assured')}</div>
                             </div>
                         </div>
                     </div>
 
                     <div className="mt-6 pt-4 border-t border-slate-200 text-xs text-slate-400">
-                        <strong>Note:</strong> This report is for educational/simulation purposes only and does not constitute actual medical laboratory data.
+                        <strong>{t('note_label')}</strong> {t('lab_disclaimer')}
                     </div>
                 </div>
             </div>
 
             <div className="bg-slate-100 border-t border-slate-200 p-4 flex items-center justify-between print:hidden">
-                <div className="text-xs text-slate-500">Results verified and released</div>
+                <div className="text-xs text-slate-500">{t('results_verified_released')}</div>
                 {onClose && (
                     <button
                         onClick={onClose}
                         className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-medium transition-colors"
                     >
-                        Close
+                        {t('close')}
                     </button>
                 )}
             </div>
@@ -296,12 +296,14 @@ function evaluateValue(value, minValue, maxValue) {
     return 'normal';
 }
 
+// `textKey` is an explicit i18n key map (namespace: investigations) — one
+// entry per status so every key exists statically in the catalogue.
 function getFlag(status) {
     const flags = {
-        low:     { icon: TrendingDown,   symbol: '↓', text: 'LOW',     color: 'blue' },
-        high:    { icon: TrendingUp,     symbol: '↑', text: 'HIGH',    color: 'orange' },
-        normal:  { icon: Minus,          symbol: '',  text: 'NORMAL',  color: 'green' },
-        unknown: { icon: AlertTriangle,  symbol: '?', text: 'UNKNOWN', color: 'gray' },
+        low:     { symbol: '↓', textKey: 'flag_low' },
+        high:    { symbol: '↑', textKey: 'flag_high' },
+        normal:  { symbol: '',  textKey: 'flag_normal' },
+        unknown: { symbol: '?', textKey: 'flag_unknown' },
     };
     return flags[status] || flags.unknown;
 }

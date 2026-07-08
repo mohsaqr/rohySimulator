@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, CheckCircle, ChevronRight } from 'lucide-react';
 
 // ─── Page 1: Questions ───────────────────────────────────────────────────────
 
+// `labelKey` / `sublabelKey` map into src/locales/en/common.json. The `options`
+// strings stay untranslated on purpose: the selected options are submitted
+// verbatim in the questionnaire payload (onSubmit -> API), so they are stable
+// data values, not display-only copy.
 const QUESTIONS = [
   {
     id: 'diagnosis',
-    label: 'What is your diagnosis of the case',
+    labelKey: 'q_diagnosis',
     maxSelect: 1,
     required: true,
     options: [
@@ -23,8 +28,8 @@ const QUESTIONS = [
   },
   {
     id: 'diagnosisConfidence',
-    label: 'What is your confidence level in your diagnosis',
-    sublabel: '(0 = not confident, 5 = very confident)',
+    labelKey: 'q_diagnosis_confidence',
+    sublabelKey: 'rating_scale_hint',
     type: 'rating',
     required: true,
     min: 0,
@@ -32,7 +37,7 @@ const QUESTIONS = [
   },
   {
     id: 'decisionProcess',
-    label: 'How did you mainly make your decision',
+    labelKey: 'q_decision_process',
     maxSelect: 2,
     required: true,
     options: [
@@ -45,7 +50,7 @@ const QUESTIONS = [
   },
   {
     id: 'keyFactors',
-    label: 'What are the key factors influencing your decision',
+    labelKey: 'q_key_factors',
     maxSelect: 3,
     required: true,
     options: [
@@ -59,7 +64,7 @@ const QUESTIONS = [
   },
   {
     id: 'treatment',
-    label: 'What is your possible treatment for the next step',
+    labelKey: 'q_treatment',
     maxSelect: 3,
     required: true,
     options: [
@@ -77,8 +82,8 @@ const QUESTIONS = [
   },
   {
     id: 'treatmentConfidence',
-    label: 'What is your confidence level in your further treatments',
-    sublabel: '(0 = not confident, 5 = very confident)',
+    labelKey: 'q_treatment_confidence',
+    sublabelKey: 'rating_scale_hint',
     type: 'rating',
     required: true,
     min: 0,
@@ -89,6 +94,7 @@ const QUESTIONS = [
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function RatingInput({ value, onChange, min, max }) {
+  const { t } = useTranslation('common');
   return (
     <div className="flex gap-2 flex-wrap">
       {Array.from({ length: max - min + 1 }, (_, i) => i + min).map((n) => (
@@ -107,7 +113,7 @@ function RatingInput({ value, onChange, min, max }) {
       ))}
       {value !== null && value !== undefined && (
         <span className="self-center text-xs text-neutral-400 ml-1">
-          {value === 0 ? 'Not confident' : value === max ? 'Very confident' : `Level ${value}`}
+          {value === 0 ? t('not_confident') : value === max ? t('very_confident') : t('level_value', { value })}
         </span>
       )}
     </div>
@@ -182,12 +188,13 @@ function StepIndicator({ current, total }) {
 // ─── Page 2: Case Results ─────────────────────────────────────────────────────
 
 function ResultsPage() {
+  const { t } = useTranslation('common');
   return (
     <div className="flex flex-col items-center justify-center py-10 space-y-4 text-center">
       <div className="flex items-start gap-3 p-5 bg-green-900/30 border border-green-600/50 rounded-lg w-full">
         <CheckCircle className="w-6 h-6 text-green-400 shrink-0 mt-0.5" />
         <div className="text-left">
-          <p className="text-xs font-semibold uppercase tracking-wide text-green-400 mb-1">Correct Diagnosis</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-green-400 mb-1">{t('correct_diagnosis')}</p>
           <p className="text-lg font-bold text-white">Acute Inferior Myocardial Infarction</p>
         </div>
       </div>
@@ -200,7 +207,7 @@ function ResultsPage() {
 const REFLECTION_QUESTIONS = [
   {
     id: 'improvements',
-    label: 'Based on this simulation, where do you think you need to improve in the future',
+    labelKey: 'q_improvements',
     maxSelect: 3,
     required: true,
     options: [
@@ -216,7 +223,7 @@ const REFLECTION_QUESTIONS = [
   },
   {
     id: 'doDifferently',
-    label: 'If you could do this case again, what would you do differently',
+    labelKey: 'q_do_differently',
     maxSelect: 3,
     required: true,
     options: [
@@ -235,10 +242,11 @@ const REFLECTION_QUESTIONS = [
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-const PAGE_TITLES = [
-  'Self-Assessment',
-  'Case Results',
-  'Reflection',
+// Explicit key map into src/locales/en/common.json (one key per page).
+const PAGE_TITLE_KEYS = [
+  'questionnaire_self_assessment',
+  'questionnaire_case_results',
+  'questionnaire_reflection',
 ];
 
 export default function EndSessionQuestionnaire({
@@ -246,6 +254,7 @@ export default function EndSessionQuestionnaire({
   onCancel,
   hideCancel = false,
 }) {
+  const { t } = useTranslation('common');
   const [page, setPage] = useState(1);
   const TOTAL_PAGES = 3;
 
@@ -280,9 +289,9 @@ export default function EndSessionQuestionnaire({
       if (!q.required) return;
       const val = answers[q.id];
       if (q.type === 'rating') {
-        if (val === null || val === undefined) newErrors[q.id] = 'Please select a rating.';
+        if (val === null || val === undefined) newErrors[q.id] = t('select_rating_error');
       } else {
-        if (!val || val.length === 0) newErrors[q.id] = 'Please select at least one option.';
+        if (!val || val.length === 0) newErrors[q.id] = t('select_option_error');
       }
     });
     return newErrors;
@@ -293,7 +302,7 @@ export default function EndSessionQuestionnaire({
     REFLECTION_QUESTIONS.forEach((q) => {
       if (!q.required) return;
       const val = reflectionAnswers[q.id];
-      if (!val || val.length === 0) newErrors[q.id] = 'Please select at least one option.';
+      if (!val || val.length === 0) newErrors[q.id] = t('select_option_error');
     });
     return newErrors;
   };
@@ -336,14 +345,14 @@ export default function EndSessionQuestionnaire({
               <StepIndicator current={page} total={TOTAL_PAGES} />
             </div>
             <h2 className="text-base font-semibold text-white">
-              {PAGE_TITLES[page - 1]}
+              {t(PAGE_TITLE_KEYS[page - 1])}
             </h2>
           </div>
           {!hideCancel && (
             <button
               onClick={onCancel}
               className="p-1 rounded text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors"
-              title="Cancel"
+              title={t('cancel')}
             >
               <X className="w-4 h-4" />
             </button>
@@ -358,14 +367,14 @@ export default function EndSessionQuestionnaire({
                 <div key={q.id} id={`q-${q.id}`} className="space-y-2">
                   <p className="text-sm font-medium text-neutral-100">
                     <span className="text-neutral-400 mr-1">{idx + 1}.</span>
-                    {q.label}
+                    {t(q.labelKey)}
                     {q.maxSelect && (
                       <span className="text-neutral-400 ml-1 font-normal">
-                        (select a maximum of {q.maxSelect})
+                        {t('select_max_hint', { count: q.maxSelect })}
                       </span>
                     )}
-                    {q.sublabel && (
-                      <span className="text-neutral-400 ml-1 font-normal">{q.sublabel}</span>
+                    {q.sublabelKey && (
+                      <span className="text-neutral-400 ml-1 font-normal">{t(q.sublabelKey)}</span>
                     )}
                     <span className="text-red-400 ml-1">*</span>
                   </p>
@@ -400,10 +409,10 @@ export default function EndSessionQuestionnaire({
                 <div key={q.id} id={`rq-${q.id}`} className="space-y-2">
                   <p className="text-sm font-medium text-neutral-100">
                     <span className="text-neutral-400 mr-1">{idx + 1}.</span>
-                    {q.label}
+                    {t(q.labelKey)}
                     {q.maxSelect && (
                       <span className="text-neutral-400 ml-1 font-normal">
-                        (select a maximum of {q.maxSelect})
+                        {t('select_max_hint', { count: q.maxSelect })}
                       </span>
                     )}
                     <span className="text-red-400 ml-1">*</span>
@@ -426,7 +435,7 @@ export default function EndSessionQuestionnaire({
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-neutral-700 shrink-0">
           <div className="text-xs text-neutral-500">
-            Page {page} of {TOTAL_PAGES}
+            {t('page_of', { page, total: TOTAL_PAGES })}
           </div>
           <div className="flex items-center gap-3">
             {!hideCancel && page === 1 && (
@@ -435,7 +444,7 @@ export default function EndSessionQuestionnaire({
                 onClick={onCancel}
                 className="px-4 py-2 text-sm rounded border border-neutral-600 text-neutral-300 hover:text-white hover:border-neutral-500 transition-colors"
               >
-                Cancel
+                {t('cancel')}
               </button>
             )}
             {page < TOTAL_PAGES ? (
@@ -444,7 +453,7 @@ export default function EndSessionQuestionnaire({
                 onClick={handleNext}
                 className="px-4 py-2 text-sm rounded bg-blue-700 hover:bg-blue-600 text-white font-semibold transition-colors flex items-center gap-1.5"
               >
-                Next
+                {t('next')}
                 <ChevronRight className="w-4 h-4" />
               </button>
             ) : (
@@ -454,7 +463,7 @@ export default function EndSessionQuestionnaire({
                 disabled={submitting}
                 className="px-4 py-2 text-sm rounded bg-red-700 hover:bg-red-600 text-white font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {submitting ? 'Submitting…' : 'Submit & End Session'}
+                {submitting ? t('submitting') : t('submit_end_session')}
               </button>
             )}
           </div>

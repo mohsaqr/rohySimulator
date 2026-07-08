@@ -114,6 +114,7 @@ export default defineConfig({
             { text: 'Authoring a case (wizard)', link: '/educator/case-wizard' },
             { text: 'Agent personas', link: '/educator/agents' },
             { text: 'Scenario timelines', link: '/educator/scenarios' },
+            { text: 'Languages & multilingual cases', link: '/educator/languages' },
             { text: 'Reporting & analytics', link: '/educator/reporting' },
             { text: 'TNA analytics', link: '/educator/tna' },
             { text: 'Oyon emotion analytics', link: '/educator/oyon-analytics' },

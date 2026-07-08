@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { LLMService } from '../../services/llmService';
+import { formatNumber } from '../../utils/formatters';
 
 /**
  * UsageIndicator - Shows user's remaining LLM quota
  * Can be placed in header, sidebar, or chat interface
  */
 export default function UsageIndicator({ compact = false }) {
+    const { t } = useTranslation('common');
     const [usage, setUsage] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -39,7 +42,7 @@ export default function UsageIndicator({ compact = false }) {
         if (isUnlimited) {
             return (
                 <div className="flex items-center gap-2 text-xs">
-                    <span className="text-green-400">{usage.tokensUsed.toLocaleString()} tokens used</span>
+                    <span className="text-green-400">{t('tokens_used', { count: formatNumber(usage.tokensUsed) })}</span>
                 </div>
             );
         }
@@ -54,7 +57,7 @@ export default function UsageIndicator({ compact = false }) {
                     />
                 </div>
                 <span className={`${isCritical ? 'text-red-400' : isLow ? 'text-amber-400' : 'text-neutral-400'}`}>
-                    {usage.tokensRemaining.toLocaleString()} tokens
+                    {t('tokens_count', { count: formatNumber(usage.tokensRemaining) })}
                 </span>
             </div>
         );
@@ -64,11 +67,11 @@ export default function UsageIndicator({ compact = false }) {
     return (
         <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-3 text-sm">
             <div className="flex justify-between items-center mb-2">
-                <span className="text-neutral-400">Daily Usage</span>
+                <span className="text-neutral-400">{t('daily_usage')}</span>
                 <span className={`font-medium ${
                     isUnlimited ? 'text-green-400' : isCritical ? 'text-red-400' : isLow ? 'text-amber-400' : 'text-green-400'
                 }`}>
-                    {isUnlimited ? 'Unlimited' : `${Math.round(tokenPercent)}%`}
+                    {isUnlimited ? t('unlimited') : `${Math.round(tokenPercent)}%`}
                 </span>
             </div>
             {!isUnlimited && (
@@ -82,12 +85,14 @@ export default function UsageIndicator({ compact = false }) {
                 </div>
             )}
             <div className="flex justify-between text-xs text-neutral-500">
-                <span>{usage.tokensUsed.toLocaleString()} tokens used</span>
-                {!isUnlimited && <span>{usage.tokensRemaining.toLocaleString()} remaining</span>}
+                <span>{t('tokens_used', { count: formatNumber(usage.tokensUsed) })}</span>
+                {!isUnlimited && <span>{t('tokens_remaining', { count: formatNumber(usage.tokensRemaining) })}</span>}
             </div>
             {usage.costUsed > 0 && (
                 <div className="mt-2 pt-2 border-t border-neutral-700 text-xs text-neutral-500">
-                    Cost: ${usage.costUsed.toFixed(4)}{usage.costLimit > 0 ? ` / $${usage.costLimit.toFixed(2)}` : ''}
+                    {usage.costLimit > 0
+                        ? t('cost_used_with_limit', { amount: `$${usage.costUsed.toFixed(4)}`, limit: `$${usage.costLimit.toFixed(2)}` })
+                        : t('cost_used', { amount: `$${usage.costUsed.toFixed(4)}` })}
                 </div>
             )}
         </div>

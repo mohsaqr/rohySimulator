@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, Mic, MicOff, Volume2, Eye, EyeOff } from 'lucide-react';
 import { LLMService } from '../../services/llmService';
 import { AgentService } from '../../services/AgentService';
@@ -94,21 +95,44 @@ function sameParticipant(a, b) {
 // Friendly TTS error → toast translation. The server bakes the upstream
 // error message into err.message; we just rephrase the common cases so the
 // admin knows where to look. Anything we don't recognise falls through with
-// the raw message so we never silently swallow problems.
-function ttsErrorToast(toast, err) {
+// the raw message so we never silently swallow problems. `t` is the
+// chat-namespace translator passed in from the component (this helper is
+// module-level, so it can't call useTranslation itself).
+function ttsErrorToast(toast, err, t) {
     if (!toast?.error) return;
-    const msg = err?.message || 'TTS failed';
+    const msg = err?.message || t('tts_failed');
     if (/unknown.*voice|not in catalog/i.test(msg)) {
-        toast.error('Voice not valid for this engine. Set a default in admin → Avatars & voices.');
+        toast.error(t('voice_not_valid_for_engine'));
     } else if (/api.?key|API_KEY/i.test(msg)) {
-        toast.error('Cloud TTS is missing an API key. Set it in admin → Voice & Avatar.');
+        toast.error(t('cloud_tts_missing_api_key'));
     } else {
-        toast.error(`Voice playback failed: ${msg}`);
+        toast.error(t('voice_playback_failed', { msg }));
     }
 }
 
 const EMOTIONS_ROW1 = ['Inspired', 'Alert', 'Excited', 'Enthusiastic', 'Determined'];
 const EMOTIONS_ROW2 = ['Afraid', 'Upset', 'Nervous', 'Scared', 'Distressed'];
+// Display-key map for the emotion buttons. The English emotion word stays the
+// canonical value logged to EventLogger and /emotion-logs; only the label the
+// student sees goes through i18n (static keys — never t(variable)).
+const EMOTION_KEYS = {
+    Inspired: 'emotion_inspired',
+    Alert: 'emotion_alert',
+    Excited: 'emotion_excited',
+    Enthusiastic: 'emotion_enthusiastic',
+    Determined: 'emotion_determined',
+    Afraid: 'emotion_afraid',
+    Upset: 'emotion_upset',
+    Nervous: 'emotion_nervous',
+    Scared: 'emotion_scared',
+    Distressed: 'emotion_distressed',
+};
+// Tab badge label per agent status; anything unknown renders as "Away".
+const AGENT_STATUS_KEYS = {
+    present: 'status_here',
+    paged: 'status_coming',
+    'on-call': 'status_on_call',
+};
 const ALARM_SPEECH_COOLDOWN_MS = 90 * 1000;
 const AVATAR_ALARM_SPEECH_FORCE_OFF_KEY = 'rohy_avatar_alarm_speech_force_off';
 const ALARM_SEVERITY_RANK = {
@@ -187,6 +211,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const messagesEndRef = useRef(null);
     const { user } = useAuth();
     const { caseLanguage } = useLanguage();
+    const { t } = useTranslation('chat');
     const toast = useToast();
     const { subscribe, prefs } = useNotifications();
 
@@ -1046,7 +1071,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 // case_voice set, the patient stays mute and the admin gets
                 // a loud toast pointing at the two places they can fix it.
                 console.warn('[voice] no voice resolved for case', { provider: r.provider });
-                toast?.error?.('No voice configured. Set a Case voice in the Case editor, or a default voice on the Patient persona.');
+                toast?.error?.(t('no_voice_configured_case'));
                 voiceErrored = true;
             } else {
                 speech = VoiceService.beginSpeechSession({
@@ -1067,7 +1092,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         console.error('TTS error:', err);
                         voiceErrored = true;
                         setSpeaking(false);
-                        ttsErrorToast(toast, err);
+                        ttsErrorToast(toast, err, t);
                     }
                 });
             }
@@ -1115,7 +1140,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const isError = typeof responseText === 'string' && responseText.startsWith('Error:');
         const finalDisplay = isError
             ? responseText
-            : (acc ? stripStageDirections(acc) : (responseText ? stripStageDirections(responseText) : '(no response from LLM — check server logs)'));
+            : (acc ? stripStageDirections(acc) : (responseText ? stripStageDirections(responseText) : t('no_response_from_llm')));
         setMessages(prev => {
             const copy = [...prev];
             if (assistantIdx >= 0 && copy[assistantIdx]?.role === 'assistant') {
@@ -1151,7 +1176,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         if (!spokenText || responseText.startsWith('Error:')) return;
         if (!r.file) {
             console.warn('[voice] no voice resolved for agent', { provider: r.provider });
-            toast?.error?.('No voice configured for this agent persona. Set one in Settings → Agent Personas.');
+            toast?.error?.(t('no_voice_configured_agent'));
             return;
         }
         VoiceService.speak({
@@ -1169,7 +1194,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             onError: (err) => {
                 console.error('TTS error:', err);
                 setSpeaking(false);
-                ttsErrorToast(toast, err);
+                ttsErrorToast(toast, err, t);
             }
         });
     };
@@ -1199,11 +1224,11 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             onError: (err) => {
                 console.error('TTS error:', err);
                 setSpeaking(false);
-                ttsErrorToast(toast, err);
+                ttsErrorToast(toast, err, t);
             }
         });
         return true;
-    }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, activeCase?.config?.voice, patientTemplate?.config?.voice, resolveSpeakerVoice, toast, setSpeaking, setVisemes]);
+    }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, activeCase?.config?.voice, patientTemplate?.config?.voice, resolveSpeakerVoice, toast, t, setSpeaking, setVisemes]);
 
     useEffect(() => {
         return subscribe((event) => {
@@ -1268,7 +1293,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
     const startVoiceTurn = () => {
         if (!VoiceService.isSttSupported()) {
-            toast?.error?.('Speech recognition is not supported in this browser. Use Chrome or Edge over HTTPS.');
+            toast?.error?.(t('stt_not_supported_browser'));
             return;
         }
         // Session language wins over the platform-wide STT locale: a student
@@ -1279,7 +1304,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             ? sttLocaleFor(caseLanguage)
             : voiceSettings?.stt_language;
         if (!sttLang) {
-            toast?.error?.('No STT language configured. Set one in Settings → Voice & Avatar before pressing-to-talk.');
+            toast?.error?.(t('no_stt_language'));
             return;
         }
         if (listening) {
@@ -1313,17 +1338,17 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 console.warn('STT error:', err.message);
                 const code = err?.message || 'unknown';
                 if (code === 'not-allowed' || code === 'service-not-allowed') {
-                    toast?.error?.('Microphone blocked. Allow mic access for this site, and ensure the page is served over HTTPS.');
+                    toast?.error?.(t('mic_blocked'));
                 } else if (code === 'network') {
-                    toast?.error?.('Speech recognition could not reach the network service. Check internet/firewall.');
+                    toast?.error?.(t('stt_network_error'));
                 } else if (code === 'audio-capture') {
-                    toast?.error?.('No microphone detected. Plug one in or check OS audio input.');
+                    toast?.error?.(t('no_microphone'));
                 } else if (code === 'no-speech') {
-                    toast?.error?.('Did not hear anything. Try speaking closer to the mic.');
+                    toast?.error?.(t('no_speech_heard'));
                 } else if (code === 'aborted') {
                     // Self-aborted (we called stopListening); not a user-facing error.
                 } else {
-                    toast?.error?.(`Speech recognition error: ${code}`);
+                    toast?.error?.(t('stt_error', { code }));
                 }
                 setListening(false);
             },
@@ -1335,7 +1360,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     // Recogniser ended without ever hearing speech and without
                     // emitting a code — typical of "started, immediately ended"
                     // on an insecure origin where Chrome silently refuses.
-                    toast?.error?.('Listening ended without picking up any speech. If this happens immediately, the page may need to be served over HTTPS.');
+                    toast?.error?.(t('listening_ended_no_speech'));
                 }
             }
         });
@@ -1392,7 +1417,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             // Use functional update with fallback to empty array
             setAgentConversations(prev => ({
                 ...prev,
-                [agentType]: [...(prev[agentType] || []), { role: 'assistant', content: 'Error: Could not get response.' }]
+                [agentType]: [...(prev[agentType] || []), { role: 'assistant', content: t('agent_response_error') }]
             }));
         }
 
@@ -1403,8 +1428,8 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         return (
             <div className="flex items-center justify-center h-full text-neutral-500 bg-neutral-900 border-t border-neutral-800">
                 <div className="text-center">
-                    <p>No Case Selected.</p>
-                    <p className="text-xs">Please load a case from settings.</p>
+                    <p>{t('no_case_selected')}</p>
+                    <p className="text-xs">{t('load_case_from_settings')}</p>
                 </div>
             </div>
         );
@@ -1443,10 +1468,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         status === 'on-call' ? 'bg-blue-900/50 text-blue-400' :
                         'bg-neutral-700 text-neutral-500'
                     }`}>
-                        {status === 'present' ? 'Here' :
-                         status === 'paged' ? 'Coming' :
-                         status === 'on-call' ? 'On-Call' :
-                         'Away'}
+                        {t(AGENT_STATUS_KEYS[status] || 'status_away')}
                     </span>
                 )}
             </button>
@@ -1488,12 +1510,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         {voiceMode && (
                             <button
                                 onClick={() => setShowTranscript(s => !s)}
-                                title={showTranscript ? 'Hide transcript (more immersive)' : 'Show transcript'}
+                                title={showTranscript ? t('hide_transcript_title') : t('show_transcript_title')}
                                 className="px-2.5 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition-colors"
                             >
                                 {showTranscript
-                                    ? <><EyeOff className="w-3.5 h-3.5" /> Hide</>
-                                    : <><Eye className="w-3.5 h-3.5" /> Show</>}
+                                    ? <><EyeOff className="w-3.5 h-3.5" /> {t('hide')}</>
+                                    : <><Eye className="w-3.5 h-3.5" /> {t('show')}</>}
                             </button>
                         )}
                         <button
@@ -1512,7 +1534,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                     setShowTranscript(true);
                                 }
                             }}
-                            title={voiceMode ? 'Switch to text mode' : 'Switch to voice mode'}
+                            title={voiceMode ? t('switch_to_text_mode') : t('switch_to_voice_mode')}
                             className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition-colors ${
                                 voiceMode
                                     ? 'bg-purple-600 hover:bg-purple-500 text-white'
@@ -1520,7 +1542,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                             }`}
                         >
                             {voiceMode ? <Volume2 className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                            {voiceMode ? 'Voice on' : 'Voice'}
+                            {voiceMode ? t('voice_on') : t('voice')}
                         </button>
                     </div>
                 )}
@@ -1534,7 +1556,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 const isPaged = agentStatus.status === 'paged';
                 const remaining = isPaged ? formatRemaining(arrivesAt, nowTick) : '';
                 const progress = isPaged ? waitProgressPct(pagedAt, arrivesAt, nowTick) : 0;
-                const phase = isPaged ? pickWaitPhase(currentAgent.agent_type, pagedAt, arrivesAt, nowTick) : '';
+                const phase = isPaged ? t(pickWaitPhase(currentAgent.agent_type, pagedAt, arrivesAt, nowTick)) : '';
                 return (
                     <div className={`border-b ${
                         agentStatus.status === 'present' ? 'bg-green-900/20 border-green-800/50' :
@@ -1565,16 +1587,16 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                         onClick={() => handlePageAgent(currentAgent.agent_type)}
                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-md text-xs font-bold shadow-sm"
                                     >
-                                        <Phone className="w-3.5 h-3.5" /> Call {currentAgent.name.split(' ')[0]}
+                                        <Phone className="w-3.5 h-3.5" /> {t('call_agent', { name: currentAgent.name.split(' ')[0] })}
                                     </button>
                                 )}
                                 {agentStatus.status === 'present' && (
                                     <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-900/40 text-green-300 text-xs font-semibold">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" /> In the room
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" /> {t('in_the_room')}
                                     </span>
                                 )}
                                 {!agentStatus.canChat && !isPaged && !agentStatus.canPage && (
-                                    <span className="text-neutral-500">{agentStatus.label}</span>
+                                    <span className="text-neutral-500">{t(agentStatus.labelKey, agentStatus.labelParams)}</span>
                                 )}
                             </div>
                         </div>
@@ -1611,18 +1633,18 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         </div>
                         {activeTab === 'patient' ? (
                             <>
-                                <p className="text-neutral-400 text-sm mb-2">Start a conversation with your patient</p>
-                                <p className="text-neutral-600 text-xs">Type a message below to begin taking the patient's history</p>
+                                <p className="text-neutral-400 text-sm mb-2">{t('start_conversation_with_patient')}</p>
+                                <p className="text-neutral-600 text-xs">{t('type_message_to_begin_history')}</p>
                             </>
                         ) : agentStatus?.status === 'paged' ? (() => {
                             const liveState = agentStates[currentAgent.agent_type] || {};
                             return (
                                 <div className="w-full max-w-sm">
                                     <p className="text-amber-200 text-sm font-medium mb-1">
-                                        Calling {currentAgent?.name}…
+                                        {t('calling_agent', { name: currentAgent?.name })}
                                     </p>
                                     <p className="text-neutral-400 text-xs italic mb-4">
-                                        {pickWaitPhase(currentAgent.agent_type, liveState.paged_at, liveState.arrives_at, nowTick)}
+                                        {t(pickWaitPhase(currentAgent.agent_type, liveState.paged_at, liveState.arrives_at, nowTick))}
                                     </p>
                                     <div className="text-3xl font-bold tabular-nums text-amber-300 mb-3">
                                         {formatRemaining(liveState.arrives_at, nowTick) || '0:00'}
@@ -1634,31 +1656,31 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                         />
                                     </div>
                                     <p className="text-neutral-600 text-[11px] mt-3">
-                                        You can keep working — they'll appear here when they arrive.
+                                        {t('keep_working_agent_arrives')}
                                     </p>
                                 </div>
                             );
                         })() : agentStatus?.canChat ? (
                             <>
-                                <p className="text-neutral-400 text-sm mb-2">Chat with {currentAgent?.name}</p>
-                                <p className="text-neutral-600 text-xs">Type a message to communicate with the {currentAgent?.role_title?.toLowerCase()}</p>
+                                <p className="text-neutral-400 text-sm mb-2">{t('chat_with_agent', { name: currentAgent?.name })}</p>
+                                <p className="text-neutral-600 text-xs">{t('type_message_to_agent', { role: currentAgent?.role_title?.toLowerCase() })}</p>
                             </>
                         ) : agentStatus?.canPage ? (
                             <div className="w-full max-w-sm">
                                 <p className="text-neutral-300 text-sm font-medium mb-1">{currentAgent?.name}</p>
                                 <p className="text-neutral-500 text-xs mb-1">{currentAgent?.role_title}</p>
-                                <p className="text-blue-300/80 text-xs mb-4">On-call · responds in 1–3 minutes</p>
+                                <p className="text-blue-300/80 text-xs mb-4">{t('on_call_responds')}</p>
                                 <button
                                     onClick={() => handlePageAgent(currentAgent.agent_type)}
                                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-bold shadow-md"
                                 >
-                                    <Phone className="w-4 h-4" /> Call {currentAgent.name.split(' ')[0]}
+                                    <Phone className="w-4 h-4" /> {t('call_agent', { name: currentAgent.name.split(' ')[0] })}
                                 </button>
                             </div>
                         ) : (
                             <>
-                                <p className="text-neutral-400 text-sm mb-2">{currentAgent?.name} is not available</p>
-                                <p className="text-neutral-600 text-xs">{agentStatus?.label}</p>
+                                <p className="text-neutral-400 text-sm mb-2">{t('agent_not_available', { name: currentAgent?.name })}</p>
+                                <p className="text-neutral-600 text-xs">{agentStatus?.labelKey ? t(agentStatus.labelKey, agentStatus.labelParams) : agentStatus?.label}</p>
                             </>
                         )}
                     </div>
@@ -1688,7 +1710,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                     )}
                                 </div>
                                 <span className="text-[10px] text-neutral-500 max-w-[60px] truncate">
-                                    {activeTab === 'patient' ? 'Patient' : currentAgent?.name?.split(' ')[0]}
+                                    {activeTab === 'patient' ? t('patient_label') : currentAgent?.name?.split(' ')[0]}
                                 </span>
                             </div>
                         )}
@@ -1740,7 +1762,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                 }`} />
                             </div>
                             <span className="text-[10px] text-neutral-500 max-w-[60px] truncate">
-                                {activeTab === 'patient' ? 'Patient' : currentAgent?.name?.split(' ')[0]}
+                                {activeTab === 'patient' ? t('patient_label') : currentAgent?.name?.split(' ')[0]}
                             </span>
                         </div>
                         <div className="bg-neutral-800 px-4 py-2.5 rounded-2xl rounded-bl-none border border-neutral-700 text-neutral-400 text-sm flex items-center gap-2">
@@ -1792,7 +1814,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         <button
                             type="button"
                             onClick={() => setShowTranscript(true)}
-                            aria-label="Show full transcript"
+                            aria-label={t('show_full_transcript')}
                             // Anchored pixel-wise to the bottom edge of the
                             // resp waveform: PatientMonitor.jsx stacks three
                             // 128px canvases (ECG / PLETH / RESP) below a
@@ -1837,7 +1859,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             {showQuestionnaire && (
                 <div className="px-4 pt-3 pb-2 border-t border-indigo-800/60 bg-indigo-950/40">
                     <p className="text-[11px] font-semibold text-indigo-300 text-center mb-2 tracking-wide">
-                        How are you feeling right now?
+                        {t('how_are_you_feeling')}
                     </p>
                     <div className="flex flex-col gap-1">
                         {[EMOTIONS_ROW1, EMOTIONS_ROW2].map((row, rowIdx) => (
@@ -1855,7 +1877,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                                     : 'bg-neutral-800 text-orange-300 hover:bg-orange-900/50 hover:text-orange-100 border-neutral-700 hover:border-orange-600'
                                             }`}
                                         >
-                                            {emotion}
+                                            {t(EMOTION_KEYS[emotion])}
                                         </button>
                                     );
                                 })}
@@ -1884,27 +1906,27 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                             {listening ? (
                                 <>
                                     <Mic className="w-4 h-4 animate-pulse" />
-                                    Listening… click to stop
+                                    {t('listening_click_to_stop')}
                                 </>
                             ) : speaking ? (
                                 <>
                                     <Volume2 className="w-4 h-4 animate-pulse" />
-                                    Patient speaking…
+                                    {t('patient_speaking')}
                                 </>
                             ) : !sttSupported ? (
                                 <>
                                     <MicOff className="w-4 h-4" />
-                                    Speech recognition not supported in this browser
+                                    {t('stt_not_supported_short')}
                                 </>
                             ) : loading ? (
                                 <>
                                     <Loader2 className="w-4 h-4 animate-spin" />
-                                    Thinking…
+                                    {t('thinking')}
                                 </>
                             ) : (
                                 <>
                                     <Mic className="w-4 h-4" />
-                                    Click to talk to {patientName}
+                                    {t('click_to_talk', { name: patientName })}
                                 </>
                             )}
                         </button>
@@ -1920,9 +1942,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                             onChange={(e) => setInput(e.target.value)}
                             disabled={loading || (activeTab !== 'patient' && !agentStatus?.canChat)}
                             placeholder={
-                                loading ? "Waiting for response..." :
-                                activeTab !== 'patient' && !agentStatus?.canChat ? `${currentAgent?.name} is not available` :
-                                `Message ${activeTab === 'patient' ? patientName : currentAgent?.name}...`
+                                loading ? t('waiting_for_response') :
+                                activeTab !== 'patient' && !agentStatus?.canChat ? t('agent_not_available', { name: currentAgent?.name }) :
+                                t('message_placeholder', { name: activeTab === 'patient' ? patientName : currentAgent?.name })
                             }
                             className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-4 pr-12 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-neutral-600 disabled:opacity-50"
                         />

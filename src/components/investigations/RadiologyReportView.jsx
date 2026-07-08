@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Building2, FileText, Maximize2, Pause, Play,
     Stethoscope, X, ZoomIn, ZoomOut,
 } from 'lucide-react';
 import { apiPut } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
+import { formatDate, formatTime, formatDateTime } from '../../utils/formatters';
 
 // Pure radiology-report content. Same content as the old
 // RadiologyResultsModal — gradient header, study info bar, image viewer
@@ -14,6 +16,7 @@ import { usePatientRecord } from '../../services/PatientRecord';
 // InvestigationsScreen where the topbar's Back button is the canonical
 // exit.
 export default function RadiologyReportView({ result, patientInfo, onClose }) {
+    const { t } = useTranslation('investigations');
     const { elicited } = usePatientRecord();
     const [imageZoom, setImageZoom] = useState(1);
     const [showFullImage, setShowFullImage] = useState(false);
@@ -65,9 +68,9 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
                                 <Building2 className="w-8 h-8 text-cyan-400" />
                             </div>
                             <div>
-                                <h1 className="text-xl font-bold tracking-wide">RADIOLOGY REPORT</h1>
-                                <p className="text-cyan-400 text-sm font-medium mt-1">VipSim Medical Center</p>
-                                <p className="text-slate-400 text-xs mt-0.5">Department of Diagnostic Imaging</p>
+                                <h1 className="text-xl font-bold tracking-wide">{t('radiology_report_title')}</h1>
+                                <p className="text-cyan-400 text-sm font-medium mt-1">{t('medical_center')}</p>
+                                <p className="text-slate-400 text-xs mt-0.5">{t('imaging_department')}</p>
                             </div>
                         </div>
                         {onClose && (
@@ -80,30 +83,30 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
 
                 <div className="bg-slate-100 border-b border-slate-200 p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
-                        <div className="text-slate-500 text-xs uppercase tracking-wide">Patient</div>
-                        <div className="font-semibold text-slate-800">{patientInfo?.name || 'Unknown Patient'}</div>
+                        <div className="text-slate-500 text-xs uppercase tracking-wide">{t('patient')}</div>
+                        <div className="font-semibold text-slate-800">{patientInfo?.name || t('unknown_patient')}</div>
                         <div className="text-slate-600 text-xs">
-                            {patientInfo?.age && `${patientInfo.age} yo`} {patientInfo?.gender}
+                            {patientInfo?.age && t('age_yo', { age: patientInfo.age })} {patientInfo?.gender}
                         </div>
                     </div>
                     <div>
-                        <div className="text-slate-500 text-xs uppercase tracking-wide">Accession #</div>
+                        <div className="text-slate-500 text-xs uppercase tracking-wide">{t('accession_number')}</div>
                         <div className="font-mono font-semibold text-slate-800">{accessionNumber}</div>
                     </div>
                     <div>
-                        <div className="text-slate-500 text-xs uppercase tracking-wide">Study Date</div>
+                        <div className="text-slate-500 text-xs uppercase tracking-wide">{t('study_date')}</div>
                         <div className="font-semibold text-slate-800">
-                            {reportDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {formatDate(reportDate, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </div>
                         <div className="text-slate-600 text-xs">
-                            {reportDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            {formatTime(reportDate, { hour: '2-digit', minute: '2-digit' })}
                         </div>
                     </div>
                     <div>
-                        <div className="text-slate-500 text-xs uppercase tracking-wide">Status</div>
+                        <div className="text-slate-500 text-xs uppercase tracking-wide">{t('status')}</div>
                         <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
                             <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                            FINAL
+                            {t('final')}
                         </div>
                     </div>
                 </div>
@@ -118,7 +121,7 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
                                 <h2 className="text-xl font-bold text-slate-800">{result.test_name}</h2>
                                 <div className="flex items-center gap-3 mt-2 flex-wrap">
                                     <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
-                                        {result.modality || 'Imaging'}
+                                        {result.modality || t('modality_imaging_fallback')}
                                     </span>
                                     {resultData.body_region && (
                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full text-xs">
@@ -175,7 +178,7 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
                                     className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded text-white text-xs transition-colors"
                                 >
                                     {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                                    {isPlaying ? 'Pause' : 'Play'}
+                                    {isPlaying ? t('pause') : t('play')}
                                 </button>
                             </div>
                             <div className="rounded-lg overflow-hidden bg-neutral-900">
@@ -190,7 +193,7 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
                                     onEnded={() => setIsPlaying(false)}
                                     onClick={togglePlay}
                                 >
-                                    Your browser does not support video playback.
+                                    {t('video_not_supported')}
                                 </video>
                             </div>
                         </div>
@@ -199,40 +202,43 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
                     <div className="p-6 space-y-6">
                         {resultData.indications && resultData.indications.length > 0 && (
                             <div>
-                                <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">Clinical Indication</h3>
+                                <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">{t('clinical_indication')}</h3>
                                 <p className="text-slate-700">{resultData.indications.slice(0, 3).join('; ')}</p>
                             </div>
                         )}
 
                         <div>
-                            <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">Technique</h3>
+                            <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">{t('technique')}</h3>
                             <p className="text-slate-700">
-                                {result.modality} imaging of the {resultData.body_region || 'specified region'} was performed using standard departmental protocols.
+                                {t('technique_body', {
+                                    modality: result.modality ?? '',
+                                    region: resultData.body_region || t('technique_region_fallback'),
+                                })}
                             </p>
                         </div>
 
                         <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
                             <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 flex items-center gap-2">
                                 <Stethoscope className="w-4 h-4" />
-                                Findings
+                                {t('findings')}
                             </h3>
                             {hasFindings ? (
                                 <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">{resultData.findings}</p>
                             ) : (
                                 <p className="text-slate-500 italic">
-                                    No significant abnormality detected. The study demonstrates normal appearance for the examined region.
+                                    {t('findings_default')}
                                 </p>
                             )}
                         </div>
 
                         <div className="bg-cyan-50 rounded-lg p-4 border border-cyan-200">
-                            <h3 className="text-xs uppercase tracking-wider text-cyan-700 font-semibold mb-3">Impression</h3>
+                            <h3 className="text-xs uppercase tracking-wider text-cyan-700 font-semibold mb-3">{t('impression')}</h3>
                             {hasInterpretation ? (
                                 <p className="text-slate-800 font-medium leading-relaxed whitespace-pre-wrap">{resultData.interpretation}</p>
                             ) : (
                                 <p className="text-slate-800 font-medium">
-                                    1. No acute findings.<br />
-                                    2. Clinical correlation recommended.
+                                    {t('impression_default_1')}<br />
+                                    {t('impression_default_2')}
                                 </p>
                             )}
                         </div>
@@ -240,18 +246,18 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
                         <div className="pt-6 border-t border-slate-200 mt-8">
                             <div className="flex items-end justify-between">
                                 <div>
-                                    <div className="text-slate-800 font-semibold">Electronically Signed</div>
+                                    <div className="text-slate-800 font-semibold">{t('electronically_signed')}</div>
                                     <div className="text-slate-600 text-sm">
-                                        {reportDate.toLocaleDateString('en-US', {
+                                        {formatDateTime(reportDate, {
                                             weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
                                             hour: '2-digit', minute: '2-digit',
                                         })}
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <div className="font-serif italic text-xl text-slate-700">Dr. AI Radiologist</div>
-                                    <div className="text-slate-500 text-sm">MD, FRCR</div>
-                                    <div className="text-slate-400 text-xs">Board Certified Radiologist</div>
+                                    <div className="font-serif italic text-xl text-slate-700">{t('radiologist_name')}</div>
+                                    <div className="text-slate-500 text-sm">{t('radiologist_credentials')}</div>
+                                    <div className="text-slate-400 text-xs">{t('board_certified')}</div>
                                 </div>
                             </div>
                         </div>
@@ -259,13 +265,13 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
                 </div>
 
                 <div className="bg-slate-100 border-t border-slate-200 p-4 flex items-center justify-between print:hidden">
-                    <div className="text-xs text-slate-500">This report is for educational/simulation purposes only</div>
+                    <div className="text-xs text-slate-500">{t('radiology_disclaimer')}</div>
                     {onClose && (
                         <button
                             onClick={onClose}
                             className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-medium transition-colors"
                         >
-                            Close
+                            {t('close')}
                         </button>
                     )}
                 </div>

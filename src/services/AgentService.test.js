@@ -813,7 +813,7 @@ describe('AgentService.getAgentDisplayStatus', () => {
     it('disabled agent: returns disabled / Not Available / no actions', () => {
         const out = AgentService.getAgentDisplayStatus({ enabled: false }, 0);
         expect(out).toEqual({
-            status: 'disabled', label: 'Not Available', canChat: false, canPage: false,
+            status: 'disabled', label: 'Not Available', labelKey: 'agent_status_not_available', canChat: false, canPage: false,
         });
     });
 

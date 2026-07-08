@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import { Quaternion, Vector3 } from 'three';
@@ -183,6 +184,7 @@ export default function PatientAvatar({
     cameraOverride = null,
     platformAvatars = null
 }) {
+    const { t } = useTranslation('chat');
     // Per-frame state held in refs so prop churn doesn't re-trigger useFrame.
     const visemesRef = useRef({ viseme_sil: 1 });
     const blinkRef = useRef(false);
@@ -234,7 +236,7 @@ export default function PatientAvatar({
         // Manifest is loaded but has no entries yet — show a neutral placeholder.
         return (
             <div className="w-full h-full rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-500 text-xs">
-                no avatar configured
+                {t('no_avatar_configured')}
             </div>
         );
     }

@@ -4,6 +4,7 @@ import {
     Lock, Save, Loader2, Eye, EyeOff, AlertCircle, CheckCircle,
     Bot, Server, Key, Hash, Globe
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useToast } from '../../contexts/ToastContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { LANGUAGES } from '../../i18n/languages';
@@ -15,15 +16,16 @@ import JoinClassPanel from './JoinClassPanel';
  * Allows users to view and edit their profile information and change password
  */
 export default function UserProfilePanel({ _onClose }) {
+    const { t } = useTranslation('profile');
     const toast = useToast();
     const { uiLanguage, setUiLanguage } = useLanguage();
 
     const handleLanguageChange = async (code) => {
         try {
             await setUiLanguage(code);
-            toast.success('Language saved');
+            toast.success(t('language_saved'));
         } catch (error) {
-            toast.error('Failed to save language: ' + (error?.message || 'unknown error'));
+            toast.error(t('language_save_failed', { message: error?.message || t('unknown_error') }));
         }
     };
 
@@ -90,9 +92,9 @@ export default function UserProfilePanel({ _onClose }) {
             });
         } catch (error) {
             if (error instanceof ApiError) {
-                toast.error('Failed to load profile');
+                toast.error(t('profile_load_failed'));
             } else {
-                toast.error('Failed to load profile: ' + error.message);
+                toast.error(t('profile_load_failed_message', { message: error.message }));
             }
         } finally {
             setLoading(false);
@@ -144,12 +146,12 @@ export default function UserProfilePanel({ _onClose }) {
                     temperature: aiSettings.temperature || undefined
                 }
             });
-            toast.success('AI settings saved successfully');
+            toast.success(t('ai_settings_saved'));
         } catch (error) {
             if (error instanceof ApiError) {
-                toast.error(error.body?.error || 'Failed to save AI settings');
+                toast.error(error.body?.error || t('ai_settings_save_failed'));
             } else {
-                toast.error('Failed to save AI settings: ' + error.message);
+                toast.error(t('ai_settings_save_failed_message', { message: error.message }));
             }
         } finally {
             setSaving(false);
@@ -164,7 +166,7 @@ export default function UserProfilePanel({ _onClose }) {
         // Validate required fields
         for (const [field, config] of Object.entries(fieldConfig)) {
             if (config.required && config.enabled && !profile[field]) {
-                toast.error(`${config.label} is required`);
+                toast.error(t('field_required', { label: config.label }));
                 return;
             }
         }
@@ -180,12 +182,12 @@ export default function UserProfilePanel({ _onClose }) {
                 education: profile.education,
                 grade: profile.grade
             });
-            toast.success('Profile updated successfully');
+            toast.success(t('profile_updated'));
         } catch (error) {
             if (error instanceof ApiError) {
-                toast.error(error.body?.error || 'Failed to update profile');
+                toast.error(error.body?.error || t('profile_update_failed'));
             } else {
-                toast.error('Failed to update profile: ' + error.message);
+                toast.error(t('profile_update_failed_message', { message: error.message }));
             }
         } finally {
             setSaving(false);
@@ -194,17 +196,17 @@ export default function UserProfilePanel({ _onClose }) {
 
     const handleChangePassword = async () => {
         if (!passwordData.current_password || !passwordData.new_password) {
-            toast.error('Please fill in all password fields');
+            toast.error(t('password_fields_required'));
             return;
         }
 
         if (passwordData.new_password !== passwordData.confirm_password) {
-            toast.error('New passwords do not match');
+            toast.error(t('passwords_new_do_not_match'));
             return;
         }
 
         if (passwordData.new_password.length < 6) {
-            toast.error('New password must be at least 6 characters');
+            toast.error(t('password_min_length'));
             return;
         }
 
@@ -214,7 +216,7 @@ export default function UserProfilePanel({ _onClose }) {
                 current_password: passwordData.current_password,
                 new_password: passwordData.new_password
             });
-            toast.success('Password changed successfully');
+            toast.success(t('password_changed'));
             setPasswordData({
                 current_password: '',
                 new_password: '',
@@ -222,9 +224,9 @@ export default function UserProfilePanel({ _onClose }) {
             });
         } catch (error) {
             if (error instanceof ApiError) {
-                toast.error(error.body?.error || 'Failed to change password');
+                toast.error(error.body?.error || t('password_change_failed'));
             } else {
-                toast.error('Failed to change password: ' + error.message);
+                toast.error(t('password_change_failed_message', { message: error.message }));
             }
         } finally {
             setSaving(false);
@@ -295,7 +297,7 @@ export default function UserProfilePanel({ _onClose }) {
                         }`}
                     >
                         <User className="w-4 h-4 inline mr-2" />
-                        Profile
+                        {t('profile')}
                     </button>
                     <button
                         onClick={() => setActiveTab('password')}
@@ -306,7 +308,7 @@ export default function UserProfilePanel({ _onClose }) {
                         }`}
                     >
                         <Lock className="w-4 h-4 inline mr-2" />
-                        Password
+                        {t('password')}
                     </button>
                     <button
                         onClick={() => setActiveTab('ai')}
@@ -317,7 +319,7 @@ export default function UserProfilePanel({ _onClose }) {
                         }`}
                     >
                         <Bot className="w-4 h-4 inline mr-2" />
-                        AI Settings
+                        {t('ai_settings')}
                     </button>
                     <button
                         onClick={() => setActiveTab('join-class')}
@@ -328,7 +330,7 @@ export default function UserProfilePanel({ _onClose }) {
                         }`}
                     >
                         <GraduationCap className="w-4 h-4 inline mr-2" />
-                        Join a class
+                        {t('join_class')}
                     </button>
                 </div>
             </div>
@@ -341,17 +343,17 @@ export default function UserProfilePanel({ _onClose }) {
                         <div className="p-4 bg-neutral-800/50 rounded-lg border border-neutral-700">
                             <h3 className="text-sm font-bold text-neutral-300 mb-3 flex items-center gap-2">
                                 <AlertCircle className="w-4 h-4 text-amber-500" />
-                                Account Information (Cannot be changed)
+                                {t('account_information')}
                             </h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <label className="text-xs font-medium text-neutral-500">Username</label>
+                                    <label className="text-xs font-medium text-neutral-500">{t('username')}</label>
                                     <div className="px-3 py-2.5 bg-neutral-900 border border-neutral-700 rounded-lg text-neutral-400">
                                         {profile.username}
                                     </div>
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-xs font-medium text-neutral-500">Email</label>
+                                    <label className="text-xs font-medium text-neutral-500">{t('email')}</label>
                                     <div className="px-3 py-2.5 bg-neutral-900 border border-neutral-700 rounded-lg text-neutral-400">
                                         {profile.email}
                                     </div>
@@ -361,22 +363,22 @@ export default function UserProfilePanel({ _onClose }) {
 
                         {/* Editable Fields */}
                         <div className="space-y-4">
-                            <h3 className="text-sm font-bold text-neutral-300">Personal Information</h3>
+                            <h3 className="text-sm font-bold text-neutral-300">{t('personal_information')}</h3>
 
-                            {renderField('name', User, 'text', 'Your full name')}
+                            {renderField('name', User, 'text', t('placeholder_name'))}
 
                             <div className="grid grid-cols-2 gap-4">
-                                {fieldConfig.institution?.enabled !== false && renderField('institution', Building2, 'text', 'Your institution')}
-                                {fieldConfig.phone?.enabled !== false && renderField('phone', Phone, 'tel', 'Phone number')}
+                                {fieldConfig.institution?.enabled !== false && renderField('institution', Building2, 'text', t('placeholder_institution'))}
+                                {fieldConfig.phone?.enabled !== false && renderField('phone', Phone, 'tel', t('placeholder_phone'))}
                             </div>
 
-                            {fieldConfig.address?.enabled !== false && renderField('address', MapPin, 'text', 'Your address')}
+                            {fieldConfig.address?.enabled !== false && renderField('address', MapPin, 'text', t('placeholder_address'))}
 
-                            {fieldConfig.alternative_email?.enabled !== false && renderField('alternative_email', Mail, 'email', 'Alternative email address')}
+                            {fieldConfig.alternative_email?.enabled !== false && renderField('alternative_email', Mail, 'email', t('placeholder_alternative_email'))}
 
                             <div className="grid grid-cols-2 gap-4">
-                                {fieldConfig.education?.enabled !== false && renderField('education', GraduationCap, 'text', 'Education level')}
-                                {fieldConfig.grade?.enabled !== false && renderField('grade', GraduationCap, 'text', 'Grade/Year')}
+                                {fieldConfig.education?.enabled !== false && renderField('education', GraduationCap, 'text', t('placeholder_education'))}
+                                {fieldConfig.grade?.enabled !== false && renderField('grade', GraduationCap, 'text', t('placeholder_grade'))}
                             </div>
                         </div>
 
@@ -385,7 +387,7 @@ export default function UserProfilePanel({ _onClose }) {
                         <div className="space-y-2">
                             <h3 className="text-sm font-bold text-neutral-300 flex items-center gap-2">
                                 <Globe className="w-4 h-4 text-blue-400" />
-                                Language
+                                {t('language')}
                             </h3>
                             <select
                                 value={uiLanguage}
@@ -399,7 +401,7 @@ export default function UserProfilePanel({ _onClose }) {
                                 ))}
                             </select>
                             <p className="text-xs text-neutral-500">
-                                Sets the patient dialogue language for your sessions. Interface translation follows as coverage grows.
+                                {t('language_help')}
                             </p>
                         </div>
 
@@ -411,9 +413,9 @@ export default function UserProfilePanel({ _onClose }) {
                                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-600 text-white rounded-lg font-medium flex items-center gap-2"
                             >
                                 {saving ? (
-                                    <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                                    <><Loader2 className="w-4 h-4 animate-spin" /> {t('saving')}</>
                                 ) : (
-                                    <><Save className="w-4 h-4" /> Save Changes</>
+                                    <><Save className="w-4 h-4" /> {t('save_changes')}</>
                                 )}
                             </button>
                         </div>
@@ -425,21 +427,21 @@ export default function UserProfilePanel({ _onClose }) {
                         <div className="p-4 bg-amber-900/20 border border-amber-700/50 rounded-lg">
                             <p className="text-sm text-amber-200 flex items-start gap-2">
                                 <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                                Choose a strong password with at least 6 characters. You'll need to enter your current password to make changes.
+                                {t('password_intro')}
                             </p>
                         </div>
 
                         <div className="space-y-4">
                             {/* Current Password */}
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-neutral-400">Current Password</label>
+                                <label className="text-xs font-medium text-neutral-400">{t('current_password')}</label>
                                 <div className="relative">
                                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
                                     <input
                                         type={showCurrentPassword ? 'text' : 'password'}
                                         value={passwordData.current_password}
                                         onChange={(e) => setPasswordData(prev => ({ ...prev, current_password: e.target.value }))}
-                                        placeholder="Enter current password"
+                                        placeholder={t('current_password_placeholder')}
                                         className="w-full pl-10 pr-10 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:border-blue-500 focus:outline-none"
                                     />
                                     <button
@@ -454,14 +456,14 @@ export default function UserProfilePanel({ _onClose }) {
 
                             {/* New Password */}
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-neutral-400">New Password</label>
+                                <label className="text-xs font-medium text-neutral-400">{t('new_password')}</label>
                                 <div className="relative">
                                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
                                     <input
                                         type={showNewPassword ? 'text' : 'password'}
                                         value={passwordData.new_password}
                                         onChange={(e) => setPasswordData(prev => ({ ...prev, new_password: e.target.value }))}
-                                        placeholder="Enter new password"
+                                        placeholder={t('new_password_placeholder')}
                                         className="w-full pl-10 pr-10 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:border-blue-500 focus:outline-none"
                                     />
                                     <button
@@ -473,29 +475,29 @@ export default function UserProfilePanel({ _onClose }) {
                                     </button>
                                 </div>
                                 {passwordData.new_password && passwordData.new_password.length < 6 && (
-                                    <p className="text-xs text-red-400">Password must be at least 6 characters</p>
+                                    <p className="text-xs text-red-400">{t('password_too_short')}</p>
                                 )}
                             </div>
 
                             {/* Confirm Password */}
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-neutral-400">Confirm New Password</label>
+                                <label className="text-xs font-medium text-neutral-400">{t('confirm_new_password')}</label>
                                 <div className="relative">
                                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
                                     <input
                                         type={showNewPassword ? 'text' : 'password'}
                                         value={passwordData.confirm_password}
                                         onChange={(e) => setPasswordData(prev => ({ ...prev, confirm_password: e.target.value }))}
-                                        placeholder="Confirm new password"
+                                        placeholder={t('confirm_new_password_placeholder')}
                                         className="w-full pl-10 pr-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:border-blue-500 focus:outline-none"
                                     />
                                 </div>
                                 {passwordData.confirm_password && passwordData.new_password !== passwordData.confirm_password && (
-                                    <p className="text-xs text-red-400">Passwords do not match</p>
+                                    <p className="text-xs text-red-400">{t('passwords_do_not_match')}</p>
                                 )}
                                 {passwordData.confirm_password && passwordData.new_password === passwordData.confirm_password && passwordData.new_password.length >= 6 && (
                                     <p className="text-xs text-green-400 flex items-center gap-1">
-                                        <CheckCircle className="w-3 h-3" /> Passwords match
+                                        <CheckCircle className="w-3 h-3" /> {t('passwords_match')}
                                     </p>
                                 )}
                             </div>
@@ -509,9 +511,9 @@ export default function UserProfilePanel({ _onClose }) {
                                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-600 disabled:cursor-not-allowed text-white rounded-lg font-medium flex items-center gap-2"
                             >
                                 {saving ? (
-                                    <><Loader2 className="w-4 h-4 animate-spin" /> Changing...</>
+                                    <><Loader2 className="w-4 h-4 animate-spin" /> {t('changing')}</>
                                 ) : (
-                                    <><Lock className="w-4 h-4" /> Change Password</>
+                                    <><Lock className="w-4 h-4" /> {t('change_password')}</>
                                 )}
                             </button>
                         </div>
@@ -523,23 +525,22 @@ export default function UserProfilePanel({ _onClose }) {
                         <div className="p-4 bg-blue-900/20 border border-blue-700/50 rounded-lg">
                             <p className="text-sm text-blue-200 flex items-start gap-2">
                                 <Bot className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                                Configure your personal AI settings. These will be used instead of platform defaults when you start new sessions.
-                                Leave fields empty to use platform defaults.
+                                {t('ai_intro')}
                             </p>
                         </div>
 
                         <div className="space-y-4">
-                            <h3 className="text-sm font-bold text-neutral-300">AI Provider Configuration</h3>
+                            <h3 className="text-sm font-bold text-neutral-300">{t('ai_provider_configuration')}</h3>
 
                             {/* Provider */}
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-neutral-400">Provider</label>
+                                <label className="text-xs font-medium text-neutral-400">{t('provider')}</label>
                                 <select
                                     value={aiSettings.provider}
                                     onChange={(e) => setAiSettings(prev => ({ ...prev, provider: e.target.value }))}
                                     className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
                                 >
-                                    <option value="">Use platform default</option>
+                                    <option value="">{t('use_platform_default')}</option>
                                     <option value="openai">OpenAI</option>
                                     <option value="anthropic">Anthropic (Claude)</option>
                                     <option value="lmstudio">LM Studio (Local)</option>
@@ -552,14 +553,14 @@ export default function UserProfilePanel({ _onClose }) {
 
                             {/* Model */}
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-neutral-400">Model</label>
+                                <label className="text-xs font-medium text-neutral-400">{t('model')}</label>
                                 <div className="relative">
                                     <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
                                     <input
                                         type="text"
                                         value={aiSettings.model}
                                         onChange={(e) => setAiSettings(prev => ({ ...prev, model: e.target.value }))}
-                                        placeholder="e.g., gpt-4, claude-3-opus, llama3"
+                                        placeholder={t('model_placeholder')}
                                         className="w-full pl-10 pr-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:border-blue-500 focus:outline-none"
                                     />
                                 </div>
@@ -567,14 +568,14 @@ export default function UserProfilePanel({ _onClose }) {
 
                             {/* Base URL */}
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-neutral-400">API Base URL</label>
+                                <label className="text-xs font-medium text-neutral-400">{t('api_base_url')}</label>
                                 <div className="relative">
                                     <Server className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
                                     <input
                                         type="text"
                                         value={aiSettings.baseUrl}
                                         onChange={(e) => setAiSettings(prev => ({ ...prev, baseUrl: e.target.value }))}
-                                        placeholder="e.g., https://api.openai.com/v1"
+                                        placeholder={t('api_base_url_placeholder')}
                                         className="w-full pl-10 pr-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:border-blue-500 focus:outline-none"
                                     />
                                 </div>
@@ -582,14 +583,14 @@ export default function UserProfilePanel({ _onClose }) {
 
                             {/* API Key */}
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-neutral-400">API Key</label>
+                                <label className="text-xs font-medium text-neutral-400">{t('api_key')}</label>
                                 <div className="relative">
                                     <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
                                     <input
                                         type={showApiKey ? 'text' : 'password'}
                                         value={aiSettings.apiKey}
                                         onChange={(e) => setAiSettings(prev => ({ ...prev, apiKey: e.target.value }))}
-                                        placeholder="Your API key (stored securely)"
+                                        placeholder={t('api_key_placeholder')}
                                         className="w-full pl-10 pr-10 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:border-blue-500 focus:outline-none"
                                     />
                                     <button
@@ -603,24 +604,24 @@ export default function UserProfilePanel({ _onClose }) {
                             </div>
 
                             {/* Advanced Settings */}
-                            <h3 className="text-sm font-bold text-neutral-300 pt-4">Advanced Settings</h3>
+                            <h3 className="text-sm font-bold text-neutral-300 pt-4">{t('advanced_settings')}</h3>
 
                             <div className="grid grid-cols-2 gap-4">
                                 {/* Max Output Tokens */}
                                 <div className="space-y-1">
-                                    <label className="text-xs font-medium text-neutral-400">Max Output Tokens</label>
+                                    <label className="text-xs font-medium text-neutral-400">{t('max_output_tokens')}</label>
                                     <input
                                         type="number"
                                         value={aiSettings.maxOutputTokens}
                                         onChange={(e) => setAiSettings(prev => ({ ...prev, maxOutputTokens: e.target.value }))}
-                                        placeholder="e.g., 1024"
+                                        placeholder={t('max_output_tokens_placeholder')}
                                         className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:border-blue-500 focus:outline-none"
                                     />
                                 </div>
 
                                 {/* Temperature */}
                                 <div className="space-y-1">
-                                    <label className="text-xs font-medium text-neutral-400">Temperature</label>
+                                    <label className="text-xs font-medium text-neutral-400">{t('temperature')}</label>
                                     <input
                                         type="number"
                                         step="0.1"
@@ -628,7 +629,7 @@ export default function UserProfilePanel({ _onClose }) {
                                         max="2"
                                         value={aiSettings.temperature}
                                         onChange={(e) => setAiSettings(prev => ({ ...prev, temperature: e.target.value }))}
-                                        placeholder="e.g., 0.7"
+                                        placeholder={t('temperature_placeholder')}
                                         className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:border-blue-500 focus:outline-none"
                                     />
                                 </div>
@@ -643,9 +644,9 @@ export default function UserProfilePanel({ _onClose }) {
                                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-600 text-white rounded-lg font-medium flex items-center gap-2"
                             >
                                 {saving ? (
-                                    <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                                    <><Loader2 className="w-4 h-4 animate-spin" /> {t('saving')}</>
                                 ) : (
-                                    <><Save className="w-4 h-4" /> Save AI Settings</>
+                                    <><Save className="w-4 h-4" /> {t('save_ai_settings')}</>
                                 )}
                             </button>
                         </div>

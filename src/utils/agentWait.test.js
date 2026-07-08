@@ -7,38 +7,57 @@ const PAGED = '2026-05-13T12:00:00.000Z';
 const ARRIVES = '2026-05-13T12:03:00.000Z'; // 3 min later
 const ms = (sec) => new Date(PAGED).getTime() + sec * 1000;
 
+// pickWaitPhase returns chat-namespace translation KEYS (i18n, 2026-07-08);
+// the English copy lives in src/locales/en/chat.json and the render site
+// wraps the key in t(). The catalogue-side contract (keys exist + English
+// values) is asserted separately below.
 describe('pickWaitPhase', () => {
-    it('returns the first phase at t=0 for a known agent type', () => {
+    it('returns the first phase key at t=0 for a known agent type', () => {
         expect(pickWaitPhase('consultant', PAGED, ARRIVES, ms(0)))
-            .toBe('Paging the consultant…');
+            .toBe('wait_consultant_0');
     });
 
-    it('advances through phases as elapsed fraction grows', () => {
+    it('advances through phase keys as elapsed fraction grows', () => {
         // 4 consultant phases over 180s → boundaries at 45/90/135s.
         expect(pickWaitPhase('consultant', PAGED, ARRIVES, ms(50)))
-            .toBe('Reviewing the chart and current vitals');
+            .toBe('wait_consultant_1');
         expect(pickWaitPhase('consultant', PAGED, ARRIVES, ms(95)))
-            .toBe('Considering differentials and next steps');
+            .toBe('wait_consultant_2');
         expect(pickWaitPhase('consultant', PAGED, ARRIVES, ms(170)))
-            .toBe('On the way to the bedside');
+            .toBe('wait_consultant_3');
     });
 
     it('never overflows the phase array even at/past arrival', () => {
         // frac is clamped to 0.999 so floor(0.999 * len) === len-1.
         expect(pickWaitPhase('consultant', PAGED, ARRIVES, ms(180)))
-            .toBe('On the way to the bedside');
+            .toBe('wait_consultant_3');
         expect(pickWaitPhase('consultant', PAGED, ARRIVES, ms(10_000)))
-            .toBe('On the way to the bedside');
+            .toBe('wait_consultant_3');
     });
 
-    it('falls back to default phases for unknown agent types', () => {
-        expect(pickWaitPhase('janitor', PAGED, ARRIVES, ms(0))).toBe('Paging…');
-        expect(pickWaitPhase('janitor', PAGED, ARRIVES, ms(170))).toBe('Almost here…');
+    it('falls back to default phase keys for unknown agent types', () => {
+        expect(pickWaitPhase('janitor', PAGED, ARRIVES, ms(0))).toBe('wait_default_0');
+        expect(pickWaitPhase('janitor', PAGED, ARRIVES, ms(170))).toBe('wait_default_2');
     });
 
-    it('returns the first phase if timestamps are missing', () => {
-        expect(pickWaitPhase('consultant', null, ARRIVES, ms(50))).toBe('Paging the consultant…');
-        expect(pickWaitPhase('consultant', PAGED, null, ms(50))).toBe('Paging the consultant…');
+    it('returns the first phase key if timestamps are missing', () => {
+        expect(pickWaitPhase('consultant', null, ARRIVES, ms(50))).toBe('wait_consultant_0');
+        expect(pickWaitPhase('consultant', PAGED, null, ms(50))).toBe('wait_consultant_0');
+    });
+
+    it('every key it can return exists in the en chat catalogue with the original copy', async () => {
+        const catalogue = (await import('../locales/en/chat.json')).default;
+        const allKeys = [
+            'wait_consultant_0', 'wait_consultant_1', 'wait_consultant_2', 'wait_consultant_3',
+            'wait_relative_0', 'wait_relative_1', 'wait_relative_2',
+            'wait_nurse_0', 'wait_nurse_1', 'wait_nurse_2',
+            'wait_default_0', 'wait_default_1', 'wait_default_2'
+        ];
+        for (const key of allKeys) {
+            expect(catalogue[key], `missing catalogue entry for ${key}`).toBeTruthy();
+        }
+        expect(catalogue.wait_consultant_0).toBe('Paging the consultant…');
+        expect(catalogue.wait_default_2).toBe('Almost here…');
     });
 });
 

@@ -1,4 +1,6 @@
+import { useTranslation } from 'react-i18next';
 import { CheckCircle, ChevronRight, Clock, Eye, Inbox } from 'lucide-react';
+import { formatDate, formatTime, formatDateTime } from '../../utils/formatters';
 
 // Right-rail worklist used by InvestigationsScreen. Splits orders into
 // Pending / Ready / Viewed cards so historical results stay reachable.
@@ -13,6 +15,7 @@ export default function InvestigationWorklist({
     openOrderIds,
     onSelectOrder,
 }) {
+    const { t } = useTranslation('investigations');
     const isOpen = (id) => openOrderIds?.has?.(id) ?? false;
     const pending = orders.filter((o) => !o.is_ready);
     const ready = orders.filter((o) => o.is_ready && !o.viewed_at);
@@ -24,7 +27,7 @@ export default function InvestigationWorklist({
             <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/80 flex items-center gap-2">
                 <Inbox className={`w-4 h-4 ${theme.accentText}`} />
                 <h2 className="text-xs uppercase tracking-wider font-semibold text-slate-300">
-                    Worklist
+                    {t('worklist')}
                 </h2>
                 <span className="ml-auto text-xs text-slate-500">{orders.length}</span>
             </div>
@@ -33,13 +36,13 @@ export default function InvestigationWorklist({
                 {empty && (
                     <div className="flex flex-col items-center text-center text-slate-500 text-sm py-12 px-4">
                         <Inbox className="w-8 h-8 mb-2 opacity-40" />
-                        <div>No {kind === 'radiology' ? 'studies' : 'tests'} ordered yet.</div>
-                        <div className="text-xs mt-1 text-slate-600">Pick from the catalogue on the left.</div>
+                        <div>{kind === 'radiology' ? t('worklist_empty_radiology') : t('worklist_empty_lab')}</div>
+                        <div className="text-xs mt-1 text-slate-600">{t('worklist_empty_hint')}</div>
                     </div>
                 )}
 
                 {ready.length > 0 && (
-                    <Section title="Ready" count={ready.length} icon={CheckCircle} tint="emerald">
+                    <Section title={t('stat_ready')} count={ready.length} icon={CheckCircle} tint="emerald">
                         {ready.map((order) => (
                             <ReadyRow
                                 key={order.id}
@@ -53,7 +56,7 @@ export default function InvestigationWorklist({
                 )}
 
                 {pending.length > 0 && (
-                    <Section title="Pending" count={pending.length} icon={Clock} tint="amber">
+                    <Section title={t('stat_pending')} count={pending.length} icon={Clock} tint="amber">
                         {pending.map((order) => (
                             <PendingRow key={order.id} order={order} />
                         ))}
@@ -61,7 +64,7 @@ export default function InvestigationWorklist({
                 )}
 
                 {viewed.length > 0 && (
-                    <Section title="Viewed" count={viewed.length} icon={Eye} tint="slate">
+                    <Section title={t('stat_viewed')} count={viewed.length} icon={Eye} tint="slate">
                         {viewed.map((order) => (
                             <ViewedRow
                                 key={order.id}
@@ -100,7 +103,8 @@ function Section({ title, count, icon: Icon, tint, children }) {
 }
 
 function PendingRow({ order }) {
-    const remaining = pendingLabel(order);
+    const { t } = useTranslation('investigations');
+    const remaining = pendingLabel(t, order);
     return (
         <div className="p-2.5 rounded-lg border-l-[3px] border-l-amber-500 border border-amber-700/30 bg-amber-900/15">
             <div className="text-sm font-medium text-white truncate">{order.test_name}</div>
@@ -113,6 +117,7 @@ function PendingRow({ order }) {
 }
 
 function ReadyRow({ order, selected, theme, onSelect }) {
+    const { t } = useTranslation('investigations');
     const baseClass = selected
         ? `border-l-[3px] ${theme.accentRail} border border-emerald-400/60 bg-emerald-900/30 ${theme.glow}`
         : 'border-l-[3px] border-l-emerald-500 border border-emerald-700/40 bg-emerald-900/15 hover:bg-emerald-900/25';
@@ -124,7 +129,7 @@ function ReadyRow({ order, selected, theme, onSelect }) {
             <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold text-white truncate">{order.test_name}</div>
                 <div className="text-[11px] text-emerald-300 mt-0.5">
-                    {selected ? 'Showing in viewer →' : 'Tap to open report'}
+                    {selected ? t('showing_in_viewer') : t('tap_to_open')}
                 </div>
             </div>
             <ChevronRight className={`w-4 h-4 ${selected ? 'text-emerald-200' : 'text-emerald-500'}`} />
@@ -133,6 +138,7 @@ function ReadyRow({ order, selected, theme, onSelect }) {
 }
 
 function ViewedRow({ order, selected, onSelect }) {
+    const { t } = useTranslation('investigations');
     const baseClass = selected
         ? 'bg-slate-700/60 border border-slate-500'
         : 'border border-transparent hover:bg-slate-800/60';
@@ -143,7 +149,7 @@ function ViewedRow({ order, selected, onSelect }) {
         >
             <div className="text-slate-200 truncate">{order.test_name}</div>
             <div className="text-[11px] text-slate-500 mt-0.5">
-                Viewed {formatRelative(order.viewed_at)}
+                {t('viewed_when', { when: formatRelative(t, order.viewed_at) })}
             </div>
         </button>
     );
@@ -164,11 +170,11 @@ function parseSqliteUtc(ts) {
 // Pending rows are filtered to !is_ready (server truth). The label must
 // therefore NEVER say "Ready" — it derives from the server-computed
 // minutes_remaining, not a re-parsed timestamp.
-function pendingLabel(order) {
+function pendingLabel(t, order) {
     const mins = Number(order?.minutes_remaining);
     if (Number.isFinite(mins) && mins > 0) {
-        if (mins >= 1) return `~${Math.ceil(mins)} min remaining`;
-        return '< 1 min remaining';
+        if (mins >= 1) return t('pending_minutes_remaining', { count: Math.ceil(mins) });
+        return t('pending_under_minute');
     }
     // minutes_remaining absent or 0 but the server still has it pending
     // (rounding / poll lag): show a truthful transient, not "Ready".
@@ -178,17 +184,17 @@ function pendingLabel(order) {
         if (diff > 0) {
             const m = Math.floor(diff / 60000);
             const s = Math.floor((diff % 60000) / 1000);
-            return `${m}:${s.toString().padStart(2, '0')} remaining`;
+            return t('pending_countdown', { time: `${m}:${s.toString().padStart(2, '0')}` });
         }
     }
-    return 'Finalizing…';
+    return t('finalizing');
 }
 
-function formatRelative(timestamp) {
+function formatRelative(t, timestamp) {
     if (!timestamp) return '';
     const diff = Date.now() - parseSqliteUtc(timestamp);
-    if (diff < 60_000) return 'just now';
-    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-    return new Date(timestamp).toLocaleDateString();
+    if (diff < 60_000) return t('relative_just_now');
+    if (diff < 3_600_000) return t('relative_minutes_ago', { count: Math.floor(diff / 60_000) });
+    if (diff < 86_400_000) return t('relative_hours_ago', { count: Math.floor(diff / 3_600_000) });
+    return formatDate(timestamp);
 }

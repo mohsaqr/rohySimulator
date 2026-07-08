@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Play, Pause, Volume2, VolumeX, AlertTriangle, CheckCircle, Heart, Wind, Activity } from 'lucide-react';
 import EventLogger from '../../services/eventLogger';
 import { baseUrl } from '../../config/api';
@@ -29,30 +30,34 @@ const DEFAULT_SOUNDS = {
 
 // Cardiopulmonary auscultation points (percentage coordinates).
 // type: 'heart' or 'lung' determines which default sound to use.
+// `label`/`description` are the canonical English strings kept for
+// EventLogger payloads; `labelKey`/`descKey` are the explicit i18n keys
+// (namespace 'examination') used at every display site — the en values
+// are byte-identical to label/description.
 const CARDIO_POINTS = {
-    aortic: { x: 54, y: 22, label: 'Aortic', description: '2nd ICS, right sternal border', type: 'heart' },
-    pulmonic: { x: 46, y: 22, label: 'Pulmonic', description: '2nd ICS, left sternal border', type: 'heart' },
-    erb: { x: 46, y: 30, label: "Erb's Point", description: '3rd ICS, left sternal border', type: 'heart' },
-    tricuspid: { x: 50, y: 38, label: 'Tricuspid', description: '4th ICS, left sternal border', type: 'heart' },
-    mitral: { x: 42, y: 42, label: 'Mitral (Apex)', description: '5th ICS, midclavicular line', type: 'heart' },
-    lungLeft: { x: 35, y: 28, label: 'L. Lung', description: 'Left anterior chest', type: 'lung' },
-    lungRight: { x: 65, y: 28, label: 'R. Lung', description: 'Right anterior chest', type: 'lung' },
-    lungBaseLeft: { x: 38, y: 45, label: 'L. Base', description: 'Left lung base', type: 'lung' },
-    lungBaseRight: { x: 62, y: 45, label: 'R. Base', description: 'Right lung base', type: 'lung' }
+    aortic: { x: 54, y: 22, label: 'Aortic', description: '2nd ICS, right sternal border', labelKey: 'point_aortic', descKey: 'point_aortic_desc', type: 'heart' },
+    pulmonic: { x: 46, y: 22, label: 'Pulmonic', description: '2nd ICS, left sternal border', labelKey: 'point_pulmonic', descKey: 'point_pulmonic_desc', type: 'heart' },
+    erb: { x: 46, y: 30, label: "Erb's Point", description: '3rd ICS, left sternal border', labelKey: 'point_erb', descKey: 'point_erb_desc', type: 'heart' },
+    tricuspid: { x: 50, y: 38, label: 'Tricuspid', description: '4th ICS, left sternal border', labelKey: 'point_tricuspid', descKey: 'point_tricuspid_desc', type: 'heart' },
+    mitral: { x: 42, y: 42, label: 'Mitral (Apex)', description: '5th ICS, midclavicular line', labelKey: 'point_mitral', descKey: 'point_mitral_desc', type: 'heart' },
+    lungLeft: { x: 35, y: 28, label: 'L. Lung', description: 'Left anterior chest', labelKey: 'point_lung_left', descKey: 'point_lung_left_desc', type: 'lung' },
+    lungRight: { x: 65, y: 28, label: 'R. Lung', description: 'Right anterior chest', labelKey: 'point_lung_right', descKey: 'point_lung_right_desc', type: 'lung' },
+    lungBaseLeft: { x: 38, y: 45, label: 'L. Base', description: 'Left lung base', labelKey: 'point_lung_base_left', descKey: 'point_lung_base_left_desc', type: 'lung' },
+    lungBaseRight: { x: 62, y: 45, label: 'R. Base', description: 'Right lung base', labelKey: 'point_lung_base_right', descKey: 'point_lung_base_right_desc', type: 'lung' }
 };
 
 // Abdominal auscultation: four quadrants for bowel sounds + the three
 // classic vascular bruit sites. Patient's right is on the viewer's left.
 const ABDOMEN_POINTS = {
-    ruq: { x: 38, y: 32, label: 'RUQ', description: 'Right upper quadrant — bowel sounds', type: 'bowel' },
-    luq: { x: 62, y: 32, label: 'LUQ', description: 'Left upper quadrant — bowel sounds', type: 'bowel' },
-    rlq: { x: 38, y: 62, label: 'RLQ', description: 'Right lower quadrant (ileocaecal) — bowel sounds', type: 'bowel' },
-    llq: { x: 62, y: 62, label: 'LLQ', description: 'Left lower quadrant — bowel sounds', type: 'bowel' },
-    aorticBruit: { x: 50, y: 40, label: 'Aorta', description: 'Epigastrium / midline — aortic bruit', type: 'bruit' },
-    renalRight: { x: 40, y: 46, label: 'R. Renal', description: 'Para-umbilical right — renal artery bruit', type: 'bruit' },
-    renalLeft: { x: 60, y: 46, label: 'L. Renal', description: 'Para-umbilical left — renal artery bruit', type: 'bruit' },
-    femoralRight: { x: 40, y: 78, label: 'R. Femoral', description: 'Right groin — iliac/femoral bruit', type: 'bruit' },
-    femoralLeft: { x: 60, y: 78, label: 'L. Femoral', description: 'Left groin — iliac/femoral bruit', type: 'bruit' }
+    ruq: { x: 38, y: 32, label: 'RUQ', description: 'Right upper quadrant — bowel sounds', labelKey: 'point_ruq', descKey: 'point_ruq_desc', type: 'bowel' },
+    luq: { x: 62, y: 32, label: 'LUQ', description: 'Left upper quadrant — bowel sounds', labelKey: 'point_luq', descKey: 'point_luq_desc', type: 'bowel' },
+    rlq: { x: 38, y: 62, label: 'RLQ', description: 'Right lower quadrant (ileocaecal) — bowel sounds', labelKey: 'point_rlq', descKey: 'point_rlq_desc', type: 'bowel' },
+    llq: { x: 62, y: 62, label: 'LLQ', description: 'Left lower quadrant — bowel sounds', labelKey: 'point_llq', descKey: 'point_llq_desc', type: 'bowel' },
+    aorticBruit: { x: 50, y: 40, label: 'Aorta', description: 'Epigastrium / midline — aortic bruit', labelKey: 'point_aorta', descKey: 'point_aorta_desc', type: 'bruit' },
+    renalRight: { x: 40, y: 46, label: 'R. Renal', description: 'Para-umbilical right — renal artery bruit', labelKey: 'point_renal_right', descKey: 'point_renal_right_desc', type: 'bruit' },
+    renalLeft: { x: 60, y: 46, label: 'L. Renal', description: 'Para-umbilical left — renal artery bruit', labelKey: 'point_renal_left', descKey: 'point_renal_left_desc', type: 'bruit' },
+    femoralRight: { x: 40, y: 78, label: 'R. Femoral', description: 'Right groin — iliac/femoral bruit', labelKey: 'point_femoral_right', descKey: 'point_femoral_right_desc', type: 'bruit' },
+    femoralLeft: { x: 60, y: 78, label: 'L. Femoral', description: 'Left groin — iliac/femoral bruit', labelKey: 'point_femoral_left', descKey: 'point_femoral_left_desc', type: 'bruit' }
 };
 
 // Visual + audio behaviour per point type.
@@ -79,7 +84,7 @@ function getProfile(profileId, selectedRegion, regionName) {
             // Bowel sounds are classically auscultated first; RLQ over the
             // ileocaecal valve is the conventional starting point.
             defaultPoint: 'rlq',
-            playerLabel: 'Bowel / bruit sounds',
+            playerLabelKey: 'sounds_bowel_bruit',
             renderBackground: () => (
                 <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full">
                     {/* Abdominal wall outline */}
@@ -98,7 +103,7 @@ function getProfile(profileId, selectedRegion, regionName) {
         points: CARDIO_POINTS,
         // Mitral (apex) is clinically the most important first listen.
         defaultPoint: 'mitral',
-        playerLabel: 'Heart / lung sounds',
+        playerLabelKey: 'sounds_heart_lung',
         renderBackground: () => (
             <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full">
                 {/* Simple chest outline */}
@@ -137,6 +142,7 @@ export default function AuscultationPanel({
     auscultationProfile,   // Explicit profile id from examRegions.js (preferred)
     regionName = 'Chest'
 }) {
+    const { t } = useTranslation('examination');
     const profile = getProfile(auscultationProfile, selectedRegion, regionName);
     const POINTS = profile.points;
 
@@ -283,17 +289,17 @@ export default function AuscultationPanel({
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                     <Volume2 className="w-5 h-5 text-cyan-400" />
-                    <span className="text-white font-medium">Auscultation - {regionName}</span>
+                    <span className="text-white font-medium">{t('auscultation_title', { region: regionName })}</span>
                 </div>
                 {isAbnormal ? (
                     <span className="flex items-center gap-1 text-xs px-2 py-1 bg-red-900/50 text-red-400 rounded">
                         <AlertTriangle className="w-3 h-3" />
-                        Abnormal
+                        {t('abnormal')}
                     </span>
                 ) : (
                     <span className="flex items-center gap-1 text-xs px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded">
                         <CheckCircle className="w-3 h-3" />
-                        Normal
+                        {t('normal')}
                     </span>
                 )}
             </div>
@@ -322,7 +328,7 @@ export default function AuscultationPanel({
                                         : 'bg-slate-600 hover:bg-slate-500'
                                 }`}
                                 style={{ left: `${point.x}%`, top: `${point.y}%` }}
-                                title={`${point.label}: ${point.description}`}
+                                title={t('point_tooltip', { label: t(point.labelKey), description: t(point.descKey) })}
                             >
                                 <PointIcon className="w-3.5 h-3.5 text-white" />
                                 {isSelected && (
@@ -337,9 +343,9 @@ export default function AuscultationPanel({
                         <div className="absolute bottom-1 left-1 right-1 bg-black/70 rounded px-2 py-1 text-center">
                             <div className={`text-xs font-medium flex items-center justify-center gap-1 ${COLOR_CLASSES[currentMeta.color].text}`}>
                                 <currentMeta.Icon className="w-3 h-3" />
-                                {currentPoint.label}
+                                {t(currentPoint.labelKey)}
                             </div>
-                            <div className="text-[10px] text-slate-400">{currentPoint.description}</div>
+                            <div className="text-[10px] text-slate-400">{t(currentPoint.descKey)}</div>
                         </div>
                     )}
                 </div>
@@ -348,7 +354,7 @@ export default function AuscultationPanel({
                 <div className="flex-1 flex flex-col">
                     {/* Finding text */}
                     <div className={`flex-1 text-sm leading-relaxed p-3 rounded bg-slate-900/50 mb-3 ${isAbnormal ? 'text-red-200' : 'text-slate-200'}`}>
-                        {finding || 'Click on auscultation points to examine'}
+                        {finding || t('auscultate_prompt')}
                     </div>
 
                     {/* Hidden audio element - always rendered so ref is available */}
@@ -374,7 +380,7 @@ export default function AuscultationPanel({
                                 </button>
                                 <div className="flex-1">
                                     <div className="text-xs text-slate-400 mb-1">
-                                        {currentPoint ? `${currentPoint.label} sounds` : profile.playerLabel}
+                                        {currentPoint ? t('point_sounds', { point: t(currentPoint.labelKey) }) : t(profile.playerLabelKey)}
                                     </div>
                                     <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
                                         <div className={`h-full bg-cyan-500 transition-all ${isPlaying ? 'animate-pulse' : ''}`} style={{ width: isPlaying ? '60%' : '0%' }} />
@@ -390,7 +396,7 @@ export default function AuscultationPanel({
                         </div>
                     ) : (
                         <div className="bg-slate-900/50 rounded-lg p-3 text-center text-slate-500 text-xs">
-                            No audio available for this examination
+                            {t('no_audio')}
                         </div>
                     )}
                 </div>
@@ -398,7 +404,7 @@ export default function AuscultationPanel({
 
             {/* Auscultation point legend */}
             <div className="mt-3 pt-3 border-t border-slate-700">
-                <div className="text-xs text-slate-500 mb-2">Click points to examine:</div>
+                <div className="text-xs text-slate-500 mb-2">{t('legend_click_points')}</div>
                 <div className="flex flex-wrap gap-2">
                     {Object.entries(POINTS).map(([id, point]) => (
                         <button
@@ -410,7 +416,7 @@ export default function AuscultationPanel({
                                     : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                             }`}
                         >
-                            {point.label}
+                            {t(point.labelKey)}
                         </button>
                     ))}
                 </div>

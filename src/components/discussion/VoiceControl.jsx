@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Mic, MicOff, Square } from 'lucide-react';
 import { VoiceService } from '../../services/voiceService';
 
@@ -10,6 +11,7 @@ import { VoiceService } from '../../services/voiceService';
 // interim transcript changes. Parent can use this to drive a subtitle band
 // that captures both speakers (the user's live STT + the discussant's TTS).
 export default function VoiceControl({ onSend, busy, speaking, sttLang = 'en-US', onListeningChange }) {
+    const { t } = useTranslation('discussion');
     const [listening, setListening] = useState(false);
     const [interim, setInterim] = useState('');
     const [supported] = useState(() => VoiceService.isSttSupported());
@@ -72,18 +74,18 @@ export default function VoiceControl({ onSend, busy, speaking, sttLang = 'en-US'
     if (!supported) {
         return (
             <div className="text-center text-sm text-slate-400 italic px-4">
-                Voice input isn't supported in this browser. Use the type button below.
+                {t('voice_not_supported')}
             </div>
         );
     }
 
     const status = speaking
-        ? 'Discussant is speaking…'
+        ? t('status_speaking')
         : listening
-            ? 'Listening — talk now'
+            ? t('status_listening')
             : busy
-                ? 'Thinking…'
-                : 'Tap to talk';
+                ? t('status_thinking')
+                : t('status_tap_to_talk');
 
     return (
         <div className="flex flex-col items-center gap-2">
@@ -100,7 +102,7 @@ export default function VoiceControl({ onSend, busy, speaking, sttLang = 'en-US'
                                 ? 'bg-slate-300 text-slate-500 cursor-wait'
                                 : 'bg-indigo-600 hover:bg-indigo-700 text-white ring-2 ring-indigo-100 hover:ring-indigo-200'
                 }`}
-                aria-label={listening ? 'Stop listening' : 'Start listening'}
+                aria-label={listening ? t('stop_listening') : t('start_listening')}
             >
                 {listening
                     ? <Square className="w-7 h-7" />

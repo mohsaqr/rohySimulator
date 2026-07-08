@@ -4,13 +4,24 @@ import {
     Heart, Wind,
     ChevronDown, ChevronUp, Clock, Pill
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../../services/apiClient';
+
+// Backend effect phases -> static i18n keys (never t(variable) — every
+// enum value gets an explicit key; unknown values fall back to the raw
+// backend string).
+const PHASE_LABEL_KEYS = {
+    onset: 'phase_onset',
+    peak: 'phase_peak',
+    decline: 'phase_decline'
+};
 
 /**
  * ActiveEffectsIndicator - Visual indicator of active treatment effects
  * Shows aggregate effects and individual treatments
  */
 export default function ActiveEffectsIndicator({ sessionId, refreshTrigger, compact = false }) {
+    const { t } = useTranslation('treatments');
     const [effects, setEffects] = useState(null);
     const [expanded, setExpanded] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -64,7 +75,7 @@ export default function ActiveEffectsIndicator({ sessionId, refreshTrigger, comp
         return (
             <div className="flex items-center gap-2 px-2 py-1 bg-neutral-800/50 rounded text-xs">
                 <Pill className="w-3 h-3 text-pink-400" />
-                <span className="text-neutral-400">{treatment_count} active</span>
+                <span className="text-neutral-400">{t('active_label', { count: treatment_count })}</span>
                 {aggregate_effects.hr_effect !== 0 && (
                     <span className={aggregate_effects.hr_effect > 0 ? 'text-green-400' : 'text-red-400'}>
                         HR {aggregate_effects.hr_effect > 0 ? '+' : ''}{aggregate_effects.hr_effect}
@@ -93,7 +104,7 @@ export default function ActiveEffectsIndicator({ sessionId, refreshTrigger, comp
             >
                 <div className="flex items-center gap-2">
                     <Activity className="w-4 h-4 text-pink-400" />
-                    <span className="text-sm font-bold text-white">Active Treatments ({treatment_count})</span>
+                    <span className="text-sm font-bold text-white">{t('active_treatments', { count: treatment_count })}</span>
                 </div>
                 <div className="flex items-center gap-3">
                     {/* Aggregate effects summary */}
@@ -126,10 +137,10 @@ export default function ActiveEffectsIndicator({ sessionId, refreshTrigger, comp
                                         treatment.current_phase === 'decline' ? 'bg-orange-600/30 text-orange-300' :
                                         'bg-neutral-600/30 text-neutral-300'
                                     }`}>
-                                        {treatment.current_phase}
+                                        {PHASE_LABEL_KEYS[treatment.current_phase] ? t(PHASE_LABEL_KEYS[treatment.current_phase]) : treatment.current_phase}
                                     </div>
                                     <div className="text-xs text-neutral-500 mt-0.5">
-                                        {Math.round(treatment.current_strength * 100)}% effect
+                                        {t('effect_percent', { percent: Math.round(treatment.current_strength * 100) })}
                                     </div>
                                 </div>
                             </div>
@@ -171,7 +182,7 @@ export default function ActiveEffectsIndicator({ sessionId, refreshTrigger, comp
                                 )}
                                 {treatment.is_continuous && (
                                     <span className="text-cyan-400 flex items-center gap-1">
-                                        <Clock className="w-3 h-3" /> Continuous
+                                        <Clock className="w-3 h-3" /> {t('continuous')}
                                     </span>
                                 )}
                             </div>

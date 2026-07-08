@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FileText, Stethoscope, Pill, Image, Syringe, ClipboardList, ChevronDown, ChevronUp, ChevronRight, X, ZoomIn } from 'lucide-react';
 import { HISTORY_GROUPS as CANONICAL_HISTORY_GROUPS } from '../../data/historyGroups';
 import EventLogger from '../../services/eventLogger';
@@ -9,13 +10,16 @@ const RECORD_TAB_LABELS = {
     radiology: 'Radiology', procedures: 'Procedures', notes: 'Notes',
 };
 
+// `labelKey` is the i18n key (namespace: investigations) for the visible
+// tab label; the analytics label above stays hardcoded English so events
+// remain comparable across UI languages.
 const RECORD_TABS = [
-    { id: 'history', label: 'History', icon: FileText },
-    { id: 'physical', label: 'Past Physical Exam', icon: Stethoscope },
-    { id: 'medications', label: 'Medications', icon: Pill },
-    { id: 'radiology', label: 'Radiology', icon: Image },
-    { id: 'procedures', label: 'Procedures', icon: Syringe },
-    { id: 'notes', label: 'Notes', icon: ClipboardList }
+    { id: 'history', labelKey: 'tab_history', icon: FileText },
+    { id: 'physical', labelKey: 'tab_physical', icon: Stethoscope },
+    { id: 'medications', labelKey: 'tab_medications', icon: Pill },
+    { id: 'radiology', labelKey: 'tab_radiology', icon: Image },
+    { id: 'procedures', labelKey: 'tab_procedures', icon: Syringe },
+    { id: 'notes', labelKey: 'tab_notes', icon: ClipboardList }
 ];
 
 // Viewer-specific overlays: only Chief Complaint gets a red highlight band
@@ -32,6 +36,7 @@ const HISTORY_GROUPS = CANONICAL_HISTORY_GROUPS.map(group => ({
 }));
 
 export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history' }) {
+    const { t } = useTranslation('investigations');
     const [activeTab, setActiveTab] = useState(initialTab);
 
     // Record review is `assessing` activity. Log the tab the trainee is
@@ -131,7 +136,7 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                             }`}
                         >
                             <Icon className="w-3.5 h-3.5" />
-                            {tab.label}
+                            {t(tab.labelKey)}
                             {hasData && activeTab !== tab.id && (
                                 <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
                             )}
@@ -147,7 +152,7 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                     <div className="space-y-2">
                         {!hasContent('history') && (
                             <div className="text-center py-8 text-neutral-500">
-                                No history information available
+                                {t('no_history')}
                             </div>
                         )}
                         {hasContent('history') && HISTORY_GROUPS.map(group => {
@@ -173,7 +178,7 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                                             </span>
                                         </div>
                                         <span className="text-[10px] text-neutral-500 font-mono">
-                                            {populatedFields.length} {populatedFields.length === 1 ? 'item' : 'items'}
+                                            {t('n_items', { count: populatedFields.length })}
                                         </span>
                                     </button>
                                     {isOpen && (
@@ -208,19 +213,19 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                     <div className="space-y-2">
                         {physicalExam.general && (
                             <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-3">
-                                <h4 className="text-xs font-bold text-blue-400 uppercase mb-1">General Appearance</h4>
+                                <h4 className="text-xs font-bold text-blue-400 uppercase mb-1">{t('general_appearance')}</h4>
                                 <p className="text-sm text-white">{physicalExam.general}</p>
                             </div>
                         )}
-                        <Section title="HEENT" content={physicalExam.heent} sectionKey="heent" />
-                        <Section title="Cardiovascular" content={physicalExam.cardiovascular} sectionKey="cardiovascular" />
-                        <Section title="Respiratory" content={physicalExam.respiratory} sectionKey="respiratory" />
-                        <Section title="Abdomen" content={physicalExam.abdomen} sectionKey="abdomen" />
-                        <Section title="Neurological" content={physicalExam.neurological} sectionKey="neurological" />
-                        <Section title="Extremities/Skin" content={physicalExam.extremities} sectionKey="extremities" />
+                        <Section title={t('section_heent')} content={physicalExam.heent} sectionKey="heent" />
+                        <Section title={t('section_cardiovascular')} content={physicalExam.cardiovascular} sectionKey="cardiovascular" />
+                        <Section title={t('section_respiratory')} content={physicalExam.respiratory} sectionKey="respiratory" />
+                        <Section title={t('section_abdomen')} content={physicalExam.abdomen} sectionKey="abdomen" />
+                        <Section title={t('section_neurological')} content={physicalExam.neurological} sectionKey="neurological" />
+                        <Section title={t('section_extremities')} content={physicalExam.extremities} sectionKey="extremities" />
                         {!hasContent('physical') && (
                             <div className="text-center py-8 text-neutral-500">
-                                No physical exam findings available
+                                {t('no_physical_exam')}
                             </div>
                         )}
                     </div>
@@ -231,7 +236,7 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                     <div>
                         {medications.length > 0 ? (
                             <div className="space-y-2">
-                                <h4 className="text-xs font-bold text-neutral-400 uppercase mb-2">Current Medications</h4>
+                                <h4 className="text-xs font-bold text-neutral-400 uppercase mb-2">{t('current_medications')}</h4>
                                 {medications.map((med, idx) => (
                                     <div key={idx} className="flex items-center gap-3 bg-neutral-800/50 rounded-lg px-3 py-2 border border-neutral-700">
                                         <Pill className="w-4 h-4 text-purple-400 flex-shrink-0" />
@@ -246,7 +251,7 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                             </div>
                         ) : (
                             <div className="text-center py-8 text-neutral-500">
-                                No medications recorded
+                                {t('no_medications')}
                             </div>
                         )}
                     </div>
@@ -289,13 +294,13 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                                             )}
                                             {study.findings && (
                                                 <div className="mb-2">
-                                                    <h5 className="text-xs font-bold text-neutral-400 uppercase">Findings</h5>
+                                                    <h5 className="text-xs font-bold text-neutral-400 uppercase">{t('findings')}</h5>
                                                     <p className="text-sm text-neutral-300">{study.findings}</p>
                                                 </div>
                                             )}
                                             {study.interpretation && (
                                                 <div>
-                                                    <h5 className="text-xs font-bold text-neutral-400 uppercase">Interpretation</h5>
+                                                    <h5 className="text-xs font-bold text-neutral-400 uppercase">{t('interpretation')}</h5>
                                                     <p className="text-sm text-neutral-300">{study.interpretation}</p>
                                                 </div>
                                             )}
@@ -305,7 +310,7 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                             </div>
                         ) : (
                             <div className="text-center py-8 text-neutral-500">
-                                No radiology studies available
+                                {t('no_radiology')}
                             </div>
                         )}
                     </div>
@@ -330,19 +335,19 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                                         <div className="grid grid-cols-3 gap-2 text-xs">
                                             {proc.indication && (
                                                 <div>
-                                                    <span className="text-neutral-500">Indication: </span>
+                                                    <span className="text-neutral-500">{t('proc_indication_prefix')}</span>
                                                     <span className="text-neutral-300">{proc.indication}</span>
                                                 </div>
                                             )}
                                             {proc.findings && (
                                                 <div>
-                                                    <span className="text-neutral-500">Findings: </span>
+                                                    <span className="text-neutral-500">{t('proc_findings_prefix')}</span>
                                                     <span className="text-neutral-300">{proc.findings}</span>
                                                 </div>
                                             )}
                                             {proc.complications && (
                                                 <div>
-                                                    <span className="text-neutral-500">Complications: </span>
+                                                    <span className="text-neutral-500">{t('proc_complications_prefix')}</span>
                                                     <span className="text-neutral-300">{proc.complications}</span>
                                                 </div>
                                             )}
@@ -352,7 +357,7 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                             </div>
                         ) : (
                             <div className="text-center py-8 text-neutral-500">
-                                No procedures recorded
+                                {t('no_procedures')}
                             </div>
                         )}
                     </div>
@@ -385,7 +390,7 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                             </div>
                         ) : (
                             <div className="text-center py-8 text-neutral-500">
-                                No clinical notes available
+                                {t('no_clinical_notes')}
                             </div>
                         )}
                     </div>
@@ -406,7 +411,7 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
                     </button>
                     <img
                         src={viewingImage}
-                        alt="Full size view"
+                        alt={t('full_size_view')}
                         className="max-w-full max-h-full object-contain"
                         onClick={(e) => e.stopPropagation()}
                     />

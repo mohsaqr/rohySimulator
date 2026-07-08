@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { LogIn, User, Lock, AlertCircle } from 'lucide-react';
 
 export default function LoginPage({ onSwitchToRegister }) {
+    const { t } = useTranslation('auth');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -17,7 +19,7 @@ export default function LoginPage({ onSwitchToRegister }) {
         try {
             await login(username, password);
         } catch (err) {
-            setError(err.message || 'Login failed');
+            setError(err.message || t('login_failed'));
         } finally {
             setLoading(false);
         }
@@ -29,14 +31,14 @@ export default function LoginPage({ onSwitchToRegister }) {
                 {/* Logo/Header */}
             <div className="text-center mb-8">
                 <h1 className="text-4xl font-bold text-white mb-2">Rohy</h1>
-                <p className="text-neutral-400">Virtual Patient Simulation Platform</p>
+                <p className="text-neutral-400">{t('platform_tagline')}</p>
             </div>
 
                 {/* Login Card */}
                 <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 shadow-2xl">
                     <div className="flex items-center gap-2 mb-6">
                         <LogIn className="w-6 h-6 text-blue-400" />
-                        <h2 className="text-2xl font-bold text-white">Sign In</h2>
+                        <h2 className="text-2xl font-bold text-white">{t('sign_in')}</h2>
                     </div>
 
                     {error && (
@@ -50,7 +52,7 @@ export default function LoginPage({ onSwitchToRegister }) {
                         {/* Username */}
                         <div>
                             <label className="block text-sm font-medium text-neutral-300 mb-2">
-                                Username
+                                {t('username')}
                             </label>
                             <div className="relative">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500" />
@@ -59,7 +61,7 @@ export default function LoginPage({ onSwitchToRegister }) {
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
                                     disabled={loading}
-                                    placeholder="Enter your username"
+                                    placeholder={t('enter_username')}
                                     className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50"
                                     required
                                 />
@@ -69,7 +71,7 @@ export default function LoginPage({ onSwitchToRegister }) {
                         {/* Password */}
                         <div>
                             <label className="block text-sm font-medium text-neutral-300 mb-2">
-                                Password
+                                {t('password')}
                             </label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500" />
@@ -78,7 +80,7 @@ export default function LoginPage({ onSwitchToRegister }) {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     disabled={loading}
-                                    placeholder="Enter your password"
+                                    placeholder={t('enter_password')}
                                     className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50"
                                     required
                                 />
@@ -94,12 +96,12 @@ export default function LoginPage({ onSwitchToRegister }) {
                             {loading ? (
                                 <>
                                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    Signing in...
+                                    {t('signing_in')}
                                 </>
                             ) : (
                                 <>
                                     <LogIn className="w-5 h-5" />
-                                    Sign In
+                                    {t('sign_in')}
                                 </>
                             )}
                         </button>
@@ -108,12 +110,12 @@ export default function LoginPage({ onSwitchToRegister }) {
                     {/* Register Link */}
                     <div className="mt-6 text-center">
                         <p className="text-neutral-400 text-sm">
-                            Don't have an account?{' '}
+                            {t('no_account_prompt')}{' '}
                             <button
                                 onClick={onSwitchToRegister}
                                 className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
                             >
-                                Create Account
+                                {t('create_account')}
                             </button>
                         </p>
                     </div>
@@ -121,7 +123,7 @@ export default function LoginPage({ onSwitchToRegister }) {
 
                 {/* Footer */}
                 <div className="mt-6 text-center text-neutral-500 text-xs">
-                    <p>Virtual Patient Platform for Clinical Training</p>
+                    <p>{t('footer_tagline')}</p>
                 </div>
             </div>
         </div>

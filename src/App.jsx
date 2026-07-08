@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import PatientMonitor from './components/monitor/PatientMonitor';
 import PatientVisual from './components/patient/PatientVisual';
 import ChatInterface from './components/chat/ChatInterface';
@@ -38,6 +39,7 @@ import { HelpCenter, OnboardingTour } from './help';
 // those count as exits. We restore whatever the user had whenever the app
 // boots, and never silently wipe based on time-since-last-activity.
 function MainApp() {
+   const { t } = useTranslation('app');
    const [showFullPageSettings, setShowFullPageSettings] = useState(false);
    const [showUserProfile, setShowUserProfile] = useState(false);
    const [showUserMenu, setShowUserMenu] = useState(false);
@@ -789,13 +791,13 @@ function MainApp() {
          {multiTabWarning && (
             <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-4 py-2 bg-amber-600/95 text-amber-50 text-sm rounded-lg shadow-xl border border-amber-700 max-w-2xl">
                <span>
-                  <strong>Heads up:</strong> this session is open in another browser tab. Last-write-wins applies.
+                  <strong>{t('multi_tab_heads_up')}</strong> {t('multi_tab_warning')}
                </span>
                <button
                   onClick={() => setMultiTabWarning(false)}
                   className="px-2 py-0.5 rounded bg-amber-700 hover:bg-amber-800 text-xs"
                >
-                  Dismiss
+                  {t('dismiss')}
                </button>
             </div>
          )}
@@ -823,11 +825,11 @@ function MainApp() {
                         }}
                         aria-expanded={showUserMenu}
                         aria-controls="app-user-menu"
-                        aria-label="Settings and profile menu"
+                        aria-label={t('settings_menu_aria')}
                         className={`rohy-topbar-menu-trigger text-sm ${showUserMenu ? 'rohy-topbar-menu-trigger-open' : ''}`}
                      >
                         <Settings className="w-4 h-4 text-[var(--rohy-accent)]" />
-                        <span>Settings</span>
+                        <span>{t('settings')}</span>
                         <ChevronDown className={`w-4 h-4 text-[var(--rohy-muted)] transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
                      </button>
 
@@ -847,7 +849,7 @@ function MainApp() {
                                  className="rohy-topbar-menu-item"
                               >
                                  <User className="w-4 h-4" />
-                                 My Profile
+                                 {t('my_profile')}
                               </button>
                               <button
                                  type="button"
@@ -856,7 +858,7 @@ function MainApp() {
                                  className="rohy-topbar-menu-item"
                               >
                                  <Settings className="w-4 h-4" />
-                                 Open Settings
+                                 {t('open_settings')}
                               </button>
                               <button
                                  type="button"
@@ -865,7 +867,7 @@ function MainApp() {
                                  className="rohy-topbar-menu-item"
                               >
                                  <HelpCircle className="w-4 h-4" />
-                                 Help &amp; Support
+                                 {t('help_support')}
                               </button>
                               {(canSeeOyonAnalytics || isAdminUser) && (
                                  <div className="rohy-menu-divider" />
@@ -906,7 +908,7 @@ function MainApp() {
                                  className="rohy-topbar-menu-item rohy-topbar-menu-item-danger"
                               >
                                  <LogOut className="w-4 h-4" />
-                                 Logout
+                                 {t('logout')}
                               </button>
                            </div>
                         </>
@@ -923,10 +925,10 @@ function MainApp() {
                      <button
                         onClick={() => setShowEndConfirm(true)}
                         className="px-3 py-2 bg-red-900/70 hover:bg-red-800/80 backdrop-blur-md rounded-full flex items-center gap-2 text-sm text-red-50 border border-red-700/60 transition-colors"
-                        title="End the current session and open the debrief"
+                        title={t('end_debrief_title')}
                      >
                         <StopCircle className="w-4 h-4" />
-                        <span>End &amp; Debrief</span>
+                        <span>{t('end_debrief')}</span>
                      </button>
                   </div>
                )}
@@ -1061,19 +1063,20 @@ function MainApp() {
 }
 
 function EndSessionConfirm({ onCancel, onConfirm }) {
+   const { t } = useTranslation('app');
    return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
          <div className="bg-neutral-900 border border-red-800/70 rounded-lg shadow-2xl w-full max-w-md">
             <div className="px-6 py-5 border-b border-neutral-800 flex items-center gap-3">
                <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
-               <h2 className="text-base font-semibold text-white">End this session?</h2>
+               <h2 className="text-base font-semibold text-white">{t('end_session_confirm_title')}</h2>
             </div>
             <div className="px-6 py-5 text-sm text-neutral-300 space-y-2">
-               <p>This closes the case for debrief. Once ended:</p>
+               <p>{t('end_session_confirm_intro')}</p>
                <ul className="list-disc list-inside text-neutral-400 space-y-1 ml-1">
-                  <li>The patient timeline stops advancing.</li>
-                  <li>Orders, exams, and chat are locked.</li>
-                  <li>You can review the transcript in the debrief room but cannot reopen the case.</li>
+                  <li>{t('end_session_confirm_timeline')}</li>
+                  <li>{t('end_session_confirm_locked')}</li>
+                  <li>{t('end_session_confirm_transcript')}</li>
                </ul>
             </div>
             <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-neutral-800">
@@ -1081,14 +1084,14 @@ function EndSessionConfirm({ onCancel, onConfirm }) {
                   onClick={onCancel}
                   className="px-4 py-2 text-sm rounded border border-neutral-700 text-neutral-300 hover:text-white"
                >
-                  Cancel
+                  {t('cancel')}
                </button>
                <button
                   onClick={onConfirm}
                   className="px-4 py-2 text-sm rounded text-white font-semibold bg-red-700 hover:bg-red-600 flex items-center gap-2"
                >
                   <StopCircle className="w-4 h-4" />
-                  End &amp; Debrief
+                  {t('end_debrief')}
                </button>
             </div>
          </div>
@@ -1209,6 +1212,7 @@ function NotificationApiBridge() {
 }
 
 function AuthenticatedApp({ showRegister, setShowRegister }) {
+   const { t } = useTranslation('app');
    const { user, loading } = useAuth();
 
    // Show loading spinner while checking authentication
@@ -1217,7 +1221,7 @@ function AuthenticatedApp({ showRegister, setShowRegister }) {
          <div className="flex items-center justify-center h-screen bg-neutral-950">
             <div className="text-center">
                <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-               <p className="text-neutral-400">Loading...</p>
+               <p className="text-neutral-400">{t('loading')}</p>
             </div>
          </div>
       );

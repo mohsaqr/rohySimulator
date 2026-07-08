@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Edit3, Save, RefreshCw, ChevronDown, ChevronUp, AlertTriangle, Loader2 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { apiFetch, apiPut } from '../../services/apiClient';
 
 const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
+  const { t } = useTranslation('investigations');
   const toast = useToast();
   const [availableLabs, setAvailableLabs] = useState([]);
   const [expandedLabs, setExpandedLabs] = useState(new Set());
@@ -75,7 +77,7 @@ const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
       onUpdate?.(lab.id, parseFloat(newValue));
     } catch (error) {
       console.error('Failed to save lab value:', error);
-      toast.error('Failed to update lab value');
+      toast.error(t('toast_update_failed'));
     } finally {
       setSaving(prev => ({ ...prev, [lab.id]: false }));
     }
@@ -131,7 +133,7 @@ const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
     return (
       <div className="text-center py-8 text-neutral-500">
         <Edit3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
-        <p>No lab tests configured for this case</p>
+        <p>{t('no_labs_configured')}</p>
       </div>
     );
   }
@@ -143,10 +145,10 @@ const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
         <div>
           <h3 className="text-lg font-bold text-white flex items-center gap-2">
             <Edit3 className="w-5 h-5 text-purple-500" />
-            Edit Lab Values (Instructor)
+            {t('edit_lab_values_title')}
           </h3>
           <p className="text-xs text-neutral-400 mt-1">
-            Modify lab values during simulation. Changes apply immediately if tests are already ordered.
+            {t('edit_lab_values_desc')}
           </p>
         </div>
         <button
@@ -154,7 +156,7 @@ const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
           className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded text-sm flex items-center gap-2 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
-          Refresh
+          {t('refresh')}
         </button>
       </div>
 
@@ -162,8 +164,7 @@ const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
       <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3 flex items-start gap-2">
         <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
         <div className="text-sm text-neutral-300">
-          <strong className="text-yellow-400">Instructor Mode:</strong> Changes will update existing ordered results immediately. 
-          Use this to simulate disease progression or treatment response.
+          <strong className="text-yellow-400">{t('instructor_mode_label')}</strong> {t('instructor_mode_warning')}
         </div>
       </div>
 
@@ -174,7 +175,7 @@ const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
             <div className="bg-neutral-800 px-4 py-3 border-b border-neutral-700">
               <div className="flex items-center justify-between">
                 <div className="font-bold text-white">{group}</div>
-                <div className="text-xs text-neutral-500">{labs.length} test{labs.length > 1 ? 's' : ''}</div>
+                <div className="text-xs text-neutral-500">{t('n_tests', { count: labs.length })}</div>
               </div>
             </div>
             <div className="bg-neutral-900/50 p-2 space-y-2">
@@ -195,8 +196,8 @@ const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
                         <div className="flex-1">
                           <div className="text-sm font-medium text-white">{lab.test_name}</div>
                           <div className="text-xs text-neutral-400 mt-0.5">
-                            Current: <span className={getStatusColor(status)}>{lab.current_value} {lab.unit}</span>
-                            {lab.is_abnormal && <span className="text-yellow-500 ml-2">⚠️ Modified</span>}
+                            {t('current_prefix')} <span className={getStatusColor(status)}>{lab.current_value} {lab.unit}</span>
+                            {lab.is_abnormal && <span className="text-yellow-500 ml-2">{t('modified_flag')}</span>}
                           </div>
                         </div>
                       </div>
@@ -213,7 +214,11 @@ const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
                           {/* Value Editor */}
                           <div>
                             <label className="text-xs text-neutral-400 block mb-1">
-                              New Value (Normal Range: {lab.min_value} - {lab.max_value} {lab.unit})
+                              {t('new_value_label', {
+                                min: lab.min_value ?? '',
+                                max: lab.max_value ?? '',
+                                unit: lab.unit ?? '',
+                              })}
                             </label>
                             <div className="flex gap-2">
                               <input
@@ -231,12 +236,12 @@ const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
 
                           {/* Status Indicator */}
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-neutral-500">Status:</span>
+                            <span className="text-xs text-neutral-500">{t('status_prefix')}</span>
                             <span className={`text-xs font-bold ${getStatusColor(status)}`}>
-                              {status === 'low' && '↓ BELOW NORMAL'}
-                              {status === 'high' && '↑ ABOVE NORMAL'}
-                              {status === 'normal' && '✓ NORMAL'}
-                              {status === 'unknown' && '? UNKNOWN'}
+                              {status === 'low' && t('status_below')}
+                              {status === 'high' && t('status_above')}
+                              {status === 'normal' && t('status_normal')}
+                              {status === 'unknown' && t('status_unknown')}
                             </span>
                           </div>
 
@@ -250,19 +255,19 @@ const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
                               {isSaving ? (
                                 <>
                                   <Loader2 className="w-4 h-4 animate-spin" />
-                                  Saving...
+                                  {t('saving')}
                                 </>
                               ) : (
                                 <>
                                   <Save className="w-4 h-4" />
-                                  {hasChanged ? 'Save Changes' : 'No Changes'}
+                                  {hasChanged ? t('save_changes') : t('no_changes')}
                                 </>
                               )}
                             </button>
                             <button
                               onClick={() => resetToNormal(lab)}
                               className="px-3 py-2 bg-neutral-700 hover:bg-neutral-600 text-white rounded text-sm font-bold transition-colors"
-                              title="Reset to normal value"
+                              title={t('reset_to_normal_title')}
                             >
                               <RefreshCw className="w-4 h-4" />
                             </button>

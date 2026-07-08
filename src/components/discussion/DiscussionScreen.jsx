@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Keyboard, GraduationCap, MessagesSquare, NotebookPen, Play } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -16,6 +17,7 @@ import CaseSummaryModal from './CaseSummaryModal';
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 
 export default function DiscussionScreen({ sessionId, activeCase, onClose, roomNav = null }) {
+    const { t } = useTranslation('discussion');
     const { headManifest, platformAvatars, voiceSettings } = useVoice();
     const { user } = useAuth();
     // Debrief is fully student-facing — the authoring title is the diagnosis.
@@ -123,11 +125,11 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                         onClick={onClose}
                         className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm flex items-center gap-1.5 transition-colors border border-slate-700"
                     >
-                        <ArrowLeft className="w-4 h-4" /> Back to Cases
+                        <ArrowLeft className="w-4 h-4" /> {t('back_to_cases')}
                     </button>
                     <div className="flex items-center gap-2 text-sm">
                         <GraduationCap className="w-5 h-5 text-indigo-400" />
-                        <span className="font-semibold text-slate-100">Case Debrief</span>
+                        <span className="font-semibold text-slate-100">{t('case_debrief')}</span>
                         {caseTitle && (
                             <span className="text-slate-400">· {caseTitle}</span>
                         )}
@@ -158,7 +160,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                         className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm flex items-center gap-1.5 transition-colors border border-slate-700"
                     >
                         <NotebookPen className="w-4 h-4" />
-                        Notes
+                        {t('notes')}
                     </button>
                     <button
                         type="button"
@@ -166,7 +168,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                         className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm flex items-center gap-1.5 transition-colors border border-slate-700"
                     >
                         <MessagesSquare className="w-4 h-4" />
-                        Transcript {messages.length > 0 && <span className="ml-0.5 px-1.5 py-0.5 rounded bg-slate-700 text-slate-200 text-xs">{messages.filter(m => m.role !== 'system').length}</span>}
+                        {t('transcript')} {messages.length > 0 && <span className="ml-0.5 px-1.5 py-0.5 rounded bg-slate-700 text-slate-200 text-xs">{messages.filter(m => m.role !== 'system').length}</span>}
                     </button>
                 </div>
             </header>
@@ -206,7 +208,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                     <div className="w-full flex flex-col items-center gap-3 mt-6">
                         {!discussant && !loading ? (
                             <div className="text-sm text-slate-400 italic text-center max-w-md">
-                                No discussant configured. An admin can add one in Agent Templates.
+                                {t('no_discussant')}
                             </div>
                         ) : !started ? (
                             <button
@@ -216,7 +218,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                                 className="px-8 py-4 rounded-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold text-base flex items-center gap-2 shadow-lg ring-4 ring-indigo-500/20 hover:ring-indigo-500/40 transition-all"
                             >
                                 <Play className="w-5 h-5" />
-                                Start debrief
+                                {t('start_debrief')}
                             </button>
                         ) : (
                             <VoiceControl
@@ -234,7 +236,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                                 disabled={!discussant}
                                 className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-300 disabled:opacity-40"
                             >
-                                <Keyboard className="w-3.5 h-3.5" /> Type instead
+                                <Keyboard className="w-3.5 h-3.5" /> {t('type_instead')}
                             </button>
                         )}
                     </div>
@@ -265,7 +267,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                     <button
                         type="button"
                         onClick={() => setShowTranscript(true)}
-                        aria-label="Show full transcript"
+                        aria-label={t('show_full_transcript')}
                         // Span only the right 2/3 of the viewport so flex
                         // centering lands on the discussant column's geometric
                         // centre, not the viewport's. The body grid is

@@ -1,10 +1,12 @@
 import React, { useState, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, User, UserCheck, Brain, Download, Users } from 'lucide-react';
 import BodyMap from './BodyMap';
 import ExamTypeSelector from './ExamTypeSelector';
 import FindingDisplay from './FindingDisplay';
 import ExamLog from './ExamLog';
 import { BODY_REGIONS, getDefaultFinding, SAMPLE_ABNORMAL_EXAM } from '../../data/examRegions';
+import { regionLabel } from './examinationLabels';
 import { useToast } from '../../contexts/ToastContext';
 import { usePatientRecord } from '../../services/PatientRecord';
 
@@ -36,6 +38,7 @@ export default function ManikinPanel({
     onExamPerformed,
     patientGender = 'male'
 }) {
+    const { t } = useTranslation('examination');
     const toast = useToast();
     const { examined, elicited } = usePatientRecord();
     // State
@@ -169,14 +172,14 @@ export default function ManikinPanel({
 
     // Clear log
     const handleClearLog = useCallback(async () => {
-        const confirmed = await toast.confirm('Clear all examination records?', { title: 'Clear Records', type: 'warning' });
+        const confirmed = await toast.confirm(t('clear_confirm'), { title: t('clear_confirm_title'), type: 'warning' });
         if (confirmed) {
             setExamLog([]);
             setSelectedRegion(null);
             setSelectedExamType(null);
             setCurrentFinding(null);
         }
-    }, [toast]);
+    }, [toast, t]);
 
     // Export findings
     const handleExportFindings = useCallback(() => {
@@ -238,7 +241,7 @@ export default function ManikinPanel({
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 bg-slate-800/50">
                     <div className="flex items-center gap-3">
                         <User className="w-6 h-6 text-cyan-400" />
-                        <h2 className="text-xl font-bold text-white">Physical Examination</h2>
+                        <h2 className="text-xl font-bold text-white">{t('physical_examination')}</h2>
                     </div>
                     <div className="flex items-center gap-2">
                         {examLog.length > 0 && (
@@ -247,7 +250,7 @@ export default function ManikinPanel({
                                 className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 text-slate-300 rounded flex items-center gap-2"
                             >
                                 <Download className="w-4 h-4" />
-                                Export
+                                {t('export')}
                             </button>
                         )}
                         {/* Close button is modal-only — the screen wrapper
@@ -277,7 +280,7 @@ export default function ManikinPanel({
                                         : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                                 }`}
                             >
-                                Anterior
+                                {t('anterior')}
                             </button>
                             <button
                                 onClick={() => setView('posterior')}
@@ -287,7 +290,7 @@ export default function ManikinPanel({
                                         : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                                 }`}
                             >
-                                Posterior
+                                {t('posterior')}
                             </button>
                         </div>
 
@@ -299,7 +302,7 @@ export default function ManikinPanel({
                                     gender === 'male' ? 'bg-blue-600 text-white' : 'bg-pink-600 text-white'
                                 }`}>
                                     {gender === 'male' ? <User className="w-3 h-3" /> : <Users className="w-3 h-3" />}
-                                    {gender === 'male' ? 'Male' : 'Female'} Patient
+                                    {gender === 'male' ? t('male_patient') : t('female_patient')}
                                 </div>
                             ) : (
                                 // Show toggle buttons when no case is loaded
@@ -313,7 +316,7 @@ export default function ManikinPanel({
                                         }`}
                                     >
                                         <User className="w-3 h-3" />
-                                        Male
+                                        {t('male')}
                                     </button>
                                     <button
                                         onClick={() => setGender('female')}
@@ -324,7 +327,7 @@ export default function ManikinPanel({
                                         }`}
                                     >
                                         <Users className="w-3 h-3" />
-                                        Female
+                                        {t('female')}
                                     </button>
                                 </>
                             )}
@@ -353,7 +356,7 @@ export default function ManikinPanel({
                                 }`}
                             >
                                 <UserCheck className="w-3 h-3" />
-                                General
+                                {t('general')}
                             </button>
                             <button
                                 onClick={() => handleRegionClick('neurological')}
@@ -364,7 +367,7 @@ export default function ManikinPanel({
                                 }`}
                             >
                                 <Brain className="w-3 h-3" />
-                                Neuro
+                                {t('neuro')}
                             </button>
                         </div>
                     </div>
@@ -376,7 +379,7 @@ export default function ManikinPanel({
                             <div className="mb-4 pb-3 border-b border-slate-700">
                                 <h3 className="text-lg font-medium text-white flex items-center gap-2">
                                     <span className="w-2 h-2 bg-cyan-400 rounded-full"></span>
-                                    {BODY_REGIONS[selectedRegion]?.name || selectedRegion}
+                                    {regionLabel(t, selectedRegion, BODY_REGIONS[selectedRegion]?.name)}
                                 </h3>
                             </div>
                         )}

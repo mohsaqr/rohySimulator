@@ -1,16 +1,18 @@
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 
 export default function DiscussionTranscript({ messages, onClose }) {
+    const { t } = useTranslation('discussion');
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-sm">
             <div className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-slate-700">
                 <header className="flex items-center justify-between px-5 py-3 border-b border-slate-700 bg-slate-900/50 rounded-t-2xl">
-                    <h2 className="text-base font-semibold text-slate-100">Conversation transcript</h2>
+                    <h2 className="text-base font-semibold text-slate-100">{t('transcript_title')}</h2>
                     <button
                         type="button"
                         onClick={onClose}
                         className="rounded-full p-1.5 hover:bg-slate-700 text-slate-300"
-                        aria-label="Close transcript"
+                        aria-label={t('close_transcript')}
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -18,7 +20,7 @@ export default function DiscussionTranscript({ messages, onClose }) {
                 <div className="overflow-y-auto px-5 py-4 space-y-3">
                     {messages.length === 0 && (
                         <div className="text-sm text-slate-400 italic text-center py-8">
-                            No messages yet. Tap the mic to begin.
+                            {t('no_messages_yet')}
                         </div>
                     )}
                     {messages.map((m, i) => (
@@ -33,7 +35,7 @@ export default function DiscussionTranscript({ messages, onClose }) {
                             }`}
                         >
                             <div className="text-xs font-semibold uppercase mb-1 text-slate-400">
-                                {m.role === 'user' ? 'You' : 'Discussant'}
+                                {m.role === 'user' ? t('role_you') : t('role_discussant')}
                             </div>
                             {m.content || <span className="italic text-slate-500">…</span>}
                         </div>

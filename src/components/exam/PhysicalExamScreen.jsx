@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { NotebookPen, Stethoscope } from 'lucide-react';
 import ManikinPanel from '../examination/ManikinPanel';
 import ExamNotesDrawer from './ExamNotesDrawer';
@@ -26,6 +27,7 @@ export default function PhysicalExamScreen({
     onExamPerformed,
     roomNav,
 }) {
+    const { t } = useTranslation('examination');
     const [showNotes, setShowNotes] = useState(false);
     const { user } = useAuth();
 
@@ -47,7 +49,7 @@ export default function PhysicalExamScreen({
             <header className="flex items-center justify-between px-6 py-3 bg-slate-900/80 backdrop-blur border-b border-slate-700">
                 <div className="flex items-center gap-2 text-sm">
                     <Stethoscope className="w-5 h-5 text-cyan-400" />
-                    <span className="font-semibold text-slate-100">Physical Examination</span>
+                    <span className="font-semibold text-slate-100">{t('physical_examination')}</span>
                     <span className="text-slate-400">· {caseTitle}</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -57,7 +59,7 @@ export default function PhysicalExamScreen({
                         className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm flex items-center gap-1.5 transition-colors border border-slate-700"
                     >
                         <NotebookPen className="w-4 h-4" />
-                        Notes
+                        {t('notes')}
                     </button>
                 </div>
             </header>

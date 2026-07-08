@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Check, Filter, Loader2, Plus, Search, Zap } from 'lucide-react';
 
 // Left-rail catalogue used by InvestigationsScreen for both labs and
@@ -20,6 +21,7 @@ export default function InvestigationCatalogue({
     onSubmit,
     onSubmitInstant,
 }) {
+    const { t } = useTranslation('investigations');
     const filtered = items.filter((item) => {
         const matchesSearch = !searchQuery
             || item.test_name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -31,8 +33,8 @@ export default function InvestigationCatalogue({
 
     const KindIcon = theme.kindIcon;
     const placeholder = kind === 'radiology'
-        ? 'Search studies (CT, MRI, X-ray…)'
-        : 'Search tests (glucose, CBC, sodium…)';
+        ? t('search_placeholder_radiology')
+        : t('search_placeholder_lab');
 
     return (
         <div className="flex flex-col h-full bg-slate-900/60 border-r border-slate-800">
@@ -40,7 +42,7 @@ export default function InvestigationCatalogue({
                 <div className="flex items-center gap-2 mb-3">
                     <KindIcon className={`w-4 h-4 ${theme.accentText}`} />
                     <h2 className="text-xs uppercase tracking-wider font-semibold text-slate-300">
-                        {theme.label} catalogue
+                        {kind === 'radiology' ? t('catalogue_title_radiology') : t('catalogue_title_lab')}
                     </h2>
                     <span className="ml-auto text-xs text-slate-500">{items.length}</span>
                 </div>
@@ -61,7 +63,7 @@ export default function InvestigationCatalogue({
                         onChange={(e) => onGroupFilterChange(e.target.value)}
                         className="w-full pl-9 pr-8 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:border-cyan-500 focus:outline-none appearance-none cursor-pointer transition-colors"
                     >
-                        <option value="all">All groups</option>
+                        <option value="all">{t('all_groups')}</option>
                         {groups.map((group) => (
                             <option key={group} value={group}>
                                 {group} ({items.filter((i) => i.test_group === group).length})
@@ -75,7 +77,7 @@ export default function InvestigationCatalogue({
                 {filtered.length === 0 ? (
                     <div className="flex flex-col items-center text-center text-slate-500 text-sm py-12 px-4">
                         <Search className="w-8 h-8 mb-2 opacity-40" />
-                        {searchQuery ? `Nothing matches "${searchQuery}"` : 'No items available'}
+                        {searchQuery ? t('no_search_matches', { query: searchQuery }) : t('no_items')}
                     </div>
                 ) : Object.entries(grouped).map(([group, groupItems]) => (
                     <div key={group}>
@@ -111,12 +113,14 @@ export default function InvestigationCatalogue({
                         {loading ? (
                             <>
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                Ordering…
+                                {t('ordering')}
                             </>
                         ) : (
                             <>
                                 <Plus className="w-4 h-4" />
-                                Order {selectedIds.length} {pluralize(kind, selectedIds.length)}
+                                {kind === 'radiology'
+                                    ? t('order_count_radiology', { count: selectedIds.length })
+                                    : t('order_count_lab', { count: selectedIds.length })}
                             </>
                         )}
                     </button>
@@ -124,11 +128,11 @@ export default function InvestigationCatalogue({
                         <button
                             onClick={onSubmitInstant}
                             disabled={loading}
-                            title="Skip the wait — results land in the worklist immediately"
+                            title={t('order_instantly_title')}
                             className="w-full px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-700/50 disabled:cursor-not-allowed text-slate-200 border border-slate-700 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
                         >
                             <Zap className="w-3.5 h-3.5 text-amber-300" />
-                            Order instantly
+                            {t('order_instantly')}
                         </button>
                     )}
                 </div>
@@ -138,6 +142,7 @@ export default function InvestigationCatalogue({
 }
 
 function CatalogueRow({ item, kind, theme, isSelected, alreadyOrdered, onToggle }) {
+    const { t } = useTranslation('investigations');
     const railClass = alreadyOrdered
         ? 'border-l-cyan-600/60'
         : isSelected
@@ -167,12 +172,12 @@ function CatalogueRow({ item, kind, theme, isSelected, alreadyOrdered, onToggle 
                     )}
                     {item.turnaround_minutes ? (
                         <span className="inline-flex items-center gap-1">
-                            <span className="text-slate-500">{item.turnaround_minutes}m</span>
+                            <span className="text-slate-500">{t('turnaround_short', { minutes: item.turnaround_minutes })}</span>
                         </span>
                     ) : null}
                     {alreadyOrdered && (
                         <span className="inline-flex items-center gap-1 text-cyan-300">
-                            <Check className="w-3 h-3" /> ordered
+                            <Check className="w-3 h-3" /> {t('ordered_chip')}
                         </span>
                     )}
                 </div>
@@ -195,9 +200,4 @@ function orderMatchesItem(order, item, kind) {
         return order.radiology_id === item.id || order.study_id === item.id;
     }
     return order.investigation_id === item.id || order.lab_id === item.id;
-}
-
-function pluralize(kind, n) {
-    if (kind === 'radiology') return n === 1 ? 'study' : 'studies';
-    return n === 1 ? 'test' : 'tests';
 }

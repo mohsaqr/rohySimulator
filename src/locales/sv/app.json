@@ -1,0 +1,20 @@
+{
+  "cancel": "Avbryt",
+  "dismiss": "Avfärda",
+  "end_debrief": "Avsluta & debriefa",
+  "end_debrief_title": "Avsluta den pågående sessionen och öppna debriefingen",
+  "end_session_confirm_intro": "Detta avslutar fallet för debriefing. När sessionen avslutats:",
+  "end_session_confirm_locked": "Ordinationer, undersökningar och chatt låses.",
+  "end_session_confirm_timeline": "Patientens tidslinje slutar gå framåt.",
+  "end_session_confirm_title": "Avsluta den här sessionen?",
+  "end_session_confirm_transcript": "Du kan granska transkriptet i debriefingrummet men kan inte öppna fallet igen.",
+  "help_support": "Hjälp & support",
+  "loading": "Laddar...",
+  "logout": "Logga ut",
+  "multi_tab_heads_up": "Obs:",
+  "multi_tab_warning": "den här sessionen är öppen i en annan webbläsarflik. Senast sparade ändring gäller.",
+  "my_profile": "Min profil",
+  "open_settings": "Öppna inställningar",
+  "settings": "Inställningar",
+  "settings_menu_aria": "Meny för inställningar och profil"
+}

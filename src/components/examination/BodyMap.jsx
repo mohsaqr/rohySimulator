@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import defaultRegions from '../../utils/defaultRegions';
+import { mapRegionLabel } from './examinationLabels';
 import { baseUrl } from '../../config/api';
 import { apiFetch } from '../../services/apiClient';
 // Storage key - must match BodyMapDebug
@@ -19,6 +21,7 @@ export default function BodyMap({
     examinedRegions = new Set(),
     abnormalRegions = new Set()
 }) {
+    const { t } = useTranslation('examination');
     const [hoveredRegion, setHoveredRegion] = useState(null);
     const [savedRegions, setSavedRegions] = useState(null);
     // Bug 13 (18.5.2026): the container was hardcoded to a 5:9 box for every
@@ -140,7 +143,7 @@ export default function BodyMap({
                     {/* PNG Body Image */}
                     <img
                         src={imageSrc}
-                        alt={`${gender} body ${view} view`}
+                        alt={t('body_alt', { gender, view })}
                         className="h-full w-full select-none pointer-events-none"
                         draggable={false}
                         onLoad={(e) => {
@@ -211,7 +214,7 @@ export default function BodyMap({
                                                     fontWeight="500"
                                                     style={{ pointerEvents: 'none', fontFamily: 'inherit' }}
                                                 >
-                                                    {region.label}
+                                                    {mapRegionLabel(t, region.id, region.label)}
                                                 </text>
                                             </g>
                                         </g>
@@ -226,19 +229,19 @@ export default function BodyMap({
             <div className="flex-shrink-0 flex items-center justify-center gap-4 py-1.5 border-t border-slate-700/50 bg-slate-900/50">
                 <div className="flex items-center gap-1">
                     <div className="w-3 h-3 rounded border border-white/30 bg-transparent" />
-                    <span className="text-[10px] text-slate-500">Hover to reveal</span>
+                    <span className="text-[10px] text-slate-500">{t('legend_hover')}</span>
                 </div>
                 <div className="flex items-center gap-1">
                     <div className="w-3 h-3 rounded bg-emerald-500/50 border border-emerald-400" />
-                    <span className="text-[10px] text-slate-500">Normal</span>
+                    <span className="text-[10px] text-slate-500">{t('normal')}</span>
                 </div>
                 <div className="flex items-center gap-1">
                     <div className="w-3 h-3 rounded bg-red-500/50 border border-red-400" />
-                    <span className="text-[10px] text-slate-500">Abnormal</span>
+                    <span className="text-[10px] text-slate-500">{t('abnormal')}</span>
                 </div>
                 <div className="flex items-center gap-1">
                     <div className="w-3 h-3 rounded bg-cyan-500/50 border border-cyan-400" />
-                    <span className="text-[10px] text-slate-500">Selected</span>
+                    <span className="text-[10px] text-slate-500">{t('legend_selected')}</span>
                 </div>
             </div>
         </div>

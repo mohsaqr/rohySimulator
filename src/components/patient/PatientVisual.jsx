@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { User, Loader2 } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
 import { PATIENT_AOI_ID, FACE_BOX } from '../oyon/screenAois';
@@ -24,6 +25,7 @@ const PatientAvatar = lazy(() => import('../chat/PatientAvatar'));
 // For backward compatibility, if no `participant` is passed but `caseData`
 // is, we synthesise a participant from caseData.config.
 export default function PatientVisual({ caseData, participant }) {
+    const { t } = useTranslation('patient');
     const { speaking, listening, visemes, voiceSettings, headManifest, platformAvatars, activeParticipant } = useVoice();
 
     // Stable fallback when no explicit/context participant is supplied — memo
@@ -102,7 +104,7 @@ export default function PatientVisual({ caseData, participant }) {
                     <div className="text-base font-bold text-white leading-tight truncate">{p.name}</div>
                     {(p.age || p.gender) && (
                         <div className="text-[11px] text-neutral-300 leading-tight truncate">
-                            {p.age ? `${p.age}y` : ''}{p.age && p.gender ? ' ' : ''}{p.gender || ''}
+                            {p.age ? t('age_y', { age: p.age }) : ''}{p.age && p.gender ? ' ' : ''}{p.gender || ''}
                         </div>
                     )}
                 </div>

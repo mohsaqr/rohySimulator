@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FileText } from 'lucide-react';
 import { parseConfig } from '../../utils/parseConfig.js';
 
@@ -8,15 +9,16 @@ const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 // PatientAvatar the live monitor uses, so the case's configured avatar
 // (or gender-based fallback) carries through into the discussion.
 export default function PatientSummaryCard({ activeCase, headManifest, platformAvatars, onViewSummary }) {
+    const { t } = useTranslation('discussion');
     if (!activeCase) {
         return (
             <div className="text-sm text-slate-500 italic px-4">
-                No active case loaded.
+                {t('no_active_case')}
             </div>
         );
     }
     const cfg = parseConfig(activeCase.config);
-    const name = cfg.patient_name || activeCase.name || 'Patient';
+    const name = cfg.patient_name || activeCase.name || t('patient_fallback');
     const age = cfg.demographics?.age;
     const gender = cfg.demographics?.gender;
     // Chief complaint comes from the structured history, falling back to the
@@ -44,21 +46,21 @@ export default function PatientSummaryCard({ activeCase, headManifest, platformA
                 <div className="text-base font-semibold text-slate-100">{name}</div>
                 {(age || gender) && (
                     <div className="text-sm text-slate-400 mt-0.5">
-                        {age ? `${age} y` : ''}{age && gender ? ' · ' : ''}{gender || ''}
+                        {age ? t('age_y', { age }) : ''}{age && gender ? ' · ' : ''}{gender || ''}
                     </div>
                 )}
             </div>
 
             {chief && (
                 <div className="rounded-xl bg-slate-800/60 border border-slate-700 shadow-md p-4 backdrop-blur-sm">
-                    <div className="text-xs font-semibold uppercase text-slate-400 mb-1">Chief complaint</div>
+                    <div className="text-xs font-semibold uppercase text-slate-400 mb-1">{t('chief_complaint')}</div>
                     <div className="text-sm text-slate-100">{chief}</div>
                 </div>
             )}
 
             {hpi && (
                 <div className="rounded-xl bg-slate-800/60 border border-slate-700 shadow-md p-4 overflow-hidden backdrop-blur-sm">
-                    <div className="text-xs font-semibold uppercase text-slate-400 mb-1">HPI</div>
+                    <div className="text-xs font-semibold uppercase text-slate-400 mb-1">{t('hpi')}</div>
                     <div className="text-sm text-slate-200 line-clamp-6 whitespace-pre-wrap">{hpi}</div>
                 </div>
             )}
@@ -69,7 +71,7 @@ export default function PatientSummaryCard({ activeCase, headManifest, platformA
                 className="mt-auto rounded-xl bg-indigo-700/40 hover:bg-indigo-700/60 border border-indigo-600/50 text-indigo-100 px-4 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors"
             >
                 <FileText className="w-4 h-4" />
-                View full case summary
+                {t('view_full_summary')}
             </button>
         </div>
     );

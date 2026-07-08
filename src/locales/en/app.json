@@ -1,0 +1,20 @@
+{
+  "cancel": "Cancel",
+  "dismiss": "Dismiss",
+  "end_debrief": "End & Debrief",
+  "end_debrief_title": "End the current session and open the debrief",
+  "end_session_confirm_intro": "This closes the case for debrief. Once ended:",
+  "end_session_confirm_locked": "Orders, exams, and chat are locked.",
+  "end_session_confirm_timeline": "The patient timeline stops advancing.",
+  "end_session_confirm_title": "End this session?",
+  "end_session_confirm_transcript": "You can review the transcript in the debrief room but cannot reopen the case.",
+  "help_support": "Help & Support",
+  "loading": "Loading...",
+  "logout": "Logout",
+  "multi_tab_heads_up": "Heads up:",
+  "multi_tab_warning": "this session is open in another browser tab. Last-write-wins applies.",
+  "my_profile": "My Profile",
+  "open_settings": "Open Settings",
+  "settings": "Settings",
+  "settings_menu_aria": "Settings and profile menu"
+}

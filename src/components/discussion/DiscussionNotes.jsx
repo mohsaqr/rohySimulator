@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, Save, NotebookPen } from 'lucide-react';
 import { fetchSessionNote, saveSessionNote } from '../../services/notesService';
 
 const SAVE_DEBOUNCE_MS = 500;
 
 export default function DiscussionNotes({ sessionId }) {
+    const { t } = useTranslation('discussion');
     const [text, setText] = useState('');
     const [collapsed, setCollapsed] = useState(false);
     const [status, setStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
@@ -76,10 +78,10 @@ export default function DiscussionNotes({ sessionId }) {
             >
                 <span className="flex items-center gap-2">
                     <NotebookPen className="w-4 h-4 text-indigo-400" />
-                    Notes
-                    {status === 'saving' && <span className="text-xs text-slate-400 font-normal">saving…</span>}
+                    {t('notes')}
+                    {status === 'saving' && <span className="text-xs text-slate-400 font-normal">{t('saving')}</span>}
                     {status === 'saved' && <Save className="w-3.5 h-3.5 text-emerald-400" />}
-                    {status === 'error' && <span className="text-xs text-rose-400 font-normal">save failed</span>}
+                    {status === 'error' && <span className="text-xs text-rose-400 font-normal">{t('save_failed')}</span>}
                 </span>
                 {collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
             </button>
@@ -87,7 +89,7 @@ export default function DiscussionNotes({ sessionId }) {
                 <textarea
                     value={text}
                     onChange={handleChange}
-                    placeholder="Jot down what you want to remember from the debrief — auto-saves and stays private to you."
+                    placeholder={t('notes_placeholder')}
                     className="flex-1 w-full px-4 py-3 bg-slate-800 text-sm text-slate-100 placeholder-slate-500 resize-none focus:outline-none"
                 />
             )}

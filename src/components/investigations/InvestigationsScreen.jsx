@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle, Clock, Eye, FlaskConical, NotebookPen, Scan, X } from 'lucide-react';
 import { ApiError, apiFetch, apiPost } from '../../services/apiClient';
 import { useToast } from '../../contexts/ToastContext';
@@ -18,7 +19,8 @@ import RadiologyReportView from './RadiologyReportView';
 // one-line edit per modality.
 const MODALITY_THEME = {
     lab: {
-        label: 'Laboratory Investigations',
+        // i18n key for the room title (namespace: investigations).
+        labelKey: 'room_lab',
         kindIcon: FlaskConical,
         accentText: 'text-purple-300',
         accentTextSolid: 'text-purple-400',
@@ -33,7 +35,7 @@ const MODALITY_THEME = {
         ghostText: 'text-purple-400/[0.07]',
     },
     radiology: {
-        label: 'Radiology Room',
+        labelKey: 'room_radiology',
         kindIcon: Scan,
         accentText: 'text-cyan-300',
         accentTextSolid: 'text-cyan-400',
@@ -80,6 +82,7 @@ export default function InvestigationsScreen({
     activeKind = 'lab',
     roomNav,
 }) {
+    const { t } = useTranslation('investigations');
     const [showNotes, setShowNotes] = useState(false);
     const toast = useToast();
     const { user } = useAuth();
@@ -159,7 +162,7 @@ export default function InvestigationsScreen({
                 <div className="flex items-center gap-3">
                     <TitleIcon className={`w-6 h-6 ${theme.accentTextSolid}`} />
                     <div className="flex items-baseline gap-2 text-sm">
-                        <span className="font-semibold text-slate-100 text-base">{theme.label}</span>
+                        <span className="font-semibold text-slate-100 text-base">{t(theme.labelKey)}</span>
                         <span className="text-slate-500">·</span>
                         <span className="text-slate-300">{caseTitle}</span>
                     </div>
@@ -171,7 +174,7 @@ export default function InvestigationsScreen({
                         className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm flex items-center gap-1.5 transition-colors border border-slate-700"
                     >
                         <NotebookPen className="w-4 h-4" />
-                        Notes
+                        {t('notes')}
                     </button>
                 </div>
             </header>
@@ -212,7 +215,7 @@ export default function InvestigationsScreen({
                         aria-hidden="true"
                         className={`pointer-events-none absolute inset-0 flex items-center justify-center text-[18vw] font-black tracking-tighter select-none ${theme.ghostText}`}
                     >
-                        {activeKind === 'radiology' ? 'RADIOLOGY' : 'LABORATORY'}
+                        {activeKind === 'radiology' ? t('watermark_radiology') : t('watermark_lab')}
                     </h1>
                     <div className="relative flex-1 min-h-0 p-8 overflow-y-auto">
                         {expandedOrder ? (
@@ -245,7 +248,7 @@ export default function InvestigationsScreen({
                                     <div className="relative z-10 mx-auto max-w-5xl mt-10 space-y-6">
                                         <div className="flex items-center gap-3">
                                             <span className={`text-xs uppercase tracking-widest font-semibold ${theme.accentText}`}>
-                                                Open reports
+                                                {t('open_reports')}
                                             </span>
                                             <span className="flex-1 h-px bg-slate-700/60" />
                                             <span className="text-xs text-slate-500">{active.openOrders.length}</span>
@@ -304,7 +307,7 @@ export default function InvestigationsScreen({
                 open={showNotes}
                 onClose={() => setShowNotes(false)}
                 sessionId={sessionId}
-                title="Investigations notes"
+                title={t('notes_drawer_title')}
             />
         </div>
     );
@@ -315,9 +318,10 @@ export default function InvestigationsScreen({
 // that toggles the expanded report below and a small dismiss X that
 // removes the report from the stack without nuking it from the worklist.
 function ReportPill({ order, kind, theme, active, onClick, onDismiss }) {
+    const { t } = useTranslation('investigations');
     const label = order.test_name
         || order.studyName
-        || (kind === 'radiology' ? 'Radiology study' : 'Lab test');
+        || (kind === 'radiology' ? t('pill_fallback_radiology') : t('pill_fallback_lab'));
     // Light status signal so the pill row reads like a glanceable summary.
     // Radiology: hasConfiguredResult / abnormal tag. Labs: is_abnormal.
     const isAbnormal = kind === 'radiology'
@@ -338,7 +342,7 @@ function ReportPill({ order, kind, theme, active, onClick, onDismiss }) {
                 type="button"
                 onClick={onClick}
                 className="px-3 py-1.5 flex items-center gap-2 text-xs font-medium"
-                title={active ? 'Collapse' : 'Open report'}
+                title={active ? t('pill_collapse') : t('pill_open_report')}
             >
                 <span
                     className={`w-1.5 h-1.5 rounded-full ${
@@ -351,8 +355,8 @@ function ReportPill({ order, kind, theme, active, onClick, onDismiss }) {
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onDismiss(); }}
                 className="px-2 hover:bg-black/20 text-slate-400 hover:text-slate-100 transition-colors"
-                title="Remove from stack"
-                aria-label={`Remove ${label} from stack`}
+                title={t('pill_remove_title')}
+                aria-label={t('pill_remove_aria', { label })}
             >
                 <X className="w-3 h-3" />
             </button>
@@ -361,6 +365,7 @@ function ReportPill({ order, kind, theme, active, onClick, onDismiss }) {
 }
 
 function DepartmentDashboard({ kind, theme, counts }) {
+    const { t } = useTranslation('investigations');
     const Icon = theme.kindIcon;
 
     return (
@@ -371,34 +376,39 @@ function DepartmentDashboard({ kind, theme, counts }) {
                         <Icon className={`w-7 h-7 ${theme.accentTextSolid}`} />
                     </div>
                     <div>
-                        <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold">Welcome to</div>
-                        <div className="text-xl font-bold text-slate-100">{theme.label}</div>
+                        <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold">{t('welcome_to')}</div>
+                        <div className="text-xl font-bold text-slate-100">{t(theme.labelKey)}</div>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3 mb-6">
-                    <StatCard label="Ready" value={counts.ready} tone="emerald" icon={CheckCircle} highlight={counts.ready > 0} />
-                    <StatCard label="Pending" value={counts.pending} tone="amber" icon={Clock} />
-                    <StatCard label="Viewed" value={counts.viewed} tone="slate" icon={Eye} />
+                    <StatCard label={t('stat_ready')} value={counts.ready} tone="emerald" icon={CheckCircle} highlight={counts.ready > 0} />
+                    <StatCard label={t('stat_pending')} value={counts.pending} tone="amber" icon={Clock} />
+                    <StatCard label={t('stat_viewed')} value={counts.viewed} tone="slate" icon={Eye} />
                 </div>
 
                 <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-5 backdrop-blur-sm">
                     <div className="text-sm text-slate-300 leading-relaxed">
                         {counts.ready > 0 ? (
                             <>
-                                <span className={`font-semibold ${theme.accentText}`}>{counts.ready} new {kind === 'radiology' ? 'studies' : 'results'}</span>{' '}
-                                ready in the worklist. Click one in the worklist on the right to open it — your reports stack here as you read them.
+                                <span className={`font-semibold ${theme.accentText}`}>
+                                    {kind === 'radiology'
+                                        ? t('dashboard_ready_highlight_radiology', { count: counts.ready })
+                                        : t('dashboard_ready_highlight_lab', { count: counts.ready })}
+                                </span>{' '}
+                                {t('dashboard_ready_body')}
                             </>
                         ) : counts.pending > 0 ? (
                             <>
-                                <span className="font-semibold text-amber-300">{counts.pending} {kind === 'radiology' ? 'studies' : 'tests'} pending</span>.
-                                Reports land here automatically as they become available — no need to refresh.
+                                <span className="font-semibold text-amber-300">
+                                    {kind === 'radiology'
+                                        ? t('dashboard_pending_highlight_radiology', { count: counts.pending })
+                                        : t('dashboard_pending_highlight_lab', { count: counts.pending })}
+                                </span>
+                                {t('dashboard_pending_body')}
                             </>
                         ) : (
-                            <>
-                                Pick {kind === 'radiology' ? 'a study' : 'a test'} from the catalogue on the left to place an order.
-                                Results show up in the worklist on the right; click any to stack the report here.
-                            </>
+                            kind === 'radiology' ? t('dashboard_empty_radiology') : t('dashboard_empty_lab')
                         )}
                     </div>
                 </div>
@@ -478,6 +488,7 @@ function useInvestigationState({
     onOrdered,
     toast,
 }) {
+    const { t } = useTranslation('investigations');
     const [catalogue, setCatalogue] = useState({ items: [], groups: [] });
     const [orders, setOrders] = useState([]);
     const [selected, setSelected] = useState([]);
@@ -603,9 +614,9 @@ function useInvestigationState({
             }
             await apiPost(submitEndpoint, body);
             toast.success(
-                instant
-                    ? `Ordered ${selected.length} ${kind === 'radiology' ? 'study(s)' : 'test(s)'} — instant`
-                    : `Ordered ${selected.length} ${kind === 'radiology' ? 'study(s)' : 'test(s)'}`
+                kind === 'radiology'
+                    ? t(instant ? 'toast_ordered_radiology_instant' : 'toast_ordered_radiology', { count: selected.length })
+                    : t(instant ? 'toast_ordered_lab_instant' : 'toast_ordered_lab', { count: selected.length })
             );
             selected.forEach((id) => {
                 const item = catalogue.items.find((i) => i.id === id);
@@ -614,12 +625,12 @@ function useInvestigationState({
             setSelected([]);
             await fetchOrders();
         } catch (err) {
-            const msg = err instanceof ApiError ? err.message : (err.message || 'Order failed');
-            toast.error(`Failed to order: ${msg}`);
+            const msg = err instanceof ApiError ? err.message : (err.message || t('order_failed'));
+            toast.error(t('toast_order_failed', { message: msg ?? '' }));
         } finally {
             setSubmitting(false);
         }
-    }, [selected, submitEndpoint, buildSubmitBody, kind, catalogue.items, onOrdered, toast, fetchOrders]);
+    }, [selected, submitEndpoint, buildSubmitBody, kind, catalogue.items, onOrdered, toast, fetchOrders, t]);
 
     return {
         catalogue,

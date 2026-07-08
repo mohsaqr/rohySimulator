@@ -13,28 +13,33 @@
 // don't poke at module-level state — fast-refresh hates components
 // sharing a file with non-component exports.
 
-const WAIT_PHASES = {
+// I18N: phases are chat-namespace translation KEYS, not display strings —
+// the render site wraps the result in t(). The English copy lives in
+// src/locales/en/chat.json (wait_consultant_0 = "Paging the consultant…",
+// etc.); this module stays translation-free so it remains a pure,
+// clock-in/key-out unit-testable helper.
+const WAIT_PHASE_KEYS = {
     consultant: [
-        'Paging the consultant…',
-        'Reviewing the chart and current vitals',
-        'Considering differentials and next steps',
-        'On the way to the bedside'
+        'wait_consultant_0',
+        'wait_consultant_1',
+        'wait_consultant_2',
+        'wait_consultant_3'
     ],
     relative: [
-        'Reaching the family…',
-        'Family on the way from the waiting area',
-        'Family is approaching the room'
+        'wait_relative_0',
+        'wait_relative_1',
+        'wait_relative_2'
     ],
     nurse: [
-        'Paging the nurse…',
-        'Wrapping up another patient',
-        'On the way over'
+        'wait_nurse_0',
+        'wait_nurse_1',
+        'wait_nurse_2'
     ]
 };
-const DEFAULT_WAIT_PHASES = ['Paging…', 'On the way…', 'Almost here…'];
+const DEFAULT_WAIT_PHASE_KEYS = ['wait_default_0', 'wait_default_1', 'wait_default_2'];
 
 export function pickWaitPhase(agentType, pagedAt, arrivesAt, now) {
-    const phases = WAIT_PHASES[agentType] || DEFAULT_WAIT_PHASES;
+    const phases = WAIT_PHASE_KEYS[agentType] || DEFAULT_WAIT_PHASE_KEYS;
     if (!pagedAt || !arrivesAt) return phases[0];
     const start = new Date(pagedAt).getTime();
     const end = new Date(arrivesAt).getTime();

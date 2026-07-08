@@ -4,6 +4,7 @@ import {
     Search, Clock, CheckCircle, Loader2, List,
     Eye, FileText, Scan, Activity, Syringe
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import PatientRecordViewer from '../PatientRecordViewer';
 import { useToast } from '../../contexts/ToastContext';
 import { usePatientRecord } from '../../services/PatientRecord';
@@ -24,6 +25,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('labs'); // labs, radiology, drugs, records
     const [drawerHeight, setDrawerHeight] = useState('50vh'); // 50vh or 80vh
+    const { t } = useTranslation('orders');
     const toast = useToast();
     const { ordered } = usePatientRecord();
 
@@ -211,7 +213,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                 // learning_events row records where the study was ordered.
                 room: EventLogger.getStatus?.()?.room || null,
             });
-            toast.success(`Ordered ${selectedRadiology.length} radiology study(s)`);
+            toast.success(t('ordered_radiology', { count: selectedRadiology.length }));
             selectedRadiology.forEach(radId => {
                 const study = availableRadiology.find(r => r.id === radId);
                 ordered('radiology', study?.test_name || radId, { urgency: labSettings.instantResults ? 'stat' : 'routine' });
@@ -219,7 +221,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
             setSelectedRadiology([]);
             await fetchRadiologyOrders();
         } catch (error) {
-            toast.error('Failed to order radiology: ' + (error.message || 'Failed to order radiology'));
+            toast.error(t('failed_order_radiology_error', { error: error.message || t('failed_order_radiology') }));
         } finally {
             setLoadingRadiology(false);
         }
@@ -263,7 +265,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                 }
             });
             await apiPost(`/sessions/${sessionId}/order-labs`, body);
-            toast.success(`Ordered ${selectedLabs.length} lab test(s)`);
+            toast.success(t('ordered_labs', { count: selectedLabs.length }));
 
             selectedLabs.forEach(labId => {
                 const lab = availableLabs.find(l => l.id === labId);
@@ -276,8 +278,8 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
             setSelectedLabs([]);
             await fetchLabOrders();
         } catch (error) {
-            const msg = error.message || 'Failed to order labs';
-            toast.error('Failed to order labs: ' + msg);
+            const msg = error.message || t('failed_order_labs');
+            toast.error(t('failed_order_labs_error', { error: msg }));
             setOrderError(msg);
         } finally {
             setLoadingLabs(false);
@@ -335,7 +337,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         const now = new Date();
         const available = new Date(order.available_at + 'Z'); // Append Z to treat as UTC
         const diff = available - now;
-        if (diff <= 0) return 'Ready';
+        if (diff <= 0) return t('ready');
         const minutes = Math.floor(diff / 60000);
         const seconds = Math.floor((diff % 60000) / 1000);
         return `${minutes}:${seconds.toString().padStart(2, '0')}`;
@@ -383,9 +385,9 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     // treatments, records, memory. Labs and Radiology are full rooms now
     // and switch via the nav at the bottom of the screen.
     const tabs = [
-        { id: 'treatments', label: 'Treatments', icon: Syringe, count: treatmentOrdersCount },
-        { id: 'records', label: 'Records', icon: FileText, count: 0 },
-        { id: 'memory', label: 'Memory', icon: Activity, count: 0 }
+        { id: 'treatments', label: t('tab_treatments'), icon: Syringe, count: treatmentOrdersCount },
+        { id: 'records', label: t('tab_records'), icon: FileText, count: 0 },
+        { id: 'memory', label: t('tab_memory'), icon: Activity, count: 0 }
     ];
 
     return (
@@ -452,12 +454,12 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                     {/* Header with Tabs */}
                     <div className="px-4 pb-3 border-b border-neutral-800">
                         <div className="flex items-center justify-between mb-3">
-                            <h2 className="text-lg font-bold text-white">Order Entry</h2>
+                            <h2 className="text-lg font-bold text-white">{t('order_entry')}</h2>
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => setDrawerHeight(h => h === '50vh' ? '80vh' : '50vh')}
                                     className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
-                                    title={drawerHeight === '50vh' ? 'Expand' : 'Collapse'}
+                                    title={drawerHeight === '50vh' ? t('expand') : t('collapse')}
                                 >
                                     {drawerHeight === '50vh' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                                 </button>
@@ -515,7 +517,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                 }`}
                                             >
                                                 <Search className="w-3 h-3 inline mr-1" />
-                                                Search
+                                                {t('search')}
                                             </button>
                                             <button
                                                 onClick={() => setLabViewMode('browse')}
@@ -524,20 +526,20 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                 }`}
                                             >
                                                 <List className="w-3 h-3 inline mr-1" />
-                                                Browse
+                                                {t('browse')}
                                             </button>
                                             <div className="ml-auto flex items-center gap-2">
                                                 {/* Show effective turnaround mode */}
                                                 {caseData?.config?.investigations?.instantResults ? (
-                                                    <span className="text-xs text-amber-400 bg-amber-900/30 px-2 py-0.5 rounded" title="Case configured for instant results">
-                                                        Case: Instant
+                                                    <span className="text-xs text-amber-400 bg-amber-900/30 px-2 py-0.5 rounded" title={t('case_instant_title')}>
+                                                        {t('case_instant')}
                                                     </span>
                                                 ) : caseData?.config?.investigations?.defaultTurnaround > 0 ? (
-                                                    <span className="text-xs text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded" title="Case default turnaround">
-                                                        Case: {caseData.config.investigations.defaultTurnaround}m
+                                                    <span className="text-xs text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded" title={t('case_turnaround_title')}>
+                                                        {t('case_turnaround', { minutes: caseData.config.investigations.defaultTurnaround })}
                                                     </span>
                                                 ) : null}
-                                                <label className="flex items-center gap-1.5 cursor-pointer" title="When checked, results are available immediately (no turnaround delay)">
+                                                <label className="flex items-center gap-1.5 cursor-pointer" title={t('instant_title')}>
                                                     <input
                                                         type="checkbox"
                                                         checked={labSettings.instantResults}
@@ -545,7 +547,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                         className="w-3 h-3"
                                                     />
                                                     <span className={`text-xs ${labSettings.instantResults ? 'text-green-400 font-bold' : 'text-neutral-400'}`}>
-                                                        Instant
+                                                        {t('instant')}
                                                     </span>
                                                 </label>
                                                 <button
@@ -558,12 +560,12 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                             instantResults: false,
                                                             autoRefreshInterval: 5
                                                         });
-                                                        toast.info('Lab settings reset to defaults');
+                                                        toast.info(t('settings_reset'));
                                                     }}
                                                     className="text-[10px] text-neutral-500 hover:text-neutral-300 underline"
-                                                    title="Reset lab settings to defaults"
+                                                    title={t('reset_title')}
                                                 >
-                                                    Reset
+                                                    {t('reset')}
                                                 </button>
                                             </div>
                                         </div>
@@ -617,7 +619,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                                     ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed'
                                                                     : 'bg-blue-900/50 text-blue-300 hover:bg-blue-800/50 border border-blue-700/50'
                                                         }`}
-                                                        title={`${panel.label}: ${matchingLabs.length} tests (${unorderedMatches.length} available)`}
+                                                        title={t('panel_title', { label: panel.label, tests: matchingLabs.length, available: unorderedMatches.length })}
                                                     >
                                                         {panel.label}
                                                         {unorderedMatches.length > 0 && (
@@ -635,7 +637,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                     type="text"
                                                     value={labSearchQuery}
                                                     onChange={(e) => handleSearchChange(e.target.value)}
-                                                    placeholder="Search tests..."
+                                                    placeholder={t('search_tests_placeholder')}
                                                     className="w-full pl-10 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none"
                                                 />
                                             </div>
@@ -644,7 +646,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                 onChange={(e) => handleFilterChange(e.target.value)}
                                                 className="px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:border-purple-500 focus:outline-none"
                                             >
-                                                <option value="all">All Groups</option>
+                                                <option value="all">{t('all_groups')}</option>
                                                 {labGroups.map(g => <option key={g} value={g}>{g}</option>)}
                                             </select>
                                         </div>
@@ -678,7 +680,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                                 <div className="text-sm font-bold text-white truncate">{lab.test_name}</div>
                                                                 <div className="text-xs text-neutral-400">{lab.test_group} - {lab.turnaround_minutes ?? DEFAULT_TURNAROUND_MINUTES}min</div>
                                                             </div>
-                                                            {ordered && <span className="text-xs text-blue-400">Ordered</span>}
+                                                            {ordered && <span className="text-xs text-blue-400">{t('ordered_badge')}</span>}
                                                         </label>
                                                     );
                                                 })}
@@ -738,13 +740,13 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                             {/* Turnaround info */}
                                             <div className="text-xs text-center">
                                                 {labSettings.instantResults || caseData?.config?.investigations?.instantResults ? (
-                                                    <span className="text-green-400">Results will be available immediately</span>
+                                                    <span className="text-green-400">{t('results_immediate')}</span>
                                                 ) : labSettings.globalTurnaround > 0 ? (
-                                                    <span className="text-blue-400">Results in {labSettings.globalTurnaround} minutes</span>
+                                                    <span className="text-blue-400">{t('results_in_minutes', { minutes: labSettings.globalTurnaround })}</span>
                                                 ) : caseData?.config?.investigations?.defaultTurnaround > 0 ? (
-                                                    <span className="text-blue-400">Results in {caseData.config.investigations.defaultTurnaround} minutes (case default)</span>
+                                                    <span className="text-blue-400">{t('results_in_minutes_case', { minutes: caseData.config.investigations.defaultTurnaround })}</span>
                                                 ) : (
-                                                    <span className="text-neutral-400">Results per test turnaround (typically a few minutes)</span>
+                                                    <span className="text-neutral-400">{t('results_per_test')}</span>
                                                 )}
                                             </div>
                                             <button
@@ -753,9 +755,9 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                 className="w-full px-4 py-3 bg-green-600 hover:bg-green-500 disabled:bg-neutral-600 text-white rounded-lg font-bold flex items-center justify-center gap-2"
                                             >
                                                 {loadingLabs ? (
-                                                    <><Loader2 className="w-5 h-5 animate-spin" /> Ordering...</>
+                                                    <><Loader2 className="w-5 h-5 animate-spin" /> {t('ordering')}</>
                                                 ) : (
-                                                    <>Order {selectedLabs.length} Test{selectedLabs.length > 1 ? 's' : ''}</>
+                                                    <>{t('order_n_tests', { count: selectedLabs.length })}</>
                                                 )}
                                             </button>
                                         </div>
@@ -767,10 +769,10 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                     <div className="p-4 border-b border-neutral-700 bg-neutral-800">
                                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
                                             <FlaskConical className="w-4 h-4 text-purple-400" />
-                                            Order Status
+                                            {t('order_status')}
                                             {labOrders.length > 0 && (
                                                 <span className="ml-auto text-xs text-neutral-400">
-                                                    {labOrders.length} test{labOrders.length !== 1 ? 's' : ''}
+                                                    {t('n_tests', { count: labOrders.length })}
                                                 </span>
                                             )}
                                         </h3>
@@ -779,8 +781,8 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                         {labOrders.length === 0 ? (
                                             <div className="text-center py-12 text-neutral-500">
                                                 <FlaskConical className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                                                <p className="text-sm">No tests ordered yet</p>
-                                                <p className="text-xs mt-1 text-neutral-600">Select tests from the left to order</p>
+                                                <p className="text-sm">{t('no_tests_ordered')}</p>
+                                                <p className="text-xs mt-1 text-neutral-600">{t('select_tests_hint')}</p>
                                             </div>
                                         ) : (
                                             <div className="divide-y divide-neutral-800">
@@ -819,7 +821,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                                         {isReady && (
                                                                             <>
                                                                                 <CheckCircle className="w-3 h-3" />
-                                                                                READY - Click to view
+                                                                                {t('ready_click_view')}
                                                                             </>
                                                                         )}
                                                                         {isPending && (
@@ -831,7 +833,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                                         {isViewed && (
                                                                             <>
                                                                                 <Eye className="w-3 h-3" />
-                                                                                Viewed
+                                                                                {t('viewed')}
                                                                             </>
                                                                         )}
                                                                     </div>
@@ -847,7 +849,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                                                 : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-300'
                                                                         }`}
                                                                     >
-                                                                        {isReady ? 'View' : 'Review'}
+                                                                        {isReady ? t('view') : t('review')}
                                                                     </button>
                                                                 )}
                                                             </div>
@@ -863,19 +865,19 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                             {pendingOrders.length > 0 && (
                                                 <span className="text-yellow-400">
                                                     <Clock className="w-3 h-3 inline mr-1" />
-                                                    {pendingOrders.length} pending
+                                                    {t('n_pending', { count: pendingOrders.length })}
                                                 </span>
                                             )}
                                             {readyOrders.length > 0 && (
                                                 <span className="text-green-400 font-bold">
                                                     <CheckCircle className="w-3 h-3 inline mr-1" />
-                                                    {readyOrders.length} ready
+                                                    {t('n_ready', { count: readyOrders.length })}
                                                 </span>
                                             )}
                                             {viewedOrders.length > 0 && (
                                                 <span className="text-neutral-500">
                                                     <Eye className="w-3 h-3 inline mr-1" />
-                                                    {viewedOrders.length} viewed
+                                                    {t('n_viewed', { count: viewedOrders.length })}
                                                 </span>
                                             )}
                                         </div>
@@ -898,7 +900,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                     type="text"
                                                     value={radiologySearchQuery}
                                                     onChange={(e) => setRadiologySearchQuery(e.target.value)}
-                                                    placeholder="Search imaging studies..."
+                                                    placeholder={t('search_studies_placeholder')}
                                                     className="w-full pl-10 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder-neutral-500 focus:border-cyan-500 focus:outline-none"
                                                 />
                                             </div>
@@ -907,7 +909,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                 onChange={(e) => setRadiologySelectedGroup(e.target.value)}
                                                 className="px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:border-cyan-500 focus:outline-none"
                                             >
-                                                <option value="all">All Modalities</option>
+                                                <option value="all">{t('all_modalities')}</option>
                                                 {radiologyGroups.map(g => <option key={g} value={g}>{g}</option>)}
                                             </select>
                                         </div>
@@ -920,7 +922,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                     className="w-3 h-3"
                                                 />
                                                 <span className={`text-xs ${labSettings.instantResults ? 'text-green-400 font-bold' : 'text-neutral-400'}`}>
-                                                    Instant Results
+                                                    {t('instant_results')}
                                                 </span>
                                             </label>
                                         </div>
@@ -931,8 +933,8 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                         {filteredRadiology.length === 0 ? (
                                             <div className="text-center py-12">
                                                 <Scan className="w-12 h-12 mx-auto mb-2 text-neutral-600" />
-                                                <p className="text-sm text-neutral-400">No radiology studies available</p>
-                                                <p className="text-xs text-neutral-500 mt-1">Configure radiology in case settings</p>
+                                                <p className="text-sm text-neutral-400">{t('no_studies_available')}</p>
+                                                <p className="text-xs text-neutral-500 mt-1">{t('configure_radiology_hint')}</p>
                                             </div>
                                         ) : (
                                             <div className="space-y-2">
@@ -961,7 +963,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                                 <div className="text-sm font-bold text-white truncate">{study.test_name}</div>
                                                                 <div className="text-xs text-neutral-400">{study.test_group} - {study.turnaround_minutes}min</div>
                                                             </div>
-                                                            {ordered && <span className="text-xs text-cyan-400">Ordered</span>}
+                                                            {ordered && <span className="text-xs text-cyan-400">{t('ordered_badge')}</span>}
                                                         </label>
                                                     );
                                                 })}
@@ -978,9 +980,9 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                 className="w-full px-4 py-3 bg-cyan-600 hover:bg-cyan-500 disabled:bg-neutral-600 text-white rounded-lg font-bold flex items-center justify-center gap-2"
                                             >
                                                 {loadingRadiology ? (
-                                                    <><Loader2 className="w-5 h-5 animate-spin" /> Ordering...</>
+                                                    <><Loader2 className="w-5 h-5 animate-spin" /> {t('ordering')}</>
                                                 ) : (
-                                                    <>Order {selectedRadiology.length} Study{selectedRadiology.length > 1 ? 'ies' : 'y'}</>
+                                                    <>{t('order_n_studies', { count: selectedRadiology.length })}</>
                                                 )}
                                             </button>
                                         </div>
@@ -992,10 +994,10 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                     <div className="p-4 border-b border-neutral-700 bg-neutral-800">
                                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
                                             <Scan className="w-4 h-4 text-cyan-400" />
-                                            Order Status
+                                            {t('order_status')}
                                             {radiologyOrders.length > 0 && (
                                                 <span className="ml-auto text-xs text-neutral-400">
-                                                    {radiologyOrders.length} stud{radiologyOrders.length !== 1 ? 'ies' : 'y'}
+                                                    {t('n_studies', { count: radiologyOrders.length })}
                                                 </span>
                                             )}
                                         </h3>
@@ -1004,7 +1006,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                         {radiologyOrders.length === 0 ? (
                                             <div className="text-center py-12 text-neutral-500">
                                                 <Scan className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                                                <p className="text-sm">No studies ordered yet</p>
+                                                <p className="text-sm">{t('no_studies_ordered')}</p>
                                             </div>
                                         ) : (
                                             <div className="divide-y divide-neutral-800">
@@ -1035,16 +1037,16 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                                     {!isReady && (
                                                                         <div className="text-xs text-yellow-500 mt-1">
                                                                             <Clock className="w-3 h-3 inline mr-1" />
-                                                                            {Math.ceil(order.minutes_remaining)} min remaining
+                                                                            {t('min_remaining', { minutes: Math.ceil(order.minutes_remaining) })}
                                                                         </div>
                                                                     )}
                                                                     {isReady && !isViewed && (
-                                                                        <div className="text-xs text-cyan-400 mt-1">Ready - Click to view</div>
+                                                                        <div className="text-xs text-cyan-400 mt-1">{t('ready_click_view_radiology')}</div>
                                                                     )}
                                                                     {isViewed && (
                                                                         <div className="text-xs text-green-400 mt-1">
                                                                             <CheckCircle className="w-3 h-3 inline mr-1" />
-                                                                            Viewed
+                                                                            {t('viewed')}
                                                                         </div>
                                                                     )}
                                                                     {/* Show findings preview when viewed */}
@@ -1079,7 +1081,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                                                                 : 'bg-cyan-600 hover:bg-cyan-500 text-white'
                                                                         }`}
                                                                     >
-                                                                        {isViewed ? 'Review' : 'View'}
+                                                                        {isViewed ? t('review') : t('view')}
                                                                     </button>
                                                                 )}
                                                             </div>

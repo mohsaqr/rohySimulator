@@ -39,7 +39,11 @@
     "docs:gen:api": "node scripts/docs-gen/gen-api.mjs",
     "docs:gen:data": "node scripts/docs-gen/gen-data.mjs",
     "docs:gen:config": "node scripts/docs-gen/gen-config.mjs",
-    "docs:check": "bash scripts/docs-gen/check.sh"
+    "docs:check": "bash scripts/docs-gen/check.sh",
+    "i18n:extract": "node node_modules/i18next-parser/bin/cli.js",
+    "i18n:check": "node node_modules/i18next-parser/bin/cli.js --fail-on-update",
+    "i18n:pseudo": "node scripts/generate-pseudo-locale.mjs",
+    "i18n:translate": "node scripts/translate-locales.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -53,6 +57,8 @@
     "dynajs": "file:../dynajs",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
+    "i18next": "^26.3.4",
+    "i18next-icu": "^2.4.4",
     "jsonwebtoken": "^9.0.3",
     "kokoro-js": "^1.2.1",
     "lucide-react": "^0.562.0",
@@ -61,6 +67,7 @@
     "papaparse": "^5.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-i18next": "^17.0.8",
     "sqlite3": "^5.1.7",
     "three": "^0.184.0",
     "wawa-lipsync": "^0.0.2"
@@ -84,6 +91,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "eslint-plugin-unused-imports": "^4.4.1",
     "globals": "^16.5.0",
+    "i18next-parser": "^9.0.2",
     "jsdom": "^25.0.1",
     "msw": "^2.6.8",
     "postcss": "^8.5.6",

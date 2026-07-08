@@ -17,6 +17,18 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useAuth } from './AuthContext';
 import { apiFetch, apiPut } from '../services/apiClient';
 import { LANGUAGES, DEFAULT_LANGUAGE, isKnownLanguage } from '../i18n/languages';
+import { setAppLanguage, PSEUDO_LOCALE } from '../i18n/index.js';
+
+// QA escape hatch: ?pseudo=1 renders the en-XA pseudo-locale (accented,
+// lengthened English) to expose hardcoded strings and layout truncation.
+// Query-param only — never persisted, never user-visible in settings.
+const pseudoRequested = () => {
+    try {
+        return new URLSearchParams(window.location.search).get('pseudo') === '1';
+    } catch {
+        return false;
+    }
+};
 
 const noop = () => {};
 
@@ -58,11 +70,13 @@ export function LanguageProvider({ children }) {
     }, [user?.id]);
 
     // <html lang dir> follow the UI language — screen readers, hyphenation,
-    // and Intl-aware CSS all key off these attributes.
+    // and Intl-aware CSS all key off these attributes — and i18next switches
+    // to the same language (lazy-loading its locale chunks on first use).
     useEffect(() => {
         const lang = LANGUAGES[uiLanguage] || LANGUAGES[DEFAULT_LANGUAGE];
         document.documentElement.lang = uiLanguage;
         document.documentElement.dir = lang.dir;
+        setAppLanguage(pseudoRequested() ? PSEUDO_LOCALE : uiLanguage);
     }, [uiLanguage]);
 
     // Optimistic update; persists via the merge PUT. Returns the request

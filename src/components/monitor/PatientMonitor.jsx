@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Heart, Activity, Bell, Settings, Play, Pause, AlertCircle, X, Monitor, FileJson, Save, Download, Upload, Volume2, VolumeX, Pencil, Pill } from 'lucide-react';
 import defaultSettings from '../../settings.json';
 import { useAlarms } from '../../hooks/useAlarms';
@@ -17,6 +18,7 @@ import { apiFetch, apiPost } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
 import AoiRegion from '../oyon/AoiRegion';
 import { requestAvatarGlance } from '../oyon/studentPresence';
+import { formatDate, formatTime, formatDateTime } from '../../utils/formatters';
 
 /**
  * ECG GENERATION
@@ -275,7 +277,26 @@ const importSettingsFromJSON = (file, setRhythm, setConditions, setParams) => {
    });
 };
 
+// Static key maps for enum-ish labels (controls-drawer tabs and rhythm
+// buttons). Every key exists in src/locales/en/monitor.json — never call
+// t() with a bare variable.
+const TAB_KEYS = {
+   rhythm: 'tab_rhythm',
+   vitals: 'tab_vitals',
+   scenarios: 'tab_scenarios',
+   alarms: 'tab_alarms',
+   labs: 'tab_labs'
+};
+const RHYTHM_KEYS = {
+   NSR: 'rhythm_nsr',
+   AFib: 'rhythm_afib',
+   VTach: 'rhythm_vtach',
+   VFib: 'rhythm_vfib',
+   Asystole: 'rhythm_asystole'
+};
+
 export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdmin: isAdminProp = false }) {
+   const { t } = useTranslation('monitor');
    const toast = useToast();
    const { isAdmin: isAdminAuth } = useAuth();
    const isAdmin = isAdminProp || isAdminAuth();
@@ -644,8 +665,8 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
          if (scenarioSource) {
             const caseScenario = {
                id: `case_${caseData.id}`,
-               name: `${caseData.name} - Scenario`,
-               description: scenarioSource.description || 'Case scenario',
+               name: t('case_scenario_name', { name: caseData.name }),
+               description: scenarioSource.description || t('case_scenario_description_fallback'),
                timeline: scenarioSource.timeline || []
             };
 
@@ -680,8 +701,8 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
       const id = `custom_${Date.now()}`;
       const newScenario = {
          id,
-         name: `Custom Trend (${(trendTarget.duration / 60).toFixed(1)}m)`,
-         description: `Linear trend to HR ${trendTarget.hr}, SpO2 ${trendTarget.spo2}%`,
+         name: t('custom_trend_name', { duration: (trendTarget.duration / 60).toFixed(1) }),
+         description: t('custom_trend_description', { hr: trendTarget.hr, spo2: trendTarget.spo2 }),
          timeline: [
             { time: 0, params: { ...params }, conditions: { ...conditions } }, // Start at current
             {
@@ -1245,12 +1266,12 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                {monitorSettings.showTimer && (
                   <div className="text-center mr-2 px-3 py-1 bg-neutral-800 rounded-lg">
                      <div className="text-lg font-mono font-bold text-green-400">{formatElapsedTime(elapsedTime)}</div>
-                     <div className="text-[10px] text-neutral-500 uppercase tracking-wide">Session Time</div>
+                     <div className="text-[10px] text-neutral-500 uppercase tracking-wide">{t('session_time')}</div>
                   </div>
                )}
                <div className="text-right mr-4 hidden md:block">
-                  <div className="text-sm font-bold text-neutral-300">{new Date().toLocaleTimeString()}</div>
-                  <div className="text-xs text-neutral-500">{new Date().toLocaleDateString()}</div>
+                  <div className="text-sm font-bold text-neutral-300">{formatTime(new Date())}</div>
+                  <div className="text-xs text-neutral-500">{formatDate(new Date())}</div>
                </div>
 
                <button
@@ -1263,7 +1284,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                <button
                   onClick={() => handleControlsOpen('alarms')}
                   className={`p-2 rounded-full transition-colors relative ${alarmSystem.activeAlarms.length > 0 ? 'bg-red-900/40 text-red-500 animate-pulse' : 'bg-neutral-800 text-neutral-400'}`}
-                  title="Alarms"
+                  title={t('alarms')}
                >
                   <Bell className="w-5 h-5" />
                   {alarmSystem.activeAlarms.length > 0 && (
@@ -1285,7 +1306,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                         ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/20'
                         : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
                   }`}
-                  title={savedSettings ? 'Monitor Settings (Custom settings loaded)' : 'Monitor Settings'}
+                  title={savedSettings ? t('monitor_settings_custom') : t('monitor_settings')}
                >
                   <Settings className="w-5 h-5" />
                   {savedSettings && (
@@ -1403,7 +1424,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      <div className="text-neutral-500 text-xs">°C</div>
                   </div>
                   <div className="absolute bottom-2 left-3 text-[10px] text-neutral-500">
-                     Core • <span className="text-neutral-300">Esophageal</span>
+                     {t('temp_site_core')} • <span className="text-neutral-300">{t('temp_site_esophageal')}</span>
                   </div>
                </div>
 
@@ -1424,7 +1445,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      <div className="flex items-center gap-2 mb-2">
                         <Pill className="w-4 h-4 text-pink-400" />
                         <span className="text-xs font-bold text-pink-300">
-                           {treatmentEffects.count} Active Treatment{treatmentEffects.count > 1 ? 's' : ''}
+                           {t('active_treatments', { count: treatmentEffects.count })}
                         </span>
                      </div>
                      <div className="grid grid-cols-3 gap-1 text-xs">
@@ -1462,7 +1483,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
             <div className="flex items-center justify-between p-4 border-b border-neutral-800 bg-neutral-800">
                <h2 className="text-white font-bold text-lg flex items-center gap-2">
                   <Settings className="w-5 h-5 text-blue-500" />
-                  Simulator Controls
+                  {t('simulator_controls')}
                </h2>
                <button onClick={handleControlsClose} className="text-neutral-400 hover:text-white">
                   <X className="w-6 h-6" />
@@ -1477,7 +1498,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      onClick={() => handleTabChange(tab)}
                      className={`flex-1 py-2 px-2 text-sm font-bold uppercase tracking-wider rounded-md transition-colors whitespace-nowrap ${activeTab === tab ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
                   >
-                     {tab}
+                     {t(TAB_KEYS[tab])}
                   </button>
                ))}
             </div>
@@ -1490,7 +1511,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                         <div className="flex justify-between items-center mb-4">
                            <h3 className="text-white font-bold flex items-center gap-2">
                               <FileJson className="w-5 h-5 text-purple-500" />
-                              Scenarios
+                              {t('scenarios')}
                            </h3>
                            <div className="text-xs font-mono text-neutral-400">
                               {scenarioTime}s
@@ -1503,13 +1524,13 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                  <button
                                     onClick={() => setScenarioPlaying(!scenarioPlaying)}
                                     className={`p-2 rounded-full ${scenarioPlaying ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}
-                                    aria-label={scenarioPlaying ? 'Pause scenario' : 'Resume scenario'}
-                                    title={scenarioPlaying ? 'Pause scenario' : 'Resume scenario'}
+                                    aria-label={scenarioPlaying ? t('pause_scenario') : t('resume_scenario')}
+                                    title={scenarioPlaying ? t('pause_scenario') : t('resume_scenario')}
                                  >
                                     {scenarioPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                                  </button>
                                  <div className="flex-1">
-                                    <div className="text-xs text-neutral-400 uppercase">Current</div>
+                                    <div className="text-xs text-neutral-400 uppercase">{t('current')}</div>
                                     <div className="text-sm font-bold text-white max-w-[150px] truncate">
                                        {scenarioList.find(s => s.id === activeScenario)?.name}
                                     </div>
@@ -1522,13 +1543,13 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                     }}
                                     className="text-xs text-neutral-500 hover:text-white underline"
                                  >
-                                    Stop/Reset
+                                    {t('stop_reset')}
                                  </button>
                               </div>
 
                               {/* Manual Step Triggers */}
                               <div className="bg-neutral-900/50 p-3 rounded border border-neutral-700">
-                                 <div className="text-xs font-bold text-neutral-400 uppercase mb-2">Manual Controls</div>
+                                 <div className="text-xs font-bold text-neutral-400 uppercase mb-2">{t('manual_controls')}</div>
                                  <div className="space-y-2">
                                     {(() => {
                                        const scenario = scenarioList.find(s => s.id === activeScenario);
@@ -1567,9 +1588,9 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                              >
                                                 <div className="flex items-center justify-between">
                                                    <span className="font-mono">{Math.floor(step.time / 60)}:{(step.time % 60).toString().padStart(2, '0')}</span>
-                                                   {isCurrentStep && <span className="text-[10px] px-2 py-0.5 bg-blue-600 rounded">ACTIVE</span>}
+                                                   {isCurrentStep && <span className="text-[10px] px-2 py-0.5 bg-blue-600 rounded">{t('active_badge')}</span>}
                                                 </div>
-                                                <div className="text-neutral-400 mt-1">{step.label || `Step ${index + 1}`}</div>
+                                                <div className="text-neutral-400 mt-1">{step.label || t('step_n', { n: index + 1 })}</div>
                                              </button>
                                           );
                                        });
@@ -1585,12 +1606,12 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                               onClick={() => setShowBuilder(true)}
                               className="w-full py-3 mb-4 rounded border-2 border-dashed border-neutral-700 text-neutral-400 font-bold text-sm uppercase hover:bg-neutral-800 hover:border-neutral-500 transition-all flex items-center justify-center gap-2"
                            >
-                              <Settings className="w-4 h-4" /> Build Custom Trend
+                              <Settings className="w-4 h-4" /> {t('build_custom_trend')}
                            </button>
                         ) : (
                            <div className="mb-4 bg-neutral-900 border border-neutral-700 p-3 rounded-md space-y-3 animate-in fade-in slide-in-from-top-2">
                               <div className="flex justify-between items-center text-xs font-bold text-neutral-400 uppercase">
-                                 <span>Target Values</span>
+                                 <span>{t('target_values')}</span>
                                  <button onClick={() => setShowBuilder(false)}><X className="w-4 h-4" /></button>
                               </div>
                               <div className="grid grid-cols-2 gap-2">
@@ -1611,7 +1632,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                     />
                                  </div>
                                  <div className="space-y-1">
-                                    <label className="text-[10px] text-neutral-500">BP Sys</label>
+                                    <label className="text-[10px] text-neutral-500">{t('bp_sys_label')}</label>
                                     <input type="number"
                                        value={trendTarget.bpSys}
                                        onChange={e => setTrendTarget({ ...trendTarget, bpSys: parseInt(e.target.value) })}
@@ -1619,7 +1640,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                     />
                                  </div>
                                  <div className="space-y-1">
-                                    <label className="text-[10px] text-neutral-500">BP Dia</label>
+                                    <label className="text-[10px] text-neutral-500">{t('bp_dia_label')}</label>
                                     <input type="number"
                                        value={trendTarget.bpDia}
                                        onChange={e => setTrendTarget({ ...trendTarget, bpDia: parseInt(e.target.value) })}
@@ -1629,7 +1650,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                               </div>
                               <div className="space-y-1 pt-2 border-t border-neutral-800">
                                  <div className="flex justify-between">
-                                    <label className="text-[10px] text-neutral-500">Trend Duration</label>
+                                    <label className="text-[10px] text-neutral-500">{t('trend_duration')}</label>
                                     <span className="text-[10px] text-blue-400 font-mono font-bold">
                                        {(trendTarget.duration / 60).toFixed(1)} min
                                     </span>
@@ -1648,7 +1669,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                  onClick={runCustomTrend}
                                  className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase rounded shadow-lg shadow-blue-900/20"
                               >
-                                 Start Trend
+                                 {t('start_trend')}
                               </button>
                            </div>
                         )}
@@ -1681,7 +1702,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                         <div className="flex items-center justify-between p-2 rounded-lg bg-orange-900/30 border border-orange-700/50">
                            <div className="flex items-center gap-2">
                               <Pencil className="w-4 h-4 text-orange-400" />
-                              <span className="text-xs text-orange-300">Rhythm overridden from case</span>
+                              <span className="text-xs text-orange-300">{t('rhythm_overridden')}</span>
                            </div>
                            <button
                               onClick={() => {
@@ -1694,7 +1715,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                               }}
                               className="text-xs px-2 py-1 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold"
                            >
-                              Reset Rhythm
+                              {t('reset_rhythm')}
                            </button>
                         </div>
                      )}
@@ -1702,7 +1723,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      {/* Rhythm Select - Admin Only */}
                      {isAdmin && (
                         <div className="space-y-2">
-                           <label className="text-xs font-bold text-neutral-500 uppercase">Primary Rhythm</label>
+                           <label className="text-xs font-bold text-neutral-500 uppercase">{t('primary_rhythm')}</label>
                            <div className="grid grid-cols-1 gap-2">
                               {['NSR', 'AFib', 'VTach', 'VFib', 'Asystole'].map(r => (
                                  <button
@@ -1710,7 +1731,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                     onClick={() => handleRhythmChange(r)}
                                     className={`px-4 py-3 rounded-md text-left text-sm font-bold border transition-all ${rhythm === r ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/50' : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-600'}`}
                                  >
-                                    {r === 'NSR' ? 'Normal Sinus Rhythm' : r}
+                                    {t(RHYTHM_KEYS[r])}
                                  </button>
                               ))}
                            </div>
@@ -1720,7 +1741,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      {/* ECG Pattern Presets - Admin Only */}
                      {isAdmin && (
                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-neutral-500 uppercase">ECG Pattern Presets</label>
+                        <label className="text-xs font-bold text-neutral-500 uppercase">{t('ecg_pattern_presets')}</label>
                         <select
                            onChange={(e) => {
                               const pattern = e.target.value;
@@ -1787,27 +1808,27 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                            className="w-full bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2.5 text-sm text-white"
                            defaultValue=""
                         >
-                           <option value="" disabled>Select a pattern...</option>
-                           <optgroup label="Ischemia / MI">
-                              <option value="stemi">STEMI (ST elevation 2mm)</option>
-                              <option value="nstemi">NSTEMI (ST depression, T-inv)</option>
-                              <option value="angina">Angina (Mild ST depression)</option>
+                           <option value="" disabled>{t('pattern_select_placeholder')}</option>
+                           <optgroup label={t('pattern_group_ischemia')}>
+                              <option value="stemi">{t('pattern_stemi')}</option>
+                              <option value="nstemi">{t('pattern_nstemi')}</option>
+                              <option value="angina">{t('pattern_angina')}</option>
                            </optgroup>
-                           <optgroup label="Electrolyte Abnormalities">
-                              <option value="hyperkalemia">Hyperkalemia (Wide QRS)</option>
-                              <option value="hypokalemia">Hypokalemia (T-wave flat/inv)</option>
+                           <optgroup label={t('pattern_group_electrolyte')}>
+                              <option value="hyperkalemia">{t('pattern_hyperkalemia')}</option>
+                              <option value="hypokalemia">{t('pattern_hypokalemia')}</option>
                            </optgroup>
-                           <optgroup label="Structural / Inflammation">
-                              <option value="pericarditis">Pericarditis (Diffuse ST elevation)</option>
-                              <option value="lbbb">LBBB (Wide QRS)</option>
+                           <optgroup label={t('pattern_group_structural')}>
+                              <option value="pericarditis">{t('pattern_pericarditis')}</option>
+                              <option value="lbbb">{t('pattern_lbbb')}</option>
                            </optgroup>
-                           <optgroup label="Arrhythmias">
-                              <option value="pvcs">PVCs (Ectopic beats)</option>
-                              <option value="afib">Atrial Fibrillation</option>
-                              <option value="vtach">Ventricular Tachycardia</option>
+                           <optgroup label={t('pattern_group_arrhythmias')}>
+                              <option value="pvcs">{t('pattern_pvcs')}</option>
+                              <option value="afib">{t('pattern_afib')}</option>
+                              <option value="vtach">{t('pattern_vtach')}</option>
                            </optgroup>
-                           <optgroup label="Normal">
-                              <option value="normal">Normal Sinus Rhythm</option>
+                           <optgroup label={t('pattern_group_normal')}>
+                              <option value="normal">{t('pattern_normal')}</option>
                            </optgroup>
                         </select>
                      </div>
@@ -1816,11 +1837,11 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      {/* Ectopics & Noise - Admin Only */}
                      {isAdmin && (
                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-neutral-500 uppercase">Modifiers</label>
+                        <label className="text-xs font-bold text-neutral-500 uppercase">{t('modifiers')}</label>
                         <div className="space-y-3 bg-neutral-800/50 p-3 rounded-lg border border-neutral-800">
 
                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-neutral-300">PVCs (Ectopics)</span>
+                              <span className="text-sm text-neutral-300">{t('pvcs_ectopics')}</span>
                               <button
                                  onClick={() => setConditions(c => ({ ...c, pvc: !c.pvc }))}
                                  className={`w-12 h-6 rounded-full relative transition-colors ${conditions.pvc ? 'bg-green-600' : 'bg-neutral-700'}`}
@@ -1830,7 +1851,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                            </div>
 
                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-neutral-300">Wide QRS</span>
+                              <span className="text-sm text-neutral-300">{t('wide_qrs')}</span>
                               <button
                                  onClick={() => setConditions(c => ({ ...c, wideQRS: !c.wideQRS }))}
                                  className={`w-12 h-6 rounded-full relative transition-colors ${conditions.wideQRS ? 'bg-green-600' : 'bg-neutral-700'}`}
@@ -1841,7 +1862,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
                            <div className="space-y-1">
                               <div className="flex justify-between text-xs">
-                                 <span className="text-neutral-400">ST Deviation</span>
+                                 <span className="text-neutral-400">{t('st_deviation')}</span>
                                  <span className={`font-mono ${Math.abs(conditions.stElev) >= 1 ? 'text-red-400' : 'text-blue-400'}`}>
                                     {conditions.stElev > 0 ? '+' : ''}{conditions.stElev} mm
                                     {Math.abs(conditions.stElev) >= 1 && <span className="ml-1">⚠️</span>}
@@ -1854,13 +1875,13 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                  className="w-full h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer"
                               />
                               <div className="text-[10px] text-neutral-600">
-                                 Normal: 0mm | Significant: ≥1mm elevation or depression
+                                 {t('st_deviation_hint')}
                               </div>
                            </div>
 
                            <div className="space-y-1">
                               <div className="flex justify-between text-xs">
-                                 <span className="text-neutral-400">Signal Noise</span>
+                                 <span className="text-neutral-400">{t('signal_noise')}</span>
                                  <span className="text-blue-400 font-mono">{conditions.noise}/10</span>
                               </div>
                               <input
@@ -1883,7 +1904,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      {/* Override tracking toggle */}
                      <div className="flex items-center justify-between p-2 rounded-lg bg-neutral-800/50 border border-neutral-700">
                         <div className="flex items-center gap-2">
-                           <span className="text-xs text-neutral-400">Track Overrides</span>
+                           <span className="text-xs text-neutral-400">{t('track_overrides')}</span>
                         </div>
                         <button
                            onClick={() => {
@@ -1906,12 +1927,12 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                               {hasOverrides ? (
                                  <>
                                     <Pencil className="w-4 h-4 text-orange-400" />
-                                    <span className="text-xs text-orange-300">Override Mode ({overriddenVitals.size} modified)</span>
+                                    <span className="text-xs text-orange-300">{t('override_mode', { count: overriddenVitals.size })}</span>
                                  </>
                               ) : (
                                  <>
                                     <Activity className="w-4 h-4 text-green-400" />
-                                    <span className="text-xs text-green-300">{caseBaseline ? 'Using Case Vitals' : 'Default Vitals'}</span>
+                                    <span className="text-xs text-green-300">{caseBaseline ? t('using_case_vitals') : t('default_vitals')}</span>
                                  </>
                               )}
                            </div>
@@ -1920,9 +1941,9 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                  <button
                                     onClick={() => setOverriddenVitals(new Set())}
                                     className="text-xs px-2 py-1 bg-neutral-600 hover:bg-neutral-500 text-white rounded"
-                                    title="Clear override flags without resetting values"
+                                    title={t('clear_flags_title')}
                                  >
-                                    Clear Flags
+                                    {t('clear_flags')}
                                  </button>
                               )}
                               {caseBaseline && (
@@ -1930,7 +1951,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                     onClick={resetToCaseDefaults}
                                     className="text-xs px-2 py-1 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold"
                                  >
-                                    Reset to Case
+                                    {t('reset_to_case')}
                                  </button>
                               )}
                            </div>
@@ -1941,7 +1962,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      <div className="space-y-2">
                         <div className="flex justify-between items-end">
                            <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
-                              Heart Rate
+                              {t('heart_rate')}
                               {trackOverrides && overriddenVitals.has('hr') && <Pencil className="w-3 h-3 text-orange-400" />}
                            </label>
                            <span className="text-xl font-mono text-green-500 font-bold">{params.hr}</span>
@@ -1975,7 +1996,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      <div className="space-y-2">
                         <div className="flex justify-between items-end">
                            <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
-                              Resp Rate
+                              {t('resp_rate')}
                               {trackOverrides && overriddenVitals.has('rr') && <Pencil className="w-3 h-3 text-orange-400" />}
                            </label>
                            <span className="text-xl font-mono text-amber-500 font-bold">{params.rr}</span>
@@ -1993,7 +2014,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                         <div className="space-y-2">
                            <div className="flex justify-between items-end">
                               <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
-                                 Systolic BP
+                                 {t('systolic_bp')}
                                  {trackOverrides && overriddenVitals.has('bpSys') && <Pencil className="w-3 h-3 text-orange-400" />}
                               </label>
                               <span className="text-lg font-mono text-red-400 font-bold">{params.bpSys}</span>
@@ -2008,7 +2029,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                         <div className="space-y-2">
                            <div className="flex justify-between items-end">
                               <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
-                                 Diastolic BP
+                                 {t('diastolic_bp')}
                                  {trackOverrides && overriddenVitals.has('bpDia') && <Pencil className="w-3 h-3 text-orange-400" />}
                               </label>
                               <span className="text-lg font-mono text-red-500 font-bold">{params.bpDia}</span>
@@ -2027,7 +2048,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                         <div className="space-y-2">
                            <div className="flex justify-between items-end">
                               <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-1">
-                                 Temperature
+                                 {t('temperature')}
                                  {trackOverrides && overriddenVitals.has('temp') && <Pencil className="w-3 h-3 text-orange-400" />}
                               </label>
                               <span className="text-lg font-mono text-purple-400 font-bold">{params.temp?.toFixed(1)}°C</span>
@@ -2065,12 +2086,12 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      <div className="flex items-center justify-between mb-4">
                         <h3 className="text-white font-bold flex items-center gap-2">
                            <Bell className="w-5 h-5 text-red-500" />
-                           Alarm System
+                           {t('alarm_system')}
                         </h3>
                         <button
                            onClick={() => alarmSystem.setIsMuted(!alarmSystem.isMuted)}
                            className={`p-2 rounded-full ${alarmSystem.isMuted ? 'bg-red-900/40 text-red-500' : 'bg-green-900/40 text-green-500'}`}
-                           title={alarmSystem.isMuted ? 'Unmute alarms' : 'Mute alarms'}
+                           title={alarmSystem.isMuted ? t('unmute_alarms') : t('mute_alarms')}
                         >
                            {alarmSystem.isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                         </button>
@@ -2079,7 +2100,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      {/* Active Alarms */}
                      {alarmSystem.activeAlarms.length > 0 && (
                         <div className="space-y-2 mb-6">
-                           <h4 className="text-sm font-semibold text-red-400">Active Alarms ({alarmSystem.activeAlarms.length})</h4>
+                           <h4 className="text-sm font-semibold text-red-400">{t('active_alarms_count', { count: alarmSystem.activeAlarms.length })}</h4>
                            {alarmSystem.activeAlarms.map(alarmKey => (
                               <div key={alarmKey} className="bg-red-900/20 border border-red-700/50 rounded p-3 animate-pulse">
                                  <div className="text-sm text-white font-semibold mb-2">{alarmKey.replace('_', ' ').toUpperCase()}</div>
@@ -2088,13 +2109,13 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                        onClick={() => handleAcknowledgeAlarm(alarmKey)}
                                        className="flex-1 text-xs px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded"
                                     >
-                                       Acknowledge
+                                       {t('acknowledge')}
                                     </button>
                                     <button
                                        onClick={() => handleSnoozeAlarm(alarmKey)}
                                        className="flex-1 text-xs px-3 py-1.5 bg-yellow-700 hover:bg-yellow-600 text-white rounded"
                                     >
-                                       Snooze {alarmSystem.snoozeDuration}min
+                                       {t('snooze_minutes', { minutes: alarmSystem.snoozeDuration })}
                                     </button>
                                  </div>
                               </div>
@@ -2104,7 +2125,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                  onClick={handleAcknowledgeAll}
                                  className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-bold"
                               >
-                                 Acknowledge All
+                                 {t('acknowledge_all')}
                               </button>
                               <button
                                  onClick={() => {
@@ -2114,7 +2135,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                  }}
                                  className="flex-1 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm font-bold"
                               >
-                                 Snooze All
+                                 {t('snooze_all')}
                               </button>
                            </div>
                         </div>
@@ -2122,20 +2143,20 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
                      {/* Snooze Configuration */}
                      <div className="space-y-3 mb-6 bg-neutral-800/30 p-4 rounded-lg border border-neutral-700">
-                        <h4 className="text-sm font-semibold text-yellow-400">Snooze Settings</h4>
+                        <h4 className="text-sm font-semibold text-yellow-400">{t('snooze_settings')}</h4>
                         <div className="flex items-center gap-3">
-                           <label className="text-xs text-neutral-400">Duration:</label>
+                           <label className="text-xs text-neutral-400">{t('duration_label')}</label>
                            <select
                               value={alarmSystem.snoozeDuration}
                               onChange={(e) => alarmSystem.setSnoozeDuration(parseInt(e.target.value))}
                               className="flex-1 bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-sm"
                            >
-                              <option value="1">1 minute</option>
-                              <option value="2">2 minutes</option>
-                              <option value="3">3 minutes</option>
-                              <option value="5">5 minutes</option>
-                              <option value="10">10 minutes</option>
-                              <option value="15">15 minutes</option>
+                              <option value="1">{t('n_minutes', { count: 1 })}</option>
+                              <option value="2">{t('n_minutes', { count: 2 })}</option>
+                              <option value="3">{t('n_minutes', { count: 3 })}</option>
+                              <option value="5">{t('n_minutes', { count: 5 })}</option>
+                              <option value="10">{t('n_minutes', { count: 10 })}</option>
+                              <option value="15">{t('n_minutes', { count: 15 })}</option>
                            </select>
                         </div>
                      </div>
@@ -2143,14 +2164,14 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      {/* Snoozed Alarms */}
                      {alarmSystem.snoozedAlarms && alarmSystem.snoozedAlarms.length > 0 && (
                         <div className="space-y-2 mb-6">
-                           <h4 className="text-sm font-semibold text-yellow-400">Snoozed Alarms ({alarmSystem.snoozedAlarms.length})</h4>
+                           <h4 className="text-sm font-semibold text-yellow-400">{t('snoozed_alarms_count', { count: alarmSystem.snoozedAlarms.length })}</h4>
                            {alarmSystem.snoozedAlarms.map(({ key, _until, remaining }) => (
                               <div key={key} className="bg-yellow-900/20 border border-yellow-700/50 rounded p-3">
                                  <div className="flex items-center justify-between">
                                     <div>
                                        <div className="text-sm text-white font-semibold">{key.replace('_', ' ').toUpperCase()}</div>
                                        <div className="text-xs text-yellow-300 mt-1">
-                                          Returns in {remaining} min{remaining !== 1 ? 's' : ''}
+                                          {t('returns_in_mins', { count: remaining })}
                                        </div>
                                     </div>
                                     <div className="text-xs text-yellow-400">💤</div>
@@ -2166,14 +2187,14 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      {alarmSystem.silencedAlarms && alarmSystem.silencedAlarms.length > 0 && (
                         <div className="space-y-2 mb-6">
                            <h4 className="text-sm font-semibold text-orange-400">
-                              Silenced — still abnormal ({alarmSystem.silencedAlarms.length})
+                              {t('silenced_still_abnormal_count', { count: alarmSystem.silencedAlarms.length })}
                            </h4>
                            <div className="flex flex-wrap gap-1.5">
                               {alarmSystem.silencedAlarms.map(({ key, vital, value, threshold, kind }) => (
                                  <button
                                     key={key}
                                     onClick={() => alarmSystem.unsilenceAlarm(key)}
-                                    title="Click to un-silence — alarm will fire again"
+                                    title={t('unsilence_title')}
                                     className="px-2 py-1 bg-orange-900/30 border border-orange-700/50 hover:bg-orange-900/50 rounded text-xs text-orange-200 transition-colors"
                                  >
                                     {vital.toUpperCase()} = {value} ({kind === 'low' ? '<' : '>'} {threshold})
@@ -2186,7 +2207,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      {/* Alarm Thresholds - Admin Only */}
                      {isAdmin && (
                         <div className="space-y-4">
-                           <h4 className="text-sm font-semibold text-neutral-300">Thresholds</h4>
+                           <h4 className="text-sm font-semibold text-neutral-300">{t('thresholds')}</h4>
                            {Object.entries(alarmSystem.thresholds).map(([vital, config]) => (
                               <div key={vital} className="bg-neutral-800/50 p-3 rounded-lg border border-neutral-800">
                                  <div className="flex items-center justify-between mb-2">
@@ -2202,7 +2223,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                     <div className="space-y-2 text-xs">
                                        {config.low !== null && (
                                           <div>
-                                             <label className="text-neutral-400">Low: </label>
+                                             <label className="text-neutral-400">{t('low_label')} </label>
                                              <input
                                                 type="number"
                                                 value={config.low}
@@ -2213,7 +2234,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                        )}
                                        {config.high !== null && (
                                           <div>
-                                             <label className="text-neutral-400">High: </label>
+                                             <label className="text-neutral-400">{t('high_label')} </label>
                                              <input
                                                 type="number"
                                                 value={config.high}
@@ -2236,13 +2257,13 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                               onClick={() => alarmSystem.saveConfig()}
                               className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
                            >
-                              Save Alarm Config
+                              {t('save_alarm_config')}
                            </button>
                            <button
                               onClick={alarmSystem.resetToDefaults}
                               className="w-full py-2 bg-neutral-700 hover:bg-neutral-600 text-white rounded text-sm"
                            >
-                              Reset to Defaults
+                              {t('reset_to_defaults')}
                            </button>
                         </div>
                      )}
@@ -2264,7 +2285,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
                {activeTab === 'labs' && !sessionId && (
                   <div className="text-center py-8 text-neutral-500">
-                     <p>Start a session to edit lab values</p>
+                     <p>{t('start_session_to_edit_labs')}</p>
                   </div>
                )}
 
@@ -2278,10 +2299,10 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      <div className="text-xs text-neutral-500 bg-blue-900/20 border border-blue-700/30 rounded p-2">
                         <div className="flex items-center gap-2">
                            <Settings className="w-3 h-3" />
-                           <span>Saved settings loaded</span>
+                           <span>{t('saved_settings_loaded')}</span>
                         </div>
                         <div className="text-[10px] mt-1 opacity-70">
-                           {new Date(savedSettings.savedAt).toLocaleString()}
+                           {formatDateTime(savedSettings.savedAt)}
                         </div>
                      </div>
                   )}
@@ -2290,16 +2311,16 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                   <button
                      onClick={() => {
                         if (saveSettings(rhythm, conditions, params)) {
-                           toast.success('Settings saved to browser!');
+                           toast.success(t('settings_saved_toast'));
                            window.location.reload();
                         } else {
-                           toast.error('Failed to save settings');
+                           toast.error(t('settings_save_failed_toast'));
                         }
                      }}
                      className="w-full py-3 rounded border border-green-700/50 bg-green-900/20 text-green-400 font-bold text-xs uppercase hover:bg-green-900/30 transition-colors flex items-center justify-center gap-2"
                   >
                      <Save className="w-4 h-4" />
-                     Save to Browser
+                     {t('save_to_browser')}
                   </button>
 
                   {/* Export/Import Settings as JSON Files */}
@@ -2307,12 +2328,12 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      <button
                         onClick={() => {
                            exportSettingsToJSON(rhythm, conditions, params);
-                           toast.success('Settings exported to JSON file!');
+                           toast.success(t('settings_exported_toast'));
                         }}
                         className="py-3 rounded border border-blue-700/50 bg-blue-900/20 text-blue-400 font-bold text-xs uppercase hover:bg-blue-900/30 transition-colors flex items-center justify-center gap-2"
                      >
                         <Download className="w-4 h-4" />
-                        Export JSON
+                        {t('export_json')}
                      </button>
 
                      <button
@@ -2325,9 +2346,9 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                               if (file) {
                                  try {
                                     await importSettingsFromJSON(file, setRhythm, setConditions, setParams);
-                                    toast.success('Settings imported successfully!');
+                                    toast.success(t('settings_imported_toast'));
                                  } catch (err) {
-                                    toast.error('Failed to import settings: ' + err.message);
+                                    toast.error(t('settings_import_failed_toast', { error: err.message }));
                                  }
                               }
                            };
@@ -2336,41 +2357,41 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                         className="py-3 rounded border border-purple-700/50 bg-purple-900/20 text-purple-400 font-bold text-xs uppercase hover:bg-purple-900/30 transition-colors flex items-center justify-center gap-2"
                      >
                         <Upload className="w-4 h-4" />
-                        Import JSON
+                        {t('import_json')}
                      </button>
                   </div>
 
                   {/* Reset to Factory Defaults */}
                   <button
                      onClick={async () => {
-                        const confirmed = await toast.confirm('Reset to factory defaults? This will clear saved settings.', { title: 'Reset Settings', type: 'warning' });
+                        const confirmed = await toast.confirm(t('reset_factory_confirm'), { title: t('reset_settings_title'), type: 'warning' });
                         if (confirmed) {
                            clearSavedSettings();
                            setRhythm(FACTORY_DEFAULTS.rhythm);
                            setParams(FACTORY_DEFAULTS.params);
                            setConditions(FACTORY_DEFAULTS.conditions);
-                           toast.success('Reset to factory defaults');
+                           toast.success(t('reset_factory_toast'));
                            window.location.reload();
                         }
                      }}
                      className="w-full py-3 rounded border border-neutral-700 text-neutral-400 font-bold text-xs uppercase hover:bg-neutral-800 transition-colors"
                   >
-                     Reset to Defaults
+                     {t('reset_to_defaults')}
                   </button>
 
                   {/* Clear Saved Settings (only show if saved) */}
                   {savedSettings && (
                      <button
                         onClick={async () => {
-                           const confirmed = await toast.confirm('Clear saved settings? Monitor will use factory defaults on next load.', { title: 'Clear Settings', type: 'warning' });
+                           const confirmed = await toast.confirm(t('clear_settings_confirm'), { title: t('clear_settings_title'), type: 'warning' });
                            if (confirmed) {
                               clearSavedSettings();
-                              toast.success('Saved settings cleared. Using factory defaults.');
+                              toast.success(t('settings_cleared_toast'));
                            }
                         }}
                         className="w-full py-2 rounded border border-red-700/50 bg-red-900/20 text-red-400 font-bold text-xs uppercase hover:bg-red-900/30 transition-colors"
                      >
-                        Clear Saved Settings
+                        {t('clear_saved_settings')}
                      </button>
                   )}
                </div>
@@ -2388,6 +2409,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 // matrix, and routing has BANNER stripped from clinical to avoid duplicate
 // rendering at the top of the screen.
 function InlineClinicalAlarms() {
+   const { t } = useTranslation('monitor');
    const { active, ack, snooze } = useNotifications();
    const alarms = useMemo(
       () => active.filter(n => n.source === SOURCES.CLINICAL),
@@ -2418,13 +2440,13 @@ function InlineClinicalAlarms() {
                   onClick={() => snooze(n.key)}
                   className="text-xs px-2 py-1 rounded bg-red-800/50 hover:bg-red-700/60 text-white shrink-0"
                >
-                  Snooze
+                  {t('snooze')}
                </button>
                <button
                   onClick={() => ack(n.key)}
                   className="text-xs px-3 py-1 rounded bg-red-600 hover:bg-red-500 text-white font-semibold shrink-0"
                >
-                  Acknowledge
+                  {t('acknowledge')}
                </button>
             </div>
          ))}

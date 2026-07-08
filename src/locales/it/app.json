@@ -1,0 +1,20 @@
+{
+  "cancel": "Annulla",
+  "dismiss": "Ignora",
+  "end_debrief": "Termina e debriefing",
+  "end_debrief_title": "Termina la sessione corrente e apri il debriefing",
+  "end_session_confirm_intro": "Questa azione chiude il caso per il debriefing. Una volta terminata:",
+  "end_session_confirm_locked": "Prescrizioni, esami e chat vengono bloccati.",
+  "end_session_confirm_timeline": "La timeline del paziente smette di avanzare.",
+  "end_session_confirm_title": "Terminare questa sessione?",
+  "end_session_confirm_transcript": "Potrai rivedere la trascrizione nella stanza di debriefing, ma non potrai riaprire il caso.",
+  "help_support": "Aiuto e supporto",
+  "loading": "Caricamento...",
+  "logout": "Esci",
+  "multi_tab_heads_up": "Attenzione:",
+  "multi_tab_warning": "questa sessione è aperta in un'altra scheda del browser. Vale l'ultima modifica salvata.",
+  "my_profile": "Il mio profilo",
+  "open_settings": "Apri impostazioni",
+  "settings": "Impostazioni",
+  "settings_menu_aria": "Menu impostazioni e profilo"
+}

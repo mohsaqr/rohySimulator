@@ -4,10 +4,18 @@
 or any further language is a *data change* (one registry entry + one translated
 locale file + optional voice files) — never a code change.
 
-**Status:** reviewed 2026-07-08 (findings folded in below) — **Phase A implemented**
-(all tests green, build verified; live LLM smoke test pending — run
-`node scripts/llm-language-smoke.mjs` against a dev server). Scope decision:
-student-facing surfaces first; analytics + admin panels deprioritised (§6).
+**Status:** **Phases A–D implemented end-to-end, 2026-07-08** (single session on
+`lang_dev`, rebased onto origin/main first). Registry + LLM directive + STT +
+voice-mismatch warning (A); react-i18next + ICU + parser + pseudo-locale (B);
+all student-facing domains extracted, ~1,035 keys × 12 namespaces (C, scoped —
+analytics/admin deferred per §6); Italian/Finnish/Swedish machine-first
+translations with glossary, delta pipeline, Intl formatting sweep (D).
+Verified: full test suite green (incl. locale-integrity + language-switch
+tests), clean build with per-locale lazy chunks, live browser run
+(pseudo-locale exposes zero missed strings on login; Italian UI + Italian
+date formatting + preference persistence across reload). LLM dialogue smoke VERIFIED against a live keyed server (all six
+first-turn + drift probes pass in it/fi/sv). **Remaining: native-speaker
+review per language (the release gate, §7).** Phase E (Piper packs, Google voices, deploy check) as needed.
 **Date:** 2026-07-08
 
 ---
