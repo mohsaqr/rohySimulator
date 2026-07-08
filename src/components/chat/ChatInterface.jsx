@@ -5,6 +5,8 @@ import { AgentService } from '../../services/AgentService';
 import { buildPersonaBlocks } from '../../utils/personaBlocks';
 import { roleAnchor } from '../../utils/roleAnchor';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { sttLocaleFor, DEFAULT_LANGUAGE } from '../../i18n/languages';
 import { caseDisplayLabel } from '../../utils/caseDisplayLabel';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { baseUrl } from '../../config/api';
@@ -184,6 +186,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const [messagesLoaded, setMessagesLoaded] = useState(false);
     const messagesEndRef = useRef(null);
     const { user } = useAuth();
+    const { caseLanguage } = useLanguage();
     const toast = useToast();
     const { subscribe, prefs } = useNotifications();
 
@@ -1080,6 +1083,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             voiceMode ? 'voice' : undefined,
             {
                 agentTemplateId: patientTemplate?.templateId || null,
+                // Server appends the output-language directive for this code
+                // (systemPromptAssembly) — never inject it into the prompt here.
+                caseLanguage,
                 onDelta: (delta) => {
                     acc += delta;
                     const display = stripStageDirections(acc);
@@ -1265,7 +1271,14 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             toast?.error?.('Speech recognition is not supported in this browser. Use Chrome or Edge over HTTPS.');
             return;
         }
-        if (!voiceSettings?.stt_language) {
+        // Session language wins over the platform-wide STT locale: a student
+        // in an Italian session speaks Italian into the mic regardless of the
+        // platform default. English sessions keep the platform setting, so
+        // English-only deployments see zero behaviour change.
+        const sttLang = caseLanguage !== DEFAULT_LANGUAGE
+            ? sttLocaleFor(caseLanguage)
+            : voiceSettings?.stt_language;
+        if (!sttLang) {
             toast?.error?.('No STT language configured. Set one in Settings → Voice & Avatar before pressing-to-talk.');
             return;
         }
@@ -1282,7 +1295,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         let sawError = false;
 
         VoiceService.startListening({
-            lang: voiceSettings.stt_language,
+            lang: sttLang,
             onResult: ({ final, interim, _isFinal }) => {
                 // Continuous mode (default in voiceService): show whatever's
                 // currently transcribed but DO NOT stop on isFinal — pauses

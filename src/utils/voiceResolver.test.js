@@ -5,7 +5,7 @@
 // No slot logic, no per-provider hardcoded map, no catalogue fallback.
 
 import { describe, it, expect, vi } from 'vitest';
-import { resolveVoice, deriveSlot, isVoiceValidForProvider } from './voiceResolver.js';
+import { resolveVoice, deriveSlot, isVoiceValidForProvider, voiceLanguage, voiceMatchesLanguage } from './voiceResolver.js';
 
 describe('resolveVoice — tier 1: case_voice override', () => {
     it('returns the voice.case_voice when present', () => {
@@ -223,5 +223,58 @@ describe('isVoiceValidForProvider — pattern-based provider check', () => {
         expect(isVoiceValidForProvider('',   'kokoro')).toBe(false);
         expect(isVoiceValidForProvider(null, 'kokoro')).toBe(false);
         expect(isVoiceValidForProvider(undefined, 'kokoro')).toBe(false);
+    });
+});
+
+// I18N (2026-07-08): voice LANGUAGE helpers. Validation only — these must
+// never influence which voice plays (one-tier case_voice stays authoritative).
+// The contract callers rely on: null means "unknown, do NOT warn".
+describe('voiceLanguage', () => {
+    it('derives BCP-47 from Piper model filenames', () => {
+        expect(voiceLanguage('en_US-amy-medium.onnx', 'piper')).toBe('en-US');
+        expect(voiceLanguage('it_IT-paola-medium.onnx', 'piper')).toBe('it-IT');
+        expect(voiceLanguage('fi_FI-harri-medium.onnx', 'piper')).toBe('fi-FI');
+    });
+
+    it('derives BCP-47 from Google voice names', () => {
+        expect(voiceLanguage('en-US-Chirp3-HD-Kore', 'google')).toBe('en-US');
+        expect(voiceLanguage('sv-SE-Wavenet-A', 'google')).toBe('sv-SE');
+    });
+
+    it('maps Kokoro pack prefixes', () => {
+        expect(voiceLanguage('af_bella', 'kokoro')).toBe('en-US');
+        expect(voiceLanguage('bm_lewis', 'kokoro')).toBe('en-GB');
+        expect(voiceLanguage('if_sara', 'kokoro')).toBe('it-IT');
+    });
+
+    it('marks text-following providers as multilingual', () => {
+        expect(voiceLanguage('alloy', 'openai')).toBe('multilingual');
+        expect(voiceLanguage(null, 'browser')).toBe('multilingual');
+    });
+
+    it('returns null for unknown shapes — never guesses', () => {
+        expect(voiceLanguage('mystery-voice', 'piper')).toBeNull();
+        expect(voiceLanguage('af_bella', 'unknown_provider')).toBeNull();
+        expect(voiceLanguage(null, 'kokoro')).toBeNull();
+        expect(voiceLanguage('qf_x', 'kokoro')).toBeNull();
+    });
+});
+
+describe('voiceMatchesLanguage', () => {
+    it('matches on primary subtag: registry codes and BCP-47 both work', () => {
+        expect(voiceMatchesLanguage('it_IT-paola-medium.onnx', 'piper', 'it')).toBe(true);
+        expect(voiceMatchesLanguage('en_GB-jenny_dioco-medium.onnx', 'piper', 'en-US')).toBe(true);
+        expect(voiceMatchesLanguage('en_US-amy-medium.onnx', 'piper', 'it')).toBe(false);
+    });
+
+    it('multilingual providers always match', () => {
+        expect(voiceMatchesLanguage('alloy', 'openai', 'fi')).toBe(true);
+        expect(voiceMatchesLanguage('whatever', 'browser', 'sv')).toBe(true);
+    });
+
+    it('returns null when the voice language is unknown — callers must not warn', () => {
+        expect(voiceMatchesLanguage('mystery', 'piper', 'it')).toBeNull();
+        expect(voiceMatchesLanguage('af_bella', 'kokoro', '')).toBeNull();
+        expect(voiceMatchesLanguage('af_bella', 'kokoro', null)).toBeNull();
     });
 });

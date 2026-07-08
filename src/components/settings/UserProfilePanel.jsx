@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
     User, Mail, Phone, Building2, MapPin, GraduationCap,
     Lock, Save, Loader2, Eye, EyeOff, AlertCircle, CheckCircle,
-    Bot, Server, Key, Hash
+    Bot, Server, Key, Hash, Globe
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { LANGUAGES } from '../../i18n/languages';
 import { ApiError, apiFetch, apiPut } from '../../services/apiClient';
 import JoinClassPanel from './JoinClassPanel';
 
@@ -14,6 +16,16 @@ import JoinClassPanel from './JoinClassPanel';
  */
 export default function UserProfilePanel({ _onClose }) {
     const toast = useToast();
+    const { uiLanguage, setUiLanguage } = useLanguage();
+
+    const handleLanguageChange = async (code) => {
+        try {
+            await setUiLanguage(code);
+            toast.success('Language saved');
+        } catch (error) {
+            toast.error('Failed to save language: ' + (error?.message || 'unknown error'));
+        }
+    };
 
     const [activeTab, setActiveTab] = useState('profile'); // profile, password, ai
     const [loading, setLoading] = useState(true);
@@ -366,6 +378,29 @@ export default function UserProfilePanel({ _onClose }) {
                                 {fieldConfig.education?.enabled !== false && renderField('education', GraduationCap, 'text', 'Education level')}
                                 {fieldConfig.grade?.enabled !== false && renderField('grade', GraduationCap, 'text', 'Grade/Year')}
                             </div>
+                        </div>
+
+                        {/* Language preference — saves immediately (merge PUT),
+                            independent of the profile Save button below. */}
+                        <div className="space-y-2">
+                            <h3 className="text-sm font-bold text-neutral-300 flex items-center gap-2">
+                                <Globe className="w-4 h-4 text-blue-400" />
+                                Language
+                            </h3>
+                            <select
+                                value={uiLanguage}
+                                onChange={(e) => handleLanguageChange(e.target.value)}
+                                className="w-full px-3 py-2.5 bg-neutral-900 border border-neutral-700 rounded-lg text-neutral-200 focus:border-blue-500 focus:outline-none"
+                            >
+                                {Object.entries(LANGUAGES).map(([code, lang]) => (
+                                    <option key={code} value={code}>
+                                        {lang.native === lang.name ? lang.native : `${lang.native} (${lang.name})`}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-neutral-500">
+                                Sets the patient dialogue language for your sessions. Interface translation follows as coverage grows.
+                            </p>
                         </div>
 
                         {/* Save Button */}

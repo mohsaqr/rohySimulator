@@ -11,6 +11,14 @@
 // Prior to this change the platform template was *prepended*, which shadowed
 // the case persona and was the root cause of "the model ignores my case"
 // reports. The shipped default systemPromptTemplate is now empty.
+//
+// I18N (2026-07-08): an output-language directive trails EVERYTHING when the
+// request carries a non-English case_language. Last position is deliberate —
+// recency keeps the directive dominant over long English case prompts, the
+// drift risk called out in I18N_PLAN.md §10. The directive text comes from
+// the language registry only; this module must not know language codes.
+
+import { llmDirectiveFor } from '../shared/languages.js';
 
 const SEPARATOR = '\n\n---\n\n';
 
@@ -30,13 +38,18 @@ function toTrimmedString(value) {
  * @param {object} parts
  * @param {string} [parts.system_prompt]         The case-built prompt (leads).
  * @param {string} [parts.systemPromptTemplate]  Optional platform reminder (trails).
+ * @param {string} [parts.caseLanguage]          Registry language code for the
+ *   patient dialogue ('it', 'fi', …). Non-English appends the registry's
+ *   output-language directive as the final block. Unknown/missing codes are
+ *   ignored (body-sourced value — never trusted to be valid).
  * @returns {string}
  */
-export function assembleSystemPrompt({ system_prompt = '', systemPromptTemplate = '' } = {}) {
-    const leading = toTrimmedString(system_prompt);
-    const trailing = toTrimmedString(systemPromptTemplate);
-    if (leading && trailing) return `${leading}${SEPARATOR}${trailing}`;
-    if (leading) return leading;
-    if (trailing) return trailing;
-    return '';
+export function assembleSystemPrompt({ system_prompt = '', systemPromptTemplate = '', caseLanguage = '' } = {}) {
+    const directive = llmDirectiveFor(caseLanguage);
+    const blocks = [
+        toTrimmedString(system_prompt),
+        toTrimmedString(systemPromptTemplate),
+        toTrimmedString(directive)
+    ].filter(Boolean);
+    return blocks.join(SEPARATOR);
 }

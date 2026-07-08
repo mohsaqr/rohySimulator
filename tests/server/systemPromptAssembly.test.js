@@ -57,3 +57,43 @@ describe('assembleSystemPrompt', () => {
         expect(out.startsWith('You are a simulated patient.')).toBe(false);
     });
 });
+
+// I18N (2026-07-08): the output-language directive from the registry trails
+// EVERYTHING — recency keeps it dominant over long English case prompts
+// (drift risk, I18N_PLAN.md §10). English requests must be byte-identical
+// to pre-i18n output (success criterion: zero behaviour change for English).
+describe('assembleSystemPrompt — caseLanguage directive', () => {
+    it('appends the registry directive as the final block', () => {
+        const out = assembleSystemPrompt({
+            system_prompt: 'CASE: chest pain',
+            systemPromptTemplate: 'Behavioral reminder.',
+            caseLanguage: 'it'
+        });
+        const italianIdx = out.indexOf('italiano');
+        expect(italianIdx).toBeGreaterThan(out.indexOf('CASE:'));
+        expect(italianIdx).toBeGreaterThan(out.indexOf('Behavioral reminder.'));
+        expect(out.endsWith('Rispondi sempre in italiano.')).toBe(true);
+    });
+
+    it('English (the model default) appends nothing', () => {
+        expect(assembleSystemPrompt({ system_prompt: 'CASE', caseLanguage: 'en' })).toBe('CASE');
+    });
+
+    it('unknown or malformed codes are ignored, never crash the assembly', () => {
+        expect(assembleSystemPrompt({ system_prompt: 'CASE', caseLanguage: 'xx' })).toBe('CASE');
+        expect(assembleSystemPrompt({ system_prompt: 'CASE', caseLanguage: undefined })).toBe('CASE');
+        expect(assembleSystemPrompt({ system_prompt: 'CASE', caseLanguage: { evil: 1 } })).toBe('CASE');
+    });
+
+    it('directive stands alone when no prompts are provided', () => {
+        const out = assembleSystemPrompt({ caseLanguage: 'fi' });
+        expect(out).toContain('Finnish');
+        expect(out).not.toContain('---');
+    });
+
+    it('English-only requests are byte-identical to the pre-i18n behaviour', () => {
+        const legacy = assembleSystemPrompt({ system_prompt: 'CASE', systemPromptTemplate: 'T' });
+        expect(assembleSystemPrompt({ system_prompt: 'CASE', systemPromptTemplate: 'T', caseLanguage: 'en' })).toBe(legacy);
+        expect(assembleSystemPrompt({ system_prompt: 'CASE', systemPromptTemplate: 'T', caseLanguage: '' })).toBe(legacy);
+    });
+});

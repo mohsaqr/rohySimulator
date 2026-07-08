@@ -419,11 +419,32 @@ router.get('/users/preferences', authenticateToken, (req, res) => {
     );
 });
 
+// PUT is a MERGE, not a replace: fields absent from the body keep their
+// stored value. Until 2026-07-08 this was a full-replace upsert, so the
+// profile panel saving only { default_llm_settings } silently reset
+// language and theme back to defaults on every AI-settings save.
 router.put('/users/preferences', authenticateToken, (req, res) => {
     const { theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings } = req.body;
 
     dbAdapter.get(`SELECT * FROM user_preferences WHERE user_id = ? AND tenant_id = ?`, [req.user.id, tenantId(req)], (readErr, oldPrefs) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
+
+        // JSON columns are stored (and arrive in oldPrefs) as strings;
+        // body values arrive as objects. undefined = "not in this PUT".
+        const keepOrJson = (incoming, stored) =>
+            incoming !== undefined
+                ? (incoming ? JSON.stringify(incoming) : null)
+                : (stored ?? null);
+
+        const merged = {
+            theme: theme !== undefined ? (theme || 'dark') : (oldPrefs?.theme || 'dark'),
+            language: language !== undefined ? (language || 'en') : (oldPrefs?.language || 'en'),
+            notification_settings: keepOrJson(notification_settings, oldPrefs?.notification_settings),
+            dashboard_layout: keepOrJson(dashboard_layout, oldPrefs?.dashboard_layout),
+            default_llm_settings: keepOrJson(default_llm_settings, oldPrefs?.default_llm_settings),
+            default_monitor_settings: keepOrJson(default_monitor_settings, oldPrefs?.default_monitor_settings),
+            accessibility_settings: keepOrJson(accessibility_settings, oldPrefs?.accessibility_settings)
+        };
 
         dbAdapter.run(
             `INSERT INTO user_preferences (user_id, theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings, tenant_id)
@@ -439,13 +460,13 @@ router.put('/users/preferences', authenticateToken, (req, res) => {
              updated_at = CURRENT_TIMESTAMP`,
             [
                 req.user.id,
-                theme || 'dark',
-                language || 'en',
-                notification_settings ? JSON.stringify(notification_settings) : null,
-                dashboard_layout ? JSON.stringify(dashboard_layout) : null,
-                default_llm_settings ? JSON.stringify(default_llm_settings) : null,
-                default_monitor_settings ? JSON.stringify(default_monitor_settings) : null,
-                accessibility_settings ? JSON.stringify(accessibility_settings) : null,
+                merged.theme,
+                merged.language,
+                merged.notification_settings,
+                merged.dashboard_layout,
+                merged.default_llm_settings,
+                merged.default_monitor_settings,
+                merged.accessibility_settings,
                 tenantId(req)
             ],
             function(err) {
@@ -456,13 +477,8 @@ router.put('/users/preferences', authenticateToken, (req, res) => {
                     resourceId: String(req.user.id),
                     oldValue: oldPrefs,
                     newValue: {
-                        theme: theme || 'dark',
-                        language: language || 'en',
-                        notification_settings,
-                        dashboard_layout,
-                        default_llm_settings: default_llm_settings ? redactAuditSetting('default_llm_settings', JSON.stringify(default_llm_settings)) : null,
-                        default_monitor_settings,
-                        accessibility_settings
+                        ...merged,
+                        default_llm_settings: merged.default_llm_settings ? redactAuditSetting('default_llm_settings', merged.default_llm_settings) : null
                     }
                 });
                 res.json({ message: 'Preferences updated' });

@@ -41,7 +41,7 @@ export const LLMService = {
      * Send Message to LLM via authenticated server proxy
      * Server handles LLM configuration and rate limiting
      */
-    async sendMessage(sessionId, messages, systemPrompt, sessionMode) {
+    async sendMessage(sessionId, messages, systemPrompt, sessionMode, { caseLanguage = null } = {}) {
         const lastMsg = messages[messages.length - 1];
         if (lastMsg?.role === 'user') {
             await this.logInteraction(sessionId, 'user', lastMsg.content);
@@ -54,6 +54,10 @@ export const LLMService = {
                 system_prompt: systemPrompt || 'You are a patient.'
             };
             if (sessionMode) body.session_mode = sessionMode;
+            // Patient-dialogue language. The server appends the registry's
+            // output-language directive (systemPromptAssembly) — the client
+            // never injects it into system_prompt itself, or it would double.
+            if (caseLanguage) body.case_language = caseLanguage;
 
             const data = await apiPost('/proxy/llm', body);
             const aiContent = data?.choices?.[0]?.message?.content || '...';
@@ -84,7 +88,7 @@ export const LLMService = {
      * accumulated full text on completion. Falls back to non-streaming if the
      * server doesn't return text/event-stream.
      */
-    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null, persistInteractions = true } = {}) {
+    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null, persistInteractions = true, caseLanguage = null } = {}) {
         const lastMsg = messages[messages.length - 1];
         // `silent` lets callers (e.g. the discussion opening turn) suppress
         // the user-side /interactions write so meta-prompts and sentinels
@@ -130,6 +134,9 @@ export const LLMService = {
                 stream: true
             };
             if (sessionMode) body.session_mode = sessionMode;
+            // Patient-dialogue language — server-side directive injection,
+            // same contract as sendMessage above.
+            if (caseLanguage) body.case_language = caseLanguage;
             // Per-persona LLM routing. When the caller (patient chat,
             // discussant, any agent) passes a template id, the server reads
             // that template's llm_provider / llm_model / llm_api_key /

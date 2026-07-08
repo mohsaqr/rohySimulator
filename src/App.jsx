@@ -11,6 +11,7 @@ import RadiologyResultsModal from './components/investigations/RadiologyResultsM
 import UserProfilePanel from './components/settings/UserProfilePanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 import { VoiceProvider } from './contexts/VoiceContext';
 import { NotificationProvider } from './notifications/NotificationContext';
 import { useNotifications } from './notifications/useNotifications';
@@ -1139,23 +1140,27 @@ export default function App() {
             {/* Bridge so non-React producers (EventLogger singleton) can call notify() */}
             <NotificationApiBridge />
             <ToastProvider>
-               <VoiceProvider>
-                  <AuthenticatedApp
-                     showRegister={showRegister}
-                     setShowRegister={setShowRegister}
-                  />
-                  {/* Surfaces. They render fixed-position UI / side effects, so they
-                      can sit at the root regardless of which page is active. */}
-                  <ToastSurface />
-                  <BannerSurface />
-                  <AudioSurface />
-                  <ConsoleSurface />
-                  <BackendSurfaceBridge />
-                  {/* Diagnostic bar — runtime context (LLM, voice, speaker,
-                      session, tenant). Default off; toggle from the floating
-                      pill in the bottom-right or via Settings → General. */}
-                  <DiagnosticBar />
-               </VoiceProvider>
+               {/* Language sits above VoiceProvider so speech (STT locale,
+                   TTS mismatch warnings) can key off caseLanguage. */}
+               <LanguageProvider>
+                  <VoiceProvider>
+                     <AuthenticatedApp
+                        showRegister={showRegister}
+                        setShowRegister={setShowRegister}
+                     />
+                     {/* Surfaces. They render fixed-position UI / side effects, so they
+                         can sit at the root regardless of which page is active. */}
+                     <ToastSurface />
+                     <BannerSurface />
+                     <AudioSurface />
+                     <ConsoleSurface />
+                     <BackendSurfaceBridge />
+                     {/* Diagnostic bar — runtime context (LLM, voice, speaker,
+                         session, tenant). Default off; toggle from the floating
+                         pill in the bottom-right or via Settings → General. */}
+                     <DiagnosticBar />
+                  </VoiceProvider>
+               </LanguageProvider>
             </ToastProvider>
          </ScopedNotificationProvider>
       </AuthProvider>

@@ -22,7 +22,9 @@ import { useVoice } from '../../contexts/VoiceContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiFetch } from '../../services/apiClient';
 import EventLogger from '../../services/eventLogger';
-import { resolveVoice } from '../../utils/voiceResolver';
+import { resolveVoice, voiceMatchesLanguage, voiceLanguage } from '../../utils/voiceResolver';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { LANGUAGES } from '../../i18n/languages';
 import { parseConfig } from '../../utils/parseConfig';
 import { getLastTtsRequest, getRecentTtsRequests, auditionWirePayload } from '../../services/voiceService';
 import { getBackendTelemetry } from '../../notifications/surfaces/BackendSurface';
@@ -65,6 +67,7 @@ export default function DiagnosticBar() {
         voiceMode, listening, speaking,
         voiceSettings, platformAvatars, activeParticipant
     } = useVoice();
+    const { caseLanguage } = useLanguage();
 
     const [enabled, setEnabledState] = useState(() => isDiagnosticBarEnabled(userId));
     const [expanded, setExpanded] = useState(false);
@@ -349,6 +352,24 @@ export default function DiagnosticBar() {
     const speakerVoice = activeSpeakerRow?.file || null;
     const speakerTier = activeSpeakerRow?.tier || null;
 
+    // I18N: language-mismatch check (validation only — the voice is never
+    // substituted; one-tier case_voice resolution is untouched). Prefer the
+    // live wire payload (ground truth) over the static prediction. null
+    // verdicts (unknown voice shape) never warn.
+    const langMismatch = useMemo(() => {
+        if (!caseLanguage || caseLanguage === 'en') return null;
+        const voice = lastTts?.voice || speakerVoice;
+        const provider = lastTts?.voice ? lastTts?.provider : voiceSettings?.tts_provider;
+        if (!voice || !provider) return null;
+        if (voiceMatchesLanguage(voice, provider, caseLanguage) !== false) return null;
+        return {
+            voice,
+            provider,
+            spoken: voiceLanguage(voice, provider),
+            wanted: LANGUAGES[caseLanguage]?.name || caseLanguage
+        };
+    }, [caseLanguage, lastTts, speakerVoice, voiceSettings?.tts_provider]);
+
     // Build the compact one-liner. Show only fields that have a value so the
     // bar stays readable. Voice tier appears next to the file so the user can
     // tell at a glance whether it's an override or a fallback. When a wire
@@ -368,12 +389,13 @@ export default function DiagnosticBar() {
             const tierTag = speakerTier ? ` (${speakerTier})` : '';
             parts.push(`TTS: ${voiceSettings.tts_provider}${v ? ` · ${v}${tierTag}` : ''}`);
         }
+        if (langMismatch) parts.push(`⚠ voice ≠ ${langMismatch.wanted}`);
         parts.push(voiceMode ? 'voice ON' : 'voice OFF');
         if (activeParticipant?.name) parts.push(`speaker: ${activeParticipant.name}`);
         if (eventStatus.sessionId) parts.push(`s${eventStatus.sessionId}`);
         if (user?.tenant_id) parts.push(`t${user.tenant_id}`);
         return parts.join(' · ');
-    }, [llm, voiceSettings, voiceMode, speakerVoice, speakerTier, activeParticipant, eventStatus.sessionId, user?.tenant_id, lastTts]);
+    }, [llm, voiceSettings, voiceMode, speakerVoice, speakerTier, activeParticipant, eventStatus.sessionId, user?.tenant_id, lastTts, langMismatch]);
 
     // Audit #22: hard role gate. Non-admin/educator users see nothing,
     // even if their localStorage flag says enabled. Returning early
@@ -563,6 +585,20 @@ export default function DiagnosticBar() {
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+                    )}
+
+                    {/* I18N: loud wrong-language-voice warning. Validation only —
+                        playback is never silently redirected to another voice
+                        (one-tier case_voice design, I18N_PLAN.md §5). */}
+                    {langMismatch && (
+                        <div className="mt-3 px-3 py-2 rounded border border-amber-800 bg-amber-900/30 text-amber-300 text-xs">
+                            <span className="font-bold uppercase tracking-wider">Voice language mismatch:</span>{' '}
+                            session language is <span className="font-bold">{langMismatch.wanted}</span> but the
+                            configured voice <span className="font-mono">{langMismatch.voice}</span> ({langMismatch.provider})
+                            speaks <span className="font-bold">{langMismatch.spoken || 'unknown'}</span>.
+                            Pick a matching case voice in the case editor, or switch to a multilingual
+                            provider (OpenAI / browser).
                         </div>
                     )}
 

@@ -121,6 +121,68 @@ export function resolveVoice({ voice = {}, voiceSettings = null, isValid = null 
     return { file: null, provider, rate, pitch, tier: null };
 }
 
+// ---------------------------------------------------------------------------
+// I18N (2026-07-08): voice LANGUAGE helpers. These are VALIDATION, not
+// resolution — the one-tier case_voice design above is untouched. When the
+// session's caseLanguage doesn't match the configured voice, callers warn
+// loudly (diagnostic bar) and never substitute a different voice; fallback
+// chains stay dead (I18N_PLAN.md §5).
+
+// Kokoro voice-id prefix letter → language of the pack. af_bella = American
+// English female; if_sara would be Italian female if a pack shipped.
+const KOKORO_PREFIX_LANGUAGE = {
+    a: 'en-US', b: 'en-GB', e: 'es-ES', f: 'fr-FR', h: 'hi-IN',
+    i: 'it-IT', j: 'ja-JP', p: 'pt-BR', z: 'zh-CN'
+};
+
+/**
+ * Derive the spoken language of a voice id for a given provider.
+ *
+ * @param {string} voiceId   e.g. 'en_US-amy-medium.onnx', 'en-US-Chirp3-HD-Kore', 'af_bella'.
+ * @param {string} provider  'piper' | 'google' | 'kokoro' | 'openai' | 'browser'.
+ * @returns {string|null} BCP-47 tag, the sentinel 'multilingual' (provider
+ *   follows the input text), or null when unknown — callers must NOT warn on
+ *   null (don't reject what we don't recognise, same stance as
+ *   isVoiceValidForProvider).
+ */
+export function voiceLanguage(voiceId, provider) {
+    if (provider === 'openai' || provider === 'browser') return 'multilingual';
+    if (!voiceId || typeof voiceId !== 'string') return null;
+    if (provider === 'piper') {
+        const m = voiceId.match(/^([a-z]{2})_([A-Z]{2})-/);
+        return m ? `${m[1]}-${m[2]}` : null;
+    }
+    if (provider === 'google') {
+        const m = voiceId.match(/^([a-z]{2,3}-[A-Z]{2,3})-/);
+        return m ? m[1] : null;
+    }
+    if (provider === 'kokoro') {
+        const m = voiceId.match(/^([a-z])[fm]_[a-z]+$/);
+        return m ? (KOKORO_PREFIX_LANGUAGE[m[1]] ?? null) : null;
+    }
+    return null;
+}
+
+/**
+ * Does this voice speak the given app language?
+ *
+ * @param {string} voiceId       Provider voice id.
+ * @param {string} provider      TTS provider name.
+ * @param {string} languageCode  Registry code ('en', 'it', …) or a BCP-47 tag.
+ * @returns {boolean|null} true/false on a definite answer; null when the
+ *   voice's language can't be derived (callers must not warn on null).
+ */
+export function voiceMatchesLanguage(voiceId, provider, languageCode) {
+    if (!languageCode) return null;
+    const spoken = voiceLanguage(voiceId, provider);
+    if (spoken == null) return null;
+    if (spoken === 'multilingual') return true;
+    // Compare primary subtags only: it-IT matches 'it'; en-GB matches 'en-US'.
+    const spokenPrimary = spoken.split('-')[0].toLowerCase();
+    const wantedPrimary = languageCode.split('-')[0].toLowerCase();
+    return spokenPrimary === wantedPrimary;
+}
+
 // Re-exported for callers that still need to render a demographic slot label
 // in the UI (e.g., "inherits from female default" copy). The resolver itself
 // no longer consults it.

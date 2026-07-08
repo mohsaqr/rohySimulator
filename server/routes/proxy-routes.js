@@ -84,7 +84,7 @@ const extractUpstreamError = (errText) => {
 };
 
 router.post('/proxy/llm', authenticateToken, async (req, res) => {
-    const { messages, system_prompt, session_id, agent_llm_config, session_mode } = req.body;
+    const { messages, system_prompt, session_id, agent_llm_config, session_mode, case_language } = req.body;
     const userId = req.user.id;
     const today = new Date().toISOString().split('T')[0];
     const startTime = Date.now();
@@ -430,8 +430,10 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         });
 
         // 8. Build system prompt. See assembleSystemPrompt for the ordering
-        // invariant — case content leads, platform template trails.
-        let fullSystemPrompt = assembleSystemPrompt({ system_prompt, systemPromptTemplate });
+        // invariant — case content leads, platform template trails, and the
+        // output-language directive (case_language, registry-validated)
+        // trails everything so it stays dominant.
+        let fullSystemPrompt = assembleSystemPrompt({ system_prompt, systemPromptTemplate, caseLanguage: case_language });
 
         // 9. Build request based on provider type
         let llmHeaders = { 'Content-Type': 'application/json' };

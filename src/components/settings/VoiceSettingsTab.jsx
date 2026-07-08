@@ -4,6 +4,7 @@ import { ApiError, apiFetch, apiPut } from '../../services/apiClient.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { useVoice } from '../../contexts/VoiceContext.jsx';
+import { sttOptions } from '../../i18n/languages.js';
 
 // 2026-05-12 — the per-gender voice pickers that used to live in this tab
 // were removed. Per-character voice now belongs in ONE place: the case
@@ -17,17 +18,10 @@ import { useVoice } from '../../contexts/VoiceContext.jsx';
 // (voice_<provider>_<slot>) are no longer read; rows can stay or be
 // cleared with no behaviour change.
 
-// Curated list of locales the browser SpeechRecognition handles reliably.
-// Could be expanded; kept short to avoid choice paralysis.
-const STT_LANGUAGES = [
-    { code: 'en-US', label: 'English (US)' },
-    { code: 'en-GB', label: 'English (UK)' },
-    { code: 'tr-TR', label: 'Turkish' },
-    { code: 'ar-SA', label: 'Arabic (Saudi)' },
-    { code: 'fr-FR', label: 'French' },
-    { code: 'de-DE', label: 'German' },
-    { code: 'es-ES', label: 'Spanish' }
-];
+// STT locale options come from the language registry (I18N_PLAN.md §2):
+// every full app language's STT locale plus the curated extra dialects.
+// Adding a language never touches this file again.
+const STT_LANGUAGES = sttOptions();
 
 const blankSettings = {
     voice_mode_enabled: false,
