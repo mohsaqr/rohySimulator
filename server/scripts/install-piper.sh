@@ -97,6 +97,16 @@ install_voice en_US-amy-medium.onnx          en_US amy          medium
 install_voice en_US-ryan-medium.onnx         en_US ryan         medium
 install_voice en_GB-jenny_dioco-medium.onnx  en_GB jenny_dioco  medium
 
+# I18N voices (I18N_PLAN.md §5/Phase E) — one female + one male Italian,
+# Finnish, and Swedish, matching the app's shipped UI languages. The voice
+# resolver derives language from the it_IT/fi_FI/sv_SE filename prefix; a
+# case's per-character voice must still be pointed at one of these in the
+# case/persona editor (one-tier case_voice, no automatic substitution).
+install_voice it_IT-paola-medium.onnx        it_IT paola        medium
+install_voice it_IT-riccardo-x_low.onnx      it_IT riccardo     x_low
+install_voice fi_FI-harri-medium.onnx        fi_FI harri        medium
+install_voice sv_SE-nst-medium.onnx          sv_SE nst          medium
+
 echo ""
 echo "✓ Piper setup complete."
 echo "  Binary: $PIPER_BIN"
