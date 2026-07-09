@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Pill, Droplets, Wind, HeartPulse,
     Search, X, Save, AlertTriangle,
@@ -12,6 +13,7 @@ import { ApiError, apiFetch, apiPut } from '../../services/apiClient';
  * Allows setting expected, contraindicated, and available treatments with feedback
  */
 export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpdate }) {
+    const { t } = useTranslation('authoring_case');
     const [treatments, setTreatments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -22,11 +24,11 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
     const toast = useToast();
 
     const categories = [
-        { id: 'all', label: 'All' },
-        { id: 'medication', label: 'Medications', icon: Pill, color: 'pink' },
-        { id: 'iv_fluid', label: 'IV Fluids', icon: Droplets, color: 'blue' },
-        { id: 'oxygen', label: 'Oxygen', icon: Wind, color: 'cyan' },
-        { id: 'nursing', label: 'Nursing', icon: HeartPulse, color: 'green' }
+        { id: 'all', label: t('category_all') },
+        { id: 'medication', label: t('category_medications'), icon: Pill, color: 'pink' },
+        { id: 'iv_fluid', label: t('category_iv_fluids'), icon: Droplets, color: 'blue' },
+        { id: 'oxygen', label: t('category_oxygen'), icon: Wind, color: 'cyan' },
+        { id: 'nursing', label: t('category_nursing'), icon: HeartPulse, color: 'green' }
     ];
 
     // Fetch available treatment effects (master data)
@@ -106,22 +108,22 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
             if (onUpdate) {
                 onUpdate(configuredTreatments);
             }
-            toast.success('Treatment configurations updated');
+            toast.success(t('toast_configs_updated'));
             return;
         }
 
         setSaving(true);
         try {
             await apiPut(`/cases/${caseId}/treatments`, { treatments: configuredTreatments });
-            toast.success('Treatment configurations saved');
+            toast.success(t('toast_configs_saved'));
             if (onUpdate) {
                 onUpdate(configuredTreatments);
             }
         } catch (error) {
             if (error instanceof ApiError) {
-                toast.error(error.body?.error || 'Failed to save');
+                toast.error(error.body?.error || t('toast_save_failed'));
             } else {
-                toast.error('Failed to save: ' + error.message);
+                toast.error(t('toast_save_failed_error', { error: error.message }));
             }
         } finally {
             setSaving(false);
@@ -159,18 +161,14 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
             <div className="bg-amber-900/20 border border-amber-700/40 rounded-lg p-3 flex items-start gap-2 text-xs">
                 <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
                 <div className="text-amber-200">
-                    Treatments below pull their effect values (onset, duration, vital-sign
-                    deltas) live from the shared <span className="font-mono text-amber-100">treatment_effects</span> master catalog
-                    at runtime. Editing the master catalog will retroactively change
-                    behaviour for every case configured to use that treatment. Per-case
-                    overrides aren't yet exposed in this UI.
+                    {t('master_catalog_warning_before')}<span className="font-mono text-amber-100">treatment_effects</span>{t('master_catalog_warning_after')}
                 </div>
             </div>
 
             {/* Configured Treatments Summary */}
             {configuredList.length > 0 && (
                 <div className="bg-neutral-800/50 rounded-lg p-4 border border-neutral-700">
-                    <h4 className="text-sm font-bold text-white mb-3">Configured Treatments</h4>
+                    <h4 className="text-sm font-bold text-white mb-3">{t('configured_treatments_heading')}</h4>
                     <div className="flex flex-wrap gap-2">
                         {configuredList.map(ct => {
                             const color = ct.is_expected ? 'green' : ct.is_contraindicated ? 'red' : 'yellow';
@@ -220,7 +218,7 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search treatments..."
+                    placeholder={t('search_treatments_placeholder')}
                     className="w-full pl-10 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none"
                 />
             </div>
@@ -253,17 +251,17 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
                                     <div className="font-medium text-white flex items-center gap-2">
                                         {treatment.treatment_name}
                                         {config?.is_expected && (
-                                            <span className="text-xs px-1.5 py-0.5 bg-green-600/30 text-green-300 rounded">Expected</span>
+                                            <span className="text-xs px-1.5 py-0.5 bg-green-600/30 text-green-300 rounded">{t('badge_expected')}</span>
                                         )}
                                         {config?.is_contraindicated && (
-                                            <span className="text-xs px-1.5 py-0.5 bg-red-600/30 text-red-300 rounded">Contraindicated</span>
+                                            <span className="text-xs px-1.5 py-0.5 bg-red-600/30 text-red-300 rounded">{t('badge_contraindicated')}</span>
                                         )}
                                         {config && !config.is_available && (
-                                            <span className="text-xs px-1.5 py-0.5 bg-yellow-600/30 text-yellow-300 rounded">Hidden</span>
+                                            <span className="text-xs px-1.5 py-0.5 bg-yellow-600/30 text-yellow-300 rounded">{t('badge_hidden')}</span>
                                         )}
                                     </div>
                                     <div className="text-xs text-neutral-400 mt-0.5">
-                                        {treatment.treatment_type} | {treatment.route || 'N/A'}
+                                        {treatment.treatment_type} | {treatment.route || t('route_not_available')}
                                     </div>
                                 </div>
                                 {isExpanded ? (
@@ -278,11 +276,11 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
                                     {/* Effect Preview */}
                                     {(treatment.hr_effect || treatment.bp_sys_effect || treatment.spo2_effect) && (
                                         <div className="text-xs text-neutral-400 p-2 bg-neutral-900 rounded">
-                                            <span className="font-bold">Effects:</span>
+                                            <span className="font-bold">{t('effects_label')}</span>
                                             {treatment.hr_effect !== 0 && <span className="ml-2">HR {treatment.hr_effect > 0 ? '+' : ''}{treatment.hr_effect}</span>}
                                             {treatment.bp_sys_effect !== 0 && <span className="ml-2">BP {treatment.bp_sys_effect > 0 ? '+' : ''}{treatment.bp_sys_effect}</span>}
                                             {treatment.spo2_effect !== 0 && <span className="ml-2">SpO2 {treatment.spo2_effect > 0 ? '+' : ''}{treatment.spo2_effect}</span>}
-                                            <span className="ml-2 text-neutral-500">| Onset: {treatment.onset_minutes}min</span>
+                                            <span className="ml-2 text-neutral-500">{t('onset_label', { onset: treatment.onset_minutes })}</span>
                                         </div>
                                     )}
 
@@ -300,7 +298,7 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
                                             }`}
                                         >
                                             <Check className="w-3 h-3 inline mr-1" />
-                                            Expected
+                                            {t('badge_expected')}
                                         </button>
                                         <button
                                             onClick={() => updateTreatmentConfig(treatment, {
@@ -314,7 +312,7 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
                                             }`}
                                         >
                                             <AlertTriangle className="w-3 h-3 inline mr-1" />
-                                            Contraindicated
+                                            {t('badge_contraindicated')}
                                         </button>
                                         <button
                                             onClick={() => updateTreatmentConfig(treatment, {
@@ -327,7 +325,7 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
                                             }`}
                                         >
                                             <X className="w-3 h-3 inline mr-1" />
-                                            Hide
+                                            {t('button_hide')}
                                         </button>
                                     </div>
 
@@ -336,7 +334,7 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
                                         <div className="space-y-2">
                                             {config?.is_expected && (
                                                 <div>
-                                                    <label className="text-xs text-neutral-400">Points if ordered</label>
+                                                    <label className="text-xs text-neutral-400">{t('points_if_ordered_label')}</label>
                                                     <input
                                                         type="number"
                                                         value={config?.points_if_ordered || 0}
@@ -351,7 +349,7 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
                                             )}
                                             <div>
                                                 <label className="text-xs text-neutral-400">
-                                                    {config?.is_contraindicated ? 'Warning message' : 'Feedback if ordered'}
+                                                    {config?.is_contraindicated ? t('warning_message_label') : t('feedback_if_ordered_label')}
                                                 </label>
                                                 <input
                                                     type="text"
@@ -360,22 +358,22 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
                                                         feedback_if_ordered: e.target.value
                                                     })}
                                                     placeholder={config?.is_contraindicated
-                                                        ? 'e.g., "Contraindicated due to patient allergy"'
-                                                        : 'e.g., "Correct choice for this presentation"'
+                                                        ? t('feedback_contraindicated_placeholder')
+                                                        : t('feedback_correct_placeholder')
                                                     }
                                                     className="w-full px-2 py-1 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                                                 />
                                             </div>
                                             {config?.is_expected && (
                                                 <div>
-                                                    <label className="text-xs text-neutral-400">Feedback if missed</label>
+                                                    <label className="text-xs text-neutral-400">{t('feedback_if_missed_label')}</label>
                                                     <input
                                                         type="text"
                                                         value={config?.feedback_if_missed || ''}
                                                         onChange={(e) => updateTreatmentConfig(treatment, {
                                                             feedback_if_missed: e.target.value
                                                         })}
-                                                        placeholder="e.g., 'Consider ordering this for hypotension'"
+                                                        placeholder={t('feedback_missed_placeholder')}
                                                         className="w-full px-2 py-1 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                                                     />
                                                 </div>
@@ -397,9 +395,9 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
                     className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded font-bold flex items-center gap-2 disabled:opacity-50"
                 >
                     {saving ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                        <><Loader2 className="w-4 h-4 animate-spin" /> {t('saving')}</>
                     ) : (
-                        <><Save className="w-4 h-4" /> Save Treatment Config</>
+                        <><Save className="w-4 h-4" /> {t('save_treatment_config')}</>
                     )}
                 </button>
             </div>

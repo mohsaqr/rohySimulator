@@ -1,6 +1,8 @@
 {
   "cancel": "Annulla",
+  "case_analytics": "Analisi del caso",
   "dismiss": "Ignora",
+  "emotion_analytics": "Analisi delle emozioni",
   "end_debrief": "Termina e debriefing",
   "end_debrief_title": "Termina la sessione corrente e apri il debriefing",
   "end_session_confirm_intro": "Questa azione chiude il caso per il debriefing. Una volta terminata:",
@@ -9,6 +11,7 @@
   "end_session_confirm_title": "Terminare questa sessione?",
   "end_session_confirm_transcript": "Potrai rivedere la trascrizione nella stanza di debriefing, ma non potrai riaprire il caso.",
   "help_support": "Aiuto e supporto",
+  "language_menu_aria": "Cambia lingua",
   "loading": "Caricamento...",
   "logout": "Esci",
   "multi_tab_heads_up": "Attenzione:",

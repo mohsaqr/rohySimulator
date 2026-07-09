@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, FileText, Stethoscope, Pill, Syringe, ClipboardList, Brain, Eye, EyeOff, ChevronDown, ChevronRight } from 'lucide-react';
 import MedicationSearch from './MedicationSearch';
 import { HISTORY_GROUPS as CANONICAL_HISTORY_GROUPS } from '../../data/historyGroups';
 
 const RECORD_TABS = [
-    { id: 'history', label: 'History', icon: FileText },
-    { id: 'physical', label: 'Past Physical Exam', icon: Stethoscope },
-    { id: 'medications', label: 'Medications', icon: Pill },
-    { id: 'procedures', label: 'Procedures', icon: Syringe },
-    { id: 'notes', label: 'Notes', icon: ClipboardList }
+    { id: 'history', labelKey: 'tab_history', icon: FileText },
+    { id: 'physical', labelKey: 'tab_physical', icon: Stethoscope },
+    { id: 'medications', labelKey: 'tab_medications', icon: Pill },
+    { id: 'procedures', labelKey: 'tab_procedures', icon: Syringe },
+    { id: 'notes', labelKey: 'tab_notes', icon: ClipboardList }
 ];
 
 
@@ -29,13 +30,13 @@ const DEFAULT_AI_ACCESS = {
 // student viewer and AI prompt builder use). Default all groups expanded:
 // it's an editor, hiding fields slows authoring.
 const EDITOR_FIELD_META = {
-    chiefComplaint: { type: 'input',    label: 'Chief Complaint',                 placeholder: 'e.g., Chest pain for 2 hours' },
-    hpi:            { type: 'textarea', label: 'History of Present Illness (HPI)', rows: 4, placeholder: 'Detailed description of the presenting complaint...' },
-    pastMedical:    { type: 'textarea', label: 'Past Medical History',            rows: 3, placeholder: 'HTN, DM, CAD...' },
-    pastSurgical:   { type: 'textarea', label: 'Past Surgical History',           rows: 3, placeholder: 'Appendectomy 2010...' },
-    allergies:      { type: 'input',    label: 'Allergies',                       placeholder: 'Penicillin (rash), NKDA...' },
-    social:         { type: 'textarea', label: 'Social History',                  rows: 3, placeholder: 'Smoking, alcohol, occupation...' },
-    family:         { type: 'textarea', label: 'Family History',                  rows: 3, placeholder: 'Father MI at 55, Mother DM...' },
+    chiefComplaint: { type: 'input',    labelKey: 'field_chief_complaint',  placeholderKey: 'field_chief_complaint_ph' },
+    hpi:            { type: 'textarea', labelKey: 'field_hpi',              rows: 4, placeholderKey: 'field_hpi_ph' },
+    pastMedical:    { type: 'textarea', labelKey: 'field_past_medical',     rows: 3, placeholderKey: 'field_past_medical_ph' },
+    pastSurgical:   { type: 'textarea', labelKey: 'field_past_surgical',    rows: 3, placeholderKey: 'field_past_surgical_ph' },
+    allergies:      { type: 'input',    labelKey: 'field_allergies',        placeholderKey: 'field_allergies_ph' },
+    social:         { type: 'textarea', labelKey: 'field_social',           rows: 3, placeholderKey: 'field_social_ph' },
+    family:         { type: 'textarea', labelKey: 'field_family',           rows: 3, placeholderKey: 'field_family_ph' },
 };
 
 const HISTORY_GROUPS = CANONICAL_HISTORY_GROUPS.map(group => ({
@@ -44,6 +45,7 @@ const HISTORY_GROUPS = CANONICAL_HISTORY_GROUPS.map(group => ({
 }));
 
 export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateConfig }) {
+    const { t } = useTranslation('authoring_records');
     const [activeTab, setActiveTab] = useState('history');
     const [openHistoryGroups, setOpenHistoryGroups] = useState({
         presentHistory: true,
@@ -98,7 +100,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
     const removeMedication = (idx) => {
         const m = medications[idx];
         const filled = m && (m.name || m.dose || m.route || m.frequency || m.indication);
-        if (filled && !window.confirm(`Delete medication "${m.name || '(unnamed)'}"? This cannot be undone.`)) return;
+        if (filled && !window.confirm(t('confirm_delete_medication', { name: m.name || t('unnamed') }))) return;
         updateRecords('medications', medications.filter((_, i) => i !== idx));
     };
     // Handle medication selection from search
@@ -133,7 +135,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
     const removeProcedure = (idx) => {
         const p = procedures[idx];
         const filled = p && (p.name || p.date || p.indication || p.findings || p.complications);
-        if (filled && !window.confirm(`Delete procedure "${p.name || '(unnamed)'}"? This cannot be undone.`)) return;
+        if (filled && !window.confirm(t('confirm_delete_procedure', { name: p.name || t('unnamed') }))) return;
         updateRecords('procedures', procedures.filter((_, i) => i !== idx));
     };
 
@@ -157,31 +159,31 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
     const removeNote = (idx) => {
         const n = notes[idx];
         const filled = n && (n.title || n.author || n.content);
-        if (filled && !window.confirm(`Delete clinical note "${n.title || '(untitled)'}"? This cannot be undone.`)) return;
+        if (filled && !window.confirm(t('confirm_delete_note', { title: n.title || t('untitled') }))) return;
         updateRecords('notes', notes.filter((_, i) => i !== idx));
     };
 
     return (
         <div className="space-y-6">
-            <h4 className="text-lg font-bold text-purple-400">6. Clinical Records</h4>
+            <h4 className="text-lg font-bold text-purple-400">{t('heading')}</h4>
 
             {/* AI Access Configuration */}
             <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-700/50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
                     <Brain className="w-5 h-5 text-purple-400" />
-                    <h5 className="text-sm font-bold text-white">AI Access Settings</h5>
+                    <h5 className="text-sm font-bold text-white">{t('ai_access_title')}</h5>
                 </div>
                 <p className="text-xs text-neutral-400 mb-3">
-                    Control what information the AI patient can discuss. Unchecked items are only viewable in the Records panel.
+                    {t('ai_access_help')}
                 </p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
-                        { key: 'history', label: 'History & HPI' },
-                        { key: 'physicalExam', label: 'Physical Exam' },
-                        { key: 'medications', label: 'Medications' },
-                        { key: 'radiology', label: 'Radiology' },
-                        { key: 'procedures', label: 'Procedures' },
-                        { key: 'notes', label: 'Clinical Notes' }
+                        { key: 'history', label: t('ai_access_history') },
+                        { key: 'physicalExam', label: t('ai_access_physical_exam') },
+                        { key: 'medications', label: t('ai_access_medications') },
+                        { key: 'radiology', label: t('ai_access_radiology') },
+                        { key: 'procedures', label: t('ai_access_procedures') },
+                        { key: 'notes', label: t('ai_access_notes') }
                     ].map(item => (
                         <label key={item.key} className="flex items-center gap-2 cursor-pointer bg-neutral-800/50 rounded px-3 py-2 hover:bg-neutral-800 transition-colors">
                             <input
@@ -192,9 +194,9 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                             />
                             <span className="text-xs text-neutral-300">{item.label}</span>
                             {aiAccess[item.key] ? (
-                                <Eye className="w-3 h-3 text-green-400 ml-auto" title="AI can see" />
+                                <Eye className="w-3 h-3 text-green-400 ml-auto" title={t('ai_can_see')} />
                             ) : (
-                                <EyeOff className="w-3 h-3 text-neutral-500 ml-auto" title="Hidden from AI" />
+                                <EyeOff className="w-3 h-3 text-neutral-500 ml-auto" title={t('hidden_from_ai')} />
                             )}
                         </label>
                     ))}
@@ -216,7 +218,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                             }`}
                         >
                             <Icon className="w-4 h-4" />
-                            {tab.label}
+                            {t(tab.labelKey)}
                         </button>
                     );
                 })}
@@ -250,7 +252,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                             </span>
                                         </div>
                                         <span className="text-[10px] text-neutral-500 font-mono">
-                                            {filled} of {group.fields.length}
+                                            {t('group_filled_count', { filled, total: group.fields.length })}
                                         </span>
                                     </button>
                                     {isOpen && (
@@ -258,9 +260,9 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                             {group.fields.map(field => (
                                                 <div key={field.key}>
                                                     <label className="label-xs flex items-center gap-1.5">
-                                                        {field.label}
+                                                        {t(field.labelKey)}
                                                         {(history[field.key] || '').trim() && (
-                                                            <span className="text-green-400 text-[10px]" title="Has content">●</span>
+                                                            <span className="text-green-400 text-[10px]" title={t('has_content')}>●</span>
                                                         )}
                                                     </label>
                                                     {field.type === 'textarea' ? (
@@ -269,7 +271,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                                             value={history[field.key] || ''}
                                                             onChange={e => updateHistory(field.key, e.target.value)}
                                                             className="input-dark text-sm"
-                                                            placeholder={field.placeholder}
+                                                            placeholder={t(field.placeholderKey)}
                                                         />
                                                     ) : (
                                                         <input
@@ -277,7 +279,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                                             value={history[field.key] || ''}
                                                             onChange={e => updateHistory(field.key, e.target.value)}
                                                             className="input-dark"
-                                                            placeholder={field.placeholder}
+                                                            placeholder={t(field.placeholderKey)}
                                                         />
                                                     )}
                                                 </div>
@@ -294,13 +296,13 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                 {activeTab === 'physical' && (
                     <div className="space-y-4">
                         <div>
-                            <label className="label-xs">General Appearance</label>
+                            <label className="label-xs">{t('pe_general')}</label>
                             <input
                                 type="text"
                                 value={physicalExam.general || ''}
                                 onChange={e => updatePhysicalExam('general', e.target.value)}
                                 className="input-dark"
-                                placeholder="Alert, oriented, in mild distress..."
+                                placeholder={t('pe_general_ph')}
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -311,57 +313,57 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                     value={physicalExam.heent || ''}
                                     onChange={e => updatePhysicalExam('heent', e.target.value)}
                                     className="input-dark text-sm"
-                                    placeholder="PERRL, EOMI, no JVD..."
+                                    placeholder={t('pe_heent_ph')}
                                 />
                             </div>
                             <div>
-                                <label className="label-xs">Cardiovascular</label>
+                                <label className="label-xs">{t('pe_cardiovascular')}</label>
                                 <textarea
                                     rows={2}
                                     value={physicalExam.cardiovascular || ''}
                                     onChange={e => updatePhysicalExam('cardiovascular', e.target.value)}
                                     className="input-dark text-sm"
-                                    placeholder="RRR, no murmurs..."
+                                    placeholder={t('pe_cardiovascular_ph')}
                                 />
                             </div>
                             <div>
-                                <label className="label-xs">Respiratory</label>
+                                <label className="label-xs">{t('pe_respiratory')}</label>
                                 <textarea
                                     rows={2}
                                     value={physicalExam.respiratory || ''}
                                     onChange={e => updatePhysicalExam('respiratory', e.target.value)}
                                     className="input-dark text-sm"
-                                    placeholder="Clear to auscultation bilaterally..."
+                                    placeholder={t('pe_respiratory_ph')}
                                 />
                             </div>
                             <div>
-                                <label className="label-xs">Abdomen</label>
+                                <label className="label-xs">{t('pe_abdomen')}</label>
                                 <textarea
                                     rows={2}
                                     value={physicalExam.abdomen || ''}
                                     onChange={e => updatePhysicalExam('abdomen', e.target.value)}
                                     className="input-dark text-sm"
-                                    placeholder="Soft, non-tender, no masses..."
+                                    placeholder={t('pe_abdomen_ph')}
                                 />
                             </div>
                             <div>
-                                <label className="label-xs">Neurological</label>
+                                <label className="label-xs">{t('pe_neurological')}</label>
                                 <textarea
                                     rows={2}
                                     value={physicalExam.neurological || ''}
                                     onChange={e => updatePhysicalExam('neurological', e.target.value)}
                                     className="input-dark text-sm"
-                                    placeholder="CN II-XII intact, 5/5 strength..."
+                                    placeholder={t('pe_neurological_ph')}
                                 />
                             </div>
                             <div>
-                                <label className="label-xs">Extremities/Skin</label>
+                                <label className="label-xs">{t('pe_extremities')}</label>
                                 <textarea
                                     rows={2}
                                     value={physicalExam.extremities || ''}
                                     onChange={e => updatePhysicalExam('extremities', e.target.value)}
                                     className="input-dark text-sm"
-                                    placeholder="No edema, pulses 2+ bilaterally..."
+                                    placeholder={t('pe_extremities_ph')}
                                 />
                             </div>
                         </div>
@@ -372,14 +374,14 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                 {activeTab === 'medications' && (
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                            <p className="text-xs text-neutral-400">Current medications list</p>
+                            <p className="text-xs text-neutral-400">{t('medications_subtitle')}</p>
                             <button onClick={addMedication} className="btn-secondary text-xs">
-                                <Plus className="w-3 h-3 mr-1" /> Add Medication
+                                <Plus className="w-3 h-3 mr-1" /> {t('add_medication')}
                             </button>
                         </div>
                         {medications.length === 0 ? (
                             <div className="text-center py-8 text-neutral-500 border border-dashed border-neutral-700 rounded-lg">
-                                No medications added
+                                {t('no_medications')}
                             </div>
                         ) : (
                             <div className="space-y-2">
@@ -390,7 +392,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                                 value={med.name}
                                                 onChange={(name) => updateMedication(idx, 'name', name)}
                                                 onSelect={(medication) => handleMedicationSelect(idx, medication)}
-                                                placeholder="Search drug name..."
+                                                placeholder={t('search_drug_placeholder')}
                                             />
                                         </div>
                                         <input
@@ -398,7 +400,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                             value={med.dose}
                                             onChange={e => updateMedication(idx, 'dose', e.target.value)}
                                             className="input-dark text-xs col-span-2"
-                                            placeholder="Dose"
+                                            placeholder={t('dose_placeholder')}
                                         />
                                         <select
                                             value={med.route}
@@ -419,7 +421,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                             value={med.frequency}
                                             onChange={e => updateMedication(idx, 'frequency', e.target.value)}
                                             className="input-dark text-xs col-span-3"
-                                            placeholder="Frequency (e.g., BID)"
+                                            placeholder={t('frequency_placeholder')}
                                         />
                                         <button onClick={() => removeMedication(idx)} className="text-neutral-500 hover:text-red-400 col-span-1">
                                             <Trash2 className="w-4 h-4" />
@@ -435,14 +437,14 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                 {activeTab === 'procedures' && (
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                            <p className="text-xs text-neutral-400">Surgeries and procedures</p>
+                            <p className="text-xs text-neutral-400">{t('procedures_subtitle')}</p>
                             <button onClick={addProcedure} className="btn-secondary text-xs">
-                                <Plus className="w-3 h-3 mr-1" /> Add Procedure
+                                <Plus className="w-3 h-3 mr-1" /> {t('add_procedure')}
                             </button>
                         </div>
                         {procedures.length === 0 ? (
                             <div className="text-center py-8 text-neutral-500 border border-dashed border-neutral-700 rounded-lg">
-                                No procedures added
+                                {t('no_procedures')}
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -455,7 +457,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                                     value={proc.name}
                                                     onChange={e => updateProcedure(idx, 'name', e.target.value)}
                                                     className="input-dark text-xs flex-1"
-                                                    placeholder="Procedure name"
+                                                    placeholder={t('procedure_name_placeholder')}
                                                 />
                                                 <input
                                                     type="date"
@@ -474,21 +476,21 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                                 value={proc.indication}
                                                 onChange={e => updateProcedure(idx, 'indication', e.target.value)}
                                                 className="input-dark text-xs"
-                                                placeholder="Indication"
+                                                placeholder={t('indication_placeholder')}
                                             />
                                             <input
                                                 type="text"
                                                 value={proc.findings}
                                                 onChange={e => updateProcedure(idx, 'findings', e.target.value)}
                                                 className="input-dark text-xs"
-                                                placeholder="Findings"
+                                                placeholder={t('findings_placeholder')}
                                             />
                                             <input
                                                 type="text"
                                                 value={proc.complications}
                                                 onChange={e => updateProcedure(idx, 'complications', e.target.value)}
                                                 className="input-dark text-xs"
-                                                placeholder="Complications (if any)"
+                                                placeholder={t('complications_placeholder')}
                                             />
                                         </div>
                                     </div>
@@ -502,14 +504,14 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                 {activeTab === 'notes' && (
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                            <p className="text-xs text-neutral-400">Clinical notes and documentation</p>
+                            <p className="text-xs text-neutral-400">{t('notes_subtitle')}</p>
                             <button onClick={addNote} className="btn-secondary text-xs">
-                                <Plus className="w-3 h-3 mr-1" /> Add Note
+                                <Plus className="w-3 h-3 mr-1" /> {t('add_note')}
                             </button>
                         </div>
                         {notes.length === 0 ? (
                             <div className="text-center py-8 text-neutral-500 border border-dashed border-neutral-700 rounded-lg">
-                                No notes added
+                                {t('no_notes')}
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -535,7 +537,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                                     value={note.title}
                                                     onChange={e => updateNote(idx, 'title', e.target.value)}
                                                     className="input-dark text-xs flex-1"
-                                                    placeholder="Note title"
+                                                    placeholder={t('note_title_placeholder')}
                                                 />
                                                 <input
                                                     type="date"
@@ -548,7 +550,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                                     value={note.author}
                                                     onChange={e => updateNote(idx, 'author', e.target.value)}
                                                     className="input-dark text-xs w-32"
-                                                    placeholder="Author"
+                                                    placeholder={t('author_placeholder')}
                                                 />
                                             </div>
                                             <button onClick={() => removeNote(idx)} className="text-neutral-500 hover:text-red-400 ml-2">
@@ -560,7 +562,7 @@ export default function ClinicalRecordsEditor({ caseData, _setCaseData, updateCo
                                             value={note.content}
                                             onChange={e => updateNote(idx, 'content', e.target.value)}
                                             className="input-dark text-xs w-full"
-                                            placeholder="Note content..."
+                                            placeholder={t('note_content_placeholder')}
                                         />
                                     </div>
                                 ))}

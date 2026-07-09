@@ -1,6 +1,8 @@
 {
   "cancel": "Avbryt",
+  "case_analytics": "Fallanalys",
   "dismiss": "Avfärda",
+  "emotion_analytics": "Emotionsanalys",
   "end_debrief": "Avsluta & debriefa",
   "end_debrief_title": "Avsluta den pågående sessionen och öppna debriefingen",
   "end_session_confirm_intro": "Detta avslutar fallet för debriefing. När sessionen avslutats:",
@@ -9,6 +11,7 @@
   "end_session_confirm_title": "Avsluta den här sessionen?",
   "end_session_confirm_transcript": "Du kan granska transkriptet i debriefingrummet men kan inte öppna fallet igen.",
   "help_support": "Hjälp & support",
+  "language_menu_aria": "Byt språk",
   "loading": "Laddar...",
   "logout": "Logga ut",
   "multi_tab_heads_up": "Obs:",

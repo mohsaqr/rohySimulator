@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Upload, Loader2, Scan, AlertCircle, RefreshCw, PenLine } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 import { useToast } from '../../contexts/ToastContext';
@@ -12,6 +13,7 @@ const MODALITIES = ['X-Ray', 'CT', 'MRI', 'Ultrasound', 'Nuclear Medicine', 'Flu
  * Allows selecting from master database and configuring results
  */
 export default function RadiologyEditor({ caseData, setCaseData }) {
+    const { t } = useTranslation('authoring_radiology');
     const toast = useToast();
     const [uploading, setUploading] = useState(false);
     const [uploadingIdx, setUploadingIdx] = useState(null);
@@ -56,7 +58,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
             setModalities(fetchedModalities);
         } catch (err) {
             console.error('Failed to fetch radiology studies:', err);
-            setError(err.message || 'Failed to load studies');
+            setError(err.message || t('error_load_studies'));
         } finally {
             setLoading(false);
         }
@@ -151,8 +153,8 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
     const removeStudy = (idx) => {
         if (idx < 0 || idx >= radiology.length) return;
         const target = radiology[idx];
-        const label = target?.studyName || target?.type || 'this radiology study';
-        if (!window.confirm(`Delete "${label}"? Any configured findings, images, and videos for this study will be removed.`)) return;
+        const label = target?.studyName || target?.type || t('delete_fallback_label');
+        if (!window.confirm(t('confirm_delete', { label }))) return;
         updateRadiology(radiology.filter((_, i) => i !== idx));
     };
 
@@ -160,7 +162,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
     const handleFileUpload = async (idx, file, fileType) => {
         if (!file || idx < 0 || idx >= radiology.length) return;
         if (fileType === 'video' && file.size > 100 * 1024 * 1024) {
-            toast.error('Video file must be under 100MB');
+            toast.error(t('toast_video_over_size'));
             return;
         }
         setUploading(true);
@@ -176,17 +178,17 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
             if (data.imageUrl) {
                 if (fileType === 'video') {
                     updateStudy(idx, 'videoUrl', data.imageUrl);
-                    toast.success('Video uploaded successfully');
+                    toast.success(t('toast_video_uploaded'));
                 } else {
                     updateStudy(idx, 'imageUrl', data.imageUrl);
-                    toast.success('Image uploaded successfully');
+                    toast.success(t('toast_image_uploaded'));
                 }
             } else {
-                throw new Error('No URL returned from server');
+                throw new Error(t('toast_no_url'));
             }
         } catch (err) {
             console.error('Upload failed:', err);
-            toast.error(err.message || 'Failed to upload file');
+            toast.error(err.message || t('toast_upload_failed'));
         } finally {
             setUploading(false);
             setUploadingIdx(null);
@@ -224,9 +226,9 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
     return (
         <div className="space-y-6">
             <div>
-                <h4 className="text-lg font-bold text-purple-400">6. Radiology Studies</h4>
+                <h4 className="text-lg font-bold text-purple-400">{t('heading')}</h4>
                 <p className="text-xs text-neutral-500 mt-1">
-                    Configure radiology studies and their results. When students order these studies, they'll see the findings you configure.
+                    {t('help')}
                 </p>
             </div>
 
@@ -234,13 +236,13 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                 {/* Left: Available Studies */}
                 <div className="space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                        <h5 className="text-sm font-bold text-white">Available Studies</h5>
+                        <h5 className="text-sm font-bold text-white">{t('available_studies')}</h5>
                         <select
                             value={selectedModality}
                             onChange={(e) => setSelectedModality(e.target.value)}
                             className="input-dark text-xs max-w-[180px]"
                         >
-                            <option value="all">All ({studies.length})</option>
+                            <option value="all">{t('filter_all', { count: studies.length })}</option>
                             {modalities.map(mod => (
                                 <option key={mod} value={mod}>
                                     {mod} ({groupedStudies[mod]?.length || 0})
@@ -253,7 +255,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                         {loading ? (
                             <div className="flex items-center justify-center py-16 text-neutral-400">
                                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                                <span className="text-sm">Loading studies...</span>
+                                <span className="text-sm">{t('loading_studies')}</span>
                             </div>
                         ) : error ? (
                             <div className="flex flex-col items-center justify-center py-16 text-neutral-400">
@@ -264,13 +266,13 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                     className="flex items-center gap-2 px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-xs"
                                 >
                                     <RefreshCw className="w-3 h-3" />
-                                    Retry
+                                    {t('retry')}
                                 </button>
                             </div>
                         ) : filteredStudies.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
                                 <Scan className="w-8 h-8 mb-2 opacity-30" />
-                                <p className="text-sm">No studies found</p>
+                                <p className="text-sm">{t('no_studies_found')}</p>
                             </div>
                         ) : (
                             <div className="max-h-[450px] overflow-y-auto divide-y divide-neutral-800">
@@ -300,12 +302,12 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                                         </span>
                                                         <span className="text-xs text-neutral-500">{study.body_region}</span>
                                                         <span className="text-xs text-neutral-600">
-                                                            {study.turnaround_minutes}min
+                                                            {t('minutes_short', { count: study.turnaround_minutes })}
                                                         </span>
                                                     </div>
                                                 </div>
                                                 {isAdded ? (
-                                                    <span className="text-xs text-green-500 flex-shrink-0">Added</span>
+                                                    <span className="text-xs text-green-500 flex-shrink-0">{t('added')}</span>
                                                 ) : (
                                                     <Plus className="w-4 h-4 text-purple-400 flex-shrink-0" />
                                                 )}
@@ -322,7 +324,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
                         <h5 className="text-sm font-bold text-white">
-                            Configured Results
+                            {t('configured_results')}
                             {radiology.length > 0 && (
                                 <span className="ml-2 text-xs font-normal text-neutral-400">
                                     ({radiology.length})
@@ -338,27 +340,27 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                             }`}
                         >
                             <PenLine className="w-3 h-3" />
-                            Custom
+                            {t('custom')}
                         </button>
                     </div>
 
                     {/* Custom Study Form */}
                     {showCustomForm && (
                         <div className="p-4 bg-purple-900/20 border border-purple-700/50 rounded-lg space-y-3">
-                            <div className="text-xs font-bold text-purple-300">Add Custom Study</div>
+                            <div className="text-xs font-bold text-purple-300">{t('add_custom_study')}</div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="col-span-2">
-                                    <label className="text-xs text-neutral-400 mb-1 block">Study Name *</label>
+                                    <label className="text-xs text-neutral-400 mb-1 block">{t('study_name')}</label>
                                     <input
                                         type="text"
                                         value={customStudy.name}
                                         onChange={e => setCustomStudy(prev => ({ ...prev, name: e.target.value }))}
                                         className="input-dark text-xs w-full"
-                                        placeholder="e.g., Chest X-Ray PA/Lateral"
+                                        placeholder={t('study_name_placeholder')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs text-neutral-400 mb-1 block">Modality</label>
+                                    <label className="text-xs text-neutral-400 mb-1 block">{t('modality')}</label>
                                     <select
                                         value={customStudy.modality}
                                         onChange={e => setCustomStudy(prev => ({ ...prev, modality: e.target.value }))}
@@ -368,17 +370,17 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs text-neutral-400 mb-1 block">Body Region</label>
+                                    <label className="text-xs text-neutral-400 mb-1 block">{t('body_region')}</label>
                                     <input
                                         type="text"
                                         value={customStudy.bodyRegion}
                                         onChange={e => setCustomStudy(prev => ({ ...prev, bodyRegion: e.target.value }))}
                                         className="input-dark text-xs w-full"
-                                        placeholder="e.g., Chest"
+                                        placeholder={t('body_region_placeholder')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs text-neutral-400 mb-1 block">Wait Time (min)</label>
+                                    <label className="text-xs text-neutral-400 mb-1 block">{t('wait_time_min_label')}</label>
                                     <input
                                         type="number"
                                         min="0"
@@ -393,7 +395,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                         disabled={!customStudy.name.trim()}
                                         className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-neutral-700 disabled:text-neutral-500 text-white text-xs font-bold rounded w-full transition-colors"
                                     >
-                                        Add Study
+                                        {t('add_study')}
                                     </button>
                                 </div>
                             </div>
@@ -404,8 +406,8 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                         {radiology.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
                                 <Scan className="w-8 h-8 mb-2 opacity-30" />
-                                <p className="text-sm">No studies configured</p>
-                                <p className="text-xs mt-1">Click studies on the left to add</p>
+                                <p className="text-sm">{t('no_studies_configured')}</p>
+                                <p className="text-xs mt-1">{t('no_studies_configured_hint')}</p>
                             </div>
                         ) : (
                             <div className="max-h-[450px] overflow-y-auto divide-y divide-neutral-800">
@@ -428,11 +430,11 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                             <div className="flex items-start justify-between mb-3">
                                                 <div className="min-w-0 flex-1">
                                                     <div className="text-sm font-bold text-white truncate">
-                                                        {study.studyName || 'Unknown Study'}
+                                                        {study.studyName || t('unknown_study')}
                                                     </div>
                                                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                                                         <span className={`text-xs px-1.5 py-0.5 rounded border ${getModalityColor(study.modality)}`}>
-                                                            {study.modality || 'Unknown'}
+                                                            {study.modality || t('unknown_modality')}
                                                         </span>
                                                         {study.bodyRegion && (
                                                             <span className="text-xs text-neutral-500">{study.bodyRegion}</span>
@@ -442,7 +444,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                                 <button
                                                     onClick={() => removeStudy(idx)}
                                                     className="text-neutral-500 hover:text-red-400 p-1 flex-shrink-0"
-                                                    title="Remove study"
+                                                    title={t('remove_study')}
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
@@ -450,7 +452,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
 
                                             {/* Wait Time */}
                                             <div className="mb-3">
-                                                <label className="text-xs text-neutral-400 mb-1.5 block">Wait Time</label>
+                                                <label className="text-xs text-neutral-400 mb-1.5 block">{t('wait_time')}</label>
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <input
                                                         type="number"
@@ -463,7 +465,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                                     <span className="text-xs text-neutral-500">min</span>
                                                     <div className="flex gap-1">
                                                         {[
-                                                            { value: 0, label: 'Instant', color: 'green' },
+                                                            { value: 0, label: t('preset_instant'), color: 'green' },
                                                             { value: 1, label: '1m' },
                                                             { value: 3, label: '3m' },
                                                             { value: 5, label: '5m' }
@@ -490,7 +492,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                             <div className="mb-3 space-y-2">
                                                 {/* Image Upload */}
                                                 <div>
-                                                    <label className="text-xs text-neutral-400 mb-1.5 block">Result Image</label>
+                                                    <label className="text-xs text-neutral-400 mb-1.5 block">{t('result_image')}</label>
                                                     {study.imageUrl ? (
                                                         <div className="relative group inline-block">
                                                             <img
@@ -501,7 +503,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                                             <button
                                                                 onClick={() => updateStudy(idx, 'imageUrl', '')}
                                                                 className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-500 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                title="Remove image"
+                                                                title={t('remove_image')}
                                                             >
                                                                 <Trash2 className="w-3 h-3 text-white" />
                                                             </button>
@@ -511,12 +513,12 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                                             {uploading && uploadingIdx === idx && uploadingType === 'image' ? (
                                                                 <>
                                                                     <Loader2 className="w-4 h-4 text-neutral-400 animate-spin" />
-                                                                    <span className="text-neutral-400">Uploading...</span>
+                                                                    <span className="text-neutral-400">{t('uploading')}</span>
                                                                 </>
                                                             ) : (
                                                                 <>
                                                                     <Upload className="w-4 h-4 text-neutral-400" />
-                                                                    <span className="text-neutral-400">Upload Image</span>
+                                                                    <span className="text-neutral-400">{t('upload_image')}</span>
                                                                 </>
                                                             )}
                                                             <input
@@ -533,7 +535,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                                 {/* Video Upload */}
                                                 <div>
                                                     <label className="text-xs text-neutral-400 mb-1.5 block">
-                                                        Result Video <span className="text-neutral-600">(max 100MB)</span>
+                                                        {t('result_video')} <span className="text-neutral-600">{t('result_video_max')}</span>
                                                     </label>
                                                     {study.videoUrl ? (
                                                         <div className="relative group inline-block">
@@ -546,7 +548,7 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                                             <button
                                                                 onClick={() => updateStudy(idx, 'videoUrl', '')}
                                                                 className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-500 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                title="Remove video"
+                                                                title={t('remove_video')}
                                                             >
                                                                 <Trash2 className="w-3 h-3 text-white" />
                                                             </button>
@@ -556,12 +558,12 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                                             {uploading && uploadingIdx === idx && uploadingType === 'video' ? (
                                                                 <>
                                                                     <Loader2 className="w-4 h-4 text-neutral-400 animate-spin" />
-                                                                    <span className="text-neutral-400">Uploading...</span>
+                                                                    <span className="text-neutral-400">{t('uploading')}</span>
                                                                 </>
                                                             ) : (
                                                                 <>
                                                                     <Upload className="w-4 h-4 text-neutral-400" />
-                                                                    <span className="text-neutral-400">Upload Video</span>
+                                                                    <span className="text-neutral-400">{t('upload_video')}</span>
                                                                 </>
                                                             )}
                                                             <input
@@ -580,15 +582,15 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                             <div className="space-y-3">
                                                 <div>
                                                     <div className="flex items-center justify-between mb-1.5">
-                                                        <label className="text-xs text-neutral-400">Findings</label>
+                                                        <label className="text-xs text-neutral-400">{t('findings')}</label>
                                                         {defaultFindings && !study.findings && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => updateStudy(idx, 'findings', defaultFindings)}
                                                                 className="text-[10px] text-cyan-400 hover:text-cyan-300 underline"
-                                                                title="Copy the master default into this field so you can edit it"
+                                                                title={t('use_default_title')}
                                                             >
-                                                                Use default
+                                                                {t('use_default')}
                                                             </button>
                                                         )}
                                                     </div>
@@ -597,25 +599,25 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                                         value={study.findings || ''}
                                                         onChange={e => updateStudy(idx, 'findings', e.target.value)}
                                                         className="input-dark text-xs w-full resize-none"
-                                                        placeholder={defaultFindings || 'Describe what the study shows...'}
+                                                        placeholder={defaultFindings || t('findings_placeholder')}
                                                     />
                                                     {defaultFindings && !study.findings && (
                                                         <p className="text-[10px] text-neutral-500 mt-1">
-                                                            Empty → report shows the master default above.
+                                                            {t('findings_default_hint')}
                                                         </p>
                                                     )}
                                                 </div>
                                                 <div>
                                                     <div className="flex items-center justify-between mb-1.5">
-                                                        <label className="text-xs text-neutral-400">Interpretation</label>
+                                                        <label className="text-xs text-neutral-400">{t('interpretation')}</label>
                                                         {defaultInterpretation && !study.interpretation && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => updateStudy(idx, 'interpretation', defaultInterpretation)}
                                                                 className="text-[10px] text-cyan-400 hover:text-cyan-300 underline"
-                                                                title="Copy the master default into this field so you can edit it"
+                                                                title={t('use_default_title')}
                                                             >
-                                                                Use default
+                                                                {t('use_default')}
                                                             </button>
                                                         )}
                                                     </div>
@@ -624,11 +626,11 @@ export default function RadiologyEditor({ caseData, setCaseData }) {
                                                         value={study.interpretation || ''}
                                                         onChange={e => updateStudy(idx, 'interpretation', e.target.value)}
                                                         className="input-dark text-xs w-full resize-none"
-                                                        placeholder={defaultInterpretation || 'Clinical interpretation...'}
+                                                        placeholder={defaultInterpretation || t('interpretation_placeholder')}
                                                     />
                                                     {defaultInterpretation && !study.interpretation && (
                                                         <p className="text-[10px] text-neutral-500 mt-1">
-                                                            Empty → report shows the master default above (printed under "Impression").
+                                                            {t('interpretation_default_hint')}
                                                         </p>
                                                     )}
                                                 </div>

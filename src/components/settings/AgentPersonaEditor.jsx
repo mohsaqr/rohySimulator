@@ -16,6 +16,7 @@
 // single source of truth.
 
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
    ArrowLeft, Save, RotateCcw, Trash2, Copy, X, Plus, GripVertical,
    User, Image as ImageIcon, Mic, Sparkles, Settings as SettingsIcon,
@@ -40,71 +41,49 @@ const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 // Domain enums kept in sync with AgentTemplateManager's copies. Duplicated
 // rather than imported to keep the two surfaces independent — neither
 // component is a "library" for the other.
-const AGENT_TYPES = [
-   { value: 'patient', label: 'Patient', description: 'The simulated patient persona' },
-   { value: 'discussant', label: 'Discussant', description: 'Case debrief tutor (post-case discussion)' },
-   { value: 'nurse', label: 'Nurse', description: 'Bedside nursing staff' },
-   { value: 'consultant', label: 'Consultant', description: 'Specialist physicians' },
-   { value: 'relative', label: 'Family member', description: 'Patient family members' },
-   { value: 'pharmacist', label: 'Pharmacist', description: 'Pharmacy consultation' },
-   { value: 'technician', label: 'Technician', description: 'Lab/Radiology technicians' },
-   { value: 'other', label: 'Other', description: 'Custom agent type' }
-];
+// Enum value lists. User-visible labels/descriptions are resolved through
+// i18n at render time (keys `type_<value>_label` etc.) rather than stored
+// here, so the same value token drives both the server contract and the
+// translated display.
+const AGENT_TYPES = ['patient', 'discussant', 'nurse', 'consultant', 'relative', 'pharmacist', 'technician', 'other'];
 
-const CONTEXT_FILTERS = [
-   { value: 'full', label: 'Full Context', description: 'All patient data + team communications' },
-   { value: 'history', label: 'History Only', description: 'Patient history and related comms' },
-   { value: 'vitals', label: 'Vitals Only', description: 'Current vitals and recent changes' },
-   { value: 'minimal', label: 'Minimal', description: 'Basic demographics only' }
-];
+const CONTEXT_FILTERS = ['full', 'history', 'vitals', 'minimal'];
 
-const COMMUNICATION_STYLES = [
-   { value: 'professional', label: 'Professional' },
-   { value: 'educational', label: 'Educational' },
-   { value: 'emotional', label: 'Emotional' },
-   { value: 'concise', label: 'Concise' }
-];
+const COMMUNICATION_STYLES = ['professional', 'educational', 'emotional', 'concise'];
 
+// OpenAI/Anthropic/OpenRouter are brand names and stay verbatim; only the
+// two descriptive rows carry a translation key.
 const LLM_PROVIDERS = [
-   { value: '', label: 'Use Platform Default' },
+   { value: '', labelKey: 'provider_platform_default' },
    { value: 'openai', label: 'OpenAI' },
    { value: 'anthropic', label: 'Anthropic' },
    { value: 'openrouter', label: 'OpenRouter' },
-   { value: 'custom', label: 'Custom Endpoint' }
+   { value: 'custom', labelKey: 'provider_custom_endpoint' }
 ];
 
-const UNLOCK_TRIGGERS = [
-   { value: 'after_case_ended', label: 'After case ends (debrief)' },
-   { value: 'always', label: 'Always available' },
-];
+const UNLOCK_TRIGGERS = ['after_case_ended', 'always'];
 
-const MEMORY_CATEGORIES = [
-   { key: 'OBTAINED', label: 'History (OBTAINED)', description: 'Patient history, symptoms, HPI, PMH' },
-   { key: 'EXAMINED', label: 'Physical Exam (EXAMINED)', description: 'Physical examination findings' },
-   { key: 'ELICITED', label: 'Tests Elicited (ELICITED)', description: 'Reflexes, sensory tests' },
-   { key: 'NOTED', label: 'Observations (NOTED)', description: 'General observations' },
-   { key: 'ORDERED', label: 'Orders (ORDERED)', description: 'Labs, imaging, medications' },
-   { key: 'ADMINISTERED', label: 'Administered', description: 'Treatments given' },
-   { key: 'CHANGED', label: 'Changes (CHANGED)', description: 'Vital changes, positioning' },
-   { key: 'EXPRESSED', label: 'Communication (EXPRESSED)', description: 'Explanations to patient' }
-];
+// The parenthetical enum tokens (OBTAINED, EXAMINED, …) are server-side
+// category keys and must stay identical across locales.
+const MEMORY_CATEGORIES = ['OBTAINED', 'EXAMINED', 'ELICITED', 'NOTED', 'ORDERED', 'ADMINISTERED', 'CHANGED', 'EXPRESSED'];
 
-const DEFAULT_MEMORY_ACCESS = MEMORY_CATEGORIES.reduce((acc, c) => {
-   acc[c.key] = true;
+const DEFAULT_MEMORY_ACCESS = MEMORY_CATEGORIES.reduce((acc, key) => {
+   acc[key] = true;
    return acc;
 }, {});
 
-const DEFAULT_PREVIEW_TEXT = (template) => {
+const DEFAULT_PREVIEW_TEXT = (template, t) => {
    const name = (template?.name || '').trim();
    const role = (template?.role_title || '').trim();
-   if (name && role) return `Hello, I'm ${name}, ${role}. How can I help today?`;
-   if (name) return `Hello, I'm ${name}. How can I help today?`;
-   return 'Hello, this is a voice preview from the Rohy simulator.';
+   if (name && role) return t('preview_greeting_name_role', { name, role });
+   if (name) return t('preview_greeting_name', { name });
+   return t('preview_greeting_generic');
 };
 
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
+   const { t } = useTranslation('authoring_persona');
    const toast = useToast();
    const { headManifest: ctxHeadManifest, voiceSettings: ctxVoiceSettings, setSpeaking } = useVoice();
 
@@ -145,7 +124,7 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
             const [tpl, ancRes] = await Promise.all([tplPromise, ancillary]);
             if (cancelled) return;
             if (!tpl) {
-               toast.error('Failed to load agent template');
+               toast.error(t('toast_load_template_failed'));
                onClose?.();
                return;
             }
@@ -157,7 +136,7 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
          } catch (err) {
             if (!cancelled) {
                console.error('[AgentPersonaEditor] load failed:', err);
-               toast.error(err.message || 'Failed to load editor');
+               toast.error(err.message || t('toast_load_editor_failed'));
                onClose?.();
             }
          } finally {
@@ -259,11 +238,11 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
    const handleSave = async () => {
       if (!template) return;
       if (!template.name?.trim()) {
-         toast.warning('Name is required');
+         toast.warning(t('toast_name_required'));
          return;
       }
       if (!template.system_prompt?.trim()) {
-         toast.warning('System prompt is required');
+         toast.warning(t('toast_prompt_required'));
          return;
       }
 
@@ -271,10 +250,10 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
       try {
          if (isCreate) {
             await AgentService.createTemplate(template);
-            toast.success('Template created');
+            toast.success(t('toast_template_created'));
          } else {
             await AgentService.updateTemplate(template.id, template);
-            toast.success(isStandard ? 'Standard template updated' : 'Template updated');
+            toast.success(isStandard ? t('toast_standard_updated') : t('toast_template_updated'));
          }
          // Notify the parent (App.jsx) so the running chat tab can refetch
          // the patient template + agents list. Without this, the chat's
@@ -283,7 +262,7 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
          onSaved?.();
          onClose?.();
       } catch (err) {
-         toast.error(err.message || 'Failed to save template');
+         toast.error(err.message || t('toast_save_failed'));
       } finally {
          setSaving(false);
       }
@@ -293,13 +272,13 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
       if (!template?.id) return;
       try {
          const result = await AgentService.resetTemplateToDefault(template.id);
-         toast.success(result.message || 'Reset to shipped defaults');
+         toast.success(result.message || t('toast_reset_done'));
          if (result.template) {
             setTemplate(normalizeFromServer(result.template));
          }
          setResetConfirm(false);
       } catch (err) {
-         toast.error(err.message || 'Failed to reset to defaults');
+         toast.error(err.message || t('toast_reset_failed'));
       }
    };
 
@@ -307,10 +286,10 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
       if (!template?.id) return;
       try {
          await AgentService.deleteTemplate(template.id);
-         toast.success('Template deleted');
+         toast.success(t('toast_template_deleted'));
          onClose?.();
       } catch (err) {
-         toast.error(err.message || 'Failed to delete template');
+         toast.error(err.message || t('toast_delete_failed'));
          setDeleteConfirm(false);
       }
    };
@@ -318,17 +297,17 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
    const handleDuplicate = async () => {
       if (!template?.id) return;
       try {
-         await AgentService.duplicateTemplate(template.id, `${template.name} (Copy)`);
-         toast.success('Template duplicated. Returning to list…');
+         await AgentService.duplicateTemplate(template.id, t('copy_suffix', { name: template.name }));
+         toast.success(t('toast_duplicated_returning'));
          onClose?.();
       } catch (err) {
-         toast.error(err.message || 'Failed to duplicate');
+         toast.error(err.message || t('toast_duplicate_failed'));
       }
    };
 
    const handleTestLLM = async () => {
       if (!template?.id) {
-         toast.warning('Save the template first before testing LLM');
+         toast.warning(t('toast_save_before_test'));
          return;
       }
       setTestingLLM(true);
@@ -342,10 +321,10 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
             latency: result.latency_ms,
             response: result.response
          });
-         toast.success(`LLM test OK (${result.latency_ms}ms)`);
+         toast.success(t('toast_llm_test_ok', { ms: result.latency_ms }));
       } catch (err) {
-         setTestResult({ success: false, error: err.message || 'Test failed' });
-         toast.error(err.message || 'LLM test failed');
+         setTestResult({ success: false, error: err.message || t('test_failed') });
+         toast.error(err.message || t('toast_llm_test_failed'));
       } finally {
          setTestingLLM(false);
       }
@@ -359,10 +338,10 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
          return;
       }
       if (!resolvedVoiceFile) {
-         toast.warning('No voice could be resolved — pick a voice or set a platform default first.');
+         toast.warning(t('toast_no_voice_resolved'));
          return;
       }
-      const text = (previewTextRef.current || DEFAULT_PREVIEW_TEXT(template)).trim();
+      const text = (previewTextRef.current || DEFAULT_PREVIEW_TEXT(template, t)).trim();
       setPreviewState({ playing: true, text });
       setSpeaking?.(true);
       try {
@@ -377,7 +356,7 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                setSpeaking?.(false);
             },
             onError: (err) => {
-               toast.error(`Voice preview failed: ${err.message || err}`);
+               toast.error(t('toast_voice_preview_failed', { error: err.message || err }));
                setPreviewState({ playing: false, text: '' });
                setSpeaking?.(false);
             }
@@ -395,13 +374,15 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
          <div className="rohy-admin-light h-screen w-screen flex items-center justify-center">
             <div className="flex flex-col items-center gap-3 text-neutral-400">
                <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
-               <span className="text-sm">Loading persona editor…</span>
+               <span className="text-sm">{t('loading_editor')}</span>
             </div>
          </div>
       );
    }
 
-   const typeLabel = AGENT_TYPES.find(a => a.value === template.agent_type)?.label || template.agent_type;
+   const typeLabel = AGENT_TYPES.includes(template.agent_type)
+      ? t(`type_${template.agent_type}_label`)
+      : template.agent_type;
 
    return (
       <div className="rohy-admin-light h-screen w-screen flex flex-col overflow-hidden">
@@ -412,24 +393,24 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                <button
                   onClick={onClose}
                   className="p-2 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors shrink-0"
-                  title="Back to Agent Personas"
+                  title={t('back_to_personas')}
                >
                   <ArrowLeft className="w-5 h-5" />
                </button>
                <div className="min-w-0">
                   <h1 className="text-lg font-bold truncate">
-                     {isCreate ? 'New Agent Persona' : `Edit: ${template.name || 'Untitled'}`}
+                     {isCreate ? t('header_new') : t('header_edit', { name: template.name || t('untitled') })}
                   </h1>
                   <div className="flex items-center gap-2 text-xs text-neutral-400 mt-0.5">
                      <span className="capitalize">{typeLabel}</span>
                      {isStandard && (
                         <span className="px-2 py-0.5 rounded bg-purple-700/40 border border-purple-700/60 text-purple-200">
-                           Standard (shipped)
+                           {t('badge_standard_shipped')}
                         </span>
                      )}
                      {isCreate && (
                         <span className="px-2 py-0.5 rounded bg-emerald-700/40 border border-emerald-700/60 text-emerald-200">
-                           Unsaved
+                           {t('badge_unsaved')}
                         </span>
                      )}
                   </div>
@@ -440,18 +421,18 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                   <button
                      onClick={handleDuplicate}
                      className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm flex items-center gap-1.5"
-                     title="Create an editable copy of this persona"
+                     title={t('duplicate_tooltip')}
                   >
-                     <Copy className="w-4 h-4" /> Duplicate
+                     <Copy className="w-4 h-4" /> {t('duplicate')}
                   </button>
                )}
                {isStandard && !isCreate && (
                   <button
                      onClick={() => setResetConfirm(true)}
                      className="px-3 py-2 bg-amber-700 hover:bg-amber-600 rounded text-sm flex items-center gap-1.5"
-                     title="Re-apply the shipped baseline values"
+                     title={t('reset_tooltip')}
                   >
-                     <RotateCcw className="w-4 h-4" /> Reset to defaults
+                     <RotateCcw className="w-4 h-4" /> {t('reset_to_defaults')}
                   </button>
                )}
                {!isCreate && !isStandard && (
@@ -459,14 +440,14 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                      onClick={() => setDeleteConfirm(true)}
                      className="px-3 py-2 bg-red-800 hover:bg-red-700 rounded text-sm flex items-center gap-1.5"
                   >
-                     <Trash2 className="w-4 h-4" /> Delete
+                     <Trash2 className="w-4 h-4" /> {t('delete')}
                   </button>
                )}
                <button
                   onClick={onClose}
                   className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm flex items-center gap-1.5"
                >
-                  <X className="w-4 h-4" /> Cancel
+                  <X className="w-4 h-4" /> {t('cancel')}
                </button>
                <button
                   onClick={handleSave}
@@ -474,7 +455,7 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                   className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded text-sm font-semibold flex items-center gap-1.5"
                >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  {isCreate ? 'Create persona' : 'Save changes'}
+                  {isCreate ? t('create_persona') : t('save_changes')}
                </button>
             </div>
          </header>
@@ -485,62 +466,62 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
 
                {/* ── Left rail: Identity / Avatar / Voice ──────────── */}
                <div className="space-y-6">
-                  <Section icon={<User className="w-4 h-4 text-blue-400" />} title="Identity">
-                     <Field label="Agent type">
+                  <Section icon={<User className="w-4 h-4 text-blue-400" />} title={t('section_identity')}>
+                     <Field label={t('field_agent_type')}>
                         <select
                            value={template.agent_type}
                            onChange={(e) => setField('agent_type', e.target.value)}
                            className={inputClass}
                         >
-                           {AGENT_TYPES.map(t => (
-                              <option key={t.value} value={t.value}>{t.label} — {t.description}</option>
+                           {AGENT_TYPES.map(v => (
+                              <option key={v} value={v}>{t(`type_${v}_label`)} — {t(`type_${v}_desc`)}</option>
                            ))}
                         </select>
                      </Field>
-                     <Field label="Display name *" hint="Shown to learners and to the LLM as the speaker.">
+                     <Field label={t('field_display_name')} hint={t('hint_display_name')}>
                         <input
                            type="text"
                            value={template.name || ''}
                            onChange={(e) => setField('name', e.target.value)}
-                           placeholder="e.g., Sarah Mitchell"
+                           placeholder={t('ph_display_name')}
                            className={inputClass}
                         />
                      </Field>
-                     <Field label="Role title">
+                     <Field label={t('field_role_title')}>
                         <input
                            type="text"
                            value={template.role_title || ''}
                            onChange={(e) => setField('role_title', e.target.value)}
-                           placeholder="e.g., Bedside Nurse"
+                           placeholder={t('ph_role_title')}
                            className={inputClass}
                         />
                      </Field>
-                     <Field label="Communication style">
+                     <Field label={t('field_comm_style')}>
                         <select
                            value={template.communication_style || ''}
                            onChange={(e) => setField('communication_style', e.target.value)}
                            className={inputClass}
                         >
-                           <option value="">— None specified —</option>
+                           <option value="">{t('opt_none_specified')}</option>
                            {COMMUNICATION_STYLES.map(s => (
-                              <option key={s.value} value={s.value}>{s.label}</option>
+                              <option key={s} value={s}>{t(`style_${s}`)}</option>
                            ))}
                         </select>
                      </Field>
-                     <Field label="Gender slot" hint="Drives default avatar/voice selection when no explicit override is set.">
+                     <Field label={t('field_gender_slot')} hint={t('hint_gender_slot')}>
                         <select
                            value={template.config?.gender || ''}
                            onChange={(e) => setConfigField('gender', e.target.value || undefined)}
                            className={inputClass}
                         >
-                           <option value="">Auto-detect from name</option>
-                           <option value="male">Male</option>
-                           <option value="female">Female</option>
+                           <option value="">{t('opt_gender_auto')}</option>
+                           <option value="male">{t('opt_gender_male')}</option>
+                           <option value="female">{t('opt_gender_female')}</option>
                         </select>
                      </Field>
                   </Section>
 
-                  <Section icon={<ImageIcon className="w-4 h-4 text-pink-400" />} title="Avatar">
+                  <Section icon={<ImageIcon className="w-4 h-4 text-pink-400" />} title={t('section_avatar')}>
                      <div className="grid grid-cols-[160px_minmax(0,1fr)] gap-4">
                         <div className="aspect-square w-full bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
                            {template.avatar_url && headManifest ? (
@@ -554,18 +535,18 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                               </Suspense>
                            ) : (
                               <div className="w-full h-full flex items-center justify-center text-neutral-500 text-xs text-center px-3">
-                                 Pick an avatar to preview live
+                                 {t('avatar_preview_empty')}
                               </div>
                            )}
                         </div>
                         <div className="space-y-3">
-                           <Field label="3D avatar">
+                           <Field label={t('field_3d_avatar')}>
                               <select
                                  value={template.avatar_url || ''}
                                  onChange={(e) => setField('avatar_url', e.target.value || null)}
                                  className={inputClass}
                               >
-                                 <option value="">Auto (by gender)</option>
+                                 <option value="">{t('opt_avatar_auto')}</option>
                                  {(headManifest?.all || []).map(a => (
                                     <option key={a.id} value={a.id}>{a.label}</option>
                                  ))}
@@ -585,20 +566,18 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                      </div>
                   </Section>
 
-                  <Section icon={<Mic className="w-4 h-4 text-amber-400" />} title="Voice">
+                  <Section icon={<Mic className="w-4 h-4 text-amber-400" />} title={t('section_voice')}>
                      <p className="text-[11px] text-neutral-500 -mt-2">
-                        The TTS engine is set platform-wide in Settings → Voice.
-                        Pick a voice from that engine's catalogue. Cases can
-                        override this per-case in the Case editor.
+                        {t('voice_engine_help')}
                      </p>
-                     <Field label={`Voice (${voiceSettings?.tts_provider || 'no provider set'})`}>
+                     <Field label={t('field_voice', { provider: voiceSettings?.tts_provider || t('no_provider_set') })}>
                         <select
                            value={cfg.voice?.case_voice || ''}
                            onChange={(e) => updateVoiceField('case_voice', e.target.value)}
                            className={inputClass}
                            disabled={!voiceSettings?.tts_provider}
                         >
-                           <option value="">— pick a voice —</option>
+                           <option value="">{t('opt_pick_voice')}</option>
                            {voiceOptions.map(v => {
                               const genderLabel = voiceGenderLabel(v);
                               return (
@@ -610,12 +589,12 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                         </select>
                      </Field>
                      <div className="grid grid-cols-2 gap-3">
-                        <Field label="Speech rate">
+                        <Field label={t('field_speech_rate')}>
                            <input
                               type="number"
                               step="0.05" min="0.5" max="1.5"
                               value={cfg.voice?.tts_rate ?? ''}
-                              placeholder={`Inherit (${resolvedRate.toFixed(2)})`}
+                              placeholder={t('ph_inherit_rate', { rate: resolvedRate.toFixed(2) })}
                               onChange={(e) => {
                                  const v = e.target.value;
                                  updateVoiceField('tts_rate', v === '' ? '' : Number(v));
@@ -623,12 +602,12 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                               className={inputClass}
                            />
                         </Field>
-                        <Field label="Pitch">
+                        <Field label={t('field_pitch')}>
                            <input
                               type="number"
                               step="0.25" min="-10" max="10"
                               value={cfg.voice?.tts_pitch ?? ''}
-                              placeholder="Inherit"
+                              placeholder={t('ph_inherit')}
                               onChange={(e) => {
                                  const v = e.target.value;
                                  updateVoiceField('tts_pitch', v === '' ? '' : Number(v));
@@ -638,12 +617,12 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                         </Field>
                      </div>
                      <div className="border-t border-neutral-800 pt-3 space-y-2">
-                        <label className="block text-xs text-neutral-500">Preview text</label>
+                        <label className="block text-xs text-neutral-500">{t('label_preview_text')}</label>
                         <input
                            type="text"
-                           defaultValue={DEFAULT_PREVIEW_TEXT(template)}
+                           defaultValue={DEFAULT_PREVIEW_TEXT(template, t)}
                            onChange={(e) => { previewTextRef.current = e.target.value; }}
-                           placeholder="What should the voice say?"
+                           placeholder={t('ph_preview_text')}
                            className={inputClass}
                         />
                         <button
@@ -657,36 +636,36 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                                     ? 'bg-amber-600 hover:bg-amber-500 text-white'
                                     : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
                            }`}
-                           title={resolvedVoiceFile ? `Will use: ${resolvedVoiceFile}` : 'No voice resolved'}
+                           title={resolvedVoiceFile ? t('preview_will_use', { file: resolvedVoiceFile }) : t('no_voice_resolved')}
                         >
                            {previewState.playing ? (
                               <>
-                                 <StopCircle className="w-4 h-4" /> Stop preview
+                                 <StopCircle className="w-4 h-4" /> {t('stop_preview')}
                               </>
                            ) : resolvedVoiceFile ? (
                               <>
-                                 <PlayCircle className="w-4 h-4" /> Preview voice
+                                 <PlayCircle className="w-4 h-4" /> {t('preview_voice')}
                               </>
                            ) : (
                               <>
-                                 <Volume2 className="w-4 h-4" /> No voice resolved
+                                 <Volume2 className="w-4 h-4" /> {t('no_voice_resolved')}
                               </>
                            )}
                         </button>
                         {resolvedVoiceFile && (
                            <p className="text-[10px] text-neutral-500 truncate" title={resolvedVoiceFile}>
-                              Will play: <span className="text-neutral-400 font-mono">{resolvedVoiceFile}</span>
-                              {resolvedProvider && <> via <span className="text-neutral-400 font-mono">{resolvedProvider}</span></>}
+                              {t('will_play')} <span className="text-neutral-400 font-mono">{resolvedVoiceFile}</span>
+                              {resolvedProvider && <> {t('via')} <span className="text-neutral-400 font-mono">{resolvedProvider}</span></>}
                            </p>
                         )}
                         {!resolvedVoiceFile && !voiceSettings?.tts_provider && (
                            <p className="text-[10px] text-amber-400">
-                              No TTS provider configured. Set one in Settings → Voice first.
+                              {t('no_tts_provider_configured')}
                            </p>
                         )}
                         {!resolvedVoiceFile && voiceSettings?.tts_provider === 'piper' && ttsVoices.length === 0 && (
                            <p className="text-[10px] text-amber-400">
-                              No Piper voices installed. Run <code className="text-amber-200">bash server/scripts/install-piper.sh</code>.
+                              {t('no_piper_voices_prefix')} <code className="text-amber-200">bash server/scripts/install-piper.sh</code>.
                            </p>
                         )}
                      </div>
@@ -696,54 +675,54 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                {/* ── Right column: Persona / Behavior / LLM / Memory ── */}
                <div className="space-y-6">
 
-                  <Section icon={<Sparkles className="w-4 h-4 text-purple-400" />} title="Persona prompt" subtitle="The agent's system prompt. Patient context and vitals are appended at runtime.">
+                  <Section icon={<Sparkles className="w-4 h-4 text-purple-400" />} title={t('section_persona_prompt')} subtitle={t('subtitle_persona_prompt')}>
                      <textarea
                         value={template.system_prompt || ''}
                         onChange={(e) => setField('system_prompt', e.target.value)}
-                        placeholder="Define the agent's personality, role, knowledge, and how they should respond…"
+                        placeholder={t('ph_system_prompt')}
                         className="w-full min-h-[320px] px-3 py-3 bg-neutral-950 border border-neutral-800 rounded text-sm focus:outline-none focus:border-purple-500 font-mono leading-relaxed resize-y"
                      />
                   </Section>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                      <BulletList
-                        title="Dos"
+                        title={t('bullet_dos')}
                         accent="emerald"
                         items={dos}
                         onChange={updateDosList}
-                        placeholder="e.g., Stay in character throughout"
+                        placeholder={t('ph_dos')}
                      />
                      <BulletList
-                        title="Don'ts"
+                        title={t('bullet_donts')}
                         accent="rose"
                         items={donts}
                         onChange={updateDontsList}
-                        placeholder="e.g., Volunteer differential diagnoses"
+                        placeholder={t('ph_donts')}
                      />
                   </div>
 
-                  <Section icon={<SettingsIcon className="w-4 h-4 text-cyan-400" />} title="Behavior">
+                  <Section icon={<SettingsIcon className="w-4 h-4 text-cyan-400" />} title={t('section_behavior')}>
                      <div className="grid grid-cols-2 gap-4">
-                        <Field label="Context filter" hint="What slice of the case the agent can see at runtime.">
+                        <Field label={t('field_context_filter')} hint={t('hint_context_filter')}>
                            <select
                               value={template.context_filter || 'full'}
                               onChange={(e) => setField('context_filter', e.target.value)}
                               className={inputClass}
                            >
                               {CONTEXT_FILTERS.map(c => (
-                                 <option key={c.value} value={c.value}>{c.label}</option>
+                                 <option key={c} value={c}>{t(`ctx_${c}_label`)}</option>
                               ))}
                            </select>
                         </Field>
-                        <Field label="Default availability">
+                        <Field label={t('field_default_availability')}>
                            <select
                               value={cfg.typical_availability || 'present'}
                               onChange={(e) => setConfigField('typical_availability', e.target.value)}
                               className={inputClass}
                            >
-                              <option value="present">Present (immediately available)</option>
-                              <option value="on-call">On-call (must be paged)</option>
-                              <option value="absent">Absent (not available)</option>
+                              <option value="present">{t('opt_avail_present')}</option>
+                              <option value="on-call">{t('opt_avail_oncall')}</option>
+                              <option value="absent">{t('opt_avail_absent')}</option>
                            </select>
                         </Field>
                      </div>
@@ -754,11 +733,11 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                            onChange={(e) => setConfigField('can_be_paged', e.target.checked)}
                            className="w-4 h-4 rounded bg-neutral-800 border-neutral-700 text-purple-500"
                         />
-                        Can be paged
+                        {t('can_be_paged')}
                      </label>
                      {cfg.can_be_paged && (
                         <div className="grid grid-cols-2 gap-3 mt-3">
-                           <Field label="Response time min (min)">
+                           <Field label={t('field_response_time_min')}>
                               <input
                                  type="number" min="0"
                                  value={cfg.response_time?.min ?? 0}
@@ -769,7 +748,7 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                                  className={inputClass}
                               />
                            </Field>
-                           <Field label="Response time max (min)">
+                           <Field label={t('field_response_time_max')}>
                               <input
                                  type="number" min="0"
                                  value={cfg.response_time?.max ?? 0}
@@ -784,21 +763,21 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                      )}
                   </Section>
 
-                  <Section icon={<Zap className="w-4 h-4 text-amber-400" />} title="LLM override" subtitle="Empty values inherit from the platform defaults.">
-                     <Field label="Provider">
+                  <Section icon={<Zap className="w-4 h-4 text-amber-400" />} title={t('section_llm_override')} subtitle={t('subtitle_llm_override')}>
+                     <Field label={t('field_provider')}>
                         <select
                            value={template.llm_provider || ''}
                            onChange={(e) => setField('llm_provider', e.target.value)}
                            className={inputClass}
                         >
                            {LLM_PROVIDERS.map(p => (
-                              <option key={p.value} value={p.value}>{p.label}</option>
+                              <option key={p.value} value={p.value}>{p.labelKey ? t(p.labelKey) : p.label}</option>
                            ))}
                         </select>
                      </Field>
                      {template.llm_provider && (
                         <div className="space-y-3 mt-3">
-                           <Field label="Model">
+                           <Field label={t('field_model')}>
                               <input
                                  type="text"
                                  value={template.llm_model || ''}
@@ -812,13 +791,13 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                                  className={inputClass}
                               />
                            </Field>
-                           <Field label="API key">
+                           <Field label={t('field_api_key')}>
                               <div className="relative">
                                  <input
                                     type={showApiKey ? 'text' : 'password'}
                                     value={template.llm_api_key || ''}
                                     onChange={(e) => setField('llm_api_key', e.target.value)}
-                                    placeholder="sk-… (leave empty for platform key)"
+                                    placeholder={t('ph_api_key')}
                                     className={`${inputClass} pr-10`}
                                  />
                                  <button
@@ -831,7 +810,7 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                               </div>
                            </Field>
                            {template.llm_provider === 'custom' && (
-                              <Field label="Custom endpoint">
+                              <Field label={t('field_custom_endpoint')}>
                                  <input
                                     type="text"
                                     value={template.llm_endpoint || ''}
@@ -849,7 +828,7 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                               session/platform defaults.
                            */}
                            <div className="grid grid-cols-2 gap-3">
-                              <Field label="Temperature">
+                              <Field label={t('field_temperature')}>
                                  <input
                                     type="number"
                                     min="0"
@@ -857,35 +836,35 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                                     step="0.1"
                                     value={template.llm_temperature ?? ''}
                                     onChange={(e) => setField('llm_temperature', e.target.value)}
-                                    placeholder="(platform default)"
+                                    placeholder={t('ph_platform_default')}
                                     className={inputClass}
                                  />
                               </Field>
-                              <Field label="Max tokens">
+                              <Field label={t('field_max_tokens')}>
                                  <input
                                     type="number"
                                     min="1"
                                     step="1"
                                     value={template.llm_max_tokens ?? ''}
                                     onChange={(e) => setField('llm_max_tokens', e.target.value)}
-                                    placeholder="(platform default)"
+                                    placeholder={t('ph_platform_default')}
                                     className={inputClass}
                                  />
                               </Field>
                            </div>
                            <p className="text-xs text-neutral-500 -mt-2">
-                              Leave blank to inherit platform/session defaults. Resolver precedence: agent → session → platform.
+                              {t('llm_precedence_note')}
                            </p>
                            <button
                               onClick={handleTestLLM}
                               disabled={testingLLM || isCreate}
                               className="w-full px-3 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-neutral-700 disabled:opacity-60 rounded text-sm flex items-center justify-center gap-2"
-                              title={isCreate ? 'Save first to enable LLM testing' : ''}
+                              title={isCreate ? t('save_first_to_test') : ''}
                            >
                               {testingLLM ? (
-                                 <><Loader2 className="w-4 h-4 animate-spin" /> Testing…</>
+                                 <><Loader2 className="w-4 h-4 animate-spin" /> {t('testing')}</>
                               ) : (
-                                 <><Zap className="w-4 h-4" /> Test LLM connection</>
+                                 <><Zap className="w-4 h-4" /> {t('test_llm_connection')}</>
                               )}
                            </button>
                            {testResult && (
@@ -893,7 +872,7 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                                  {testResult.success ? (
                                     <div className="space-y-1">
                                        <div className="flex items-center gap-2 text-green-400">
-                                          <CheckCircle className="w-4 h-4" /> Test successful
+                                          <CheckCircle className="w-4 h-4" /> {t('test_successful')}
                                        </div>
                                        <div className="text-xs text-neutral-400">{testResult.provider}/{testResult.model} — {testResult.latency}ms</div>
                                        <div className="text-xs text-neutral-300 mt-2 p-2 bg-neutral-950 rounded">{testResult.response}</div>
@@ -909,19 +888,19 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                      )}
                   </Section>
 
-                  <Section icon={<Brain className="w-4 h-4 text-cyan-400" />} title="Patient record access" subtitle="Which slices of the patient record this agent can see at runtime.">
+                  <Section icon={<Brain className="w-4 h-4 text-cyan-400" />} title={t('section_record_access')} subtitle={t('subtitle_record_access')}>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {MEMORY_CATEGORIES.map(cat => (
-                           <label key={cat.key} className="flex items-start gap-3 px-3 py-2 rounded border border-neutral-800 bg-neutral-900/40 hover:bg-neutral-900 cursor-pointer">
+                        {MEMORY_CATEGORIES.map(key => (
+                           <label key={key} className="flex items-start gap-3 px-3 py-2 rounded border border-neutral-800 bg-neutral-900/40 hover:bg-neutral-900 cursor-pointer">
                               <input
                                  type="checkbox"
-                                 checked={template.memory_access?.[cat.key] !== false}
-                                 onChange={() => toggleMemoryAccess(cat.key)}
+                                 checked={template.memory_access?.[key] !== false}
+                                 onChange={() => toggleMemoryAccess(key)}
                                  className="mt-1 w-4 h-4 rounded bg-neutral-800 border-neutral-700 text-cyan-500"
                               />
                               <div className="text-sm">
-                                 <div className="text-neutral-200">{cat.label}</div>
-                                 <div className="text-xs text-neutral-500">{cat.description}</div>
+                                 <div className="text-neutral-200">{t(`mem_${key}_label`)}</div>
+                                 <div className="text-xs text-neutral-500">{t(`mem_${key}_desc`)}</div>
                               </div>
                            </label>
                         ))}
@@ -929,20 +908,20 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                   </Section>
 
                   {template.agent_type === 'discussant' && (
-                     <Section icon={<GraduationCap className="w-4 h-4 text-indigo-400" />} title="Discussant settings" subtitle="Only applies when this persona is the post-case debrief tutor.">
-                        <Field label="Unlock trigger">
+                     <Section icon={<GraduationCap className="w-4 h-4 text-indigo-400" />} title={t('section_discussant')} subtitle={t('subtitle_discussant')}>
+                        <Field label={t('field_unlock_trigger')}>
                            <select
                               value={cfg.unlock_trigger || 'after_case_ended'}
                               onChange={(e) => setConfigField('unlock_trigger', e.target.value)}
                               className={inputClass}
                            >
                               {UNLOCK_TRIGGERS.map(u => (
-                                 <option key={u.value} value={u.value}>{u.label}</option>
+                                 <option key={u} value={u}>{t(`unlock_${u}`)}</option>
                               ))}
                            </select>
                         </Field>
                         <p className="text-xs text-neutral-500 mt-2">
-                           Controls when the learner can open the debrief screen during a session.
+                           {t('discussant_note')}
                         </p>
                      </Section>
                   )}
@@ -953,9 +932,9 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
          {/* ── Confirmation modals ──────────────────────────────────── */}
          {resetConfirm && (
             <ConfirmModal
-               title="Reset to shipped defaults?"
-               body="This will overwrite the current name, role, system prompt, dos/don'ts, avatar, voice slot, and clear any LLM or memory overrides — restoring the values that originally shipped with Rohy. Custom edits to this standard persona will be lost."
-               confirmLabel="Reset to defaults"
+               title={t('reset_modal_title')}
+               body={t('reset_modal_body')}
+               confirmLabel={t('reset_to_defaults')}
                confirmTone="amber"
                onConfirm={handleResetToDefault}
                onCancel={() => setResetConfirm(false)}
@@ -963,9 +942,9 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
          )}
          {deleteConfirm && (
             <ConfirmModal
-               title="Delete this persona?"
-               body={`Permanently delete "${template.name}". This cannot be undone.`}
-               confirmLabel="Delete"
+               title={t('delete_modal_title')}
+               body={t('delete_modal_body', { name: template.name })}
+               confirmLabel={t('delete')}
                confirmTone="red"
                onConfirm={handleDelete}
                onCancel={() => setDeleteConfirm(false)}
@@ -1007,6 +986,7 @@ function Field({ label, hint, children }) {
 // Reorder is keyboard-only (move up/down arrows) — drag-and-drop would pull
 // in another dep for what is at most 5–8 bullets per persona.
 function BulletList({ title, accent, items, onChange, placeholder }) {
+   const { t } = useTranslation('authoring_persona');
    const accentMap = {
       emerald: { headerText: 'text-emerald-400', border: 'border-emerald-900/50', bg: 'bg-emerald-950/20', addBg: 'bg-emerald-700 hover:bg-emerald-600' },
       rose:    { headerText: 'text-rose-400',    border: 'border-rose-900/50',    bg: 'bg-rose-950/20',    addBg: 'bg-rose-700 hover:bg-rose-600' },
@@ -1045,12 +1025,12 @@ function BulletList({ title, accent, items, onChange, placeholder }) {
                onClick={add}
                className={`px-2.5 py-1 rounded text-xs font-semibold text-white flex items-center gap-1 ${palette.addBg}`}
             >
-               <Plus className="w-3.5 h-3.5" /> Add
+               <Plus className="w-3.5 h-3.5" /> {t('add')}
             </button>
          </header>
          {items.length === 0 ? (
             <div className={`rounded border border-dashed border-neutral-800 ${palette.bg} p-4 text-center text-xs text-neutral-500`}>
-               No bullets yet. Click <span className={palette.headerText}>Add</span> to start.
+               {t('no_bullets_prefix')} <span className={palette.headerText}>{t('add')}</span> {t('no_bullets_suffix')}
             </div>
          ) : (
             <ul className="space-y-2">
@@ -1062,7 +1042,7 @@ function BulletList({ title, accent, items, onChange, placeholder }) {
                            onClick={() => move(i, -1)}
                            disabled={i === 0}
                            className="text-[10px] disabled:opacity-30 hover:text-neutral-300 leading-none"
-                           title="Move up"
+                           title={t('move_up')}
                         >▲</button>
                         <GripVertical className="w-3 h-3 my-0.5" />
                         <button
@@ -1070,7 +1050,7 @@ function BulletList({ title, accent, items, onChange, placeholder }) {
                            onClick={() => move(i, 1)}
                            disabled={i === items.length - 1}
                            className="text-[10px] disabled:opacity-30 hover:text-neutral-300 leading-none"
-                           title="Move down"
+                           title={t('move_down')}
                         >▼</button>
                      </div>
                      <textarea
@@ -1084,7 +1064,7 @@ function BulletList({ title, accent, items, onChange, placeholder }) {
                         type="button"
                         onClick={() => removeAt(i)}
                         className="p-1.5 rounded text-neutral-500 hover:text-rose-300 hover:bg-rose-900/30 mt-0.5"
-                        title="Remove bullet"
+                        title={t('remove_bullet')}
                      >
                         <Trash2 className="w-4 h-4" />
                      </button>
@@ -1097,6 +1077,7 @@ function BulletList({ title, accent, items, onChange, placeholder }) {
 }
 
 function ConfirmModal({ title, body, confirmLabel, confirmTone, onConfirm, onCancel }) {
+   const { t } = useTranslation('authoring_persona');
    const toneClass = confirmTone === 'red'
       ? 'bg-red-700 hover:bg-red-600'
       : confirmTone === 'amber'
@@ -1114,7 +1095,7 @@ function ConfirmModal({ title, body, confirmLabel, confirmTone, onConfirm, onCan
                   onClick={onCancel}
                   className="px-4 py-2 text-sm rounded border border-neutral-700 text-neutral-300 hover:text-white"
                >
-                  Cancel
+                  {t('cancel')}
                </button>
                <button
                   onClick={onConfirm}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Copy, Users, Bot, RotateCcw } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { AgentService } from '../../services/AgentService';
@@ -19,6 +20,7 @@ const AGENT_TYPE_BADGE = {
 // callback that swaps the screen. Standards and customs are both fully
 // editable — see HANDOFF for why the previous read-only gating was wrong.
 export default function AgentTemplateManager({ onOpenEditor }) {
+   const { t } = useTranslation('authoring_persona');
    const toast = useToast();
    const [templates, setTemplates] = useState([]);
    const [loading, setLoading] = useState(true);
@@ -32,7 +34,7 @@ export default function AgentTemplateManager({ onOpenEditor }) {
          const data = await AgentService.getTemplates();
          setTemplates(data);
       } catch {
-         toast.error('Failed to load agent templates');
+         toast.error(t('toast_load_templates_failed'));
       } finally {
          setLoading(false);
       }
@@ -43,11 +45,11 @@ export default function AgentTemplateManager({ onOpenEditor }) {
 
    const handleDuplicate = async (template) => {
       try {
-         await AgentService.duplicateTemplate(template.id, `${template.name} (Copy)`);
-         toast.success('Template duplicated');
+         await AgentService.duplicateTemplate(template.id, t('copy_suffix', { name: template.name }));
+         toast.success(t('toast_duplicated'));
          loadTemplates();
       } catch (err) {
-         toast.error(err.message || 'Failed to duplicate template');
+         toast.error(err.message || t('toast_duplicate_failed'));
       }
    };
 
@@ -56,16 +58,16 @@ export default function AgentTemplateManager({ onOpenEditor }) {
       // before the round-trip rather than letting the toast read like a
       // server error.
       if (template.is_default) {
-         toast.warning('Standard templates cannot be deleted. Use "Reset to defaults" or duplicate them.');
+         toast.warning(t('toast_standard_no_delete'));
          return;
       }
-      if (!confirm(`Delete agent template "${template.name}"?`)) return;
+      if (!confirm(t('confirm_delete', { name: template.name }))) return;
       try {
          await AgentService.deleteTemplate(template.id);
-         toast.success('Template deleted');
+         toast.success(t('toast_template_deleted'));
          loadTemplates();
       } catch (err) {
-         toast.error(err.message || 'Failed to delete template');
+         toast.error(err.message || t('toast_delete_failed'));
       }
    };
 
@@ -73,11 +75,11 @@ export default function AgentTemplateManager({ onOpenEditor }) {
       if (!resetTarget) return;
       try {
          const result = await AgentService.resetTemplateToDefault(resetTarget.id);
-         toast.success(result.message || 'Reset to shipped defaults');
+         toast.success(result.message || t('toast_reset_done'));
          setResetTarget(null);
          loadTemplates();
       } catch (err) {
-         toast.error(err.message || 'Failed to reset to defaults');
+         toast.error(err.message || t('toast_reset_failed'));
       }
    };
 
@@ -135,40 +137,40 @@ export default function AgentTemplateManager({ onOpenEditor }) {
                   <span className="font-semibold">{template.name}</span>
                   <span className="rohy-badge-neutral capitalize">{template.agent_type}</span>
                   {isStandard && (
-                     <span className="rohy-badge-teal">Standard</span>
+                     <span className="rohy-badge-teal">{t('badge_standard')}</span>
                   )}
                </div>
                <div className="text-sm text-neutral-600 truncate mt-0.5">
-                  {template.role_title || template.agent_type} · {template.communication_style || 'standard'}
+                  {template.role_title || template.agent_type} · {template.communication_style || t('style_standard')}
                </div>
 
                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                   <span className="rohy-meta-chip">
-                     <span className="rohy-meta-chip__k">voice</span>
-                     <span className={voiceId ? 'font-mono truncate max-w-[150px]' : 'text-neutral-500 italic'} title={voiceId || 'no voice set'}>
-                        {voiceId || 'unset'}
+                     <span className="rohy-meta-chip__k">{t('chip_voice')}</span>
+                     <span className={voiceId ? 'font-mono truncate max-w-[150px]' : 'text-neutral-500 italic'} title={voiceId || t('no_voice_set')}>
+                        {voiceId || t('unset')}
                      </span>
                      {voiceGender && <span className="text-neutral-500">· {voiceGender}</span>}
                   </span>
                   <span className="rohy-meta-chip">
-                     <span className="rohy-meta-chip__k">avatar</span>
-                     <span className={avatarFile ? 'font-mono truncate max-w-[180px]' : 'text-neutral-500 italic'} title={avatarFile || 'no avatar set'}>
-                        {avatarFile || 'unset'}
+                     <span className="rohy-meta-chip__k">{t('chip_avatar')}</span>
+                     <span className={avatarFile ? 'font-mono truncate max-w-[180px]' : 'text-neutral-500 italic'} title={avatarFile || t('no_avatar_set')}>
+                        {avatarFile || t('unset')}
                      </span>
                   </span>
-                  <span className="rohy-meta-chip" title={`${dosCount} dos · ${dontsCount} don'ts`}>
-                     <span className="rohy-meta-chip__k">do / don&apos;t</span>
+                  <span className="rohy-meta-chip" title={t('chip_dos_donts_title', { dos: dosCount, donts: dontsCount })}>
+                     <span className="rohy-meta-chip__k">{t('chip_do_dont')}</span>
                      <span className={dosCount > 0 ? 'text-teal-700 font-semibold' : 'text-neutral-400'}>{dosCount}</span>
                      <span className="text-neutral-400">/</span>
                      <span className={dontsCount > 0 ? 'text-red-700 font-semibold' : 'text-neutral-400'}>{dontsCount}</span>
                   </span>
                   <span className="rohy-meta-chip">
-                     <span className="rohy-meta-chip__k">context</span>
+                     <span className="rohy-meta-chip__k">{t('chip_context')}</span>
                      <span className={`font-medium ${ctxColor}`}>{ctxFilter}</span>
                   </span>
                   {llmLabel && (
                      <span className="rohy-meta-chip" title={llmLabel}>
-                        <span className="rohy-meta-chip__k">llm</span>
+                        <span className="rohy-meta-chip__k">{t('chip_llm')}</span>
                         <span className="font-mono truncate max-w-[180px]">{llmLabel}</span>
                      </span>
                   )}
@@ -186,8 +188,8 @@ export default function AgentTemplateManager({ onOpenEditor }) {
                <button
                   onClick={() => handleDuplicate(template)}
                   className="rohy-subtle-button p-2 rounded"
-                  title="Duplicate"
-                  aria-label="Duplicate"
+                  title={t('duplicate')}
+                  aria-label={t('duplicate')}
                >
                   <Copy className="w-4 h-4" />
                </button>
@@ -195,18 +197,18 @@ export default function AgentTemplateManager({ onOpenEditor }) {
                   <button
                      onClick={() => setResetTarget(template)}
                      className="rohy-subtle-button px-2 py-1.5 rounded flex items-center gap-1 text-xs"
-                     title="Reset to shipped defaults"
-                     aria-label="Reset to defaults"
+                     title={t('reset_tooltip')}
+                     aria-label={t('reset_to_defaults')}
                   >
                      <RotateCcw className="w-4 h-4" />
-                     <span>Reset</span>
+                     <span>{t('reset')}</span>
                   </button>
                ) : (
                   <button
                      onClick={() => handleDelete(template)}
                      className="rohy-danger-icon-button p-2 rounded"
-                     title="Delete"
-                     aria-label="Delete"
+                     title={t('delete')}
+                     aria-label={t('delete')}
                   >
                      <Trash2 className="w-4 h-4" />
                   </button>
@@ -222,43 +224,43 @@ export default function AgentTemplateManager({ onOpenEditor }) {
             <div>
                <h3 className="text-lg font-bold flex items-center gap-2">
                   <Bot className="w-5 h-5 text-teal-700" />
-                  Agent Personas
+                  {t('personas_title')}
                </h3>
                <p className="text-sm text-neutral-600 mt-1">
-                  Standard personas ship with Rohy. Admins can edit them in place; the &quot;Reset to defaults&quot; button restores the shipped baseline. Custom personas are admin-authored and available system-wide.
+                  {t('personas_intro')}
                </p>
             </div>
             <button
                onClick={handleCreate}
                className="px-3 py-1.5 bg-teal-700 hover:bg-teal-600 text-white rounded text-sm flex items-center gap-1 font-semibold"
             >
-               <Plus className="w-4 h-4" /> New Custom
+               <Plus className="w-4 h-4" /> {t('new_custom')}
             </button>
          </div>
 
          <section>
             <div className="flex items-center justify-between mb-2">
-               <h4 className="text-sm font-bold text-teal-700 uppercase tracking-wider">Standard templates</h4>
-               <span className="text-xs text-neutral-600">{standardTemplates.length} shipped · admin-editable</span>
+               <h4 className="text-sm font-bold text-teal-700 uppercase tracking-wider">{t('standard_templates')}</h4>
+               <span className="text-xs text-neutral-600">{t('standard_count', { count: standardTemplates.length })}</span>
             </div>
             {standardTemplates.length === 0 ? (
-               <div className="text-sm text-neutral-500 italic px-2 py-4">No standard templates seeded.</div>
+               <div className="text-sm text-neutral-500 italic px-2 py-4">{t('no_standard_seeded')}</div>
             ) : (
-               <div className="space-y-3">{standardTemplates.map(t => renderTemplateCard(t, { isStandard: true }))}</div>
+               <div className="space-y-3">{standardTemplates.map(tpl => renderTemplateCard(tpl, { isStandard: true }))}</div>
             )}
          </section>
 
          <section>
             <div className="flex items-center justify-between mb-2">
-               <h4 className="text-sm font-bold text-neutral-700 uppercase tracking-wider">Custom templates</h4>
-               <span className="text-xs text-neutral-600">{customTemplates.length} authored · system-wide</span>
+               <h4 className="text-sm font-bold text-neutral-700 uppercase tracking-wider">{t('custom_templates')}</h4>
+               <span className="text-xs text-neutral-600">{t('custom_count', { count: customTemplates.length })}</span>
             </div>
             {customTemplates.length === 0 ? (
                <div className="rounded border border-dashed border-neutral-400 p-6 text-center text-sm text-neutral-600">
-                  No custom templates yet. Click <span className="text-teal-700">+ New Custom</span> or duplicate a standard template above to get started.
+                  {t('no_custom_prefix')} <span className="text-teal-700">{t('new_custom_inline')}</span> {t('no_custom_suffix')}
                </div>
             ) : (
-               <div className="space-y-3">{customTemplates.map(t => renderTemplateCard(t, { isStandard: false }))}</div>
+               <div className="space-y-3">{customTemplates.map(tpl => renderTemplateCard(tpl, { isStandard: false }))}</div>
             )}
          </section>
 
@@ -266,24 +268,24 @@ export default function AgentTemplateManager({ onOpenEditor }) {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
                <div className="rohy-card rounded-lg shadow-2xl w-full max-w-md">
                   <div className="px-6 py-5 border-b border-neutral-300">
-                     <h2 className="text-base font-semibold text-neutral-900">Reset &quot;{resetTarget.name}&quot; to shipped defaults?</h2>
+                     <h2 className="text-base font-semibold text-neutral-900">{t('reset_confirm_title', { name: resetTarget.name })}</h2>
                   </div>
                   <div className="px-6 py-5 text-sm text-neutral-700 space-y-2">
-                     <p>This restores the original name, role, system prompt, dos/don&apos;ts, avatar, and voice slot, and clears any LLM or memory overrides.</p>
-                     <p className="text-neutral-600">Custom edits to this standard persona will be lost.</p>
+                     <p>{t('reset_confirm_body1')}</p>
+                     <p className="text-neutral-600">{t('reset_confirm_body2')}</p>
                   </div>
                   <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-neutral-300">
                      <button
                         onClick={() => setResetTarget(null)}
                         className="rohy-subtle-button px-4 py-2 text-sm rounded"
                      >
-                        Cancel
+                        {t('cancel')}
                      </button>
                      <button
                         onClick={handleResetConfirmed}
                         className="px-4 py-2 text-sm rounded bg-teal-700 hover:bg-teal-600 text-white font-semibold"
                      >
-                        Reset to defaults
+                        {t('reset_to_defaults')}
                      </button>
                   </div>
                </div>

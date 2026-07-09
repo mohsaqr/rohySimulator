@@ -1,6 +1,8 @@
 {
   "cancel": "Peruuta",
+  "case_analytics": "Tapausanalytiikka",
   "dismiss": "Ohita",
+  "emotion_analytics": "Tunneanalytiikka",
   "end_debrief": "Lopeta ja siirry jälkipuintiin",
   "end_debrief_title": "Lopeta nykyinen istunto ja avaa jälkipuinti",
   "end_session_confirm_intro": "Tämä sulkee tapauksen jälkipuintia varten. Lopettamisen jälkeen:",
@@ -9,6 +11,7 @@
   "end_session_confirm_title": "Lopetetaanko istunto?",
   "end_session_confirm_transcript": "Voit tarkastella keskustelulokia jälkipuintihuoneessa, mutta et voi avata tapausta uudelleen.",
   "help_support": "Ohje ja tuki",
+  "language_menu_aria": "Vaihda kieli",
   "loading": "Ladataan...",
   "logout": "Kirjaudu ulos",
   "multi_tab_heads_up": "Huomio:",

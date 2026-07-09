@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Loader2, ArrowLeft, Download, RefreshCw, Activity,
     LayoutGrid, ListChecks, Check, Circle, ChevronDown, ChevronRight,
@@ -39,6 +40,7 @@ const FEED_MAX_ROWS = 200;
 // inside the existing CohortRoster drill-down as a sub-nav alongside the
 // unchanged "Manage" roster/join-code screen. GET only — no mutations.
 export default function CohortReports({ cohortId, initialView = 'roster' }) {
+    const { t } = useTranslation('teacher_reports');
     const [view, setView] = useState(initialView);
 
     // Deep-link support: when the parent re-targets this cohort at a
@@ -47,23 +49,23 @@ export default function CohortReports({ cohortId, initialView = 'roster' }) {
     useEffect(() => { setView(initialView); }, [initialView]);
 
     const tabs = [
-        { id: 'roster', label: 'Roster', hint: 'Students', icon: ListChecks },
-        { id: 'grid', label: 'Completion', hint: 'Progress grid', icon: LayoutGrid },
-        { id: 'analytics', label: 'Analytics', hint: 'Engagement', icon: BarChart3 },
-        { id: 'export', label: 'Export', hint: 'CSV', icon: Download },
-        { id: 'feed', label: 'Live feed', hint: 'Realtime', icon: Activity },
+        { id: 'roster', label: t('tab_roster_label'), hint: t('tab_roster_hint'), icon: ListChecks },
+        { id: 'grid', label: t('tab_grid_label'), hint: t('tab_grid_hint'), icon: LayoutGrid },
+        { id: 'analytics', label: t('tab_analytics_label'), hint: t('tab_analytics_hint'), icon: BarChart3 },
+        { id: 'export', label: t('tab_export_label'), hint: t('tab_export_hint'), icon: Download },
+        { id: 'feed', label: t('tab_feed_label'), hint: t('tab_feed_hint'), icon: Activity },
     ];
 
     return (
         <div className="space-y-5">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                {tabs.map((t) => {
-                    const Icon = t.icon;
-                    const active = view === t.id;
+                {tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const active = view === tab.id;
                     return (
                         <button
-                            key={t.id}
-                            onClick={() => setView(t.id)}
+                            key={tab.id}
+                            onClick={() => setView(tab.id)}
                             className={`rounded-2xl border p-3 text-left transition-all ${
                                 active
                                     ? 'border-teal-500 bg-teal-950/50 text-white shadow-lg shadow-teal-950/20'
@@ -75,8 +77,8 @@ export default function CohortReports({ cohortId, initialView = 'roster' }) {
                                     <Icon className="h-4 w-4" />
                                 </span>
                                 <span>
-                                    <span className="block text-sm font-bold">{t.label}</span>
-                                    <span className="block text-xs text-current opacity-60">{t.hint}</span>
+                                    <span className="block text-sm font-bold">{tab.label}</span>
+                                    <span className="block text-xs text-current opacity-60">{tab.hint}</span>
                                 </span>
                             </div>
                         </button>
@@ -199,6 +201,7 @@ function AnalyticsSkeleton() {
 // merge map), so the states are clinically meaningful without the
 // client-side resolver chain.
 function TnaSection({ sequences }) {
+    const { t } = useTranslation('teacher_reports');
     const model = useMemo(() => {
         const seqs = (sequences || []).filter((s) => Array.isArray(s) && s.length >= 2);
         if (seqs.length === 0) return null;
@@ -234,9 +237,9 @@ function TnaSection({ sequences }) {
 
     if (!model) {
         return (
-            <ChartCard title="Behaviour network (TNA)">
+            <ChartCard title={t('tna_title')}>
                 <p className="text-xs text-gray-500 py-8 text-center">
-                    Not enough sequenced activity to build a transition network for this scope.
+                    {t('tna_empty')}
                 </p>
             </ChartCard>
         );
@@ -244,11 +247,11 @@ function TnaSection({ sequences }) {
     const firstMeasure = model.cent ? Object.keys(model.cent.measures)[0] : null;
     return (
         <>
-            <SectionLabel>Behaviour</SectionLabel>
+            <SectionLabel>{t('section_behaviour')}</SectionLabel>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <ChartCard
-                    title="Behaviour network (TNA)"
-                    hint={`${model.labels.length} states`}
+                    title={t('tna_title')}
+                    hint={t('tna_states_hint', { count: model.labels.length })}
                 >
                     <TnaNetworkGraph
                         model={model.pruned}
@@ -258,7 +261,7 @@ function TnaSection({ sequences }) {
                         height={380}
                     />
                 </ChartCard>
-                <ChartCard title="Centrality" hint={firstMeasure || undefined}>
+                <ChartCard title={t('tna_centrality')} hint={firstMeasure || undefined}>
                     {model.cent && firstMeasure ? (
                         <CentralityBarChart
                             centralityData={model.cent}
@@ -267,11 +270,11 @@ function TnaSection({ sequences }) {
                         />
                     ) : (
                         <p className="text-xs text-gray-500 py-8 text-center">
-                            No centrality data
+                            {t('tna_no_centrality')}
                         </p>
                     )}
                 </ChartCard>
-                <ChartCard title="State frequency" wide>
+                <ChartCard title={t('tna_state_frequency')} wide>
                     <TnaFrequencyChart
                         sequences={sequences}
                         labels={model.labels}
@@ -342,16 +345,17 @@ function PulseInsight({ label, value, detail, tone = 'slate' }) {
 }
 
 function PulseDistribution({ items }) {
+    const { t } = useTranslation('teacher_reports');
     const total = items.reduce((sum, item) => sum + Number(item.value || 0), 0);
     return (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <h4 className="font-bold text-slate-950">Student status distribution</h4>
-                    <p className="text-sm text-slate-500">Course health by learner state.</p>
+                    <h4 className="font-bold text-slate-950">{t('pulse_status_title')}</h4>
+                    <p className="text-sm text-slate-500">{t('pulse_status_subtitle')}</p>
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
-                    {total} students
+                    {t('pulse_students_count', { count: total })}
                 </span>
             </div>
             <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-slate-100">
@@ -383,6 +387,7 @@ function PulseDistribution({ items }) {
 }
 
 function AnalyticsView({ cohortId }) {
+    const { t } = useTranslation('teacher_reports');
     const toast = useToast();
     const [pulse, setPulse] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -393,7 +398,7 @@ function AnalyticsView({ cohortId }) {
             setPulse(await getCohortPulse(cohortId));
         } catch (e) {
             setPulse(null);
-            toast.error(errMsg(e, 'Failed to load course analytics'));
+            toast.error(errMsg(e, t('err_load_course_analytics')));
         } finally {
             setLoading(false);
         }
@@ -433,18 +438,18 @@ function AnalyticsView({ cohortId }) {
         + ((quietStudents === 0 ? 1 : 1 - (quietStudents / Math.max(1, summary.students || 0))) * 20)
     );
     const distribution = [
-        { label: 'Complete', value: completedStudents, color: 'bg-emerald-500' },
-        { label: 'Active', value: activeStudents, color: 'bg-blue-500' },
-        { label: 'In progress', value: inProgressStudents, color: 'bg-amber-500' },
-        { label: 'Quiet / not started', value: quietStudents, color: 'bg-slate-400' },
+        { label: t('status_complete'), value: completedStudents, color: 'bg-emerald-500' },
+        { label: t('status_active'), value: activeStudents, color: 'bg-blue-500' },
+        { label: t('status_in_progress'), value: inProgressStudents, color: 'bg-amber-500' },
+        { label: t('status_quiet_not_started'), value: quietStudents, color: 'bg-slate-400' },
     ];
 
     return (
         <div className="space-y-4">
             <ReportShell
-                eyebrow="Analytics"
-                title="Course command center"
-                description="A course-native operating view: learner momentum, activity quality, case completion, and intervention priorities."
+                eyebrow={t('shell_analytics_eyebrow')}
+                title={t('shell_analytics_title')}
+                description={t('shell_analytics_desc')}
                 action={(
                     <button
                         type="button"
@@ -453,7 +458,7 @@ function AnalyticsView({ cohortId }) {
                         className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-100 disabled:opacity-50"
                     >
                         <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                        Refresh
+                        {t('btn_refresh')}
                     </button>
                 )}
             >
@@ -468,7 +473,7 @@ function AnalyticsView({ cohortId }) {
 
                     {!loading && !pulse && (
                         <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-                            Course analytics could not be loaded.
+                            {t('analytics_load_failed')}
                         </div>
                     )}
 
@@ -476,60 +481,60 @@ function AnalyticsView({ cohortId }) {
                         <>
                             <div className="grid gap-3 xl:grid-cols-[1.25fr_0.9fr_0.9fr_0.9fr]">
                                 <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 p-5 text-white shadow-xl">
-                                    <div className="text-[11px] font-black uppercase tracking-[0.18em] text-teal-200/80">Executive readout</div>
+                                    <div className="text-[11px] font-black uppercase tracking-[0.18em] text-teal-200/80">{t('exec_readout')}</div>
                                     <div className="mt-4 flex items-end justify-between gap-4">
                                         <div>
                                             <div className="text-5xl font-black leading-none tabular-nums">{pulseScore}</div>
-                                            <div className="mt-2 text-sm font-semibold text-slate-300">Course health score</div>
+                                            <div className="mt-2 text-sm font-semibold text-slate-300">{t('health_score')}</div>
                                         </div>
                                         <div className="text-right">
                                             <div className={`text-2xl font-black ${trend >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                                                 {trend >= 0 ? '+' : ''}{trend}%
                                             </div>
-                                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">weekly activity trend</div>
+                                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('weekly_trend')}</div>
                                         </div>
                                     </div>
                                     <div className="mt-5 grid gap-2 sm:grid-cols-3">
                                         <div className="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
-                                            <div className="text-xs text-slate-300">Avg events</div>
+                                            <div className="text-xs text-slate-300">{t('avg_events')}</div>
                                             <div className="mt-1 font-mono text-lg font-black">{avgEvents}</div>
                                         </div>
                                         <div className="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
-                                            <div className="text-xs text-slate-300">Avg sessions</div>
+                                            <div className="text-xs text-slate-300">{t('avg_sessions')}</div>
                                             <div className="mt-1 font-mono text-lg font-black">{avgSessions}</div>
                                         </div>
                                         <div className="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
-                                            <div className="text-xs text-slate-300">Completion</div>
+                                            <div className="text-xs text-slate-300">{t('lbl_completion')}</div>
                                             <div className="mt-1 font-mono text-lg font-black">{summary.completion_rate || 0}%</div>
                                         </div>
                                     </div>
                                 </div>
                                 <PulseInsight
-                                    label="Priority"
+                                    label={t('insight_priority')}
                                     value={summary.attention_students || 0}
-                                    detail="students need follow-up"
+                                    detail={t('insight_priority_detail')}
                                     tone={(summary.attention_students || 0) > 0 ? 'amber' : 'teal'}
                                 />
                                 <PulseInsight
-                                    label="Dominant activity"
-                                    value={topBucket?.label || 'None'}
-                                    detail={topBucket ? `${topBucket.count} events in this activity family` : 'No learner activity yet'}
+                                    label={t('insight_dominant_activity')}
+                                    value={topBucket?.label || t('insight_none')}
+                                    detail={topBucket ? t('insight_dominant_detail', { count: topBucket.count }) : t('insight_no_activity')}
                                     tone="blue"
                                 />
                                 <PulseInsight
-                                    label="Most active learner"
-                                    value={mostActiveStudent?.name || mostActiveStudent?.username || 'None'}
-                                    detail={mostActiveStudent ? `${mostActiveStudent.event_count} events · ${mostActiveStudent.session_count} sessions` : 'No active learners yet'}
+                                    label={t('insight_most_active')}
+                                    value={mostActiveStudent?.name || mostActiveStudent?.username || t('insight_none')}
+                                    detail={mostActiveStudent ? t('insight_most_active_detail', { events: mostActiveStudent.event_count, sessions: mostActiveStudent.session_count }) : t('insight_no_active_learners')}
                                     tone="slate"
                                 />
                             </div>
 
                             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                                <PulseMetric label="Students" value={summary.students} hint={`${summary.active_students || 0} active this week`} />
-                                <PulseMetric label="Support flags" value={summary.attention_students} hint="Quiet or not started" />
-                                <PulseMetric label="Sessions" value={summary.total_sessions} hint="Student attempts" />
-                                <PulseMetric label="Events" value={summary.total_events} hint={`${trend >= 0 ? '+' : ''}${trend}% vs prior week`} />
-                                <PulseMetric label="Completion" value={`${summary.completion_rate || 0}%`} hint="Assigned case slots" />
+                                <PulseMetric label={t('lbl_students')} value={summary.students} hint={t('metric_students_hint', { count: summary.active_students || 0 })} />
+                                <PulseMetric label={t('metric_support_flags')} value={summary.attention_students} hint={t('metric_support_flags_hint')} />
+                                <PulseMetric label={t('lbl_sessions')} value={summary.total_sessions} hint={t('metric_sessions_hint')} />
+                                <PulseMetric label={t('lbl_events')} value={summary.total_events} hint={t('metric_events_hint', { delta: `${trend >= 0 ? '+' : ''}${trend}` })} />
+                                <PulseMetric label={t('lbl_completion')} value={`${summary.completion_rate || 0}%`} hint={t('metric_completion_hint')} />
                             </div>
 
                             <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
@@ -537,23 +542,23 @@ function AnalyticsView({ cohortId }) {
                                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                                     <div className="flex items-center justify-between gap-3">
                                         <div>
-                                            <h4 className="font-bold text-slate-950">Case funnel</h4>
-                                            <p className="text-sm text-slate-500">Where assigned work is converting into completed debriefs.</p>
+                                            <h4 className="font-bold text-slate-950">{t('case_funnel_title')}</h4>
+                                            <p className="text-sm text-slate-500">{t('case_funnel_subtitle')}</p>
                                         </div>
                                         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
-                                            {hottestCase?.name || 'No active case'}
+                                            {hottestCase?.name || t('no_active_case')}
                                         </span>
                                     </div>
                                     <div className="mt-4 space-y-3">
                                         {cases.length === 0 ? (
-                                            <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500 ring-1 ring-slate-200">No cases assigned or attempted yet.</p>
+                                            <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500 ring-1 ring-slate-200">{t('no_cases_assigned')}</p>
                                         ) : cases.slice(0, 4).map((item) => (
                                             <div key={item.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                                                 <div className="flex items-center justify-between gap-3">
                                                     <div className="min-w-0">
                                                         <div className="truncate font-semibold text-slate-900">{item.name}</div>
                                                         <div className="text-xs text-slate-500">
-                                                            {item.students_attempted} attempted · {item.students_completed} completed
+                                                            {t('funnel_attempted_completed', { attempted: item.students_attempted, completed: item.students_completed })}
                                                         </div>
                                                     </div>
                                                     <span className="font-mono text-xs font-black text-slate-600">{item.completion_rate}%</span>
@@ -565,7 +570,7 @@ function AnalyticsView({ cohortId }) {
                                                             style={{ width: `${Math.min(100, Math.round((item.students_attempted / Math.max(1, summary.students || 0)) * 100))}%` }}
                                                         />
                                                     </div>
-                                                    <span>to</span>
+                                                    <span>{t('funnel_to')}</span>
                                                     <div className="h-2 overflow-hidden rounded-full bg-white">
                                                         <div
                                                             className="h-full rounded-full bg-emerald-500"
@@ -583,16 +588,16 @@ function AnalyticsView({ cohortId }) {
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                     <div className="flex items-center justify-between gap-3">
                                         <div>
-                                            <h4 className="font-bold text-slate-950">Activity frequencies</h4>
-                                            <p className="text-sm text-slate-500">What learners are actually doing in this course.</p>
+                                            <h4 className="font-bold text-slate-950">{t('activity_freq_title')}</h4>
+                                            <p className="text-sm text-slate-500">{t('activity_freq_subtitle')}</p>
                                         </div>
                                         <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-500 ring-1 ring-slate-200">
-                                            {summary.total_events || 0} events
+                                            {t('events_count', { count: summary.total_events || 0 })}
                                         </span>
                                     </div>
                                     <div className="mt-4 space-y-3">
                                         {frequencies.length === 0 ? (
-                                            <p className="rounded-lg bg-white p-4 text-sm text-slate-500 ring-1 ring-slate-200">No activity recorded yet.</p>
+                                            <p className="rounded-lg bg-white p-4 text-sm text-slate-500 ring-1 ring-slate-200">{t('no_activity_recorded')}</p>
                                         ) : frequencies.map((item) => (
                                             <PulseBar key={item.label} label={item.label} value={item.count} max={maxFrequency} />
                                         ))}
@@ -600,19 +605,19 @@ function AnalyticsView({ cohortId }) {
                                 </div>
 
                                 <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                    <h4 className="font-bold text-slate-950">Students needing attention</h4>
-                                    <p className="text-sm text-slate-500">A short operational list, not a wall of analytics.</p>
+                                    <h4 className="font-bold text-slate-950">{t('attention_title')}</h4>
+                                    <p className="text-sm text-slate-500">{t('attention_subtitle')}</p>
                                     <div className="mt-4 divide-y divide-slate-100">
                                         {attention.length === 0 ? (
                                             <p className="rounded-lg bg-emerald-50 p-4 text-sm font-medium text-emerald-700 ring-1 ring-emerald-100">
-                                                No quiet or not-started students right now.
+                                                {t('attention_none')}
                                             </p>
                                         ) : attention.map((student) => (
                                             <div key={student.id} className="flex items-center justify-between gap-3 py-3">
                                                 <div className="min-w-0">
                                                     <div className="truncate font-semibold text-slate-900">{student.name || student.username}</div>
                                                     <div className="text-xs text-slate-500">
-                                                        {student.primary_activity} · last active {fmtTime(student.last_activity)}
+                                                        {t('attention_last_active', { activity: student.primary_activity, time: fmtTime(student.last_activity) })}
                                                     </div>
                                                 </div>
                                                 <PulseBadge status={student.status} />
@@ -625,18 +630,18 @@ function AnalyticsView({ cohortId }) {
                             <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
                                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                                     <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-                                        <h4 className="font-bold text-slate-950">Student pulse</h4>
-                                        <p className="text-sm text-slate-500">Progress, recency, and dominant activity by learner.</p>
+                                        <h4 className="font-bold text-slate-950">{t('student_pulse_title')}</h4>
+                                        <p className="text-sm text-slate-500">{t('student_pulse_subtitle')}</p>
                                     </div>
                                     <div className="overflow-x-auto">
                                         <table className="min-w-full divide-y divide-slate-200 text-sm">
                                             <thead className="bg-white text-left text-xs uppercase tracking-wide text-slate-400">
                                                 <tr>
-                                                    <th className="px-4 py-3 font-bold">Student</th>
-                                                    <th className="px-4 py-3 font-bold">Status</th>
-                                                    <th className="px-4 py-3 font-bold">Cases</th>
-                                                    <th className="px-4 py-3 font-bold">Events</th>
-                                                    <th className="px-4 py-3 font-bold">Last active</th>
+                                                    <th className="px-4 py-3 font-bold">{t('lbl_student')}</th>
+                                                    <th className="px-4 py-3 font-bold">{t('lbl_status')}</th>
+                                                    <th className="px-4 py-3 font-bold">{t('lbl_cases')}</th>
+                                                    <th className="px-4 py-3 font-bold">{t('lbl_events')}</th>
+                                                    <th className="px-4 py-3 font-bold">{t('col_last_active')}</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
@@ -660,23 +665,23 @@ function AnalyticsView({ cohortId }) {
                                 </div>
 
                                 <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                    <h4 className="font-bold text-slate-950">Case progress</h4>
-                                    <p className="text-sm text-slate-500">Attempts and completion by assigned course case.</p>
+                                    <h4 className="font-bold text-slate-950">{t('case_progress_title')}</h4>
+                                    <p className="text-sm text-slate-500">{t('case_progress_subtitle')}</p>
                                     <div className="mt-4 space-y-4">
                                         {cases.length === 0 ? (
-                                            <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500 ring-1 ring-slate-200">No cases are assigned or attempted yet.</p>
+                                            <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500 ring-1 ring-slate-200">{t('case_progress_none')}</p>
                                         ) : cases.map((item) => (
                                             <div key={item.id} className="space-y-2">
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div>
                                                         <div className="font-semibold text-slate-900">{item.name}</div>
                                                         <div className="text-xs text-slate-500">
-                                                            {item.students_completed}/{summary.students || 0} completed · {item.sessions} sessions
+                                                            {t('case_completed_sessions', { completed: item.students_completed, total: summary.students || 0, sessions: item.sessions })}
                                                         </div>
                                                     </div>
                                                     <span className="font-mono text-xs font-bold text-slate-500">{item.completion_rate}%</span>
                                                 </div>
-                                                <PulseBar label="Attempts" value={item.sessions} max={maxCaseSessions} tone="bg-slate-700" />
+                                                <PulseBar label={t('bar_attempts')} value={item.sessions} max={maxCaseSessions} tone="bg-slate-700" />
                                             </div>
                                         ))}
                                     </div>
@@ -685,10 +690,10 @@ function AnalyticsView({ cohortId }) {
 
                             <div className="grid gap-4 xl:grid-cols-2">
                                 <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                    <h4 className="font-bold text-slate-950">Top activities</h4>
+                                    <h4 className="font-bold text-slate-950">{t('top_activities_title')}</h4>
                                     <div className="mt-3 divide-y divide-slate-100">
                                         {topActivities.length === 0 ? (
-                                            <p className="text-sm text-slate-500">No frequent activities yet.</p>
+                                            <p className="text-sm text-slate-500">{t('top_activities_none')}</p>
                                         ) : topActivities.map((item) => (
                                             <div key={`${item.bucket}-${item.label}`} className="flex items-center justify-between gap-3 py-2">
                                                 <div className="min-w-0">
@@ -702,10 +707,10 @@ function AnalyticsView({ cohortId }) {
                                 </div>
 
                                 <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                    <h4 className="font-bold text-slate-950">Recent activity</h4>
+                                    <h4 className="font-bold text-slate-950">{t('recent_activity_title')}</h4>
                                     <div className="mt-3 divide-y divide-slate-100">
                                         {recent.length === 0 ? (
-                                            <p className="text-sm text-slate-500">No recent activity yet.</p>
+                                            <p className="text-sm text-slate-500">{t('recent_activity_none')}</p>
                                         ) : recent.map((event) => (
                                             <div key={event.id} className="py-2">
                                                 <div className="flex items-center justify-between gap-3">
@@ -713,7 +718,7 @@ function AnalyticsView({ cohortId }) {
                                                     <span className="text-xs text-slate-400">{fmtTime(event.timestamp)}</span>
                                                 </div>
                                                 <div className="mt-0.5 text-xs text-slate-500">
-                                                    {event.bucket} · {event.case_name || 'No case'} · {event.activity}
+                                                    {event.bucket} · {event.case_name || t('no_case')} · {event.activity}
                                                 </div>
                                             </div>
                                         ))}
@@ -727,7 +732,7 @@ function AnalyticsView({ cohortId }) {
 
             <details className="rounded-2xl border border-neutral-700 bg-neutral-900/60 p-3">
                 <summary className="cursor-pointer px-2 py-1 text-sm font-semibold text-neutral-200">
-                    Advanced event analytics
+                    {t('advanced_analytics')}
                 </summary>
                 <div className="mt-3">
                     <AdvancedAnalyticsView cohortId={cohortId} />
@@ -745,6 +750,7 @@ function AnalyticsView({ cohortId }) {
 // surface — no light-grey slab, no redundant generic filter bar, no
 // TNA/network machinery a teacher didn't ask for.
 function AdvancedAnalyticsView({ cohortId }) {
+    const { t } = useTranslation('teacher_reports');
     const toast = useToast();
     const [roster, setRoster] = useState([]);
     const [userId, setUserId] = useState('');       // '' = whole class
@@ -757,7 +763,7 @@ function AdvancedAnalyticsView({ cohortId }) {
     useEffect(() => {
         getCohortRoster(cohortId)
             .then((d) => setRoster(studentOnly(d.roster)))
-            .catch((e) => toast.error(errMsg(e, 'Failed to load course roster')));
+            .catch((e) => toast.error(errMsg(e, t('err_load_roster'))));
     }, [cohortId, toast]);
 
     // A picked student's sessions drive the session picker (reuses the
@@ -806,7 +812,7 @@ function AdvancedAnalyticsView({ cohortId }) {
         } catch (e) {
             if (reqId !== reqIdRef.current) return; // superseded; ignore
             setData(null); // don't render the prior scope's stats
-            toast.error(errMsg(e, 'Failed to load analytics'));
+            toast.error(errMsg(e, t('err_load_analytics')));
         } finally {
             if (reqId === reqIdRef.current) setLoading(false);
         }
@@ -820,12 +826,12 @@ function AdvancedAnalyticsView({ cohortId }) {
     const objData = Object.fromEntries(
         (data?.stats?.objectTypes || []).map((r) => [r.label, r.count]));
     const hasTimeline = (data?.timeline?.days?.length || 0) > 0;
-    const scopeWord = sessionId ? 'session' : student ? 'student' : 'class';
+    const scopeWord = sessionId ? t('scope_session') : student ? t('scope_student') : t('scope_class');
     const scopeTitle = sessionId
-        ? 'Session report'
+        ? t('scope_session_report')
         : student
             ? `${student.name || student.username}`
-            : 'Whole class';
+            : t('scope_whole_class');
 
     return (
         // Crafted light "report sheet": one self-contained document that
@@ -839,7 +845,7 @@ function AdvancedAnalyticsView({ cohortId }) {
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-5 py-3.5 border-b border-gray-200 bg-gray-50">
                 <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400 mr-1">
-                        Analytics
+                        {t('shell_analytics_eyebrow')}
                     </span>
                     <button
                         type="button"
@@ -850,16 +856,16 @@ function AdvancedAnalyticsView({ cohortId }) {
                                 : 'text-gray-600 hover:bg-gray-200/70'
                         }`}
                     >
-                        Whole class
+                        {t('scope_whole_class')}
                     </button>
                     <span className="text-gray-300 select-none">›</span>
                     <select
-                        aria-label="Student"
+                        aria-label={t('aria_student')}
                         value={userId}
                         onChange={(e) => { setUserId(e.target.value); setSessionId(''); }}
                         className="px-2.5 py-1.5 text-sm bg-white border border-gray-300 rounded-lg text-gray-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                     >
-                        <option value="">All students</option>
+                        <option value="">{t('opt_all_students')}</option>
                         {roster.map((r) => (
                             <option key={r.id} value={r.id}>{r.name || r.username}</option>
                         ))}
@@ -868,15 +874,15 @@ function AdvancedAnalyticsView({ cohortId }) {
                         <>
                             <span className="text-gray-300 select-none">›</span>
                             <select
-                                aria-label="Session"
+                                aria-label={t('aria_session')}
                                 value={sessionId}
                                 onChange={(e) => setSessionId(e.target.value)}
                                 className="px-2.5 py-1.5 text-sm bg-white border border-gray-300 rounded-lg text-gray-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                             >
-                                <option value="">All sessions</option>
+                                <option value="">{t('opt_all_sessions')}</option>
                                 {sessions.map((se) => (
                                     <option key={se.id} value={se.id}>
-                                        {se.case_name || `Case ${se.case_id}`}
+                                        {se.case_name || t('case_fallback', { id: se.case_id })}
                                         {se.start_time ? ` · ${fmtTime(se.start_time)}` : ''}
                                     </option>
                                 ))}
@@ -888,11 +894,11 @@ function AdvancedAnalyticsView({ cohortId }) {
                     type="button"
                     onClick={loadAnalytics}
                     disabled={loading}
-                    title="Refresh"
+                    title={t('btn_refresh')}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-200/70 rounded-lg transition-colors disabled:opacity-50"
                 >
                     <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                    Refresh
+                    {t('btn_refresh')}
                 </button>
             </div>
 
@@ -903,31 +909,31 @@ function AdvancedAnalyticsView({ cohortId }) {
                     <>
                         {/* KPI band — one bordered strip, divided cells. */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden divide-x divide-y lg:divide-y-0 divide-gray-100">
-                            <StatTile label="Events" value={data.summary.totalActivities} accent />
-                            <StatTile label="Sessions" value={data.summary.uniqueSessions} />
+                            <StatTile label={t('lbl_events')} value={data.summary.totalActivities} accent />
+                            <StatTile label={t('lbl_sessions')} value={data.summary.uniqueSessions} />
                             <StatTile
-                                label={student ? 'Student' : 'Students'}
+                                label={student ? t('lbl_student') : t('lbl_students')}
                                 value={student ? (student.name || student.username) : data.summary.uniqueUsers}
                             />
-                            <StatTile label="Avg events / student" value={data.summary.avgPerUser} />
+                            <StatTile label={t('stat_avg_per_student')} value={data.summary.avgPerUser} />
                         </div>
 
                         {data.summary.totalActivities === 0 ? (
                             <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 py-14 text-center">
                                 <p className="text-sm font-medium text-gray-500">
-                                    No recorded activity for this {scopeWord} yet.
+                                    {t('no_activity_scope', { scope: scopeWord })}
                                 </p>
                                 <p className="mt-1 text-xs text-gray-400">
-                                    {scopeTitle} — charts appear once learners start working.
+                                    {t('scope_charts_hint', { scope: scopeTitle })}
                                 </p>
                             </div>
                         ) : (
                             <>
-                                <SectionLabel>Engagement</SectionLabel>
+                                <SectionLabel>{t('section_engagement')}</SectionLabel>
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                     <ChartCard
-                                        title="Activity over time"
-                                        hint={hasTimeline ? `${data.timeline.days.length} days` : undefined}
+                                        title={t('chart_activity_over_time')}
+                                        hint={hasTimeline ? t('days_hint', { count: data.timeline.days.length }) : undefined}
                                         wide
                                     >
                                         {hasTimeline ? (
@@ -938,17 +944,17 @@ function AdvancedAnalyticsView({ cohortId }) {
                                             />
                                         ) : (
                                             <p className="text-xs text-gray-500 py-8 text-center">
-                                                Not enough data to chart a trend.
+                                                {t('not_enough_trend')}
                                             </p>
                                         )}
                                     </ChartCard>
-                                    <ChartCard title="When they worked" wide>
+                                    <ChartCard title={t('chart_when_worked')} wide>
                                         <ActivityHeatmap data={data.heatmap} />
                                     </ChartCard>
-                                    <ChartCard title="What they did (actions)">
+                                    <ChartCard title={t('chart_what_did')}>
                                         <ActivityDonutChart data={verbData} />
                                     </ChartCard>
-                                    <ChartCard title="What they touched (object types)">
+                                    <ChartCard title={t('chart_what_touched')}>
                                         <ActivityDonutChart data={objData} />
                                     </ChartCard>
                                 </div>
@@ -964,6 +970,7 @@ function AdvancedAnalyticsView({ cohortId }) {
 
 // 1. Roster + per-student drill-down.
 function RosterView({ cohortId }) {
+    const { t } = useTranslation('teacher_reports');
     const toast = useToast();
     const [loading, setLoading] = useState(true);
     const [roster, setRoster] = useState([]);
@@ -975,7 +982,7 @@ function RosterView({ cohortId }) {
             const data = await getCohortRoster(cohortId);
             setRoster(studentOnly(data.roster));
         } catch (e) {
-            toast.error(errMsg(e, 'Failed to load roster'));
+            toast.error(errMsg(e, t('err_load_roster2')));
         } finally {
             setLoading(false);
         }
@@ -1002,7 +1009,7 @@ function RosterView({ cohortId }) {
 
     if (loading) {
         return (
-            <ReportShell eyebrow="Roster" title="Student roster" description="Loading enrolled students and their course activity.">
+            <ReportShell eyebrow={t('roster_eyebrow')} title={t('roster_title')} description={t('roster_loading_desc')}>
                 <div className="flex items-center justify-center h-40 text-slate-400">
                     <Loader2 className="w-5 h-5 animate-spin" />
                 </div>
@@ -1012,9 +1019,9 @@ function RosterView({ cohortId }) {
 
     if (roster.length === 0) {
         return (
-            <ReportShell eyebrow="Roster" title="No students enrolled" description="Add students from Manage or share the registration code to populate this roster.">
+            <ReportShell eyebrow={t('roster_eyebrow')} title={t('roster_empty_title')} description={t('roster_empty_desc')}>
                 <div className="p-8 text-center text-sm text-slate-500">
-                    Reports, exports, and live activity stay empty until students enrol.
+                    {t('roster_empty_body')}
                 </div>
             </ReportShell>
         );
@@ -1022,26 +1029,26 @@ function RosterView({ cohortId }) {
 
     return (
         <ReportShell
-            eyebrow="Roster"
-            title="Student roster"
-            description="Enrolled students with session counts, case progress, and latest activity."
+            eyebrow={t('roster_eyebrow')}
+            title={t('roster_title')}
+            description={t('roster_desc')}
         >
             <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 border-b border-slate-200 bg-white md:grid-cols-4 md:divide-y-0">
-                <ReportMetric label="Students" value={roster.length} />
-                <ReportMetric label="Active" value={activeCount} accent="text-teal-700" />
-                <ReportMetric label="Sessions" value={totals.sessions} />
-                <ReportMetric label="Completed cases" value={totals.completed} accent="text-emerald-700" />
+                <ReportMetric label={t('lbl_students')} value={roster.length} />
+                <ReportMetric label={t('metric_active')} value={activeCount} accent="text-teal-700" />
+                <ReportMetric label={t('lbl_sessions')} value={totals.sessions} />
+                <ReportMetric label={t('metric_completed_cases')} value={totals.completed} accent="text-emerald-700" />
             </div>
             <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                     <thead>
                         <tr className="border-b border-slate-200 bg-slate-50 text-left">
-                            <th className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">Student</th>
-                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">Sessions</th>
-                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">Attempted</th>
-                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">Completed</th>
-                            <th className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">Last activity</th>
-                            <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">Action</th>
+                            <th className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">{t('lbl_student')}</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">{t('lbl_sessions')}</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">{t('lbl_attempted')}</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">{t('lbl_completed')}</th>
+                            <th className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">{t('col_last_activity')}</th>
+                            <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">{t('col_action')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1080,7 +1087,7 @@ function RosterView({ cohortId }) {
                                             onClick={() => setOpenStudent(s.id)}
                                             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm hover:border-teal-300 hover:text-teal-800"
                                         >
-                                            View activity
+                                            {t('btn_view_activity')}
                                         </button>
                                     </td>
                                 </tr>
@@ -1099,6 +1106,7 @@ function RosterView({ cohortId }) {
 // "their activity, per case" — no new endpoint; events already carry
 // session_id from the existing /cohorts/:id/student/:userId payload.
 function SessionGroup({ group, defaultOpen }) {
+    const { t } = useTranslation('teacher_reports');
     const [open, setOpen] = useState(defaultOpen);
     const { session: s, events } = group;
     return (
@@ -1113,11 +1121,11 @@ function SessionGroup({ group, defaultOpen }) {
                     : <ChevronRight className="w-4 h-4 text-neutral-500 shrink-0" />}
                 <span className="flex-1 text-sm text-white truncate">{group.title}</span>
                 {s && (s.completed
-                    ? <Check className="w-4 h-4 text-green-400 shrink-0" title="Debrief completed" />
-                    : <Circle className="w-3 h-3 text-neutral-600 shrink-0" title="Not completed" />)}
+                    ? <Check className="w-4 h-4 text-green-400 shrink-0" title={t('title_debrief_completed')} />
+                    : <Circle className="w-3 h-3 text-neutral-600 shrink-0" title={t('title_not_completed')} />)}
                 {s?.status && <span className="text-xs text-neutral-500 shrink-0">{s.status}</span>}
                 <span className="text-xs text-neutral-500 shrink-0">
-                    {events.length} action{events.length === 1 ? '' : 's'}
+                    {t('actions_count', { count: events.length })}
                 </span>
                 {s?.start_time && (
                     <span className="text-xs text-neutral-500 whitespace-nowrap shrink-0">
@@ -1128,7 +1136,7 @@ function SessionGroup({ group, defaultOpen }) {
             {open && (
                 events.length === 0 ? (
                     <p className="text-xs text-neutral-500 px-3 pb-2 pt-1">
-                        No recorded actions in this session.
+                        {t('session_no_actions')}
                     </p>
                 ) : (
                     <ul className="px-3 pb-2 pt-1 space-y-0.5">
@@ -1157,6 +1165,7 @@ function SessionGroup({ group, defaultOpen }) {
 }
 
 function StudentDetail({ cohortId, userId, onBack }) {
+    const { t } = useTranslation('teacher_reports');
     const toast = useToast();
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState(null);
@@ -1166,7 +1175,7 @@ function StudentDetail({ cohortId, userId, onBack }) {
         try {
             setData(await getCohortStudent(cohortId, userId));
         } catch (e) {
-            toast.error(errMsg(e, 'Failed to load student'));
+            toast.error(errMsg(e, t('err_load_student')));
         } finally {
             setLoading(false);
         }
@@ -1180,7 +1189,7 @@ function StudentDetail({ cohortId, userId, onBack }) {
                 onClick={onBack}
                 className="flex items-center gap-2 text-sm text-neutral-400 hover:text-white mb-4 transition-colors"
             >
-                <ArrowLeft className="w-4 h-4" /> Back to roster
+                <ArrowLeft className="w-4 h-4" /> {t('btn_back_roster')}
             </button>
 
             {loading ? (
@@ -1188,7 +1197,7 @@ function StudentDetail({ cohortId, userId, onBack }) {
                     <Loader2 className="w-5 h-5 animate-spin" />
                 </div>
             ) : !data ? (
-                <p className="text-sm text-neutral-500">Student not found.</p>
+                <p className="text-sm text-neutral-500">{t('student_not_found')}</p>
             ) : (
                 <>
                     <h4 className="text-base font-bold text-white mb-1">
@@ -1203,7 +1212,7 @@ function StudentDetail({ cohortId, userId, onBack }) {
                         const sessions = data.sessions || [];
                         const events = data.events || [];
                         if (sessions.length === 0 && events.length === 0) {
-                            return <p className="text-sm text-neutral-500">No activity yet.</p>;
+                            return <p className="text-sm text-neutral-500">{t('no_activity_yet')}</p>;
                         }
                         // Bucket events under their session (events carry
                         // session_id). Events with no/unknown session land
@@ -1216,7 +1225,7 @@ function StudentDetail({ cohortId, userId, onBack }) {
                         }
                         const groups = sessions.map(s => ({
                             key: s.id,
-                            title: s.case_name || `Case ${s.case_id}`,
+                            title: s.case_name || t('case_fallback', { id: s.case_id }),
                             session: s,
                             events: bySession.get(s.id) || [],
                         }));
@@ -1224,10 +1233,10 @@ function StudentDetail({ cohortId, userId, onBack }) {
                         return (
                             <div className="space-y-2">
                                 <h5 className="text-sm font-bold text-neutral-200 mb-1">
-                                    Activity by case ({sessions.length} session{sessions.length === 1 ? '' : 's'}, {events.length} action{events.length === 1 ? '' : 's'})
+                                    {t('activity_by_case', { sessions: sessions.length, actions: events.length })}
                                 </h5>
                                 {groups.length === 0 && orphan.length === 0 && (
-                                    <p className="text-sm text-neutral-500">No sessions yet.</p>
+                                    <p className="text-sm text-neutral-500">{t('no_sessions_yet')}</p>
                                 )}
                                 {groups.map((g, i) => (
                                     <SessionGroup key={g.key} group={g} defaultOpen={i === 0} />
@@ -1235,7 +1244,7 @@ function StudentDetail({ cohortId, userId, onBack }) {
                                 {orphan.length > 0 && (
                                     <SessionGroup
                                         key="__none__"
-                                        group={{ key: '__none__', title: 'Other activity (no session)', session: null, events: orphan }}
+                                        group={{ key: '__none__', title: t('other_activity_no_session'), session: null, events: orphan }}
                                         defaultOpen={groups.length === 0}
                                     />
                                 )}
@@ -1250,6 +1259,7 @@ function StudentDetail({ cohortId, userId, onBack }) {
 
 // 2. Students × cases completion matrix.
 function GridView({ cohortId }) {
+    const { t } = useTranslation('teacher_reports');
     const toast = useToast();
     const [loading, setLoading] = useState(true);
     const [grid, setGrid] = useState(null);
@@ -1259,7 +1269,7 @@ function GridView({ cohortId }) {
         try {
             setGrid(await getCohortGrid(cohortId));
         } catch (e) {
-            toast.error(errMsg(e, 'Failed to load grid'));
+            toast.error(errMsg(e, t('err_load_grid')));
         } finally {
             setLoading(false);
         }
@@ -1293,9 +1303,9 @@ function GridView({ cohortId }) {
     if (students.length === 0) {
         return (
             <div className="rounded-2xl border border-dashed border-neutral-700 bg-neutral-900/50 p-8 text-center">
-                <div className="text-sm font-semibold text-neutral-200">No students enrolled</div>
+                <div className="text-sm font-semibold text-neutral-200">{t('grid_empty_students_title')}</div>
                 <p className="mt-1 text-sm text-neutral-500">
-                    Completion reports appear after students are enrolled in this course.
+                    {t('grid_empty_students_body')}
                 </p>
             </div>
         );
@@ -1303,9 +1313,9 @@ function GridView({ cohortId }) {
     if (cases.length === 0) {
         return (
             <div className="rounded-2xl border border-dashed border-neutral-700 bg-neutral-900/50 p-8 text-center">
-                <div className="text-sm font-semibold text-neutral-200">No case activity yet</div>
+                <div className="text-sm font-semibold text-neutral-200">{t('grid_empty_cases_title')}</div>
                 <p className="mt-1 text-sm text-neutral-500">
-                    The completion grid populates once enrolled students start course cases.
+                    {t('grid_empty_cases_body')}
                 </p>
             </div>
         );
@@ -1317,24 +1327,24 @@ function GridView({ cohortId }) {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                            Completion report
+                            {t('grid_eyebrow')}
                         </div>
-                        <h3 className="mt-1 text-lg font-bold text-slate-950">Student progress by case</h3>
+                        <h3 className="mt-1 text-lg font-bold text-slate-950">{t('grid_title')}</h3>
                         <p className="mt-1 text-sm text-slate-500">
-                            {students.length} enrolled student{students.length === 1 ? '' : 's'} across {cases.length} case{cases.length === 1 ? '' : 's'}.
+                            {t('grid_subtitle', { students: students.length, cases: cases.length })}
                         </p>
                     </div>
                     <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-800">
-                        {completionRate}% complete
+                        {t('grid_complete_badge', { rate: completionRate })}
                     </div>
                 </div>
             </div>
 
             <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 border-b border-slate-200 bg-white md:grid-cols-4 md:divide-y-0">
-                <ReportMetric label="Students" value={students.length} />
-                <ReportMetric label="Cases" value={cases.length} />
-                <ReportMetric label="Completed" value={completedCells} accent="text-emerald-700" />
-                <ReportMetric label="Attempted" value={attemptedCells} accent="text-amber-600" />
+                <ReportMetric label={t('lbl_students')} value={students.length} />
+                <ReportMetric label={t('lbl_cases')} value={cases.length} />
+                <ReportMetric label={t('lbl_completed')} value={completedCells} accent="text-emerald-700" />
+                <ReportMetric label={t('lbl_attempted')} value={attemptedCells} accent="text-amber-600" />
             </div>
 
             <div className="overflow-x-auto">
@@ -1342,7 +1352,7 @@ function GridView({ cohortId }) {
                     <thead>
                         <tr className="border-b border-slate-200 bg-slate-50 text-left">
                             <th className="sticky left-0 z-10 min-w-[220px] bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
-                                Student
+                                {t('lbl_student')}
                             </th>
                             {cases.map((c) => (
                                 <th
@@ -1369,8 +1379,8 @@ function GridView({ cohortId }) {
                                     {cases.map((c) => {
                                         const cell = row[c.id];
                                         const title = cell
-                                            ? `${cell.completed ? 'Completed' : 'Attempted'} · last ${fmtTime(cell.last_activity)}`
-                                            : 'Not attempted';
+                                            ? t('cell_title', { state: cell.completed ? t('cell_completed') : t('cell_attempted'), time: fmtTime(cell.last_activity) })
+                                            : t('cell_not_attempted');
                                         return (
                                             <td key={c.id} className="px-4 py-3 text-center" title={title}>
                                                 <StatusPill cell={cell} />
@@ -1386,11 +1396,11 @@ function GridView({ cohortId }) {
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs text-slate-500">
                 <div className="flex flex-wrap items-center gap-3">
-                    <LegendItem tone="completed" label="Completed" />
-                    <LegendItem tone="attempted" label="Attempted, not completed" />
-                    <LegendItem tone="none" label="Not attempted" />
+                    <LegendItem tone="completed" label={t('legend_completed')} />
+                    <LegendItem tone="attempted" label={t('legend_attempted')} />
+                    <LegendItem tone="none" label={t('legend_none')} />
                 </div>
-                <span>{untouchedCells} not attempted cell{untouchedCells === 1 ? '' : 's'}</span>
+                <span>{t('not_attempted_cells', { count: untouchedCells })}</span>
             </div>
         </div>
     );
@@ -1406,23 +1416,24 @@ function ReportMetric({ label, value, accent = 'text-slate-950' }) {
 }
 
 function StatusPill({ cell }) {
+    const { t } = useTranslation('teacher_reports');
     if (!cell) {
         return (
             <span className="inline-flex min-w-[7rem] items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-400">
-                Not started
+                {t('pill_not_started')}
             </span>
         );
     }
     if (cell.completed) {
         return (
             <span className="inline-flex min-w-[7rem] items-center justify-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
-                <Check className="h-3.5 w-3.5" /> Completed
+                <Check className="h-3.5 w-3.5" /> {t('pill_completed')}
             </span>
         );
     }
     return (
         <span className="inline-flex min-w-[7rem] items-center justify-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
-            <Circle className="h-2.5 w-2.5 fill-amber-400 text-amber-500" /> Attempted
+            <Circle className="h-2.5 w-2.5 fill-amber-400 text-amber-500" /> {t('pill_attempted')}
         </span>
     );
 }
@@ -1438,6 +1449,7 @@ function LegendItem({ tone, label }) {
 
 // 3. CSV export (auth'd blob download) + optional JSON preview affordance.
 function ExportView({ cohortId }) {
+    const { t } = useTranslation('teacher_reports');
     const toast = useToast();
     const [busy, setBusy] = useState(false);
 
@@ -1445,9 +1457,9 @@ function ExportView({ cohortId }) {
         setBusy(true);
         try {
             await downloadCohortExport(cohortId);
-            toast.success('CSV download started');
+            toast.success(t('csv_download_started'));
         } catch (e) {
-            toast.error(errMsg(e, 'Export failed'));
+            toast.error(errMsg(e, t('err_export')));
         } finally {
             setBusy(false);
         }
@@ -1455,9 +1467,9 @@ function ExportView({ cohortId }) {
 
     return (
         <ReportShell
-            eyebrow="Export"
-            title="Course report export"
-            description="Download a flattened student-by-case completion file for grading, audit, or LMS import."
+            eyebrow={t('export_eyebrow')}
+            title={t('export_title')}
+            description={t('export_desc')}
             action={(
                 <button
                     onClick={handleDownload}
@@ -1465,22 +1477,22 @@ function ExportView({ cohortId }) {
                     className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-teal-800 disabled:opacity-50"
                 >
                     {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                    Download CSV
+                    {t('btn_download_csv')}
                 </button>
             )}
         >
             <div className="grid gap-4 p-5 md:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm font-bold text-slate-900">Roster x cases</div>
-                    <p className="mt-1 text-sm text-slate-500">One row per student-case pair with attempted/completed state.</p>
+                    <div className="text-sm font-bold text-slate-900">{t('export_card1_title')}</div>
+                    <p className="mt-1 text-sm text-slate-500">{t('export_card1_body')}</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm font-bold text-slate-900">Audit-ready columns</div>
-                    <p className="mt-1 text-sm text-slate-500">Includes course, student, case, attempted, completed, and last activity.</p>
+                    <div className="text-sm font-bold text-slate-900">{t('export_card2_title')}</div>
+                    <p className="mt-1 text-sm text-slate-500">{t('export_card2_body')}</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm font-bold text-slate-900">Current course scope</div>
-                    <p className="mt-1 text-sm text-slate-500">Export is restricted to this course and student enrolments.</p>
+                    <div className="text-sm font-bold text-slate-900">{t('export_card3_title')}</div>
+                    <p className="mt-1 text-sm text-slate-500">{t('export_card3_body')}</p>
                 </div>
             </div>
         </ReportShell>
@@ -1490,6 +1502,7 @@ function ExportView({ cohortId }) {
 // 4. Live activity feed — incremental poll on the numeric learning_events.id
 // cursor (`next_since`). Newest first, bounded list.
 function FeedView({ cohortId }) {
+    const { t } = useTranslation('teacher_reports');
     const toast = useToast();
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -1510,7 +1523,7 @@ function FeedView({ cohortId }) {
                 setEvents((prev) => [...incoming, ...prev].slice(0, FEED_MAX_ROWS));
             }
         } catch (e) {
-            toast.error(errMsg(e, 'Failed to refresh feed'));
+            toast.error(errMsg(e, t('err_refresh_feed')));
         } finally {
             setLoading(false);
         }
@@ -1531,20 +1544,20 @@ function FeedView({ cohortId }) {
 
     return (
         <ReportShell
-            eyebrow="Live feed"
-            title="Realtime course activity"
-            description={`Refreshes every ${FEED_POLL_MS / 1000}s while this tab is open.`}
+            eyebrow={t('feed_eyebrow')}
+            title={t('feed_title')}
+            description={t('feed_desc', { seconds: FEED_POLL_MS / 1000 })}
             action={(
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setPaused((p) => !p)}
                         className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm hover:border-teal-300 hover:text-teal-800"
                     >
-                        {paused ? 'Resume' : 'Pause'}
+                        {paused ? t('btn_resume') : t('btn_pause')}
                     </button>
                     <button
                         onClick={poll}
-                        title="Refresh now"
+                        title={t('title_refresh_now')}
                         className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm hover:border-teal-300 hover:text-teal-800"
                     >
                         <RefreshCw className="w-4 h-4" />
@@ -1559,7 +1572,7 @@ function FeedView({ cohortId }) {
                 </div>
             ) : events.length === 0 ? (
                 <div className="p-8 text-center text-sm text-slate-500">
-                    No live activity yet. Student events will appear here as they work through cases.
+                    {t('feed_empty')}
                 </div>
             ) : (
                 <ul className="max-h-[32rem] divide-y divide-slate-100 overflow-y-auto">

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, Loader2, Check, AlertTriangle } from 'lucide-react';
 import { ApiError } from '../../services/apiClient';
 import { roleLabel } from '../../constants/roleLabels';
@@ -17,6 +18,7 @@ const INPUT =
 // is fetched here (GET /cases — educator-accessible) so callers don't have
 // to thread the fetch through.
 export function CasePicker({ selected, onToggle, excludeIds = [], heightClass = 'max-h-56' }) {
+    const { t } = useTranslation('teacher_cohorts');
     const [cases, setCases] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -30,7 +32,7 @@ export function CasePicker({ selected, onToggle, excludeIds = [], heightClass = 
                 if (alive) setCases(Array.isArray(data?.cases) ? data.cases : []);
             } catch (e) {
                 if (alive) {
-                    setError(e instanceof ApiError ? (e.message || 'Failed to load cases') : 'Failed to load cases');
+                    setError(e instanceof ApiError ? (e.message || t('error_load_cases')) : t('error_load_cases'));
                 }
             } finally {
                 if (alive) setLoading(false);
@@ -64,8 +66,7 @@ export function CasePicker({ selected, onToggle, excludeIds = [], heightClass = 
     if (cases.length === 0) {
         return (
             <p className="text-sm text-neutral-500 p-3 bg-neutral-800/40 border border-neutral-700 rounded-lg">
-                No cases in the library yet. Create cases under Case Manager first,
-                then assign them here.
+                {t('empty_library_no_cases')}
             </p>
         );
     }
@@ -78,14 +79,14 @@ export function CasePicker({ selected, onToggle, excludeIds = [], heightClass = 
                     type="text"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
-                    placeholder="Search cases"
-                    aria-label="Search cases"
+                    placeholder={t('placeholder_search_cases')}
+                    aria-label={t('placeholder_search_cases')}
                     className={`${INPUT} pl-9`}
                 />
             </div>
             <div className={`${heightClass} overflow-y-auto space-y-1 pr-1`}>
                 {filtered.length === 0 ? (
-                    <p className="text-sm text-neutral-500 p-2">No cases match “{q}”.</p>
+                    <p className="text-sm text-neutral-500 p-2">{t('empty_no_cases_match', { q })}</p>
                 ) : (
                     filtered.map((c) => {
                         const id = Number(c.id);
@@ -109,14 +110,14 @@ export function CasePicker({ selected, onToggle, excludeIds = [], heightClass = 
                                 >
                                     {on && <Check className="w-3 h-3 text-white" />}
                                 </span>
-                                <span className="text-sm text-white truncate">{c.name || `Case ${id}`}</span>
+                                <span className="text-sm text-white truncate">{c.name || t('case_fallback', { id })}</span>
                             </button>
                         );
                     })
                 )}
             </div>
             <p className="text-xs text-neutral-500 mt-2">
-                {selected.size} case{selected.size === 1 ? '' : 's'} selected
+                {t('label_cases_selected', { count: selected.size })}
             </p>
         </div>
     );
@@ -140,6 +141,7 @@ export function PeoplePicker({
     onChange,
     heightClass = 'max-h-56',
 }) {
+    const { t } = useTranslation('teacher_cohorts');
     const [users, setUsers] = useState(null); // null = not-yet / unavailable
     const [loading, setLoading] = useState(true);
     const [canList, setCanList] = useState(true);
@@ -221,8 +223,8 @@ export function PeoplePicker({
     if (!canList) {
         const label =
             mode === 'students'
-                ? 'Add students by username or email — one per line'
-                : 'Add co-teachers by username or email — one per line';
+                ? t('label_add_students_lines')
+                : t('label_add_coteachers_lines');
         return (
             <div>
                 <textarea
@@ -234,9 +236,7 @@ export function PeoplePicker({
                     className={`${INPUT} resize-y font-mono`}
                 />
                 <p className="text-xs text-neutral-500 mt-2">
-                    {label}. Your account can’t browse the user directory
-                    (admin-only), so enter identifiers directly — the server
-                    resolves each one in your tenant.
+                    {t('help_directory_fallback', { label })}
                 </p>
             </div>
         );
@@ -246,8 +246,8 @@ export function PeoplePicker({
         return (
             <p className="text-sm text-neutral-500 p-3 bg-neutral-800/40 border border-neutral-700 rounded-lg">
                 {mode === 'students'
-                    ? 'No eligible students in this tenant yet.'
-                    : 'No other users in this tenant to add as co-teachers.'}
+                    ? t('empty_no_students_tenant')
+                    : t('empty_no_users_tenant')}
             </p>
         );
     }
@@ -279,8 +279,8 @@ export function PeoplePicker({
                     type="text"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
-                    placeholder={mode === 'students' ? 'Search students' : 'Search users'}
-                    aria-label={mode === 'students' ? 'Search students' : 'Search users'}
+                    placeholder={mode === 'students' ? t('placeholder_search_students') : t('placeholder_search_users')}
+                    aria-label={mode === 'students' ? t('placeholder_search_students') : t('placeholder_search_users')}
                     className={`${INPUT} pl-9`}
                 />
             </div>
@@ -290,12 +290,12 @@ export function PeoplePicker({
                     onClick={toggleAllFiltered}
                     className="text-xs text-purple-300 hover:text-purple-200 mb-2"
                 >
-                    {allFilteredPicked ? 'Clear all shown' : `Select all ${filtered.length} shown`}
+                    {allFilteredPicked ? t('btn_clear_shown') : t('btn_select_all_shown', { count: filtered.length })}
                 </button>
             )}
             <div className={`${heightClass} overflow-y-auto space-y-1 pr-1`}>
                 {filtered.length === 0 ? (
-                    <p className="text-sm text-neutral-500 p-2">No users match “{q}”.</p>
+                    <p className="text-sm text-neutral-500 p-2">{t('empty_no_users_match', { q })}</p>
                 ) : (
                     filtered.map((u) => {
                         const id = Number(u.id);
@@ -334,7 +334,7 @@ export function PeoplePicker({
                 )}
             </div>
             <p className="text-xs text-neutral-500 mt-2">
-                {picked.size} selected
+                {t('label_n_selected', { count: picked.size })}
             </p>
         </div>
     );

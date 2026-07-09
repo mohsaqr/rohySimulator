@@ -26,6 +26,7 @@ export default function PhysicalExamScreen({
     patientGender,
     onExamPerformed,
     roomNav,
+    topBarControls = null,
 }) {
     const { t } = useTranslation('examination');
     const [showNotes, setShowNotes] = useState(false);
@@ -53,6 +54,7 @@ export default function PhysicalExamScreen({
                     <span className="text-slate-400">· {caseTitle}</span>
                 </div>
                 <div className="flex items-center gap-2">
+                    {topBarControls}
                     <button
                         type="button"
                         onClick={() => setShowNotes(true)}

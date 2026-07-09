@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Users, UserPlus, UserMinus, Upload, Search, ShieldCheck, ChevronDown, ChevronRight,
     Pencil, Trash2, X, ArrowUpDown, Layers, Ban, RotateCcw, GraduationCap,
@@ -20,6 +21,7 @@ const ROLE_RANK = { guest: 0, student: 1, user: 1, reviewer: 2, educator: 3, adm
 const rank = (r) => ROLE_RANK[r] ?? 0;
 
 export default function UsersWorkspace() {
+    const { t } = useTranslation('teacher_users');
     const toast = useToast();
     const { user: me } = useAuth();
     const myRank = rank(me?.role);
@@ -54,7 +56,7 @@ export default function UsersWorkspace() {
             setUsers((u.users || []).filter(x => !x.deleted_at));
             setCohorts(c.cohorts || []);
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to load users');
+            toast.error(err instanceof ApiError ? err.message : t('err_load_users'));
         } finally {
             setLoading(false);
         }
@@ -142,11 +144,11 @@ export default function UsersWorkspace() {
         try {
             const { results } = await userService.bulkUserAction(action, ids, value);
             const ok = results.success.length, bad = results.failed.length;
-            toast.success(`${ok} updated${bad ? `, ${bad} skipped` : ''}`);
+            toast.success(bad ? t('toast_bulk_updated_skipped', { count: ok, skipped: bad }) : t('toast_bulk_updated', { count: ok }));
             clearSelection();
             load();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Bulk action failed');
+            toast.error(err instanceof ApiError ? err.message : t('err_bulk_action'));
         }
     };
 
@@ -159,19 +161,19 @@ export default function UsersWorkspace() {
                 cohortIds: [Number(barCohort)],
                 action,
             });
-            const cls = cohorts.find(c => String(c.id) === String(barCohort))?.name || 'class';
+            const cls = cohorts.find(c => String(c.id) === String(barCohort))?.name || t('fallback_class');
             const done = action === 'enroll' ? (summary.enrolled + summary.revived) : summary.unenrolled;
             const noop = action === 'enroll' ? summary.already : summary.not_member;
             toast.success(
                 action === 'enroll'
-                    ? `Enrolled ${done} into ${cls}${noop ? `, ${noop} already in` : ''}`
-                    : `Removed ${done} from ${cls}${noop ? `, ${noop} not members` : ''}`,
+                    ? (noop ? t('toast_enroll_done_noop', { done, cls, noop }) : t('toast_enroll_done', { done, cls }))
+                    : (noop ? t('toast_unenroll_done_noop', { done, cls, noop }) : t('toast_unenroll_done', { done, cls })),
             );
             setBarCohort('');
             clearSelection();
             load();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Bulk enrollment failed');
+            toast.error(err instanceof ApiError ? err.message : t('err_bulk_enroll'));
         }
     };
 
@@ -183,18 +185,18 @@ export default function UsersWorkspace() {
                 cohortIds: [Number(assignmentCohort)],
                 action,
             });
-            const cls = activeAssignmentCohort?.name || 'course';
+            const cls = activeAssignmentCohort?.name || t('fallback_course');
             const done = action === 'enroll' ? (summary.enrolled + summary.revived) : summary.unenrolled;
             const noop = action === 'enroll' ? summary.already : summary.not_member;
             toast.success(
                 action === 'enroll'
-                    ? `Assigned ${done} to ${cls}${noop ? `, ${noop} already assigned` : ''}`
-                    : `Removed ${done} from ${cls}${noop ? `, ${noop} not assigned` : ''}`,
+                    ? (noop ? t('toast_assign_done_noop', { done, cls, noop }) : t('toast_assign_done', { done, cls }))
+                    : (noop ? t('toast_assign_removed_noop', { done, cls, noop }) : t('toast_assign_removed', { done, cls })),
             );
             clearSelection();
             load();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Assignment failed');
+            toast.error(err instanceof ApiError ? err.message : t('err_assign'));
         }
     };
 
@@ -207,20 +209,20 @@ export default function UsersWorkspace() {
             setCopiedCode(true);
             setTimeout(() => setCopiedCode(false), 1500);
         } catch {
-            toast.error('Could not copy registration code');
+            toast.error(t('err_copy_code'));
         }
     };
 
     const onDelete = async (u) => {
-        const ok = await toast.confirm(`Delete ${u.username}? This cannot be undone.`, { title: 'Delete user', type: 'danger', confirmText: 'Delete' });
+        const ok = await toast.confirm(t('confirm_delete_msg', { username: u.username }), { title: t('confirm_delete_title'), type: 'danger', confirmText: t('confirm_delete_btn') });
         if (!ok) return;
         try {
             await userService.deleteUser(u.id);
-            toast.success('User deleted');
+            toast.success(t('toast_user_deleted'));
             setExpandedId(null);
             load();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Delete failed');
+            toast.error(err instanceof ApiError ? err.message : t('err_delete'));
         }
     };
 
@@ -242,32 +244,32 @@ export default function UsersWorkspace() {
                 <div>
                     <h3 className="text-lg font-bold flex items-center gap-2">
                         <Users className="w-5 h-5 text-teal-700" />
-                        User Management
+                        {t('header_title')}
                     </h3>
                     <p className="text-sm text-neutral-600 mt-0.5">
-                        {stats.total} {stats.total === 1 ? 'user' : 'users'} · manage accounts, roles, classes & access
+                        {t('header_subtitle', { count: stats.total })}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <button className="rohy-btn rohy-btn-secondary" onClick={() => setBulkOpsOpen(true)}>
-                        <Layers className="w-4 h-4" /> Bulk operations
+                        <Layers className="w-4 h-4" /> {t('btn_bulk_ops')}
                     </button>
                     <button className="rohy-btn rohy-btn-secondary" onClick={() => setImportOpen(true)}>
-                        <Upload className="w-4 h-4" /> Import CSV
+                        <Upload className="w-4 h-4" /> {t('btn_import_csv')}
                     </button>
                     <button className="rohy-btn rohy-btn-primary" onClick={() => setFormUser(null)}>
-                        <UserPlus className="w-4 h-4" /> New user
+                        <UserPlus className="w-4 h-4" /> {t('btn_new_user')}
                     </button>
                 </div>
             </div>
 
             {/* KPI stat row */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
-                <Stat label="Total users" value={stats.total} accent />
-                <Stat label="Admins / Teachers" value={`${stats.admins} / ${stats.teachers}`} />
-                <Stat label="Students" value={stats.students} />
-                <Stat label="Active" value={stats.active} />
-                <Stat label="Suspended" value={stats.suspended} tone={stats.suspended ? 'warn' : undefined} />
+                <Stat label={t('stat_total')} value={stats.total} accent />
+                <Stat label={t('stat_admins_teachers')} value={`${stats.admins} / ${stats.teachers}`} />
+                <Stat label={t('stat_students')} value={stats.students} />
+                <Stat label={t('stat_active')} value={stats.active} />
+                <Stat label={t('stat_suspended')} value={stats.suspended} tone={stats.suspended ? 'warn' : undefined} />
             </div>
 
             {/* Toolbar */}
@@ -276,27 +278,27 @@ export default function UsersWorkspace() {
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
                     <input
                         className="rohy-field w-full pl-9 pr-3 py-2 rounded-lg text-sm"
-                        placeholder="Search name, username, or email…"
+                        placeholder={t('search_placeholder')}
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                     />
                 </div>
                 <select className="rohy-field px-3 py-2 rounded-lg text-sm" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-                    <option value="all">All roles</option>
-                    <option value="admin">Admin</option>
-                    <option value="educator">Teacher</option>
-                    <option value="reviewer">Reviewer</option>
-                    <option value="student">Student</option>
+                    <option value="all">{t('opt_all_roles')}</option>
+                    <option value="admin">{t('opt_role_admin')}</option>
+                    <option value="educator">{t('opt_role_teacher')}</option>
+                    <option value="reviewer">{t('opt_role_reviewer')}</option>
+                    <option value="student">{t('opt_role_student')}</option>
                 </select>
                 <select className="rohy-field px-3 py-2 rounded-lg text-sm" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-                    <option value="all">All statuses</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="suspended">Suspended</option>
+                    <option value="all">{t('opt_all_statuses')}</option>
+                    <option value="active">{t('opt_status_active')}</option>
+                    <option value="inactive">{t('opt_status_inactive')}</option>
+                    <option value="suspended">{t('opt_status_suspended')}</option>
                 </select>
                 <select className="rohy-field px-3 py-2 rounded-lg text-sm max-w-[180px]" value={classFilter} onChange={e => setClassFilter(e.target.value)}>
-                    <option value="all">All classes</option>
-                    <option value="none">Unassigned</option>
+                    <option value="all">{t('opt_all_classes')}</option>
+                    <option value="none">{t('opt_unassigned')}</option>
                     {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
             </div>
@@ -307,41 +309,41 @@ export default function UsersWorkspace() {
                     <div className="flex items-center gap-2 min-w-0">
                         <GraduationCap className="w-5 h-5 text-teal-700 shrink-0" />
                         <div className="min-w-0">
-                            <div className="text-sm font-bold">Course assignment</div>
+                            <div className="text-sm font-bold">{t('assign_title')}</div>
                             <div className="text-xs text-neutral-600 truncate">
-                                Pick a course, select users, then assign or remove in one step.
+                                {t('assign_subtitle')}
                             </div>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                         <button className="rohy-btn rohy-btn-secondary" onClick={() => selectIds(unassignedIds)} disabled={unassignedIds.length === 0}>
-                            <UserCheck className="w-4 h-4" /> Select unassigned ({unassignedIds.length})
+                            <UserCheck className="w-4 h-4" /> {t('btn_select_unassigned', { count: unassignedIds.length })}
                         </button>
                         <button className="rohy-btn rohy-btn-secondary" onClick={() => selectIds(assignmentMemberIds)} disabled={!assignmentCohort || assignmentMemberIds.length === 0}>
-                            <Users className="w-4 h-4" /> Select course users
+                            <Users className="w-4 h-4" /> {t('btn_select_course_users')}
                         </button>
                     </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <select className="rohy-field px-3 py-2 rounded-lg text-sm min-w-[220px]" value={assignmentCohort} onChange={e => setAssignmentCohort(e.target.value)}>
-                        <option value="">Choose course / class…</option>
+                        <option value="">{t('opt_choose_course')}</option>
                         {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                     <button className="rohy-btn rohy-btn-primary" disabled={!assignmentCohort || selectedForAssignment.length === 0} onClick={() => runAssignmentEnroll('enroll')}>
-                        <UserPlus className="w-4 h-4" /> Assign {selectedForAssignment.length || ''}
+                        <UserPlus className="w-4 h-4" /> {t('btn_assign', { count: selectedForAssignment.length || '' })}
                     </button>
                     <button className="rohy-btn rohy-btn-secondary" disabled={!assignmentCohort || selectedForAssignment.length === 0} onClick={() => runAssignmentEnroll('unenroll')}>
-                        <UserMinus className="w-4 h-4" /> Remove
+                        <UserMinus className="w-4 h-4" /> {t('btn_remove')}
                     </button>
                     {activeAssignmentCohort?.join_code && (
                         <button className="rohy-btn rohy-btn-ghost" onClick={copyAssignmentCode}>
                             {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                            Code {activeAssignmentCohort.join_code}
+                            {t('btn_code', { code: activeAssignmentCohort.join_code })}
                         </button>
                     )}
                     {assignmentCohort && !activeAssignmentCohort?.join_code && (
                         <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
-                            <KeyRound className="w-3.5 h-3.5" /> No registration code
+                            <KeyRound className="w-3.5 h-3.5" /> {t('label_no_reg_code')}
                         </span>
                     )}
                 </div>
@@ -354,20 +356,20 @@ export default function UsersWorkspace() {
                         {/* Selection count — bold pill so the whole bar reads as an action mode */}
                         <div className="flex items-center gap-2 shrink-0">
                             <span className="inline-flex items-center justify-center min-w-[2.25rem] h-8 px-2 rounded-full bg-teal-600 text-white text-sm font-bold tabular-nums">{selected.size}</span>
-                            <span className="text-sm font-semibold text-teal-900">selected</span>
+                            <span className="text-sm font-semibold text-teal-900">{t('label_selected')}</span>
                         </div>
 
                         {/* Role */}
                         <div className="flex items-center gap-2">
-                            <span className="text-[11px] uppercase tracking-wider font-bold text-teal-700/80">Role</span>
+                            <span className="text-[11px] uppercase tracking-wider font-bold text-teal-700/80">{t('label_role')}</span>
                             <select className="rohy-field px-2.5 py-1.5 rounded-lg text-sm" value={bulkRole} onChange={e => setBulkRole(e.target.value)}>
-                                <option value="student">Student</option>
-                                <option value="reviewer">Reviewer</option>
-                                <option value="educator">Teacher</option>
-                                {myRank >= 4 && <option value="admin">Admin</option>}
+                                <option value="student">{t('opt_role_student')}</option>
+                                <option value="reviewer">{t('opt_role_reviewer')}</option>
+                                <option value="educator">{t('opt_role_teacher')}</option>
+                                {myRank >= 4 && <option value="admin">{t('opt_role_admin')}</option>}
                             </select>
                             <button className="rohy-btn rohy-btn-secondary" onClick={() => runBulk('role', bulkRole)}>
-                                <ShieldCheck className="w-4 h-4" /> Set role
+                                <ShieldCheck className="w-4 h-4" /> {t('btn_set_role')}
                             </button>
                         </div>
 
@@ -375,12 +377,12 @@ export default function UsersWorkspace() {
 
                         {/* Status */}
                         <div className="flex items-center gap-2">
-                            <span className="text-[11px] uppercase tracking-wider font-bold text-teal-700/80">Status</span>
+                            <span className="text-[11px] uppercase tracking-wider font-bold text-teal-700/80">{t('label_status')}</span>
                             <button className="rohy-btn rohy-btn-danger" onClick={() => runBulk('suspend')}>
-                                <Ban className="w-4 h-4" /> Suspend
+                                <Ban className="w-4 h-4" /> {t('btn_suspend')}
                             </button>
                             <button className="rohy-btn rohy-btn-secondary" onClick={() => runBulk('reactivate')}>
-                                <RotateCcw className="w-4 h-4" /> Reactivate
+                                <RotateCcw className="w-4 h-4" /> {t('btn_reactivate')}
                             </button>
                         </div>
 
@@ -389,27 +391,27 @@ export default function UsersWorkspace() {
                         {/* Class enrollment */}
                         <div className="flex items-center gap-2">
                             <span className="text-[11px] uppercase tracking-wider font-bold text-teal-700/80 flex items-center gap-1">
-                                <GraduationCap className="w-3.5 h-3.5" /> Class
+                                <GraduationCap className="w-3.5 h-3.5" /> {t('label_class')}
                             </span>
                             <select className="rohy-field px-2.5 py-1.5 rounded-lg text-sm max-w-[170px]" value={barCohort} onChange={e => setBarCohort(e.target.value)}>
-                                <option value="">Choose class…</option>
+                                <option value="">{t('opt_choose_class')}</option>
                                 {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                             <button className="rohy-btn rohy-btn-secondary" disabled={!barCohort} onClick={() => runQuickEnroll('enroll')}>
-                                <UserPlus className="w-4 h-4" /> Add
+                                <UserPlus className="w-4 h-4" /> {t('btn_add')}
                             </button>
                             <button className="rohy-btn rohy-btn-secondary" disabled={!barCohort} onClick={() => runQuickEnroll('unenroll')}>
-                                <UserMinus className="w-4 h-4" /> Remove
+                                <UserMinus className="w-4 h-4" /> {t('btn_remove')}
                             </button>
                         </div>
 
                         {/* Advanced + clear, pushed to the right */}
                         <div className="flex items-center gap-2 ml-auto shrink-0">
                             <button className="rohy-btn rohy-btn-primary" onClick={() => setBulkOpsOpen(true)}>
-                                <Layers className="w-4 h-4" /> More actions…
+                                <Layers className="w-4 h-4" /> {t('btn_more_actions')}
                             </button>
                             <button className="rohy-btn rohy-btn-ghost" onClick={clearSelection}>
-                                <X className="w-4 h-4" /> Clear
+                                <X className="w-4 h-4" /> {t('btn_clear')}
                             </button>
                         </div>
                     </div>
@@ -419,24 +421,24 @@ export default function UsersWorkspace() {
                         <thead className="rohy-table-head">
                             <tr>
                                 <th className="w-10 px-3 py-2.5 text-left">
-                                    <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} aria-label="Select all" />
+                                    <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} aria-label={t('aria_select_all')} />
                                 </th>
-                                <th className="px-3 py-2.5 text-left"><SortHead label="User" k="name" /></th>
-                                <th className="px-3 py-2.5 text-left"><SortHead label="Email" k="email" /></th>
-                                <th className="px-3 py-2.5 text-left"><SortHead label="Role" k="role" /></th>
-                                <th className="px-3 py-2.5 text-left">Status</th>
-                                <th className="px-3 py-2.5 text-left">Classes</th>
-                                <th className="px-3 py-2.5 text-left"><SortHead label="Last active" k="last_login" /></th>
-                                <th className="px-3 py-2.5 text-left"><SortHead label="Joined" k="created_at" /></th>
+                                <th className="px-3 py-2.5 text-left"><SortHead label={t('col_user')} k="name" /></th>
+                                <th className="px-3 py-2.5 text-left"><SortHead label={t('col_email')} k="email" /></th>
+                                <th className="px-3 py-2.5 text-left"><SortHead label={t('col_role')} k="role" /></th>
+                                <th className="px-3 py-2.5 text-left">{t('col_status')}</th>
+                                <th className="px-3 py-2.5 text-left">{t('col_classes')}</th>
+                                <th className="px-3 py-2.5 text-left"><SortHead label={t('col_last_active')} k="last_login" /></th>
+                                <th className="px-3 py-2.5 text-left"><SortHead label={t('col_joined')} k="created_at" /></th>
                                 <th className="w-20 px-3 py-2.5"></th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading && (
-                                <tr><td colSpan={9} className="px-4 py-10 text-center text-neutral-500">Loading users…</td></tr>
+                                <tr><td colSpan={9} className="px-4 py-10 text-center text-neutral-500">{t('loading_users')}</td></tr>
                             )}
                             {!loading && filtered.length === 0 && (
-                                <tr><td colSpan={9} className="px-4 py-10 text-center text-neutral-500">No users match your filters.</td></tr>
+                                <tr><td colSpan={9} className="px-4 py-10 text-center text-neutral-500">{t('empty_no_match')}</td></tr>
                             )}
                             {!loading && filtered.map(u => {
                                 const expanded = expandedId === u.id;
@@ -450,7 +452,7 @@ export default function UsersWorkspace() {
                                                     checked={selected.has(u.id)}
                                                     disabled={!actionable}
                                                     onChange={() => toggleSelect(u.id)}
-                                                    aria-label={`Select ${u.username}`}
+                                                    aria-label={t('aria_select_user', { username: u.username })}
                                                 />
                                             </td>
                                             <td className="px-3 py-2.5">
@@ -474,11 +476,11 @@ export default function UsersWorkspace() {
                                             <td className="px-3 py-2.5 rohy-table-muted whitespace-nowrap">{formatDate(u.created_at)}</td>
                                             <td className="px-3 py-2.5">
                                                 <div className="flex items-center justify-end gap-1">
-                                                    <button className="rohy-subtle-button p-1.5 rounded" title="Edit" onClick={() => setFormUser(u)}><Pencil className="w-3.5 h-3.5" /></button>
+                                                    <button className="rohy-subtle-button p-1.5 rounded" title={t('title_edit')} onClick={() => setFormUser(u)}><Pencil className="w-3.5 h-3.5" /></button>
                                                     {actionable && (
-                                                        <button className="rohy-danger-icon-button p-1.5 rounded" title="Delete" onClick={() => onDelete(u)}><Trash2 className="w-3.5 h-3.5" /></button>
+                                                        <button className="rohy-danger-icon-button p-1.5 rounded" title={t('title_delete')} onClick={() => onDelete(u)}><Trash2 className="w-3.5 h-3.5" /></button>
                                                     )}
-                                                    <button className="rohy-subtle-button p-1.5 rounded" title="Details" onClick={() => setExpandedId(expanded ? null : u.id)}>
+                                                    <button className="rohy-subtle-button p-1.5 rounded" title={t('title_details')} onClick={() => setExpandedId(expanded ? null : u.id)}>
                                                         {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                                                     </button>
                                                 </div>

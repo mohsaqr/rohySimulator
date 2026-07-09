@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { User, RotateCcw, CheckCircle, AlertCircle, Upload, Volume2, Trash2 } from 'lucide-react';
 import BodyMap from '../examination/BodyMap';
 import { BODY_REGIONS, EXAM_TECHNIQUES } from '../../data/examRegions';
@@ -11,6 +12,7 @@ import { apiFetch } from '../../services/apiClient';
  * Special support for auscultation with audio upload
  */
 export default function PhysicalExamEditor({ caseData, setCaseData, patientGender = 'male' }) {
+    const { t } = useTranslation('authoring_exam');
     const toast = useToast();
     const [view, setView] = useState('anterior');
     const [selectedRegion, setSelectedRegion] = useState(null);
@@ -100,7 +102,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
             }
         } catch (err) {
             console.error('Audio upload failed:', err);
-            toast.error('Failed to upload audio file');
+            toast.error(t('upload_audio_error'));
         } finally {
             setUploading(false);
         }
@@ -154,9 +156,9 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h4 className="text-lg font-bold text-purple-400">6. Physical Examination</h4>
+                    <h4 className="text-lg font-bold text-purple-400">{t('heading')}</h4>
                     <p className="text-xs text-neutral-500">
-                        Configure physical examination findings for each body region. Click a region to edit.
+                        {t('heading_help')}
                     </p>
                 </div>
                 <button
@@ -164,17 +166,17 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                     className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded flex items-center gap-1"
                 >
                     <RotateCcw className="w-3 h-3" />
-                    Fill All Defaults
+                    {t('fill_all_defaults')}
                 </button>
             </div>
 
             {/* Gender indicator */}
             <div className="flex items-center gap-2 text-sm">
-                <span className="text-neutral-400">Patient Gender:</span>
+                <span className="text-neutral-400">{t('patient_gender')}</span>
                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${gender === 'female' ? 'bg-pink-900/50 text-pink-300' : 'bg-blue-900/50 text-blue-300'}`}>
-                    {gender === 'female' ? 'Female' : 'Male'}
+                    {gender === 'female' ? t('female') : t('male')}
                 </span>
-                <span className="text-neutral-500 text-xs">(Set in Step 2 - Details)</span>
+                <span className="text-neutral-500 text-xs">{t('gender_hint')}</span>
             </div>
 
             <div className="flex gap-6">
@@ -190,7 +192,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                     : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                             }`}
                         >
-                            Anterior
+                            {t('anterior')}
                         </button>
                         <button
                             onClick={() => setView('posterior')}
@@ -200,7 +202,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                     : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                             }`}
                         >
-                            Posterior
+                            {t('posterior')}
                         </button>
                     </div>
 
@@ -227,7 +229,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                             }`}
                         >
                             <User className="w-3 h-3" />
-                            General
+                            {t('general')}
                         </button>
                         <button
                             onClick={() => setSelectedRegion('neurological')}
@@ -237,7 +239,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                     : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                             }`}
                         >
-                            Neuro
+                            {t('neuro')}
                         </button>
                     </div>
                 </div>
@@ -262,7 +264,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                     }}
                                     className="px-2 py-1 bg-neutral-700 hover:bg-neutral-600 text-xs rounded"
                                 >
-                                    Fill Defaults
+                                    {t('fill_defaults')}
                                 </button>
                             </div>
 
@@ -293,7 +295,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                                     className="w-3 h-3"
                                                 />
                                                 <span className={examData.abnormal ? 'text-red-400' : 'text-neutral-500'}>
-                                                    Abnormal
+                                                    {t('abnormal')}
                                                 </span>
                                             </label>
                                         </div>
@@ -316,19 +318,19 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                                 onClick={() => updatePhysicalExam(selectedRegion, examType, defaultFinding, false)}
                                                 className="text-xs text-blue-400 hover:text-blue-300"
                                             >
-                                                Use default: "{defaultFinding.substring(0, 50)}..."
+                                                {t('use_default', { finding: defaultFinding.substring(0, 50) })}
                                             </button>
                                         )}
 
                                         {/* Audio upload for auscultation */}
                                         {isAuscultation && (
                                             <div className="mt-3 pt-3 border-t border-neutral-700 space-y-3">
-                                                <div className="text-xs text-cyan-400 font-medium">Auscultation Audio Files</div>
+                                                <div className="text-xs text-cyan-400 font-medium">{t('auscultation_audio_files')}</div>
 
                                                 {/* Default sounds info */}
                                                 {!examData.abnormal && (
                                                     <div className="bg-emerald-900/20 border border-emerald-700/30 rounded p-2 text-xs text-emerald-300">
-                                                        Normal findings use default heart/lung sounds automatically
+                                                        {t('normal_defaults_note')}
                                                     </div>
                                                 )}
 
@@ -336,7 +338,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                                 <div className="space-y-1">
                                                     <label className="text-xs text-red-400 flex items-center gap-1">
                                                         <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                                                        Heart Sound (all cardiac points)
+                                                        {t('heart_sound_label')}
                                                     </label>
                                                     {examData.heartAudio ? (
                                                         <div className="flex items-center gap-2 bg-neutral-900 p-2 rounded">
@@ -352,7 +354,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                                         <label className="flex items-center gap-2 px-2 py-1.5 bg-neutral-800 border border-dashed border-red-700/30 rounded cursor-pointer hover:bg-neutral-700 transition-colors">
                                                             <Upload className="w-3 h-3 text-red-400" />
                                                             <span className="text-xs text-neutral-400">
-                                                                {uploading ? 'Uploading...' : 'Upload custom heart sound'}
+                                                                {uploading ? t('uploading') : t('upload_heart_sound')}
                                                             </span>
                                                             <input
                                                                 type="file"
@@ -369,7 +371,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                                 <div className="space-y-1">
                                                     <label className="text-xs text-cyan-400 flex items-center gap-1">
                                                         <span className="w-2 h-2 bg-cyan-500 rounded-full"></span>
-                                                        Lung Sound (all lung fields)
+                                                        {t('lung_sound_label')}
                                                     </label>
                                                     {examData.lungAudio ? (
                                                         <div className="flex items-center gap-2 bg-neutral-900 p-2 rounded">
@@ -385,7 +387,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                                         <label className="flex items-center gap-2 px-2 py-1.5 bg-neutral-800 border border-dashed border-cyan-700/30 rounded cursor-pointer hover:bg-neutral-700 transition-colors">
                                                             <Upload className="w-3 h-3 text-cyan-400" />
                                                             <span className="text-xs text-neutral-400">
-                                                                {uploading ? 'Uploading...' : 'Upload custom lung sound'}
+                                                                {uploading ? t('uploading') : t('upload_lung_sound')}
                                                             </span>
                                                             <input
                                                                 type="file"
@@ -399,7 +401,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                                                 </div>
 
                                                 <p className="text-[10px] text-neutral-500">
-                                                    Custom audio overrides defaults. Heart sounds play at cardiac points, lung sounds at lung fields.
+                                                    {t('custom_audio_note')}
                                                 </p>
                                             </div>
                                         )}
@@ -410,7 +412,7 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                             {/* Special tests if available */}
                             {currentRegion.specialTests && currentRegion.specialTests.length > 0 && (
                                 <div className="mt-4 pt-4 border-t border-neutral-700">
-                                    <p className="text-xs text-neutral-500 mb-2">Available special tests:</p>
+                                    <p className="text-xs text-neutral-500 mb-2">{t('special_tests_available')}</p>
                                     <div className="flex flex-wrap gap-1">
                                         {currentRegion.specialTests.map(test => (
                                             <span key={test} className="px-2 py-0.5 bg-neutral-800 text-neutral-400 text-xs rounded">
@@ -424,8 +426,8 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-neutral-500">
                             <User className="w-12 h-12 mb-3 opacity-30" />
-                            <p className="text-sm">Select a body region to configure findings</p>
-                            <p className="text-xs mt-1">Click on the body map or use the buttons below</p>
+                            <p className="text-sm">{t('empty_select_region')}</p>
+                            <p className="text-xs mt-1">{t('empty_select_hint')}</p>
                         </div>
                     )}
                 </div>
@@ -433,22 +435,22 @@ export default function PhysicalExamEditor({ caseData, setCaseData, patientGende
 
             {/* Summary */}
             <div className="bg-neutral-800/50 rounded-lg p-4 border border-neutral-700">
-                <h5 className="text-sm font-bold text-neutral-300 mb-2">Configuration Summary</h5>
+                <h5 className="text-sm font-bold text-neutral-300 mb-2">{t('config_summary')}</h5>
                 <div className="flex gap-6 text-xs">
                     <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-green-500" />
-                        <span className="text-neutral-400">Configured regions:</span>
+                        <span className="text-neutral-400">{t('configured_regions')}</span>
                         <span className="text-white font-bold">{configuredRegions.size}</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <AlertCircle className="w-4 h-4 text-red-500" />
-                        <span className="text-neutral-400">Abnormal findings:</span>
+                        <span className="text-neutral-400">{t('abnormal_findings')}</span>
                         <span className="text-white font-bold">{abnormalRegions.size}</span>
                     </div>
                 </div>
                 {configuredRegions.size === 0 && (
                     <p className="text-xs text-yellow-500 mt-2">
-                        Click "Fill All Defaults" to initialize all regions with normal findings.
+                        {t('empty_fill_hint')}
                     </p>
                 )}
             </div>

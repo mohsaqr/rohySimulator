@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     X, Search, Download, CheckCircle2, AlertTriangle, Play, RefreshCw,
     UserPlus, UserMinus, ShieldCheck, Ban, RotateCcw, Layers, Users as UsersIcon,
@@ -16,11 +17,11 @@ const rank = (r) => ROLE_RANK[r] ?? 0;
 // The five operations, split by which API they drive: `enroll` kind → bulkEnroll
 // against a set of classes; `user` kind → bulkUserAction (rank-gated server-side).
 const ACTIONS = [
-    { key: 'enroll', label: 'Enroll in classes', icon: UserPlus, kind: 'enroll' },
-    { key: 'unenroll', label: 'Remove from classes', icon: UserMinus, kind: 'enroll' },
-    { key: 'role', label: 'Change role', icon: ShieldCheck, kind: 'user' },
-    { key: 'suspend', label: 'Suspend', icon: Ban, kind: 'user' },
-    { key: 'reactivate', label: 'Reactivate', icon: RotateCcw, kind: 'user' },
+    { key: 'enroll', icon: UserPlus, kind: 'enroll' },
+    { key: 'unenroll', icon: UserMinus, kind: 'enroll' },
+    { key: 'role', icon: ShieldCheck, kind: 'user' },
+    { key: 'suspend', icon: Ban, kind: 'user' },
+    { key: 'reactivate', icon: RotateCcw, kind: 'user' },
 ];
 
 const OUTCOME_BADGE = {
@@ -34,15 +35,13 @@ const OUTCOME_BADGE = {
     success: 'rohy-badge-green',
     failed: 'rohy-badge-red',
 };
-const OUTCOME_LABEL = {
-    enrolled: 'enrolled', revived: 'revived', already: 'already in',
-    unenrolled: 'removed', not_member: 'not a member', user_not_found: 'not found',
-    cohort_denied: 'class denied', success: 'updated', failed: 'failed',
-};
+const OUTCOME_KEYS = ['enrolled', 'revived', 'already', 'unenrolled', 'not_member', 'user_not_found', 'cohort_denied', 'success', 'failed'];
+const outcomeLabel = (t, k) => OUTCOME_KEYS.includes(k) ? t('outcome_' + k) : k;
 
 export default function BulkOperationsModal({
     users, cohorts, myRank, meId, preselectedIds, onClose, onChanged,
 }) {
+    const { t } = useTranslation('teacher_users');
     const toast = useToast();
 
     // --- Target set (the "bulk search") ---------------------------------------
@@ -145,19 +144,15 @@ export default function BulkOperationsModal({
     const preview = useMemo(() => {
         const n = effectiveUsers.length;
         if (action.kind === 'enroll') {
-            const verb = action.key === 'enroll' ? 'Enroll' : 'Remove';
-            const prep = action.key === 'enroll' ? 'into' : 'from';
-            return {
-                text: `${verb} ${n} ${n === 1 ? 'user' : 'users'} ${prep} ${cohortCount} ${cohortCount === 1 ? 'class' : 'classes'}`,
-                ops: n * cohortCount,
-            };
+            const key = action.key === 'enroll' ? 'preview_enroll' : 'preview_unenroll';
+            return { text: t(key, { count: n, classes: cohortCount }), ops: n * cohortCount };
         }
         if (action.key === 'role') {
-            return { text: `Change role of ${n} ${n === 1 ? 'user' : 'users'} to ${roleLabel(roleValue)}`, ops: n };
+            return { text: t('preview_role', { count: n, role: roleLabel(roleValue) }), ops: n };
         }
-        const verb = action.key === 'suspend' ? 'Suspend' : 'Reactivate';
-        return { text: `${verb} ${n} ${n === 1 ? 'user' : 'users'}`, ops: n };
-    }, [action, effectiveUsers.length, cohortCount, roleValue]);
+        const key = action.key === 'suspend' ? 'preview_suspend' : 'preview_reactivate';
+        return { text: t(key, { count: n }), ops: n };
+    }, [action, effectiveUsers.length, cohortCount, roleValue, t]);
 
     const canExecute = !running && effectiveUsers.length > 0 &&
         (action.kind !== 'enroll' || cohortCount > 0);
@@ -177,7 +172,7 @@ export default function BulkOperationsModal({
                 const done = action.key === 'enroll'
                     ? (summary.enrolled + summary.revived)
                     : summary.unenrolled;
-                toast.success(`${action.key === 'enroll' ? 'Enrolled' : 'Removed'} ${done} membership${done === 1 ? '' : 's'}`);
+                toast.success(t(action.key === 'enroll' ? 'toast_enrolled_memberships' : 'toast_removed_memberships', { count: done }));
             } else {
                 const { results } = await userService.bulkUserAction(
                     action.key, userIds, action.key === 'role' ? roleValue : undefined,
@@ -197,11 +192,11 @@ export default function BulkOperationsModal({
                     summary: { success: results.success.length, failed: results.failed.length },
                     rows,
                 });
-                toast.success(`${results.success.length} updated${results.failed.length ? `, ${results.failed.length} skipped` : ''}`);
+                toast.success(results.failed.length ? t('toast_bulk_updated_skipped', { count: results.success.length, skipped: results.failed.length }) : t('toast_bulk_updated', { count: results.success.length }));
             }
             onChanged?.();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Bulk operation failed');
+            toast.error(err instanceof ApiError ? err.message : t('err_bulk_op'));
         } finally {
             setRunning(false);
         }
@@ -237,19 +232,19 @@ export default function BulkOperationsModal({
                 <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 shrink-0">
                     <div>
                         <h3 className="font-bold flex items-center gap-2">
-                            <Layers className="w-4 h-4 text-teal-700" /> Bulk operations
+                            <Layers className="w-4 h-4 text-teal-700" /> {t('bulk_title')}
                         </h3>
                         <p className="text-xs text-neutral-500 mt-0.5">
-                            Select users, choose one operation, preview, then run with a downloadable report.
+                            {t('bulk_subtitle')}
                         </p>
                     </div>
-                    <button className="rohy-subtle-button p-1.5 rounded" onClick={onClose} aria-label="Close">
+                    <button className="rohy-subtle-button p-1.5 rounded" onClick={onClose} aria-label={t('btn_close')}>
                         <X className="w-4 h-4" />
                     </button>
                 </div>
 
                 {report ? (
-                    <ReportView report={report} onDownload={downloadReport} onRunAnother={runAnother} onClose={onClose} />
+                    <ReportView report={report} onDownload={downloadReport} onRunAnother={runAnother} onClose={onClose} t={t} />
                 ) : (
                     <>
                         <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[1.25fr_1fr] divide-y md:divide-y-0 md:divide-x divide-neutral-200 overflow-hidden">
@@ -258,65 +253,65 @@ export default function BulkOperationsModal({
                                 <div className="px-5 pt-4 pb-3 space-y-2.5 shrink-0">
                                     <div className="flex items-center justify-between">
                                         <h4 className="text-sm font-bold flex items-center gap-1.5">
-                                            <UsersIcon className="w-4 h-4 text-teal-700" /> Target users
+                                            <UsersIcon className="w-4 h-4 text-teal-700" /> {t('target_users')}
                                         </h4>
-                                        <span className="rohy-count-pill">{selected.size} selected</span>
+                                        <span className="rohy-count-pill">{t('n_selected', { count: selected.size })}</span>
                                     </div>
                                     <div className="relative">
                                         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
                                         <input
                                             className="rohy-field w-full pl-9 pr-3 py-2 rounded-lg text-sm"
-                                            placeholder="Search name, username, or email…"
+                                            placeholder={t('search_placeholder')}
                                             value={query}
                                             onChange={e => setQuery(e.target.value)}
                                         />
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         <select className="rohy-field px-2 py-1.5 rounded text-xs flex-1 min-w-[90px]" value={roleF} onChange={e => setRoleF(e.target.value)}>
-                                            <option value="all">All roles</option>
-                                            <option value="admin">Admin</option>
-                                            <option value="educator">Teacher</option>
-                                            <option value="reviewer">Reviewer</option>
-                                            <option value="student">Student</option>
+                                            <option value="all">{t('opt_all_roles')}</option>
+                                            <option value="admin">{t('opt_role_admin')}</option>
+                                            <option value="educator">{t('opt_role_teacher')}</option>
+                                            <option value="reviewer">{t('opt_role_reviewer')}</option>
+                                            <option value="student">{t('opt_role_student')}</option>
                                         </select>
                                         <select className="rohy-field px-2 py-1.5 rounded text-xs flex-1 min-w-[90px]" value={statusF} onChange={e => setStatusF(e.target.value)}>
-                                            <option value="all">All statuses</option>
-                                            <option value="active">Active</option>
-                                            <option value="inactive">Inactive</option>
-                                            <option value="suspended">Suspended</option>
+                                            <option value="all">{t('opt_all_statuses')}</option>
+                                            <option value="active">{t('opt_status_active')}</option>
+                                            <option value="inactive">{t('opt_status_inactive')}</option>
+                                            <option value="suspended">{t('opt_status_suspended')}</option>
                                         </select>
                                         <select className="rohy-field px-2 py-1.5 rounded text-xs flex-1 min-w-[90px]" value={classF} onChange={e => setClassF(e.target.value)}>
-                                            <option value="all">All classes</option>
-                                            <option value="none">Unassigned</option>
+                                            <option value="all">{t('opt_all_classes')}</option>
+                                            <option value="none">{t('opt_unassigned')}</option>
                                             {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                         </select>
                                     </div>
                                     <div className="grid grid-cols-3 gap-1.5">
                                         <button type="button" className="rohy-subtle-button px-2 py-1.5 rounded text-xs font-semibold" onClick={() => replaceSelection(filteredIds)} disabled={filteredIds.length === 0}>
-                                            Shown ({filteredIds.length})
+                                            {t('quick_shown', { count: filteredIds.length })}
                                         </button>
                                         <button type="button" className="rohy-subtle-button px-2 py-1.5 rounded text-xs font-semibold" onClick={() => replaceSelection(studentIds)} disabled={studentIds.length === 0}>
-                                            Students ({studentIds.length})
+                                            {t('quick_students', { count: studentIds.length })}
                                         </button>
                                         <button type="button" className="rohy-subtle-button px-2 py-1.5 rounded text-xs font-semibold" onClick={() => replaceSelection(unassignedIds)} disabled={unassignedIds.length === 0}>
-                                            Unassigned ({unassignedIds.length})
+                                            {t('quick_unassigned', { count: unassignedIds.length })}
                                         </button>
                                     </div>
                                     <div className="flex items-center justify-between text-xs">
                                         <label className="inline-flex items-center gap-2 font-semibold text-neutral-700 cursor-pointer">
                                             <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAllFiltered} />
-                                            Select all {filtered.length} shown
+                                            {t('select_all_shown', { count: filtered.length })}
                                         </label>
                                         {selected.size > 0 && (
                                             <button className="rohy-subtle-button px-2 py-0.5 rounded font-semibold" onClick={clearSelection}>
-                                                Clear selection
+                                                {t('btn_clear_selection')}
                                             </button>
                                         )}
                                     </div>
                                 </div>
                                 <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
                                     {filtered.length === 0 && (
-                                        <div className="px-3 py-10 text-center text-sm text-neutral-500">No users match your filters.</div>
+                                        <div className="px-3 py-10 text-center text-sm text-neutral-500">{t('empty_no_match')}</div>
                                     )}
                                     <ul className="space-y-1">
                                         {filtered.map(u => {
@@ -325,7 +320,7 @@ export default function BulkOperationsModal({
                                             return (
                                                 <li key={u.id}>
                                                     <label className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${checked ? 'bg-teal-50' : 'hover:bg-neutral-50'}`}>
-                                                        <input type="checkbox" checked={checked} onChange={() => toggleUser(u.id)} aria-label={`Select ${u.username}`} />
+                                                        <input type="checkbox" checked={checked} onChange={() => toggleUser(u.id)} aria-label={t('aria_select_user', { username: u.username })} />
                                                         <span className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${avatarClass(u.username)}`}>
                                                             {initials(u.name, u.username)}
                                                         </span>
@@ -335,7 +330,7 @@ export default function BulkOperationsModal({
                                                         </span>
                                                         <span className={roleBadgeClass(u.role)}>{roleLabel(u.role)}</span>
                                                         {blocked && checked && (
-                                                            <span className="rohy-badge-amber" title="Skipped: self or equal/higher role">skip</span>
+                                                            <span className="rohy-badge-amber" title={t('title_skip_blocked')}>{t('badge_skip')}</span>
                                                         )}
                                                     </label>
                                                 </li>
@@ -350,7 +345,7 @@ export default function BulkOperationsModal({
                                 <div className="p-5 space-y-5">
                                     {/* Action picker */}
                                     <div>
-                                        <h4 className="text-sm font-bold mb-2">Action</h4>
+                                        <h4 className="text-sm font-bold mb-2">{t('label_action')}</h4>
                                         <div className="grid grid-cols-1 gap-1.5">
                                             {ACTIONS.map(a => {
                                                 const Icon = a.icon;
@@ -367,7 +362,7 @@ export default function BulkOperationsModal({
                                                         aria-pressed={active}
                                                     >
                                                         <Icon className="w-4 h-4 shrink-0" />
-                                                        {a.label}
+                                                        {t('action_' + a.key)}
                                                     </button>
                                                 );
                                             })}
@@ -379,12 +374,12 @@ export default function BulkOperationsModal({
                                         <div>
                                             <div className="flex items-center justify-between mb-2">
                                                 <h4 className="text-sm font-bold flex items-center gap-1.5">
-                                                    <GraduationCap className="w-4 h-4 text-teal-700" /> Classes
+                                                    <GraduationCap className="w-4 h-4 text-teal-700" /> {t('label_classes')}
                                                 </h4>
-                                                <span className="text-xs text-neutral-500">{cohortCount} selected</span>
+                                                <span className="text-xs text-neutral-500">{t('n_selected', { count: cohortCount })}</span>
                                             </div>
                                             {cohorts.length === 0 ? (
-                                                <div className="rohy-detail-panel rounded-lg p-3 text-xs text-neutral-500">No classes available.</div>
+                                                <div className="rohy-detail-panel rounded-lg p-3 text-xs text-neutral-500">{t('no_classes')}</div>
                                             ) : (
                                                 <ul className="rohy-detail-panel rounded-lg p-1.5 max-h-56 overflow-y-auto space-y-0.5">
                                                     {cohorts.map(c => {
@@ -406,32 +401,29 @@ export default function BulkOperationsModal({
                                     {action.key === 'role' && (
                                         <div>
                                             <h4 className="text-sm font-bold mb-2 flex items-center gap-1.5">
-                                                <ShieldCheck className="w-4 h-4 text-teal-700" /> New role
+                                                <ShieldCheck className="w-4 h-4 text-teal-700" /> {t('label_new_role')}
                                             </h4>
                                             <select className="rohy-field w-full px-3 py-2 rounded-lg text-sm" value={roleValue} onChange={e => setRoleValue(e.target.value)}>
                                                 {roleOptions.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
                                             </select>
-                                            <p className="text-xs text-neutral-500 mt-1.5">Only roles at or below your own are listed.</p>
+                                            <p className="text-xs text-neutral-500 mt-1.5">{t('hint_roles_below')}</p>
                                         </div>
                                     )}
 
                                     {action.kind === 'user' && skippedCount > 0 && (
                                         <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
                                             <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                                            <span>
-                                                {skippedCount} selected {skippedCount === 1 ? 'user' : 'users'} can&apos;t be modified by this action
-                                                (yourself, or equal/higher role) and will be skipped.
-                                            </span>
+                                            <span>{t('skip_note', { count: skippedCount })}</span>
                                         </div>
                                     )}
 
                                     {/* Preview */}
                                     <div className="rohy-stat-card rohy-stat-card-accent rounded-lg p-3.5">
-                                        <div className="text-xs uppercase tracking-wide font-semibold text-neutral-600 mb-1">Preview</div>
+                                        <div className="text-xs uppercase tracking-wide font-semibold text-neutral-600 mb-1">{t('label_preview')}</div>
                                         <div className="text-sm font-bold text-teal-900">{preview.text}</div>
                                         {action.kind === 'enroll' && (
                                             <div className="text-xs text-neutral-600 mt-0.5">
-                                                = {preview.ops} {preview.ops === 1 ? 'operation' : 'operations'}
+                                                {t('preview_ops', { count: preview.ops })}
                                             </div>
                                         )}
                                     </div>
@@ -441,13 +433,13 @@ export default function BulkOperationsModal({
 
                         {/* Footer */}
                         <div className="flex items-center justify-between px-5 py-4 border-t border-neutral-200 shrink-0">
-                            <button className="rohy-btn rohy-btn-ghost" onClick={onClose}>Cancel</button>
+                            <button className="rohy-btn rohy-btn-ghost" onClick={onClose}>{t('btn_cancel')}</button>
                             <button
                                 className={`rohy-btn ${action.key === 'suspend' ? 'rohy-btn-danger' : 'rohy-btn-primary'}`}
                                 disabled={!canExecute}
                                 onClick={execute}
                             >
-                                {running ? <><RefreshCw className="w-4 h-4 animate-spin" /> Running…</> : <><Play className="w-4 h-4" /> Execute</>}
+                                {running ? <><RefreshCw className="w-4 h-4 animate-spin" /> {t('btn_running')}</> : <><Play className="w-4 h-4" /> {t('btn_execute')}</>}
                             </button>
                         </div>
                     </>
@@ -457,7 +449,7 @@ export default function BulkOperationsModal({
     );
 }
 
-function ReportView({ report, onDownload, onRunAnother, onClose }) {
+function ReportView({ report, onDownload, onRunAnother, onClose, t }) {
     const chips = report.kind === 'enroll'
         ? Object.entries(report.summary).filter(([, v]) => v > 0)
         : [['success', report.summary.success], ['failed', report.summary.failed]];
@@ -467,15 +459,15 @@ function ReportView({ report, onDownload, onRunAnother, onClose }) {
             <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
                 <div className="flex items-center gap-2 text-teal-700">
                     <CheckCircle2 className="w-6 h-6" />
-                    <span className="font-bold text-lg">Operation complete</span>
+                    <span className="font-bold text-lg">{t('operation_complete')}</span>
                 </div>
 
                 {/* Summary chips */}
                 <div className="flex flex-wrap gap-2">
-                    {chips.length === 0 && <span className="text-sm text-neutral-500">No changes were made.</span>}
+                    {chips.length === 0 && <span className="text-sm text-neutral-500">{t('no_changes')}</span>}
                     {chips.map(([k, v]) => (
                         <span key={k} className={`${OUTCOME_BADGE[k] || 'rohy-badge-neutral'} !text-sm`}>
-                            {v} {OUTCOME_LABEL[k] || k}
+                            {v} {outcomeLabel(t, k)}
                         </span>
                     ))}
                 </div>
@@ -486,16 +478,16 @@ function ReportView({ report, onDownload, onRunAnother, onClose }) {
                         <table className="w-full text-xs">
                             <thead className="rohy-table-head sticky top-0">
                                 <tr>
-                                    <th className="px-3 py-2 text-left">User</th>
+                                    <th className="px-3 py-2 text-left">{t('col_user')}</th>
                                     {report.kind === 'enroll'
-                                        ? <th className="px-3 py-2 text-left">Class</th>
-                                        : <th className="px-3 py-2 text-left">Error</th>}
-                                    <th className="px-3 py-2 text-left">Outcome</th>
+                                        ? <th className="px-3 py-2 text-left">{t('col_class')}</th>
+                                        : <th className="px-3 py-2 text-left">{t('col_error')}</th>}
+                                    <th className="px-3 py-2 text-left">{t('col_outcome')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {report.rows.length === 0 && (
-                                    <tr><td colSpan={3} className="px-3 py-8 text-center text-neutral-500">No result rows.</td></tr>
+                                    <tr><td colSpan={3} className="px-3 py-8 text-center text-neutral-500">{t('no_result_rows')}</td></tr>
                                 )}
                                 {report.rows.map((r, i) => (
                                     <tr key={i} className="rohy-table-row">
@@ -509,7 +501,7 @@ function ReportView({ report, onDownload, onRunAnother, onClose }) {
                                             : <td className="px-3 py-1.5 text-red-600">{r.error || '—'}</td>}
                                         <td className="px-3 py-1.5">
                                             <span className={OUTCOME_BADGE[r.outcome] || 'rohy-badge-neutral'}>
-                                                {r.outcome === 'failed' && <AlertTriangle className="w-3 h-3 inline" />} {OUTCOME_LABEL[r.outcome] || r.outcome}
+                                                {r.outcome === 'failed' && <AlertTriangle className="w-3 h-3 inline" />} {outcomeLabel(t, r.outcome)}
                                             </span>
                                         </td>
                                     </tr>
@@ -522,13 +514,13 @@ function ReportView({ report, onDownload, onRunAnother, onClose }) {
 
             <div className="flex items-center justify-between px-5 py-4 border-t border-neutral-200 shrink-0">
                 <button className="rohy-btn rohy-btn-secondary" onClick={onDownload}>
-                    <Download className="w-4 h-4" /> Download report (CSV)
+                    <Download className="w-4 h-4" /> {t('btn_download_report')}
                 </button>
                 <div className="flex items-center gap-2">
                     <button className="rohy-btn rohy-btn-ghost" onClick={onRunAnother}>
-                        <RefreshCw className="w-4 h-4" /> Run another
+                        <RefreshCw className="w-4 h-4" /> {t('btn_run_another')}
                     </button>
-                    <button className="rohy-btn rohy-btn-primary" onClick={onClose}>Done</button>
+                    <button className="rohy-btn rohy-btn-primary" onClick={onClose}>{t('btn_done')}</button>
                 </div>
             </div>
         </>

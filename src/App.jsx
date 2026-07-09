@@ -12,7 +12,8 @@ import RadiologyResultsModal from './components/investigations/RadiologyResultsM
 import UserProfilePanel from './components/settings/UserProfilePanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
-import { LanguageProvider } from './contexts/LanguageContext';
+import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
+import TopBarControls from './components/common/TopBarControls';
 import { VoiceProvider } from './contexts/VoiceContext';
 import { NotificationProvider } from './notifications/NotificationContext';
 import { useNotifications } from './notifications/useNotifications';
@@ -22,7 +23,7 @@ import DiagnosticBar from './components/debug/DiagnosticBar';
 import { PatientRecordProvider } from './services/PatientRecord';
 import EventLogger, { COMPONENTS, registerWindowLifecycleLogging } from './services/eventLogger';
 import { ApiError, apiFetch, apiPut } from './services/apiClient';
-import { Settings, X, LogOut, User, ChevronDown, Activity, StopCircle, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Settings, X, Activity, StopCircle, AlertTriangle } from 'lucide-react';
 import BodyMapDebug from './components/examination/BodyMapDebug';
 import TnaDashboard from './components/analytics/tna/TnaDashboardV2';
 import DiscussionScreen from './components/discussion/DiscussionScreen';
@@ -71,6 +72,7 @@ function MainApp() {
    // the nonce is ConfigPanel's key.
    const [settingsNavNonce] = useState(0);
    const { user, logout, isAdmin } = useAuth();
+   const { uiLanguage, setUiLanguage } = useLanguage();
    const isAdminUser = isAdmin();
    const canSeeOyonAnalytics = user?.role === 'educator' || user?.role === 'admin';
    const [sessionValidated, setSessionValidated] = useState(false);
@@ -626,6 +628,28 @@ function MainApp() {
       </div>
    ) : null;
 
+   // Persistent settings/account menu + language switcher. Built once here
+   // and rendered in every screen's header (via the same `roomNav`-style
+   // prop the room screens already accept) so the gear + language switch
+   // no longer vanish when the user leaves the chat room.
+   const topBarControls = user ? (
+      <TopBarControls
+         isAdminUser={isAdminUser}
+         canSeeOyonAnalytics={canSeeOyonAnalytics}
+         onOpenProfile={() => setShowUserProfile(true)}
+         onOpenSettings={handleOpenSettings}
+         onOpenHelp={() => setShowHelpCenter(true)}
+         onOpenEmotionAnalytics={() => setShowOyonAnalytics(true)}
+         onOpenCaseAnalytics={() => setShowTnaAnalytics(true)}
+         onLogout={() => {
+            EventLogger.log('CLICKED', 'button', { objectId: 'logout', objectName: 'Logout', component: COMPONENTS.APP });
+            logout();
+         }}
+         uiLanguage={uiLanguage}
+         onSetLanguage={setUiLanguage}
+      />
+   ) : null;
+
    // Mounted at the App.jsx level so it owns the entire viewport (the
    // user's "not a toy" feedback was specifically about cramped chrome).
    if (personaEditorTarget !== null) {
@@ -730,6 +754,7 @@ function MainApp() {
          <>
          {showExamination ? (
             <PhysicalExamScreen
+               topBarControls={topBarControls}
                activeCase={activeCase}
                sessionId={sessionId}
                physicalExam={caseSnapshot?.config?.physical_exam ?? activeCase?.config?.physical_exam ?? null}
@@ -752,6 +777,7 @@ function MainApp() {
             />
          ) : showInvestigations ? (
             <InvestigationsScreen
+               topBarControls={topBarControls}
                activeCase={activeCase}
                sessionId={sessionId}
                patientInfo={patientInfo}
@@ -766,6 +792,7 @@ function MainApp() {
             />
          ) : showDiscussion ? (
             <DiscussionScreen
+               topBarControls={topBarControls}
                sessionId={sessionId}
                activeCase={activeCase}
                caseEnded={caseEnded}
@@ -809,111 +836,12 @@ function MainApp() {
             <div className="h-[45%] border-b border-neutral-800 relative">
                <PatientVisual caseData={activeCase} />
 
-               {/* Settings menu — far-left top corner. Replaces the old
-                   admin/username pill. Single menu now contains Profile,
-                   Support, and Analytics shortcuts (educator+/admin, based on
-                   role gate) in one place. The case-name banner that used to
-                   sit here was hidden per the operator
-                   request — students don't need the diagnosis spoiled in
-                   the header. */}
-               <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-                  <div className="relative">
-                     <button
-                        type="button"
-                        onClick={() => {
-                           setShowUserMenu(v => !v);
-                        }}
-                        aria-expanded={showUserMenu}
-                        aria-controls="app-user-menu"
-                        aria-label={t('settings_menu_aria')}
-                        className={`rohy-topbar-menu-trigger text-sm ${showUserMenu ? 'rohy-topbar-menu-trigger-open' : ''}`}
-                     >
-                        <Settings className="w-4 h-4 text-[var(--rohy-accent)]" />
-                        <span>{t('settings')}</span>
-                        <ChevronDown className={`w-4 h-4 text-[var(--rohy-muted)] transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
-                     </button>
-
-                     {/* Dropdown */}
-                     {showUserMenu && (
-                        <>
-                           <div className="fixed inset-0 z-40" onClick={closeTopMenus} />
-                           <div
-                              id="app-user-menu"
-                              role="menu"
-                              className="absolute left-0 top-full mt-2 z-50 rohy-menu rohy-topbar-menu-panel"
-                           >
-                              <button
-                                 type="button"
-                                 onClick={() => { setShowUserProfile(true); setShowUserMenu(false); }}
-                                 role="menuitem"
-                                 className="rohy-topbar-menu-item"
-                              >
-                                 <User className="w-4 h-4" />
-                                 {t('my_profile')}
-                              </button>
-                              <button
-                                 type="button"
-                                 onClick={() => { handleOpenSettings(); setShowUserMenu(false); }}
-                                 role="menuitem"
-                                 className="rohy-topbar-menu-item"
-                              >
-                                 <Settings className="w-4 h-4" />
-                                 {t('open_settings')}
-                              </button>
-                              <button
-                                 type="button"
-                                 onClick={() => { setShowHelpCenter(true); setShowUserMenu(false); }}
-                                 role="menuitem"
-                                 className="rohy-topbar-menu-item"
-                              >
-                                 <HelpCircle className="w-4 h-4" />
-                                 {t('help_support')}
-                              </button>
-                              {(canSeeOyonAnalytics || isAdminUser) && (
-                                 <div className="rohy-menu-divider" />
-                              )}
-                              {canSeeOyonAnalytics && (
-                                 <button
-                                    type="button"
-                                    onClick={() => { setShowOyonAnalytics(true); setShowUserMenu(false); }}
-                                    role="menuitem"
-                                    className="rohy-topbar-menu-item"
-                                 >
-                                    <Activity className="w-4 h-4" />
-                                    Emotion Analytics
-                                 </button>
-                              )}
-                              {isAdminUser && (
-                                 <button
-                                    type="button"
-                                    onClick={() => { setShowTnaAnalytics(true); setShowUserMenu(false); }}
-                                    role="menuitem"
-                                    className="rohy-topbar-menu-item"
-                                 >
-                                    <Activity className="w-4 h-4" />
-                                    Case Analytics
-                                 </button>
-                              )}
-                              {(canSeeOyonAnalytics || isAdminUser) && (
-                                 <div className="rohy-menu-divider" />
-                              )}
-                              <button
-                                 type="button"
-                                 onClick={() => {
-                                    EventLogger.log('CLICKED', 'button', { objectId: 'logout', objectName: 'Logout', component: COMPONENTS.APP });
-                                    logout();
-                                    closeTopMenus();
-                                 }}
-                                 role="menuitem"
-                                 className="rohy-topbar-menu-item rohy-topbar-menu-item-danger"
-                              >
-                                 <LogOut className="w-4 h-4" />
-                                 {t('logout')}
-                              </button>
-                           </div>
-                        </>
-                     )}
-                  </div>
+               {/* Settings menu + language switcher — far-left top corner.
+                   Now the shared TopBarControls, identical to the one rendered
+                   in every other screen's header, so the gear and language
+                   switch are consistent app-wide. */}
+               <div className="absolute top-4 left-4 z-10">
+                  {topBarControls}
                </div>
 
                {/* End & Debrief — the explicit way for the learner to close

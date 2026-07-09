@@ -5,7 +5,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { apiFetch, apiPut } from '../../services/apiClient';
 
 const LabValueEditor = ({ sessionId, _caseId, onUpdate }) => {
-  const { t } = useTranslation('investigations');
+  const { t } = useTranslation('authoring_labs');
   const toast = useToast();
   const [availableLabs, setAvailableLabs] = useState([]);
   const [expandedLabs, setExpandedLabs] = useState(new Set());

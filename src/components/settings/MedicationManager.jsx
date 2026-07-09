@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Search, Plus, Trash2, Loader2, Upload, Download, Edit2, Save, X,
     Pill, Database, RefreshCw, ChevronDown, ChevronRight, Lock
@@ -47,17 +48,19 @@ function csvToArray(value) {
 const ROUTE_OPTIONS = ['oral', 'iv', 'im', 'sc', 'topical', 'inhaled', 'sublingual', 'rectal', 'other'];
 
 function ScopeBadge({ scope, isCurated }) {
+    const { t } = useTranslation('authoring_meds');
     const map = {
-        platform: { label: isCurated ? 'Curated' : 'Platform', color: 'rohy-badge-cyan' },
-        tenant:   { label: 'Tenant',   color: 'rohy-badge-amber' },
-        user:     { label: 'My',       color: 'rohy-badge-green' },
-        session:  { label: 'Session',  color: 'rohy-badge-neutral' },
+        platform: { label: isCurated ? t('scope_curated') : t('scope_platform'), color: 'rohy-badge-cyan' },
+        tenant:   { label: t('scope_tenant'),   color: 'rohy-badge-amber' },
+        user:     { label: t('scope_my'),       color: 'rohy-badge-green' },
+        session:  { label: t('scope_session'),  color: 'rohy-badge-neutral' },
     };
     const meta = map[scope] || map.platform;
     return <span className={`${meta.color} uppercase tracking-wide`}>{meta.label}</span>;
 }
 
 function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, saving }) {
+    const { t } = useTranslation('authoring_meds');
     const [draft, setDraft] = useState(() => ({
         generic_name: med.generic_name || '',
         drug_class: med.drug_class || '',
@@ -104,40 +107,40 @@ function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, savi
                             className="rohy-subtle-button flex items-center gap-1 px-3 py-1 text-xs rounded"
                         >
                             <Edit2 className="w-3.5 h-3.5" />
-                            Edit
+                            {t('edit')}
                         </button>
                     ) : (
-                        <span className="flex items-center gap-1 text-[10px] text-neutral-500" title="Insufficient role to edit this row">
+                        <span className="flex items-center gap-1 text-[10px] text-neutral-500" title={t('read_only_title')}>
                             <Lock className="w-3 h-3" />
-                            Read-only
+                            {t('read_only')}
                         </span>
                     )}
                 </div>
-                <Field label="Drug class">{med.drug_class || '—'}</Field>
-                <Field label="Category">{med.category || '—'}</Field>
-                <Field label="Route">{med.route || '—'}</Field>
-                <Field label="Dose">{dose || '—'}</Field>
-                <Field label="Frequency">{med.frequency || '—'}</Field>
-                <Field label="NDC / ATC">{[med.ndc_primary, med.atc_code].filter(Boolean).join(' / ') || '—'}</Field>
+                <Field label={t('field_drug_class')}>{med.drug_class || '—'}</Field>
+                <Field label={t('field_category')}>{med.category || '—'}</Field>
+                <Field label={t('field_route')}>{med.route || '—'}</Field>
+                <Field label={t('field_dose')}>{dose || '—'}</Field>
+                <Field label={t('field_frequency')}>{med.frequency || '—'}</Field>
+                <Field label={t('field_ndc_atc')}>{[med.ndc_primary, med.atc_code].filter(Boolean).join(' / ') || '—'}</Field>
                 {med.boxed_warning && (
-                    <Field label="Boxed warning" wide>
+                    <Field label={t('field_boxed_warning')} wide>
                         <span className="text-red-300">{med.boxed_warning}</span>
                     </Field>
                 )}
-                <Field label="Indications" wide>{jsonToCsv(med.indications) || '—'}</Field>
-                <Field label="Contraindications" wide>{jsonToCsv(med.contraindications) || '—'}</Field>
-                <Field label="Side effects" wide>{jsonToCsv(med.side_effects) || '—'}</Field>
+                <Field label={t('field_indications')} wide>{jsonToCsv(med.indications) || '—'}</Field>
+                <Field label={t('field_contraindications')} wide>{jsonToCsv(med.contraindications) || '—'}</Field>
+                <Field label={t('field_side_effects')} wide>{jsonToCsv(med.side_effects) || '—'}</Field>
             </div>
         );
     }
 
     return (
         <div className="px-6 py-4 rohy-detail-panel grid grid-cols-2 gap-3 text-xs">
-            <Input label="Generic name" value={draft.generic_name} onChange={(v) => setDraft({ ...draft, generic_name: v })} />
-            <Input label="Drug class" value={draft.drug_class} onChange={(v) => setDraft({ ...draft, drug_class: v })} />
-            <Input label="Category" value={draft.category} onChange={(v) => setDraft({ ...draft, category: v })} />
+            <Input label={t('field_generic_name')} value={draft.generic_name} onChange={(v) => setDraft({ ...draft, generic_name: v })} />
+            <Input label={t('field_drug_class')} value={draft.drug_class} onChange={(v) => setDraft({ ...draft, drug_class: v })} />
+            <Input label={t('field_category')} value={draft.category} onChange={(v) => setDraft({ ...draft, category: v })} />
             <div>
-                <label className="block text-[10px] uppercase tracking-wide text-neutral-400 mb-1">Route</label>
+                <label className="block text-[10px] uppercase tracking-wide text-neutral-400 mb-1">{t('field_route')}</label>
                 <select
                     value={draft.route}
                     onChange={(e) => setDraft({ ...draft, route: e.target.value })}
@@ -146,23 +149,23 @@ function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, savi
                     {ROUTE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
             </div>
-            <Input label="Typical dose" value={draft.typical_dose} onChange={(v) => setDraft({ ...draft, typical_dose: v })} />
-            <Input label="Dose unit" value={draft.dose_unit} onChange={(v) => setDraft({ ...draft, dose_unit: v })} />
-            <Input label="Frequency" value={draft.frequency} onChange={(v) => setDraft({ ...draft, frequency: v })} />
-            <Input label="RxCUI" value={draft.rxcui} onChange={(v) => setDraft({ ...draft, rxcui: v })} />
-            <Input label="NDC primary" value={draft.ndc_primary} onChange={(v) => setDraft({ ...draft, ndc_primary: v })} />
-            <Input label="ATC code" value={draft.atc_code} onChange={(v) => setDraft({ ...draft, atc_code: v })} />
-            <Input label="Boxed warning" value={draft.boxed_warning} onChange={(v) => setDraft({ ...draft, boxed_warning: v })} wide />
-            <Input label="Indications (comma-separated)" value={draft.indications} onChange={(v) => setDraft({ ...draft, indications: v })} wide />
-            <Input label="Contraindications (comma-separated)" value={draft.contraindications} onChange={(v) => setDraft({ ...draft, contraindications: v })} wide />
-            <Input label="Side effects (comma-separated)" value={draft.side_effects} onChange={(v) => setDraft({ ...draft, side_effects: v })} wide />
+            <Input label={t('field_typical_dose')} value={draft.typical_dose} onChange={(v) => setDraft({ ...draft, typical_dose: v })} />
+            <Input label={t('field_dose_unit')} value={draft.dose_unit} onChange={(v) => setDraft({ ...draft, dose_unit: v })} />
+            <Input label={t('field_frequency')} value={draft.frequency} onChange={(v) => setDraft({ ...draft, frequency: v })} />
+            <Input label={t('field_rxcui')} value={draft.rxcui} onChange={(v) => setDraft({ ...draft, rxcui: v })} />
+            <Input label={t('field_ndc_primary')} value={draft.ndc_primary} onChange={(v) => setDraft({ ...draft, ndc_primary: v })} />
+            <Input label={t('field_atc_code')} value={draft.atc_code} onChange={(v) => setDraft({ ...draft, atc_code: v })} />
+            <Input label={t('field_boxed_warning')} value={draft.boxed_warning} onChange={(v) => setDraft({ ...draft, boxed_warning: v })} wide />
+            <Input label={t('field_indications_csv')} value={draft.indications} onChange={(v) => setDraft({ ...draft, indications: v })} wide />
+            <Input label={t('field_contraindications_csv')} value={draft.contraindications} onChange={(v) => setDraft({ ...draft, contraindications: v })} wide />
+            <Input label={t('field_side_effects_csv')} value={draft.side_effects} onChange={(v) => setDraft({ ...draft, side_effects: v })} wide />
             <div className="col-span-2 flex justify-end gap-2 pt-2 border-t border-neutral-800">
                 <button
                     onClick={onCancel}
                     disabled={saving}
                     className="rohy-subtle-button flex items-center gap-1 px-3 py-1.5 text-xs rounded"
                 >
-                    <X className="w-3.5 h-3.5" /> Cancel
+                    <X className="w-3.5 h-3.5" /> {t('cancel')}
                 </button>
                 <button
                     onClick={() => onSave({
@@ -175,7 +178,7 @@ function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, savi
                     className="flex items-center gap-1 px-3 py-1.5 text-xs bg-cyan-700 hover:bg-cyan-600 text-white disabled:opacity-50 rounded font-bold"
                 >
                     {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    Save
+                    {t('save')}
                 </button>
             </div>
         </div>
@@ -215,6 +218,7 @@ function Input({ label, value, onChange, wide }) {
  * - Delete medications
  */
 export default function MedicationManager() {
+    const { t } = useTranslation('authoring_meds');
     const toast = useToast();
     const { user: currentUser } = useAuth();
 
@@ -244,7 +248,7 @@ export default function MedicationManager() {
             const data = await apiFetch('/master/medications');
             setMedications(data.medications || []);
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to load medications');
+            toast.error(err instanceof ApiError ? err.message : t('toast_load_failed'));
             console.error(err);
         } finally {
             setLoading(false);
@@ -291,11 +295,11 @@ export default function MedicationManager() {
             // the UI gates the Edit button by, so 403s here would only fire
             // for race conditions (someone else changed scope).
             await apiPut(`/catalogue/medications/${id}`, draft);
-            toast.success('Medication updated');
+            toast.success(t('toast_updated'));
             setEditingId(null);
             await fetchMedications();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : err.message || 'Failed to save medication');
+            toast.error(err instanceof ApiError ? err.message : err.message || t('toast_save_failed'));
         } finally {
             setSavingId(null);
         }
@@ -303,7 +307,7 @@ export default function MedicationManager() {
 
     const handleAddMed = async () => {
         if (!newMed.generic_name) {
-            toast.error('Medication name is required');
+            toast.error(t('toast_name_required'));
             return;
         }
 
@@ -316,7 +320,7 @@ export default function MedicationManager() {
 
             await apiPost('/master/medications', medData);
 
-            toast.success('Medication added');
+            toast.success(t('toast_added'));
             setNewMed({
                 generic_name: '',
                 drug_class: '',
@@ -329,47 +333,47 @@ export default function MedicationManager() {
             fetchMedications();
             setActiveTab('browse');
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : err.message || 'Failed to add medication');
+            toast.error(err instanceof ApiError ? err.message : err.message || t('toast_add_failed'));
         }
     };
 
     const handleDeleteMed = async (id, name) => {
-        if (!confirm(`Delete "${name}"?`)) return;
+        if (!confirm(t('confirm_delete', { name }))) return;
 
         try {
             await apiDelete(`/master/medications/${id}`);
 
-            toast.success('Medication deleted');
+            toast.success(t('toast_deleted'));
             if (expandedId === id) setExpandedId(null);
             if (editingId === id) setEditingId(null);
             fetchMedications();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : err.message || 'Failed to delete');
+            toast.error(err instanceof ApiError ? err.message : err.message || t('toast_delete_failed'));
         }
     };
 
     const handleClearAll = async () => {
-        if (!confirm('Delete ALL medications? This cannot be undone.')) return;
+        if (!confirm(t('confirm_clear_all'))) return;
 
         try {
             await apiDelete('/master/medications/all');
 
-            toast.success('All medications deleted');
+            toast.success(t('toast_all_deleted'));
             fetchMedications();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : err.message || 'Failed to delete');
+            toast.error(err instanceof ApiError ? err.message : err.message || t('toast_delete_failed'));
         }
     };
 
     const handleBulkImport = async () => {
         if (!importData.trim()) {
-            toast.error('Enter medication names (one per line)');
+            toast.error(t('toast_enter_names'));
             return;
         }
 
         const names = importData.split('\n').map(n => n.trim()).filter(n => n);
         if (names.length === 0) {
-            toast.error('No valid medication names found');
+            toast.error(t('toast_no_valid_names'));
             return;
         }
 
@@ -378,12 +382,12 @@ export default function MedicationManager() {
                 medications: names.map(name => ({ name }))
             });
 
-            toast.success(`Imported ${data.inserted} medications (${data.skipped} skipped)`);
+            toast.success(t('toast_imported', { inserted: data.inserted, skipped: data.skipped }));
             setImportData('');
             fetchMedications();
             setActiveTab('browse');
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : err.message || 'Import failed');
+            toast.error(err instanceof ApiError ? err.message : err.message || t('toast_import_failed'));
         }
     };
 
@@ -415,7 +419,7 @@ export default function MedicationManager() {
     if (rankOf(currentUser) < ROLE_RANKS.admin) {
         return (
             <div className="rohy-card rounded-lg p-6 text-sm rohy-table-muted">
-                Medication management requires an administrator account.
+                {t('admin_required')}
             </div>
         );
     }
@@ -426,16 +430,16 @@ export default function MedicationManager() {
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <Pill className="w-5 h-5 text-teal-700" />
-                    <h3 className="text-lg font-bold">Medication Database</h3>
+                    <h3 className="text-lg font-bold">{t('title')}</h3>
                     <span className="rohy-count-pill">
-                        {medications.length} medications
+                        {t('count_medications', { count: medications.length })}
                     </span>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={fetchMedications}
                         className="rohy-subtle-button p-2 rounded"
-                        title="Refresh"
+                        title={t('refresh')}
                     >
                         <RefreshCw className="w-4 h-4" />
                     </button>
@@ -444,7 +448,7 @@ export default function MedicationManager() {
                         className="rohy-subtle-button flex items-center gap-1 px-3 py-1.5 rounded text-sm"
                     >
                         <Download className="w-4 h-4" />
-                        Export
+                        {t('export')}
                     </button>
                 </div>
             </div>
@@ -456,21 +460,21 @@ export default function MedicationManager() {
                     className={`px-4 py-2 text-sm font-medium rounded-t ${activeTab === 'browse' ? 'rohy-admin-tab-active' : 'rohy-admin-tab'}`}
                 >
                     <Database className="w-4 h-4 inline mr-2" />
-                    Browse
+                    {t('tab_browse')}
                 </button>
                 <button
                     onClick={() => setActiveTab('add')}
                     className={`px-4 py-2 text-sm font-medium rounded-t ${activeTab === 'add' ? 'rohy-admin-tab-active' : 'rohy-admin-tab'}`}
                 >
                     <Plus className="w-4 h-4 inline mr-2" />
-                    Add
+                    {t('tab_add')}
                 </button>
                 <button
                     onClick={() => setActiveTab('import')}
                     className={`px-4 py-2 text-sm font-medium rounded-t ${activeTab === 'import' ? 'rohy-admin-tab-active' : 'rohy-admin-tab'}`}
                 >
                     <Upload className="w-4 h-4 inline mr-2" />
-                    Bulk Import
+                    {t('tab_bulk_import')}
                 </button>
             </div>
 
@@ -484,7 +488,7 @@ export default function MedicationManager() {
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Search by name, class, or RxCUI..."
+                            placeholder={t('search_placeholder')}
                             className="rohy-field w-full pl-10 pr-4 py-2 rounded-lg text-sm"
                         />
                     </div>
@@ -495,18 +499,18 @@ export default function MedicationManager() {
                             <thead className="rohy-table-head sticky top-0 z-10">
                                 <tr>
                                     <th className="w-8"></th>
-                                    <th className="px-4 py-3 text-left font-bold">Name</th>
-                                    <th className="px-4 py-3 text-left font-bold">Class</th>
-                                    <th className="px-4 py-3 text-left font-bold">Route</th>
-                                    <th className="px-4 py-3 text-left font-bold">Scope</th>
-                                    <th className="px-4 py-3 text-right font-bold w-20">Actions</th>
+                                    <th className="px-4 py-3 text-left font-bold">{t('col_name')}</th>
+                                    <th className="px-4 py-3 text-left font-bold">{t('col_class')}</th>
+                                    <th className="px-4 py-3 text-left font-bold">{t('col_route')}</th>
+                                    <th className="px-4 py-3 text-left font-bold">{t('col_scope')}</th>
+                                    <th className="px-4 py-3 text-right font-bold w-20">{t('col_actions')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredMedications.length === 0 ? (
                                     <tr>
                                         <td colSpan="6" className="text-center py-8 text-neutral-500">
-                                            {searchQuery ? 'No medications match your search' : 'No medications in database'}
+                                            {searchQuery ? t('empty_no_match') : t('empty_no_medications')}
                                         </td>
                                     </tr>
                                 ) : (
@@ -530,7 +534,7 @@ export default function MedicationManager() {
                                                         <button
                                                             onClick={() => handleDeleteMed(med.id, med.generic_name)}
                                                             className="rohy-danger-icon-button p-1 rounded"
-                                                            title="Delete"
+                                                            title={t('delete')}
                                                         >
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
@@ -567,7 +571,7 @@ export default function MedicationManager() {
                                 className="rohy-danger-button flex items-center gap-2 px-3 py-1.5 rounded text-sm"
                             >
                                 <Trash2 className="w-4 h-4" />
-                                Clear All
+                                {t('clear_all')}
                             </button>
                         </div>
                     )}
@@ -577,31 +581,31 @@ export default function MedicationManager() {
             {/* Add Tab */}
             {activeTab === 'add' && (
                 <div className="rohy-card space-y-4 rounded-lg p-4">
-                    <h4 className="font-bold text-sm">Add New Medication</h4>
+                    <h4 className="font-bold text-sm">{t('add_new_title')}</h4>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs text-neutral-400 mb-1">Name *</label>
+                            <label className="block text-xs text-neutral-400 mb-1">{t('label_name_required')}</label>
                             <input
                                 type="text"
                                 value={newMed.generic_name}
                                 onChange={(e) => setNewMed({ ...newMed, generic_name: e.target.value })}
                                 className="rohy-field w-full px-3 py-2 rounded text-sm"
-                                placeholder="e.g., Metformin"
+                                placeholder={t('placeholder_name')}
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-neutral-400 mb-1">Drug Class</label>
+                            <label className="block text-xs text-neutral-400 mb-1">{t('field_drug_class')}</label>
                             <input
                                 type="text"
                                 value={newMed.drug_class}
                                 onChange={(e) => setNewMed({ ...newMed, drug_class: e.target.value })}
                                 className="rohy-field w-full px-3 py-2 rounded text-sm"
-                                placeholder="e.g., Biguanide"
+                                placeholder={t('placeholder_drug_class')}
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-neutral-400 mb-1">Route</label>
+                            <label className="block text-xs text-neutral-400 mb-1">{t('field_route')}</label>
                             <select
                                 value={newMed.route}
                                 onChange={(e) => setNewMed({ ...newMed, route: e.target.value })}
@@ -611,36 +615,36 @@ export default function MedicationManager() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs text-neutral-400 mb-1">Typical Dose</label>
+                            <label className="block text-xs text-neutral-400 mb-1">{t('field_typical_dose')}</label>
                             <input
                                 type="text"
                                 value={newMed.typical_dose}
                                 onChange={(e) => setNewMed({ ...newMed, typical_dose: e.target.value })}
                                 className="rohy-field w-full px-3 py-2 rounded text-sm"
-                                placeholder="e.g., 500mg"
+                                placeholder={t('placeholder_typical_dose')}
                             />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-xs text-neutral-400 mb-1">Indications (comma-separated)</label>
+                        <label className="block text-xs text-neutral-400 mb-1">{t('field_indications_csv')}</label>
                         <input
                             type="text"
                             value={newMed.indications}
                             onChange={(e) => setNewMed({ ...newMed, indications: e.target.value })}
                             className="rohy-field w-full px-3 py-2 rounded text-sm"
-                            placeholder="e.g., Type 2 Diabetes, PCOS"
+                            placeholder={t('placeholder_indications')}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-xs text-neutral-400 mb-1">Side Effects (comma-separated)</label>
+                        <label className="block text-xs text-neutral-400 mb-1">{t('field_side_effects_csv')}</label>
                         <input
                             type="text"
                             value={newMed.side_effects}
                             onChange={(e) => setNewMed({ ...newMed, side_effects: e.target.value })}
                             className="rohy-field w-full px-3 py-2 rounded text-sm"
-                            placeholder="e.g., Nausea, Diarrhea"
+                            placeholder={t('placeholder_side_effects')}
                         />
                     </div>
 
@@ -649,7 +653,7 @@ export default function MedicationManager() {
                         className="flex items-center gap-2 px-4 py-2 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-sm font-bold"
                     >
                         <Plus className="w-4 h-4" />
-                        Add Medication
+                        {t('add_medication')}
                     </button>
                 </div>
             )}
@@ -657,8 +661,8 @@ export default function MedicationManager() {
             {/* Import Tab */}
             {activeTab === 'import' && (
                 <div className="rohy-card space-y-4 rounded-lg p-4">
-                    <h4 className="font-bold text-sm">Bulk Import Medications</h4>
-                    <p className="text-xs text-neutral-400">Enter medication names, one per line</p>
+                    <h4 className="font-bold text-sm">{t('bulk_import_title')}</h4>
+                    <p className="text-xs text-neutral-400">{t('bulk_import_help')}</p>
 
                     <textarea
                         value={importData}
@@ -670,7 +674,7 @@ export default function MedicationManager() {
 
                     <div className="flex justify-between items-center">
                         <span className="text-xs text-neutral-500">
-                            {importData.split('\n').filter(n => n.trim()).length} medications to import
+                            {t('import_count', { count: importData.split('\n').filter(n => n.trim()).length })}
                         </span>
                         <button
                             onClick={handleBulkImport}
@@ -678,7 +682,7 @@ export default function MedicationManager() {
                             className="flex items-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-600 text-white disabled:opacity-50 rounded text-sm font-bold"
                         >
                             <Upload className="w-4 h-4" />
-                            Import
+                            {t('import')}
                         </button>
                     </div>
                 </div>

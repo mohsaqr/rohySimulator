@@ -1,6 +1,8 @@
 {
   "cancel": "Cancel",
+  "case_analytics": "Case Analytics",
   "dismiss": "Dismiss",
+  "emotion_analytics": "Emotion Analytics",
   "end_debrief": "End & Debrief",
   "end_debrief_title": "End the current session and open the debrief",
   "end_session_confirm_intro": "This closes the case for debrief. Once ended:",
@@ -9,6 +11,7 @@
   "end_session_confirm_title": "End this session?",
   "end_session_confirm_transcript": "You can review the transcript in the debrief room but cannot reopen the case.",
   "help_support": "Help & Support",
+  "language_menu_aria": "Change language",
   "loading": "Loading...",
   "logout": "Logout",
   "multi_tab_heads_up": "Heads up:",

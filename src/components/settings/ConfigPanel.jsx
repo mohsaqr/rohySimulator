@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -43,6 +44,7 @@ import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTe
 // URL flag. Self-contained so its hooks don't perturb ConfigPanel's
 // top-level hook order.
 export function InlineBodyMapEditor() {
+    const { t } = useTranslation('authoring_config');
     const [open, setOpen] = useState(false);
     const [gender, setGender] = useState('male');
     const [view, setView] = useState('anterior');
@@ -55,7 +57,7 @@ export function InlineBodyMapEditor() {
                 className="inline-flex items-center gap-2 px-4 py-2 bg-teal-700 hover:bg-teal-600 text-white rounded transition-colors"
             >
                 <Image className="w-4 h-4" />
-                Open Body Map Editor
+                {t('bodymap_open_editor')}
             </button>
         );
     }
@@ -68,16 +70,16 @@ export function InlineBodyMapEditor() {
                     onChange={(e) => setGender(e.target.value)}
                     className="bg-neutral-900 text-white p-2 rounded border border-neutral-700"
                 >
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
+                    <option value="male">{t('gender_male')}</option>
+                    <option value="female">{t('gender_female')}</option>
                 </select>
                 <select
                     value={view}
                     onChange={(e) => setView(e.target.value)}
                     className="bg-neutral-900 text-white p-2 rounded border border-neutral-700"
                 >
-                    <option value="anterior">Front (Anterior)</option>
-                    <option value="posterior">Back (Posterior)</option>
+                    <option value="anterior">{t('bodymap_view_anterior')}</option>
+                    <option value="posterior">{t('bodymap_view_posterior')}</option>
                 </select>
                 <button
                     type="button"
@@ -85,7 +87,7 @@ export function InlineBodyMapEditor() {
                     className="inline-flex items-center gap-2 px-3 py-2 bg-neutral-700 hover:bg-neutral-600 text-white rounded transition-colors"
                 >
                     <X className="w-4 h-4" />
-                    Close editor
+                    {t('bodymap_close_editor')}
                 </button>
             </div>
             <div className="bg-slate-900 rounded-lg overflow-hidden">
@@ -201,6 +203,7 @@ const SETTINGS_CARD_COPY = {
 };
 
 function SettingsOverviewCard({ item, group, onSelect, featured = false }) {
+    const { t } = useTranslation('authoring_config');
     const Icon = item.icon;
     const copy = SETTINGS_CARD_COPY[item.id] || {};
     return (
@@ -223,17 +226,18 @@ function SettingsOverviewCard({ item, group, onSelect, featured = false }) {
             <div className="mt-2 min-w-0 flex-1">
                 <h4 className="text-sm font-black tracking-tight text-slate-950">{item.label}</h4>
                 <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                    {copy.description || 'Open this settings workspace.'}
+                    {t([`card_${item.id}_desc`, 'card_default_desc'])}
                 </p>
             </div>
             <span className="mt-1 text-[9px] font-black uppercase tracking-[0.12em] text-teal-700 opacity-0 transition-opacity group-hover:opacity-100">
-                Open {copy.metric || 'workspace'}
+                {t('card_open', { metric: t([`card_${item.id}_metric`, 'card_default_metric']) })}
             </span>
         </button>
     );
 }
 
 function SettingsOverview({ sections, onSelect }) {
+    const { t } = useTranslation('authoring_config');
     const visibleSections = sections
         .map(({ group, items }) => ({ group, items: items.filter((item) => item.visible) }))
         .filter(({ items }) => items.length > 0);
@@ -241,21 +245,21 @@ function SettingsOverview({ sections, onSelect }) {
     return (
         <div className="space-y-5">
             <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <h3 className="text-2xl font-black tracking-tight text-slate-950">Control Center</h3>
+                <h3 className="text-2xl font-black tracking-tight text-slate-950">{t('overview_control_center')}</h3>
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-4 flex items-center justify-between gap-4">
                     <div>
-                        <h3 className="text-xl font-black text-slate-950">Settings areas</h3>
-                        <p className="text-sm text-slate-500">One surface, framed by domain. Existing tabs remain unchanged.</p>
+                        <h3 className="text-xl font-black text-slate-950">{t('overview_settings_areas')}</h3>
+                        <p className="text-sm text-slate-500">{t('overview_settings_subtitle')}</p>
                     </div>
                     <button
                         type="button"
                         onClick={() => onSelect('cases')}
                         className="rounded-xl border border-slate-200 bg-slate-950 px-3 py-2 text-sm font-bold text-white shadow-sm hover:bg-slate-800"
                     >
-                        Go to cases
+                        {t('overview_go_to_cases')}
                     </button>
                 </div>
 
@@ -279,6 +283,7 @@ function SettingsOverview({ sections, onSelect }) {
 }
 
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'overview', initialWizardStep = 1, onOpenPersonaEditor, onCaseSaved }) {
+    const { t } = useTranslation('authoring_config');
     const { isAdmin, user } = useAuth();
     // Educator+ gate for the Analytics tab (formerly split into an admin-only
     // "Case Analytics" and an educator+ "Emotion & Attention" Oyon tab — the
@@ -352,7 +357,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
         const handleBeforeUnload = (e) => {
             if (editingCase && hasUnsavedChanges) {
                 e.preventDefault();
-                e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+                e.returnValue = t('unsaved_leave');
                 return e.returnValue;
             }
         };
@@ -384,7 +389,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
         // Validate required fields
         if (!editingCase.name || editingCase.name.trim() === '') {
-            toast.warning('Please enter a case name before saving.');
+            toast.warning(t('toast_enter_case_name'));
             return false;
         }
 
@@ -449,28 +454,28 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             // Clear auto-save after successful database save
             clearAutoSave();
 
-            toast.success('Case saved successfully!');
+            toast.success(t('toast_case_saved'));
             return true;
 
         } catch (err) {
             console.error(err);
-            toast.error(err.message || 'Failed to save case');
+            toast.error(err.message || t('toast_save_failed'));
             return false;
         }
     };
 
     const handleDeleteCase = async (caseId) => {
-        const confirmed = await toast.confirm('Are you sure you want to delete this case?', { title: 'Delete Case', type: 'danger', confirmText: 'Delete' });
+        const confirmed = await toast.confirm(t('confirm_delete_case'), { title: t('confirm_delete_case_title'), type: 'danger', confirmText: t('confirm_delete_text') });
         if (!confirmed) return;
 
         try {
             await apiDelete(`/cases/${caseId}`);
 
             setCases(prev => prev.filter(c => c.id !== caseId));
-            toast.success('Case deleted successfully!');
+            toast.success(t('toast_case_deleted'));
         } catch (err) {
             console.error(err);
-            toast.error('Failed to delete case');
+            toast.error(t('toast_delete_failed'));
         }
     };
 
@@ -495,48 +500,48 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
     // Medications) sit in Libraries near the bottom, above System.
     const SECTIONS = [
         {
-            group: 'Content',
+            group: t('group_content'),
             items: [
-                { id: 'cases', label: admin ? 'Cases' : 'Select Case', icon: FileText, visible: true },
-                { id: 'scenarios', label: 'Scenarios', icon: Layers, visible: admin },
+                { id: 'cases', label: admin ? t('tab_cases') : t('tab_select_case'), icon: FileText, visible: true },
+                { id: 'scenarios', label: t('tab_scenarios'), icon: Layers, visible: admin },
             ],
         },
         {
-            group: 'Agents & Voice',
+            group: t('group_agents_voice'),
             items: [
-                { id: 'agents', label: 'Agents', icon: Users, visible: admin },
-                { id: 'avatars', label: 'Avatars', icon: Image, visible: admin },
-                { id: 'voice', label: 'Voice', icon: Mic, visible: admin },
+                { id: 'agents', label: t('tab_agents'), icon: Users, visible: admin },
+                { id: 'avatars', label: t('tab_avatars'), icon: Image, visible: admin },
+                { id: 'voice', label: t('tab_voice'), icon: Mic, visible: admin },
             ],
         },
         {
-            group: 'People',
+            group: t('group_people'),
             items: [
-                { id: 'users', label: 'Users', icon: Users, visible: admin },
-                { id: 'cohorts', label: 'Courses', icon: Users, visible: canManageCohorts },
+                { id: 'users', label: t('tab_users'), icon: Users, visible: admin },
+                { id: 'cohorts', label: t('tab_courses'), icon: Users, visible: canManageCohorts },
             ],
         },
         {
-            group: 'Analytics',
+            group: t('group_analytics'),
             items: [
-                { id: 'analytics', label: 'Analytics', icon: Activity, visible: canSeeAnalytics },
-                { id: 'oyon', label: 'Oyon', icon: Camera, visible: true },
-                { id: 'logs', label: 'Logs', icon: ClipboardList, visible: admin },
+                { id: 'analytics', label: t('tab_analytics'), icon: Activity, visible: canSeeAnalytics },
+                { id: 'oyon', label: t('tab_oyon'), icon: Camera, visible: true },
+                { id: 'logs', label: t('tab_logs'), icon: ClipboardList, visible: admin },
             ],
         },
         {
-            group: 'Libraries',
+            group: t('group_libraries'),
             items: [
-                { id: 'bodymap', label: 'Body Map', icon: Image, visible: admin },
-                { id: 'labdb', label: 'Lab Database', icon: Database, visible: admin },
-                { id: 'medications', label: 'Medications', icon: Database, visible: admin },
+                { id: 'bodymap', label: t('tab_bodymap'), icon: Image, visible: admin },
+                { id: 'labdb', label: t('tab_labdb'), icon: Database, visible: admin },
+                { id: 'medications', label: t('tab_medications'), icon: Database, visible: admin },
             ],
         },
         {
-            group: 'System',
+            group: t('group_system'),
             items: [
-                { id: 'platform', label: 'Platform', icon: Settings, visible: admin },
-                { id: 'notifications', label: 'Notifications', icon: BellIcon, visible: true },
+                { id: 'platform', label: t('tab_platform'), icon: Settings, visible: admin },
+                { id: 'notifications', label: t('tab_notifications'), icon: BellIcon, visible: true },
             ],
         },
     ];
@@ -552,10 +557,10 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     </span>
                     <div className="flex flex-col leading-tight">
                         <h2 className="text-[0.9375rem] font-bold tracking-tight text-gray-900">
-                            {fullPage ? 'Rohy — Settings & Administration' : 'Platform Configuration'}
+                            {fullPage ? t('header_title_fullpage') : t('header_title_compact')}
                         </h2>
                         <span className="text-xs text-gray-500 font-medium">
-                            {fullPage ? 'Manage cases, cohorts, agents & platform configuration' : 'Workspace configuration'}
+                            {fullPage ? t('header_subtitle_fullpage') : t('header_subtitle_compact')}
                         </span>
                     </div>
                 </div>
@@ -566,7 +571,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                         className="rohy-subtle-button px-3.5 py-2 rounded-lg flex items-center gap-2"
                     >
                         <X className="w-4 h-4" />
-                        Back to Simulation
+                        {t('header_back_to_sim')}
                     </button>
                 )}
             </div>
@@ -586,14 +591,14 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                         onClick={onClose}
                         className="rohy-settings-nav-item"
                     >
-                        <Monitor className="w-4 h-4" /> Simulation
+                        <Monitor className="w-4 h-4" /> {t('nav_simulation')}
                     </button>
                     <button
                         type="button"
                         onClick={() => setActiveTab('overview')}
                         className={`rohy-settings-nav-item ${activeTab === 'overview' ? 'rohy-settings-nav-item--active' : ''}`}
                     >
-                        <Settings className="w-4 h-4" /> Overview
+                        <Settings className="w-4 h-4" /> {t('nav_overview')}
                     </button>
                     {SECTIONS.map(({ group, items }) => {
                         const visibleItems = items.filter((item) => item.visible);
@@ -637,7 +642,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                             {!editingCase ? (
                                 <>
                                     <div className="flex justify-between items-center mb-4">
-                                        <h3 className="text-lg font-bold">{isAdmin() ? 'Manage Cases' : 'Available Cases'}</h3>
+                                        <h3 className="text-lg font-bold">{isAdmin() ? t('cases_manage') : t('cases_available')}</h3>
                                         <div className="flex gap-2">
                                             {isAdmin() && (
                                                 <>
@@ -645,7 +650,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                         onClick={() => setEditingCase({ name: '', description: '', config: { pages: [] } })}
                                                         className="rohy-btn rohy-btn-primary"
                                                     >
-                                                        <Plus className="w-4 h-4" /> New Case
+                                                        <Plus className="w-4 h-4" /> {t('btn_new_case')}
                                                     </button>
                                                     <button
                                                         onClick={() => {
@@ -662,23 +667,23 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
                                                                     // Validate
                                                                     if (!caseData.name || !caseData.description) {
-                                                                        throw new Error('Invalid case file format');
+                                                                        throw new Error(t('err_invalid_case_file'));
                                                                     }
 
                                                                     await apiPost('/cases', caseData);
-                                                                    toast.success('Case imported successfully!');
+                                                                    toast.success(t('toast_case_imported'));
                                                                     const data = await apiFetch('/cases');
                                                                     setCases(data.cases || []);
                                                                 } catch (err) {
-                                                                    toast.error('Failed to import case: ' + err.message);
+                                                                    toast.error(t('toast_import_failed', { error: err.message }));
                                                                 }
                                                             };
                                                             input.click();
                                                         }}
                                                         className="rohy-btn rohy-btn-secondary"
-                                                        title="Import Case from JSON"
+                                                        title={t('import_title')}
                                                     >
-                                                        <FileUp className="w-4 h-4" /> Import
+                                                        <FileUp className="w-4 h-4" /> {t('btn_import')}
                                                     </button>
                                                 </>
                                             )}
@@ -690,15 +695,15 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                         <div className="grid grid-cols-3 gap-3 mb-4">
                                             <div className="rohy-stat-card rounded-lg p-3 text-center">
                                                 <div className="text-xl font-bold text-gray-900">{cases.length}</div>
-                                                <div className="text-xs text-gray-600">Total Cases</div>
+                                                <div className="text-xs text-gray-600">{t('stat_total_cases')}</div>
                                             </div>
                                             <div className="rohy-stat-card rohy-stat-card-accent rounded-lg p-3 text-center">
                                                 <div className="text-xl font-bold text-blue-700">{cases.filter(c => c.is_available).length}</div>
-                                                <div className="text-xs text-gray-700">Available</div>
+                                                <div className="text-xs text-gray-700">{t('stat_available')}</div>
                                             </div>
                                             <div className="rohy-stat-card rounded-lg p-3 text-center">
                                                 <div className="text-xl font-bold text-gray-700">{cases.filter(c => !c.is_available).length}</div>
-                                                <div className="text-xs text-gray-600">Hidden</div>
+                                                <div className="text-xs text-gray-600">{t('stat_hidden')}</div>
                                             </div>
                                         </div>
                                     )}
@@ -710,11 +715,11 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                     <div className="flex items-center gap-2">
                                                         <span className="font-bold text-gray-900">{c.name}</span>
                                                         {c.is_default && (
-                                                            <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded border border-green-300">Default</span>
+                                                            <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded border border-green-300">{t('badge_default')}</span>
                                                         )}
                                                         {isAdmin() && (
                                                             <span className={`px-2 py-0.5 text-xs rounded border ${c.is_available ? 'bg-blue-100 text-blue-800 border-blue-300' : 'bg-gray-100 text-gray-700 border-gray-300'}`}>
-                                                                {c.is_available ? 'Available' : 'Hidden'}
+                                                                {c.is_available ? t('badge_available') : t('badge_hidden')}
                                                             </span>
                                                         )}
                                                         {/* Active-use indicator. Edits to this case will be live to
@@ -723,9 +728,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                         {isAdmin() && c.active_session_count > 0 && (
                                                             <span
                                                                 className="px-2 py-0.5 text-xs rounded border bg-orange-100 text-orange-800 border-orange-300"
-                                                                title={`${c.active_session_count} active simulation session(s) — edits will be visible to learners on their next request.`}
+                                                                title={t('badge_live_title', { count: c.active_session_count })}
                                                             >
-                                                                ⚡ {c.active_session_count} live
+                                                                ⚡ {t('badge_live', { count: c.active_session_count })}
                                                             </span>
                                                         )}
                                                     </div>
@@ -745,9 +750,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                 }
                                                             }}
                                                             className={`px-2 py-1 text-xs rounded border ${c.is_available ? 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100' : 'rohy-subtle-button'}`}
-                                                            title={c.is_available ? 'Hide from students' : 'Make available to students'}
+                                                            title={c.is_available ? t('title_hide_students') : t('title_show_students')}
                                                         >
-                                                            {c.is_available ? 'Hide' : 'Show'}
+                                                            {c.is_available ? t('btn_hide') : t('btn_show')}
                                                         </button>
                                                     )}
                                                     {/* Admin: Set as Default */}
@@ -763,9 +768,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                 }
                                                             }}
                                                             className="px-2 py-1 text-xs rounded border bg-green-50 border-green-300 text-green-700 hover:bg-green-100"
-                                                            title="Set as default case for students"
+                                                            title={t('title_set_default')}
                                                         >
-                                                            Set Default
+                                                            {t('btn_set_default')}
                                                         </button>
                                                     )}
                                                     <button
@@ -775,7 +780,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                         }}
                                                         className="px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded text-xs font-bold text-white shadow-lg shadow-green-900/20"
                                                     >
-                                                        Load
+                                                        {t('btn_load')}
                                                     </button>
                                                     {/* Export - Admin only */}
                                                     {isAdmin() && (
@@ -802,7 +807,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                 window.URL.revokeObjectURL(url);
                                                             }}
                                                             className="p-2 bg-blue-700 hover:bg-blue-600 rounded text-xs text-white"
-                                                            title="Export to JSON"
+                                                            title={t('title_export_json')}
                                                         >
                                                             <FileDown className="w-4 h-4" />
                                                         </button>
@@ -814,7 +819,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                 localStorage.removeItem('rohy_editing_case');
                                                                 console.log('[ConfigPanel] Editing case:', c.name, 'scenario:', c.scenario ? 'present' : 'null');
                                                                 setEditingCase(c);
-                                                            }} className="rohy-subtle-button p-2 rounded text-xs">Edit</button>
+                                                            }} className="rohy-subtle-button p-2 rounded text-xs">{t('btn_edit')}</button>
                                                             <button
                                                                 onClick={() => {
                                                                     // Duplicate case - create a copy without ID
@@ -827,14 +832,14 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                     localStorage.removeItem('rohy_editing_case');
                                                                     console.log('[ConfigPanel] Duplicating case:', c.name);
                                                                     setEditingCase(duplicatedCase);
-                                                                    toast.success(`Duplicated "${c.name}" - Edit and save as new case`);
+                                                                    toast.success(t('toast_duplicated', { name: c.name }));
                                                                 }}
                                                                 className="p-2 bg-teal-100 text-teal-700 border border-teal-200 rounded text-xs hover:bg-teal-200"
-                                                                title="Duplicate case"
+                                                                title={t('title_duplicate')}
                                                             >
                                                                 <Copy className="w-4 h-4" />
                                                             </button>
-                                                            <button onClick={() => handleDeleteCase(c.id)} className="p-2 bg-red-50 text-red-700 border border-red-200 rounded text-xs hover:bg-red-100">Delete</button>
+                                                            <button onClick={() => handleDeleteCase(c.id)} className="p-2 bg-red-50 text-red-700 border border-red-200 rounded text-xs hover:bg-red-100">{t('btn_delete')}</button>
                                                         </>
                                                     )}
                                                 </div>
@@ -842,7 +847,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                         ))}
                                         {cases.length === 0 && (
                                             <div className="text-neutral-500 text-center py-8">
-                                                {isAdmin() ? 'No cases found in database.' : 'No cases available. Please contact an administrator.'}
+                                                {isAdmin() ? t('empty_no_cases_admin') : t('empty_no_cases_student')}
                                             </div>
                                         )}
                                     </div>
@@ -862,8 +867,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                     onCancel={async () => {
                                         if (hasUnsavedChanges) {
                                             const action = await toast.confirm(
-                                                'You have unsaved changes. Save before exiting?',
-                                                { title: 'Unsaved Changes', confirmText: 'Save & Exit', cancelText: 'Discard', type: 'warning' }
+                                                t('confirm_unsaved_save'),
+                                                { title: t('confirm_unsaved_title'), confirmText: t('confirm_save_exit'), cancelText: t('confirm_discard'), type: 'warning' }
                                             );
                                             if (action) {
                                                 // Await the save so we don't close the dialog
@@ -898,8 +903,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                             {!editingCase && (
                                 <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-4 flex items-center justify-between">
                                     <div>
-                                        <p className="text-sm text-amber-300 font-medium">No case selected</p>
-                                        <p className="text-xs text-neutral-400">Create or edit a case to apply scenarios</p>
+                                        <p className="text-sm text-amber-300 font-medium">{t('scenario_no_case_selected')}</p>
+                                        <p className="text-xs text-neutral-400">{t('scenario_no_case_help')}</p>
                                     </div>
                                     <button
                                         onClick={() => {
@@ -908,14 +913,14 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                         }}
                                         className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded text-sm font-bold"
                                     >
-                                        + New Case
+                                        {t('btn_new_case_plus')}
                                     </button>
                                 </div>
                             )}
                             {editingCase && (
                                 <div className="bg-green-900/20 border border-green-700/50 rounded-lg p-4">
                                     <p className="text-sm text-green-300">
-                                        Editing: <strong>{editingCase.name || 'New Case'}</strong> — Select a scenario below to apply it
+                                        {t('scenario_editing_prefix')} <strong>{editingCase.name || t('new_case_fallback')}</strong> {t('scenario_editing_suffix')}
                                     </p>
                                 </div>
                             )}
@@ -931,7 +936,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                         const hasTimeline = existing && Array.isArray(existing.timeline) && existing.timeline.length > 0;
                                         if (hasTimeline) {
                                             const proceed = window.confirm(
-                                                `This case already has a scenario timeline (${existing.timeline.length} frame${existing.timeline.length === 1 ? '' : 's'}). Replace it with "${scenario.name}"? The current timeline will be lost.`
+                                                t('confirm_replace_timeline', { count: existing.timeline.length, name: scenario.name })
                                             );
                                             if (!proceed) return;
                                         }
@@ -955,7 +960,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
                                         setWizardInitialStep(3);
                                         setActiveTab('cases');
-                                        toast.success(`Scenario "${scenario.name}" applied to case!`);
+                                        toast.success(t('toast_scenario_applied', { name: scenario.name }));
                                     } else {
                                         // Create new case with this scenario
                                         const scaledScenario = {
@@ -975,7 +980,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                             }
                                         });
                                         setActiveTab('cases');
-                                        toast.success(`Scenario "${scenario.name}" applied. Complete your new case details.`);
+                                        toast.success(t('toast_scenario_applied_new', { name: scenario.name }));
                                     }
                                 }}
                             />
@@ -1001,8 +1006,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     {activeTab === 'labdb' && isAdmin() && (
                         <div className="space-y-6">
                             <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
-                                <h3 className="text-lg font-bold">Lab Test Database</h3>
-                                <span className="text-xs text-neutral-500">Manage laboratory test reference values</span>
+                                <h3 className="text-lg font-bold">{t('labdb_title')}</h3>
+                                <span className="text-xs text-neutral-500">{t('labdb_subtitle')}</span>
                             </div>
                             <LabTestManager />
                         </div>
@@ -1019,29 +1024,27 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     {activeTab === 'bodymap' && isAdmin() && (
                         <div className="space-y-6">
                             <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
-                                <h3 className="text-lg font-bold">Body Map Editor</h3>
-                                <span className="text-xs text-neutral-500">Edit body region mappings for physical examination</span>
+                                <h3 className="text-lg font-bold">{t('bodymap_title')}</h3>
+                                <span className="text-xs text-neutral-500">{t('bodymap_subtitle')}</span>
                             </div>
 
                             <div className="space-y-4">
                                 <div className="bg-neutral-800 rounded-lg p-4">
-                                    <h4 className="font-medium mb-2">Visual Region Editor</h4>
+                                    <h4 className="font-medium mb-2">{t('bodymap_visual_editor')}</h4>
                                     <p className="text-sm text-neutral-400 mb-4">
-                                        Open the interactive editor to drag and adjust body region polygons.
-                                        Click regions to select them, then drag vertices to reshape.
+                                        {t('bodymap_visual_help')}
                                     </p>
                                     <InlineBodyMapEditor />
                                 </div>
 
                                 <div className="bg-neutral-800 rounded-lg p-4">
-                                    <h4 className="font-medium mb-2">Body Images</h4>
+                                    <h4 className="font-medium mb-2">{t('bodymap_images')}</h4>
                                     <p className="text-sm text-neutral-400 mb-4">
-                                        Upload custom SVG or PNG images for the body silhouettes.
-                                        Images should be transparent backgrounds with body outlines.
+                                        {t('bodymap_images_help')}
                                     </p>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium">Male Front</label>
+                                            <label className="text-sm font-medium">{t('bodymap_male_front')}</label>
                                             <div className="flex gap-2">
                                                 <img src="./man-front.png" alt="Male front" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
                                                 <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
@@ -1049,8 +1052,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                         const file = e.target.files?.[0];
                                                         if (file) {
                                                             uploadBodyImage(file, 'man-front')
-                                                                .then(() => toast.success('Image uploaded!'))
-                                                                .catch(err => toast.error('Upload failed: ' + (err.error || err.message)));
+                                                                .then(() => toast.success(t('toast_image_uploaded')))
+                                                                .catch(err => toast.error(t('toast_upload_failed', { error: err.error || err.message })));
                                                         }
                                                     }} />
                                                     <Upload className="w-5 h-5 text-neutral-500" />
@@ -1058,7 +1061,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                             </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium">Male Back</label>
+                                            <label className="text-sm font-medium">{t('bodymap_male_back')}</label>
                                             <div className="flex gap-2">
                                                 <img src="./man-back.png" alt="Male back" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
                                                 <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
@@ -1066,8 +1069,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                         const file = e.target.files?.[0];
                                                         if (file) {
                                                             uploadBodyImage(file, 'man-back')
-                                                                .then(() => toast.success('Image uploaded!'))
-                                                                .catch(err => toast.error('Upload failed: ' + (err.error || err.message)));
+                                                                .then(() => toast.success(t('toast_image_uploaded')))
+                                                                .catch(err => toast.error(t('toast_upload_failed', { error: err.error || err.message })));
                                                         }
                                                     }} />
                                                     <Upload className="w-5 h-5 text-neutral-500" />
@@ -1075,7 +1078,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                             </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium">Female Front</label>
+                                            <label className="text-sm font-medium">{t('bodymap_female_front')}</label>
                                             <div className="flex gap-2">
                                                 <img src="./woman-front.png" alt="Female front" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
                                                 <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
@@ -1083,8 +1086,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                         const file = e.target.files?.[0];
                                                         if (file) {
                                                             uploadBodyImage(file, 'woman-front')
-                                                                .then(() => toast.success('Image uploaded!'))
-                                                                .catch(err => toast.error('Upload failed: ' + (err.error || err.message)));
+                                                                .then(() => toast.success(t('toast_image_uploaded')))
+                                                                .catch(err => toast.error(t('toast_upload_failed', { error: err.error || err.message })));
                                                         }
                                                     }} />
                                                     <Upload className="w-5 h-5 text-neutral-500" />
@@ -1092,7 +1095,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                             </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium">Female Back</label>
+                                            <label className="text-sm font-medium">{t('bodymap_female_back')}</label>
                                             <div className="flex gap-2">
                                                 <img src="./woman-back.png" alt="Female back" className="w-16 h-24 object-contain bg-neutral-700 rounded" />
                                                 <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
@@ -1100,8 +1103,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                         const file = e.target.files?.[0];
                                                         if (file) {
                                                             uploadBodyImage(file, 'woman-back')
-                                                                .then(() => toast.success('Image uploaded!'))
-                                                                .catch(err => toast.error('Upload failed: ' + (err.error || err.message)));
+                                                                .then(() => toast.success(t('toast_image_uploaded')))
+                                                                .catch(err => toast.error(t('toast_upload_failed', { error: err.error || err.message })));
                                                         }
                                                     }} />
                                                     <Upload className="w-5 h-5 text-neutral-500" />
@@ -1152,15 +1155,16 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
 // Platform Settings Component (Admin Only)
 function PlatformSettings({ cases, setCases }) {
+    const { t } = useTranslation('authoring_config');
     const [activeSection, setActiveSection] = useState('general');
     const [defaultCaseId, setDefaultCaseId] = useState(null);
     const [loading, setLoading] = useState(false);
 
     const sections = [
-        { id: 'general', label: 'General', icon: Settings },
-        { id: 'ai', label: 'AI / LLM', icon: Cpu },
-        { id: 'users', label: 'Users', icon: Users },
-        { id: 'monitor', label: 'Monitor', icon: Monitor }
+        { id: 'general', label: t('platform_section_general'), icon: Settings },
+        { id: 'ai', label: t('platform_section_ai'), icon: Cpu },
+        { id: 'users', label: t('platform_section_users'), icon: Users },
+        { id: 'monitor', label: t('platform_section_monitor'), icon: Monitor }
     ];
 
     // Find the current default case
@@ -1229,10 +1233,10 @@ function PlatformSettings({ cases, setCases }) {
                     <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
                         <h4 className="text-md font-bold text-green-400 mb-4 flex items-center gap-2">
                             <Activity className="w-5 h-5" />
-                            Default Case for Students
+                            {t('platform_default_case_title')}
                         </h4>
                         <p className="text-sm text-neutral-400 mb-4">
-                            When students log in, they will see this case pre-selected.
+                            {t('platform_default_case_help')}
                         </p>
                         <select
                             value={defaultCaseId || ''}
@@ -1244,14 +1248,14 @@ function PlatformSettings({ cases, setCases }) {
                             disabled={loading}
                             className="w-full max-w-md bg-neutral-800 border border-neutral-600 rounded p-3 text-sm focus:border-green-500 outline-none"
                         >
-                            <option value="">No default case</option>
+                            <option value="">{t('platform_no_default_case')}</option>
                             {availableCases.map(c => (
                                 <option key={c.id} value={c.id}>{c.name}</option>
                             ))}
                         </select>
                         {defaultCaseId && (
                             <p className="text-xs text-green-400 mt-2">
-                                Students will automatically see "{cases.find(c => c.id === defaultCaseId)?.name}" when they log in.
+                                {t('platform_default_case_note', { name: cases.find(c => c.id === defaultCaseId)?.name })}
                             </p>
                         )}
                     </div>
@@ -1287,15 +1291,16 @@ function PlatformSettings({ cases, setCases }) {
 
 // User Profile Field Configuration Component
 function UserFieldConfiguration() {
+    const { t } = useTranslation('authoring_config');
     const toast = useToast();
     const [fieldConfig, setFieldConfig] = useState({
-        name: { label: 'Full Name', required: true, enabled: true },
-        institution: { label: 'Institution', required: false, enabled: true },
-        address: { label: 'Address', required: false, enabled: true },
-        phone: { label: 'Phone Number', required: false, enabled: true },
-        alternative_email: { label: 'Alternative Email', required: false, enabled: true },
-        education: { label: 'Education', required: false, enabled: true },
-        grade: { label: 'Grade/Year', required: false, enabled: true }
+        name: { label: t('userfield_default_name'), required: true, enabled: true },
+        institution: { label: t('userfield_default_institution'), required: false, enabled: true },
+        address: { label: t('userfield_default_address'), required: false, enabled: true },
+        phone: { label: t('userfield_default_phone'), required: false, enabled: true },
+        alternative_email: { label: t('userfield_default_alternative_email'), required: false, enabled: true },
+        education: { label: t('userfield_default_education'), required: false, enabled: true },
+        grade: { label: t('userfield_default_grade'), required: false, enabled: true }
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -1331,9 +1336,9 @@ function UserFieldConfiguration() {
         setSaving(true);
         try {
             await apiPut('/platform-settings/user-fields', { config: fieldConfig });
-            toast.success('User field configuration saved');
+            toast.success(t('toast_userfields_saved'));
         } catch (error) {
-            toast.error(error instanceof ApiError ? error.message : 'Failed to save configuration: ' + error.message);
+            toast.error(error instanceof ApiError ? error.message : t('toast_save_config_failed', { error: error.message }));
         } finally {
             setSaving(false);
         }
@@ -1361,19 +1366,19 @@ function UserFieldConfiguration() {
         <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
             <h4 className="text-md font-bold text-teal-400 mb-4 flex items-center gap-2">
                 <User className="w-5 h-5" />
-                User Profile Field Configuration
+                {t('userfield_title')}
             </h4>
             <p className="text-sm text-neutral-400 mb-6">
-                Configure which fields are visible and required on user profiles. Disabled fields will not appear to users.
+                {t('userfield_help')}
             </p>
 
             <div className="space-y-3">
                 {/* Header */}
                 <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-bold text-neutral-400 border-b border-neutral-700">
-                    <div className="col-span-4">Field</div>
-                    <div className="col-span-3">Label</div>
-                    <div className="col-span-2 text-center">Enabled</div>
-                    <div className="col-span-3 text-center">Required</div>
+                    <div className="col-span-4">{t('userfield_col_field')}</div>
+                    <div className="col-span-3">{t('userfield_col_label')}</div>
+                    <div className="col-span-2 text-center">{t('userfield_col_enabled')}</div>
+                    <div className="col-span-3 text-center">{t('userfield_col_required')}</div>
                 </div>
 
                 {/* Fields */}
@@ -1392,7 +1397,7 @@ function UserFieldConfiguration() {
                                     {fieldKey.replace(/_/g, ' ')}
                                 </span>
                                 {fieldKey === 'name' && (
-                                    <span className="text-xs text-amber-400 ml-2">(always required)</span>
+                                    <span className="text-xs text-amber-400 ml-2">{t('userfield_always_required')}</span>
                                 )}
                             </div>
                             <div className="col-span-3">
@@ -1447,12 +1452,12 @@ function UserFieldConfiguration() {
                     {saving ? (
                         <>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            Saving...
+                            {t('btn_saving')}
                         </>
                     ) : (
                         <>
                             <Save className="w-4 h-4" />
-                            Save Configuration
+                            {t('btn_save_config')}
                         </>
                     )}
                 </button>
@@ -1477,41 +1482,41 @@ const LLM_PROVIDERS = {
     custom: { name: 'Custom OpenAI-Compatible', defaultBase: 'http://localhost:8000/v1', defaultModel: '', needsKey: false, modelRequired: false, keyPrefix: '', description: 'Any OpenAI-compatible API' }
 };
 
-function validateLlmConfig(cfg) {
+function validateLlmConfig(cfg, t) {
     const errs = [];
     const provider = LLM_PROVIDERS[cfg.provider] || LLM_PROVIDERS.lmstudio;
 
     if (!cfg.baseUrl || !/^https?:\/\//i.test(cfg.baseUrl.trim())) {
-        errs.push({ field: 'baseUrl', message: 'Base URL must start with http:// or https://' });
+        errs.push({ field: 'baseUrl', message: t('err_base_url_scheme') });
     }
     if (cfg.baseUrl && /^sk-/i.test(cfg.baseUrl.trim())) {
-        errs.push({ field: 'baseUrl', message: 'This looks like an API key — paste it in the API Key field instead.' });
+        errs.push({ field: 'baseUrl', message: t('err_base_url_is_key') });
     }
     if (provider.needsKey) {
         if (!cfg.apiKey || !cfg.apiKey.trim()) {
-            errs.push({ field: 'apiKey', message: `${provider.name} requires an API key.` });
+            errs.push({ field: 'apiKey', message: t('err_provider_needs_key', { provider: provider.name }) });
         } else {
             if (/^https?:\/\//i.test(cfg.apiKey.trim())) {
-                errs.push({ field: 'apiKey', message: 'This looks like a URL — paste the API key here, not the endpoint.' });
+                errs.push({ field: 'apiKey', message: t('err_key_is_url') });
             }
             if (provider.keyPrefix && !cfg.apiKey.trim().startsWith(provider.keyPrefix)) {
-                errs.push({ field: 'apiKey', message: `Expected a key starting with "${provider.keyPrefix}" for ${provider.name}. Double-check this is the right provider's key.`, soft: true });
+                errs.push({ field: 'apiKey', message: t('err_key_prefix', { prefix: provider.keyPrefix, provider: provider.name }), soft: true });
             }
         }
     }
     if (provider.modelRequired && (!cfg.model || !cfg.model.trim())) {
-        errs.push({ field: 'model', message: `${provider.name} requires a model name.` });
+        errs.push({ field: 'model', message: t('err_provider_needs_model', { provider: provider.name }) });
     }
     if (cfg.maxOutputTokens && cfg.maxOutputTokens.trim()) {
         const n = parseInt(cfg.maxOutputTokens, 10);
         if (!Number.isFinite(n) || n < 1 || n > 200000) {
-            errs.push({ field: 'maxOutputTokens', message: 'Max output tokens must be a positive integer ≤ 200000.' });
+            errs.push({ field: 'maxOutputTokens', message: t('err_max_tokens') });
         }
     }
     if (cfg.temperature && cfg.temperature.trim()) {
         const t = parseFloat(cfg.temperature);
         if (!Number.isFinite(t) || t < 0 || t > 2) {
-            errs.push({ field: 'temperature', message: 'Temperature must be a number between 0 and 2.' });
+            errs.push({ field: 'temperature', message: t('err_temperature') });
         }
     }
     return { ok: errs.filter(e => !e.soft).length === 0, errors: errs };
@@ -1519,6 +1524,7 @@ function validateLlmConfig(cfg) {
 
 // LLM Configuration Component (Admin Only)
 function LLMConfiguration() {
+    const { t } = useTranslation('authoring_config');
     const toast = useToast();
     const [llmConfig, setLlmConfig] = useState({
         provider: 'lmstudio',
@@ -1579,19 +1585,19 @@ function LLMConfiguration() {
     };
 
     const handleSaveLLM = async () => {
-        const v = validateLlmConfig(llmConfig);
+        const v = validateLlmConfig(llmConfig, t);
         setValidationErrors(v.errors);
         if (!v.ok) {
             const blocking = v.errors.filter(e => !e.soft);
-            toast.error(`Fix ${blocking.length} validation error${blocking.length === 1 ? '' : 's'} before saving.`);
+            toast.error(t('toast_fix_validation', { count: blocking.length }));
             return;
         }
         setSaving(true);
         try {
             await apiPut('/platform-settings/llm', llmConfig);
-            toast.success('LLM settings saved.');
+            toast.success(t('toast_llm_saved'));
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to save LLM settings');
+            toast.error(err instanceof ApiError ? err.message : t('toast_llm_save_failed'));
         } finally {
             setSaving(false);
         }
@@ -1601,9 +1607,9 @@ function LLMConfiguration() {
         setSaving(true);
         try {
             await apiPut('/platform-settings/rate-limits', rateLimits);
-            toast.success('Rate limits saved successfully!');
+            toast.success(t('toast_rate_limits_saved'));
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to save rate limits');
+            toast.error(err instanceof ApiError ? err.message : t('toast_rate_limits_failed'));
         } finally {
             setSaving(false);
         }
@@ -1618,12 +1624,12 @@ function LLMConfiguration() {
             // Then test
             const data = await apiPost('/platform-settings/llm/test', {});
             if (data.success) {
-                toast.success(`Connection successful! Response: "${data.response}"`);
+                toast.success(t('toast_connection_success', { response: data.response }));
             } else {
-                toast.error(`Connection failed: ${data.error}`);
+                toast.error(t('toast_connection_failed', { error: data.error }));
             }
         } catch (err) {
-            toast.error('Connection test failed: ' + err.message);
+            toast.error(t('toast_connection_test_failed', { error: err.message }));
         } finally {
             setTesting(false);
         }
@@ -1641,18 +1647,18 @@ function LLMConfiguration() {
             <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
                 <h4 className="text-md font-bold text-cyan-400 mb-4 flex items-center gap-2">
                     <Cpu className="w-5 h-5" />
-                    LLM Configuration
+                    {t('llm_config_title')}
                 </h4>
                 <p className="text-sm text-neutral-400 mb-6">
-                    Configure the AI model used for patient simulations. These settings apply to all users.
+                    {t('llm_config_help')}
                 </p>
 
                 <div className="space-y-4">
                     {/* Enable/Disable */}
                     <div className="flex items-center justify-between p-3 bg-neutral-700/30 rounded-lg">
                         <div>
-                            <span className="text-white font-medium">LLM Service</span>
-                            <p className="text-xs text-neutral-400">Enable or disable AI functionality for all users</p>
+                            <span className="text-white font-medium">{t('llm_service')}</span>
+                            <p className="text-xs text-neutral-400">{t('llm_service_help')}</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -1668,34 +1674,34 @@ function LLMConfiguration() {
 
                     {/* Provider Selection */}
                     <div>
-                        <label className="block text-sm font-medium text-neutral-300 mb-2">Provider</label>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">{t('llm_provider_label')}</label>
                         <select
                             value={llmConfig.provider}
                             onChange={(e) => handleProviderChange(e.target.value)}
                             className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
                         >
-                            <optgroup label="Local (No API Key)">
-                                <option value="lmstudio">LM Studio (Local)</option>
-                                <option value="ollama">Ollama (Local)</option>
+                            <optgroup label={t('llm_optgroup_local')}>
+                                <option value="lmstudio">{t('llm_opt_lmstudio')}</option>
+                                <option value="ollama">{t('llm_opt_ollama')}</option>
                             </optgroup>
-                            <optgroup label="Cloud Providers (API Key Required)">
-                                <option value="openai">OpenAI (GPT-4o, GPT-4o-mini)</option>
-                                <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
-                                <option value="openrouter">OpenRouter (Multi-provider)</option>
-                                <option value="groq">Groq (Ultra-fast)</option>
-                                <option value="together">Together AI (Open Source)</option>
-                                <option value="azure">Azure OpenAI</option>
+                            <optgroup label={t('llm_optgroup_cloud')}>
+                                <option value="openai">{t('llm_opt_openai')}</option>
+                                <option value="anthropic">{t('llm_opt_anthropic')}</option>
+                                <option value="openrouter">{t('llm_opt_openrouter')}</option>
+                                <option value="groq">{t('llm_opt_groq')}</option>
+                                <option value="together">{t('llm_opt_together')}</option>
+                                <option value="azure">{t('llm_opt_azure')}</option>
                             </optgroup>
-                            <optgroup label="Other">
-                                <option value="custom">Custom OpenAI-Compatible API</option>
+                            <optgroup label={t('llm_optgroup_other')}>
+                                <option value="custom">{t('llm_opt_custom')}</option>
                             </optgroup>
                         </select>
-                        <p className="text-xs text-neutral-500 mt-1">{currentProvider.description}</p>
+                        <p className="text-xs text-neutral-500 mt-1">{t(`llm_provider_desc_${llmConfig.provider}`)}</p>
                     </div>
 
                     {/* Base URL */}
                     <div>
-                        <label className="block text-sm font-medium text-neutral-300 mb-2">Base URL</label>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">{t('llm_base_url')}</label>
                         <input
                             type="text"
                             value={llmConfig.baseUrl}
@@ -1711,9 +1717,9 @@ function LLMConfiguration() {
                     {/* Model */}
                     <div>
                         <label className="block text-sm font-medium text-neutral-300 mb-2">
-                            Model
+                            {t('llm_model')}
                             {!currentProvider.modelRequired && (
-                                <span className="text-neutral-500 text-xs ml-2">(optional - uses loaded model)</span>
+                                <span className="text-neutral-500 text-xs ml-2">{t('llm_model_optional')}</span>
                             )}
                         </label>
                         <input
@@ -1721,7 +1727,7 @@ function LLMConfiguration() {
                             value={llmConfig.model}
                             onChange={(e) => setLlmConfig(prev => ({ ...prev, model: e.target.value }))}
                             className={`w-full bg-neutral-800 border rounded-lg p-3 text-white focus:border-cyan-500 outline-none ${fieldError('model') ? 'border-red-500' : 'border-neutral-600'}`}
-                            placeholder={currentProvider.modelRequired ? currentProvider.defaultModel || 'gpt-4o-mini' : 'Leave empty to use loaded model'}
+                            placeholder={currentProvider.modelRequired ? currentProvider.defaultModel || 'gpt-4o-mini' : t('llm_model_placeholder_optional')}
                         />
                         {fieldError('model') && (
                             <p className="text-xs text-red-400 mt-1">{fieldError('model').message}</p>
@@ -1732,10 +1738,10 @@ function LLMConfiguration() {
                     {currentProvider.needsKey && (
                         <div>
                             <label className="block text-sm font-medium text-neutral-300 mb-2">
-                                API Key
+                                {t('llm_api_key')}
                                 {currentProvider.keyPrefix && (
                                     <span className="text-neutral-500 text-xs ml-2">
-                                        starts with <code className="text-neutral-400">{currentProvider.keyPrefix}</code>
+                                        {t('llm_api_key_prefix')} <code className="text-neutral-400">{currentProvider.keyPrefix}</code>
                                     </span>
                                 )}
                             </label>
@@ -1745,7 +1751,7 @@ function LLMConfiguration() {
                                     value={llmConfig.apiKey}
                                     onChange={(e) => setLlmConfig(prev => ({ ...prev, apiKey: e.target.value }))}
                                     className={`w-full bg-neutral-800 border rounded-lg p-3 text-white focus:border-cyan-500 outline-none pr-20 ${fieldError('apiKey') ? 'border-red-500' : 'border-neutral-600'}`}
-                                    placeholder={currentProvider.keyPrefix ? `${currentProvider.keyPrefix}...` : 'API key'}
+                                    placeholder={currentProvider.keyPrefix ? `${currentProvider.keyPrefix}...` : t('llm_api_key_placeholder')}
                                     autoComplete="off"
                                     spellCheck={false}
                                 />
@@ -1754,7 +1760,7 @@ function LLMConfiguration() {
                                     onClick={() => setShowApiKey(!showApiKey)}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs text-neutral-400 hover:text-white"
                                 >
-                                    {showApiKey ? 'Hide' : 'Show'}
+                                    {showApiKey ? t('btn_hide_key') : t('btn_show_key')}
                                 </button>
                             </div>
                             {fieldError('apiKey') && (
@@ -1767,21 +1773,21 @@ function LLMConfiguration() {
 
                     {/* Effective settings preview — show what's actually wired up */}
                     <div className="pt-2 border-t border-neutral-700">
-                        <h5 className="text-xs font-bold text-neutral-400 uppercase tracking-wide mb-2">Currently wired up</h5>
+                        <h5 className="text-xs font-bold text-neutral-400 uppercase tracking-wide mb-2">{t('llm_wired_up')}</h5>
                         <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                            <dt className="text-neutral-500">Provider</dt>
+                            <dt className="text-neutral-500">{t('llm_provider_label')}</dt>
                             <dd className="text-neutral-200 font-mono">{llmConfig.provider}</dd>
-                            <dt className="text-neutral-500">Model</dt>
-                            <dd className="text-neutral-200 font-mono">{llmConfig.model || <span className="text-neutral-500">(provider default)</span>}</dd>
-                            <dt className="text-neutral-500">Base URL</dt>
-                            <dd className="text-neutral-200 font-mono break-all">{llmConfig.baseUrl || <span className="text-neutral-500">(unset)</span>}</dd>
+                            <dt className="text-neutral-500">{t('llm_model')}</dt>
+                            <dd className="text-neutral-200 font-mono">{llmConfig.model || <span className="text-neutral-500">{t('llm_provider_default')}</span>}</dd>
+                            <dt className="text-neutral-500">{t('llm_base_url')}</dt>
+                            <dd className="text-neutral-200 font-mono break-all">{llmConfig.baseUrl || <span className="text-neutral-500">{t('llm_unset')}</span>}</dd>
                             {currentProvider.needsKey && (
                                 <>
-                                    <dt className="text-neutral-500">Key</dt>
+                                    <dt className="text-neutral-500">{t('llm_key')}</dt>
                                     <dd className="text-neutral-200 font-mono">
                                         {llmConfig.apiKey
-                                            ? `${llmConfig.apiKey.slice(0, Math.min(7, llmConfig.apiKey.length))}…${llmConfig.apiKey.slice(-3)} (${llmConfig.apiKey.length} chars)`
-                                            : <span className="text-red-400">missing</span>}
+                                            ? `${llmConfig.apiKey.slice(0, Math.min(7, llmConfig.apiKey.length))}…${llmConfig.apiKey.slice(-3)} (${llmConfig.apiKey.length} ${t('llm_key_chars')})`
+                                            : <span className="text-red-400">{t('llm_key_missing')}</span>}
                                     </dd>
                                 </>
                             )}
@@ -1791,40 +1797,40 @@ function LLMConfiguration() {
                     {/* Model Parameters */}
                     <div className="grid grid-cols-2 gap-4 pt-2 border-t border-neutral-700 mt-4">
                         <div>
-                            <label className="block text-sm font-medium text-neutral-300 mb-2">Max Output Tokens</label>
+                            <label className="block text-sm font-medium text-neutral-300 mb-2">{t('llm_max_tokens')}</label>
                             <input
                                 type="text"
                                 value={llmConfig.maxOutputTokens}
                                 onChange={(e) => setLlmConfig(prev => ({ ...prev, maxOutputTokens: e.target.value }))}
-                                placeholder="Provider default"
+                                placeholder={t('llm_provider_default_placeholder')}
                                 className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
                             />
-                            <p className="text-xs text-neutral-500 mt-1">Empty = provider default</p>
+                            <p className="text-xs text-neutral-500 mt-1">{t('llm_empty_provider_default')}</p>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-neutral-300 mb-2">Temperature</label>
+                            <label className="block text-sm font-medium text-neutral-300 mb-2">{t('llm_temperature')}</label>
                             <input
                                 type="text"
                                 value={llmConfig.temperature}
                                 onChange={(e) => setLlmConfig(prev => ({ ...prev, temperature: e.target.value }))}
-                                placeholder="Provider default"
+                                placeholder={t('llm_provider_default_placeholder')}
                                 className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
                             />
-                            <p className="text-xs text-neutral-500 mt-1">Empty = provider default (0-2)</p>
+                            <p className="text-xs text-neutral-500 mt-1">{t('llm_empty_provider_default_range')}</p>
                         </div>
                     </div>
 
                     {/* System Prompt Template */}
                     <div className="pt-2">
-                        <label className="block text-sm font-medium text-neutral-300 mb-2">System Prompt Template</label>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">{t('llm_system_prompt_template')}</label>
                         <textarea
                             value={llmConfig.systemPromptTemplate}
                             onChange={(e) => setLlmConfig(prev => ({ ...prev, systemPromptTemplate: e.target.value }))}
                             rows={8}
                             className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none font-mono text-xs"
-                            placeholder="Instructions sent with every conversation (e.g., 'You are a simulated patient...')"
+                            placeholder={t('llm_system_prompt_placeholder')}
                         />
-                        <p className="text-xs text-neutral-500 mt-1">Optional. Appended <em>after</em> the case-specific persona/instructions as a trailing reminder. Leave empty to use only the per-case content. (Previously prepended, which shadowed each case persona.)</p>
+                        <p className="text-xs text-neutral-500 mt-1">{t('llm_system_prompt_help')}</p>
                     </div>
 
                     {/* Action Buttons */}
@@ -1835,7 +1841,7 @@ function LLMConfiguration() {
                             className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-neutral-600 text-white rounded-lg font-medium flex items-center gap-2"
                         >
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                            Save Settings
+                            {t('btn_save_settings')}
                         </button>
                         <button
                             onClick={handleTestConnection}
@@ -1843,7 +1849,7 @@ function LLMConfiguration() {
                             className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 disabled:bg-neutral-800 text-white rounded-lg font-medium flex items-center gap-2"
                         >
                             {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                            Test Connection
+                            {t('btn_test_connection')}
                         </button>
                     </div>
                 </div>
@@ -1853,73 +1859,73 @@ function LLMConfiguration() {
             <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
                 <h4 className="text-md font-bold text-orange-400 mb-4 flex items-center gap-2">
                     <Shield className="w-5 h-5" />
-                    Rate Limits & Quotas
+                    {t('llm_rate_limits_title')}
                 </h4>
                 <p className="text-sm text-neutral-400 mb-6">
-                    Set daily limits for token usage and costs to control API spending. Set to 0 for unlimited (disabled).
+                    {t('llm_rate_limits_help')}
                 </p>
 
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-neutral-300 mb-2">
-                            Tokens per User (Daily)
-                            {rateLimits.tokensPerUserDaily === 0 && <span className="text-green-400 ml-2 text-xs">Unlimited</span>}
+                            {t('llm_tokens_per_user')}
+                            {rateLimits.tokensPerUserDaily === 0 && <span className="text-green-400 ml-2 text-xs">{t('llm_unlimited')}</span>}
                         </label>
                         <input
                             type="number"
                             value={rateLimits.tokensPerUserDaily}
                             onChange={(e) => setRateLimits(prev => ({ ...prev, tokensPerUserDaily: parseInt(e.target.value) || 0 }))}
-                            placeholder="0 = Unlimited"
+                            placeholder={t('llm_unlimited_placeholder')}
                             className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-orange-500 outline-none"
                         />
-                        <p className="text-xs text-neutral-500 mt-1">Max tokens each user can use per day (0 = unlimited)</p>
+                        <p className="text-xs text-neutral-500 mt-1">{t('llm_tokens_per_user_help')}</p>
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-neutral-300 mb-2">
-                            Cost per User (Daily) $
-                            {rateLimits.costPerUserDaily === 0 && <span className="text-green-400 ml-2 text-xs">Unlimited</span>}
+                            {t('llm_cost_per_user')}
+                            {rateLimits.costPerUserDaily === 0 && <span className="text-green-400 ml-2 text-xs">{t('llm_unlimited')}</span>}
                         </label>
                         <input
                             type="number"
                             step="0.01"
                             value={rateLimits.costPerUserDaily}
                             onChange={(e) => setRateLimits(prev => ({ ...prev, costPerUserDaily: parseFloat(e.target.value) || 0 }))}
-                            placeholder="0 = Unlimited"
+                            placeholder={t('llm_unlimited_placeholder')}
                             className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-orange-500 outline-none"
                         />
-                        <p className="text-xs text-neutral-500 mt-1">Max cost each user can incur per day (0 = unlimited)</p>
+                        <p className="text-xs text-neutral-500 mt-1">{t('llm_cost_per_user_help')}</p>
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-neutral-300 mb-2">
-                            Platform Tokens (Daily)
-                            {rateLimits.tokensPlatformDaily === 0 && <span className="text-green-400 ml-2 text-xs">Unlimited</span>}
+                            {t('llm_platform_tokens')}
+                            {rateLimits.tokensPlatformDaily === 0 && <span className="text-green-400 ml-2 text-xs">{t('llm_unlimited')}</span>}
                         </label>
                         <input
                             type="number"
                             value={rateLimits.tokensPlatformDaily}
                             onChange={(e) => setRateLimits(prev => ({ ...prev, tokensPlatformDaily: parseInt(e.target.value) || 0 }))}
-                            placeholder="0 = Unlimited"
+                            placeholder={t('llm_unlimited_placeholder')}
                             className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-orange-500 outline-none"
                         />
-                        <p className="text-xs text-neutral-500 mt-1">Max tokens for entire platform per day (0 = unlimited)</p>
+                        <p className="text-xs text-neutral-500 mt-1">{t('llm_platform_tokens_help')}</p>
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-neutral-300 mb-2">
-                            Platform Cost (Daily) $
-                            {rateLimits.costPlatformDaily === 0 && <span className="text-green-400 ml-2 text-xs">Unlimited</span>}
+                            {t('llm_platform_cost')}
+                            {rateLimits.costPlatformDaily === 0 && <span className="text-green-400 ml-2 text-xs">{t('llm_unlimited')}</span>}
                         </label>
                         <input
                             type="number"
                             step="0.01"
                             value={rateLimits.costPlatformDaily}
                             onChange={(e) => setRateLimits(prev => ({ ...prev, costPlatformDaily: parseFloat(e.target.value) || 0 }))}
-                            placeholder="0 = Unlimited"
+                            placeholder={t('llm_unlimited_placeholder')}
                             className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-orange-500 outline-none"
                         />
-                        <p className="text-xs text-neutral-500 mt-1">Max cost for entire platform per day (0 = unlimited)</p>
+                        <p className="text-xs text-neutral-500 mt-1">{t('llm_platform_cost_help')}</p>
                     </div>
                 </div>
 
@@ -1930,7 +1936,7 @@ function LLMConfiguration() {
                         className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-neutral-600 text-white rounded-lg font-medium flex items-center gap-2"
                     >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        Save Rate Limits
+                        {t('btn_save_rate_limits')}
                     </button>
                 </div>
             </div>
@@ -1940,42 +1946,42 @@ function LLMConfiguration() {
                 <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
                     <h4 className="text-md font-bold text-green-400 mb-4 flex items-center gap-2">
                         <Activity className="w-5 h-5" />
-                        Today's Usage
+                        {t('llm_todays_usage')}
                     </h4>
 
                     <div className="grid grid-cols-4 gap-4">
                         <div className="bg-neutral-700/30 rounded-lg p-4 text-center">
                             <div className="text-2xl font-bold text-white">{platformUsage.tokensUsed?.toLocaleString() || 0}</div>
-                            <div className="text-xs text-neutral-400">Tokens Used</div>
+                            <div className="text-xs text-neutral-400">{t('llm_tokens_used')}</div>
                             <div className="mt-2 h-1 bg-neutral-600 rounded">
                                 <div
                                     className="h-full bg-green-500 rounded"
                                     style={{ width: `${Math.min((platformUsage.tokensUsed / platformUsage.tokensLimit) * 100, 100)}%` }}
                                 />
                             </div>
-                            <div className="text-xs text-neutral-500 mt-1">{platformUsage.tokensRemaining?.toLocaleString() || 0} remaining</div>
+                            <div className="text-xs text-neutral-500 mt-1">{t('llm_remaining', { value: platformUsage.tokensRemaining?.toLocaleString() || 0 })}</div>
                         </div>
 
                         <div className="bg-neutral-700/30 rounded-lg p-4 text-center">
                             <div className="text-2xl font-bold text-white">${platformUsage.costUsed?.toFixed(2) || '0.00'}</div>
-                            <div className="text-xs text-neutral-400">Cost Today</div>
+                            <div className="text-xs text-neutral-400">{t('llm_cost_today')}</div>
                             <div className="mt-2 h-1 bg-neutral-600 rounded">
                                 <div
                                     className="h-full bg-orange-500 rounded"
                                     style={{ width: `${Math.min((platformUsage.costUsed / platformUsage.costLimit) * 100, 100)}%` }}
                                 />
                             </div>
-                            <div className="text-xs text-neutral-500 mt-1">${platformUsage.costRemaining?.toFixed(2) || '0.00'} remaining</div>
+                            <div className="text-xs text-neutral-500 mt-1">{t('llm_remaining', { value: '$' + (platformUsage.costRemaining?.toFixed(2) || '0.00') })}</div>
                         </div>
 
                         <div className="bg-neutral-700/30 rounded-lg p-4 text-center">
                             <div className="text-2xl font-bold text-white">{platformUsage.totalRequests || 0}</div>
-                            <div className="text-xs text-neutral-400">Total Requests</div>
+                            <div className="text-xs text-neutral-400">{t('llm_total_requests')}</div>
                         </div>
 
                         <div className="bg-neutral-700/30 rounded-lg p-4 text-center">
                             <div className="text-2xl font-bold text-white">{platformUsage.activeUsers || 0}</div>
-                            <div className="text-xs text-neutral-400">Active Users</div>
+                            <div className="text-xs text-neutral-400">{t('llm_active_users')}</div>
                         </div>
                     </div>
                 </div>
@@ -1986,6 +1992,7 @@ function LLMConfiguration() {
 
 // Chat/Doctor Configuration Component (Admin Only)
 function ChatConfiguration() {
+    const { t } = useTranslation('authoring_config');
     const toast = useToast();
     const [chatSettings, setChatSettings] = useState({
         doctorName: 'Dr. Carmen',
@@ -2015,9 +2022,9 @@ function ChatConfiguration() {
         setSaving(true);
         try {
             await apiPut('/platform-settings/chat', chatSettings);
-            toast.success('Chat settings saved successfully!');
+            toast.success(t('toast_chat_saved'));
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to save chat settings');
+            toast.error(err instanceof ApiError ? err.message : t('toast_chat_save_failed'));
         } finally {
             setSaving(false);
         }
@@ -2027,7 +2034,7 @@ function ChatConfiguration() {
         const file = e.target.files[0];
         if (file) {
             if (file.size > 500000) {
-                toast.warning('Image too large. Please use an image under 500KB.');
+                toast.warning(t('toast_image_too_large'));
                 return;
             }
             const reader = new FileReader();
@@ -2048,16 +2055,16 @@ function ChatConfiguration() {
         <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-6">
             <h4 className="text-md font-bold text-cyan-400 mb-4 flex items-center gap-2">
                 <User className="w-5 h-5" />
-                Chat Interface Settings
+                {t('chat_title')}
             </h4>
             <p className="text-sm text-neutral-400 mb-6">
-                Configure how the doctor appears in patient conversations.
+                {t('chat_help')}
             </p>
 
             <div className="space-y-4">
                 {/* Doctor Name */}
                 <div>
-                    <label className="block text-sm font-medium text-neutral-300 mb-2">Doctor Name</label>
+                    <label className="block text-sm font-medium text-neutral-300 mb-2">{t('chat_doctor_name')}</label>
                     <input
                         type="text"
                         value={chatSettings.doctorName}
@@ -2065,12 +2072,12 @@ function ChatConfiguration() {
                         placeholder="Dr. Carmen"
                         className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
                     />
-                    <p className="text-xs text-neutral-500 mt-1">This name appears next to user messages in the chat</p>
+                    <p className="text-xs text-neutral-500 mt-1">{t('chat_doctor_name_help')}</p>
                 </div>
 
                 {/* Doctor Avatar */}
                 <div>
-                    <label className="block text-sm font-medium text-neutral-300 mb-2">Doctor Avatar (Optional)</label>
+                    <label className="block text-sm font-medium text-neutral-300 mb-2">{t('chat_doctor_avatar')}</label>
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-full bg-neutral-700 border border-neutral-600 flex items-center justify-center overflow-hidden">
                             {previewAvatar ? (
@@ -2092,7 +2099,7 @@ function ChatConfiguration() {
                                 className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded-lg cursor-pointer transition-colors text-sm"
                             >
                                 <Upload className="w-4 h-4" />
-                                Upload Image
+                                {t('btn_upload_image')}
                             </label>
                             {previewAvatar && (
                                 <button
@@ -2102,10 +2109,10 @@ function ChatConfiguration() {
                                     }}
                                     className="ml-2 px-3 py-2 text-red-400 hover:text-red-300 text-sm"
                                 >
-                                    Remove
+                                    {t('btn_remove')}
                                 </button>
                             )}
-                            <p className="text-xs text-neutral-500 mt-2">Square image recommended, max 500KB</p>
+                            <p className="text-xs text-neutral-500 mt-2">{t('chat_avatar_help')}</p>
                         </div>
                     </div>
                 </div>
@@ -2118,7 +2125,7 @@ function ChatConfiguration() {
                         className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg transition-colors disabled:opacity-50"
                     >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        Save Chat Settings
+                        {t('btn_save_chat')}
                     </button>
                 </div>
             </div>
@@ -2128,6 +2135,7 @@ function ChatConfiguration() {
 
 // Monitor Display Configuration Component (Admin Only)
 function MonitorConfiguration() {
+    const { t } = useTranslation('authoring_config');
     const toast = useToast();
     const [monitorSettings, setMonitorSettings] = useState({
         showTimer: true,
@@ -2166,24 +2174,24 @@ function MonitorConfiguration() {
         setSaving(true);
         try {
             await apiPut('/platform-settings/monitor', monitorSettings);
-            toast.success('Monitor settings saved');
+            toast.success(t('toast_monitor_saved'));
         } catch (error) {
-            toast.error(error instanceof ApiError ? error.message : 'Failed to save monitor settings');
+            toast.error(error instanceof ApiError ? error.message : t('toast_monitor_save_failed'));
         } finally {
             setSaving(false);
         }
     };
 
     const settingsConfig = [
-        { key: 'showTimer', label: 'Session Timer', description: 'Show elapsed time since session started' },
-        { key: 'showECG', label: 'ECG Waveform', description: 'Show ECG trace and heart rate' },
-        { key: 'showPleth', label: 'Plethysmograph', description: 'Show SpO2 waveform' },
-        { key: 'showSpO2', label: 'SpO2 Value', description: 'Show oxygen saturation numeric' },
-        { key: 'showBP', label: 'Blood Pressure', description: 'Show systolic/diastolic BP' },
-        { key: 'showRR', label: 'Respiratory Rate', description: 'Show breathing rate' },
-        { key: 'showTemp', label: 'Temperature', description: 'Show body temperature' },
-        { key: 'showCO2', label: 'EtCO2', description: 'Show end-tidal CO2' },
-        { key: 'showNumerics', label: 'Numeric Panel', description: 'Show all vital signs panel' }
+        { key: 'showTimer', label: t('monitor_setting_timer_label'), description: t('monitor_setting_timer_desc') },
+        { key: 'showECG', label: t('monitor_setting_ecg_label'), description: t('monitor_setting_ecg_desc') },
+        { key: 'showPleth', label: t('monitor_setting_pleth_label'), description: t('monitor_setting_pleth_desc') },
+        { key: 'showSpO2', label: t('monitor_setting_spo2_label'), description: t('monitor_setting_spo2_desc') },
+        { key: 'showBP', label: t('monitor_setting_bp_label'), description: t('monitor_setting_bp_desc') },
+        { key: 'showRR', label: t('monitor_setting_rr_label'), description: t('monitor_setting_rr_desc') },
+        { key: 'showTemp', label: t('monitor_setting_temp_label'), description: t('monitor_setting_temp_desc') },
+        { key: 'showCO2', label: t('monitor_setting_co2_label'), description: t('monitor_setting_co2_desc') },
+        { key: 'showNumerics', label: t('monitor_setting_numerics_label'), description: t('monitor_setting_numerics_desc') }
     ];
 
     return (
@@ -2193,13 +2201,13 @@ function MonitorConfiguration() {
                     <Monitor className="w-5 h-5 text-cyan-400" />
                 </div>
                 <div>
-                    <h3 className="text-lg font-bold text-white">Monitor Display Settings</h3>
-                    <p className="text-sm text-neutral-400">Configure which components are visible on the ICU monitor</p>
+                    <h3 className="text-lg font-bold text-white">{t('monitor_title')}</h3>
+                    <p className="text-sm text-neutral-400">{t('monitor_subtitle')}</p>
                 </div>
             </div>
 
             {loading ? (
-                <div className="text-center py-8 text-neutral-400">Loading settings...</div>
+                <div className="text-center py-8 text-neutral-400">{t('monitor_loading')}</div>
             ) : (
                 <>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -2233,12 +2241,12 @@ function MonitorConfiguration() {
                         {saving ? (
                             <>
                                 <RefreshCw className="w-4 h-4 animate-spin" />
-                                Saving...
+                                {t('btn_saving')}
                             </>
                         ) : (
                             <>
                                 <Save className="w-4 h-4" />
-                                Save Monitor Settings
+                                {t('btn_save_monitor')}
                             </>
                         )}
                     </button>
@@ -2256,14 +2264,15 @@ function MonitorConfiguration() {
 // `src/components/analytics/`. Each wrapper owns its own fetch + per-tab
 // CSV export — there is no longer a global "Export Data (CSV)" grid here.
 function SystemLogs() {
+    const { t } = useTranslation('authoring_config');
     const [activeLogTab, setActiveLogTab] = useState('activity'); // activity, sessions, system, chat, moments, turns, insights, oyondata
 
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-center">
-                <h3 className="text-lg font-bold">System Logs</h3>
+                <h3 className="text-lg font-bold">{t('logs_title')}</h3>
                 <span className="text-xs text-neutral-500">
-                    Date filters live inside each tab now.
+                    {t('logs_date_filter_note')}
                 </span>
             </div>
 
@@ -2278,49 +2287,49 @@ function SystemLogs() {
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-1 whitespace-nowrap ${activeLogTab === 'activity' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
                     <Activity className="w-4 h-4" />
-                    Activity
+                    {t('logtab_activity')}
                 </button>
                 <button
                     onClick={() => setActiveLogTab('sessions')}
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'sessions' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
-                    Sessions
+                    {t('logtab_sessions')}
                 </button>
                 <button
                     onClick={() => setActiveLogTab('system')}
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'system' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
-                    System Log
+                    {t('logtab_system')}
                 </button>
                 <button
                     onClick={() => setActiveLogTab('chat')}
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'chat' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
-                    Chat Log
+                    {t('logtab_chat')}
                 </button>
                 <button
                     onClick={() => setActiveLogTab('moments')}
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'moments' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
-                    Moments
+                    {t('logtab_moments')}
                 </button>
                 <button
                     onClick={() => setActiveLogTab('turns')}
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'turns' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
-                    By Turn
+                    {t('logtab_turns')}
                 </button>
                 <button
                     onClick={() => setActiveLogTab('insights')}
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'insights' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
-                    Case Insights
+                    {t('logtab_insights')}
                 </button>
                 <button
                     onClick={() => setActiveLogTab('oyondata')}
                     className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeLogTab === 'oyondata' ? 'border-teal-700 text-teal-950' : 'border-transparent text-neutral-500 hover:text-neutral-300'}`}
                 >
-                    Oyon data
+                    {t('logtab_oyondata')}
                 </button>
             </div>
 
@@ -2368,6 +2377,7 @@ function SystemLogs() {
 
 // Lab Investigation Selector Component
 function LabInvestigationSelector({ _caseData, onAddLab, patientGender, showAddByGroup = false }) {
+    const { t } = useTranslation('authoring_config');
     const toast = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
@@ -2438,7 +2448,7 @@ function LabInvestigationSelector({ _caseData, onAddLab, patientGender, showAddB
 
     const handleAddByGroup = async () => {
         if (selectedGroup === 'all') {
-            toast.warning('Please select a specific group to add');
+            toast.warning(t('toast_select_group'));
             return;
         }
 
@@ -2461,10 +2471,10 @@ function LabInvestigationSelector({ _caseData, onAddLab, patientGender, showAddB
                 handleAddLab(testGroup);
             });
 
-            toast.success(`Added ${Object.keys(grouped).length} tests from ${selectedGroup}`);
+            toast.success(t('toast_added_tests', { count: Object.keys(grouped).length, group: selectedGroup }));
         } catch (error) {
             console.error('Failed to add group:', error);
-            toast.error('Failed to add tests by group');
+            toast.error(t('toast_add_group_failed'));
         } finally {
             setAddingGroup(false);
         }
@@ -2478,7 +2488,7 @@ function LabInvestigationSelector({ _caseData, onAddLab, patientGender, showAddB
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search lab tests (e.g., glucose, hemoglobin, sodium)..."
+                        placeholder={t('lab_search_placeholder')}
                         className="input-dark w-full"
                     />
                 </div>
@@ -2487,7 +2497,7 @@ function LabInvestigationSelector({ _caseData, onAddLab, patientGender, showAddB
                     onChange={(e) => setSelectedGroup(e.target.value)}
                     className="input-dark"
                 >
-                    <option value="all">All Groups</option>
+                    <option value="all">{t('lab_all_groups')}</option>
                     {groups.map(group => (
                         <option key={group} value={group}>{group}</option>
                     ))}
@@ -2497,17 +2507,17 @@ function LabInvestigationSelector({ _caseData, onAddLab, patientGender, showAddB
                         onClick={handleAddByGroup}
                         disabled={selectedGroup === 'all' || addingGroup}
                         className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-neutral-700 disabled:cursor-not-allowed text-white rounded font-bold text-sm whitespace-nowrap flex items-center gap-2"
-                        title="Add all tests from selected group"
+                        title={t('title_add_all_group')}
                     >
                         {addingGroup ? (
                             <>
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                Adding...
+                                {t('btn_adding')}
                             </>
                         ) : (
                             <>
                                 <Plus className="w-4 h-4" />
-                                Add Group
+                                {t('btn_add_group')}
                             </>
                         )}
                     </button>
@@ -2536,7 +2546,7 @@ function LabInvestigationSelector({ _caseData, onAddLab, patientGender, showAddB
                                         <div>
                                             <div className="font-bold text-sm">{test.test_name}</div>
                                             <div className="text-xs text-neutral-400">
-                                                {test.group} • {testGroup.length} variation(s)
+                                                {test.group} • {t('lab_variations', { count: testGroup.length })}
                                             </div>
                                         </div>
                                         <Plus className="w-4 h-4 text-green-400" />
@@ -2549,7 +2559,7 @@ function LabInvestigationSelector({ _caseData, onAddLab, patientGender, showAddB
 
             {searchQuery && !isSearching && searchResults.length === 0 && (
                 <div className="text-center py-4 text-neutral-500 text-sm">
-                    No tests found matching "{searchQuery}"
+                    {t('lab_no_tests_found', { query: searchQuery })}
                 </div>
             )}
         </div>
@@ -2561,6 +2571,7 @@ function LabInvestigationSelector({ _caseData, onAddLab, patientGender, showAddB
 // system prompt as hidden context (only revealed when relevant to history
 // taking). Lightweight inline editor with add/remove/reorder; no rich-text.
 function PagesEditor({ pages, onChange }) {
+    const { t } = useTranslation('authoring_config');
     const update = (i, patch) => {
         const next = pages.map((p, idx) => idx === i ? { ...p, ...patch } : p);
         onChange(next);
@@ -2579,10 +2590,9 @@ function PagesEditor({ pages, onChange }) {
         <div className="border-t border-neutral-700 pt-4 space-y-3">
             <div className="flex items-center justify-between">
                 <div>
-                    <h5 className="text-sm font-bold text-neutral-200">Hidden Context Pages</h5>
+                    <h5 className="text-sm font-bold text-neutral-200">{t('pages_title')}</h5>
                     <p className="text-[11px] text-neutral-500">
-                        Title + content pairs the AI patient knows about but reveals only when asked.
-                        Useful for backstory, social context, lab results the patient already heard, etc.
+                        {t('pages_help')}
                     </p>
                 </div>
                 <button
@@ -2590,12 +2600,12 @@ function PagesEditor({ pages, onChange }) {
                     onClick={add}
                     className="px-2.5 py-1 rounded text-xs font-semibold text-white flex items-center gap-1 bg-teal-700 hover:bg-teal-600"
                 >
-                    <Plus className="w-3.5 h-3.5" /> Add page
+                    <Plus className="w-3.5 h-3.5" /> {t('btn_add_page')}
                 </button>
             </div>
             {pages.length === 0 ? (
                 <div className="rounded border border-dashed border-neutral-700 bg-neutral-900/40 p-4 text-center text-xs text-neutral-500">
-                    No hidden pages yet.
+                    {t('pages_empty')}
                 </div>
             ) : (
                 <ul className="space-y-2">
@@ -2611,7 +2621,7 @@ function PagesEditor({ pages, onChange }) {
                                     type="text"
                                     value={page.title || ''}
                                     onChange={(e) => update(i, { title: e.target.value })}
-                                    placeholder="Page title (e.g., Lab Result Summary)"
+                                    placeholder={t('pages_title_placeholder')}
                                     className="flex-1 px-2 py-1.5 bg-neutral-950 border border-neutral-800 rounded text-sm focus:outline-none focus:border-teal-500"
                                 />
                                 <button
@@ -2625,7 +2635,7 @@ function PagesEditor({ pages, onChange }) {
                             <textarea
                                 value={page.content || ''}
                                 onChange={(e) => update(i, { content: e.target.value })}
-                                placeholder="Body text — anything the AI should know but reveal only on demand."
+                                placeholder={t('pages_body_placeholder')}
                                 rows={4}
                                 className="w-full px-2.5 py-2 bg-neutral-950 border border-neutral-800 rounded text-sm focus:outline-none focus:border-teal-500 resize-y"
                             />
@@ -2638,6 +2648,7 @@ function PagesEditor({ pages, onChange }) {
 }
 
 function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenPersonaEditor }) {
+    const { t } = useTranslation('authoring_config');
     const [templates, setTemplates] = useState([]);
     const [caseAgents, setCaseAgents] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -2670,7 +2681,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
 
     const handleAddDefaultAgents = async () => {
         if (!caseId) {
-            toast.warning('Please save the case first before adding agents');
+            toast.warning(t('toast_save_case_first_agents'));
             return;
         }
         try {
@@ -2678,31 +2689,31 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
             toast.success(data.message);
             loadData();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to add default agents');
+            toast.error(err instanceof ApiError ? err.message : t('toast_add_default_failed'));
         }
     };
 
     const handleAddAgent = async (templateId) => {
         if (!caseId) {
-            toast.warning('Please save the case first before adding agents');
+            toast.warning(t('toast_save_case_first_agents'));
             return;
         }
         try {
             await apiPost(`/cases/${caseId}/agents`, { agent_template_id: templateId });
-            toast.success('Agent added');
+            toast.success(t('toast_agent_added'));
             loadData();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to add agent');
+            toast.error(err instanceof ApiError ? err.message : t('toast_add_agent_failed'));
         }
     };
 
     const handleRemoveAgent = async (agentId) => {
         try {
             await apiDelete(`/cases/${caseId}/agents/${agentId}`);
-            toast.success('Agent removed');
+            toast.success(t('toast_agent_removed'));
             loadData();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to remove agent');
+            toast.error(err instanceof ApiError ? err.message : t('toast_remove_agent_failed'));
         }
     };
 
@@ -2711,7 +2722,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
             await apiPut(`/cases/${caseId}/agents/${agent.id}`, { enabled: !agent.enabled });
             loadData();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to update agent');
+            toast.error(err instanceof ApiError ? err.message : t('toast_update_agent_failed'));
         }
     };
 
@@ -2719,11 +2730,11 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
         if (!editingAgent) return;
         try {
             await apiPut(`/cases/${caseId}/agents/${editingAgent.id}`, updates);
-            toast.success('Agent updated');
+            toast.success(t('toast_agent_updated'));
             setEditingAgent(null);
             loadData();
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to update agent');
+            toast.error(err instanceof ApiError ? err.message : t('toast_update_agent_failed'));
         }
     };
 
@@ -2744,19 +2755,19 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
         return (
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                    <h4 className="text-lg font-bold text-teal-400">Edit Agent: {editingAgent.name}</h4>
+                    <h4 className="text-lg font-bold text-teal-400">{t('agent_edit_title', { name: editingAgent.name })}</h4>
                     <button
                         onClick={() => setEditingAgent(null)}
                         className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-sm"
                     >
-                        Cancel
+                        {t('btn_cancel')}
                     </button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm text-neutral-400 mb-1">Name Override</label>
+                            <label className="block text-sm text-neutral-400 mb-1">{t('agent_name_override')}</label>
                             <input
                                 type="text"
                                 value={editingAgent.name_override || ''}
@@ -2767,20 +2778,20 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                         </div>
 
                         <div>
-                            <label className="block text-sm text-neutral-400 mb-1">Availability Type</label>
+                            <label className="block text-sm text-neutral-400 mb-1">{t('agent_availability_type')}</label>
                             <select
                                 value={editingAgent.availability_type || 'present'}
                                 onChange={(e) => setEditingAgent(prev => ({ ...prev, availability_type: e.target.value }))}
                                 className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
                             >
-                                <option value="present">Present (Available immediately)</option>
-                                <option value="on-call">On-Call (Must be paged)</option>
-                                <option value="absent">Absent (Not available)</option>
+                                <option value="present">{t('agent_avail_present')}</option>
+                                <option value="on-call">{t('agent_avail_oncall')}</option>
+                                <option value="absent">{t('agent_avail_absent')}</option>
                             </select>
                         </div>
 
                         <div>
-                            <label className="block text-sm text-neutral-400 mb-1">Available from minute</label>
+                            <label className="block text-sm text-neutral-400 mb-1">{t('agent_available_from')}</label>
                             <input
                                 type="number"
                                 min="0"
@@ -2791,7 +2802,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                         </div>
 
                         <div>
-                            <label className="block text-sm text-neutral-400 mb-1">Depart at minute (0 = never)</label>
+                            <label className="block text-sm text-neutral-400 mb-1">{t('agent_depart_at')}</label>
                             <input
                                 type="number"
                                 min="0"
@@ -2803,7 +2814,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
 
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-sm text-neutral-400 mb-1">Response time min (min)</label>
+                                <label className="block text-sm text-neutral-400 mb-1">{t('agent_response_min')}</label>
                                 <input
                                     type="number"
                                     min="0"
@@ -2813,7 +2824,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-neutral-400 mb-1">Response time max (min)</label>
+                                <label className="block text-sm text-neutral-400 mb-1">{t('agent_response_max')}</label>
                                 <input
                                     type="number"
                                     min="0"
@@ -2826,47 +2837,47 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                     </div>
 
                     <div>
-                        <label className="block text-sm text-neutral-400 mb-1">System Prompt Override</label>
+                        <label className="block text-sm text-neutral-400 mb-1">{t('agent_system_prompt_override')}</label>
                         <textarea
                             value={editingAgent.system_prompt_override || ''}
                             onChange={(e) => setEditingAgent(prev => ({ ...prev, system_prompt_override: e.target.value }))}
-                            placeholder="Leave empty to use template default..."
+                            placeholder={t('agent_system_prompt_placeholder')}
                             className="w-full h-64 px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm font-mono resize-none"
                         />
-                        <p className="text-xs text-neutral-500 mt-1">Override the default system prompt for this case</p>
+                        <p className="text-xs text-neutral-500 mt-1">{t('agent_system_prompt_help')}</p>
                     </div>
                 </div>
 
                 {editingAgent.agent_type === 'discussant' && (
                     <div className="space-y-4 p-4 rounded-lg bg-indigo-950/30 border border-indigo-900/50">
-                        <h5 className="text-sm font-bold text-indigo-300">Discussant — case overrides</h5>
+                        <h5 className="text-sm font-bold text-indigo-300">{t('agent_discussant_overrides')}</h5>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm text-neutral-400 mb-1">Context filter</label>
+                                <label className="block text-sm text-neutral-400 mb-1">{t('agent_context_filter')}</label>
                                 <select
                                     value={editingAgent._cfg_context_filter ?? editingAgent.context_filter ?? 'full'}
                                     onChange={(e) => setEditingAgent(prev => ({ ...prev, _cfg_context_filter: e.target.value }))}
                                     className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
                                 >
-                                    <option value="full">Full case context</option>
-                                    <option value="history">History only</option>
-                                    <option value="vitals">Vitals only</option>
-                                    <option value="minimal">Minimal (Socratic)</option>
+                                    <option value="full">{t('agent_ctx_full')}</option>
+                                    <option value="history">{t('agent_ctx_history')}</option>
+                                    <option value="vitals">{t('agent_ctx_vitals')}</option>
+                                    <option value="minimal">{t('agent_ctx_minimal')}</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm text-neutral-400 mb-1">Unlock trigger</label>
+                                <label className="block text-sm text-neutral-400 mb-1">{t('agent_unlock_trigger')}</label>
                                 <select
                                     value={editingAgent._cfg_unlock_trigger ?? editingAgent.unlock_trigger ?? 'after_case_ended'}
                                     onChange={(e) => setEditingAgent(prev => ({ ...prev, _cfg_unlock_trigger: e.target.value }))}
                                     className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
                                 >
-                                    <option value="after_case_ended">After case ends (debrief)</option>
-                                    <option value="always">Always available</option>
+                                    <option value="after_case_ended">{t('agent_unlock_after')}</option>
+                                    <option value="always">{t('agent_unlock_always')}</option>
                                 </select>
                             </div>
                         </div>
-                        <p className="text-xs text-neutral-500">These override the global discussant template values for this case only. Stored in <code className="text-neutral-400">case_agents.config_override</code>.</p>
+                        <p className="text-xs text-neutral-500">{t('agent_discussant_help')} <code className="text-neutral-400">case_agents.config_override</code>.</p>
                     </div>
                 )}
 
@@ -2894,7 +2905,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                         }}
                         className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded text-sm font-bold"
                     >
-                        Save Changes
+                        {t('btn_save_changes')}
                     </button>
                 </div>
             </div>
@@ -2905,12 +2916,12 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h4 className="text-lg font-bold text-teal-400">8. AI Agents</h4>
-                    <p className="text-xs text-neutral-500">Configure which AI agents are available in this case</p>
+                    <h4 className="text-lg font-bold text-teal-400">{t('agent_step_title')}</h4>
+                    <p className="text-xs text-neutral-500">{t('agent_step_help')}</p>
                 </div>
                 {!caseId ? (
                     <span className="px-3 py-1.5 bg-amber-900/30 text-amber-400 rounded text-sm">
-                        Save case first to add agents
+                        {t('agent_save_first_badge')}
                     </span>
                 ) : (
                     <button
@@ -2918,7 +2929,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                         disabled={caseAgents.length > 0}
                         className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm flex items-center gap-1"
                     >
-                        <Plus className="w-4 h-4" /> Add Default Agents
+                        <Plus className="w-4 h-4" /> {t('btn_add_default_agents')}
                     </button>
                 )}
             </div>
@@ -2926,7 +2937,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
             {/* Configured Agents */}
             {caseAgents.length > 0 ? (
                 <div className="space-y-3">
-                    <h5 className="text-sm font-medium text-neutral-400">Configured Agents</h5>
+                    <h5 className="text-sm font-medium text-neutral-400">{t('agent_configured')}</h5>
                     {caseAgents.map(agent => (
                         <div
                             key={agent.id}
@@ -2953,12 +2964,12 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                         <div className="font-medium flex items-center gap-2">
                                             {agent.name}
                                             {agent.has_name_override && (
-                                                <span className="px-1 py-0.5 bg-blue-900/50 text-blue-400 rounded text-xs">Override</span>
+                                                <span className="px-1 py-0.5 bg-blue-900/50 text-blue-400 rounded text-xs">{t('badge_override')}</span>
                                             )}
                                         </div>
                                         <div className="text-sm text-neutral-500">
                                             {agent.role_title || agent.agent_type} • {agent.availability_type}
-                                            {agent.available_from_minute > 0 && ` • From min ${agent.available_from_minute}`}
+                                            {agent.available_from_minute > 0 && ' • ' + t('agent_from_min', { min: agent.available_from_minute })}
                                         </div>
                                     </div>
                                 </div>
@@ -2970,14 +2981,14 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                             : 'bg-neutral-700 text-neutral-400 hover:bg-neutral-600'
                                             }`}
                                     >
-                                        {agent.enabled ? 'Enabled' : 'Disabled'}
+                                        {agent.enabled ? t('btn_enabled') : t('btn_disabled')}
                                     </button>
                                     <button
                                         onClick={() => setEditingAgent(agent)}
                                         className="px-2 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs"
-                                        title="Edit per-case overrides (name, availability, response time)"
+                                        title={t('title_case_overrides')}
                                     >
-                                        Case overrides
+                                        {t('btn_case_overrides')}
                                     </button>
                                     {onOpenPersonaEditor && agent.agent_template_id && (
                                         <button
@@ -2986,16 +2997,16 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                             // search this comment to find the magic number.
                                             onClick={() => onOpenPersonaEditor(agent.agent_template_id, { tab: 'cases', wizardStep: 11 })}
                                             className="px-2 py-1 bg-teal-700/40 hover:bg-teal-700 text-teal-200 hover:text-white rounded text-xs"
-                                            title="Open the underlying persona template in the full editor (system-wide; affects every case using it). You'll return here when done."
+                                            title={t('title_edit_persona')}
                                         >
-                                            Edit persona ↗
+                                            {t('btn_edit_persona')}
                                         </button>
                                     )}
                                     <button
                                         onClick={() => handleRemoveAgent(agent.id)}
                                         className="px-2 py-1 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded text-xs"
                                     >
-                                        Remove
+                                        {t('btn_remove')}
                                     </button>
                                 </div>
                             </div>
@@ -3005,15 +3016,15 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
             ) : (
                 <div className="text-center py-8 text-neutral-500 border border-dashed border-neutral-700 rounded-lg">
                     <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>No agents configured for this case.</p>
-                    <p className="text-sm">Click "Add Default Agents" to get started.</p>
+                    <p>{t('agent_none_configured')}</p>
+                    <p className="text-sm">{t('agent_add_default_hint')}</p>
                 </div>
             )}
 
             {/* Available Templates to Add */}
             {caseId && availableTemplates.length > 0 && (
                 <div className="space-y-3 pt-4 border-t border-neutral-800">
-                    <h5 className="text-sm font-medium text-neutral-400">Available Templates</h5>
+                    <h5 className="text-sm font-medium text-neutral-400">{t('agent_available_templates')}</h5>
                     <div className="grid grid-cols-3 gap-3">
                         {availableTemplates.map(template => (
                             <button
@@ -3034,6 +3045,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
 
 // Sub-component for the Wizard to keep code clean
 function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, _hasUnsavedChanges, lastSavedAt, initialStep, onStepLoaded, onOpenPersonaEditor, resumedFromStash, onDiscardDraft }) {
+    const { t } = useTranslation('authoring_config');
     const [step, setStep] = useState(initialStep || 1);
     const [publicScenarios, setPublicScenarios] = useState([]);
     const toast = useToast();
@@ -3063,9 +3075,9 @@ function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, _ha
         if (!lastSavedAt) return null;
         const now = new Date();
         const diff = Math.floor((now - lastSavedAt) / 1000);
-        if (diff < 5) return 'Just now';
-        if (diff < 60) return `${diff}s ago`;
-        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 5) return t('wizard_just_now');
+        if (diff < 60) return t('wizard_seconds_ago', { n: diff });
+        if (diff < 3600) return t('wizard_minutes_ago', { n: Math.floor(diff / 60) });
         return lastSavedAt.toLocaleTimeString();
     };
 
@@ -3227,17 +3239,17 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
     };
 
     const WIZARD_STEPS = [
-        { num: 1,  title: 'Demographics', icon: '👤' },
-        { num: 2,  title: 'Avatar',       icon: '🎭' },
-        { num: 3,  title: 'Story',        icon: '📖' },
-        { num: 4,  title: 'Scenario',     icon: '📈' },
-        { num: 5,  title: 'Vitals',       icon: '💓' },
-        { num: 6,  title: 'Labs',         icon: '🧪' },
-        { num: 7,  title: 'Radiology',    icon: '📷' },
-        { num: 8,  title: 'Exam',         icon: '🩺' },
-        { num: 9,  title: 'Records',      icon: '📄' },
-        { num: 10, title: 'Treatments',   icon: '💊' },
-        { num: 11, title: 'Agents',       icon: '🤖' }
+        { num: 1,  title: t('wstep_demographics'), icon: '👤' },
+        { num: 2,  title: t('wstep_avatar'),       icon: '🎭' },
+        { num: 3,  title: t('wstep_story'),        icon: '📖' },
+        { num: 4,  title: t('wstep_scenario'),     icon: '📈' },
+        { num: 5,  title: t('wstep_vitals'),       icon: '💓' },
+        { num: 6,  title: t('wstep_labs'),         icon: '🧪' },
+        { num: 7,  title: t('wstep_radiology'),    icon: '📷' },
+        { num: 8,  title: t('wstep_exam'),         icon: '🩺' },
+        { num: 9,  title: t('wstep_records'),      icon: '📄' },
+        { num: 10, title: t('wstep_treatments'),   icon: '💊' },
+        { num: 11, title: t('wstep_agents'),       icon: '🤖' }
     ];
 
     // Helper to get vitals from scenario's first keyframe
@@ -3273,17 +3285,17 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {resumedFromStash && caseData?._stashedAt && (
                     <div className="mb-3 px-3 py-2 bg-amber-900/30 border border-amber-700/50 rounded flex items-center justify-between gap-3 text-xs">
                         <div className="text-amber-200">
-                            Resumed unsaved draft of <strong>{caseData.name || '(new case)'}</strong>
-                            {' from '}
+                            {t('wizard_resumed_prefix')} <strong>{caseData.name || t('wizard_new_case_paren')}</strong>
+                            {' '}{t('wizard_resumed_from')}{' '}
                             <span className="font-mono">{new Date(caseData._stashedAt).toLocaleString()}</span>
-                            . Save to persist, or discard to revert to the last saved version.
+                            {t('wizard_resumed_suffix')}
                         </div>
                         <button
                             type="button"
                             onClick={onDiscardDraft}
                             className="shrink-0 px-2 py-1 rounded border border-amber-700 text-amber-200 hover:bg-amber-800/40 hover:text-white text-xs"
                         >
-                            Discard draft
+                            {t('btn_discard_draft')}
                         </button>
                     </div>
                 )}
@@ -3291,19 +3303,19 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex-1 mr-4">
                         <div className="flex items-center gap-3 mb-1">
-                            <h3 className="text-lg font-bold text-white whitespace-nowrap">Case Title:</h3>
+                            <h3 className="text-lg font-bold text-white whitespace-nowrap">{t('wizard_case_title')}</h3>
                             <input
                                 type="text"
                                 value={caseData.name}
                                 onChange={e => setCaseData({ ...caseData, name: e.target.value })}
                                 className="input-dark flex-1 text-lg font-semibold"
-                                placeholder="e.g., Chest Pain - STEMI"
+                                placeholder={t('wizard_case_title_placeholder')}
                             />
                         </div>
                         {lastSavedAt && (
                             <span className="text-[10px] text-green-500 flex items-center gap-1 ml-[105px]">
                                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                                Auto-saved {formatLastSaved()}
+                                {t('wizard_autosaved', { time: formatLastSaved() })}
                             </span>
                         )}
                     </div>
@@ -3314,14 +3326,14 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                 className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded-lg flex items-center gap-1"
                             >
                                 <Save className="w-4 h-4" />
-                                Save
+                                {t('btn_save')}
                             </button>
                             <button
                                 onClick={onCancel}
                                 className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 text-white text-sm font-bold rounded-lg flex items-center gap-1"
                             >
                                 <X className="w-4 h-4" />
-                                Exit
+                                {t('btn_exit')}
                             </button>
                         </div>
                         {lastSavedAt && (
@@ -3362,35 +3374,35 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {/* STEP 1: DEMOGRAPHICS (EHR-style) */}
                 {step === 1 && (
                     <div className="space-y-6">
-                        <h4 className="text-lg font-bold text-teal-400">1. Patient Demographics</h4>
-                        <p className="text-xs text-neutral-500 -mt-4">EHR-style patient information. Most fields are optional.</p>
+                        <h4 className="text-lg font-bold text-teal-400">{t('demo_step_title')}</h4>
+                        <p className="text-xs text-neutral-500 -mt-4">{t('demo_step_help')}</p>
 
                         {/* Top Section: Basic Info (Patient Photo replaced by avatar system) */}
                         <div>
                             <div className="space-y-3">
                                 <div>
-                                    <label className="label-xs">Patient Name <span className="text-red-400">*</span></label>
+                                    <label className="label-xs">{t('demo_patient_name')} <span className="text-red-400">*</span></label>
                                     <input
                                         type="text"
                                         value={caseData.config?.patient_name || ''}
                                         onChange={e => updateConfig('patient_name', e.target.value)}
                                         className="input-dark"
-                                        placeholder="e.g., John Smith"
+                                        placeholder={t('demo_patient_name_placeholder')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">MRN</label>
+                                    <label className="label-xs">{t('demo_mrn')}</label>
                                     <input
                                         type="text"
                                         value={caseData.config?.demographics?.mrn || ''}
                                         onChange={e => updateDemographics('mrn', e.target.value)}
                                         className="input-dark"
-                                        placeholder="e.g., 12345678"
+                                        placeholder={t('demo_mrn_placeholder')}
                                     />
                                 </div>
                                 <div className="grid grid-cols-3 gap-3">
                                     <div>
-                                        <label className="label-xs">Date of Birth</label>
+                                        <label className="label-xs">{t('demo_dob')}</label>
                                         <input
                                             type="date"
                                             value={caseData.config?.demographics?.dob || ''}
@@ -3399,7 +3411,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         />
                                     </div>
                                     <div>
-                                        <label className="label-xs">Age</label>
+                                        <label className="label-xs">{t('demo_age')}</label>
                                         <input
                                             type="number"
                                             min="0"
@@ -3420,20 +3432,20 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                                 }
                                             }}
                                             className="input-dark"
-                                            placeholder="Years"
+                                            placeholder={t('demo_age_placeholder')}
                                         />
                                     </div>
                                     <div>
-                                        <label className="label-xs">Gender</label>
+                                        <label className="label-xs">{t('demo_gender')}</label>
                                         <select
                                             value={caseData.config?.demographics?.gender || ''}
                                             onChange={e => updateDemographics('gender', e.target.value)}
                                             className="input-dark"
                                         >
-                                            <option value="">Select</option>
-                                            <option>Male</option>
-                                            <option>Female</option>
-                                            <option>Other</option>
+                                            <option value="">{t('demo_select')}</option>
+                                            <option>{t('demo_gender_male')}</option>
+                                            <option>{t('demo_gender_female')}</option>
+                                            <option>{t('demo_gender_other')}</option>
                                         </select>
                                     </div>
                                 </div>
@@ -3442,10 +3454,10 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
 
                         {/* Physical Measurements */}
                         <div className="bg-neutral-800/50 rounded-lg p-4 border border-neutral-700">
-                            <h5 className="text-sm font-bold text-neutral-300 mb-3">Physical Measurements</h5>
+                            <h5 className="text-sm font-bold text-neutral-300 mb-3">{t('demo_physical_measurements')}</h5>
                             <div className="grid grid-cols-4 gap-3">
                                 <div>
-                                    <label className="label-xs">Height (cm)</label>
+                                    <label className="label-xs">{t('demo_height')}</label>
                                     <input
                                         type="number"
                                         value={caseData.config?.demographics?.height || ''}
@@ -3455,7 +3467,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">Weight (kg)</label>
+                                    <label className="label-xs">{t('demo_weight')}</label>
                                     <input
                                         type="number"
                                         value={caseData.config?.demographics?.weight || ''}
@@ -3465,7 +3477,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">BMI</label>
+                                    <label className="label-xs">{t('demo_bmi')}</label>
                                     <input
                                         type="text"
                                         value={
@@ -3475,17 +3487,17 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         }
                                         className="input-dark bg-neutral-900"
                                         readOnly
-                                        placeholder="Auto"
+                                        placeholder={t('demo_bmi_auto')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">Blood Type</label>
+                                    <label className="label-xs">{t('demo_blood_type')}</label>
                                     <select
                                         value={caseData.config?.demographics?.bloodType || ''}
                                         onChange={e => updateDemographics('bloodType', e.target.value)}
                                         className="input-dark"
                                     >
-                                        <option value="">Unknown</option>
+                                        <option value="">{t('demo_blood_unknown')}</option>
                                         <option>A+</option>
                                         <option>A-</option>
                                         <option>B+</option>
@@ -3501,51 +3513,51 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
 
                         {/* Additional Demographics */}
                         <div className="bg-neutral-800/50 rounded-lg p-4 border border-neutral-700">
-                            <h5 className="text-sm font-bold text-neutral-300 mb-3">Additional Information</h5>
+                            <h5 className="text-sm font-bold text-neutral-300 mb-3">{t('demo_additional_info')}</h5>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="label-xs">Primary Language</label>
+                                    <label className="label-xs">{t('demo_language')}</label>
                                     <input
                                         type="text"
                                         value={caseData.config?.demographics?.language || ''}
                                         onChange={e => updateDemographics('language', e.target.value)}
                                         className="input-dark"
-                                        placeholder="e.g., English"
+                                        placeholder={t('demo_language_placeholder')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">Ethnicity</label>
+                                    <label className="label-xs">{t('demo_ethnicity')}</label>
                                     <input
                                         type="text"
                                         value={caseData.config?.demographics?.ethnicity || ''}
                                         onChange={e => updateDemographics('ethnicity', e.target.value)}
                                         className="input-dark"
-                                        placeholder="e.g., Caucasian"
+                                        placeholder={t('demo_ethnicity_placeholder')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">Occupation</label>
+                                    <label className="label-xs">{t('demo_occupation')}</label>
                                     <input
                                         type="text"
                                         value={caseData.config?.demographics?.occupation || ''}
                                         onChange={e => updateDemographics('occupation', e.target.value)}
                                         className="input-dark"
-                                        placeholder="e.g., Teacher"
+                                        placeholder={t('demo_occupation_placeholder')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">Marital Status</label>
+                                    <label className="label-xs">{t('demo_marital')}</label>
                                     <select
                                         value={caseData.config?.demographics?.maritalStatus || ''}
                                         onChange={e => updateDemographics('maritalStatus', e.target.value)}
                                         className="input-dark"
                                     >
-                                        <option value="">Select</option>
-                                        <option>Single</option>
-                                        <option>Married</option>
-                                        <option>Divorced</option>
-                                        <option>Widowed</option>
-                                        <option>Separated</option>
+                                        <option value="">{t('demo_select')}</option>
+                                        <option>{t('demo_marital_single')}</option>
+                                        <option>{t('demo_marital_married')}</option>
+                                        <option>{t('demo_marital_divorced')}</option>
+                                        <option>{t('demo_marital_widowed')}</option>
+                                        <option>{t('demo_marital_separated')}</option>
                                     </select>
                                 </div>
                             </div>
@@ -3553,36 +3565,36 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
 
                         {/* Emergency Contact */}
                         <div className="bg-neutral-800/50 rounded-lg p-4 border border-neutral-700">
-                            <h5 className="text-sm font-bold text-neutral-300 mb-3">Emergency Contact</h5>
+                            <h5 className="text-sm font-bold text-neutral-300 mb-3">{t('demo_emergency_contact')}</h5>
                             <div className="grid grid-cols-3 gap-3">
                                 <div>
-                                    <label className="label-xs">Contact Name</label>
+                                    <label className="label-xs">{t('demo_contact_name')}</label>
                                     <input
                                         type="text"
                                         value={caseData.config?.demographics?.emergencyContact?.name || ''}
                                         onChange={e => updateDemographics('emergencyContact', { ...caseData.config?.demographics?.emergencyContact, name: e.target.value })}
                                         className="input-dark"
-                                        placeholder="e.g., Jane Smith"
+                                        placeholder={t('demo_contact_name_placeholder')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">Relationship</label>
+                                    <label className="label-xs">{t('demo_relationship')}</label>
                                     <input
                                         type="text"
                                         value={caseData.config?.demographics?.emergencyContact?.relationship || ''}
                                         onChange={e => updateDemographics('emergencyContact', { ...caseData.config?.demographics?.emergencyContact, relationship: e.target.value })}
                                         className="input-dark"
-                                        placeholder="e.g., Spouse"
+                                        placeholder={t('demo_relationship_placeholder')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">Phone</label>
+                                    <label className="label-xs">{t('demo_phone')}</label>
                                     <input
                                         type="text"
                                         value={caseData.config?.demographics?.emergencyContact?.phone || ''}
                                         onChange={e => updateDemographics('emergencyContact', { ...caseData.config?.demographics?.emergencyContact, phone: e.target.value })}
                                         className="input-dark"
-                                        placeholder="e.g., 555-1234"
+                                        placeholder={t('demo_phone_placeholder')}
                                     />
                                 </div>
                             </div>
@@ -3590,15 +3602,15 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
 
                         {/* Known Allergies */}
                         <div>
-                            <label className="label-xs">Known Allergies</label>
+                            <label className="label-xs">{t('demo_allergies')}</label>
                             <input
                                 type="text"
                                 value={caseData.config?.demographics?.allergies || ''}
                                 onChange={e => updateDemographics('allergies', e.target.value)}
                                 className="input-dark"
-                                placeholder="e.g., Penicillin (rash), Sulfa, NKDA"
+                                placeholder={t('demo_allergies_placeholder')}
                             />
-                            <p className="text-[10px] text-neutral-500 mt-1">Separate multiple allergies with commas</p>
+                            <p className="text-[10px] text-neutral-500 mt-1">{t('demo_allergies_help')}</p>
                         </div>
                     </div>
                 )}
@@ -3609,10 +3621,9 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {step === 2 && (
                     <div className="space-y-4">
                         <div>
-                            <h4 className="text-lg font-bold text-teal-400">2. Avatar &amp; Voice</h4>
+                            <h4 className="text-lg font-bold text-teal-400">{t('avatar_step_title')}</h4>
                             <p className="text-xs text-neutral-500">
-                                Pick the 3D head, framing, and voice for this case. Empty fields inherit the
-                                platform's persona default for the patient's gender.
+                                {t('avatar_step_help')}
                             </p>
                         </div>
                         <CaseAvatarVoicePicker caseData={caseData} setCaseData={setCaseData} />
@@ -3624,103 +3635,103 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     <div className="space-y-6">
                         <div className="flex justify-between items-end">
                             <div>
-                                <h4 className="text-lg font-bold text-teal-400">3. Patient Story & Behavior</h4>
-                                <p className="text-xs text-neutral-500">Define how the simulated patient behaves and communicates.</p>
+                                <h4 className="text-lg font-bold text-teal-400">{t('story_step_title')}</h4>
+                                <p className="text-xs text-neutral-500">{t('story_step_help')}</p>
                             </div>
                             <button onClick={applyPersonaDefaults} className="text-xs bg-neutral-800 hover:bg-neutral-700 px-3 py-1 rounded text-teal-300">
-                                Load Defaults
+                                {t('btn_load_defaults')}
                             </button>
                         </div>
 
                         {/* Personality Section */}
                         <div className="bg-gradient-to-r from-teal-900/20 to-blue-900/20 rounded-lg p-4 border border-teal-700/30">
-                            <h5 className="text-sm font-bold text-teal-300 mb-3">Personality & Communication</h5>
+                            <h5 className="text-sm font-bold text-teal-300 mb-3">{t('story_personality')}</h5>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="label-xs">Persona Type</label>
+                                    <label className="label-xs">{t('story_persona_type')}</label>
                                     <select
                                         value={caseData.config?.persona_type || 'Standard Simulated Patient'}
                                         onChange={e => updateConfig('persona_type', e.target.value)}
                                         className="input-dark"
                                     >
-                                        <option>Standard Simulated Patient</option>
-                                        <option>Difficult/Angry Patient</option>
-                                        <option>Anxious Patient</option>
-                                        <option>Depressed Patient</option>
-                                        <option>Elderly/Confused Patient</option>
-                                        <option>Pediatric Proxy (Parent)</option>
-                                        <option>Non-compliant Patient</option>
-                                        <option>Drug-seeking Patient</option>
+                                        <option>{t('persona_standard')}</option>
+                                        <option>{t('persona_difficult')}</option>
+                                        <option>{t('persona_anxious')}</option>
+                                        <option>{t('persona_depressed')}</option>
+                                        <option>{t('persona_elderly')}</option>
+                                        <option>{t('persona_pediatric')}</option>
+                                        <option>{t('persona_noncompliant')}</option>
+                                        <option>{t('persona_drugseeking')}</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="label-xs">Communication Style</label>
+                                    <label className="label-xs">{t('story_comm_style')}</label>
                                     <select
                                         value={caseData.config?.personality?.communicationStyle || 'normal'}
                                         onChange={e => updateConfig('personality', { ...caseData.config?.personality, communicationStyle: e.target.value })}
                                         className="input-dark"
                                     >
-                                        <option value="normal">Normal</option>
-                                        <option value="verbose">Verbose (detailed answers)</option>
-                                        <option value="brief">Brief (short answers)</option>
-                                        <option value="tangential">Tangential (goes off-topic)</option>
-                                        <option value="guarded">Guarded (hesitant to share)</option>
+                                        <option value="normal">{t('comm_normal')}</option>
+                                        <option value="verbose">{t('comm_verbose')}</option>
+                                        <option value="brief">{t('comm_brief')}</option>
+                                        <option value="tangential">{t('comm_tangential')}</option>
+                                        <option value="guarded">{t('comm_guarded')}</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="label-xs">Emotional State</label>
+                                    <label className="label-xs">{t('story_emotional_state')}</label>
                                     <select
                                         value={caseData.config?.personality?.emotionalState || 'neutral'}
                                         onChange={e => updateConfig('personality', { ...caseData.config?.personality, emotionalState: e.target.value })}
                                         className="input-dark"
                                     >
-                                        <option value="neutral">Neutral</option>
-                                        <option value="calm">Calm</option>
-                                        <option value="anxious">Anxious</option>
-                                        <option value="fearful">Fearful</option>
-                                        <option value="angry">Angry/Frustrated</option>
-                                        <option value="sad">Sad/Tearful</option>
-                                        <option value="stoic">Stoic</option>
-                                        <option value="distressed">Distressed</option>
+                                        <option value="neutral">{t('emo_neutral')}</option>
+                                        <option value="calm">{t('emo_calm')}</option>
+                                        <option value="anxious">{t('emo_anxious')}</option>
+                                        <option value="fearful">{t('emo_fearful')}</option>
+                                        <option value="angry">{t('emo_angry')}</option>
+                                        <option value="sad">{t('emo_sad')}</option>
+                                        <option value="stoic">{t('emo_stoic')}</option>
+                                        <option value="distressed">{t('emo_distressed')}</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="label-xs">Pain Tolerance</label>
+                                    <label className="label-xs">{t('story_pain_tolerance')}</label>
                                     <select
                                         value={caseData.config?.personality?.painTolerance || 'normal'}
                                         onChange={e => updateConfig('personality', { ...caseData.config?.personality, painTolerance: e.target.value })}
                                         className="input-dark"
                                     >
-                                        <option value="high">High (minimizes pain)</option>
-                                        <option value="normal">Normal</option>
-                                        <option value="low">Low (expresses pain readily)</option>
-                                        <option value="dramatic">Dramatic (exaggerates)</option>
+                                        <option value="high">{t('pain_high')}</option>
+                                        <option value="normal">{t('comm_normal')}</option>
+                                        <option value="low">{t('pain_low')}</option>
+                                        <option value="dramatic">{t('pain_dramatic')}</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="label-xs">Cooperativeness</label>
+                                    <label className="label-xs">{t('story_cooperativeness')}</label>
                                     <select
                                         value={caseData.config?.personality?.cooperativeness || 'cooperative'}
                                         onChange={e => updateConfig('personality', { ...caseData.config?.personality, cooperativeness: e.target.value })}
                                         className="input-dark"
                                     >
-                                        <option value="very_cooperative">Very Cooperative</option>
-                                        <option value="cooperative">Cooperative</option>
-                                        <option value="neutral">Neutral</option>
-                                        <option value="reluctant">Reluctant</option>
-                                        <option value="uncooperative">Uncooperative</option>
+                                        <option value="very_cooperative">{t('coop_very')}</option>
+                                        <option value="cooperative">{t('coop_cooperative')}</option>
+                                        <option value="neutral">{t('emo_neutral')}</option>
+                                        <option value="reluctant">{t('coop_reluctant')}</option>
+                                        <option value="uncooperative">{t('coop_uncooperative')}</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="label-xs">Health Literacy</label>
+                                    <label className="label-xs">{t('story_health_literacy')}</label>
                                     <select
                                         value={caseData.config?.personality?.healthLiteracy || 'average'}
                                         onChange={e => updateConfig('personality', { ...caseData.config?.personality, healthLiteracy: e.target.value })}
                                         className="input-dark"
                                     >
-                                        <option value="high">High (medical background)</option>
-                                        <option value="average">Average</option>
-                                        <option value="low">Low (needs explanations)</option>
+                                        <option value="high">{t('lit_high')}</option>
+                                        <option value="average">{t('lit_average')}</option>
+                                        <option value="low">{t('lit_low')}</option>
                                     </select>
                                 </div>
                             </div>
@@ -3729,32 +3740,32 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                         {/* Initial Greeting & Constraints */}
                         <div className="grid grid-cols-1 gap-4">
                             <div>
-                                <label className="label-xs">Initial Greeting</label>
+                                <label className="label-xs">{t('story_greeting')}</label>
                                 <input
                                     type="text"
                                     value={caseData.config?.greeting || ''}
                                     onChange={e => updateConfig('greeting', e.target.value)}
                                     className="input-dark"
-                                    placeholder="e.g., Doctor, I've had this terrible chest pain since this morning..."
+                                    placeholder={t('story_greeting_placeholder')}
                                 />
-                                <p className="text-[10px] text-neutral-500 mt-1">What the patient says when the conversation starts</p>
+                                <p className="text-[10px] text-neutral-500 mt-1">{t('story_greeting_help')}</p>
                             </div>
                             <div>
-                                <label className="label-xs">Behavioral Constraints & Guides</label>
+                                <label className="label-xs">{t('story_constraints')}</label>
                                 <textarea
                                     value={caseData.config?.constraints || ''}
                                     onChange={e => updateConfig('constraints', e.target.value)}
                                     className="input-dark h-20"
-                                    placeholder="e.g., Only speaks English. Will not reveal drug use unless asked directly. Gets defensive when asked about alcohol."
+                                    placeholder={t('story_constraints_placeholder')}
                                 />
-                                <p className="text-[10px] text-neutral-500 mt-1">Rules the AI must follow during the conversation</p>
+                                <p className="text-[10px] text-neutral-500 mt-1">{t('story_constraints_help')}</p>
                             </div>
                         </div>
 
                         {/* Story Mode Toggle */}
                         <div className="border-t border-neutral-700 pt-4">
                             <div className="flex items-center justify-between mb-4">
-                                <h5 className="text-sm font-bold text-neutral-300">Patient Story</h5>
+                                <h5 className="text-sm font-bold text-neutral-300">{t('story_patient_story')}</h5>
                                 <div className="flex bg-neutral-800 rounded-lg p-1">
                                     {/* Mode-switch handlers clear the unused mode's data after
                                         confirmation. Without this, the runtime would see both a
@@ -3769,8 +3780,8 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             const hasStructured = Object.values(sh).some(v => v && String(v).trim());
                                             if (hasStructured) {
                                                 const ok = await toast.confirm(
-                                                    'Switching to Freeform will clear the structured history fields. Continue?',
-                                                    { title: 'Switch to Freeform', confirmText: 'Switch', type: 'warning' }
+                                                    t('confirm_switch_freeform'),
+                                                    { title: t('confirm_switch_freeform_title'), confirmText: t('btn_switch'), type: 'warning' }
                                                 );
                                                 if (!ok) return;
                                             }
@@ -3789,7 +3800,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             : 'text-neutral-400 hover:text-white'
                                             }`}
                                     >
-                                        Freeform
+                                        {t('story_mode_freeform')}
                                     </button>
                                     <button
                                         onClick={async () => {
@@ -3798,8 +3809,8 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             const hasFreeform = !!(caseData.system_prompt && caseData.system_prompt.trim());
                                             if (hasFreeform) {
                                                 const ok = await toast.confirm(
-                                                    'Switching to Structured will clear the freeform system prompt. Continue?',
-                                                    { title: 'Switch to Structured', confirmText: 'Switch', type: 'warning' }
+                                                    t('confirm_switch_structured'),
+                                                    { title: t('confirm_switch_structured_title'), confirmText: t('btn_switch'), type: 'warning' }
                                                 );
                                                 if (!ok) return;
                                             }
@@ -3814,7 +3825,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             : 'text-neutral-400 hover:text-white'
                                             }`}
                                     >
-                                        Structured
+                                        {t('story_mode_structured')}
                                     </button>
                                 </div>
                             </div>
@@ -3822,14 +3833,14 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             {/* Freeform Mode */}
                             {(caseData.config?.storyMode || 'freeform') === 'freeform' && (
                                 <div>
-                                    <label className="label-xs">Complete Patient Story / System Prompt</label>
+                                    <label className="label-xs">{t('story_complete_prompt')}</label>
                                     <textarea
                                         value={caseData.system_prompt || ''}
                                         onChange={e => setCaseData({ ...caseData, system_prompt: e.target.value })}
                                         className="input-dark h-64 font-mono text-xs"
-                                        placeholder="Write the complete patient story here. Include all relevant medical history, current symptoms, medications, social history, and any other details the AI needs to accurately portray this patient..."
+                                        placeholder={t('story_complete_prompt_placeholder')}
                                     />
-                                    <p className="text-[10px] text-neutral-500 mt-1">Full narrative description of the patient case. This is the master instruction for the AI.</p>
+                                    <p className="text-[10px] text-neutral-500 mt-1">{t('story_complete_prompt_help')}</p>
                                 </div>
                             )}
 
@@ -3837,100 +3848,100 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             {caseData.config?.storyMode === 'structured' && (
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="label-xs">Chief Complaint</label>
+                                        <label className="label-xs">{t('story_chief_complaint')}</label>
                                         <input
                                             type="text"
                                             value={caseData.config?.structuredHistory?.chiefComplaint || ''}
                                             onChange={e => updateStructuredHistoryField('chiefComplaint', e.target.value)}
                                             className="input-dark"
-                                            placeholder="e.g., Chest pain for 2 hours"
+                                            placeholder={t('story_chief_complaint_placeholder')}
                                         />
                                     </div>
                                     <div>
-                                        <label className="label-xs">History of Present Illness (HPI)</label>
+                                        <label className="label-xs">{t('story_hpi')}</label>
                                         <textarea
                                             value={caseData.config?.structuredHistory?.hpi || ''}
                                             onChange={e => updateStructuredHistoryField('hpi', e.target.value)}
                                             className="input-dark h-24"
-                                            placeholder="Describe the onset, location, duration, character, aggravating/alleviating factors, radiation, timing, and severity (OLDCARTS)..."
+                                            placeholder={t('story_hpi_placeholder')}
                                         />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="label-xs">Past Medical History</label>
+                                            <label className="label-xs">{t('story_pmh')}</label>
                                             <textarea
                                                 value={caseData.config?.structuredHistory?.pmh || ''}
                                                 onChange={e => updateStructuredHistoryField('pmh', e.target.value)}
                                                 className="input-dark h-20"
-                                                placeholder="e.g., Hypertension, Type 2 DM, Hyperlipidemia"
+                                                placeholder={t('story_pmh_placeholder')}
                                             />
                                         </div>
                                         <div>
-                                            <label className="label-xs">Past Surgical History</label>
+                                            <label className="label-xs">{t('story_psh')}</label>
                                             <textarea
                                                 value={caseData.config?.structuredHistory?.psh || ''}
                                                 onChange={e => updateStructuredHistoryField('psh', e.target.value)}
                                                 className="input-dark h-20"
-                                                placeholder="e.g., Appendectomy (2010), Cholecystectomy (2015)"
+                                                placeholder={t('story_psh_placeholder')}
                                             />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="label-xs">Current Medications</label>
+                                            <label className="label-xs">{t('story_medications')}</label>
                                             <textarea
                                                 value={caseData.config?.structuredHistory?.medications || ''}
                                                 onChange={e => updateStructuredHistoryField('medications', e.target.value)}
                                                 className="input-dark h-20"
-                                                placeholder="e.g., Metformin 500mg BID, Lisinopril 10mg daily"
+                                                placeholder={t('story_medications_placeholder')}
                                             />
                                         </div>
                                         <div>
-                                            <label className="label-xs">Allergies</label>
+                                            <label className="label-xs">{t('story_allergies')}</label>
                                             <textarea
                                                 value={caseData.config?.structuredHistory?.allergies || ''}
                                                 onChange={e => updateStructuredHistoryField('allergies', e.target.value)}
                                                 className="input-dark h-20"
-                                                placeholder="e.g., Penicillin (rash), Sulfa (hives), NKDA"
+                                                placeholder={t('story_allergies_placeholder')}
                                             />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="label-xs">Social History</label>
+                                            <label className="label-xs">{t('story_social')}</label>
                                             <textarea
                                                 value={caseData.config?.structuredHistory?.socialHistory || ''}
                                                 onChange={e => updateStructuredHistoryField('socialHistory', e.target.value)}
                                                 className="input-dark h-20"
-                                                placeholder="e.g., Smoker 1 PPD x 20 years, occasional alcohol, retired teacher, lives with spouse"
+                                                placeholder={t('story_social_placeholder')}
                                             />
                                         </div>
                                         <div>
-                                            <label className="label-xs">Family History</label>
+                                            <label className="label-xs">{t('story_family')}</label>
                                             <textarea
                                                 value={caseData.config?.structuredHistory?.familyHistory || ''}
                                                 onChange={e => updateStructuredHistoryField('familyHistory', e.target.value)}
                                                 className="input-dark h-20"
-                                                placeholder="e.g., Father - MI at 55, Mother - DM, Sister - breast cancer"
+                                                placeholder={t('story_family_placeholder')}
                                             />
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="label-xs">Review of Systems (Positive Findings)</label>
+                                        <label className="label-xs">{t('story_ros')}</label>
                                         <textarea
                                             value={caseData.config?.structuredHistory?.ros || ''}
                                             onChange={e => updateStructuredHistoryField('ros', e.target.value)}
                                             className="input-dark h-20"
-                                            placeholder="e.g., Constitutional: fatigue, weight loss. Cardiac: chest pain, palpitations. Respiratory: SOB on exertion"
+                                            placeholder={t('story_ros_placeholder')}
                                         />
                                     </div>
                                     <div>
-                                        <label className="label-xs">Additional Notes for AI</label>
+                                        <label className="label-xs">{t('story_additional_notes')}</label>
                                         <textarea
                                             value={caseData.config?.structuredHistory?.additionalNotes || ''}
                                             onChange={e => updateStructuredHistoryField('additionalNotes', e.target.value)}
                                             className="input-dark h-16"
-                                            placeholder="Any additional context or instructions for the AI..."
+                                            placeholder={t('story_additional_notes_placeholder')}
                                         />
                                     </div>
                                 </div>
@@ -3939,12 +3950,12 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
 
                         {/* Case Description */}
                         <div className="border-t border-neutral-700 pt-4">
-                            <label className="label-xs">Case Summary (for case selection screen)</label>
+                            <label className="label-xs">{t('story_case_summary')}</label>
                             <textarea
                                 value={caseData.description || ''}
                                 onChange={e => setCaseData({ ...caseData, description: e.target.value })}
                                 className="input-dark h-16"
-                                placeholder="Brief summary shown when selecting cases..."
+                                placeholder={t('story_case_summary_placeholder')}
                             />
                         </div>
                     </div>
@@ -3953,7 +3964,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {/* STEP 4: VITALS & ALARMS */}
                 {step === 5 && (
                     <div className="space-y-6">
-                        <h4 className="text-lg font-bold text-teal-400">4. Initial Vitals & Alarms</h4>
+                        <h4 className="text-lg font-bold text-teal-400">{t('vitals_step_title')}</h4>
 
                         {/* Scenario/Vitals status indicator */}
                         <div className={`p-3 rounded-lg border ${hasScenario
@@ -3965,25 +3976,25 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     {hasScenario ? (
                                         vitalsOverridden ? (
                                             <>
-                                                <span className="text-orange-400 font-bold text-sm">Override Mode</span>
-                                                <span className="text-xs text-orange-300">- Custom vitals will replace scenario's first frame</span>
+                                                <span className="text-orange-400 font-bold text-sm">{t('vitals_override_mode')}</span>
+                                                <span className="text-xs text-orange-300">{t('vitals_override_mode_note')}</span>
                                             </>
                                         ) : (
                                             <>
-                                                <span className="text-blue-400 font-bold text-sm">Reading from Scenario</span>
-                                                <span className="text-xs text-blue-300">- Values below show scenario's starting vitals</span>
+                                                <span className="text-blue-400 font-bold text-sm">{t('vitals_reading_scenario')}</span>
+                                                <span className="text-xs text-blue-300">{t('vitals_reading_scenario_note')}</span>
                                             </>
                                         )
                                     ) : (
                                         caseData.config?.initialVitals ? (
                                             <>
-                                                <span className="text-green-400 font-bold text-sm">Custom Vitals Set</span>
-                                                <span className="text-xs text-green-300">- These vitals will be applied when case loads</span>
+                                                <span className="text-green-400 font-bold text-sm">{t('vitals_custom_set')}</span>
+                                                <span className="text-xs text-green-300">{t('vitals_custom_set_note')}</span>
                                             </>
                                         ) : (
                                             <>
-                                                <span className="text-neutral-400 font-bold text-sm">Default Vitals</span>
-                                                <span className="text-xs text-neutral-500">- Using system defaults (HR: 72, SpO2: 98%, etc.)</span>
+                                                <span className="text-neutral-400 font-bold text-sm">{t('vitals_default')}</span>
+                                                <span className="text-xs text-neutral-500">{t('vitals_default_note')}</span>
                                             </>
                                         )
                                     )}
@@ -4003,7 +4014,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             }}
                                             className="px-3 py-1 text-xs font-bold bg-orange-600 hover:bg-orange-500 text-white rounded"
                                         >
-                                            Reset to Scenario
+                                            {t('btn_reset_scenario')}
                                         </button>
                                     )}
                                     {!hasScenario && caseData.config?.initialVitals && (
@@ -4020,7 +4031,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             }}
                                             className="px-3 py-1 text-xs font-bold bg-neutral-600 hover:bg-neutral-500 text-white rounded"
                                         >
-                                            Reset to Defaults
+                                            {t('btn_reset_defaults')}
                                         </button>
                                     )}
                                 </div>
@@ -4029,18 +4040,18 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
 
                         {/* Alarm Thresholds - TOP */}
                         <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
-                            <h5 className="text-sm font-bold text-white mb-3">Alarm Thresholds</h5>
-                            <p className="text-xs text-neutral-500 mb-4">Set alarm limits for this case. Leave empty to use system defaults.</p>
+                            <h5 className="text-sm font-bold text-white mb-3">{t('vitals_alarm_thresholds')}</h5>
+                            <p className="text-xs text-neutral-500 mb-4">{t('vitals_alarm_help')}</p>
 
                             <div className="space-y-3">
                                 {[
-                                    { key: 'hr', label: 'Heart Rate', unit: 'bpm', defaultLow: 50, defaultHigh: 120 },
-                                    { key: 'spo2', label: 'SpO2', unit: '%', defaultLow: 90, defaultHigh: null },
-                                    { key: 'rr', label: 'Resp Rate', unit: '/min', defaultLow: 8, defaultHigh: 30 },
-                                    { key: 'bpSys', label: 'BP Systolic', unit: 'mmHg', defaultLow: 90, defaultHigh: 180 },
-                                    { key: 'bpDia', label: 'BP Diastolic', unit: 'mmHg', defaultLow: 50, defaultHigh: 110 },
-                                    { key: 'temp', label: 'Temperature', unit: '°C', defaultLow: 36, defaultHigh: 38.5 },
-                                    { key: 'etco2', label: 'EtCO2', unit: 'mmHg', defaultLow: 30, defaultHigh: 50 }
+                                    { key: 'hr', label: t('vital_hr'), unit: 'bpm', defaultLow: 50, defaultHigh: 120 },
+                                    { key: 'spo2', label: t('vital_spo2'), unit: '%', defaultLow: 90, defaultHigh: null },
+                                    { key: 'rr', label: t('vital_rr'), unit: '/min', defaultLow: 8, defaultHigh: 30 },
+                                    { key: 'bpSys', label: t('vital_bp_sys'), unit: 'mmHg', defaultLow: 90, defaultHigh: 180 },
+                                    { key: 'bpDia', label: t('vital_bp_dia'), unit: 'mmHg', defaultLow: 50, defaultHigh: 110 },
+                                    { key: 'temp', label: t('vital_temp'), unit: '°C', defaultLow: 36, defaultHigh: 38.5 },
+                                    { key: 'etco2', label: t('vital_etco2'), unit: 'mmHg', defaultLow: 30, defaultHigh: 50 }
                                 ].map(vital => (
                                     <div key={vital.key} className="grid grid-cols-4 gap-2 items-center">
                                         <label className="flex items-center gap-2">
@@ -4058,7 +4069,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         <div>
                                             <input
                                                 type="number"
-                                                placeholder={`Low (${vital.defaultLow || '-'})`}
+                                                placeholder={t('vitals_low', { value: vital.defaultLow || '-' })}
                                                 value={caseData.config?.alarms?.[vital.key]?.low ?? ''}
                                                 onChange={e => updateConfig('alarms', {
                                                     ...(caseData.config?.alarms || {}),
@@ -4070,7 +4081,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         <div>
                                             <input
                                                 type="number"
-                                                placeholder={`High (${vital.defaultHigh || '-'})`}
+                                                placeholder={t('vitals_high', { value: vital.defaultHigh || '-' })}
                                                 value={caseData.config?.alarms?.[vital.key]?.high ?? ''}
                                                 onChange={e => updateConfig('alarms', {
                                                     ...(caseData.config?.alarms || {}),
@@ -4088,17 +4099,17 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                         {/* Vital Signs - Read from scenario or manual override */}
                         <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
                             <div className="flex items-center justify-between mb-3">
-                                <h5 className="text-sm font-bold text-white">Vital Signs</h5>
+                                <h5 className="text-sm font-bold text-white">{t('vitals_signs')}</h5>
                                 {hasScenario && !vitalsOverridden && (
-                                    <span className="text-xs text-blue-400 bg-blue-900/30 px-2 py-1 rounded">From Scenario</span>
+                                    <span className="text-xs text-blue-400 bg-blue-900/30 px-2 py-1 rounded">{t('vitals_from_scenario')}</span>
                                 )}
                                 {vitalsOverridden && (
-                                    <span className="text-xs text-orange-400 bg-orange-900/30 px-2 py-1 rounded">Override</span>
+                                    <span className="text-xs text-orange-400 bg-orange-900/30 px-2 py-1 rounded">{t('vitals_override_badge')}</span>
                                 )}
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="label-xs">Heart Rate (bpm)</label>
+                                    <label className="label-xs">{t('vital_hr_full')}</label>
                                     <input
                                         type="number"
                                         value={caseData.config?.initialVitals?.hr ?? scenarioVitals?.hr ?? 80}
@@ -4108,7 +4119,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">SpO2 (%)</label>
+                                    <label className="label-xs">{t('vital_spo2_full')}</label>
                                     <input
                                         type="number"
                                         value={caseData.config?.initialVitals?.spo2 ?? scenarioVitals?.spo2 ?? 98}
@@ -4118,7 +4129,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">Respiratory Rate (/min)</label>
+                                    <label className="label-xs">{t('vital_rr_full')}</label>
                                     <input
                                         type="number"
                                         value={caseData.config?.initialVitals?.rr ?? scenarioVitals?.rr ?? 16}
@@ -4128,7 +4139,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">Temperature (C)</label>
+                                    <label className="label-xs">{t('vital_temp_full')}</label>
                                     <input
                                         type="number"
                                         step="0.1"
@@ -4139,7 +4150,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">BP Systolic (mmHg)</label>
+                                    <label className="label-xs">{t('vital_bp_sys_full')}</label>
                                     <input
                                         type="number"
                                         value={caseData.config?.initialVitals?.bpSys ?? scenarioVitals?.bpSys ?? 120}
@@ -4149,7 +4160,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">BP Diastolic (mmHg)</label>
+                                    <label className="label-xs">{t('vital_bp_dia_full')}</label>
                                     <input
                                         type="number"
                                         value={caseData.config?.initialVitals?.bpDia ?? scenarioVitals?.bpDia ?? 80}
@@ -4159,7 +4170,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     />
                                 </div>
                                 <div className="col-span-2">
-                                    <label className="label-xs">EtCO2 (mmHg)</label>
+                                    <label className="label-xs">{t('vital_etco2_full')}</label>
                                     <input
                                         type="number"
                                         value={caseData.config?.initialVitals?.etco2 ?? scenarioVitals?.etco2 ?? 38}
@@ -4173,7 +4184,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
 
                         {/* ECG Rhythm */}
                         <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
-                            <h5 className="text-sm font-bold text-white mb-3">ECG Rhythm</h5>
+                            <h5 className="text-sm font-bold text-white mb-3">{t('ecg_rhythm')}</h5>
                             <div className="grid grid-cols-3 gap-2">
                                 {['NSR', 'Sinus Tachycardia', 'Sinus Bradycardia', 'Atrial Fibrillation', 'Atrial Flutter', 'SVT', 'Ventricular Tachycardia', 'Ventricular Fibrillation', 'Asystole'].map(r => (
                                     <button
@@ -4192,7 +4203,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
 
                         {/* ECG Conditions */}
                         <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
-                            <h5 className="text-sm font-bold text-white mb-3">ECG Conditions</h5>
+                            <h5 className="text-sm font-bold text-white mb-3">{t('ecg_conditions')}</h5>
                             <div className="grid grid-cols-2 gap-4">
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
@@ -4204,7 +4215,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         })}
                                         className="w-4 h-4 rounded bg-neutral-700 border-neutral-600"
                                     />
-                                    <span className="text-sm text-neutral-300">PVCs (Premature Ventricular)</span>
+                                    <span className="text-sm text-neutral-300">{t('ecg_pvc')}</span>
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
@@ -4216,7 +4227,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         })}
                                         className="w-4 h-4 rounded bg-neutral-700 border-neutral-600"
                                     />
-                                    <span className="text-sm text-neutral-300">Wide QRS</span>
+                                    <span className="text-sm text-neutral-300">{t('ecg_wide_qrs')}</span>
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
@@ -4228,10 +4239,10 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         })}
                                         className="w-4 h-4 rounded bg-neutral-700 border-neutral-600"
                                     />
-                                    <span className="text-sm text-neutral-300">T-Wave Inversion</span>
+                                    <span className="text-sm text-neutral-300">{t('ecg_t_inv')}</span>
                                 </label>
                                 <div>
-                                    <label className="label-xs">ST Elevation (0-5)</label>
+                                    <label className="label-xs">{t('ecg_st_elev')}</label>
                                     <input
                                         type="range"
                                         min="0" max="5" step="1"
@@ -4252,8 +4263,8 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {/* STEP 3: SCENARIO (OPTIONAL) */}
                 {step === 4 && (
                     <div className="space-y-6">
-                        <h4 className="text-lg font-bold text-teal-400">3. Progression Scenario (Optional)</h4>
-                        <p className="text-xs text-neutral-500">Add automatic deterioration or improvement over time. Choose from quick templates or browse the full repository.</p>
+                        <h4 className="text-lg font-bold text-teal-400">{t('scen_step_title')}</h4>
+                        <p className="text-xs text-neutral-500">{t('scen_step_help')}</p>
 
                         {/* Scenario Selector */}
                         <div className="space-y-4">
@@ -4261,8 +4272,8 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
                                 <div className="flex items-center justify-between mb-2">
                                     <div>
-                                        <h5 className="text-sm font-bold text-blue-300">Scenario Repository</h5>
-                                        <p className="text-xs text-neutral-400">Browse reusable scenarios from database</p>
+                                        <h5 className="text-sm font-bold text-blue-300">{t('scen_repository')}</h5>
+                                        <p className="text-xs text-neutral-400">{t('scen_repository_help')}</p>
                                     </div>
                                     <button
                                         onClick={() => {
@@ -4272,7 +4283,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-bold flex items-center gap-2"
                                     >
                                         <Database className="w-4 h-4" />
-                                        Browse Repository
+                                        {t('btn_browse_repository')}
                                     </button>
                                 </div>
                                 {(caseData.scenario_from_repository || caseData.scenario_template || caseData.scenario?.source) && (() => {
@@ -4288,7 +4299,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         ? (caseData.scenario_from_repository?.name || sourceMeta?.name)
                                         : (SCENARIO_TEMPLATES[caseData.scenario_template]?.name
                                            || SCENARIO_TEMPLATES[sourceMeta?.id]?.name);
-                                    const source = isRepo ? 'Repository' : 'Built-in Template';
+                                    const source = isRepo ? t('scen_source_repository') : t('scen_source_builtin');
                                     return (
                                         <div className="mt-3 bg-green-900/20 border border-green-700/50 rounded p-3 flex items-center justify-between gap-3">
                                             <p className="text-xs text-green-300">
@@ -4305,7 +4316,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                                 }))}
                                                 className="shrink-0 text-xs px-2 py-1 rounded border border-red-700 text-red-400 hover:bg-red-900/40 hover:text-red-300 transition-colors"
                                             >
-                                                Remove
+                                                {t('btn_remove')}
                                             </button>
                                         </div>
                                     );
@@ -4315,12 +4326,12 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             {/* OR divider */}
                             <div className="flex items-center gap-4 text-neutral-500 text-xs">
                                 <div className="flex-1 border-t border-neutral-700"></div>
-                                <span>OR USE QUICK TEMPLATE</span>
+                                <span>{t('scen_or_quick')}</span>
                                 <div className="flex-1 border-t border-neutral-700"></div>
                             </div>
 
                             <div>
-                                <label className="label-xs">Quick Templates</label>
+                                <label className="label-xs">{t('scen_quick_templates')}</label>
                                 <select
                                     value={caseData.scenario_from_repository ? '_repository' : (caseData.scenario_template || 'none')}
                                     onChange={async (e) => {
@@ -4331,8 +4342,8 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         const currentlyHasScenario = !!caseData.scenario;
                                         if (currentlyHasScenario && val !== '_repository') {
                                             const ok = await toast.confirm(
-                                                'This will replace the current scenario timeline. Continue?',
-                                                { title: 'Replace scenario?', confirmText: 'Replace', type: 'warning' }
+                                                t('confirm_replace_scenario'),
+                                                { title: t('confirm_replace_scenario_title'), confirmText: t('btn_replace'), type: 'warning' }
                                             );
                                             if (!ok) {
                                                 e.target.value = caseData.scenario_from_repository
@@ -4371,14 +4382,14 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     }}
                                     className="input-dark"
                                 >
-                                    <option value="none">No Scenario (Static Patient)</option>
+                                    <option value="none">{t('scen_no_scenario')}</option>
                                     {caseData.scenario_from_repository && (
                                         <option value="_repository">
-                                            {caseData.scenario_from_repository.name} (Repository)
+                                            {t('scen_option_repository', { name: caseData.scenario_from_repository.name })}
                                         </option>
                                     )}
                                     {publicScenarios.length > 0 && (
-                                        <optgroup label="Public Scenarios">
+                                        <optgroup label={t('scen_public_scenarios')}>
                                             {publicScenarios.map(s => (
                                                 <option key={s.id} value={`_db_${s.id}`}>
                                                     {s.name}{s.category ? ` — ${s.category}` : ''}
@@ -4386,7 +4397,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             ))}
                                         </optgroup>
                                     )}
-                                    <optgroup label="Built-in Templates">
+                                    <optgroup label={t('scen_builtin_templates')}>
                                         {Object.entries(SCENARIO_TEMPLATES).map(([key, template]) => (
                                             <option key={key} value={key}>
                                                 {template.name} - {template.description}
@@ -4396,15 +4407,15 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                 </select>
                                 <p className="text-xs text-neutral-500 mt-1">
                                     {caseData.scenario_from_repository
-                                        ? 'Currently using a scenario from the repository'
-                                        : 'Choose a public scenario or a built-in template'}
+                                        ? t('scen_using_repository')
+                                        : t('scen_choose')}
                                 </p>
                             </div>
 
                             {/* Duration Selector — only for built-in templates, not repository scenarios */}
                             {caseData.scenario_template && caseData.scenario_template !== 'none' && (
                                 <div>
-                                    <label className="label-xs">Progression Duration</label>
+                                    <label className="label-xs">{t('scen_duration')}</label>
                                     <select
                                         value={caseData.scenario_duration || 30}
                                         onChange={(e) => {
@@ -4421,18 +4432,18 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         }}
                                         className="input-dark"
                                     >
-                                        <option value="5">Very Fast (5 minutes)</option>
-                                        <option value="10">Fast (10 minutes)</option>
-                                        <option value="15">15 minutes</option>
-                                        <option value="20">20 minutes</option>
-                                        <option value="30">Standard (30 minutes)</option>
-                                        <option value="45">45 minutes</option>
-                                        <option value="60">1 hour</option>
-                                        <option value="90">1.5 hours</option>
-                                        <option value="120">2 hours</option>
+                                        <option value="5">{t('dur_very_fast')}</option>
+                                        <option value="10">{t('dur_fast')}</option>
+                                        <option value="15">{t('dur_15')}</option>
+                                        <option value="20">{t('dur_20')}</option>
+                                        <option value="30">{t('dur_standard')}</option>
+                                        <option value="45">{t('dur_45')}</option>
+                                        <option value="60">{t('dur_60')}</option>
+                                        <option value="90">{t('dur_90')}</option>
+                                        <option value="120">{t('dur_120')}</option>
                                     </select>
                                     <p className="text-xs text-neutral-500 mt-1">
-                                        Patient will progress from initial state to late stage over {caseData.scenario_duration} minutes.
+                                        {t('scen_duration_note', { minutes: caseData.scenario_duration })}
                                     </p>
                                 </div>
                             )}
@@ -4440,7 +4451,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             {/* Preview */}
                             {caseData.scenario?.timeline && (
                                 <div className="mt-4 bg-neutral-800 border border-neutral-700 rounded p-4">
-                                    <h5 className="text-sm font-bold mb-2 text-teal-300">Timeline Preview</h5>
+                                    <h5 className="text-sm font-bold mb-2 text-teal-300">{t('scen_timeline_preview')}</h5>
                                     <div className="space-y-2 text-xs">
                                         {caseData.scenario.timeline.map((step, idx) => (
                                             <div key={idx} className="flex items-start gap-3 text-neutral-300">
@@ -4470,7 +4481,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         className="w-4 h-4"
                                     />
                                     <label htmlFor="autostart-scenario" className="text-sm text-neutral-300">
-                                        Auto-start scenario when case loads (otherwise instructor must trigger manually)
+                                        {t('scen_autostart')}
                                     </label>
                                 </div>
                             )}
@@ -4481,9 +4492,9 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {/* STEP 5: LABORATORY INVESTIGATIONS */}
                 {step === 6 && (
                     <div className="space-y-6">
-                        <h4 className="text-lg font-bold text-teal-400">5. Laboratory Investigations</h4>
+                        <h4 className="text-lg font-bold text-teal-400">{t('labs_step_title')}</h4>
                         <p className="text-xs text-neutral-500">
-                            Configure lab tests with smart search, clinical panel templates, and visual value editors.
+                            {t('labs_step_help')}
                         </p>
 
                         <LabInvestigationEditor
@@ -4535,10 +4546,9 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {/* STEP 9: TREATMENTS */}
                 {step === 10 && (
                     <div className="space-y-6">
-                        <h4 className="text-lg font-bold text-teal-400">9. Treatment Configuration</h4>
+                        <h4 className="text-lg font-bold text-teal-400">{t('treatments_step_title')}</h4>
                         <p className="text-xs text-neutral-500">
-                            Configure which treatments are expected, contraindicated, or hidden for this case.
-                            Assign points for correct treatment decisions and provide feedback for learning.
+                            {t('treatments_step_help')}
                         </p>
 
                         <CaseTreatmentConfig
@@ -4571,7 +4581,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
 
             {/* Footer Actions */}
             <div className="pt-4 border-t border-neutral-800 flex justify-between mt-4">
-                <button onClick={onCancel} className="text-neutral-500 hover:text-white px-4">Cancel</button>
+                <button onClick={onCancel} className="text-neutral-500 hover:text-white px-4">{t('btn_cancel')}</button>
                 <div className="flex gap-2">
                     {step > 1 && (
                         <button
@@ -4582,7 +4592,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             }}
                             className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded font-bold text-sm"
                         >
-                            Back
+                            {t('btn_back')}
                         </button>
                     )}
 
@@ -4592,7 +4602,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             onClick={onSave}
                             className="px-4 py-2 bg-blue-700 hover:bg-blue-600 rounded font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-900/20"
                         >
-                            <Save className="w-4 h-4" /> Save Progress
+                            <Save className="w-4 h-4" /> {t('btn_save_progress')}
                         </button>
                     )}
 
@@ -4605,7 +4615,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             }}
                             className="px-6 py-2 bg-teal-600 hover:bg-teal-500 rounded font-bold text-sm"
                         >
-                            Next
+                            {t('btn_next')}
                         </button>
                     ) : (
                         <button
@@ -4616,7 +4626,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             }}
                             className="px-6 py-2 bg-green-600 hover:bg-green-500 rounded font-bold text-sm shadow-lg shadow-green-900/20 flex items-center gap-2"
                         >
-                            <Save className="w-4 h-4" /> Save & Finish
+                            <Save className="w-4 h-4" /> {t('btn_save_finish')}
                         </button>
                     )}
                 </div>

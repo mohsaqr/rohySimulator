@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, Pill, X } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 
@@ -6,7 +7,9 @@ import { apiFetch } from '../../services/apiClient';
  * Medication autocomplete search component
  * Searches against the medications database and returns selected medication data
  */
-export default function MedicationSearch({ value, onChange, onSelect, placeholder = 'Search medications...' }) {
+export default function MedicationSearch({ value, onChange, onSelect, placeholder }) {
+    const { t } = useTranslation('authoring_meds');
+    const resolvedPlaceholder = placeholder ?? t('search_meds_placeholder');
     const [query, setQuery] = useState(value || '');
     const [results, setResults] = useState([]);
     const [isOpen, setIsOpen] = useState(false);
@@ -130,7 +133,7 @@ export default function MedicationSearch({ value, onChange, onSelect, placeholde
                     onKeyDown={handleKeyDown}
                     onFocus={() => results.length > 0 && setIsOpen(true)}
                     className="input-dark text-xs pl-7 pr-7 w-full"
-                    placeholder={placeholder}
+                    placeholder={resolvedPlaceholder}
                 />
                 {query && (
                     <button
@@ -150,9 +153,9 @@ export default function MedicationSearch({ value, onChange, onSelect, placeholde
                     className="absolute z-50 w-full mt-1 bg-neutral-800 border border-neutral-600 rounded-lg shadow-xl max-h-60 overflow-y-auto"
                 >
                     {loading ? (
-                        <div className="px-3 py-2 text-xs text-neutral-400">Searching...</div>
+                        <div className="px-3 py-2 text-xs text-neutral-400">{t('searching')}</div>
                     ) : results.length === 0 ? (
-                        <div className="px-3 py-2 text-xs text-neutral-400">No medications found</div>
+                        <div className="px-3 py-2 text-xs text-neutral-400">{t('no_meds_found')}</div>
                     ) : (
                         results.map((med, idx) => (
                             <button

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader2, RotateCcw } from 'lucide-react';
 import { baseUrl } from '../../config/api.js';
 import { apiFetch } from '../../services/apiClient.js';
@@ -33,6 +34,7 @@ function avatarSlotFor(config) {
 }
 
 export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTemplateVoice = null }) {
+    const { t } = useTranslation('authoring_case');
     const [manifest, setManifest] = useState(null);
     const [voices, setVoices] = useState([]);
     const {
@@ -164,23 +166,22 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
             {/* Avatar + framing + preview */}
             <section className="bg-neutral-800/50 rounded-lg p-5 border border-neutral-700 space-y-4">
                 <header>
-                    <h3 className="text-sm font-bold text-neutral-200">Avatar</h3>
+                    <h3 className="text-sm font-bold text-neutral-200">{t('avatar_heading')}</h3>
                     <p className="text-[11px] text-neutral-500 mt-0.5">
-                        Pick the 3D head and framing the patient panel uses for this case. Leave on Auto to
-                        inherit the {slot} default.
+                        {t('avatar_help', { slot })}
                     </p>
                 </header>
 
                 <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-3">
                         <div>
-                            <label className="label-xs">3D Avatar</label>
+                            <label className="label-xs">{t('avatar_3d_label')}</label>
                             <select
                                 className="input-dark"
                                 value={config.avatar_id || ''}
                                 onChange={e => updateAvatarId(e.target.value)}
                             >
-                                <option value="">Auto ({slot} default)</option>
+                                <option value="">{t('avatar_auto_option', { slot })}</option>
                                 {avatarOptions.map(a => (
                                     <option key={a.id} value={a.id}>{a.label}</option>
                                 ))}
@@ -193,7 +194,7 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
                                 pick a fresh avatar before saving. */}
                             {config.avatar_id && manifest && !avatarOptions.some(a => a.id === config.avatar_id) && (
                                 <p className="text-[11px] text-amber-400 mt-1">
-                                    ⚠ Avatar <span className="font-mono text-amber-200">{config.avatar_id}</span> is no longer in the manifest. Runtime will fall back to the platform default.
+                                    {t('avatar_stale_before')}<span className="font-mono text-amber-200">{config.avatar_id}</span>{t('avatar_stale_after')}
                                 </p>
                             )}
                         </div>
@@ -228,7 +229,7 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
                             </div>
                         ) : (
                             <div className="text-[11px] text-neutral-500 text-center px-4">
-                                Pick an avatar to preview here.
+                                {t('avatar_preview_empty')}
                             </div>
                         )}
                     </div>
@@ -238,24 +239,24 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
             {/* Voice */}
             <section className="bg-neutral-800/50 rounded-lg p-5 border border-neutral-700 space-y-4">
                 <header>
-                    <h3 className="text-sm font-bold text-neutral-200">Voice</h3>
+                    <h3 className="text-sm font-bold text-neutral-200">{t('voice_heading')}</h3>
                     <p className="text-[11px] text-neutral-500 mt-0.5">
-                        TTS engine is set platform-wide in <span className="text-neutral-300">Settings → Voice</span>
-                        {effectiveProvider ? <> (currently <span className="font-mono text-neutral-300">{effectiveProvider}</span>)</> : ' (no provider set)'}.
-                        Leave the voice empty to inherit the Patient persona's default.
+                        {t('voice_help_before')}<span className="text-neutral-300">{t('voice_settings_path')}</span>
+                        {effectiveProvider ? <> {t('voice_provider_current_before')}<span className="font-mono text-neutral-300">{effectiveProvider}</span>{t('voice_provider_current_after')}</> : t('voice_no_provider')}
+                        {t('voice_help_after')}
                     </p>
                 </header>
 
                 <div>
                     <div className="flex items-center justify-between">
-                        <label className="label-xs">Case voice</label>
+                        <label className="label-xs">{t('case_voice_label')}</label>
                         {voice.case_voice && (
                             <button
                                 type="button"
                                 onClick={() => updateVoice('case_voice', '')}
                                 className="text-[10px] text-neutral-500 hover:text-neutral-300 flex items-center gap-1"
                             >
-                                <RotateCcw className="w-3 h-3" /> Reset
+                                <RotateCcw className="w-3 h-3" /> {t('reset')}
                             </button>
                         )}
                     </div>
@@ -268,8 +269,8 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
                         >
                             <option value="">
                                 {inheritedVoice
-                                    ? `Inherit from Patient persona (${inheritedVoice})`
-                                    : 'Inherit from Patient persona (none set)'}
+                                    ? t('inherit_voice_with', { voice: inheritedVoice })
+                                    : t('inherit_voice_none')}
                             </option>
                             {voiceOptions.map(v => {
                                 const genderLabel = voiceGenderLabel(v);
@@ -291,21 +292,23 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
                 </div>
 
                 <SliderRow
-                    label="Speech rate"
-                    hint="server tempo (no pitch change)"
+                    label={t('speech_rate_label')}
+                    hint={t('speech_rate_hint')}
                     min={0.5} max={1.5} step={0.05}
                     value={voice.tts_rate}
                     inherited={inheritedRate}
                     onChange={v => updateVoice('tts_rate', v)}
+                    t={t}
                 />
 
                 <SliderRow
-                    label="Pitch"
-                    hint="semitones (Google only)"
+                    label={t('pitch_label')}
+                    hint={t('pitch_hint')}
                     min={-10} max={10} step={0.25}
                     value={voice.tts_pitch}
                     inherited={inheritedPitch}
                     onChange={v => updateVoice('tts_pitch', v)}
+                    t={t}
                 />
             </section>
         </div>
@@ -314,10 +317,10 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
 
 // Numeric slider with explicit "(inherits N from gender default)" hint.
 // Empty value = inherit. ✕ button clears any override.
-function SliderRow({ label, hint, min, max, step, value, inherited, onChange }) {
+function SliderRow({ label, hint, min, max, step, value, inherited, onChange, t }) {
     const isSet = value != null && value !== '';
     const inheritDisplay = inherited == null || inherited === '' ? '1.00' : Number(inherited).toFixed(2);
-    const display = isSet ? Number(value).toFixed(2) : `${inheritDisplay} (inherited)`;
+    const display = isSet ? Number(value).toFixed(2) : t('slider_inherited', { value: inheritDisplay });
     return (
         <div>
             <div className="flex items-center justify-between mb-1">
@@ -333,7 +336,7 @@ function SliderRow({ label, hint, min, max, step, value, inherited, onChange }) 
                             type="button"
                             className="text-[10px] text-neutral-500 hover:text-neutral-300 flex items-center gap-1"
                             onClick={() => onChange('')}
-                            title="Clear override (inherit from persona default)"
+                            title={t('clear_override_title')}
                         >
                             <RotateCcw className="w-3 h-3" />
                         </button>

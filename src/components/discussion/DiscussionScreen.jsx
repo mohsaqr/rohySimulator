@@ -18,7 +18,7 @@ import CaseSummaryModal from './CaseSummaryModal';
 
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 
-export default function DiscussionScreen({ sessionId, activeCase, onClose, roomNav = null }) {
+export default function DiscussionScreen({ sessionId, activeCase, onClose, roomNav = null, topBarControls = null }) {
     const { t } = useTranslation('discussion');
     const { headManifest, platformAvatars, voiceSettings } = useVoice();
     const { user } = useAuth();
@@ -162,6 +162,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    {topBarControls}
                     <button
                         type="button"
                         onClick={() => setShowNotes(true)}

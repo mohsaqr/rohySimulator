@@ -81,6 +81,7 @@ export default function InvestigationsScreen({
     // fallback or setter — switching is the parent's job via the nav.
     activeKind = 'lab',
     roomNav,
+    topBarControls = null,
 }) {
     const { t } = useTranslation('investigations');
     const [showNotes, setShowNotes] = useState(false);
@@ -168,6 +169,7 @@ export default function InvestigationsScreen({
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    {topBarControls}
                     <button
                         type="button"
                         onClick={() => setShowNotes(true)}

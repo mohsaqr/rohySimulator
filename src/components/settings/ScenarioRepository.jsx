@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Edit, Download, Upload, Globe, Lock, Play, X, Copy, Clock, ChevronDown, ChevronUp, Save, Search, Package, Database } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
@@ -52,7 +53,9 @@ const getTemplateCategory = (key) => {
 };
 
 export default function ScenarioRepository({ onSelectScenario }) {
+    const { t } = useTranslation('authoring_scenarios');
     const toast = useToast();
+    const categoryLabel = (id) => t(`category_${String(id).toLowerCase()}`, id);
     const [dbScenarios, setDbScenarios] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editingScenario, setEditingScenario] = useState(null);
@@ -156,26 +159,26 @@ export default function ScenarioRepository({ onSelectScenario }) {
     }, [builtInScenarios, dbScenarios, showBuiltIn, showCustom]);
 
     const deleteScenario = async (id) => {
-        const confirmed = await toast.confirm('Delete this scenario?', { title: 'Delete Scenario', type: 'danger', confirmText: 'Delete' });
+        const confirmed = await toast.confirm(t('confirm_delete_message'), { title: t('confirm_delete_title'), type: 'danger', confirmText: t('delete') });
         if (!confirmed) return;
 
         try {
             await apiDelete(`/scenarios/${id}`);
             loadScenarios();
-            toast.success('Scenario deleted');
+            toast.success(t('toast_deleted'));
         } catch (error) {
             console.error('Failed to delete scenario:', error);
-            toast.error(error instanceof ApiError ? error.message : 'Failed to delete scenario');
+            toast.error(error instanceof ApiError ? error.message : t('toast_delete_failed'));
         }
     };
 
     const saveScenario = async () => {
         if (!editingScenario.name.trim()) {
-            toast.warning('Please enter a scenario name');
+            toast.warning(t('warn_name_required'));
             return;
         }
         if (!editingScenario.timeline || editingScenario.timeline.length === 0) {
-            toast.warning('Please add at least one timeline step');
+            toast.warning(t('warn_step_required'));
             return;
         }
 
@@ -197,10 +200,10 @@ export default function ScenarioRepository({ onSelectScenario }) {
 
             setEditingScenario(null);
             loadScenarios();
-            toast.success(isNew ? 'Scenario created' : 'Scenario updated');
+            toast.success(isNew ? t('toast_created') : t('toast_updated'));
         } catch (error) {
             console.error('Failed to save scenario:', error);
-            toast.error(error instanceof ApiError ? error.message : 'Failed to save scenario');
+            toast.error(error instanceof ApiError ? error.message : t('toast_save_failed'));
         }
     };
 
@@ -236,7 +239,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
         setEditingScenario({
             ...scenario,
             id: null,
-            name: `${scenario.name} (Copy)`,
+            name: `${scenario.name}${t('copy_suffix')}`,
             description: scenario.description || '',
             is_public: !!scenario.is_public,
             timeline: (Array.isArray(scenario.timeline) ? scenario.timeline : []).map(step => ({
@@ -276,7 +279,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
             try {
                 const imported = JSON.parse(e.target.result);
                 setEditingScenario({
-                    name: imported.name || 'Imported Scenario',
+                    name: imported.name || t('imported_scenario_name'),
                     description: imported.description || '',
                     category: imported.category || 'General',
                     duration_minutes: imported.duration_minutes || 30,
@@ -284,9 +287,9 @@ export default function ScenarioRepository({ onSelectScenario }) {
                     is_public: true,
                     is_builtin: false
                 });
-                toast.success('Scenario imported - review and save');
+                toast.success(t('toast_imported'));
             } catch {
-                toast.error('Invalid scenario file');
+                toast.error(t('toast_invalid_file'));
             }
         };
         reader.readAsText(file);
@@ -302,7 +305,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
             timeline: [...prev.timeline, {
                 ...DEFAULT_STEP,
                 time: newTime,
-                label: `Step ${prev.timeline.length + 1}`,
+                label: t('step_n', { n: prev.timeline.length + 1 }),
                 params: lastStep ? { ...lastStep.params } : { ...DEFAULT_STEP.params },
                 conditions: lastStep ? { ...lastStep.conditions } : { ...DEFAULT_STEP.conditions }
             }]
@@ -339,7 +342,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
 
     const removeTimelineStep = (index) => {
         if (editingScenario.timeline.length <= 1) {
-            toast.warning('Scenario must have at least one step');
+            toast.warning(t('warn_min_step'));
             return;
         }
         setEditingScenario(prev => ({
@@ -354,7 +357,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
         const newStep = {
             ...step,
             time: step.time + 5 * 60,
-            label: step.label + ' (Copy)',
+            label: step.label + t('copy_suffix'),
             params: { ...step.params },
             conditions: { ...step.conditions }
         };
@@ -378,7 +381,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
     };
 
     if (loading) {
-        return <div className="text-center py-8 text-neutral-500">Loading scenarios...</div>;
+        return <div className="text-center py-8 text-neutral-500">{t('loading')}</div>;
     }
 
     return (
@@ -386,9 +389,9 @@ export default function ScenarioRepository({ onSelectScenario }) {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-lg font-bold text-white">Scenario Templates</h3>
+                    <h3 className="text-lg font-bold text-white">{t('title')}</h3>
                     <p className="text-xs text-neutral-500 mt-1">
-                        {allScenarios.length} scenarios ({builtInScenarios.length} built-in, {dbScenarios.length} custom)
+                        {t('summary', { count: allScenarios.length, builtin: builtInScenarios.length, custom: dbScenarios.length })}
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -402,10 +405,10 @@ export default function ScenarioRepository({ onSelectScenario }) {
                     <button
                         onClick={() => fileInputRef.current?.click()}
                         className="px-3 py-2 bg-neutral-700 hover:bg-neutral-600 rounded text-sm font-bold flex items-center gap-1"
-                        title="Import from JSON"
+                        title={t('import_title')}
                     >
                         <Upload className="w-4 h-4" />
-                        Import
+                        {t('import')}
                     </button>
                     <button
                         onClick={() => setEditingScenario({
@@ -413,14 +416,14 @@ export default function ScenarioRepository({ onSelectScenario }) {
                             description: '',
                             duration_minutes: 30,
                             category: 'General',
-                            timeline: [{ ...DEFAULT_STEP, label: 'Initial State' }],
+                            timeline: [{ ...DEFAULT_STEP, label: t('initial_state') }],
                             is_public: true,
                             is_builtin: false
                         })}
                         className="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-bold flex items-center gap-1"
                     >
                         <Plus className="w-4 h-4" />
-                        New Scenario
+                        {t('new_scenario')}
                     </button>
                 </div>
             </div>
@@ -434,7 +437,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search scenarios..."
+                        placeholder={t('search_placeholder')}
                         className="w-full pl-9 pr-3 py-2 bg-neutral-900 border border-neutral-700 rounded text-sm"
                     />
                 </div>
@@ -447,7 +450,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
                 >
                     {CATEGORIES.map(cat => (
                         <option key={cat.id} value={cat.id}>
-                            {cat.label} ({categoryCounts[cat.id] || 0})
+                            {categoryLabel(cat.id)} ({categoryCounts[cat.id] || 0})
                         </option>
                     ))}
                 </select>
@@ -463,7 +466,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
                         }`}
                     >
                         <Package className="w-4 h-4" />
-                        Built-in ({builtInScenarios.length})
+                        {t('built_in_count', { count: builtInScenarios.length })}
                     </button>
                     <button
                         onClick={() => setShowCustom(!showCustom)}
@@ -474,7 +477,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
                         }`}
                     >
                         <Database className="w-4 h-4" />
-                        Custom ({dbScenarios.length})
+                        {t('custom_count', { count: dbScenarios.length })}
                     </button>
                 </div>
             </div>
@@ -482,8 +485,8 @@ export default function ScenarioRepository({ onSelectScenario }) {
             {/* Scenario List */}
             {allScenarios.length === 0 ? (
                 <div className="text-center py-12 bg-neutral-800/50 rounded-lg border border-dashed border-neutral-700">
-                    <p className="text-neutral-500 mb-2">No scenarios match your filters</p>
-                    <p className="text-xs text-neutral-600">Try adjusting the category or search query</p>
+                    <p className="text-neutral-500 mb-2">{t('empty_title')}</p>
+                    <p className="text-xs text-neutral-600">{t('empty_hint')}</p>
                 </div>
             ) : (
                 <div className="grid gap-3">
@@ -505,28 +508,28 @@ export default function ScenarioRepository({ onSelectScenario }) {
                                         {scenario.is_builtin ? (
                                             <span className="px-2 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded flex items-center gap-1">
                                                 <Package className="w-3 h-3" />
-                                                Built-in
+                                                {t('badge_built_in')}
                                             </span>
                                         ) : (
                                             <span className="px-2 py-0.5 bg-green-900/50 text-green-300 text-xs rounded flex items-center gap-1">
                                                 <Database className="w-3 h-3" />
-                                                Custom
+                                                {t('badge_custom')}
                                             </span>
                                         )}
 
                                         {/* Category Badge */}
                                         {scenario.category && (
                                             <span className="px-2 py-0.5 bg-blue-900/50 text-blue-200 text-xs rounded">
-                                                {scenario.category}
+                                                {categoryLabel(scenario.category)}
                                             </span>
                                         )}
 
                                         {/* Visibility */}
                                         {!scenario.is_builtin && (
                                             scenario.is_public ? (
-                                                <Globe className="w-3.5 h-3.5 text-green-400" title="Public" />
+                                                <Globe className="w-3.5 h-3.5 text-green-400" title={t('public')} />
                                             ) : (
-                                                <Lock className="w-3.5 h-3.5 text-yellow-400" title="Private" />
+                                                <Lock className="w-3.5 h-3.5 text-yellow-400" title={t('private')} />
                                             )
                                         )}
                                     </div>
@@ -538,9 +541,9 @@ export default function ScenarioRepository({ onSelectScenario }) {
                                             <Clock className="w-3 h-3" />
                                             {formatDuration(scenario.duration_minutes)}
                                         </span>
-                                        <span>{scenario.timeline?.length || 0} steps</span>
+                                        <span>{t('steps_count', { count: scenario.timeline?.length || 0 })}</span>
                                         {scenario.created_by_username && (
-                                            <span>By: {scenario.created_by_username}</span>
+                                            <span>{t('created_by', { name: scenario.created_by_username })}</span>
                                         )}
                                     </div>
                                 </div>
@@ -550,7 +553,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
                                         <button
                                             onClick={() => onSelectScenario(scenario)}
                                             className="p-2 bg-green-700 hover:bg-green-600 rounded text-xs"
-                                            title="Use in case"
+                                            title={t('use_in_case')}
                                         >
                                             <Play className="w-4 h-4" />
                                         </button>
@@ -558,21 +561,21 @@ export default function ScenarioRepository({ onSelectScenario }) {
                                     <button
                                         onClick={() => duplicateScenario(scenario)}
                                         className="p-2 bg-neutral-700 hover:bg-neutral-600 rounded text-xs"
-                                        title="Duplicate"
+                                        title={t('duplicate')}
                                     >
                                         <Copy className="w-4 h-4" />
                                     </button>
                                     <button
                                         onClick={() => exportScenario(scenario)}
                                         className="p-2 bg-neutral-700 hover:bg-neutral-600 rounded text-xs"
-                                        title="Export"
+                                        title={t('export')}
                                     >
                                         <Download className="w-4 h-4" />
                                     </button>
                                     <button
                                         onClick={() => editScenario(scenario)}
                                         className="p-2 bg-blue-700 hover:bg-blue-600 rounded text-xs"
-                                        title={scenario.is_builtin ? "Edit (creates copy)" : "Edit"}
+                                        title={scenario.is_builtin ? t('edit_creates_copy') : t('edit')}
                                     >
                                         <Edit className="w-4 h-4" />
                                     </button>
@@ -580,7 +583,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
                                         <button
                                             onClick={() => deleteScenario(scenario.id)}
                                             className="p-2 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded text-xs"
-                                            title="Delete"
+                                            title={t('delete')}
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
@@ -601,12 +604,12 @@ export default function ScenarioRepository({ onSelectScenario }) {
                             <div>
                                 <h3 className="text-xl font-bold">
                                     {editingScenario.id && !String(editingScenario.id).startsWith('builtin_')
-                                        ? 'Edit Scenario'
-                                        : 'New Scenario'}
+                                        ? t('edit_scenario')
+                                        : t('new_scenario')}
                                 </h3>
                                 {editingScenario.is_builtin === false && editingScenario.templateKey && (
                                     <p className="text-xs text-purple-400 mt-1">
-                                        Based on built-in template - will be saved as custom scenario
+                                        {t('based_on_template')}
                                     </p>
                                 )}
                             </div>
@@ -620,42 +623,42 @@ export default function ScenarioRepository({ onSelectScenario }) {
                             {/* Basic Info */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-neutral-400 mb-1">Name *</label>
+                                    <label className="block text-xs font-bold text-neutral-400 mb-1">{t('name_label')}</label>
                                     <input
                                         type="text"
                                         value={editingScenario.name}
                                         onChange={(e) => setEditingScenario(prev => ({ ...prev, name: e.target.value }))}
                                         className="w-full px-3 py-2 bg-neutral-800 border border-neutral-600 rounded text-white"
-                                        placeholder="Scenario name"
+                                        placeholder={t('name_placeholder')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-neutral-400 mb-1">Category</label>
+                                    <label className="block text-xs font-bold text-neutral-400 mb-1">{t('category_label')}</label>
                                     <select
                                         value={editingScenario.category}
                                         onChange={(e) => setEditingScenario(prev => ({ ...prev, category: e.target.value }))}
                                         className="w-full px-3 py-2 bg-neutral-800 border border-neutral-600 rounded text-white"
                                     >
                                         {CATEGORIES.filter(c => c.id !== 'all').map(cat => (
-                                            <option key={cat.id} value={cat.id}>{cat.label}</option>
+                                            <option key={cat.id} value={cat.id}>{categoryLabel(cat.id)}</option>
                                         ))}
                                     </select>
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-neutral-400 mb-1">Description</label>
+                                <label className="block text-xs font-bold text-neutral-400 mb-1">{t('description_label')}</label>
                                 <textarea
                                     value={editingScenario.description}
                                     onChange={(e) => setEditingScenario(prev => ({ ...prev, description: e.target.value }))}
                                     className="w-full px-3 py-2 bg-neutral-800 border border-neutral-600 rounded text-white h-20"
-                                    placeholder="Describe this scenario..."
+                                    placeholder={t('description_placeholder')}
                                 />
                             </div>
 
                             <div className="flex gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-neutral-400 mb-1">Duration (minutes)</label>
+                                    <label className="block text-xs font-bold text-neutral-400 mb-1">{t('duration_label')}</label>
                                     <input
                                         type="number"
                                         value={editingScenario.duration_minutes}
@@ -673,7 +676,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
                                             onChange={(e) => setEditingScenario(prev => ({ ...prev, is_public: e.target.checked }))}
                                             className="w-4 h-4"
                                         />
-                                        <span className="text-sm text-neutral-300">Public (visible to all users)</span>
+                                        <span className="text-sm text-neutral-300">{t('public_checkbox')}</span>
                                     </label>
                                 </div>
                             </div>
@@ -681,13 +684,13 @@ export default function ScenarioRepository({ onSelectScenario }) {
                             {/* Timeline Steps */}
                             <div>
                                 <div className="flex items-center justify-between mb-3">
-                                    <h4 className="font-bold text-purple-400">Timeline Steps</h4>
+                                    <h4 className="font-bold text-purple-400">{t('timeline_steps')}</h4>
                                     <button
                                         onClick={addTimelineStep}
                                         className="px-3 py-1 bg-purple-600 hover:bg-purple-500 rounded text-sm font-bold flex items-center gap-1"
                                     >
                                         <Plus className="w-4 h-4" />
-                                        Add Step
+                                        {t('add_step')}
                                     </button>
                                 </div>
 
@@ -706,7 +709,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
                                                     <span className="text-purple-400 font-mono text-sm">{formatTime(step.time)}</span>
                                                 </div>
                                                 <div className="flex-1">
-                                                    <span className="text-white text-sm">{step.label || `Step ${index + 1}`}</span>
+                                                    <span className="text-white text-sm">{step.label || t('step_n', { n: index + 1 })}</span>
                                                 </div>
                                                 <div className="text-xs text-neutral-500 flex gap-3">
                                                     <span>HR: {step.params.hr}</span>
@@ -722,7 +725,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
                                                     {/* Time and Label */}
                                                     <div className="grid grid-cols-3 gap-3">
                                                         <div>
-                                                            <label className="block text-xs text-neutral-500 mb-1">Time (seconds)</label>
+                                                            <label className="block text-xs text-neutral-500 mb-1">{t('time_seconds_label')}</label>
                                                             <input
                                                                 type="number"
                                                                 value={step.time}
@@ -732,20 +735,20 @@ export default function ScenarioRepository({ onSelectScenario }) {
                                                             />
                                                         </div>
                                                         <div className="col-span-2">
-                                                            <label className="block text-xs text-neutral-500 mb-1">Label</label>
+                                                            <label className="block text-xs text-neutral-500 mb-1">{t('label_label')}</label>
                                                             <input
                                                                 type="text"
                                                                 value={step.label}
                                                                 onChange={(e) => updateTimelineStep(index, 'label', e.target.value)}
                                                                 className="w-full px-2 py-1 bg-neutral-900 border border-neutral-600 rounded text-sm"
-                                                                placeholder="Describe this stage..."
+                                                                placeholder={t('stage_placeholder')}
                                                             />
                                                         </div>
                                                     </div>
 
                                                     {/* Vital Signs */}
                                                     <div>
-                                                        <label className="block text-xs font-bold text-neutral-400 mb-2">Vital Signs</label>
+                                                        <label className="block text-xs font-bold text-neutral-400 mb-2">{t('vital_signs')}</label>
                                                         <div className="grid grid-cols-4 gap-2">
                                                             <div>
                                                                 <label className="block text-xs text-neutral-500">HR (bpm)</label>
@@ -776,7 +779,7 @@ export default function ScenarioRepository({ onSelectScenario }) {
                                                                 <input type="number" value={step.params.etco2} onChange={(e) => updateStepParams(index, 'etco2', parseInt(e.target.value) || 0)} className="w-full px-2 py-1 bg-neutral-900 border border-neutral-600 rounded text-sm" min="0" max="100" />
                                                             </div>
                                                             <div>
-                                                                <label className="block text-xs text-neutral-500">Rhythm</label>
+                                                                <label className="block text-xs text-neutral-500">{t('rhythm_label')}</label>
                                                                 <select value={step.rhythm || 'NSR'} onChange={(e) => updateTimelineStep(index, 'rhythm', e.target.value)} className="w-full px-2 py-1 bg-neutral-900 border border-neutral-600 rounded text-sm">
                                                                     {RHYTHMS.map(r => <option key={r} value={r}>{r}</option>)}
                                                                 </select>
@@ -786,14 +789,14 @@ export default function ScenarioRepository({ onSelectScenario }) {
 
                                                     {/* ECG Conditions */}
                                                     <div>
-                                                        <label className="block text-xs font-bold text-neutral-400 mb-2">ECG Conditions</label>
+                                                        <label className="block text-xs font-bold text-neutral-400 mb-2">{t('ecg_conditions')}</label>
                                                         <div className="grid grid-cols-5 gap-2">
                                                             <div>
                                                                 <label className="block text-xs text-neutral-500">ST Elev</label>
                                                                 <input type="number" step="0.1" value={step.conditions.stElev} onChange={(e) => updateStepConditions(index, 'stElev', parseFloat(e.target.value) || 0)} className="w-full px-2 py-1 bg-neutral-900 border border-neutral-600 rounded text-sm" min="-5" max="5" />
                                                             </div>
                                                             <div>
-                                                                <label className="block text-xs text-neutral-500">Noise</label>
+                                                                <label className="block text-xs text-neutral-500">{t('noise_label')}</label>
                                                                 <input type="number" value={step.conditions.noise} onChange={(e) => updateStepConditions(index, 'noise', parseInt(e.target.value) || 0)} className="w-full px-2 py-1 bg-neutral-900 border border-neutral-600 rounded text-sm" min="0" max="5" />
                                                             </div>
                                                             <label className="flex items-center gap-1 text-xs text-neutral-300">
@@ -817,13 +820,13 @@ export default function ScenarioRepository({ onSelectScenario }) {
                                                             onClick={() => duplicateStep(index)}
                                                             className="px-3 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs flex items-center gap-1"
                                                         >
-                                                            <Copy className="w-3 h-3" /> Duplicate
+                                                            <Copy className="w-3 h-3" /> {t('duplicate')}
                                                         </button>
                                                         <button
                                                             onClick={() => removeTimelineStep(index)}
                                                             className="px-3 py-1 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded text-xs flex items-center gap-1"
                                                         >
-                                                            <Trash2 className="w-3 h-3" /> Remove
+                                                            <Trash2 className="w-3 h-3" /> {t('remove')}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -840,14 +843,14 @@ export default function ScenarioRepository({ onSelectScenario }) {
                                 onClick={() => setEditingScenario(null)}
                                 className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded font-bold"
                             >
-                                Cancel
+                                {t('cancel')}
                             </button>
                             <button
                                 onClick={saveScenario}
                                 className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded font-bold flex items-center gap-2"
                             >
                                 <Save className="w-4 h-4" />
-                                Save Scenario
+                                {t('save_scenario')}
                             </button>
                         </div>
                     </div>

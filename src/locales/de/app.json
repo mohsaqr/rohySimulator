@@ -1,6 +1,8 @@
 {
   "cancel": "Abbrechen",
+  "case_analytics": "Fallanalyse",
   "dismiss": "Verwerfen",
+  "emotion_analytics": "Emotionsanalyse",
   "end_debrief": "Beenden & Nachbesprechung",
   "end_debrief_title": "Aktuelle Sitzung beenden und die Nachbesprechung öffnen",
   "end_session_confirm_intro": "Dadurch wird der Fall zur Nachbesprechung geschlossen. Nach dem Beenden:",
@@ -9,6 +11,7 @@
   "end_session_confirm_title": "Diese Sitzung beenden?",
   "end_session_confirm_transcript": "Sie können das Transkript im Nachbesprechungsraum einsehen, den Fall aber nicht erneut öffnen.",
   "help_support": "Hilfe & Support",
+  "language_menu_aria": "Sprache ändern",
   "loading": "Wird geladen...",
   "logout": "Abmelden",
   "multi_tab_heads_up": "Achtung:",

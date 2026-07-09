@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import Papa from 'papaparse';
 import { X, Upload, Download, CheckCircle2, AlertTriangle, ArrowRight, ArrowLeft, ClipboardPaste, GraduationCap } from 'lucide-react';
 import { useToast } from '../../../contexts/ToastContext';
@@ -27,6 +28,7 @@ function autoMap(headers) {
 }
 
 export default function UserImportWizard({ cohorts, existingUsers, myRank, onClose, onDone }) {
+    const { t } = useTranslation('teacher_users');
     const toast = useToast();
     const [step, setStep] = useState(1);
     const [headers, setHeaders] = useState([]);
@@ -56,7 +58,7 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
     const parseText = (text) => {
         const out = Papa.parse(text, { header: true, skipEmptyLines: true });
         const hdrs = (out.meta?.fields || []).filter(Boolean);
-        if (hdrs.length === 0) { toast.error('No columns found in the CSV'); return; }
+        if (hdrs.length === 0) { toast.error(t('err_no_columns')); return; }
         setHeaders(hdrs);
         setRawRows(out.data || []);
         setMapping(autoMap(hdrs));
@@ -82,17 +84,17 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
         return mapped.map((row, i) => {
             const errors = [];
             const u = row.username.toLowerCase(), e = row.email.toLowerCase();
-            if (!row.username || !row.email) errors.push('Missing username/email');
-            if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) errors.push('Bad email');
+            if (!row.username || !row.email) errors.push(t('verr_missing'));
+            if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) errors.push(t('verr_bad_email'));
             const role = (row.role || 'student').toLowerCase();
-            if (row.role && !VALID_ROLES.includes(role)) errors.push('Invalid role');
-            if (VALID_ROLES.includes(role) && (ROLE_RANK[role] ?? 0) > myRank) errors.push('Role above yours');
-            if (u && seenU.has(u)) errors.push('Dup in file'); else if (u) seenU.add(u);
-            if (e && seenE.has(e)) errors.push('Dup in file'); else if (e) seenE.add(e);
+            if (row.role && !VALID_ROLES.includes(role)) errors.push(t('verr_invalid_role'));
+            if (VALID_ROLES.includes(role) && (ROLE_RANK[role] ?? 0) > myRank) errors.push(t('verr_role_above'));
+            if (u && seenU.has(u)) errors.push(t('verr_dup')); else if (u) seenU.add(u);
+            if (e && seenE.has(e)) errors.push(t('verr_dup')); else if (e) seenE.add(e);
             const exists = existingUsernames.has(u) || existingEmails.has(e);
             const cls = (row.class || '').toLowerCase();
-            if (cls && !knownClasses.has(cls)) errors.push(`Unknown class`);
-            if (!exists && !row.password) errors.push('Password required (new user)');
+            if (cls && !knownClasses.has(cls)) errors.push(t('verr_unknown_class'));
+            if (!exists && !row.password) errors.push(t('verr_password_required'));
             let status = 'create';
             if (errors.length) status = 'error';
             else if (exists) status = row.class || cohortId ? 'enroll' : 'skip';
@@ -118,9 +120,9 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
     const assignmentMode = useMemo(() => {
         const hasMappedClass = !!mapping.class;
         const rowsWithClass = mapped.filter(r => r.class).length;
-        if (hasMappedClass && rowsWithClass) return `${rowsWithClass} rows use their CSV course/code`;
-        if (defaultCohort) return `All valid rows go to ${defaultCohort.name}`;
-        return 'No automatic course assignment';
+        if (hasMappedClass && rowsWithClass) return t('assign_mode_csv', { count: rowsWithClass });
+        if (defaultCohort) return t('assign_mode_default', { name: defaultCohort.name });
+        return t('assign_mode_none');
     }, [mapping.class, mapped, defaultCohort]);
 
     const commit = async () => {
@@ -133,9 +135,9 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
             });
             setResult(results);
             setStep(4);
-            toast.success(`Imported: ${results.created.length} created, ${results.enrolled.length} enrolled`);
+            toast.success(t('toast_imported', { created: results.created.length, enrolled: results.enrolled.length }));
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Import failed');
+            toast.error(err instanceof ApiError ? err.message : t('err_import'));
         } finally {
             setCommitting(false);
         }
@@ -153,7 +155,7 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
             setServerPreview(results);
             setStep(3);
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Import validation failed');
+            toast.error(err instanceof ApiError ? err.message : t('err_import_validation'));
         } finally {
             setValidating(false);
         }
@@ -177,12 +179,12 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
             <div className="rohy-card rounded-xl w-full max-w-3xl max-h-[88vh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200">
-                    <h3 className="font-bold flex items-center gap-2"><Upload className="w-4 h-4 text-teal-700" /> Import users from CSV</h3>
+                    <h3 className="font-bold flex items-center gap-2"><Upload className="w-4 h-4 text-teal-700" /> {t('import_title')}</h3>
                     <button className="rohy-subtle-button p-1.5 rounded" onClick={onClose}><X className="w-4 h-4" /></button>
                 </div>
 
                 <div className="px-5 pt-3">
-                    <Steps step={step} labels={['Upload', 'Map columns', 'Review', 'Done']} />
+                    <Steps step={step} labels={[t('step_upload'), t('step_map'), t('step_review'), t('step_done')]} />
                 </div>
 
                 <div className="p-5 overflow-y-auto flex-1">
@@ -191,13 +193,13 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
                             <div className="grid md:grid-cols-2 gap-3">
                                 <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-neutral-300 rounded-xl p-7 cursor-pointer hover:border-teal-400">
                                     <Upload className="w-7 h-7 text-neutral-400" />
-                                    <span className="text-sm font-semibold">Choose CSV</span>
-                                    <span className="text-xs text-neutral-500">Headers are mapped automatically</span>
+                                    <span className="text-sm font-semibold">{t('choose_csv')}</span>
+                                    <span className="text-xs text-neutral-500">{t('headers_auto_mapped')}</span>
                                     <input type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
                                 </label>
                                 <div className="border border-neutral-200 rounded-xl p-3 space-y-2">
                                     <div className="flex items-center gap-2 text-sm font-semibold">
-                                        <ClipboardPaste className="w-4 h-4 text-teal-700" /> Paste CSV
+                                        <ClipboardPaste className="w-4 h-4 text-teal-700" /> {t('paste_csv')}
                                     </div>
                                     <textarea
                                         className="rohy-field w-full px-3 py-2 rounded-lg text-xs font-mono min-h-28"
@@ -206,49 +208,49 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
                                         placeholder="username,name,email,password,role,class"
                                     />
                                     <button className="rohy-btn rohy-btn-secondary !text-xs" disabled={!pasteText.trim()} onClick={() => parseText(pasteText)}>
-                                        Parse pasted rows
+                                        {t('btn_parse_pasted')}
                                     </button>
                                 </div>
                             </div>
                             <label className="block text-sm">
                                 <span className="flex items-center gap-1.5 font-semibold mb-1">
-                                    <GraduationCap className="w-4 h-4 text-teal-700" /> Default course assignment
+                                    <GraduationCap className="w-4 h-4 text-teal-700" /> {t('label_default_course')}
                                 </span>
                                 <select className="rohy-field w-full px-2 py-1.5 rounded text-sm" value={cohortId} onChange={e => setCohortId(e.target.value)}>
-                                    <option value="">— use CSV class/code column, or leave unassigned —</option>
-                                    {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}{c.join_code ? ` · code ${c.join_code}` : ''}</option>)}
+                                    <option value="">{t('opt_use_csv_class')}</option>
+                                    {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}{c.join_code ? t('opt_code_suffix', { code: c.join_code }) : ''}</option>)}
                                 </select>
                             </label>
                             <div className="flex flex-wrap gap-2">
-                                <button className="rohy-btn rohy-btn-ghost !text-xs" onClick={downloadTemplate}><Download className="w-3.5 h-3.5" /> Download template</button>
-                                <span className="rohy-badge-neutral">Supports class names and registration codes</span>
+                                <button className="rohy-btn rohy-btn-ghost !text-xs" onClick={downloadTemplate}><Download className="w-3.5 h-3.5" /> {t('btn_download_template')}</button>
+                                <span className="rohy-badge-neutral">{t('badge_supports_codes')}</span>
                             </div>
                         </div>
                     )}
 
                     {step === 2 && (
                         <div className="space-y-4">
-                            <p className="text-sm text-neutral-600">Match your CSV columns to user fields. {rawRows.length} rows detected.</p>
+                            <p className="text-sm text-neutral-600">{t('map_instructions', { count: rawRows.length })}</p>
                             <div className="grid grid-cols-2 gap-3">
                                 {FIELDS.map(f => (
                                     <label key={f} className="text-sm">
-                                        <span className="block font-semibold mb-1 capitalize">{f}{(f === 'username' || f === 'email') && <span className="text-red-600"> *</span>}</span>
+                                        <span className="block font-semibold mb-1">{t('field_' + f)}{(f === 'username' || f === 'email') && <span className="text-red-600"> *</span>}</span>
                                         <select className="rohy-field w-full px-2 py-1.5 rounded text-sm" value={mapping[f] || ''} onChange={e => setMapping(m => ({ ...m, [f]: e.target.value }))}>
-                                            <option value="">(ignore)</option>
+                                            <option value="">{t('opt_ignore')}</option>
                                             {headers.map(h => <option key={h} value={h}>{h}</option>)}
                                         </select>
                                     </label>
                                 ))}
                             </div>
                             <label className="block text-sm pt-2 border-t border-neutral-200">
-                                <span className="block font-semibold mb-1">Enroll all imported users into a class (optional)</span>
+                                <span className="block font-semibold mb-1">{t('label_enroll_all')}</span>
                                 <select className="rohy-field w-full px-2 py-1.5 rounded text-sm" value={cohortId} onChange={e => setCohortId(e.target.value)}>
-                                    <option value="">— none (or use a per-row "class" column) —</option>
-                                    {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}{c.join_code ? ` · code ${c.join_code}` : ''}</option>)}
+                                    <option value="">{t('opt_none_per_row')}</option>
+                                    {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}{c.join_code ? t('opt_code_suffix', { code: c.join_code }) : ''}</option>)}
                                 </select>
                             </label>
                             <div className="rohy-detail-panel rounded-lg p-3 text-sm">
-                                <span className="font-semibold">Auto assignment:</span> {assignmentMode}
+                                <span className="font-semibold">{t('label_auto_assignment')}</span> {assignmentMode}
                             </div>
                         </div>
                     )}
@@ -256,38 +258,38 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
                     {step === 3 && (
                         <div className="space-y-3">
                             <div className="flex flex-wrap gap-2 text-sm">
-                                <Pill tone="green">{(counts.create || 0)} new</Pill>
-                                <Pill tone="teal">{(counts.enroll || 0)} enroll</Pill>
-                                <Pill tone="neutral">{(counts.skip || 0)} skip</Pill>
-                                <Pill tone="red">{(counts.error || 0)} errors</Pill>
+                                <Pill tone="green">{t('pill_new', { count: counts.create || 0 })}</Pill>
+                                <Pill tone="teal">{t('pill_enroll', { count: counts.enroll || 0 })}</Pill>
+                                <Pill tone="neutral">{t('pill_skip', { count: counts.skip || 0 })}</Pill>
+                                <Pill tone="red">{t('pill_errors', { count: counts.error || 0 })}</Pill>
                             </div>
                             <div className="rohy-detail-panel rounded-lg p-3 text-sm">
-                                <span className="font-semibold">Auto assignment:</span> {assignmentMode}
+                                <span className="font-semibold">{t('label_auto_assignment')}</span> {assignmentMode}
                             </div>
                             {serverPreview && (
                                 <div className="rohy-detail-panel rounded-lg p-3 text-sm">
-                                    <div className="font-semibold mb-1">Server preview</div>
+                                    <div className="font-semibold mb-1">{t('label_server_preview')}</div>
                                     <div className="flex flex-wrap gap-2">
-                                        <Pill tone="green">{serverPreview.created.length} create</Pill>
-                                        <Pill tone="teal">{serverPreview.enrolled.length} assign</Pill>
-                                        <Pill tone="neutral">{serverPreview.skipped.length} skip</Pill>
-                                        <Pill tone="red">{serverPreview.failed.length} fail</Pill>
+                                        <Pill tone="green">{t('pill_create', { count: serverPreview.created.length })}</Pill>
+                                        <Pill tone="teal">{t('pill_assign', { count: serverPreview.enrolled.length })}</Pill>
+                                        <Pill tone="neutral">{t('pill_skip', { count: serverPreview.skipped.length })}</Pill>
+                                        <Pill tone="red">{t('pill_fail', { count: serverPreview.failed.length })}</Pill>
                                     </div>
                                 </div>
                             )}
                             <div className="rohy-table-shell rounded-lg overflow-hidden max-h-[40vh] overflow-y-auto">
                                 <table className="w-full text-xs">
                                     <thead className="rohy-table-head sticky top-0"><tr>
-                                        <th className="px-2 py-2 text-left">#</th><th className="px-2 py-2 text-left">Status</th>
-                                        <th className="px-2 py-2 text-left">Username</th><th className="px-2 py-2 text-left">Email</th>
-                                        <th className="px-2 py-2 text-left">Role</th><th className="px-2 py-2 text-left">Class</th>
-                                        <th className="px-2 py-2 text-left">Notes</th>
+                                        <th className="px-2 py-2 text-left">#</th><th className="px-2 py-2 text-left">{t('col_status')}</th>
+                                        <th className="px-2 py-2 text-left">{t('col_username')}</th><th className="px-2 py-2 text-left">{t('col_email')}</th>
+                                        <th className="px-2 py-2 text-left">{t('col_role')}</th><th className="px-2 py-2 text-left">{t('col_class')}</th>
+                                        <th className="px-2 py-2 text-left">{t('col_notes')}</th>
                                     </tr></thead>
                                     <tbody>
                                         {validated.map(v => (
                                             <tr key={v.i} className="rohy-table-row">
                                                 <td className="px-2 py-1.5 rohy-table-muted">{v.i + 1}</td>
-                                                <td className="px-2 py-1.5"><StatusBadge status={v.status} /></td>
+                                                <td className="px-2 py-1.5"><StatusBadge status={v.status} t={t} /></td>
                                                 <td className="px-2 py-1.5">{v.row.username || <em className="text-neutral-400">—</em>}</td>
                                                 <td className="px-2 py-1.5 rohy-table-muted">{v.row.email}</td>
                                                 <td className="px-2 py-1.5">{v.row.role || 'student'}</td>
@@ -301,22 +303,22 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
                                 </table>
                             </div>
                             {(counts.error || 0) > 0 && (
-                                <button className="rohy-btn rohy-btn-ghost !text-xs" onClick={downloadErrors}><Download className="w-3.5 h-3.5" /> Download error rows</button>
+                                <button className="rohy-btn rohy-btn-ghost !text-xs" onClick={downloadErrors}><Download className="w-3.5 h-3.5" /> {t('btn_download_error_rows')}</button>
                             )}
                         </div>
                     )}
 
                     {step === 4 && result && (
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-teal-700"><CheckCircle2 className="w-6 h-6" /><span className="font-bold text-lg">Import complete</span></div>
+                            <div className="flex items-center gap-2 text-teal-700"><CheckCircle2 className="w-6 h-6" /><span className="font-bold text-lg">{t('import_complete')}</span></div>
                             <div className="grid grid-cols-4 gap-2.5">
-                                <Stat label="Created" value={result.created.length} />
-                                <Stat label="Enrolled" value={result.enrolled.length} />
-                                <Stat label="Skipped" value={result.skipped.length} />
-                                <Stat label="Failed" value={result.failed.length} tone={result.failed.length ? 'warn' : undefined} />
+                                <Stat label={t('stat_created')} value={result.created.length} />
+                                <Stat label={t('stat_enrolled')} value={result.enrolled.length} />
+                                <Stat label={t('stat_skipped')} value={result.skipped.length} />
+                                <Stat label={t('stat_failed')} value={result.failed.length} tone={result.failed.length ? 'warn' : undefined} />
                             </div>
                             {result.failed.length > 0 && (
-                                <button className="rohy-btn rohy-btn-secondary !text-xs" onClick={downloadErrors}><Download className="w-3.5 h-3.5" /> Download error report</button>
+                                <button className="rohy-btn rohy-btn-secondary !text-xs" onClick={downloadErrors}><Download className="w-3.5 h-3.5" /> {t('btn_download_error_report')}</button>
                             )}
                         </div>
                     )}
@@ -324,19 +326,19 @@ export default function UserImportWizard({ cohorts, existingUsers, myRank, onClo
 
                 <div className="flex items-center justify-between px-5 py-4 border-t border-neutral-200">
                     <button className="rohy-btn rohy-btn-ghost" onClick={step > 1 && step < 4 ? () => setStep(step - 1) : onClose}>
-                        {step > 1 && step < 4 ? <><ArrowLeft className="w-4 h-4" /> Back</> : 'Close'}
+                        {step > 1 && step < 4 ? <><ArrowLeft className="w-4 h-4" /> {t('btn_back')}</> : t('btn_close')}
                     </button>
                     {step === 2 && (
                         <button className="rohy-btn rohy-btn-primary" disabled={validating || !mapping.username || !mapping.email} onClick={reviewWithServer}>
-                            {validating ? 'Validating...' : 'Review'} <ArrowRight className="w-4 h-4" />
+                            {validating ? t('btn_validating') : t('btn_review')} <ArrowRight className="w-4 h-4" />
                         </button>
                     )}
                     {step === 3 && (
                         <button className="rohy-btn rohy-btn-primary" disabled={committing || commitRows.length === 0} onClick={commit}>
-                            {committing ? 'Importing…' : `Import ${commitRows.length} rows`}
+                            {committing ? t('btn_importing') : t('btn_import_rows', { count: commitRows.length })}
                         </button>
                     )}
-                    {step === 4 && <button className="rohy-btn rohy-btn-primary" onClick={onDone}>Done</button>}
+                    {step === 4 && <button className="rohy-btn rohy-btn-primary" onClick={onDone}>{t('btn_done')}</button>}
                 </div>
             </div>
         </div>
@@ -357,9 +359,9 @@ function Steps({ step, labels }) {
         </div>
     );
 }
-function StatusBadge({ status }) {
+function StatusBadge({ status, t }) {
     const map = { create: 'rohy-badge-green', enroll: 'rohy-badge-teal', skip: 'rohy-badge-neutral', error: 'rohy-badge-red' };
-    const label = { create: 'new', enroll: 'enroll', skip: 'skip', error: 'error' };
+    const label = { create: t('sb_new'), enroll: t('sb_enroll'), skip: t('sb_skip'), error: t('sb_error') };
     return <span className={map[status]}>{status === 'error' ? <AlertTriangle className="w-3 h-3 inline" /> : null} {label[status]}</span>;
 }
 function Pill({ tone, children }) {

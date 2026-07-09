@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Search, Plus, Trash2, Loader2, ChevronDown, ChevronUp,
     Upload, Download, Edit2, X, Check, RefreshCw,
@@ -17,6 +18,7 @@ import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/a
  * - Delete tests
  */
 export default function LabTestManager() {
+    const { t } = useTranslation('authoring_labs');
     const toast = useToast();
 
     // State
@@ -60,7 +62,7 @@ export default function LabTestManager() {
             setGroups(groupsData.groups || []);
             setStats(statsData);
         } catch (err) {
-            toast.error('Failed to load lab tests');
+            toast.error(t('load_failed'));
             console.error(err);
         } finally {
             setLoading(false);
@@ -119,7 +121,7 @@ export default function LabTestManager() {
     // Add new test
     const handleAddTest = async () => {
         if (!newTest.test_name || !newTest.group || !newTest.unit) {
-            toast.error('Test name, group, and unit are required');
+            toast.error(t('validation_required'));
             return;
         }
 
@@ -135,7 +137,7 @@ export default function LabTestManager() {
 
             await apiPost('/labs/test', testData);
 
-            toast.success('Test added successfully');
+            toast.success(t('test_added'));
             setNewTest({
                 test_name: '',
                 group: '',
@@ -156,7 +158,7 @@ export default function LabTestManager() {
         try {
             await apiPut('/labs/test', test);
 
-            toast.success('Test updated successfully');
+            toast.success(t('test_updated'));
             setEditingTest(null);
             fetchTests();
         } catch (err) {
@@ -166,13 +168,13 @@ export default function LabTestManager() {
 
     // Delete test
     const handleDeleteTest = async (test_name, category) => {
-        const confirmed = await toast.confirm(`Delete "${test_name}" (${category})?`, { title: 'Delete Test', type: 'danger', confirmText: 'Delete' });
+        const confirmed = await toast.confirm(t('confirm_delete_test', { name: test_name, category }), { title: t('confirm_delete_title'), type: 'danger', confirmText: t('confirm_delete_confirm') });
         if (!confirmed) return;
 
         try {
             await apiDelete('/labs/test', { json: { test_name, category } });
 
-            toast.success('Test deleted');
+            toast.success(t('test_deleted'));
             fetchTests();
         } catch (err) {
             toast.error(err.message);
@@ -220,7 +222,7 @@ export default function LabTestManager() {
     // Execute import
     const handleImport = async () => {
         if (importPreview.length === 0) {
-            toast.error('No valid tests to import');
+            toast.error(t('no_valid_import'));
             return;
         }
 
@@ -230,7 +232,7 @@ export default function LabTestManager() {
                 overwrite: importOverwrite
             });
 
-            toast.success(`Import complete: ${data.results.added} added, ${data.results.updated} updated, ${data.results.skipped} skipped`);
+            toast.success(t('import_complete', { added: data.results.added, updated: data.results.updated, skipped: data.results.skipped }));
             setImportData('');
             setImportPreview([]);
             fetchTests();
@@ -268,7 +270,7 @@ export default function LabTestManager() {
         a.download = 'lab_tests_export.csv';
         a.click();
         URL.revokeObjectURL(url);
-        toast.success('Exported lab tests to CSV');
+        toast.success(t('export_success'));
     };
 
     // Toggle group expansion
@@ -297,21 +299,21 @@ export default function LabTestManager() {
                 <div className="grid grid-cols-4 gap-3">
                     <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
                         <div className="text-2xl font-bold text-cyan-400">{stats.totalTests}</div>
-                        <div className="text-xs text-slate-400">Total Tests</div>
+                        <div className="text-xs text-slate-400">{t('stat_total_tests')}</div>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
                         <div className="text-2xl font-bold text-emerald-400">{stats.totalGroups}</div>
-                        <div className="text-xs text-slate-400">Groups</div>
+                        <div className="text-xs text-slate-400">{t('stat_groups')}</div>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
                         <div className="text-2xl font-bold text-purple-400">{stats.byCategory?.Both || 0}</div>
-                        <div className="text-xs text-slate-400">Universal Tests</div>
+                        <div className="text-xs text-slate-400">{t('stat_universal_tests')}</div>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
                         <div className="text-2xl font-bold text-amber-400">
                             {(stats.byCategory?.Male || 0) + (stats.byCategory?.Female || 0)}
                         </div>
-                        <div className="text-xs text-slate-400">Gender-Specific</div>
+                        <div className="text-xs text-slate-400">{t('stat_gender_specific')}</div>
                     </div>
                 </div>
             )}
@@ -327,7 +329,7 @@ export default function LabTestManager() {
                     }`}
                 >
                     <Database size={16} />
-                    Browse Tests
+                    {t('tab_browse')}
                 </button>
                 <button
                     onClick={() => setActiveTab('add')}
@@ -338,7 +340,7 @@ export default function LabTestManager() {
                     }`}
                 >
                     <Plus size={16} />
-                    Add Test
+                    {t('tab_add')}
                 </button>
                 <button
                     onClick={() => setActiveTab('import')}
@@ -349,7 +351,7 @@ export default function LabTestManager() {
                     }`}
                 >
                     <Upload size={16} />
-                    Import CSV
+                    {t('tab_import')}
                 </button>
                 <div className="ml-auto flex gap-2">
                     <button
@@ -357,14 +359,14 @@ export default function LabTestManager() {
                         className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 rounded flex items-center gap-1"
                     >
                         <Download size={14} />
-                        Export
+                        {t('btn_export')}
                     </button>
                     <button
                         onClick={fetchTests}
                         className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 rounded flex items-center gap-1"
                     >
                         <RefreshCw size={14} />
-                        Refresh
+                        {t('btn_refresh')}
                     </button>
                 </div>
             </div>
@@ -380,7 +382,7 @@ export default function LabTestManager() {
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search tests..."
+                                placeholder={t('search_placeholder_simple')}
                                 className="w-full bg-slate-800 border border-slate-600 rounded-lg pl-10 pr-4 py-2 text-white placeholder-slate-400 focus:border-cyan-500 focus:outline-none"
                             />
                         </div>
@@ -389,7 +391,7 @@ export default function LabTestManager() {
                             onChange={(e) => setSelectedGroup(e.target.value)}
                             className="bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:border-cyan-500 focus:outline-none"
                         >
-                            <option value="all">All Groups</option>
+                            <option value="all">{t('all_groups')}</option>
                             {groups.map(g => (
                                 <option key={g} value={g}>{g}</option>
                             ))}
@@ -407,7 +409,7 @@ export default function LabTestManager() {
                                     <div className="flex items-center gap-2">
                                         <FlaskConical size={16} className="text-cyan-400" />
                                         <span className="font-medium text-white">{group}</span>
-                                        <span className="text-xs text-slate-400">({groupTests.length} tests)</span>
+                                        <span className="text-xs text-slate-400">{t('test_count_paren', { count: groupTests.length })}</span>
                                     </div>
                                     {expandedGroups.has(group) ? (
                                         <ChevronUp size={18} className="text-slate-400" />
@@ -435,7 +437,7 @@ export default function LabTestManager() {
                                                                     value={editingTest.min_value}
                                                                     onChange={(e) => setEditingTest({ ...editingTest, min_value: e.target.value })}
                                                                     className="w-20 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm"
-                                                                    placeholder="Min"
+                                                                    placeholder={t('ph_min_short')}
                                                                 />
                                                                 <span className="text-slate-400">-</span>
                                                                 <input
@@ -443,7 +445,7 @@ export default function LabTestManager() {
                                                                     value={editingTest.max_value}
                                                                     onChange={(e) => setEditingTest({ ...editingTest, max_value: e.target.value })}
                                                                     className="w-20 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm"
-                                                                    placeholder="Max"
+                                                                    placeholder={t('ph_max_short')}
                                                                 />
                                                                 <button
                                                                     onClick={() => handleUpdateTest(editingTest)}
@@ -489,7 +491,7 @@ export default function LabTestManager() {
 
                         {filteredTests.length === 0 && (
                             <div className="text-center py-8 text-slate-400">
-                                No tests found matching your criteria
+                                {t('no_tests_criteria')}
                             </div>
                         )}
                     </div>
@@ -499,28 +501,28 @@ export default function LabTestManager() {
             {/* Add Test Tab */}
             {activeTab === 'add' && (
                 <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4">
-                    <h3 className="text-lg font-medium text-white mb-4">Add New Lab Test</h3>
+                    <h3 className="text-lg font-medium text-white mb-4">{t('add_test_heading')}</h3>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm text-slate-400 mb-1">Test Name *</label>
+                            <label className="block text-sm text-slate-400 mb-1">{t('label_test_name')}</label>
                             <input
                                 type="text"
                                 value={newTest.test_name}
                                 onChange={(e) => setNewTest({ ...newTest, test_name: e.target.value })}
                                 className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-cyan-500 focus:outline-none"
-                                placeholder="e.g., Hemoglobin"
+                                placeholder={t('ph_test_name')}
                             />
                         </div>
 
                         <div>
-                            <label className="block text-sm text-slate-400 mb-1">Group *</label>
+                            <label className="block text-sm text-slate-400 mb-1">{t('label_group')}</label>
                             <input
                                 type="text"
                                 value={newTest.group}
                                 onChange={(e) => setNewTest({ ...newTest, group: e.target.value })}
                                 className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-cyan-500 focus:outline-none"
-                                placeholder="e.g., Hematology"
+                                placeholder={t('ph_group')}
                                 list="group-suggestions"
                             />
                             <datalist id="group-suggestions">
@@ -529,61 +531,61 @@ export default function LabTestManager() {
                         </div>
 
                         <div>
-                            <label className="block text-sm text-slate-400 mb-1">Category</label>
+                            <label className="block text-sm text-slate-400 mb-1">{t('label_category')}</label>
                             <select
                                 value={newTest.category}
                                 onChange={(e) => setNewTest({ ...newTest, category: e.target.value })}
                                 className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-cyan-500 focus:outline-none"
                             >
-                                <option value="Both">Both (Universal)</option>
-                                <option value="Male">Male</option>
-                                <option value="Female">Female</option>
+                                <option value="Both">{t('cat_both')}</option>
+                                <option value="Male">{t('cat_male')}</option>
+                                <option value="Female">{t('cat_female')}</option>
                             </select>
                         </div>
 
                         <div>
-                            <label className="block text-sm text-slate-400 mb-1">Unit *</label>
+                            <label className="block text-sm text-slate-400 mb-1">{t('label_unit')}</label>
                             <input
                                 type="text"
                                 value={newTest.unit}
                                 onChange={(e) => setNewTest({ ...newTest, unit: e.target.value })}
                                 className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-cyan-500 focus:outline-none"
-                                placeholder="e.g., g/dL"
+                                placeholder={t('ph_unit')}
                             />
                         </div>
 
                         <div>
-                            <label className="block text-sm text-slate-400 mb-1">Min Value</label>
+                            <label className="block text-sm text-slate-400 mb-1">{t('label_min_value')}</label>
                             <input
                                 type="number"
                                 step="any"
                                 value={newTest.min_value}
                                 onChange={(e) => setNewTest({ ...newTest, min_value: e.target.value })}
                                 className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-cyan-500 focus:outline-none"
-                                placeholder="e.g., 12.0"
+                                placeholder={t('ph_min')}
                             />
                         </div>
 
                         <div>
-                            <label className="block text-sm text-slate-400 mb-1">Max Value</label>
+                            <label className="block text-sm text-slate-400 mb-1">{t('label_max_value')}</label>
                             <input
                                 type="number"
                                 step="any"
                                 value={newTest.max_value}
                                 onChange={(e) => setNewTest({ ...newTest, max_value: e.target.value })}
                                 className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-cyan-500 focus:outline-none"
-                                placeholder="e.g., 16.0"
+                                placeholder={t('ph_max')}
                             />
                         </div>
 
                         <div className="col-span-2">
-                            <label className="block text-sm text-slate-400 mb-1">Normal Samples (comma-separated)</label>
+                            <label className="block text-sm text-slate-400 mb-1">{t('label_normal_samples')}</label>
                             <input
                                 type="text"
                                 value={newTest.normal_samples}
                                 onChange={(e) => setNewTest({ ...newTest, normal_samples: e.target.value })}
                                 className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-cyan-500 focus:outline-none"
-                                placeholder="e.g., 13.5, 14.0, 14.5, 15.0"
+                                placeholder={t('ph_normal_samples')}
                             />
                         </div>
                     </div>
@@ -594,7 +596,7 @@ export default function LabTestManager() {
                             className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded flex items-center gap-2"
                         >
                             <Plus size={18} />
-                            Add Test
+                            {t('btn_add_test')}
                         </button>
                     </div>
                 </div>
@@ -604,13 +606,13 @@ export default function LabTestManager() {
             {activeTab === 'import' && (
                 <div className="space-y-4">
                     <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4">
-                        <h3 className="text-lg font-medium text-white mb-2">Import Lab Tests from CSV</h3>
+                        <h3 className="text-lg font-medium text-white mb-2">{t('import_heading')}</h3>
                         <p className="text-sm text-slate-400 mb-4">
-                            CSV format: test_name, group, category, min_value, max_value, unit, normal_samples
+                            {t('csv_format')}
                         </p>
 
                         <div className="mb-4">
-                            <label className="block text-sm text-slate-400 mb-1">CSV Data</label>
+                            <label className="block text-sm text-slate-400 mb-1">{t('label_csv_data')}</label>
                             <textarea
                                 value={importData}
                                 onChange={(e) => setImportData(e.target.value)}
@@ -630,7 +632,7 @@ Hemoglobin,Hematology,Female,12.0,15.0,g/dL,"12.5,13.0,13.5,14.0"`}
                                     onChange={(e) => setImportOverwrite(e.target.checked)}
                                     className="rounded border-slate-600 bg-slate-700 text-cyan-500 focus:ring-cyan-500"
                                 />
-                                Overwrite existing tests
+                                {t('label_overwrite')}
                             </label>
                         </div>
 
@@ -640,7 +642,7 @@ Hemoglobin,Hematology,Female,12.0,15.0,g/dL,"12.5,13.0,13.5,14.0"`}
                                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded flex items-center gap-2"
                             >
                                 <Search size={18} />
-                                Preview
+                                {t('btn_preview')}
                             </button>
                             <button
                                 onClick={handleImport}
@@ -648,7 +650,7 @@ Hemoglobin,Hematology,Female,12.0,15.0,g/dL,"12.5,13.0,13.5,14.0"`}
                                 className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded flex items-center gap-2"
                             >
                                 <Upload size={18} />
-                                Import {importPreview.length > 0 && `(${importPreview.length})`}
+                                {t('btn_import')} {importPreview.length > 0 && `(${importPreview.length})`}
                             </button>
                         </div>
                     </div>
@@ -656,16 +658,16 @@ Hemoglobin,Hematology,Female,12.0,15.0,g/dL,"12.5,13.0,13.5,14.0"`}
                     {/* Import Preview */}
                     {importPreview.length > 0 && (
                         <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4">
-                            <h4 className="text-sm font-medium text-white mb-2">Preview ({importPreview.length} tests)</h4>
+                            <h4 className="text-sm font-medium text-white mb-2">{t('preview_count', { count: importPreview.length })}</h4>
                             <div className="max-h-[200px] overflow-y-auto">
                                 <table className="w-full text-sm">
                                     <thead className="text-slate-400 border-b border-slate-700">
                                         <tr>
-                                            <th className="text-left py-2">Test Name</th>
-                                            <th className="text-left py-2">Group</th>
-                                            <th className="text-left py-2">Category</th>
-                                            <th className="text-left py-2">Range</th>
-                                            <th className="text-left py-2">Unit</th>
+                                            <th className="text-left py-2">{t('th_test_name')}</th>
+                                            <th className="text-left py-2">{t('th_group')}</th>
+                                            <th className="text-left py-2">{t('th_category')}</th>
+                                            <th className="text-left py-2">{t('th_range')}</th>
+                                            <th className="text-left py-2">{t('th_unit')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Search, Plus, Trash2, Loader2, ChevronDown, ChevronUp,
     AlertTriangle, ArrowUp, ArrowDown,
@@ -24,6 +25,7 @@ import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
  * - Import/Export
  */
 export default function LabInvestigationEditor({ caseData, setCaseData, patientGender }) {
+    const { t } = useTranslation('authoring_labs');
     const toast = useToast();
 
     // State
@@ -140,7 +142,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
         // Check if already exists
         const exists = configuredLabs.some(l => l.test_name === labData.test_name);
         if (exists) {
-            toast.warning(`${labData.test_name} is already configured`);
+            toast.warning(t('already_configured', { name: labData.test_name }));
             return;
         }
 
@@ -304,15 +306,15 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                 labs: [...configuredLabs, ...newLabs]
             });
             if (failedTests.length > 0) {
-                toast.warning(`Applied "${template.name}" - Added ${newLabs.length} tests. ${failedTests.length} tests not found.`);
+                toast.warning(t('template_applied_partial', { name: template.name, added: newLabs.length, failed: failedTests.length }));
             } else {
-                toast.success(`Applied "${template.name}" - Added ${newLabs.length} tests`);
+                toast.success(t('template_applied', { name: template.name, count: newLabs.length }));
             }
         } else {
             if (failedTests.length > 0) {
-                toast.error(`Could not find tests: ${failedTests.slice(0, 3).join(', ')}${failedTests.length > 3 ? '...' : ''}`);
+                toast.error(t('could_not_find_tests', { names: `${failedTests.slice(0, 3).join(', ')}${failedTests.length > 3 ? '...' : ''}` }));
             } else {
-                toast.info('No new tests added (may already be configured)');
+                toast.info(t('no_new_tests'));
             }
         }
     };
@@ -385,9 +387,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
     const removeSelected = () => {
         if (selectedLabs.size === 0) return;
         const count = selectedLabs.size;
-        const confirmed = window.confirm(
-            `Delete ${count} lab test${count === 1 ? '' : 's'} from this case? This cannot be undone.`
-        );
+        const confirmed = window.confirm(t('confirm_delete_selected', { count }));
         if (!confirmed) return;
         const updatedLabs = configuredLabs.filter(lab => !selectedLabs.has(lab.id) && !selectedLabs.has(lab.test_name));
         updateInvestigations({ defaultLabsEnabled, labs: updatedLabs });
@@ -448,10 +448,10 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                             imported => !configuredLabs.some(existing => existing.test_name === imported.test_name)
                         )]
                     });
-                    toast.success(`Imported ${data.labs.length} lab configurations`);
+                    toast.success(t('imported_configs', { count: data.labs.length }));
                 }
             } catch {
-                toast.error('Failed to import: Invalid file format');
+                toast.error(t('import_invalid_format'));
             }
         };
         reader.readAsText(file);
@@ -485,13 +485,13 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
     // Get status badge
     const getStatusBadge = (status) => {
         const badges = {
-            'critical_low': { text: 'CRITICAL LOW', bg: 'bg-red-900/50 text-red-300 border-red-700' },
-            'low': { text: 'LOW', bg: 'bg-blue-900/50 text-blue-300 border-blue-700' },
-            'normal': { text: 'NORMAL', bg: 'bg-green-900/50 text-green-300 border-green-700' },
-            'high': { text: 'HIGH', bg: 'bg-yellow-900/50 text-yellow-300 border-yellow-700' },
-            'critical_high': { text: 'CRITICAL HIGH', bg: 'bg-red-900/50 text-red-300 border-red-700' }
+            'critical_low': { text: t('badge_critical_low'), bg: 'bg-red-900/50 text-red-300 border-red-700' },
+            'low': { text: t('badge_low'), bg: 'bg-blue-900/50 text-blue-300 border-blue-700' },
+            'normal': { text: t('badge_normal'), bg: 'bg-green-900/50 text-green-300 border-green-700' },
+            'high': { text: t('badge_high'), bg: 'bg-yellow-900/50 text-yellow-300 border-yellow-700' },
+            'critical_high': { text: t('badge_critical_high'), bg: 'bg-red-900/50 text-red-300 border-red-700' }
         };
-        return badges[status] || { text: 'UNKNOWN', bg: 'bg-neutral-800 text-neutral-400 border-neutral-600' };
+        return badges[status] || { text: t('badge_unknown'), bg: 'bg-neutral-800 text-neutral-400 border-neutral-600' };
     };
 
     // Group configured labs by test_group
@@ -525,10 +525,10 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                         className="w-5 h-5 mt-0.5"
                     />
                     <div>
-                        <div className="font-bold text-white">All Lab Tests Available by Default</div>
+                        <div className="font-bold text-white">{t('default_labs_title')}</div>
                         <div className="text-xs text-neutral-400 mt-1">
-                            When enabled: All 77+ lab tests available with <strong>normal values</strong>.
-                            <br />When disabled: Only tests you configure below will be available.
+                            {t('default_labs_when_enabled')}
+                            <br />{t('default_labs_when_disabled')}
                         </div>
                     </div>
                 </label>
@@ -538,7 +538,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
             <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-4">
                 <h4 className="font-bold text-white mb-3 flex items-center gap-2">
                     <Timer className="w-4 h-4 text-yellow-400" />
-                    Result Timing Settings
+                    {t('timing_settings_title')}
                 </h4>
                 <div className="grid grid-cols-2 gap-4">
                     {/* Instant Results */}
@@ -554,14 +554,14 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                             className="w-5 h-5"
                         />
                         <div>
-                            <div className="text-sm font-bold text-white">Instant Results</div>
-                            <div className="text-xs text-neutral-400">Results available immediately</div>
+                            <div className="text-sm font-bold text-white">{t('instant_results_title')}</div>
+                            <div className="text-xs text-neutral-400">{t('instant_results_desc')}</div>
                         </div>
                     </label>
 
                     {/* Global Turnaround Time */}
                     <div className="bg-neutral-800/50 p-3 rounded border border-neutral-700">
-                        <div className="text-sm font-bold text-white mb-2">Default Wait Time</div>
+                        <div className="text-sm font-bold text-white mb-2">{t('default_wait_time')}</div>
                         <select
                             value={caseData.config?.investigations?.defaultTurnaround || 0}
                             onChange={(e) => updateInvestigations({
@@ -572,19 +572,19 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                             disabled={caseData.config?.investigations?.instantResults}
                             className="w-full px-3 py-2 bg-neutral-900 border border-neutral-600 rounded text-white text-sm disabled:opacity-50"
                         >
-                            <option value={0}>Use per-test defaults</option>
-                            <option value={1}>1 minute</option>
-                            <option value={2}>2 minutes</option>
-                            <option value={5}>5 minutes</option>
-                            <option value={10}>10 minutes</option>
-                            <option value={15}>15 minutes</option>
-                            <option value={30}>30 minutes</option>
-                            <option value={60}>60 minutes</option>
+                            <option value={0}>{t('wait_per_test')}</option>
+                            <option value={1}>{t('minutes_option', { count: 1 })}</option>
+                            <option value={2}>{t('minutes_option', { count: 2 })}</option>
+                            <option value={5}>{t('minutes_option', { count: 5 })}</option>
+                            <option value={10}>{t('minutes_option', { count: 10 })}</option>
+                            <option value={15}>{t('minutes_option', { count: 15 })}</option>
+                            <option value={30}>{t('minutes_option', { count: 30 })}</option>
+                            <option value={60}>{t('minutes_option', { count: 60 })}</option>
                         </select>
                     </div>
                 </div>
                 <p className="text-xs text-neutral-500 mt-3">
-                    These settings apply to all lab tests in this case. Individual test timing can be set per-test below.
+                    {t('timing_footnote')}
                 </p>
             </div>
 
@@ -597,7 +597,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                     }`}
                 >
                     <Search className="w-4 h-4" />
-                    Search & Add
+                    {t('tab_search')}
                 </button>
                 <button
                     onClick={() => setActiveTab('templates')}
@@ -606,7 +606,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                     }`}
                 >
                     <Package className="w-4 h-4" />
-                    Panel Templates
+                    {t('tab_templates')}
                 </button>
                 <button
                     onClick={() => setActiveTab('configured')}
@@ -615,7 +615,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                     }`}
                 >
                     <FlaskConical className="w-4 h-4" />
-                    Configured ({configuredLabs.length})
+                    {t('tab_configured', { count: configuredLabs.length })}
                 </button>
             </div>
 
@@ -626,10 +626,10 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                     <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
                         <h5 className="text-sm font-bold text-purple-300 mb-3 flex items-center gap-2">
                             <Zap className="w-4 h-4" />
-                            Smart Search
+                            {t('smart_search_title')}
                         </h5>
                         <p className="text-xs text-neutral-500 mb-3">
-                            Try shortcuts: CBC, BMP, CMP, LFT, ABG, cardiac, thyroid, coags, electrolytes...
+                            {t('smart_search_hint')}
                         </p>
                         <div className="flex gap-2">
                             <div className="flex-1 relative">
@@ -638,7 +638,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Search tests (e.g., glucose, CBC, troponin, Na, K)..."
+                                    placeholder={t('search_placeholder')}
                                     className="w-full pl-10 pr-4 py-2 bg-neutral-900 border border-neutral-600 rounded text-sm text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none"
                                 />
                                 {searchQuery && (
@@ -655,7 +655,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                                 onChange={(e) => setSelectedGroup(e.target.value)}
                                 className="px-3 py-2 bg-neutral-900 border border-neutral-600 rounded text-sm text-white focus:border-purple-500 focus:outline-none"
                             >
-                                <option value="all">All Groups</option>
+                                <option value="all">{t('all_groups')}</option>
                                 {groups.map(group => (
                                     <option key={group} value={group}>{group}</option>
                                 ))}
@@ -689,35 +689,35 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                                                 </div>
                                                 {isConfigured ? (
                                                     <span className="text-xs text-green-400 flex items-center gap-1">
-                                                        <Check className="w-3 h-3" /> Added
+                                                        <Check className="w-3 h-3" /> {t('added_badge')}
                                                     </span>
                                                 ) : (
                                                     <div className="flex gap-1">
                                                         <button
                                                             onClick={() => addLab(testGroup, 'normal')}
                                                             className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-xs text-white"
-                                                            title="Add with normal value"
+                                                            title={t('title_add_normal')}
                                                         >
-                                                            Normal
+                                                            {t('btn_normal')}
                                                         </button>
                                                         <button
                                                             onClick={() => addLab(testGroup, 'high')}
                                                             className="px-2 py-1 bg-yellow-700 hover:bg-yellow-600 rounded text-xs text-white"
-                                                            title="Add with high value"
+                                                            title={t('title_add_high')}
                                                         >
                                                             <ArrowUp className="w-3 h-3" />
                                                         </button>
                                                         <button
                                                             onClick={() => addLab(testGroup, 'low')}
                                                             className="px-2 py-1 bg-blue-700 hover:bg-blue-600 rounded text-xs text-white"
-                                                            title="Add with low value"
+                                                            title={t('title_add_low')}
                                                         >
                                                             <ArrowDown className="w-3 h-3" />
                                                         </button>
                                                         <button
                                                             onClick={() => addLab(testGroup, 'critical_high')}
                                                             className="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs text-white"
-                                                            title="Add with critical high value"
+                                                            title={t('title_add_critical_high')}
                                                         >
                                                             ⚠️↑
                                                         </button>
@@ -732,7 +732,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
 
                         {searchQuery && !isSearching && filteredResults.length === 0 && (
                             <div className="text-center py-6 text-neutral-500 text-sm">
-                                No tests found matching "{searchQuery}"
+                                {t('no_results', { query: searchQuery })}
                             </div>
                         )}
                     </div>
@@ -741,7 +741,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                     <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
                         <h5 className="text-sm font-bold text-purple-300 mb-3 flex items-center gap-2">
                             <Layers className="w-4 h-4" />
-                            Add Entire Group
+                            {t('add_group_title')}
                         </h5>
                         <div className="flex gap-2">
                             <select
@@ -749,7 +749,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                                 onChange={(e) => setSelectedGroup(e.target.value)}
                                 className="flex-1 px-3 py-2 bg-neutral-900 border border-neutral-600 rounded text-sm text-white focus:border-purple-500 focus:outline-none"
                             >
-                                <option value="all">Select a group...</option>
+                                <option value="all">{t('select_group')}</option>
                                 {groups.map(group => (
                                     <option key={group} value={group}>{group}</option>
                                 ))}
@@ -759,14 +759,14 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                                     if (selectedGroup === 'all') return;
                                     const count = await addGroupAsPanel(selectedGroup);
                                     if (count > 0) {
-                                        toast.success(`Added ${count} tests from "${selectedGroup}"`);
+                                        toast.success(t('added_from_group', { count, group: selectedGroup }));
                                     }
                                 }}
                                 disabled={selectedGroup === 'all'}
                                 className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-neutral-700 disabled:cursor-not-allowed text-white rounded font-bold text-sm flex items-center gap-2"
                             >
                                 <Plus className="w-4 h-4" />
-                                Add Group
+                                {t('btn_add_group')}
                             </button>
                         </div>
                     </div>
@@ -777,9 +777,9 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
             {activeTab === 'templates' && (
                 <div className="space-y-4">
                     <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-700/50 rounded-lg p-4">
-                        <h5 className="text-sm font-bold text-purple-300 mb-2">Clinical Panel Templates</h5>
+                        <h5 className="text-sm font-bold text-purple-300 mb-2">{t('templates_title')}</h5>
                         <p className="text-xs text-neutral-400">
-                            Pre-configured lab panels for common clinical scenarios. Each template includes appropriate abnormal values.
+                            {t('templates_desc')}
                         </p>
                     </div>
 
@@ -791,7 +791,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                                 templateCategory === 'all' ? 'bg-purple-600 text-white' : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                             }`}
                         >
-                            All
+                            {t('category_all')}
                         </button>
                         {getTemplateCategories().map(cat => (
                             <button
@@ -821,7 +821,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                                             <div className="text-xs text-neutral-400">{template.category}</div>
                                         </div>
                                         <span className="text-xs bg-neutral-700 px-2 py-0.5 rounded text-neutral-300">
-                                            {template.tests.length} tests
+                                            {t('test_count', { count: template.tests.length })}
                                         </span>
                                     </div>
                                     <p className="text-xs text-neutral-500 mb-3">{template.description}</p>
@@ -830,7 +830,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                                         className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-500 rounded text-xs font-bold text-white flex items-center justify-center gap-2"
                                     >
                                         <Plus className="w-3 h-3" />
-                                        Apply Template
+                                        {t('btn_apply_template')}
                                     </button>
                                 </div>
                             ))}
@@ -850,7 +850,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                                         onClick={selectAll}
                                         className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded text-xs text-neutral-300"
                                     >
-                                        Select All
+                                        {t('btn_select_all')}
                                     </button>
                                     {selectedLabs.size > 0 && (
                                         <>
@@ -858,14 +858,14 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                                                 onClick={() => setSelectedLabs(new Set())}
                                                 className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded text-xs text-neutral-300"
                                             >
-                                                Clear ({selectedLabs.size})
+                                                {t('btn_clear', { count: selectedLabs.size })}
                                             </button>
                                             <button
                                                 onClick={removeSelected}
                                                 className="px-3 py-1.5 bg-red-900/50 hover:bg-red-900 rounded text-xs text-red-300 flex items-center gap-1"
                                             >
                                                 <Trash2 className="w-3 h-3" />
-                                                Delete Selected
+                                                {t('btn_delete_selected')}
                                             </button>
                                         </>
                                     )}
@@ -880,18 +880,18 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                                 }`}
                             >
                                 <Eye className="w-3 h-3" />
-                                Preview
+                                {t('btn_preview')}
                             </button>
                             <button
                                 onClick={exportLabs}
                                 className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded text-xs text-neutral-300 flex items-center gap-1"
                             >
                                 <Download className="w-3 h-3" />
-                                Export
+                                {t('btn_export')}
                             </button>
                             <label className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded text-xs text-neutral-300 flex items-center gap-1 cursor-pointer">
                                 <Upload className="w-3 h-3" />
-                                Import
+                                {t('btn_import')}
                                 <input type="file" accept=".json" className="hidden" onChange={importLabs} />
                             </label>
                         </div>
@@ -901,27 +901,27 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                     {configuredLabs.length === 0 ? (
                         <div className="text-center py-12 bg-neutral-800/50 rounded-lg border border-dashed border-neutral-700">
                             <FlaskConical className="w-12 h-12 mx-auto mb-3 text-neutral-600" />
-                            <p className="text-neutral-500 mb-2">No tests configured</p>
+                            <p className="text-neutral-500 mb-2">{t('empty_title')}</p>
                             <p className="text-xs text-neutral-600">
                                 {defaultLabsEnabled
-                                    ? 'All lab tests will return normal values'
-                                    : 'Students won\'t be able to get any lab results'}
+                                    ? t('empty_desc_enabled')
+                                    : t('empty_desc_disabled')}
                             </p>
                         </div>
                     ) : showPreview ? (
                         /* Preview Mode */
                         <div className="bg-neutral-950 border border-neutral-700 rounded-lg overflow-hidden">
                             <div className="bg-neutral-800 px-4 py-2 border-b border-neutral-700">
-                                <div className="text-sm font-bold text-white">Lab Results Preview (Student View)</div>
+                                <div className="text-sm font-bold text-white">{t('preview_title')}</div>
                             </div>
                             <div className="p-4">
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="text-left text-neutral-500 text-xs">
-                                            <th className="pb-2">Test</th>
-                                            <th className="pb-2">Result</th>
-                                            <th className="pb-2">Reference Range</th>
-                                            <th className="pb-2">Flag</th>
+                                            <th className="pb-2">{t('th_test')}</th>
+                                            <th className="pb-2">{t('th_result')}</th>
+                                            <th className="pb-2">{t('th_reference_range')}</th>
+                                            <th className="pb-2">{t('th_flag')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -969,7 +969,7 @@ export default function LabInvestigationEditor({ caseData, setCaseData, patientG
                                     >
                                         <div className="flex items-center gap-2">
                                             <span className="font-bold text-white">{group}</span>
-                                            <span className="text-xs text-neutral-500">({labs.length} tests)</span>
+                                            <span className="text-xs text-neutral-500">{t('test_count_paren', { count: labs.length })}</span>
                                         </div>
                                         {expandedGroups.has(group) ? (
                                             <ChevronUp className="w-4 h-4 text-neutral-400" />
@@ -1020,6 +1020,7 @@ function LabValueCard({
     _getStatusColor,
     getStatusBadge
 }) {
+    const { t } = useTranslation('authoring_labs');
     const status = getValueStatus(lab.current_value, lab.min_value, lab.max_value);
     const badge = getStatusBadge(status);
 
@@ -1108,7 +1109,7 @@ function LabValueCard({
             {/* Value Input and Presets */}
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className="text-xs text-neutral-500 block mb-1">Current Value</label>
+                    <label className="text-xs text-neutral-500 block mb-1">{t('label_current_value')}</label>
                     <div className="flex gap-2">
                         <input
                             type="number"
@@ -1126,46 +1127,46 @@ function LabValueCard({
                     {isPhysiologicallyImpossible && (
                         <div className="flex items-center gap-1 mt-1 text-xs text-red-400">
                             <AlertTriangle className="w-3 h-3" />
-                            Physiologically unlikely value
+                            {t('physiologically_unlikely')}
                         </div>
                     )}
                 </div>
 
                 <div>
-                    <label className="text-xs text-neutral-500 block mb-1">Quick Presets</label>
+                    <label className="text-xs text-neutral-500 block mb-1">{t('label_quick_presets')}</label>
                     <div className="grid grid-cols-5 gap-1">
                         <button
                             onClick={() => onApplyPreset('critical_low')}
                             className="px-2 py-2 bg-red-900/50 hover:bg-red-900 border border-red-700 rounded text-xs text-red-300"
-                            title="Critical Low"
+                            title={t('title_critical_low')}
                         >
                             ⚠↓
                         </button>
                         <button
                             onClick={() => onApplyPreset('low')}
                             className="px-2 py-2 bg-blue-900/50 hover:bg-blue-900 border border-blue-700 rounded text-xs text-blue-300"
-                            title="Low"
+                            title={t('title_low')}
                         >
                             <ArrowDown className="w-3 h-3 mx-auto" />
                         </button>
                         <button
                             onClick={() => onApplyPreset('normal')}
                             className="px-2 py-2 bg-green-900/50 hover:bg-green-900 border border-green-700 rounded text-xs text-green-300"
-                            title="Normal"
+                            title={t('title_normal')}
                         >
                             <RotateCcw className="w-3 h-3 mx-auto" />
                         </button>
                         <button
                             onClick={() => onApplyPreset('high')}
                             className="px-2 py-2 bg-yellow-900/50 hover:bg-yellow-900 border border-yellow-700 rounded text-xs text-yellow-300"
-                            title="High"
+                            title={t('title_high')}
                         >
                             <ArrowUp className="w-3 h-3 mx-auto" />
                         </button>
                         <button
                             onClick={() => onApplyPreset('critical_high')}
                             className="px-2 py-2 bg-red-900/50 hover:bg-red-900 border border-red-700 rounded text-xs text-red-300"
-                            title="Critical High"
+                            title={t('title_critical_high')}
                         >
                             ⚠↑
                         </button>
@@ -1175,7 +1176,7 @@ function LabValueCard({
 
             {/* Result Timing Configuration */}
             <div className="mt-4 pt-3 border-t border-neutral-700">
-                <label className="text-xs text-neutral-500 block mb-2">Result Timing</label>
+                <label className="text-xs text-neutral-500 block mb-2">{t('label_result_timing')}</label>
                 <div className="grid grid-cols-4 gap-2">
                     <button
                         onClick={() => onUpdateValue('turnaround_minutes', 0)}
@@ -1185,7 +1186,7 @@ function LabValueCard({
                                 : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                         }`}
                     >
-                        Immediate
+                        {t('btn_immediate')}
                     </button>
                     <button
                         onClick={() => onUpdateValue('turnaround_minutes', 1)}
@@ -1195,7 +1196,7 @@ function LabValueCard({
                                 : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                         }`}
                     >
-                        1 min
+                        {t('min_short', { count: 1 })}
                     </button>
                     <button
                         onClick={() => onUpdateValue('turnaround_minutes', 3)}
@@ -1205,7 +1206,7 @@ function LabValueCard({
                                 : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                         }`}
                     >
-                        3 min
+                        {t('min_short', { count: 3 })}
                     </button>
                     <button
                         onClick={() => onUpdateValue('turnaround_minutes', 5)}
@@ -1215,11 +1216,11 @@ function LabValueCard({
                                 : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                         }`}
                     >
-                        5 min
+                        {t('min_short', { count: 5 })}
                     </button>
                 </div>
                 <div className="flex items-center gap-2 mt-2">
-                    <span className="text-xs text-neutral-500">Custom:</span>
+                    <span className="text-xs text-neutral-500">{t('label_custom')}</span>
                     <input
                         type="number"
                         min="0"
@@ -1227,7 +1228,7 @@ function LabValueCard({
                         onChange={(e) => onUpdateValue('turnaround_minutes', parseInt(e.target.value) || 0)}
                         className="w-16 px-2 py-1 bg-neutral-900 border border-neutral-700 rounded text-white text-xs focus:border-purple-500 focus:outline-none"
                     />
-                    <span className="text-xs text-neutral-500">minutes</span>
+                    <span className="text-xs text-neutral-500">{t('label_minutes')}</span>
                 </div>
             </div>
         </div>

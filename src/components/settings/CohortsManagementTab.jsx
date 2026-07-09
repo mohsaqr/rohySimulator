@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Users, Plus, Trash2, Pencil, ArrowLeft, KeyRound, Copy,
     Check, Loader2, UserPlus, X, ChevronDown, ChevronRight,
@@ -29,11 +30,11 @@ const INPUT =
 // click-class → Reports tab → sub-tab drill (the "5 levels" complaint).
 // `id` matches CohortReports' own sub-tab ids (it takes `initialView`).
 const REPORT_SHORTCUTS = [
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'roster', label: 'Roster', icon: ListChecks },
-    { id: 'grid', label: 'Completion grid', icon: LayoutGrid },
-    { id: 'feed', label: 'Live feed', icon: Activity },
-    { id: 'export', label: 'Export', icon: Download },
+    { id: 'analytics', labelKey: 'report_analytics', icon: BarChart3 },
+    { id: 'roster', labelKey: 'report_roster', icon: ListChecks },
+    { id: 'grid', labelKey: 'report_grid', icon: LayoutGrid },
+    { id: 'feed', labelKey: 'report_feed', icon: Activity },
+    { id: 'export', labelKey: 'report_export', icon: Download },
 ];
 
 // Bounded-concurrency runner — used by bulk student add so we never fire N
@@ -57,6 +58,7 @@ async function runWithConcurrency(items, limit, worker) {
 // cohorts; admins see all (server enforces — this UI just renders whatever
 // GET /cohorts returns for the caller).
 export default function CohortsManagementTab() {
+    const { t } = useTranslation('teacher_cohorts');
     const toast = useToast();
     const [cohorts, setCohorts] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -91,11 +93,11 @@ export default function CohortsManagementTab() {
             const data = await listCohorts();
             setCohorts(data.cohorts || []);
         } catch (e) {
-            toast.error(errMsg(e, 'Failed to load classes'));
+            toast.error(errMsg(e, t('toast_load_classes_failed')));
         } finally {
             setLoading(false);
         }
-    }, [toast]);
+    }, [toast, t]);
 
     useEffect(() => { loadCohorts(); }, [loadCohorts]);
 
@@ -116,7 +118,7 @@ export default function CohortsManagementTab() {
         const name = newName.trim();
         if (!name) return;
         if (startsAt && endsAt && new Date(startsAt) > new Date(endsAt)) {
-            toast.error('Start date must be on or before the end date');
+            toast.error(t('error_start_before_end'));
             return;
         }
         setCreating(true);
@@ -142,20 +144,17 @@ export default function CohortsManagementTab() {
             let studentSummary = '';
             if (showAdvanced && newId && studentIds.length) {
                 const r = await bulkAddStudents(newId, studentIds);
-                studentSummary = ` ${summarise(r)}`;
+                studentSummary = summarise(r, t);
             }
             resetCreateForm();
-            // No trailing punctuation in the base case (keeps the legacy
-            // name-only toast string stable); the student summary, when
-            // present, brings its own leading space + sentence.
             toast.success(
                 studentSummary
-                    ? `Class "${name}" created.${studentSummary}`
-                    : `Class "${name}" created`,
+                    ? t('toast_class_created_with_summary', { name, summary: studentSummary })
+                    : t('toast_class_created', { name }),
             );
             await loadCohorts();
         } catch (err) {
-            toast.error(errMsg(err, 'Failed to create class'));
+            toast.error(errMsg(err, t('toast_create_class_failed')));
         } finally {
             setCreating(false);
         }
@@ -163,17 +162,17 @@ export default function CohortsManagementTab() {
 
     const handleDelete = async (cohort) => {
         const ok = await toast.confirm(
-            `Delete "${cohort.name}"? This removes the class grouping and its members' access to it. Members' accounts and their own data are not affected.`,
-            { title: 'Delete class', confirmText: 'Delete', type: 'danger' },
+            t('confirm_delete_msg', { name: cohort.name }),
+            { title: t('confirm_delete_title'), confirmText: t('btn_delete'), type: 'danger' },
         );
         if (!ok) return;
         try {
             await deleteCohort(cohort.id);
-            toast.success('Class deleted');
+            toast.success(t('toast_class_deleted'));
             if (open?.id === cohort.id) setOpen(null);
             await loadCohorts();
         } catch (err) {
-            toast.error(errMsg(err, 'Failed to delete class'));
+            toast.error(errMsg(err, t('toast_delete_class_failed')));
         }
     };
 
@@ -182,9 +181,9 @@ export default function CohortsManagementTab() {
         try {
             const data = await rotateJoinCode(cohort.id);
             setCohorts((rows) => rows.map((c) => c.id === cohort.id ? { ...c, join_code: data.join_code } : c));
-            toast.success('Registration code generated');
+            toast.success(t('toast_reg_code_generated'));
         } catch (err) {
-            toast.error(errMsg(err, 'Failed to generate registration code'));
+            toast.error(errMsg(err, t('toast_reg_code_failed')));
         } finally {
             setBusyCodeId(null);
         }
@@ -197,7 +196,7 @@ export default function CohortsManagementTab() {
             setCopiedCodeId(cohort.id);
             setTimeout(() => setCopiedCodeId(null), 1500);
         } catch {
-            toast.error('Could not copy registration code');
+            toast.error(t('toast_copy_reg_code_failed'));
         }
     };
 
@@ -222,16 +221,16 @@ export default function CohortsManagementTab() {
         <div className="max-w-5xl">
             <div className="flex items-center gap-2 mb-1">
                 <Users className="w-5 h-5 text-purple-400" />
-                <h3 className="text-lg font-bold">Courses</h3>
+                <h3 className="text-lg font-bold">{t('heading_courses')}</h3>
             </div>
             <p className="text-sm text-neutral-400 mb-6">
-                Group students, assign cases, and share registration codes.
+                {t('subtitle_courses')}
             </p>
 
             <div className="grid grid-cols-3 gap-2 mb-6">
-                <Stat label="Courses" value={summary.courses} />
-                <Stat label="Enrolled students" value={summary.members} />
-                <Stat label="Active registration codes" value={summary.codes} />
+                <Stat label={t('stat_courses')} value={summary.courses} />
+                <Stat label={t('stat_enrolled_students')} value={summary.members} />
+                <Stat label={t('stat_active_codes')} value={summary.codes} />
             </div>
 
             <form onSubmit={handleCreate} className="mb-8 space-y-3">
@@ -240,7 +239,7 @@ export default function CohortsManagementTab() {
                         type="text"
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
-                        placeholder="New course name"
+                        placeholder={t('placeholder_new_course')}
                         className={`flex-1 ${INPUT}`}
                     />
                     <button
@@ -251,7 +250,7 @@ export default function CohortsManagementTab() {
                         {creating
                             ? <Loader2 className="w-4 h-4 animate-spin" />
                             : <Plus className="w-4 h-4" />}
-                        Create course
+                        {t('btn_create_course')}
                     </button>
                 </div>
 
@@ -263,27 +262,27 @@ export default function CohortsManagementTab() {
                     {showAdvanced
                         ? <ChevronDown className="w-4 h-4" />
                         : <ChevronRight className="w-4 h-4" />}
-                    Add details, cases, co-teachers, students &amp; registration code
+                    {t('btn_add_details')}
                 </button>
 
                 {showAdvanced && (
                     <div className="space-y-5 p-4 bg-neutral-800/40 border border-neutral-700 rounded-lg">
                         <div>
                             <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                                Description
+                                {t('label_description')}
                             </label>
                             <textarea
                                 value={desc}
                                 onChange={(e) => setDesc(e.target.value)}
                                 rows={2}
-                                placeholder="What is this class for? (optional)"
+                                placeholder={t('placeholder_desc_optional')}
                                 className={`${INPUT} resize-y`}
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                                    Start date
+                                    {t('label_start_date')}
                                 </label>
                                 <input
                                     type="date"
@@ -294,7 +293,7 @@ export default function CohortsManagementTab() {
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                                    End date
+                                    {t('label_end_date')}
                                 </label>
                                 <input
                                     type="date"
@@ -311,11 +310,11 @@ export default function CohortsManagementTab() {
                                 onChange={(e) => setWithJoinCode(e.target.checked)}
                                 className="w-4 h-4 accent-purple-600"
                             />
-                                    Generate a join code now (registration code)
+                                    {t('label_generate_join_now')}
                                 </label>
                         <div>
                             <div className="flex items-center gap-1.5 text-xs font-medium text-neutral-300 mb-2">
-                                <BookOpen className="w-3.5 h-3.5" /> Assign cases from the library
+                                <BookOpen className="w-3.5 h-3.5" /> {t('label_assign_cases_library')}
                             </div>
                             <CasePicker
                                 selected={caseSel}
@@ -329,13 +328,13 @@ export default function CohortsManagementTab() {
                         </div>
                         <div>
                             <div className="flex items-center gap-1.5 text-xs font-medium text-neutral-300 mb-2">
-                                <GraduationCap className="w-3.5 h-3.5" /> Co-teachers
+                                <GraduationCap className="w-3.5 h-3.5" /> {t('label_coteachers')}
                             </div>
                             <PeoplePicker mode="teachers" onChange={setCoteacherIds} />
                         </div>
                         <div>
                             <div className="flex items-center gap-1.5 text-xs font-medium text-neutral-300 mb-2">
-                                <UserPlus className="w-3.5 h-3.5" /> Initial students
+                                <UserPlus className="w-3.5 h-3.5" /> {t('label_initial_students')}
                             </div>
                             <PeoplePicker mode="students" onChange={setStudentIds} />
                         </div>
@@ -348,7 +347,7 @@ export default function CohortsManagementTab() {
                     <Loader2 className="w-5 h-5 animate-spin" />
                 </div>
             ) : cohorts.length === 0 ? (
-                <p className="text-sm text-neutral-500">No courses yet. Create one above.</p>
+                <p className="text-sm text-neutral-500">{t('empty_no_courses')}</p>
             ) : (
                 <div className="space-y-2">
                     {cohorts.map((c) => (
@@ -359,13 +358,13 @@ export default function CohortsManagementTab() {
                             <button
                                 onClick={() => openCohort(c.id)}
                                 className="flex-1 min-w-0 text-left"
-                                title="Manage this course"
+                                title={t('title_manage_course')}
                             >
                                 <div className="font-bold text-white truncate">{c.name}</div>
                                 <div className="text-xs text-neutral-400 mt-0.5">
-                                    {c.student_count ?? c.students_count ?? c.member_count ?? 0} enrolled student{(c.student_count ?? c.students_count ?? c.member_count ?? 0) === 1 ? '' : 's'}
+                                    {t('card_enrolled_students', { count: c.student_count ?? c.students_count ?? c.member_count ?? 0 })}
                                     {' · '}
-                                    {c.join_code ? 'registration code active' : 'no registration code'}
+                                    {c.join_code ? t('card_code_active') : t('card_no_code')}
                                 </div>
                             </button>
 
@@ -374,7 +373,7 @@ export default function CohortsManagementTab() {
                                     <button
                                         type="button"
                                         onClick={() => copyListCode(c)}
-                                        title="Copy registration code"
+                                        title={t('title_copy_reg_code')}
                                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-900 border border-neutral-700 text-xs font-mono text-purple-300 hover:border-purple-500"
                                     >
                                         {copiedCodeId === c.id ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -388,7 +387,7 @@ export default function CohortsManagementTab() {
                                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 text-xs text-white"
                                     >
                                         {busyCodeId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
-                                        Generate code
+                                        {t('btn_generate_code')}
                                     </button>
                                 )}
                             </div>
@@ -398,12 +397,13 @@ export default function CohortsManagementTab() {
                             <div className="flex items-center gap-0.5 shrink-0">
                                 {REPORT_SHORTCUTS.map((s) => {
                                     const Icon = s.icon;
+                                    const label = t(s.labelKey);
                                     return (
                                         <button
                                             key={s.id}
                                             onClick={() => openCohort(c.id, 'reports', s.id)}
-                                            title={s.label}
-                                            aria-label={`${s.label} — ${c.name}`}
+                                            title={label}
+                                            aria-label={t('aria_report', { label, name: c.name })}
                                             className="p-2 text-neutral-400 hover:text-purple-300 hover:bg-neutral-700 rounded-lg transition-colors"
                                         >
                                             <Icon className="w-4 h-4" />
@@ -417,15 +417,15 @@ export default function CohortsManagementTab() {
                             <div className="flex items-center gap-0.5 shrink-0">
                                 <button
                                     onClick={() => openCohort(c.id, 'settings')}
-                                    title="Class settings"
-                                    aria-label={`Class settings — ${c.name}`}
+                                    title={t('title_class_settings')}
+                                    aria-label={t('aria_class_settings', { name: c.name })}
                                     className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-700 rounded-lg transition-colors"
                                 >
                                     <Pencil className="w-4 h-4" />
                                 </button>
                                 <button
                                     onClick={() => handleDelete(c)}
-                                    title="Delete"
+                                    title={t('title_delete')}
                                     className="p-2 text-neutral-400 hover:text-red-400 hover:bg-neutral-700 rounded-lg transition-colors"
                                 >
                                     <Trash2 className="w-4 h-4" />
@@ -462,13 +462,13 @@ async function bulkAddStudents(cohortId, identifiers) {
     });
 }
 
-function summarise(results) {
+function summarise(results, t) {
     const added = results.filter((r) => r.ok && !r.alreadyMember).length;
     const skipped = results.filter((r) => r.ok && r.alreadyMember).length;
     const failed = results.filter((r) => !r.ok).length;
-    const parts = [`Added ${added}`];
-    if (skipped) parts.push(`${skipped} already a member`);
-    if (failed) parts.push(`${failed} failed`);
+    const parts = [t('summary_added', { count: added })];
+    if (skipped) parts.push(t('summary_already_member', { count: skipped }));
+    if (failed) parts.push(t('summary_failed', { count: failed }));
     return parts.join(', ') + '.';
 }
 
@@ -483,6 +483,7 @@ function Stat({ label, value }) {
 
 // Roster + join-code + Phase-8 Settings management for a single cohort.
 function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialReportView = 'roster' }) {
+    const { t } = useTranslation('teacher_cohorts');
     const toast = useToast();
     const [cohort, setCohort] = useState(null);
     const [members, setMembers] = useState([]);
@@ -507,11 +508,11 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
             setTeachers(data.teachers || []);
             setCases(data.cases || []);
         } catch (e) {
-            toast.error(errMsg(e, 'Failed to load course'));
+            toast.error(errMsg(e, t('toast_load_course_failed')));
         } finally {
             setLoading(false);
         }
-    }, [cohortId, toast]);
+    }, [cohortId, toast, t]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -523,10 +524,10 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
         try {
             await addCohortMember(cohortId, id);
             setIdentifier('');
-            toast.success('Member added');
+            toast.success(t('toast_member_added'));
             await load();
         } catch (err) {
-            toast.error(errMsg(err, 'Failed to add member'));
+            toast.error(errMsg(err, t('toast_add_member_failed')));
         } finally {
             setAdding(false);
         }
@@ -534,16 +535,16 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
 
     const handleRemove = async (m) => {
         const ok = await toast.confirm(
-            `Remove ${m.username || m.name} from this class?`,
-            { title: 'Remove member', confirmText: 'Remove', type: 'danger' },
+            t('confirm_remove_member_msg', { name: m.username || m.name }),
+            { title: t('confirm_remove_member_title'), confirmText: t('btn_remove'), type: 'danger' },
         );
         if (!ok) return;
         try {
             await removeCohortMember(cohortId, m.id);
-            toast.success('Member removed');
+            toast.success(t('toast_member_removed'));
             await load();
         } catch (err) {
-            toast.error(errMsg(err, 'Failed to remove member'));
+            toast.error(errMsg(err, t('toast_remove_member_failed')));
         }
     };
 
@@ -552,9 +553,9 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
         try {
             const data = await rotateJoinCode(cohortId);
             setCohort((c) => (c ? { ...c, join_code: data.join_code } : c));
-            toast.success('Join code generated');
+            toast.success(t('toast_join_code_generated'));
         } catch (err) {
-            toast.error(errMsg(err, 'Failed to generate join code'));
+            toast.error(errMsg(err, t('toast_join_code_failed')));
         } finally {
             setBusyCode(false);
         }
@@ -565,9 +566,9 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
         try {
             await disableJoinCode(cohortId);
             setCohort((c) => (c ? { ...c, join_code: null } : c));
-            toast.success('Join code disabled');
+            toast.success(t('toast_join_code_disabled'));
         } catch (err) {
-            toast.error(errMsg(err, 'Failed to disable join code'));
+            toast.error(errMsg(err, t('toast_disable_join_code_failed')));
         } finally {
             setBusyCode(false);
         }
@@ -580,7 +581,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
         } catch {
-            toast.error('Could not copy to clipboard');
+            toast.error(t('toast_copy_failed'));
         }
     };
 
@@ -590,7 +591,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                 onClick={onBack}
                 className="flex items-center gap-2 text-sm text-neutral-400 hover:text-white mb-5 transition-colors"
             >
-                <ArrowLeft className="w-4 h-4" /> Back to courses
+                <ArrowLeft className="w-4 h-4" /> {t('btn_back_courses')}
             </button>
 
             {loading ? (
@@ -598,28 +599,28 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                     <Loader2 className="w-5 h-5 animate-spin" />
                 </div>
             ) : !cohort ? (
-                <p className="text-sm text-neutral-500">Course not found.</p>
+                <p className="text-sm text-neutral-500">{t('empty_course_not_found')}</p>
             ) : (
                 <>
                     <div className="mb-5 rounded-2xl border border-neutral-700 bg-neutral-900/60 p-5 shadow-xl shadow-black/20">
                         <div className="flex flex-wrap items-start justify-between gap-4">
                             <div>
                                 <div className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">
-                                    Course workspace
+                                    {t('label_course_workspace')}
                                 </div>
                                 <h3 className="mt-1 text-2xl font-bold text-white">{cohort.name}</h3>
                                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-400">
                                     <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2.5 py-1">
-                                        {students.length} enrolled student{students.length === 1 ? '' : 's'}
+                                        {t('card_enrolled_students', { count: students.length })}
                                     </span>
                                     <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2.5 py-1">
-                                        {teachers.length} instructor{teachers.length === 1 ? '' : 's'}
+                                        {t('badge_instructors', { count: teachers.length })}
                                     </span>
                                     <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2.5 py-1">
-                                        {cases.length} assigned case{cases.length === 1 ? '' : 's'}
+                                        {t('badge_assigned_cases', { count: cases.length })}
                                     </span>
                                     <span className={`rounded-full border px-2.5 py-1 ${cohort.join_code ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300' : 'border-neutral-700 bg-neutral-800 text-neutral-400'}`}>
-                                        {cohort.join_code ? 'Registration code active' : 'No registration code'}
+                                        {cohort.join_code ? t('badge_code_active') : t('badge_no_code')}
                                     </span>
                                 </div>
                             </div>
@@ -631,9 +632,9 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                         longer renders while another section is active. */}
                     <div className="mb-6 inline-flex rounded-xl border border-neutral-700 bg-neutral-900 p-1">
                         {[
-                            { id: 'manage', label: 'Manage' },
-                            { id: 'reports', label: 'Reports' },
-                            { id: 'settings', label: 'Settings' },
+                            { id: 'manage', label: t('tab_manage') },
+                            { id: 'reports', label: t('tab_reports') },
+                            { id: 'settings', label: t('tab_settings') },
                         ].map((s) => (
                             <button
                                 key={s.id}
@@ -672,7 +673,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                     <div className="p-4 bg-neutral-800/50 border border-neutral-700 rounded-lg mb-8">
                         <div className="flex items-center gap-2 mb-2">
                             <KeyRound className="w-4 h-4 text-purple-400" />
-                        <span className="text-sm font-bold text-neutral-200">Registration code</span>
+                        <span className="text-sm font-bold text-neutral-200">{t('label_reg_code')}</span>
                         </div>
                         {cohort.join_code ? (
                             <div className="flex items-center gap-2">
@@ -681,7 +682,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                                 </code>
                                 <button
                                     onClick={handleCopy}
-                                    title="Copy registration code"
+                                    title={t('title_copy_reg_code')}
                                     className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-700 rounded-lg transition-colors"
                                 >
                                     {copied
@@ -693,14 +694,14 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                                     disabled={busyCode}
                                     className="px-3 py-2 bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 text-white rounded-lg text-sm transition-colors"
                                 >
-                                    Rotate
+                                    {t('btn_rotate')}
                                 </button>
                                 <button
                                     onClick={handleDisableCode}
                                     disabled={busyCode}
                                     className="px-3 py-2 bg-neutral-700 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg text-sm transition-colors"
                                 >
-                                    Disable
+                                    {t('btn_disable')}
                                 </button>
                             </div>
                         ) : (
@@ -712,13 +713,11 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                                 {busyCode
                                     ? <Loader2 className="w-4 h-4 animate-spin" />
                                     : <KeyRound className="w-4 h-4" />}
-                                Generate registration code
+                                {t('btn_generate_reg_code')}
                             </button>
                         )}
                         <p className="text-xs text-neutral-500 mt-2">
-                            Students enter this under My Profile → Join a course.
-                            Anyone with this code can enrol — rotate or disable it
-                            if it leaks.
+                            {t('help_reg_code')}
                         </p>
                     </div>
 
@@ -728,7 +727,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                             type="text"
                             value={identifier}
                             onChange={(e) => setIdentifier(e.target.value)}
-                            placeholder="Add student by username or email"
+                            placeholder={t('placeholder_add_student')}
                             className={`flex-1 ${INPUT}`}
                         />
                         <button
@@ -739,7 +738,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                             {adding
                                 ? <Loader2 className="w-4 h-4 animate-spin" />
                                 : <UserPlus className="w-4 h-4" />}
-                            Add student
+                            {t('btn_add_student')}
                         </button>
                     </form>
 
@@ -751,13 +750,12 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
 
                     {/* Roster */}
                     <h4 className="text-sm font-bold text-neutral-300 mt-8 mb-2">
-                        Students ({students.length})
+                        {t('heading_students', { count: students.length })}
                     </h4>
                     {students.length === 0 ? (
                         <p className="text-sm text-neutral-500">
-                            <span>No students enrolled yet.</span>{' '}
-                            Add them above by username/email, in bulk, or
-                            share the registration code.
+                            <span>{t('empty_no_students_lead')}</span>{' '}
+                            {t('empty_no_students_hint')}
                         </p>
                     ) : (
                         <div className="space-y-2">
@@ -777,7 +775,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                                     </div>
                                     <button
                                         onClick={() => handleRemove(m)}
-                                        title="Remove student"
+                                        title={t('title_remove_student')}
                                         className="p-2 text-neutral-400 hover:text-red-400 hover:bg-neutral-700 rounded-lg transition-colors"
                                     >
                                         <X className="w-4 h-4" />
@@ -798,6 +796,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
 // the identifier textarea fallback for non-admin teachers), then performs
 // ONE throttled batch with ONE summary toast.
 function BulkStudentAdd({ cohortId, excludeIds, onDone }) {
+    const { t } = useTranslation('teacher_cohorts');
     const toast = useToast();
     const [open, setOpen] = useState(false);
     const [ids, setIds] = useState([]);
@@ -805,14 +804,14 @@ function BulkStudentAdd({ cohortId, excludeIds, onDone }) {
 
     const submit = async () => {
         if (ids.length === 0) {
-            toast.error('Select or enter at least one student');
+            toast.error(t('toast_select_one_student'));
             return;
         }
         setBusy(true);
         try {
             const results = await bulkAddStudents(cohortId, ids);
             const failed = results.filter((r) => !r.ok).length;
-            const msg = summarise(results);
+            const msg = summarise(results, t);
             if (failed && failed === results.length) toast.error(msg);
             else toast.success(msg);
             setOpen(false);
@@ -831,7 +830,7 @@ function BulkStudentAdd({ cohortId, excludeIds, onDone }) {
                 className="flex items-center gap-1.5 text-sm text-neutral-400 hover:text-white transition-colors"
             >
                 {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                Add students in bulk
+                {t('btn_add_bulk')}
             </button>
             {open && (
                 <div className="mt-3 p-4 bg-neutral-800/40 border border-neutral-700 rounded-lg">
@@ -849,7 +848,7 @@ function BulkStudentAdd({ cohortId, excludeIds, onDone }) {
                         {busy
                             ? <Loader2 className="w-4 h-4 animate-spin" />
                             : <UserPlus className="w-4 h-4" />}
-                        Add {ids.length || ''} student{ids.length === 1 ? '' : 's'}
+                        {t('btn_add_n_students', { count: ids.length })}
                     </button>
                 </div>
             )}
@@ -864,6 +863,7 @@ function BulkStudentAdd({ cohortId, excludeIds, onDone }) {
 // verbatim (server REPLACES it) so we merge over whatever was already
 // there and never silently drop an unknown key.
 function CohortSettings({ cohort, cases, teachers, onChanged }) {
+    const { t } = useTranslation('teacher_cohorts');
     const toast = useToast();
     const toDateInput = (v) => (v ? String(v).slice(0, 10) : '');
 
@@ -911,18 +911,18 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
         e.preventDefault();
         const trimmed = name.trim();
         if (!trimmed) {
-            toast.error('Name is required');
+            toast.error(t('error_name_required'));
             return;
         }
         if (startsAt && endsAt && new Date(startsAt) > new Date(endsAt)) {
-            toast.error('Start date must be on or before the end date');
+            toast.error(t('error_start_before_end'));
             return;
         }
         let passNum;
         if (passingScore !== '') {
             passNum = Number(passingScore);
             if (!Number.isFinite(passNum) || passNum < 0 || passNum > 100) {
-                toast.error('Passing score must be between 0 and 100');
+                toast.error(t('error_passing_score_range'));
                 return;
             }
         }
@@ -951,10 +951,10 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                 ends_at: endsAt ? new Date(endsAt).toISOString() : null,
                 settings,
             });
-            toast.success('Class details saved');
+            toast.success(t('toast_details_saved'));
             await onChanged();
         } catch (err) {
-            toast.error(errMsg(err, 'Failed to save'));
+            toast.error(errMsg(err, t('toast_save_failed')));
         } finally {
             setSaving(false);
         }
@@ -965,12 +965,12 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
         setBusyCase(true);
         try {
             await assignCohortCases(cohort.id, [...caseSel]);
-            toast.success(`Assigned ${caseSel.size} case${caseSel.size === 1 ? '' : 's'}`);
+            toast.success(t('toast_cases_assigned', { count: caseSel.size }));
             setCaseSel(new Set());
             setAddCaseOpen(false);
             await onChanged();
         } catch (err) {
-            toast.error(errMsg(err, 'Failed to assign cases'));
+            toast.error(errMsg(err, t('toast_assign_cases_failed')));
         } finally {
             setBusyCase(false);
         }
@@ -978,16 +978,16 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
 
     const removeCase = async (c) => {
         const ok = await toast.confirm(
-            `Unassign "${c.name}" from this class?`,
-            { title: 'Unassign case', confirmText: 'Unassign', type: 'danger' },
+            t('confirm_unassign_msg', { name: c.name }),
+            { title: t('confirm_unassign_title'), confirmText: t('btn_unassign'), type: 'danger' },
         );
         if (!ok) return;
         try {
             await unassignCohortCase(cohort.id, c.id);
-            toast.success('Case unassigned');
+            toast.success(t('toast_case_unassigned'));
             await onChanged();
         } catch (err) {
-            toast.error(errMsg(err, 'Failed to unassign case'));
+            toast.error(errMsg(err, t('toast_unassign_case_failed')));
         }
     };
 
@@ -1004,7 +1004,11 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
             );
             const added = results.filter((r) => r.ok).length;
             const failed = results.length - added;
-            toast.success(`Added ${added} co-teacher${added === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}.`);
+            toast.success(
+                failed
+                    ? t('toast_coteachers_added_with_failed', { count: added, failed })
+                    : t('toast_coteachers_added', { count: added }),
+            );
             setCoteacherIds([]);
             setAddTeacherOpen(false);
             await onChanged();
@@ -1013,19 +1017,19 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
         }
     };
 
-    const removeTeacher = async (t) => {
-        if (t.id === cohort.owner_user_id) return; // owner is non-removable
+    const removeTeacher = async (teacher) => {
+        if (teacher.id === cohort.owner_user_id) return; // owner is non-removable
         const ok = await toast.confirm(
-            `Remove ${t.username || t.name} as a co-teacher?`,
-            { title: 'Remove co-teacher', confirmText: 'Remove', type: 'danger' },
+            t('confirm_remove_coteacher_msg', { name: teacher.username || teacher.name }),
+            { title: t('confirm_remove_coteacher_title'), confirmText: t('btn_remove'), type: 'danger' },
         );
         if (!ok) return;
         try {
-            await removeCohortTeacher(cohort.id, t.id);
-            toast.success('Co-teacher removed');
+            await removeCohortTeacher(cohort.id, teacher.id);
+            toast.success(t('toast_coteacher_removed'));
             await onChanged();
         } catch (err) {
-            toast.error(errMsg(err, 'Failed to remove co-teacher'));
+            toast.error(errMsg(err, t('toast_remove_coteacher_failed')));
         }
     };
 
@@ -1036,11 +1040,11 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                 <section className="p-4 bg-neutral-800/50 border border-neutral-700 rounded-lg space-y-4">
                     <h4 className="text-sm font-bold text-neutral-200 flex items-center gap-1.5">
                         <GraduationCap className="w-4 h-4 text-purple-400" />
-                        Class identity
+                        {t('heading_class_identity')}
                     </h4>
                     <div>
                         <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                            Class name
+                            {t('label_class_name')}
                         </label>
                         <input
                             type="text"
@@ -1051,38 +1055,38 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                     </div>
                     <div>
                         <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                            Description
+                            {t('label_description')}
                         </label>
                         <textarea
                             value={desc}
                             onChange={(e) => setDesc(e.target.value)}
                             rows={3}
-                            placeholder="What is this class for?"
+                            placeholder={t('placeholder_desc')}
                             className={`${INPUT} resize-y`}
                         />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                                Course code
+                                {t('label_course_code')}
                             </label>
                             <input
                                 type="text"
                                 value={courseCode}
                                 onChange={(e) => setCourseCode(e.target.value)}
-                                placeholder="e.g. MED-301"
+                                placeholder={t('placeholder_course_code')}
                                 className={INPUT}
                             />
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                                Term
+                                {t('label_term')}
                             </label>
                             <input
                                 type="text"
                                 value={term}
                                 onChange={(e) => setTerm(e.target.value)}
-                                placeholder="e.g. Spring 2026"
+                                placeholder={t('placeholder_term')}
                                 className={INPUT}
                             />
                         </div>
@@ -1090,7 +1094,7 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                                Start date
+                                {t('label_start_date')}
                             </label>
                             <input
                                 type="date"
@@ -1101,7 +1105,7 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                                End date
+                                {t('label_end_date')}
                             </label>
                             <input
                                 type="date"
@@ -1117,13 +1121,13 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                 <section className="p-4 bg-neutral-800/50 border border-neutral-700 rounded-lg space-y-3">
                     <h4 className="text-sm font-bold text-neutral-200 flex items-center gap-1.5">
                         <Target className="w-4 h-4 text-purple-400" />
-                        Learning objectives
+                        {t('heading_objectives')}
                     </h4>
                     <textarea
                         value={objectives}
                         onChange={(e) => setObjectives(e.target.value)}
                         rows={4}
-                        placeholder="What should students be able to do by the end of this class? One objective per line."
+                        placeholder={t('placeholder_objectives')}
                         className={`${INPUT} resize-y`}
                     />
                 </section>
@@ -1132,11 +1136,11 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                 <section className="p-4 bg-neutral-800/50 border border-neutral-700 rounded-lg space-y-4">
                     <h4 className="text-sm font-bold text-neutral-200 flex items-center gap-1.5">
                         <SlidersHorizontal className="w-4 h-4 text-purple-400" />
-                        Classroom policy
+                        {t('heading_policy')}
                     </h4>
                     <div className="max-w-xs">
                         <label className="block text-xs font-medium text-neutral-300 mb-1.5 flex items-center gap-1.5">
-                            <Percent className="w-3.5 h-3.5" /> Passing score
+                            <Percent className="w-3.5 h-3.5" /> {t('label_passing_score')}
                         </label>
                         <input
                             type="number"
@@ -1144,12 +1148,11 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                             max="100"
                             value={passingScore}
                             onChange={(e) => setPassingScore(e.target.value)}
-                            placeholder="e.g. 70"
+                            placeholder={t('placeholder_passing_score')}
                             className={INPUT}
                         />
                         <p className="text-xs text-neutral-500 mt-1">
-                            Score (%) a student needs to count a case as passed
-                            in reports. Leave blank for no threshold.
+                            {t('help_passing_score')}
                         </p>
                     </div>
                     <label className="flex items-start gap-2.5 text-sm text-neutral-200 cursor-pointer">
@@ -1160,10 +1163,9 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                             className="w-4 h-4 mt-0.5 accent-purple-600"
                         />
                         <span>
-                            Allow case retakes
+                            {t('label_allow_retakes')}
                             <span className="block text-xs text-neutral-500">
-                                Students may re-attempt an assigned case after a
-                                completed run.
+                                {t('help_allow_retakes')}
                             </span>
                         </span>
                     </label>
@@ -1175,18 +1177,15 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                             className="w-4 h-4 mt-0.5 accent-purple-600"
                         />
                         <span>
-                            Require debrief
+                            {t('label_require_debrief')}
                             <span className="block text-xs text-neutral-500">
-                                A case counts as complete only after the student
-                                finishes the post-case discussion.
+                                {t('help_require_debrief')}
                             </span>
                         </span>
                     </label>
                     <p className="text-xs text-neutral-500 flex items-start gap-1.5">
                         <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                        Policy is recorded on the class and used by cohort
-                        reporting; it does not retroactively change already
-                        completed sessions.
+                        {t('help_policy_info')}
                     </p>
                 </section>
 
@@ -1198,7 +1197,7 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                     {saving
                         ? <Loader2 className="w-4 h-4 animate-spin" />
                         : <Save className="w-4 h-4" />}
-                    Save class settings
+                    {t('btn_save_settings')}
                 </button>
             </form>
 
@@ -1206,14 +1205,14 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
             <div>
                 <div className="flex items-center justify-between mb-2">
                     <h4 className="text-sm font-bold text-neutral-300 flex items-center gap-1.5">
-                        <BookOpen className="w-4 h-4" /> Assigned cases ({cases.length})
+                        <BookOpen className="w-4 h-4" /> {t('heading_assigned_cases', { count: cases.length })}
                     </h4>
                     <button
                         type="button"
                         onClick={() => setAddCaseOpen((v) => !v)}
                         className="text-xs text-purple-300 hover:text-purple-200"
                     >
-                        {addCaseOpen ? 'Close' : 'Add cases'}
+                        {addCaseOpen ? t('btn_close') : t('btn_add_cases')}
                     </button>
                 </div>
                 {addCaseOpen && (
@@ -1237,13 +1236,13 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                             {busyCase
                                 ? <Loader2 className="w-4 h-4 animate-spin" />
                                 : <Plus className="w-4 h-4" />}
-                            Assign {caseSel.size || ''}
+                            {t('btn_assign_n', { count: caseSel.size })}
                         </button>
                     </div>
                 )}
                 {cases.length === 0 ? (
                     <p className="text-sm text-neutral-500">
-                        No cases assigned — pick from the library with “Add cases”.
+                        {t('empty_no_cases_assigned')}
                     </p>
                 ) : (
                     <div className="space-y-2">
@@ -1257,7 +1256,7 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                                 </span>
                                 <button
                                     onClick={() => removeCase(c)}
-                                    title="Unassign case"
+                                    title={t('title_unassign_case')}
                                     className="p-2 text-neutral-400 hover:text-red-400 hover:bg-neutral-700 rounded-lg transition-colors"
                                 >
                                     <X className="w-4 h-4" />
@@ -1272,14 +1271,14 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
             <div>
                 <div className="flex items-center justify-between mb-2">
                     <h4 className="text-sm font-bold text-neutral-300 flex items-center gap-1.5">
-                        <GraduationCap className="w-4 h-4" /> Co-teachers ({teachers.length})
+                        <GraduationCap className="w-4 h-4" /> {t('heading_coteachers', { count: teachers.length })}
                     </h4>
                     <button
                         type="button"
                         onClick={() => setAddTeacherOpen((v) => !v)}
                         className="text-xs text-purple-300 hover:text-purple-200"
                     >
-                        {addTeacherOpen ? 'Close' : 'Add co-teachers'}
+                        {addTeacherOpen ? t('btn_close') : t('btn_add_coteachers')}
                     </button>
                 </div>
                 {addTeacherOpen && (
@@ -1294,7 +1293,7 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                             {busyTeacher
                                 ? <Loader2 className="w-4 h-4 animate-spin" />
                                 : <Plus className="w-4 h-4" />}
-                            Add co-teachers
+                            {t('btn_add_coteachers')}
                         </button>
                     </div>
                 )}
@@ -1303,37 +1302,37 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                         cohort_members row — show it, non-removable. */}
                     <div className="flex items-center gap-3 p-3 bg-neutral-800/50 border border-neutral-700 rounded-lg">
                         <div className="flex-1 min-w-0">
-                            <div className="font-medium text-white truncate">Owner</div>
+                            <div className="font-medium text-white truncate">{t('label_owner')}</div>
                             <div className="text-xs text-neutral-400">
-                                The class owner is always a teacher and can’t be removed here.
+                                {t('help_owner')}
                             </div>
                         </div>
                     </div>
                     {teachers.length === 0 ? (
                         <p className="text-sm text-neutral-500">
-                            No co-teachers — add colleagues to share this class.
+                            {t('empty_no_coteachers')}
                         </p>
                     ) : (
-                        teachers.map((t) => (
+                        teachers.map((teacher) => (
                             <div
-                                key={t.id}
+                                key={teacher.id}
                                 className="flex items-center gap-3 p-3 bg-neutral-800/50 border border-neutral-700 rounded-lg"
                             >
                                 <div className="flex-1 min-w-0">
                                     <div className="font-medium text-white truncate">
-                                        {t.name || t.username}
+                                        {teacher.name || teacher.username}
                                     </div>
                                     <div className="text-xs text-neutral-400 truncate">
-                                        {t.username}
-                                        {t.role ? ` · ${roleLabel(t.role)}` : ''}
+                                        {teacher.username}
+                                        {teacher.role ? ` · ${roleLabel(teacher.role)}` : ''}
                                     </div>
                                 </div>
-                                {t.id === cohort.owner_user_id ? (
-                                    <span className="text-xs text-neutral-500 px-2">Owner</span>
+                                {teacher.id === cohort.owner_user_id ? (
+                                    <span className="text-xs text-neutral-500 px-2">{t('label_owner')}</span>
                                 ) : (
                                     <button
-                                        onClick={() => removeTeacher(t)}
-                                        title="Remove co-teacher"
+                                        onClick={() => removeTeacher(teacher)}
+                                        title={t('title_remove_coteacher')}
                                         className="p-2 text-neutral-400 hover:text-red-400 hover:bg-neutral-700 rounded-lg transition-colors"
                                     >
                                         <X className="w-4 h-4" />

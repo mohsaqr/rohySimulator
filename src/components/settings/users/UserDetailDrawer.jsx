@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { GraduationCap, Layers, Pencil, Trash2, Plus } from 'lucide-react';
 import { useToast } from '../../../contexts/ToastContext';
 import { ApiError } from '../../../services/apiClient';
@@ -16,6 +17,9 @@ const ROLE_OPTIONS = [
 const STATUSES = ['active', 'inactive', 'suspended'];
 
 export default function UserDetailDrawer({ user, cohorts, canAct, myRank, onChanged, onEdit, onDelete }) {
+    const { t } = useTranslation('teacher_users');
+    const roleOptLabel = (v) => t('opt_role_' + (v === 'educator' ? 'teacher' : v));
+    const statusLabel = (s) => t('opt_status_' + s);
     const toast = useToast();
     const [detail, setDetail] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -32,22 +36,22 @@ export default function UserDetailDrawer({ user, cohorts, canAct, myRank, onChan
 
     const guard = async (fn, okMsg) => {
         try { await fn(); if (okMsg) toast.success(okMsg); await refetch(); onChanged?.(); }
-        catch (err) { toast.error(err instanceof ApiError ? err.message : 'Update failed'); }
+        catch (err) { toast.error(err instanceof ApiError ? err.message : t('err_update')); }
     };
 
     const changeRole = (role) => guard(
         () => userService.updateUser(user.id, { username: detail.user.username, name: detail.user.name, email: detail.user.email, role }),
-        'Role updated'
+        t('toast_role_updated')
     );
-    const changeStatus = (status) => guard(() => userService.setUserStatus(user.id, status), 'Status updated');
+    const changeStatus = (status) => guard(() => userService.setUserStatus(user.id, status), t('toast_status_updated'));
     const enroll = () => enrollId && guard(async () => {
         await userService.enrollUsersBulk(Number(enrollId), [detail.user.username]);
         setEnrollId('');
-    }, 'Enrolled');
-    const unenroll = (cohortId) => guard(() => userService.removeMembership(cohortId, user.id), 'Removed from class');
+    }, t('toast_enrolled'));
+    const unenroll = (cohortId) => guard(() => userService.removeMembership(cohortId, user.id), t('toast_removed_from_class'));
 
     if (loading || !detail) {
-        return <div className="rohy-detail-panel px-5 py-6 text-sm text-neutral-500">Loading details…</div>;
+        return <div className="rohy-detail-panel px-5 py-6 text-sm text-neutral-500">{t('loading_details')}</div>;
     }
 
     const u = detail.user;
@@ -62,46 +66,46 @@ export default function UserDetailDrawer({ user, cohorts, canAct, myRank, onChan
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
                 {/* Profile */}
                 <section className="lg:col-span-1">
-                    <SectionTitle>Profile</SectionTitle>
+                    <SectionTitle>{t('section_profile')}</SectionTitle>
                     <dl className="space-y-1.5 text-sm">
-                        <Row k="Name" v={u.name || '—'} />
-                        <Row k="Username" v={`@${u.username}`} />
-                        <Row k="Email" v={u.email} />
-                        <Row k="Department" v={u.department || '—'} />
-                        <Row k="Institution" v={u.institution || '—'} />
-                        <Row k="Joined" v={formatDate(u.created_at)} />
-                        <Row k="Last active" v={relativeTime(u.last_login)} />
-                        <Row k="Sessions" v={detail.session_count} />
+                        <Row k={t('label_name')} v={u.name || '—'} />
+                        <Row k={t('label_username')} v={`@${u.username}`} />
+                        <Row k={t('label_email')} v={u.email} />
+                        <Row k={t('label_department')} v={u.department || '—'} />
+                        <Row k={t('label_institution')} v={u.institution || '—'} />
+                        <Row k={t('label_joined')} v={formatDate(u.created_at)} />
+                        <Row k={t('label_last_active')} v={relativeTime(u.last_login)} />
+                        <Row k={t('label_sessions')} v={detail.session_count} />
                     </dl>
                 </section>
 
                 {/* Role & status */}
                 <section className="lg:col-span-1">
-                    <SectionTitle>Role &amp; status</SectionTitle>
+                    <SectionTitle>{t('section_role_status')}</SectionTitle>
                     <div className="space-y-3">
                         <div>
-                            <span className="block text-xs text-neutral-600 mb-1">Role</span>
+                            <span className="block text-xs text-neutral-600 mb-1">{t('label_role')}</span>
                             <select
                                 className="rohy-field w-full px-2 py-1.5 rounded text-sm"
                                 value={u.role}
                                 disabled={!canAct}
                                 onChange={e => changeRole(e.target.value)}
                             >
-                                {roleOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                {roleOptions.map(o => <option key={o.value} value={o.value}>{roleOptLabel(o.value)}</option>)}
                                 {!roleOptions.some(o => o.value === u.role) && <option value={u.role}>{roleLabel(u.role)}</option>}
                             </select>
                         </div>
                         <div>
-                            <span className="block text-xs text-neutral-600 mb-1">Status</span>
+                            <span className="block text-xs text-neutral-600 mb-1">{t('label_status')}</span>
                             <div className="flex gap-1">
                                 {STATUSES.map(s => (
                                     <button
                                         key={s}
                                         disabled={!canAct}
                                         onClick={() => changeStatus(s)}
-                                        className={`text-xs px-2 py-1 rounded border capitalize ${(u.status || 'active') === s ? statusBadgeClass(s) : 'rohy-subtle-button'}`}
+                                        className={`text-xs px-2 py-1 rounded border ${(u.status || 'active') === s ? statusBadgeClass(s) : 'rohy-subtle-button'}`}
                                     >
-                                        {s}
+                                        {statusLabel(s)}
                                     </button>
                                 ))}
                             </div>
@@ -111,15 +115,15 @@ export default function UserDetailDrawer({ user, cohorts, canAct, myRank, onChan
 
                 {/* Classes */}
                 <section className="lg:col-span-1">
-                    <SectionTitle><GraduationCap className="w-3.5 h-3.5" /> Classes</SectionTitle>
+                    <SectionTitle><GraduationCap className="w-3.5 h-3.5" /> {t('section_classes')}</SectionTitle>
                     <div className="flex flex-wrap gap-1.5 mb-2">
-                        {memberships.length === 0 && <span className="text-xs text-neutral-400">Not in any class</span>}
+                        {memberships.length === 0 && <span className="text-xs text-neutral-400">{t('label_not_in_class')}</span>}
                         {memberships.map(m => (
                             <span key={m.cohort_id} className="rohy-meta-chip">
-                                {m.member_role === 'teacher' && <span className="rohy-meta-chip__k">teacher</span>}
+                                {m.member_role === 'teacher' && <span className="rohy-meta-chip__k">{t('label_teacher_chip')}</span>}
                                 {m.name}
                                 {canAct && (
-                                    <button className="text-neutral-400 hover:text-red-600 ml-0.5" title="Remove" onClick={() => unenroll(m.cohort_id)}>×</button>
+                                    <button className="text-neutral-400 hover:text-red-600 ml-0.5" title={t('btn_remove')} onClick={() => unenroll(m.cohort_id)}>×</button>
                                 )}
                             </span>
                         ))}
@@ -127,7 +131,7 @@ export default function UserDetailDrawer({ user, cohorts, canAct, myRank, onChan
                     {canAct && availableCohorts.length > 0 && (
                         <div className="flex items-center gap-1.5">
                             <select className="rohy-field px-2 py-1 rounded text-xs flex-1" value={enrollId} onChange={e => setEnrollId(e.target.value)}>
-                                <option value="">Enroll in class…</option>
+                                <option value="">{t('opt_enroll_in_class')}</option>
                                 {availableCohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                             <button className="rohy-btn rohy-btn-secondary !py-1 !px-2 !text-xs" onClick={enroll} disabled={!enrollId}><Plus className="w-3 h-3" /></button>
@@ -137,15 +141,15 @@ export default function UserDetailDrawer({ user, cohorts, canAct, myRank, onChan
 
                 {/* Inherited cases + danger */}
                 <section className="lg:col-span-1">
-                    <SectionTitle><Layers className="w-3.5 h-3.5" /> Assigned cases</SectionTitle>
+                    <SectionTitle><Layers className="w-3.5 h-3.5" /> {t('section_assigned_cases')}</SectionTitle>
                     <div className="flex flex-wrap gap-1.5 mb-4">
-                        {inherited.length === 0 && <span className="text-xs text-neutral-400">None (via classes)</span>}
+                        {inherited.length === 0 && <span className="text-xs text-neutral-400">{t('label_none_via_classes')}</span>}
                         {inherited.map(c => <span key={c.id} className="rohy-count-pill">{c.name}</span>)}
                     </div>
                     <div className="flex items-center gap-2 pt-1 border-t border-neutral-200">
-                        <button className="rohy-btn rohy-btn-secondary !py-1 !text-xs mt-3" onClick={onEdit}><Pencil className="w-3.5 h-3.5" /> Edit</button>
+                        <button className="rohy-btn rohy-btn-secondary !py-1 !text-xs mt-3" onClick={onEdit}><Pencil className="w-3.5 h-3.5" /> {t('btn_edit')}</button>
                         {canAct && (
-                            <button className="rohy-btn rohy-btn-danger !py-1 !text-xs mt-3" onClick={onDelete}><Trash2 className="w-3.5 h-3.5" /> Delete</button>
+                            <button className="rohy-btn rohy-btn-danger !py-1 !text-xs mt-3" onClick={onDelete}><Trash2 className="w-3.5 h-3.5" /> {t('btn_delete')}</button>
                         )}
                     </div>
                 </section>
