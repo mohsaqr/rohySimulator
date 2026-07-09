@@ -51,5 +51,6 @@
   "voice_provider_current_after": ")",
   "voice_provider_current_before": "(för närvarande ",
   "voice_settings_path": "Inställningar → Röst",
-  "warning_message_label": "Varningsmeddelande"
+  "warning_message_label": "Varningsmeddelande",
+  "voice_group_other": "Övriga"
 }

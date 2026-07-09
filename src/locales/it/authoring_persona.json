@@ -196,5 +196,6 @@
   "untitled": "Senza titolo",
   "via": "tramite",
   "voice_engine_help": "Il motore TTS è impostato a livello di piattaforma in Impostazioni → Voce. Scegli una voce dal catalogo di quel motore. I casi possono sovrascrivere questa impostazione per singolo caso nell'editor del caso.",
-  "will_play": "Riprodurrà:"
+  "will_play": "Riprodurrà:",
+  "voice_group_other": "Altre"
 }

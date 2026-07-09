@@ -8,7 +8,7 @@ import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
 import TestVoiceButton from './TestVoiceButton.jsx';
 import { resolveVoice } from '../../utils/voiceResolver.js';
-import { voiceGenderLabel } from '../../utils/voiceCatalogue.js';
+import { voiceGenderLabel, groupVoicesByLanguage } from '../../utils/voiceCatalogue.js';
 import { avatarsForSlot } from '../../utils/resolveAvatar.js';
 import { deriveDemographicSlot } from '../../utils/demographics.js';
 
@@ -272,15 +272,19 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
                                     ? t('inherit_voice_with', { voice: inheritedVoice })
                                     : t('inherit_voice_none')}
                             </option>
-                            {voiceOptions.map(v => {
-                                const genderLabel = voiceGenderLabel(v);
-                                const tag = genderLabel ? ` — ${genderLabel}` : '';
-                                return (
-                                    <option key={v.filename} value={v.filename}>
-                                        {(v.displayName || v.filename) + tag}
-                                    </option>
-                                );
-                            })}
+                            {groupVoicesByLanguage(voiceOptions).map(group => (
+                                <optgroup key={group.language || 'other'} label={group.language || t('voice_group_other')}>
+                                    {group.voices.map(v => {
+                                        const genderLabel = voiceGenderLabel(v);
+                                        const tag = genderLabel ? ` — ${genderLabel}` : '';
+                                        return (
+                                            <option key={v.filename} value={v.filename}>
+                                                {(v.displayName || v.filename) + tag}
+                                            </option>
+                                        );
+                                    })}
+                                </optgroup>
+                            ))}
                         </select>
                         <TestVoiceButton
                             voice={resolvedVoice.file || ''}

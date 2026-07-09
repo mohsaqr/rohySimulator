@@ -196,5 +196,6 @@
   "untitled": "Untitled",
   "via": "via",
   "voice_engine_help": "The TTS engine is set platform-wide in Settings → Voice. Pick a voice from that engine's catalogue. Cases can override this per-case in the Case editor.",
-  "will_play": "Will play:"
+  "will_play": "Will play:",
+  "voice_group_other": "Other"
 }

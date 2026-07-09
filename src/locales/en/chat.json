@@ -78,5 +78,6 @@
   "wait_relative_0": "Reaching the family…",
   "wait_relative_1": "Family on the way from the waiting area",
   "wait_relative_2": "Family is approaching the room",
-  "waiting_for_response": "Waiting for response..."
+  "waiting_for_response": "Waiting for response...",
+  "voice_language_mismatch": "The configured voice \"{{voice}}\" does not speak the session language ({{language}}). Pick a matching voice in Settings → Agent Personas or the case editor."
 }

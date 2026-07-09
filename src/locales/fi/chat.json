@@ -78,5 +78,6 @@
   "wait_relative_0": "Tavoitellaan omaisia…",
   "wait_relative_1": "Omaiset ovat tulossa odotusaulasta",
   "wait_relative_2": "Omaiset lähestyvät huonetta",
-  "waiting_for_response": "Odotetaan vastausta..."
+  "waiting_for_response": "Odotetaan vastausta...",
+  "voice_language_mismatch": "Määritetty ääni \"{{voice}}\" ei puhu istunnon kieltä ({{language}}). Valitse sopiva ääni kohdasta Asetukset → Agenttipersoonat tai tapauseditorista."
 }

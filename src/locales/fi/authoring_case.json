@@ -51,5 +51,6 @@
   "voice_provider_current_after": ")",
   "voice_provider_current_before": "(tällä hetkellä ",
   "voice_settings_path": "Asetukset → Ääni",
-  "warning_message_label": "Varoitusviesti"
+  "warning_message_label": "Varoitusviesti",
+  "voice_group_other": "Muut"
 }

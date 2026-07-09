@@ -78,5 +78,6 @@
   "wait_relative_0": "Sto contattando la famiglia…",
   "wait_relative_1": "La famiglia sta arrivando dalla sala d'attesa",
   "wait_relative_2": "La famiglia si sta avvicinando alla stanza",
-  "waiting_for_response": "In attesa di risposta..."
+  "waiting_for_response": "In attesa di risposta...",
+  "voice_language_mismatch": "La voce configurata \"{{voice}}\" non parla la lingua della sessione ({{language}}). Scegli una voce corrispondente in Impostazioni → Personas agente o nell'editor del caso."
 }

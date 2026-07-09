@@ -78,5 +78,6 @@
   "wait_relative_0": "Kontaktar familjen…",
   "wait_relative_1": "Familjen är på väg från väntrummet",
   "wait_relative_2": "Familjen närmar sig rummet",
-  "waiting_for_response": "Väntar på svar..."
+  "waiting_for_response": "Väntar på svar...",
+  "voice_language_mismatch": "Den konfigurerade rösten \"{{voice}}\" talar inte sessionens språk ({{language}}). Välj en matchande röst under Inställningar → Agentpersonas eller i fallredigeraren."
 }

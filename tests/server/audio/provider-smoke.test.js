@@ -228,7 +228,12 @@ describe('GET /api/tts/voices — provider catalog smoke', () => {
 
     // ----- Google catalog ordering: Chirp 3 HD > Chirp HD > Neural2 -------
 
-    it('google — Chirp3 HD voices precede Chirp HD, which precede Neural2', async () => {
+    it('google — within each language, Chirp3 HD precedes Chirp HD, which precedes Neural2', async () => {
+        // 2026-07-09: the catalogue now spans multiple languages (de/it/fi/sv
+        // added for the i18n languages) and voice pickers group by language,
+        // so the quality-tier ordering invariant is PER LANGUAGE — a German
+        // Chirp3 voice listed after an English Neural2 is fine; a German
+        // Neural2 before a German Chirp3 is not.
         const { status, json } = await getVoices('google');
         expect(status).toBe(200);
 
@@ -242,36 +247,39 @@ describe('GET /api/tts/voices — provider catalog smoke', () => {
             return -1; // unclassified — skip in ordering check
         }
 
-        const seenIndexByTier = { 0: -1, 1: -1, 2: -1 };
+        const byLanguage = new Map();
         json.voices.forEach((v, i) => {
             const t = tier(v.filename);
             if (t === -1) return;
-            // Track the LAST index we saw any tier-N voice at; later we
-            // assert tier 0 last-index < tier 1 first-index, etc.
-            if (seenIndexByTier[t] === -1 || i > seenIndexByTier[t]) {
-                seenIndexByTier[t] = i;
+            if (!byLanguage.has(v.language)) {
+                byLanguage.set(v.language, { last: { 0: -1, 1: -1, 2: -1 }, first: { 0: Infinity, 1: Infinity, 2: Infinity } });
             }
+            const s = byLanguage.get(v.language);
+            if (i > s.last[t]) s.last[t] = i;
+            if (i < s.first[t]) s.first[t] = i;
         });
 
-        // We need at least one of each tier to assert the ordering.
-        // Catalog has all three at time of writing — fail loudly if a
+        // en-US has all three tiers at time of writing — fail loudly if a
         // refactor drops one entirely (that's the regression we want to
         // catch).
-        const firstIndexByTier = { 0: Infinity, 1: Infinity, 2: Infinity };
-        json.voices.forEach((v, i) => {
-            const t = tier(v.filename);
-            if (t === -1) return;
-            if (i < firstIndexByTier[t]) firstIndexByTier[t] = i;
-        });
+        const enUS = byLanguage.get('en-US');
+        expect(enUS.last[0], 'no en-US Chirp3 HD voices in google catalog').toBeGreaterThanOrEqual(0);
+        expect(enUS.last[1], 'no en-US Chirp HD voices in google catalog').toBeGreaterThanOrEqual(0);
+        expect(enUS.last[2], 'no en-US Neural2 voices in google catalog').toBeGreaterThanOrEqual(0);
 
-        expect(seenIndexByTier[0], 'no Chirp3 HD voices in google catalog').toBeGreaterThanOrEqual(0);
-        expect(seenIndexByTier[1], 'no Chirp HD voices in google catalog').toBeGreaterThanOrEqual(0);
-        expect(seenIndexByTier[2], 'no Neural2 voices in google catalog').toBeGreaterThanOrEqual(0);
-
-        // last(Chirp3 HD) < first(Chirp HD) < first(Neural2). This is
-        // strictly stronger than "any Chirp3 before any Neural2" — it
-        // catches an interleaving regression too.
-        expect(seenIndexByTier[0]).toBeLessThan(firstIndexByTier[1]);
-        expect(seenIndexByTier[1]).toBeLessThan(firstIndexByTier[2]);
+        // Per language: last(Chirp3 HD) < first(Chirp HD) < first(Neural2)
+        // for whichever tiers that language actually has. Strictly stronger
+        // than "any Chirp3 before any Neural2" — catches interleaving too.
+        for (const [language, s] of byLanguage) {
+            if (s.last[0] >= 0 && s.first[1] < Infinity) {
+                expect(s.last[0], `${language}: Chirp3 HD must precede Chirp HD`).toBeLessThan(s.first[1]);
+            }
+            if (s.last[1] >= 0 && s.first[2] < Infinity) {
+                expect(s.last[1], `${language}: Chirp HD must precede Neural2`).toBeLessThan(s.first[2]);
+            }
+            if (s.last[0] >= 0 && s.first[2] < Infinity) {
+                expect(s.last[0], `${language}: Chirp3 HD must precede Neural2`).toBeLessThan(s.first[2]);
+            }
+        }
     });
 });

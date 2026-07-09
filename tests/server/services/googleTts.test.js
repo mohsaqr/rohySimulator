@@ -19,7 +19,10 @@ import { Buffer } from 'node:buffer';
 import {
     synthesizeGoogleStream,
     synthesizeGoogleWav,
+    listGoogleVoices,
+    isGoogleVoice,
 } from '../../../server/services/googleTts.js';
+import { LANGUAGES } from '../../../server/shared/languages.js';
 
 // CONTRACT: SAMPLE_RATE is documented in the source as 24000. It is not
 // exported, but the yielded chunk's `sampleRate` field IS the public way to
@@ -47,6 +50,39 @@ async function drain(gen) {
     }
     return out;
 }
+
+// ---------------------------------------------------------------------------
+// Catalogue ↔ language-registry coverage
+//
+// CONTRACT (2026-07-09, after the "English voice reading Italian" gap):
+// every FULL app language in server/shared/languages.js must have at least
+// one female AND one male voice in the Google catalogue. Adding a language
+// to the registry without adding voices fails HERE, in CI — not in a
+// classroom mid-session.
+// ---------------------------------------------------------------------------
+
+describe('GOOGLE_VOICES — covers every full app language', () => {
+    const voices = listGoogleVoices();
+    const appLanguages = Object.keys(LANGUAGES);
+
+    it.each(appLanguages)('language "%s" has ≥1 female and ≥1 male Google voice', (code) => {
+        const matching = voices.filter(v => v.language.split('-')[0] === code);
+        expect(matching.some(v => v.gender === 'female')).toBe(true);
+        expect(matching.some(v => v.gender === 'male')).toBe(true);
+    });
+
+    it('every catalogued voice id passes isGoogleVoice (list and allowlist stay in sync)', () => {
+        for (const v of voices) {
+            expect(isGoogleVoice(v.filename)).toBe(true);
+        }
+    });
+
+    it('every voice name starts with its own language tag (languageCode derivation stays sound)', () => {
+        for (const v of voices) {
+            expect(v.filename.startsWith(`${v.language}-`)).toBe(true);
+        }
+    });
+});
 
 // ---------------------------------------------------------------------------
 // Voice validation against VALID_VOICES

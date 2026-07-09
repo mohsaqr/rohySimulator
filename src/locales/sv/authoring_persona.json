@@ -196,5 +196,6 @@
   "untitled": "Namnlös",
   "via": "via",
   "voice_engine_help": "TTS-motorn ställs in plattformsövergripande under Inställningar → Röst. Välj en röst från motorns katalog. Fall kan åsidosätta detta per fall i fallredigeraren.",
-  "will_play": "Spelar upp:"
+  "will_play": "Spelar upp:",
+  "voice_group_other": "Övriga"
 }

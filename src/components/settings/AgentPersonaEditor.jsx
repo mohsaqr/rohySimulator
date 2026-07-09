@@ -32,7 +32,7 @@ import { baseUrl } from '../../config/api';
 import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
 import { resolveVoice } from '../../utils/voiceResolver.js';
-import { voiceGenderLabel } from '../../utils/voiceCatalogue.js';
+import { voiceGenderLabel, groupVoicesByLanguage } from '../../utils/voiceCatalogue.js';
 
 // Heavy three.js head viewer — lazy so admins who never open the editor
 // don't pay the bundle cost.
@@ -578,14 +578,18 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                            disabled={!voiceSettings?.tts_provider}
                         >
                            <option value="">{t('opt_pick_voice')}</option>
-                           {voiceOptions.map(v => {
-                              const genderLabel = voiceGenderLabel(v);
-                              return (
-                              <option key={v.filename} value={v.filename}>
-                                 {(v.displayName || v.filename) + (genderLabel ? ` — ${genderLabel}` : '')}
-                              </option>
-                              );
-                           })}
+                           {groupVoicesByLanguage(voiceOptions).map(group => (
+                              <optgroup key={group.language || 'other'} label={group.language || t('voice_group_other')}>
+                                 {group.voices.map(v => {
+                                    const genderLabel = voiceGenderLabel(v);
+                                    return (
+                                    <option key={v.filename} value={v.filename}>
+                                       {(v.displayName || v.filename) + (genderLabel ? ` — ${genderLabel}` : '')}
+                                    </option>
+                                    );
+                                 })}
+                              </optgroup>
+                           ))}
                         </select>
                      </Field>
                      <div className="grid grid-cols-2 gap-3">

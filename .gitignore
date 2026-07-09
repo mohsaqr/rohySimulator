@@ -135,3 +135,4 @@ tests/e2e/.auth/
 # "key": "<hex>" shape trips secret scanners (the hexes are hashes of UI
 # labels like "Password"/"API key", never credentials).
 /src/locales/.en-hashes.json
+googlekey.text

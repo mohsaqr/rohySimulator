@@ -47,3 +47,28 @@ export function voiceGenderLabel(voice) {
     const g = normalizeVoiceGender(voice);
     return g || voice?.gender || '';
 }
+
+// Group a provider voice list by its `language` tag for <optgroup> rendering.
+// Returns [{ language, voices }] with English groups first (most catalogues
+// and personas are English), then the rest alphabetically, then a final
+// group with language '' for voices whose metadata carries no language
+// (some Piper sidecars). Ordering inside each group is preserved as-is —
+// providers already list their best voices first.
+export function groupVoicesByLanguage(voices) {
+    const list = Array.isArray(voices) ? voices : [];
+    const byLang = new Map();
+    for (const v of list) {
+        const lang = typeof v?.language === 'string' && v.language !== 'unknown' ? v.language : '';
+        if (!byLang.has(lang)) byLang.set(lang, []);
+        byLang.get(lang).push(v);
+    }
+    const langs = [...byLang.keys()].sort((a, b) => {
+        if (a === '') return 1;
+        if (b === '') return -1;
+        const aEn = a.toLowerCase().startsWith('en');
+        const bEn = b.toLowerCase().startsWith('en');
+        if (aEn !== bEn) return aEn ? -1 : 1;
+        return a.localeCompare(b);
+    });
+    return langs.map(language => ({ language, voices: byLang.get(language) }));
+}

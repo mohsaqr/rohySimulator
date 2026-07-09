@@ -196,5 +196,6 @@
   "untitled": "Ohne Titel",
   "via": "über",
   "voice_engine_help": "Die TTS-Engine wird plattformweit unter Einstellungen → Stimme festgelegt. Wählen Sie eine Stimme aus dem Katalog dieser Engine. Fälle können dies pro Fall im Fall-Editor übersteuern.",
-  "will_play": "Wird abgespielt:"
+  "will_play": "Wird abgespielt:",
+  "voice_group_other": "Sonstige"
 }

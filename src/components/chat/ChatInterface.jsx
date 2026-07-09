@@ -18,7 +18,7 @@ import { useVoice } from '../../contexts/VoiceContext';
 import { stripStageDirections } from '../../utils/stageDirections';
 import { parseConfig } from '../../utils/parseConfig';
 import { extractCompleteSentences } from '../../utils/sentenceSplit';
-import { resolveVoice, isVoiceValidForProvider } from '../../utils/voiceResolver';
+import { resolveVoice, isVoiceValidForProvider, voiceMatchesLanguage } from '../../utils/voiceResolver';
 import { useToast } from '../../contexts/ToastContext';
 import { useNotifications } from '../../notifications/useNotifications';
 import { SOURCES, SEVERITY } from '../../notifications/types';
@@ -209,6 +209,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const [sessionId, setSessionId] = useState(null);
     const [messagesLoaded, setMessagesLoaded] = useState(false);
     const messagesEndRef = useRef(null);
+    // Last (voice|language) pair we already warned about — one toast per
+    // combination, re-armed automatically when either side changes.
+    const voiceLangWarnedRef = useRef(null);
     const { user } = useAuth();
     const { caseLanguage } = useLanguage();
     const { t } = useTranslation('chat');
@@ -1074,6 +1077,21 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 toast?.error?.(t('no_voice_configured_case'));
                 voiceErrored = true;
             } else {
+                // Language↔voice mismatch guard (i18n hassle of 2026-07:
+                // an English Google/Kokoro voice reading a translated
+                // session sounds broken but produced zero user-visible
+                // signal — only the DiagnosticBar warned). Warn ONCE per
+                // (voice, language) pair; never substitute a voice —
+                // fallback chains stay dead by design (I18N_PLAN.md §5).
+                const mismatchKey = `${r.file}|${caseLanguage}`;
+                if (voiceMatchesLanguage(r.file, r.provider, caseLanguage) === false
+                    && voiceLangWarnedRef.current !== mismatchKey) {
+                    voiceLangWarnedRef.current = mismatchKey;
+                    console.warn('[voice] voice does not speak the session language', {
+                        voice: r.file, provider: r.provider, caseLanguage
+                    });
+                    toast?.warning?.(t('voice_language_mismatch', { voice: r.file, language: caseLanguage }));
+                }
                 speech = VoiceService.beginSpeechSession({
                     voice: r.file,
                     rate: r.rate,

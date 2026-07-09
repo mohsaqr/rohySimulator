@@ -51,5 +51,6 @@
   "voice_provider_current_after": ")",
   "voice_provider_current_before": "(derzeit ",
   "voice_settings_path": "Einstellungen → Stimme",
-  "warning_message_label": "Warnmeldung"
+  "warning_message_label": "Warnmeldung",
+  "voice_group_other": "Sonstige"
 }

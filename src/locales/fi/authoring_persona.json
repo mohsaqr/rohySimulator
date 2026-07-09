@@ -196,5 +196,6 @@
   "untitled": "Nimetön",
   "via": "kautta",
   "voice_engine_help": "TTS-moottori asetetaan koko alustalle kohdassa Asetukset → Ääni. Valitse ääni kyseisen moottorin luettelosta. Tapaukset voivat ohittaa tämän tapauskohtaisesti tapauseditorissa.",
-  "will_play": "Toistaa:"
+  "will_play": "Toistaa:",
+  "voice_group_other": "Muut"
 }

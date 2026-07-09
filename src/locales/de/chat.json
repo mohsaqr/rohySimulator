@@ -78,5 +78,6 @@
   "wait_relative_0": "Die Angehörigen werden kontaktiert …",
   "wait_relative_1": "Angehörige auf dem Weg aus dem Wartebereich",
   "wait_relative_2": "Angehörige nähern sich dem Raum",
-  "waiting_for_response": "Warte auf Antwort …"
+  "waiting_for_response": "Warte auf Antwort …",
+  "voice_language_mismatch": "Die konfigurierte Stimme „{{voice}}\" spricht nicht die Sitzungssprache ({{language}}). Wählen Sie eine passende Stimme unter Einstellungen → Agenten-Personas oder im Fall-Editor."
 }

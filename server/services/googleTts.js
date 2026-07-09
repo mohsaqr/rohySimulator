@@ -64,6 +64,41 @@ export const GOOGLE_VOICES = [
     // English (Australia) — Neural2
     { filename: 'en-AU-Neural2-A',           displayName: 'Neural2-A (AU female)',           gender: 'female', language: 'en-AU' },
     { filename: 'en-AU-Neural2-B',           displayName: 'Neural2-B (AU male)',             gender: 'male',   language: 'en-AU' },
+
+    // ---------------------------------------------------------------------
+    // Non-English app languages (I18N registry: de, it, fi, sv). Every FULL
+    // app language in server/shared/languages.js MUST have at least one
+    // female and one male voice here — tests/server/services/googleTts.test.js
+    // enforces this so a translated session can never be left without a
+    // matching Google voice again. Names verified against the live
+    // /v1/voices API on 2026-07-09; all are Chirp 3 HD (same 1M chars/month
+    // free tier as the en-US set, and the same persona names — Aoede/Kore
+    // female, Charon/Puck male — so gender inference keeps working).
+    // ---------------------------------------------------------------------
+
+    // German
+    { filename: 'de-DE-Chirp3-HD-Aoede',     displayName: 'Chirp3 HD-Aoede (DE female)',     gender: 'female', language: 'de-DE' },
+    { filename: 'de-DE-Chirp3-HD-Kore',      displayName: 'Chirp3 HD-Kore (DE female)',      gender: 'female', language: 'de-DE' },
+    { filename: 'de-DE-Chirp3-HD-Charon',    displayName: 'Chirp3 HD-Charon (DE male)',      gender: 'male',   language: 'de-DE' },
+    { filename: 'de-DE-Chirp3-HD-Puck',      displayName: 'Chirp3 HD-Puck (DE male)',        gender: 'male',   language: 'de-DE' },
+
+    // Italian
+    { filename: 'it-IT-Chirp3-HD-Aoede',     displayName: 'Chirp3 HD-Aoede (IT female)',     gender: 'female', language: 'it-IT' },
+    { filename: 'it-IT-Chirp3-HD-Kore',      displayName: 'Chirp3 HD-Kore (IT female)',      gender: 'female', language: 'it-IT' },
+    { filename: 'it-IT-Chirp3-HD-Charon',    displayName: 'Chirp3 HD-Charon (IT male)',      gender: 'male',   language: 'it-IT' },
+    { filename: 'it-IT-Chirp3-HD-Puck',      displayName: 'Chirp3 HD-Puck (IT male)',        gender: 'male',   language: 'it-IT' },
+
+    // Finnish
+    { filename: 'fi-FI-Chirp3-HD-Aoede',     displayName: 'Chirp3 HD-Aoede (FI female)',     gender: 'female', language: 'fi-FI' },
+    { filename: 'fi-FI-Chirp3-HD-Kore',      displayName: 'Chirp3 HD-Kore (FI female)',      gender: 'female', language: 'fi-FI' },
+    { filename: 'fi-FI-Chirp3-HD-Charon',    displayName: 'Chirp3 HD-Charon (FI male)',      gender: 'male',   language: 'fi-FI' },
+    { filename: 'fi-FI-Chirp3-HD-Puck',      displayName: 'Chirp3 HD-Puck (FI male)',        gender: 'male',   language: 'fi-FI' },
+
+    // Swedish
+    { filename: 'sv-SE-Chirp3-HD-Aoede',     displayName: 'Chirp3 HD-Aoede (SV female)',     gender: 'female', language: 'sv-SE' },
+    { filename: 'sv-SE-Chirp3-HD-Kore',      displayName: 'Chirp3 HD-Kore (SV female)',      gender: 'female', language: 'sv-SE' },
+    { filename: 'sv-SE-Chirp3-HD-Charon',    displayName: 'Chirp3 HD-Charon (SV male)',      gender: 'male',   language: 'sv-SE' },
+    { filename: 'sv-SE-Chirp3-HD-Puck',      displayName: 'Chirp3 HD-Puck (SV male)',        gender: 'male',   language: 'sv-SE' },
 ];
 
 const VALID_VOICES = new Set(GOOGLE_VOICES.map(v => v.filename));
