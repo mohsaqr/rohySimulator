@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Globe, Check } from 'lucide-react';
+import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Globe, Check, BookOpen } from 'lucide-react';
 import { LANGUAGES } from '../../i18n/languages';
 
 // Persistent top-bar controls: a language switcher (globe) + the settings/
@@ -37,6 +37,7 @@ export default function TopBarControls({
    onOpenProfile,
    onOpenSettings,
    onOpenHelp,
+   onOpenLessons,
    onOpenEmotionAnalytics,
    onOpenCaseAnalytics,
    onLogout,
@@ -172,6 +173,17 @@ export default function TopBarControls({
                      <HelpCircle className="w-4 h-4" />
                      {t('help_support')}
                   </button>
+                  {onOpenLessons && (
+                     <button
+                        type="button"
+                        onClick={() => { onOpenLessons?.(); closeAll(); }}
+                        role="menuitem"
+                        className="rohy-topbar-menu-item"
+                     >
+                        <BookOpen className="w-4 h-4" />
+                        {t('lessons', { defaultValue: 'Lessons' })}
+                     </button>
+                  )}
                   {(canSeeOyonAnalytics || isAdminUser) && (
                      <div className="rohy-menu-divider" />
                   )}

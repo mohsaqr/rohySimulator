@@ -2,7 +2,7 @@
 // Every call rides the shared apiClient so the bearer token / CSRF header /
 // ApiError contract come for free — callers branch on ApiError.status.
 
-import { apiGet, apiPost, apiPatch, apiDelete, apiFetch } from './apiClient';
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, apiFetch } from './apiClient';
 
 export const listCohorts = () => apiGet('/cohorts');
 
@@ -50,6 +50,16 @@ export const listLibraryCases = () => apiGet('/cases');
 // CANNOT call it (403). Callers must catch ApiError.status===403 and fall
 // back to identifier-typed entry. Shape: { users:[{id,username,name,role}] }.
 export const listTenantUsers = () => apiGet('/users');
+
+// Case↔course assignment map (educator+). →
+// { data:[{caseId, caseName, cohortId, cohortName}] } — cohortId null means
+// the case is not assigned to any course.
+export const listCaseAssignments = () => apiGet('/courses/case-assignments');
+
+// Reassign a case's single course. `cohortId` is an integer or null (null
+// unassigns). If the case belonged to another course the server moves it.
+export const assignCaseCourse = (caseId, cohortId) =>
+    apiPut(`/cases/${caseId}/course`, { cohortId });
 
 export const deleteCohort = (id) => apiDelete(`/cohorts/${id}`);
 

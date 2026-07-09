@@ -1,6 +1,8 @@
 import express from 'express';
-import crypto from 'crypto';
 import dbAdapter from '../dbAdapter.js';
+// Join-code generation lives in server/lib/joinCode.js (single owner of the
+// alphabet / retry logic) so the boot seed can allocate codes identically.
+import { allocateJoinCode } from '../lib/joinCode.js';
 import {
     authenticateToken,
     requireEducator,
@@ -24,51 +26,6 @@ const router = express.Router();
 const cohortsLog = logger('routes-cohorts');
 
 const isAdmin = (req) => hasRoleAtLeast(req.user, ROLE_RANKS.admin);
-
-// Excludes ambiguous glyphs (0/O, 1/I/L) so a shared code can't be
-// mistyped between teacher and student.
-const JOIN_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const JOIN_CODE_LENGTH = 8;
-const JOIN_CODE_MAX_RETRIES = 6;
-
-function generateJoinCode() {
-    const bytes = crypto.randomBytes(JOIN_CODE_LENGTH);
-    let out = '';
-    for (let i = 0; i < JOIN_CODE_LENGTH; i++) {
-        out += JOIN_CODE_ALPHABET[bytes[i] % JOIN_CODE_ALPHABET.length];
-    }
-    return out;
-}
-
-// Allocate a join_code on `cohort`, retrying on a partial-unique collision
-// against another live cohort's code. Returns the code on success, or null
-// if every retry collided (the caller decides how to surface that). This is
-// the single owner of join-code generation — both POST /cohorts (create
-// with join_code) and POST /cohorts/:id/join-code call it so the retry /
-// alphabet logic lives in exactly one place.
-async function allocateJoinCode(cohortId) {
-    let lastErr = null;
-    for (let attempt = 0; attempt < JOIN_CODE_MAX_RETRIES; attempt++) {
-        const code = generateJoinCode();
-        try {
-            await dbAdapter.run(`UPDATE cohorts SET join_code = ? WHERE id = ?`, [code, cohortId]);
-            return code;
-        } catch (err) {
-            // Partial-unique collision on a live join_code — retry with a
-            // fresh code. Any other error is fatal.
-            if (/UNIQUE constraint/i.test(err.message)) {
-                lastErr = err;
-                continue;
-            }
-            throw err;
-        }
-    }
-    cohortsLog.error('join code generation exhausted retries', {
-        cohort_id: cohortId,
-        error: lastErr?.message,
-    });
-    return null;
-}
 
 // WHY this access rule (the security chokepoint — read before touching).
 //

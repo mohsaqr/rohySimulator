@@ -48,10 +48,10 @@ export function setDiagnosticBarEnabled(userId, enabled) {
 }
 
 // Roles allowed to see the diagnostic bar. Locked at the top of the file so
-// auditors can see the policy without spelunking. Educators get access for
-// course authoring (resolving "why does the patient sound wrong"); admins
-// always; everyone else (student, reviewer, guest) is hidden.
-const DIAG_BAR_VISIBLE_ROLES = new Set(['admin', 'educator']);
+// auditors can see the policy without spelunking. Admin-only: it is a
+// developer/debug surface (it sits at the bottom of the screen, over the room
+// nav), so it must not reach educators or students. Everyone else is hidden.
+const DIAG_BAR_VISIBLE_ROLES = new Set(['admin']);
 
 export function isDiagBarRoleAllowed(user) {
     if (!user) return false;

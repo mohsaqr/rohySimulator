@@ -42,6 +42,7 @@ export const AOI_LABELS = Object.freeze({
     ecg_trace: 'ECG',
     vitals_values: 'Vitals',
     chat_panel: 'Chat',
+    lesson_content: 'Lesson',
 });
 
 const AOI_ALIASES = Object.freeze({

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import PatientMonitor from './components/monitor/PatientMonitor';
 import PatientVisual from './components/patient/PatientVisual';
@@ -14,6 +14,9 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import TopBarControls from './components/common/TopBarControls';
+// Lazy so the TipTap/react-query lessons bundle stays out of the main chunk,
+// loading only when a user opens the lessons room.
+const LessonsRoomContainer = lazy(() => import('./components/lessons/LessonsRoomContainer'));
 import { VoiceProvider } from './contexts/VoiceContext';
 import { NotificationProvider } from './notifications/NotificationContext';
 import { useNotifications } from './notifications/useNotifications';
@@ -42,6 +45,10 @@ import { HelpCenter, OnboardingTour } from './help';
 function MainApp() {
    const { t } = useTranslation('app');
    const [showFullPageSettings, setShowFullPageSettings] = useState(false);
+   const [showLessonsRoom, setShowLessonsRoom] = useState(false);
+   // The course tied to the active case, resolved when the Course card opens.
+   // { cohortId, cohortName } — one case, one course (no picker).
+   const [courseCohortId, setCourseCohortId] = useState({ cohortId: null, cohortName: null });
    const [showUserProfile, setShowUserProfile] = useState(false);
    const [showUserMenu, setShowUserMenu] = useState(false);
    const [showTnaAnalytics, setShowTnaAnalytics] = useState(false);
@@ -256,6 +263,7 @@ function MainApp() {
       let view = 'home';
       if (personaEditorTarget !== null) view = 'persona-editor';
       else if (showFullPageSettings)    view = 'settings';
+      else if (showLessonsRoom)         view = 'lessons';
       else if (showTnaAnalytics)        view = 'tna';
       else if (showOyonAnalytics)       view = 'oyon';
       // 'view' tracks full-page surfaces above the in-session UI; the
@@ -272,7 +280,7 @@ function MainApp() {
       };
    }, [
       personaEditorTarget, personaEditorReturn,
-      showFullPageSettings, showTnaAnalytics, showOyonAnalytics, currentRoom, showUserProfile,
+      showFullPageSettings, showLessonsRoom, showTnaAnalytics, showOyonAnalytics, currentRoom, showUserProfile,
       settingsInitialTab, settingsInitialStep,
    ]);
    const applyView = (saved) => {
@@ -457,6 +465,27 @@ function MainApp() {
       setCurrentRoom(target);
    };
 
+   // Open the lessons room for the ACTIVE case's course. Resolves the case →
+   // its cohort server-side; the room shows that course's content, or the
+   // "no course content" empty state if the course is empty. Falls back to the
+   // course picker when the case maps to no accessible course.
+   const openCourseForCase = useCallback(async () => {
+      let course = { cohortId: null, cohortName: null };
+      try {
+         if (activeCase?.id != null) {
+            const r = await apiFetch(`/courses/for-case/${activeCase.id}`);
+            course = { cohortId: r?.data?.cohortId ?? null, cohortName: r?.data?.cohortName ?? null };
+         }
+      } catch { /* show the empty state */ }
+      setCourseCohortId(course);
+      setShowLessonsRoom(true);
+      // Stamp telemetry + gaze windows with the lessons surface, mirroring
+      // the currentRoom effect — the lessons view is an early return, so the
+      // room effect never sees it and events would misattribute to the
+      // underlying simulator room.
+      EventLogger.roomChanged('lessons');
+   }, [activeCase]);
+
    // Explicit "End & Debrief": stops the server-side session, sets the
    // sticky caseEnded flag so the patient-room chrome reflects it, and
    // routes the user straight into the debrief room. Idempotent on the
@@ -571,6 +600,7 @@ function MainApp() {
    const oyonRoom = personaEditorTarget !== null ? 'persona-editor'
       : showFullPageSettings ? 'settings'
       : showTnaAnalytics ? 'tna'
+      : showLessonsRoom ? 'lessons'
       : currentRoom;
 
    // Publish the pill's live width as --oyon-pill-w on <html> so headers it
@@ -666,6 +696,26 @@ function MainApp() {
    }
 
    // Show full-page settings
+   if (showLessonsRoom) {
+      return (
+         <>
+         {oyonPill}
+         <div className="h-screen w-screen rohy-offwhite-bg overflow-hidden">
+            <Suspense fallback={<div className="p-8 text-sm text-neutral-500">Loading…</div>}>
+               <LessonsRoomContainer
+                  cohortId={courseCohortId.cohortId}
+                  cohortName={courseCohortId.cohortName}
+                  onBackToSimulation={() => {
+                     setShowLessonsRoom(false);
+                     EventLogger.roomChanged(currentRoom);
+                  }}
+               />
+            </Suspense>
+         </div>
+         </>
+      );
+   }
+
    if (showFullPageSettings) {
       return (
          <>
@@ -771,6 +821,7 @@ function MainApp() {
                   <RoomNavigator
                      currentRoom={currentRoom}
                      onSelectRoom={navigateToRoom}
+                     onOpenCourse={openCourseForCase}
                      sessionId={sessionId}
                   />
                }
@@ -786,6 +837,7 @@ function MainApp() {
                   <RoomNavigator
                      currentRoom={currentRoom}
                      onSelectRoom={navigateToRoom}
+                     onOpenCourse={openCourseForCase}
                      sessionId={sessionId}
                   />
                }
@@ -801,6 +853,7 @@ function MainApp() {
                   <RoomNavigator
                      currentRoom={currentRoom}
                      onSelectRoom={navigateToRoom}
+                     onOpenCourse={openCourseForCase}
                      sessionId={sessionId}
                   />
                }
@@ -919,6 +972,7 @@ function MainApp() {
                <RoomNavigator
                   currentRoom={currentRoom}
                   onSelectRoom={navigateToRoom}
+                  onOpenCourse={openCourseForCase}
                   sessionId={sessionId}
                />
             </div>

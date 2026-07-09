@@ -134,6 +134,62 @@ router.post('/upload', authenticateToken, upload.single('photo'), (req, res) => 
     res.json({ imageUrl });
 });
 
+// ---------------------------------------------------------------------------
+// Lessons module uploads — the contract the vendored lesson editor expects:
+// multipart field `file`, response { success, data: { url, path, ... } } with a
+// server-absolute `/uploads/<name>` url. Educator-gated (authoring only).
+// SVG is excluded everywhere (stored-XSS); docs are allowed only on /uploads/file.
+// ---------------------------------------------------------------------------
+const DOC_MIME = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain', 'text/csv', 'application/zip',
+];
+const DOC_EXT = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', '.csv', '.zip'];
+const IMAGE_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const IMAGE_EXT = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+const VIDEO_MIME = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'];
+const VIDEO_EXT = ['.mp4', '.webm', '.ogv', '.mov'];
+
+function makeUpload(mimes, exts, maxBytesMB) {
+    return multer({
+        storage,
+        limits: { fileSize: maxBytesMB * 1024 * 1024 },
+        fileFilter: (req, file, cb) => {
+            const ext = path.extname(file.originalname).toLowerCase();
+            if (mimes.includes(file.mimetype) && exts.includes(ext)) cb(null, true);
+            else cb(new Error(`Invalid file type. Allowed: ${exts.join(', ')}`), false);
+        },
+    });
+}
+const imageUpload = makeUpload(IMAGE_MIME, IMAGE_EXT, 5);
+const fileUpload = makeUpload([...DOC_MIME, ...IMAGE_MIME, ...VIDEO_MIME], [...DOC_EXT, ...IMAGE_EXT, ...VIDEO_EXT], 50);
+const videoUpload = makeUpload(VIDEO_MIME, VIDEO_EXT, 200);
+
+function sendUploaded(req, res) {
+    if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
+    const url = `/uploads/${req.file.filename}`;
+    const data = {
+        url,
+        path: url,
+        originalName: req.file.originalname,
+        filename: req.file.filename,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+    };
+    // `url` at top level too, for resilience against differing client readers.
+    res.json({ success: true, data, url });
+}
+
+router.post('/uploads/image', authenticateToken, requireEducator, imageUpload.single('file'), sendUploaded);
+router.post('/uploads/file', authenticateToken, requireEducator, fileUpload.single('file'), sendUploaded);
+router.post('/uploads/video', authenticateToken, requireEducator, videoUpload.single('file'), sendUploaded);
+
 // --- BODY IMAGE UPLOAD (Admin Only) ---
 router.post('/upload-body-image', authenticateToken, requireAdmin, uploadBodyImage.single('image'), (req, res) => {
     if (!req.file) {

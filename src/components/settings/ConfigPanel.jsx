@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
+import { listCohorts, listCaseAssignments, assignCaseCourse } from '../../services/cohortsService';
 import ActivityTable from '../analytics/ActivityTable';
 import SystemLogTable from '../analytics/SystemLogTable';
 import ChatLogTable from '../analytics/ChatLogTable';
@@ -31,7 +32,11 @@ import OyonSettingsTab from './OyonSettingsTab';
 import OyonDataLogs from '../analytics/OyonDataLogs';
 import CohortsManagementTab from './CohortsManagementTab';
 import TnaDashboardV2 from '../analytics/tna/TnaDashboardV2';
-import { Bell as BellIcon } from 'lucide-react';
+import { Bell as BellIcon, BookOpen } from 'lucide-react';
+
+// Lazy-loaded so the TipTap/react-query editor bundle only loads when a teacher
+// opens the Lessons tab — keeps it out of the main app chunk.
+const LessonAuthoring = lazy(() => import('../lessons/LessonAuthoring'));
 import CaseAvatarVoicePicker from './CaseAvatarVoicePicker';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
@@ -371,6 +376,43 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
         setHasUnsavedChanges(false);
     };
 
+    // Case↔course assignment (educator+ only). caseCourseMap: caseId →
+    // {cohortId, cohortName}; courseOptions: the educator's manageable
+    // courses. Both load quietly — the Course menu simply stays hidden/empty
+    // when either call fails.
+    const [caseCourseMap, setCaseCourseMap] = useState({});
+    const [courseOptions, setCourseOptions] = useState([]);
+
+    const loadCaseAssignments = () => {
+        listCaseAssignments()
+            .then(res => {
+                const rows = Array.isArray(res) ? res : res?.data || [];
+                setCaseCourseMap(Object.fromEntries(rows.map(r =>
+                    [r.caseId, { cohortId: r.cohortId, cohortName: r.cohortName }])));
+            })
+            .catch(err => console.error('Failed to load case assignments', err));
+    };
+
+    useEffect(() => {
+        if (!canManageCohorts) return;
+        listCohorts()
+            .then(res => setCourseOptions(Array.isArray(res) ? res : res?.cohorts || []))
+            .catch(err => console.error('Failed to load courses', err));
+        loadCaseAssignments();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [canManageCohorts]);
+
+    const handleAssignCaseCourse = async (caseId, value) => {
+        const cohortId = value === '' ? null : Number(value);
+        try {
+            await assignCaseCourse(caseId, cohortId);
+        } catch (err) {
+            console.error('Failed to assign course:', err);
+            toast.error(t('toast_course_assign_failed', { defaultValue: 'Could not update the course assignment.' }));
+        }
+        loadCaseAssignments();
+    };
+
     // Load Cases on Mount
     useEffect(() => {
         apiFetch('/cases')
@@ -519,6 +561,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             items: [
                 { id: 'users', label: t('tab_users'), icon: Users, visible: admin },
                 { id: 'cohorts', label: t('tab_courses'), icon: Users, visible: canManageCohorts },
+                { id: 'lessons', label: t('tab_lessons', { defaultValue: 'Lessons' }), icon: BookOpen, visible: canManageCohorts },
             ],
         },
         {
@@ -737,6 +780,22 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                     <div className="text-sm text-gray-600">{c.description}</div>
                                                 </div>
                                                 <div className="flex gap-2 items-center">
+                                                    {/* Educator+: Course assignment */}
+                                                    {canManageCohorts && (
+                                                        <label className="flex items-center gap-1.5 text-xs text-gray-600" title={t('title_case_course', { defaultValue: 'Course this case is assigned to' })}>
+                                                            <span>{t('label_case_course', { defaultValue: 'Course' })}</span>
+                                                            <select
+                                                                value={caseCourseMap[c.id]?.cohortId ?? ''}
+                                                                onChange={(e) => handleAssignCaseCourse(c.id, e.target.value)}
+                                                                className="rohy-input px-2 py-1 text-xs rounded border border-gray-300 bg-white text-gray-800 max-w-[10rem]"
+                                                            >
+                                                                <option value="">{t('option_course_none', { defaultValue: '— none —' })}</option>
+                                                                {courseOptions.map(co => (
+                                                                    <option key={co.id} value={co.id}>{co.name}</option>
+                                                                ))}
+                                                            </select>
+                                                        </label>
+                                                    )}
                                                     {/* Admin: Availability Toggle */}
                                                     {isAdmin() && (
                                                         <button
@@ -1145,6 +1204,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     {/* --- CLASSES (educator+ only; server enforces ownership/tenant) --- */}
                     {activeTab === 'cohorts' && canManageCohorts && (
                         <CohortsManagementTab />
+                    )}
+
+                    {activeTab === 'lessons' && canManageCohorts && (
+                        <Suspense fallback={<div className="p-6 text-sm text-neutral-500">Loading…</div>}>
+                            <LessonAuthoring />
+                        </Suspense>
                     )}
 
                 </div>

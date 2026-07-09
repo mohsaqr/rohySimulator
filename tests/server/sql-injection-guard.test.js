@@ -179,6 +179,51 @@ const ALLOWLIST = [
         lineSubstring: 'SET deleted_at = NULL, joined_at = ${dbAdapter.now()} WHERE id = ?',
         why: 'dbAdapter.now() is the constant literal "datetime(\'now\')"; membership id parameterised via ?.',
     },
+    {
+        file: 'server/routes/lessons-routes.js',
+        lineSubstring: "UPDATE lessons SET ${sets.join(', ')}",
+        why: 'sets[] entries are hardcoded "column = ?" literals pushed by the put() helper; every value flows through params[] as a ? placeholder; lesson id parameterised. Same safe shape as the cohorts UPDATE entry above.',
+    },
+    {
+        file: 'server/routes/lessons-routes.js',
+        lineSubstring: "UPDATE lesson_sections SET ${sets.join(', ')}",
+        why: 'Same put()-built sets[] of hardcoded "column = ?" literals; values and section id parameterised via ?.',
+    },
+    {
+        file: 'server/routes/lessons-routes.js',
+        lineSubstring: "IN (${ids.map(() => '?').join(',')})",
+        why: 'Injects only "?" placeholder markers for the batch ?include=sections fetch; ids are integer lesson ids from a prior parameterised SELECT, never req.* values.',
+    },
+    {
+        file: 'server/routes/surveys-routes.js',
+        lineSubstring: "UPDATE surveys SET ${sets.join(', ')}",
+        why: 'sets[] entries are hardcoded "column = ?" literals pushed by the put() helper; values and survey id parameterised via ?.',
+    },
+    {
+        file: 'server/routes/surveys-routes.js',
+        lineSubstring: "UPDATE survey_questions SET ${sets.join(', ')}",
+        why: 'Same put()-built sets[] of hardcoded "column = ?" literals; values and question id parameterised via ?.',
+    },
+    {
+        file: 'server/routes/surveys-routes.js',
+        lineSubstring: 'FROM survey_responses r WHERE ${where}',
+        why: '`where` is the literal "r.survey_id = ?" optionally + " AND r.cohort_id = ?" — hardcoded fragments; survey/cohort ids flow through params[].',
+    },
+    {
+        file: 'server/routes/surveys-routes.js',
+        lineSubstring: "IN (${respIds.map(() => '?').join(',')})",
+        why: 'Injects only "?" placeholder markers; respIds are integer response ids from a prior parameterised SELECT.',
+    },
+    {
+        file: 'server/routes/surveys-routes.js',
+        lineSubstring: "IN (${rows.map(() => '?').join(',')})",
+        why: 'Injects only "?" placeholder markers for the grouped question-count query; ids are survey ids from a prior parameterised SELECT.',
+    },
+    {
+        file: 'server/routes/surveys-routes.js',
+        lineSubstring: "IN (${uids.map(() => '?').join(',')})",
+        why: 'Injects only "?" placeholder markers; uids are integer user ids from prior parameterised response rows (non-anonymous analytics user lookup).',
+    },
 ];
 
 function isAllowlisted(filePath, line) {

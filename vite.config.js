@@ -33,6 +33,13 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true
       },
+      // Uploaded media (lesson images/files/videos, avatars) is served as
+      // static /uploads by the Express backend, not Vite — proxy it in dev so
+      // uploaded assets resolve instead of hitting the SPA fallback.
+      '/uploads': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
       // Help & Support article links point at DOCS_BASE (/rohy/docs/...).
       // In dev the docs are served by the Express backend, not Vite, so
       // proxy them through or every Help link hits Vite's SPA fallback.

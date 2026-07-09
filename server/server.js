@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 import db, { dbReady } from './db.js';
 import dbAdapter from './dbAdapter.js';
 import { runSeeders, needsSeeding } from './seeders/index.js';
+import seedStemiCourse from './seedStemiCourse.js';
 import { loadKokoro } from './services/kokoroTts.js';
 import { auditPersonaAndCaseVoices } from './healthChecks/voiceCatalogueAudit.js';
 import { configureSlowQueryThresholdFromDb, instrumentSqliteDb } from './observability.js';
@@ -265,6 +266,10 @@ async function initializeAndStart() {
     } catch (err) {
         bootLog.error('seeder failed', { error: err.message, fatal: false });
     }
+
+    // Idempotently fill the default "Basic course" with STEMI lesson content +
+    // a clinical-reasoning survey (no-op once seeded). Non-fatal on failure.
+    await seedStemiCourse();
 
     // Default platform tts_provider to kokoro on a fresh install — Kokoro
     // is the offline default and the shipped persona case_voice values

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlaskConical, GraduationCap, MessageCircle, Scan, Stethoscope } from 'lucide-react';
+import { FlaskConical, GraduationCap, MessageCircle, Scan, Stethoscope, BookOpen } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 
 // Bottom navigation bar shared across every in-session surface — main
@@ -124,7 +124,7 @@ function useReadyCounts(sessionId) {
     return counts;
 }
 
-export default function RoomNavigator({ currentRoom, onSelectRoom, sessionId = null }) {
+export default function RoomNavigator({ currentRoom, onSelectRoom, onOpenCourse = null, sessionId = null }) {
     const { t } = useTranslation('common');
     const counts = useReadyCounts(sessionId);
     return (
@@ -141,6 +141,19 @@ export default function RoomNavigator({ currentRoom, onSelectRoom, sessionId = n
                     onClick={() => onSelectRoom(room.key)}
                 />
             ))}
+            {/* Course — a peer of the rooms but visually smaller and in black,
+                opening this case's course content (lessons + surveys). */}
+            {onOpenCourse && (
+                <button
+                    type="button"
+                    onClick={onOpenCourse}
+                    aria-label={t('room_course', { defaultValue: 'Course' })}
+                    className="shrink-0 self-stretch px-3 rounded-lg flex items-center gap-2 bg-black text-white/85 ring-1 ring-white/10 hover:bg-neutral-900 hover:text-white transition-colors"
+                >
+                    <BookOpen className="w-4 h-4" />
+                    <span className="text-xs font-semibold">{t('room_course', { defaultValue: 'Course' })}</span>
+                </button>
+            )}
         </nav>
     );
 }

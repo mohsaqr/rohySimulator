@@ -21,6 +21,10 @@ export default {
         'src/**/*.{js,jsx}',
         '!src/**/*.test.{js,jsx}',
         '!src/components/analytics/**',
+        // Vendored lessons module (ported from LAILA/chatoyon) carries its own
+        // defaultValue-based i18n and is English-only for the initial port —
+        // same treatment as analytics/ above. Its own catalogues get added later.
+        '!src/components/lessons/**',
         '!src/i18n/**',
         '!src/locales/**'
     ],

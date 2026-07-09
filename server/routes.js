@@ -16,6 +16,8 @@ import patientRecordRoutes from './routes/patient-record-routes.js';
 import agentsRoutes from './routes/agents-routes.js';
 import notesRoutes from './routes/notes-routes.js';
 import cohortsRoutes from './routes/cohorts-routes.js';
+import lessonsRoutes from './routes/lessons-routes.js';
+import surveysRoutes from './routes/surveys-routes.js';
 import healthRoutes from './routes/health-routes.js';
 import helpRoutes from './routes/help-routes.js';
 import { routeTimeout } from './middleware/routeTimeout.js';
@@ -105,6 +107,8 @@ router.use(patientRecordRoutes);
 router.use(agentsRoutes);
 router.use(notesRoutes);
 router.use(cohortsRoutes);
+router.use(lessonsRoutes);
+router.use(surveysRoutes);
 router.use(helpRoutes);
 if (oyonRoutes) {
     router.use('/addons/oyon', oyonRoutes);
