@@ -91,21 +91,46 @@ install_voice() {
 require_python
 install_venv
 
-# Starter voices — three English speakers covering male / female / British accent.
-# Voice files live in $PIPER_DIR (NOT inside the venv) so they survive a venv rebuild.
+# English voices — a spread of distinct speakers (male / female / US / GB),
+# each at its highest published quality tier. Voice files live in $PIPER_DIR
+# (NOT inside the venv) so they survive a venv rebuild.
 install_voice en_US-amy-medium.onnx          en_US amy          medium
-install_voice en_US-ryan-medium.onnx         en_US ryan         medium
+install_voice en_US-ryan-high.onnx           en_US ryan         high
+install_voice en_US-lessac-high.onnx         en_US lessac       high
+install_voice en_US-libritts-high.onnx       en_US libritts     high
+install_voice en_US-hfc_female-medium.onnx   en_US hfc_female   medium
+install_voice en_US-kristin-medium.onnx      en_US kristin      medium
 install_voice en_GB-jenny_dioco-medium.onnx  en_GB jenny_dioco  medium
+install_voice en_GB-cori-high.onnx           en_GB cori         high
+install_voice en_GB-alan-medium.onnx         en_GB alan         medium
+install_voice en_GB-alba-medium.onnx         en_GB alba         medium
 
-# I18N voices (I18N_PLAN.md §5/Phase E) — one female + one male Italian,
-# Finnish, and Swedish, matching the app's shipped UI languages. The voice
-# resolver derives language from the it_IT/fi_FI/sv_SE filename prefix; a
-# case's per-character voice must still be pointed at one of these in the
-# case/persona editor (one-tier case_voice, no automatic substitution).
+# I18N voices (I18N_PLAN.md §5/Phase E) — Italian, Finnish, Swedish, and
+# German, matching the app's shipped UI languages. Every distinct published
+# speaker per language, each pinned to its HIGHEST available quality tier (no
+# redundant lower-quality duplicates of the same speaker). The voice resolver
+# derives language from the it_IT/fi_FI/sv_SE/de_DE filename prefix; a case's
+# per-character voice must still be pointed at one of these in the case/persona
+# editor (one-tier case_voice, no automatic substitution).
+#
+# Italian — both published speakers (no others exist); riccardo tops out at x_low.
 install_voice it_IT-paola-medium.onnx        it_IT paola        medium
 install_voice it_IT-riccardo-x_low.onnx      it_IT riccardo     x_low
+# Finnish — only harri is published; medium is its top tier.
 install_voice fi_FI-harri-medium.onnx        fi_FI harri        medium
+# Swedish — all three published speakers (each tops out at medium).
 install_voice sv_SE-nst-medium.onnx          sv_SE nst          medium
+install_voice sv_SE-alma-medium.onnx         sv_SE alma         medium
+install_voice sv_SE-lisa-medium.onnx         sv_SE lisa         medium
+# German — every distinct speaker; thorsten at high, the rest at their published max.
+install_voice de_DE-thorsten-high.onnx              de_DE thorsten           high
+install_voice de_DE-thorsten_emotional-medium.onnx  de_DE thorsten_emotional medium
+install_voice de_DE-mls-medium.onnx                 de_DE mls                medium
+install_voice de_DE-kerstin-low.onnx                de_DE kerstin            low
+install_voice de_DE-eva_k-x_low.onnx                de_DE eva_k              x_low
+install_voice de_DE-karlsson-low.onnx               de_DE karlsson           low
+install_voice de_DE-pavoque-low.onnx                de_DE pavoque            low
+install_voice de_DE-ramona-low.onnx                 de_DE ramona             low
 
 echo ""
 echo "✓ Piper setup complete."

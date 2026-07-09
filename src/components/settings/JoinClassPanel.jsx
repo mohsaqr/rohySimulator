@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { GraduationCap, Loader2 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError } from '../../services/apiClient';
@@ -8,6 +9,7 @@ import { joinCohort } from '../../services/cohortsService';
 // Lives inside UserProfilePanel so every user (incl. students) can reach it
 // from the profile menu without a new top-level surface.
 export default function JoinClassPanel() {
+    const { t } = useTranslation('profile');
     const toast = useToast();
     const [code, setCode] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -19,13 +21,13 @@ export default function JoinClassPanel() {
         setSubmitting(true);
         try {
             const data = await joinCohort(joinCode);
-            const name = data?.cohort?.name || 'the class';
+            const name = data?.cohort?.name || t('join_class_fallback_name');
             setCode('');
-            toast.success(`Joined ${name}`);
+            toast.success(t('join_class_success', { name }));
         } catch (err) {
-            const msg = err instanceof ApiError
-                ? (err.message || 'Could not join — check the code and try again')
-                : 'Could not join — check the code and try again';
+            const msg = err instanceof ApiError && err.message
+                ? err.message
+                : t('join_class_error');
             toast.error(msg);
         } finally {
             setSubmitting(false);
@@ -36,24 +38,24 @@ export default function JoinClassPanel() {
         <div className="space-y-6 max-w-md">
             <div className="p-4 bg-neutral-800/50 rounded-lg border border-neutral-700">
                 <h3 className="text-sm font-bold text-neutral-300 mb-1 flex items-center gap-2">
-                    <GraduationCap className="w-4 h-4" /> Join a class
+                    <GraduationCap className="w-4 h-4" /> {t('join_class_title')}
                 </h3>
                 <p className="text-xs text-neutral-400">
-                    Enter the join code your teacher shared with you.
+                    {t('join_class_help')}
                 </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1">
                     <label className="text-xs font-medium text-neutral-400" htmlFor="join-class-code">
-                        Join code
+                        {t('join_class_code_label')}
                     </label>
                     <input
                         id="join-class-code"
                         type="text"
                         value={code}
                         onChange={(e) => setCode(e.target.value)}
-                        placeholder="e.g. ABC123"
+                        placeholder={t('join_class_code_placeholder')}
                         autoComplete="off"
                         className="w-full px-3 py-2.5 bg-neutral-900 border border-neutral-700 rounded-lg text-white text-sm tracking-wider focus:outline-none focus:border-blue-500"
                     />
@@ -66,7 +68,7 @@ export default function JoinClassPanel() {
                     {submitting
                         ? <Loader2 className="w-4 h-4 animate-spin" />
                         : <GraduationCap className="w-4 h-4" />}
-                    Join class
+                    {t('join_class_button')}
                 </button>
             </form>
         </div>

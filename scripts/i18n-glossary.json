@@ -1,5 +1,6 @@
 {
   "_comment": "Pinned clinical glossary for the locale translation pass (I18N_PLAN.md §7). The translator (script or human) must use EXACTLY these renderings for these terms — machine translation of clinical vocabulary is the top mistranslation risk. Extend per language as native reviewers flag terms; never silently change an agreed rendering.",
+  "_comment_abbreviations": "The short forms below (BP/ECG/IV Push/BID/TID/Peak) were added after the 2026-07-08 adversarial clinical-translation review. They exist because MT either left English abbreviations untouched or over-localized them into initialisms that collide with international standards (e.g. German LLQ→'LUQ'). RULE: never localize the anatomical quadrant abbreviations LLQ/LUQ/RLQ/RUQ — they are international standard and must stay identical across all locales.",
   "it": {
     "chest pain": "dolore toracico",
     "shortness of breath": "dispnea",
@@ -18,7 +19,13 @@
     "vital signs": "parametri vitali",
     "patient": "paziente",
     "dose": "dose",
-    "administer": "somministrare"
+    "administer": "somministrare",
+    "BP": "PA",
+    "ECG": "ECG",
+    "IV Push": "bolo endovenoso",
+    "BID": "2 volte/die",
+    "TID": "3 volte/die",
+    "Peak": "picco"
   },
   "fi": {
     "chest pain": "rintakipu",
@@ -38,7 +45,13 @@
     "vital signs": "vitaalielintoiminnot",
     "patient": "potilas",
     "dose": "annos",
-    "administer": "annostella"
+    "administer": "annostella",
+    "BP": "RR",
+    "ECG": "EKG",
+    "IV Push": "IV-bolus",
+    "BID": "2 krt/vrk",
+    "TID": "3 krt/vrk",
+    "Peak": "huippu"
   },
   "sv": {
     "chest pain": "bröstsmärta",
@@ -58,6 +71,38 @@
     "vital signs": "vitalparametrar",
     "patient": "patient",
     "dose": "dos",
-    "administer": "administrera"
+    "administer": "administrera",
+    "BP": "BT",
+    "ECG": "EKG",
+    "IV Push": "IV-bolus",
+    "BID": "2 ggr/dygn",
+    "TID": "3 ggr/dygn",
+    "Peak": "maxeffekt"
+  },
+  "de": {
+    "chest pain": "Brustschmerz",
+    "shortness of breath": "Atemnot",
+    "blood pressure": "Blutdruck",
+    "heart rate": "Herzfrequenz",
+    "respiratory rate": "Atemfrequenz",
+    "oxygen saturation": "Sauerstoffsättigung",
+    "temperature": "Temperatur",
+    "chief complaint": "Aufnahmegrund",
+    "medical history": "Anamnese",
+    "physical examination": "körperliche Untersuchung",
+    "auscultation": "Auskultation",
+    "palpation": "Palpation",
+    "lab results": "Laborwerte",
+    "radiology": "Radiologie",
+    "vital signs": "Vitalparameter",
+    "patient": "Patient",
+    "dose": "Dosis",
+    "administer": "verabreichen",
+    "BP": "Blutdruck",
+    "ECG": "EKG",
+    "IV Push": "IV-Bolus",
+    "BID": "2×/Tag",
+    "TID": "3×/Tag",
+    "Peak": "Spitzenwirkung"
   }
 }

@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
-import { LogIn, User, Lock, AlertCircle } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { LANGUAGES } from '../../i18n/languages';
+import { LogIn, User, Lock, AlertCircle, Globe } from 'lucide-react';
 
 export default function LoginPage({ onSwitchToRegister }) {
     const { t } = useTranslation('auth');
+    const { uiLanguage, setUiLanguage } = useLanguage();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -28,6 +31,25 @@ export default function LoginPage({ onSwitchToRegister }) {
     return (
         <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
             <div className="w-full max-w-md">
+                {/* Language selector — pre-login, persisted to localStorage so the
+                    whole login/register flow renders in the chosen language. */}
+                <div className="flex justify-end mb-4">
+                    <div className="relative">
+                        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500 pointer-events-none" />
+                        <select
+                            value={uiLanguage}
+                            onChange={(e) => setUiLanguage(e.target.value)}
+                            aria-label={t('language', { defaultValue: 'Language' })}
+                            className="appearance-none bg-neutral-900 border border-neutral-800 rounded-lg pl-9 pr-8 py-2 text-sm text-neutral-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+                        >
+                            {Object.entries(LANGUAGES).map(([code, lang]) => (
+                                <option key={code} value={code}>
+                                    {lang.native === lang.name ? lang.native : `${lang.native} (${lang.name})`}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
                 {/* Logo/Header */}
             <div className="text-center mb-8">
                 <h1 className="text-4xl font-bold text-white mb-2">Rohy</h1>

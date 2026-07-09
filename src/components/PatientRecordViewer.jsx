@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { usePatientRecord } from '../services/PatientRecord';
 import {
     FileText, Clock, Activity, Stethoscope, FlaskConical,
@@ -37,6 +38,10 @@ const VERB_COLORS = {
 };
 
 export default function PatientRecordViewer() {
+    const { t } = useTranslation('orders');
+    // Event verbs are data enums (OBTAINED, EXAMINED, …); translate via a keyed
+    // lookup, falling back to the raw verb if a locale is missing one.
+    const verbLabel = (verb) => t(`record_verb_${verb}`, { defaultValue: verb });
     const {
         record,
         isLoading,
@@ -99,7 +104,7 @@ export default function PatientRecordViewer() {
             <div className="h-full flex items-center justify-center">
                 <div className="text-center">
                     <RefreshCw className="w-8 h-8 mx-auto mb-2 text-neutral-500 animate-spin" />
-                    <p className="text-sm text-neutral-400">Loading patient record...</p>
+                    <p className="text-sm text-neutral-400">{t('record_loading')}</p>
                 </div>
             </div>
         );
@@ -110,8 +115,8 @@ export default function PatientRecordViewer() {
             <div className="h-full flex items-center justify-center">
                 <div className="text-center">
                     <FileText className="w-12 h-12 mx-auto mb-2 text-neutral-600" />
-                    <p className="text-sm text-neutral-400">No active session</p>
-                    <p className="text-xs text-neutral-500 mt-1">Start a session to see patient record events</p>
+                    <p className="text-sm text-neutral-400">{t('record_no_session')}</p>
+                    <p className="text-xs text-neutral-500 mt-1">{t('record_no_session_help')}</p>
                 </div>
             </div>
         );
@@ -125,11 +130,15 @@ export default function PatientRecordViewer() {
                     <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
                             <Activity className="w-4 h-4 text-green-400" />
-                            Patient Record - Live View
+                            {t('record_live_title')}
                         </h3>
                         {summary && (
                             <p className="text-xs text-neutral-400 mt-1">
-                                {summary.patient_name} | {summary.elapsed_minutes} min | {summary.total_events} events
+                                {t('record_summary_line', {
+                                    name: summary.patient_name,
+                                    minutes: summary.elapsed_minutes,
+                                    events: summary.total_events
+                                })}
                             </p>
                         )}
                     </div>
@@ -137,24 +146,24 @@ export default function PatientRecordViewer() {
                         {/* Sync Status */}
                         <div className="text-xs text-neutral-500">
                             {syncError ? (
-                                <span className="text-red-400">Sync error</span>
+                                <span className="text-red-400">{t('record_sync_error')}</span>
                             ) : lastSyncTime ? (
-                                <span>Synced {lastSyncTime.toLocaleTimeString()}</span>
+                                <span>{t('record_synced', { time: lastSyncTime.toLocaleTimeString() })}</span>
                             ) : (
-                                <span>Not synced</span>
+                                <span>{t('record_not_synced')}</span>
                             )}
                         </div>
                         <button
                             onClick={forceSync}
                             className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
-                            title="Force sync now"
+                            title={t('record_force_sync')}
                         >
                             <RefreshCw className="w-4 h-4" />
                         </button>
                         <button
                             onClick={handleDownloadJSON}
                             className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
-                            title="Download JSON"
+                            title={t('record_download_json')}
                         >
                             <Download className="w-4 h-4" />
                         </button>
@@ -172,7 +181,7 @@ export default function PatientRecordViewer() {
                                 : 'text-neutral-400 hover:text-white'
                         }`}
                     >
-                        All ({getEventCount()})
+                        {t('record_filter_all', { count: getEventCount() })}
                     </button>
                     {Object.keys(VERB_ICONS).map(verb => {
                         const count = getEvents().filter(e => e.verb === verb).length;
@@ -189,7 +198,7 @@ export default function PatientRecordViewer() {
                                 }`}
                             >
                                 <Icon className="w-3 h-3" />
-                                {verb} ({count})
+                                {verbLabel(verb)} ({count})
                             </button>
                         );
                     })}
@@ -201,7 +210,7 @@ export default function PatientRecordViewer() {
                                 onChange={(e) => setAutoScroll(e.target.checked)}
                                 className="w-3 h-3"
                             />
-                            Auto-scroll
+                            {t('record_autoscroll')}
                         </label>
                         {/* View mode toggle */}
                         <div className="flex bg-neutral-800 rounded overflow-hidden">
@@ -211,7 +220,7 @@ export default function PatientRecordViewer() {
                                     viewMode === 'events' ? 'bg-neutral-600 text-white' : 'text-neutral-400 hover:text-white'
                                 }`}
                             >
-                                Events
+                                {t('record_view_events')}
                             </button>
                             <button
                                 onClick={() => setViewMode('narrative')}
@@ -219,7 +228,7 @@ export default function PatientRecordViewer() {
                                     viewMode === 'narrative' ? 'bg-neutral-600 text-white' : 'text-neutral-400 hover:text-white'
                                 }`}
                             >
-                                Narrative
+                                {t('record_view_narrative')}
                             </button>
                             <button
                                 onClick={() => setViewMode('json')}
@@ -227,7 +236,7 @@ export default function PatientRecordViewer() {
                                     viewMode === 'json' ? 'bg-neutral-600 text-white' : 'text-neutral-400 hover:text-white'
                                 }`}
                             >
-                                JSON
+                                {t('record_view_json')}
                             </button>
                         </div>
                     </div>
@@ -248,7 +257,7 @@ export default function PatientRecordViewer() {
                     <div className="flex-1 overflow-auto p-4">
                         {/* Narrative style selector */}
                         <div className="flex items-center gap-2 mb-4">
-                            <span className="text-xs text-neutral-500">Style:</span>
+                            <span className="text-xs text-neutral-500">{t('record_style_label')}</span>
                             <button
                                 onClick={() => setNarrativeStyle('context')}
                                 className={`px-2 py-1 text-xs rounded ${
@@ -257,7 +266,7 @@ export default function PatientRecordViewer() {
                                         : 'bg-neutral-800 text-neutral-400 hover:text-white'
                                 }`}
                             >
-                                Context (LLM)
+                                {t('record_style_context')}
                             </button>
                             <button
                                 onClick={() => setNarrativeStyle('summary')}
@@ -267,7 +276,7 @@ export default function PatientRecordViewer() {
                                         : 'bg-neutral-800 text-neutral-400 hover:text-white'
                                 }`}
                             >
-                                Summary (SOAP)
+                                {t('record_style_summary')}
                             </button>
                             <button
                                 onClick={() => setNarrativeStyle('timeline')}
@@ -277,13 +286,13 @@ export default function PatientRecordViewer() {
                                         : 'bg-neutral-800 text-neutral-400 hover:text-white'
                                 }`}
                             >
-                                Timeline
+                                {t('record_style_timeline')}
                             </button>
                         </div>
                         {/* Narrative content */}
                         <div className="bg-neutral-900 rounded-lg p-4 border border-neutral-800">
                             <pre className="text-sm text-neutral-200 font-sans whitespace-pre-wrap leading-relaxed">
-                                {narrative || 'No events recorded yet.'}
+                                {narrative || t('record_narrative_empty')}
                             </pre>
                         </div>
                         {/* Copy button */}
@@ -291,7 +300,7 @@ export default function PatientRecordViewer() {
                             onClick={() => navigator.clipboard.writeText(narrative)}
                             className="mt-3 px-3 py-1.5 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded"
                         >
-                            Copy to Clipboard
+                            {t('record_copy')}
                         </button>
                     </div>
                 ) : (
@@ -300,8 +309,8 @@ export default function PatientRecordViewer() {
                         {events.length === 0 ? (
                             <div className="text-center py-8">
                                 <Clock className="w-8 h-8 mx-auto mb-2 text-neutral-600" />
-                                <p className="text-sm text-neutral-400">No events yet</p>
-                                <p className="text-xs text-neutral-500 mt-1">Events will appear here as they happen</p>
+                                <p className="text-sm text-neutral-400">{t('record_no_events')}</p>
+                                <p className="text-xs text-neutral-500 mt-1">{t('record_no_events_help')}</p>
                             </div>
                         ) : (
                             <div className="space-y-2">
@@ -324,7 +333,7 @@ export default function PatientRecordViewer() {
                                                 {/* Content */}
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-xs font-bold uppercase">{event.verb}</span>
+                                                        <span className="text-xs font-bold uppercase">{verbLabel(event.verb)}</span>
                                                         {event.category && (
                                                             <span className="text-xs opacity-70">{event.category}</span>
                                                         )}
@@ -335,7 +344,7 @@ export default function PatientRecordViewer() {
                                                             <span className="text-xs opacity-70">({event.source})</span>
                                                         )}
                                                         {event.abnormal && (
-                                                            <span className="text-xs bg-red-600 text-white px-1 rounded">ABNORMAL</span>
+                                                            <span className="text-xs bg-red-600 text-white px-1 rounded">{t('record_abnormal')}</span>
                                                         )}
                                                     </div>
 
@@ -353,25 +362,25 @@ export default function PatientRecordViewer() {
                                                     {/* Additional details */}
                                                     <div className="flex flex-wrap gap-2 mt-1 text-xs opacity-70">
                                                         {event.value && (
-                                                            <span>Value: {event.value}{event.unit ? ` ${event.unit}` : ''}</span>
+                                                            <span>{t('record_label_value')}: {event.value}{event.unit ? ` ${event.unit}` : ''}</span>
                                                         )}
                                                         {event.dose && (
-                                                            <span>Dose: {event.dose}</span>
+                                                            <span>{t('record_label_dose')}: {event.dose}</span>
                                                         )}
                                                         {event.route && (
-                                                            <span>Route: {event.route}</span>
+                                                            <span>{t('record_label_route')}: {event.route}</span>
                                                         )}
                                                         {event.from && event.to && (
                                                             <span>{event.from} → {event.to}</span>
                                                         )}
                                                         {event.response && (
-                                                            <span>Response: {event.response}</span>
+                                                            <span>{t('record_label_response')}: {event.response}</span>
                                                         )}
                                                         {event.technique && (
-                                                            <span>Technique: {event.technique}</span>
+                                                            <span>{t('record_label_technique')}: {event.technique}</span>
                                                         )}
                                                         {event.type && (
-                                                            <span>Type: {event.type}</span>
+                                                            <span>{t('record_label_type')}: {event.type}</span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -388,7 +397,7 @@ export default function PatientRecordViewer() {
                 {/* Summary Sidebar */}
                 {summary && viewMode === 'events' && (
                     <div className="w-64 border-l border-neutral-800 bg-neutral-900/50 p-4 overflow-y-auto">
-                        <h4 className="text-xs font-bold text-neutral-400 uppercase mb-3">Summary</h4>
+                        <h4 className="text-xs font-bold text-neutral-400 uppercase mb-3">{t('record_summary_heading')}</h4>
 
                         {/* Verb counts */}
                         <div className="space-y-2 mb-4">
@@ -398,7 +407,7 @@ export default function PatientRecordViewer() {
                                     <div key={verb} className="flex items-center justify-between text-sm">
                                         <span className="flex items-center gap-2 text-neutral-400">
                                             <Icon className="w-3 h-3" />
-                                            {verb}
+                                            {verbLabel(verb)}
                                         </span>
                                         <span className="text-white font-bold">{count}</span>
                                     </div>
@@ -409,7 +418,7 @@ export default function PatientRecordViewer() {
                         {/* Current vitals */}
                         {summary.current_vitals && (
                             <>
-                                <h4 className="text-xs font-bold text-neutral-400 uppercase mb-2 mt-4">Current Vitals</h4>
+                                <h4 className="text-xs font-bold text-neutral-400 uppercase mb-2 mt-4">{t('record_current_vitals')}</h4>
                                 <div className="grid grid-cols-2 gap-2 text-xs">
                                     {summary.current_vitals.hr && (
                                         <div className="bg-neutral-800 p-2 rounded">
@@ -439,13 +448,13 @@ export default function PatientRecordViewer() {
                                     )}
                                     {summary.current_vitals.temp && (
                                         <div className="bg-neutral-800 p-2 rounded">
-                                            <span className="text-neutral-500">Temp</span>
+                                            <span className="text-neutral-500">{t('record_vital_temp')}</span>
                                             <span className="text-white font-bold ml-2">{summary.current_vitals.temp}</span>
                                         </div>
                                     )}
                                     {summary.current_vitals.pain !== null && (
                                         <div className="bg-neutral-800 p-2 rounded">
-                                            <span className="text-neutral-500">Pain</span>
+                                            <span className="text-neutral-500">{t('record_vital_pain')}</span>
                                             <span className="text-white font-bold ml-2">{summary.current_vitals.pain}/10</span>
                                         </div>
                                     )}

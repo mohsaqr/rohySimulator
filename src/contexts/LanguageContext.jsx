@@ -32,6 +32,20 @@ const pseudoRequested = () => {
 
 const noop = () => {};
 
+// Pre-login the user has no server preference yet, so the language they pick
+// from the login dropdown is remembered here and reapplied on the next visit.
+// Once authenticated, the stored server preference (user_preferences.language)
+// takes over; setUiLanguage keeps this key in sync so the two never disagree.
+const LS_KEY = 'rohy_ui_language';
+const storedLang = () => {
+    try {
+        const v = localStorage.getItem(LS_KEY);
+        return isKnownLanguage(v) ? v : null;
+    } catch {
+        return null;
+    }
+};
+
 const DEFAULT_CONTEXT = {
     uiLanguage: DEFAULT_LANGUAGE,
     caseLanguage: DEFAULT_LANGUAGE,
@@ -45,7 +59,7 @@ export const useLanguage = () => useContext(LanguageContext);
 
 export function LanguageProvider({ children }) {
     const { user } = useAuth();
-    const [uiLanguage, setUiLanguageState] = useState(DEFAULT_LANGUAGE);
+    const [uiLanguage, setUiLanguageState] = useState(storedLang() || DEFAULT_LANGUAGE);
     // null = follow uiLanguage; a code = explicit per-session override.
     const [caseOverride, setCaseOverride] = useState(null);
     // Gates the first authenticated render until the stored preference has
@@ -60,7 +74,8 @@ export function LanguageProvider({ children }) {
         let cancelled = false;
         setCaseOverride(null);
         if (!user) {
-            setUiLanguageState(DEFAULT_LANGUAGE);
+            // Logged out: honour the login-screen choice parked in localStorage.
+            setUiLanguageState(storedLang() || DEFAULT_LANGUAGE);
             setHydrated(true);
             return undefined;
         }
@@ -68,7 +83,11 @@ export function LanguageProvider({ children }) {
         apiFetch('/users/preferences')
             .then(prefs => {
                 if (cancelled) return;
-                setUiLanguageState(isKnownLanguage(prefs?.language) ? prefs.language : DEFAULT_LANGUAGE);
+                // Server preference wins; if none stored yet, keep the language
+                // the user picked pre-login rather than snapping back to English.
+                const next = isKnownLanguage(prefs?.language) ? prefs.language : (storedLang() || DEFAULT_LANGUAGE);
+                setUiLanguageState(next);
+                try { localStorage.setItem(LS_KEY, next); } catch { /* private mode */ }
             })
             .catch(err => {
                 console.error('[Language] Failed to load preference, staying on default:', err);
@@ -98,11 +117,16 @@ export function LanguageProvider({ children }) {
         }
         const previous = uiLanguage;
         setUiLanguageState(code);
+        try { localStorage.setItem(LS_KEY, code); } catch { /* private mode */ }
+        // Pre-login there is no account to persist against — the localStorage
+        // entry above is the whole story until the user signs in.
+        if (!user) return Promise.resolve();
         return apiPut('/users/preferences', { language: code }).catch(err => {
             setUiLanguageState(previous);
+            try { localStorage.setItem(LS_KEY, previous); } catch { /* private mode */ }
             throw err;
         });
-    }, [uiLanguage]);
+    }, [uiLanguage, user]);
 
     const setCaseLanguage = useCallback((code) => {
         setCaseOverride(code && isKnownLanguage(code) ? code : null);

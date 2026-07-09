@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { parse } from '@formatjs/icu-messageformat-parser';
 
 const LOCALES_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'locales');
-const TRANSLATED = ['it', 'fi', 'sv'];
+const TRANSLATED = ['it', 'fi', 'sv', 'de'];
 const GENERATED = ['en-XA'];
 
 const readNs = (lng, file) => JSON.parse(readFileSync(join(LOCALES_DIR, lng, file), 'utf8'));

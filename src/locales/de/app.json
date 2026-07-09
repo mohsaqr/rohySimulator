@@ -1,0 +1,20 @@
+{
+  "cancel": "Abbrechen",
+  "dismiss": "Verwerfen",
+  "end_debrief": "Beenden & Nachbesprechung",
+  "end_debrief_title": "Aktuelle Sitzung beenden und die Nachbesprechung öffnen",
+  "end_session_confirm_intro": "Dadurch wird der Fall zur Nachbesprechung geschlossen. Nach dem Beenden:",
+  "end_session_confirm_locked": "Anordnungen, Untersuchungen und Chat sind gesperrt.",
+  "end_session_confirm_timeline": "Die Zeitachse des Patienten schreitet nicht mehr voran.",
+  "end_session_confirm_title": "Diese Sitzung beenden?",
+  "end_session_confirm_transcript": "Sie können das Transkript im Nachbesprechungsraum einsehen, den Fall aber nicht erneut öffnen.",
+  "help_support": "Hilfe & Support",
+  "loading": "Wird geladen...",
+  "logout": "Abmelden",
+  "multi_tab_heads_up": "Achtung:",
+  "multi_tab_warning": "diese Sitzung ist in einem anderen Browser-Tab geöffnet. Es gilt die zuletzt gespeicherte Änderung.",
+  "my_profile": "Mein Profil",
+  "open_settings": "Einstellungen öffnen",
+  "settings": "Einstellungen",
+  "settings_menu_aria": "Menü für Einstellungen und Profil"
+}

@@ -48,6 +48,14 @@ export const LANGUAGES = {
         sttLabel: 'Swedish',
         llmDirective: 'Always respond in Swedish (svenska), regardless of the language the student writes in. Svara alltid på svenska.',
         dir: 'ltr'
+    },
+    de: {
+        name: 'German',
+        native: 'Deutsch',
+        stt: 'de-DE',
+        sttLabel: 'German',
+        llmDirective: 'Always respond in German (Deutsch), regardless of the language the student writes in. Antworte immer auf Deutsch.',
+        dir: 'ltr'
     }
 };
 
@@ -60,7 +68,6 @@ export const STT_DIALECTS = [
     { code: 'tr-TR', label: 'Turkish' },
     { code: 'ar-SA', label: 'Arabic (Saudi)' },
     { code: 'fr-FR', label: 'French' },
-    { code: 'de-DE', label: 'German' },
     { code: 'es-ES', label: 'Spanish' }
 ];
 
