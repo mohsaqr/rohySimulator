@@ -1,13 +1,20 @@
 // Locks in the ordering invariant for the LLM proxy's system-prompt
-// assembly: case content (system_prompt) leads, platform-wide
-// systemPromptTemplate trails as a reminder. Prior to this change the
-// platform template was *prepended* and shadowed every case persona.
+// assembly (2026-07-10 shape):
+//
+//   [language lead] → case system_prompt → platform template → RESPONSE
+//   CONTRACT (full language directive + always-on plain-speech rules).
+//
+// The platform template must never be *prepended* (it used to shadow every
+// case persona). The language directive appears twice — a one-line lead for
+// primacy and the full directive in the trailing contract for recency — and
+// the plain-speech rules trail EVERY request (replies render verbatim in
+// chat bubbles and feed TTS, so markdown is banned at the source).
 
 import { describe, expect, it } from 'vitest';
-import { assembleSystemPrompt } from '../../server/services/systemPromptAssembly.js';
+import { assembleSystemPrompt, PLAIN_SPEECH_RULES } from '../../server/services/systemPromptAssembly.js';
 
 describe('assembleSystemPrompt', () => {
-    it('case-built system_prompt leads, platform template trails', () => {
+    it('case-built system_prompt leads, platform template trails, contract last', () => {
         const out = assembleSystemPrompt({
             system_prompt: 'CASE: John Q. Patient, 55yo male, chest pain',
             systemPromptTemplate: 'Behavioral reminder: speak naturally.',
@@ -16,36 +23,35 @@ describe('assembleSystemPrompt', () => {
         const reminderIdx = out.indexOf('Behavioral reminder');
         expect(caseIdx).toBeGreaterThanOrEqual(0);
         expect(reminderIdx).toBeGreaterThan(caseIdx);
+        expect(out.indexOf(PLAIN_SPEECH_RULES)).toBeGreaterThan(reminderIdx);
         expect(out).toContain('\n\n---\n\n');
     });
 
-    it('returns just the case prompt when no platform template is set', () => {
-        expect(assembleSystemPrompt({ system_prompt: 'CASE only' })).toBe('CASE only');
+    it('the plain-speech rules trail EVERY request, even with no case language', () => {
+        const out = assembleSystemPrompt({ system_prompt: 'CASE only' });
+        expect(out.startsWith('CASE only')).toBe(true);
+        expect(out.endsWith(PLAIN_SPEECH_RULES)).toBe(true);
     });
 
-    it('returns just the platform template when no case prompt is provided', () => {
-        expect(assembleSystemPrompt({ systemPromptTemplate: 'PLATFORM only' })).toBe('PLATFORM only');
+    it('assembles the contract alone when both prompts are blank or missing', () => {
+        expect(assembleSystemPrompt()).toBe(PLAIN_SPEECH_RULES);
+        expect(assembleSystemPrompt({})).toBe(PLAIN_SPEECH_RULES);
+        expect(assembleSystemPrompt({ system_prompt: '   ', systemPromptTemplate: '\n\n' })).toBe(PLAIN_SPEECH_RULES);
     });
 
-    it('trims whitespace and omits separator for one-sided input', () => {
-        expect(assembleSystemPrompt({ system_prompt: '   CASE   ', systemPromptTemplate: '' })).toBe('CASE');
-        expect(assembleSystemPrompt({ system_prompt: '', systemPromptTemplate: '  TEMPLATE  ' })).toBe('TEMPLATE');
-    });
-
-    it('returns empty string when both inputs are blank or missing', () => {
-        expect(assembleSystemPrompt()).toBe('');
-        expect(assembleSystemPrompt({})).toBe('');
-        expect(assembleSystemPrompt({ system_prompt: '', systemPromptTemplate: '' })).toBe('');
-        expect(assembleSystemPrompt({ system_prompt: '   ', systemPromptTemplate: '\n\n' })).toBe('');
+    it('trims whitespace on prompt inputs', () => {
+        const out = assembleSystemPrompt({ system_prompt: '   CASE   ', systemPromptTemplate: '' });
+        expect(out.startsWith('CASE')).toBe(true);
+        expect(out).not.toContain('   CASE');
     });
 
     it('coerces non-string inputs without throwing', () => {
-        expect(assembleSystemPrompt({ system_prompt: {}, systemPromptTemplate: '' })).toBe('[object Object]');
-        expect(assembleSystemPrompt({ system_prompt: 42, systemPromptTemplate: undefined })).toBe('42');
-        expect(assembleSystemPrompt({ system_prompt: null, systemPromptTemplate: null })).toBe('');
         // The point: a malformed client payload should not 500 the route. We
         // intentionally accept the coerced string (even if odd) rather than
         // crash inside the proxy handler.
+        expect(assembleSystemPrompt({ system_prompt: {}, systemPromptTemplate: '' }).startsWith('[object Object]')).toBe(true);
+        expect(assembleSystemPrompt({ system_prompt: 42, systemPromptTemplate: undefined }).startsWith('42')).toBe(true);
+        expect(assembleSystemPrompt({ system_prompt: null, systemPromptTemplate: null })).toBe(PLAIN_SPEECH_RULES);
     });
 
     it('regression: platform template is never prepended in front of the case prompt', () => {
@@ -58,42 +64,43 @@ describe('assembleSystemPrompt', () => {
     });
 });
 
-// I18N (2026-07-08): the output-language directive from the registry trails
-// EVERYTHING — recency keeps it dominant over long English case prompts
-// (drift risk, I18N_PLAN.md §10). English requests must be byte-identical
-// to pre-i18n output (success criterion: zero behaviour change for English).
+// The case language is immutable and independent of the student's UI
+// language, so the directive must dominate: primacy (one-line lead before
+// the long English persona) AND recency (full directive inside the trailing
+// response contract).
 describe('assembleSystemPrompt — caseLanguage directive', () => {
-    it('appends the registry directive as the final block', () => {
+    it('a known case language leads the prompt and recurs in the trailing contract', () => {
         const out = assembleSystemPrompt({
             system_prompt: 'CASE: chest pain',
             systemPromptTemplate: 'Behavioral reminder.',
             caseLanguage: 'it'
         });
-        const italianIdx = out.indexOf('italiano');
-        expect(italianIdx).toBeGreaterThan(out.indexOf('CASE:'));
-        expect(italianIdx).toBeGreaterThan(out.indexOf('Behavioral reminder.'));
-        expect(out.endsWith('Rispondi sempre in italiano.')).toBe(true);
+        expect(out.startsWith('Respond only in Italian (Italiano).')).toBe(true);
+        const directiveIdx = out.indexOf('Rispondi sempre in italiano.');
+        expect(directiveIdx).toBeGreaterThan(out.indexOf('CASE:'));
+        expect(directiveIdx).toBeGreaterThan(out.indexOf('Behavioral reminder.'));
+        expect(out.endsWith(PLAIN_SPEECH_RULES)).toBe(true);
     });
 
-    it('English (the model default) appends nothing', () => {
-        expect(assembleSystemPrompt({ system_prompt: 'CASE', caseLanguage: 'en' })).toBe('CASE');
+    it('English gets its own directive too — an EN case stays English for a non-English student', () => {
+        const out = assembleSystemPrompt({ system_prompt: 'CASE', caseLanguage: 'en' });
+        expect(out.startsWith('Respond only in English.')).toBe(true);
+        expect(out).toContain('Always respond in English');
     });
 
-    it('unknown or malformed codes are ignored, never crash the assembly', () => {
-        expect(assembleSystemPrompt({ system_prompt: 'CASE', caseLanguage: 'xx' })).toBe('CASE');
-        expect(assembleSystemPrompt({ system_prompt: 'CASE', caseLanguage: undefined })).toBe('CASE');
-        expect(assembleSystemPrompt({ system_prompt: 'CASE', caseLanguage: { evil: 1 } })).toBe('CASE');
+    it('unknown or malformed codes add no language blocks, never crash the assembly', () => {
+        for (const junk of ['xx', undefined, { evil: 1 }, '']) {
+            const out = assembleSystemPrompt({ system_prompt: 'CASE', caseLanguage: junk });
+            expect(out.startsWith('CASE')).toBe(true);
+            expect(out).not.toContain('Respond only in');
+            expect(out.endsWith(PLAIN_SPEECH_RULES)).toBe(true);
+        }
     });
 
-    it('directive stands alone when no prompts are provided', () => {
+    it('language lead + contract stand alone when no prompts are provided', () => {
         const out = assembleSystemPrompt({ caseLanguage: 'fi' });
-        expect(out).toContain('Finnish');
-        expect(out).not.toContain('---');
-    });
-
-    it('English-only requests are byte-identical to the pre-i18n behaviour', () => {
-        const legacy = assembleSystemPrompt({ system_prompt: 'CASE', systemPromptTemplate: 'T' });
-        expect(assembleSystemPrompt({ system_prompt: 'CASE', systemPromptTemplate: 'T', caseLanguage: 'en' })).toBe(legacy);
-        expect(assembleSystemPrompt({ system_prompt: 'CASE', systemPromptTemplate: 'T', caseLanguage: '' })).toBe(legacy);
+        expect(out.startsWith('Respond only in Finnish (Suomi).')).toBe(true);
+        expect(out).toContain('Vastaa aina suomeksi.');
+        expect(out.endsWith(PLAIN_SPEECH_RULES)).toBe(true);
     });
 });

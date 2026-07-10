@@ -498,6 +498,42 @@ describe('ConfigPanel', () => {
         errSpy.mockRestore();
     });
 
+    // CONTRACT: the case list is a course → cases browser — cases group
+    // under their course (alphabetical), unassigned cases trail last, and
+    // every card shows its language flag + case code.
+    it('groups cases by course with language flags and case codes, Unassigned last', async () => {
+        server.use(
+            http.get('*/api/cases', () => HttpResponse.json({ cases: [
+                { id: 1, name: 'Chest pain', description: 'd', is_available: true, is_default: true,
+                  case_code: 'EN-0001', config: { case_language: 'en' }, course_id: 10, course_name: 'Basic course' },
+                { id: 2, name: 'Dolore toracico', description: 'd', is_available: true, is_default: false,
+                  case_code: 'IT-0002', config: { case_language: 'it' }, course_id: 11, course_name: 'Corso di cardiologia' },
+                { id: 3, name: 'Orphan case', description: 'd', is_available: true, is_default: false,
+                  case_code: 'EN-0003', config: { case_language: 'en' }, course_id: null, course_name: null },
+            ] })),
+        );
+        const onLoadCase = vi.fn();
+        mount({ initialTab: 'cases', onLoadCase });
+        await waitForAdmin();
+
+        // Group headers render, Unassigned trailing last in DOM order.
+        expect(await screen.findByText('Basic course')).toBeInTheDocument();
+        expect(screen.getByText('Corso di cardiologia')).toBeInTheDocument();
+        expect(screen.getByText('Unassigned cases')).toBeInTheDocument();
+        const text = document.body.textContent;
+        expect(text.indexOf('Basic course')).toBeLessThan(text.indexOf('Corso di cardiologia'));
+        expect(text.indexOf('Corso di cardiologia')).toBeLessThan(text.indexOf('Unassigned cases'));
+
+        // Language flag + visible case code on the cards.
+        expect(screen.getByText('🇮🇹')).toBeInTheDocument();
+        expect(screen.getByText('IT-0002')).toBeInTheDocument();
+        expect(screen.getByText('EN-0003')).toBeInTheDocument();
+
+        // Load still hands the case to the app from inside a group.
+        fireEvent.click(screen.getAllByRole('button', { name: /^Load$/i })[0]);
+        expect(onLoadCase).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
+    });
+
     // CONTRACT: clicking "New Case" opens the wizard (smoke for the
     // wizard's mount path from the empty-list view).
     it('opens the case wizard when "New Case" is clicked', async () => {

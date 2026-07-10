@@ -26,6 +26,9 @@ describe('LANGUAGES registry shape', () => {
             expect(code).toMatch(/^[a-z]{2}$/);
             expect(typeof lang.name).toBe('string');
             expect(typeof lang.native).toBe('string');
+            // Flag emoji: shown in the top-bar badge and every language picker.
+            expect(typeof lang.flag).toBe('string');
+            expect(lang.flag.length).toBeGreaterThan(0);
             expect(lang.stt).toMatch(/^[a-z]{2}-[A-Z]{2}$/);
             expect(typeof lang.sttLabel).toBe('string');
             expect(['ltr', 'rtl']).toContain(lang.dir);
@@ -41,13 +44,11 @@ describe('LANGUAGES registry shape', () => {
         }
     });
 
-    it('English is the model default: no directive', () => {
-        expect(LANGUAGES.en.llmDirective).toBeNull();
-    });
-
-    it('every non-English language has a directive naming its target', () => {
-        for (const [code, lang] of Object.entries(LANGUAGES)) {
-            if (code === DEFAULT_LANGUAGE) continue;
+    it('every language has a directive naming its target — English included (immutable case language)', () => {
+        // Case language is immutable and independent of the UI language, so
+        // even an English case needs "stay in English" against an Italian
+        // student. No language rides on the model default anymore.
+        for (const lang of Object.values(LANGUAGES)) {
             expect(lang.llmDirective).toContain(lang.name);
         }
     });
@@ -58,8 +59,8 @@ describe('llmDirectiveFor', () => {
         expect(llmDirectiveFor('it')).toBe(LANGUAGES.it.llmDirective);
     });
 
-    it('returns null for English', () => {
-        expect(llmDirectiveFor('en')).toBeNull();
+    it('returns the English directive for en (immutable case language)', () => {
+        expect(llmDirectiveFor('en')).toBe(LANGUAGES.en.llmDirective);
     });
 
     it('never throws on body-sourced junk — returns null', () => {

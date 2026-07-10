@@ -109,6 +109,7 @@ export default function TopBarControls({
                className={`rohy-topbar-menu-trigger text-sm ${showLang ? 'rohy-topbar-menu-trigger-open' : ''}`}
             >
                <Globe className="w-4 h-4 text-[var(--rohy-accent)]" />
+               <span aria-hidden="true">{(LANGUAGES[uiLanguage] || LANGUAGES.en).flag}</span>
                <ChevronDown className={`w-4 h-4 text-[var(--rohy-muted)] transition-transform ${showLang ? 'rotate-180' : ''}`} />
             </button>
             {showLang && langPos && panel(langPos, 'app-language-menu',
@@ -122,7 +123,7 @@ export default function TopBarControls({
                      className="rohy-topbar-menu-item"
                   >
                      <Check className={`w-4 h-4 ${uiLanguage === code ? 'opacity-100 text-[var(--rohy-accent)]' : 'opacity-0'}`} />
-                     {langLabel(lang)}
+                     {lang.flag} {langLabel(lang)}
                   </button>
                ))
             )}

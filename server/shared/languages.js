@@ -5,14 +5,18 @@
 // crash only in the deployed image (the Lab_database.json failure mode).
 // Client code imports this via the re-export at src/i18n/languages.js.
 //
-// Adding a language = adding one entry here + a locales/<code>/ folder
-// (+ optional voice catalogue rows / Piper .onnx files). No component,
-// route, or service may hardcode a language name or code.
+// Adding a language = adding one entry here (including its flag emoji) +
+// a locales/<code>/ folder (+ optional voice catalogue rows / Piper .onnx
+// files). No component, route, or service may hardcode a language name,
+// code, or flag.
 //
-// llmDirective: appended server-side to the assembled system prompt
+// llmDirective: applied server-side to the assembled system prompt
 // (server/services/systemPromptAssembly.js). Phrased in English naming the
 // target language — reviewable by non-speakers — with a short native-language
-// reinforcement. null = model default (English), nothing appended.
+// reinforcement. Every language carries one (case language is immutable and
+// independent of the student's UI language, so even an English case needs
+// "stay in English" when the student writes Italian); requests with NO
+// case language get nothing appended.
 
 export const DEFAULT_LANGUAGE = 'en';
 
@@ -20,14 +24,16 @@ export const LANGUAGES = {
     en: {
         name: 'English',
         native: 'English',
+        flag: '🇬🇧',
         stt: 'en-US',
         sttLabel: 'English (US)',
-        llmDirective: null,
+        llmDirective: 'Always respond in English, regardless of the language the student writes in.',
         dir: 'ltr'
     },
     it: {
         name: 'Italian',
         native: 'Italiano',
+        flag: '🇮🇹',
         stt: 'it-IT',
         sttLabel: 'Italian',
         llmDirective: 'Always respond in Italian (italiano), regardless of the language the student writes in. Rispondi sempre in italiano.',
@@ -36,6 +42,7 @@ export const LANGUAGES = {
     fi: {
         name: 'Finnish',
         native: 'Suomi',
+        flag: '🇫🇮',
         stt: 'fi-FI',
         sttLabel: 'Finnish',
         llmDirective: 'Always respond in Finnish (suomi), regardless of the language the student writes in. Vastaa aina suomeksi.',
@@ -44,6 +51,7 @@ export const LANGUAGES = {
     sv: {
         name: 'Swedish',
         native: 'Svenska',
+        flag: '🇸🇪',
         stt: 'sv-SE',
         sttLabel: 'Swedish',
         llmDirective: 'Always respond in Swedish (svenska), regardless of the language the student writes in. Svara alltid på svenska.',
@@ -52,6 +60,7 @@ export const LANGUAGES = {
     de: {
         name: 'German',
         native: 'Deutsch',
+        flag: '🇩🇪',
         stt: 'de-DE',
         sttLabel: 'German',
         llmDirective: 'Always respond in German (Deutsch), regardless of the language the student writes in. Antworte immer auf Deutsch.',
@@ -78,9 +87,11 @@ export function isKnownLanguage(code) {
 /**
  * Output-language directive for the LLM system prompt.
  * @param {string} code  Registry language code ('en', 'it', …).
- * @returns {string|null} Directive text, or null when the model default
- *   applies (English, unknown, or missing code — never throws on bad input
- *   because the value arrives from a request body).
+ * @returns {string|null} Directive text, or null for an unknown/missing code
+ *   (never throws on bad input because the value arrives from a request
+ *   body). English carries a directive too: the case language is immutable
+ *   and independent of the student's UI language, so an English case must
+ *   stay English even when the student writes in another language.
  */
 export function llmDirectiveFor(code) {
     if (!isKnownLanguage(code)) return null;

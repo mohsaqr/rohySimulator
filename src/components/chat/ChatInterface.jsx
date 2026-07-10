@@ -15,7 +15,7 @@ import { apiFetch, apiPost } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
 import { VoiceService } from '../../services/voiceService';
 import { useVoice } from '../../contexts/VoiceContext';
-import { stripStageDirections } from '../../utils/stageDirections';
+import { sanitizeResponseText } from '../../utils/plainText';
 import { parseConfig } from '../../utils/parseConfig';
 import { extractCompleteSentences } from '../../utils/sentenceSplit';
 import { resolveVoice, voiceMatchesLanguage } from '../../utils/voiceResolver';
@@ -1152,7 +1152,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 caseLanguage,
                 onDelta: (delta) => {
                     acc += delta;
-                    const display = stripStageDirections(acc);
+                    const display = sanitizeResponseText(acc);
                     setMessages(prev => {
                         const copy = [...prev];
                         copy[assistantIdx] = { role: 'assistant', content: display };
@@ -1164,7 +1164,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     const { sentences, remainder } = extractCompleteSentences(speechBuffer);
                     speechBuffer = remainder;
                     for (const s of sentences) {
-                        const spoken = stripStageDirections(s).trim();
+                        const spoken = sanitizeResponseText(s).trim();
                         if (spoken) speech.enqueue(spoken);
                     }
                 }
@@ -1179,7 +1179,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const isError = typeof responseText === 'string' && responseText.startsWith('Error:');
         const finalDisplay = isError
             ? responseText
-            : (acc ? stripStageDirections(acc) : (responseText ? stripStageDirections(responseText) : t('no_response_from_llm')));
+            : (acc ? sanitizeResponseText(acc) : (responseText ? sanitizeResponseText(responseText) : t('no_response_from_llm')));
         setMessages(prev => {
             const copy = [...prev];
             if (assistantIdx >= 0 && copy[assistantIdx]?.role === 'assistant') {
@@ -1198,7 +1198,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             if (isError || !responseText) {
                 speech.cancel();
             } else {
-                const tail = stripStageDirections(speechBuffer).trim();
+                const tail = sanitizeResponseText(speechBuffer).trim();
                 if (tail) speech.enqueue(tail);
                 speech.flush();
             }
@@ -1211,7 +1211,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // that plays.
     const speakResponse = (responseText, { override }) => {
         const r = resolveSpeakerVoice(override);
-        const spokenText = stripStageDirections(responseText);
+        const spokenText = sanitizeResponseText(responseText);
         if (!spokenText || responseText.startsWith('Error:')) return;
         if (!r.file) {
             console.warn('[voice] no voice resolved for agent', {
@@ -1250,7 +1250,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         if (!voiceMode || activeTab !== 'patient') return false;
         if (prefs.avatarAlarmSpeechEnabled === false || isAvatarAlarmSpeechForceOff()) return false;
         const r = resolveSpeakerVoice(activeCase?.config?.voice, patientTemplate?.config?.voice);
-        const spokenText = stripStageDirections(text);
+        const spokenText = sanitizeResponseText(text);
         if (!spokenText || !r.file) return false;
 
         notifySubstitutionOnce(toast, t, r);

@@ -396,7 +396,7 @@ export default function UserProfilePanel({ _onClose }) {
                             >
                                 {Object.entries(LANGUAGES).map(([code, lang]) => (
                                     <option key={code} value={code}>
-                                        {lang.native === lang.name ? lang.native : `${lang.native} (${lang.name})`}
+                                        {lang.flag} {lang.native === lang.name ? lang.native : `${lang.native} (${lang.name})`}
                                     </option>
                                 ))}
                             </select>

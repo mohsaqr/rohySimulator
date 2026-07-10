@@ -119,3 +119,53 @@ describe('PUT /api/users/preferences — merge, not replace', () => {
         expect(prefs.theme).toBe('light');
     });
 });
+
+// "No preference stored" must never be fabricated into language 'en'
+// (fixed 2026-07-10): the client falls back to its localStorage pick only
+// when the server says null — a fabricated 'en' snapped the UI back to
+// English on every refresh AND overwrote the localStorage record.
+describe('GET/PUT /api/users/preferences — no stored language stays null', () => {
+    let server;
+    let db;
+    let virginFetch;
+
+    const putPrefs = (body) => virginFetch('/api/users/preferences', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+    });
+    const getPrefs = async () => (await virginFetch('/api/users/preferences')).json();
+
+    beforeAll(async () => {
+        server = await startTestServer({ seed: false });
+        db = await openDb(server.dbPath);
+        await seedUser(db, { username: 'prefs-virgin', role: 'student' });
+        virginFetch = authed(server.baseUrl, await login(server.baseUrl, 'prefs-virgin'));
+    }, 30_000);
+
+    afterAll(async () => {
+        if (db) await closeDb(db);
+        if (server) await server.close();
+    });
+
+    it('GET with no prefs row reports language null, not en', async () => {
+        const prefs = await getPrefs();
+        expect(prefs.language).toBeNull();
+        expect(prefs.theme).toBe('dark');
+    });
+
+    it('regression: a first-ever partial PUT does not mint language en', async () => {
+        // The exact write UserProfilePanel's "Save AI settings" performs for a
+        // user who has never picked a language.
+        const res = await putPrefs({ default_llm_settings: { provider: 'openai', model: 'gpt-4o' } });
+        expect(res.status).toBe(200);
+        const prefs = await getPrefs();
+        expect(prefs.language).toBeNull();
+        expect(JSON.parse(prefs.default_llm_settings).model).toBe('gpt-4o');
+    });
+
+    it('an explicit pick after that still persists', async () => {
+        await putPrefs({ language: 'sv' });
+        const prefs = await getPrefs();
+        expect(prefs.language).toBe('sv');
+    });
+});

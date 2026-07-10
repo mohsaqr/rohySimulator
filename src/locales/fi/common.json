@@ -35,6 +35,7 @@
   "room_chat_sub": "keskustelu",
   "room_consultant": "Konsultti",
   "room_consultant_sub": "jälkipuinti",
+  "room_course": "Kurssi",
   "room_examination": "Tutkimus",
   "room_examination_sub": "kliininen tutkimus",
   "room_lab": "Laboratorio",
@@ -58,5 +59,11 @@
   "unknown": "Tuntematon",
   "unlimited": "Rajaton",
   "very_confident": "Erittäin varma",
+  "voice_default_note": "Tälle puhujalle ei ole määritetty ääntä — kielen oletusääni toistetaan: {playing}.",
+  "voice_engine_free": "ilmainen",
+  "voice_engine_paid": "maksullinen",
+  "voice_engine_unavailable": "ei saatavilla",
+  "voice_group_other": "Muu",
+  "voice_unplayable_note": "Määritetty ääni {requested} ei toistu palvelussa {provider} — mitään ei puhuta ennen kuin tämä on korjattu.",
   "yes": "Kyllä"
 }

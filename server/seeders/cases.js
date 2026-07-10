@@ -3,6 +3,7 @@
  * Seeds representative clinical cases when database is empty
  */
 import { logger } from '../logger.js';
+import { caseCodeFor, normalizeCaseLanguage } from '../shared/caseCode.js';
 
 const seederLog = logger('seeder');
 
@@ -570,6 +571,51 @@ export async function seedCases(db) {
             } else {
                 resolve({ seeded, skipped: 0 });
             }
+        });
+    });
+}
+
+/**
+ * Boot sweep: every case owns a concrete immutable language and a visible
+ * case_code (<LANG>-<zero-padded id>). Fresh-DB seeding runs AFTER migration
+ * 0035's backfill, so rows seeded above arrive here without codes; the sweep
+ * also self-heals any future insert path that skips stamping. Idempotent —
+ * only rows with case_code IS NULL are touched.
+ * @param {Object} db - SQLite database instance
+ * @returns {Promise<{stamped: number}>}
+ */
+export function ensureCaseCodes(db) {
+    return new Promise((resolve, reject) => {
+        db.all(`SELECT id, config FROM cases WHERE case_code IS NULL`, [], async (err, rows) => {
+            if (err) return reject(err);
+            let stamped = 0;
+            for (const row of rows) {
+                // Pin the concrete language into config while stamping the
+                // code; malformed config is left untouched (code only).
+                let config = null;
+                try {
+                    config = row.config ? JSON.parse(row.config) : {};
+                } catch { /* malformed legacy config — stamp code only */ }
+                const normalized = config
+                    ? { ...config, case_language: normalizeCaseLanguage(config) }
+                    : null;
+                try {
+                    await new Promise((res, rej) => db.run(
+                        normalized
+                            ? `UPDATE cases SET case_code = ?, config = ? WHERE id = ?`
+                            : `UPDATE cases SET case_code = ? WHERE id = ?`,
+                        normalized
+                            ? [caseCodeFor(normalized, row.id), JSON.stringify(normalized), row.id]
+                            : [caseCodeFor(null, row.id), row.id],
+                        (uErr) => uErr ? rej(uErr) : res()
+                    ));
+                    stamped++;
+                } catch (e) {
+                    seederLog.error('case code stamp failed', { case_id: row.id, error: e.message });
+                }
+            }
+            if (stamped > 0) seederLog.info('case codes stamped', { count: stamped });
+            resolve({ stamped });
         });
     });
 }

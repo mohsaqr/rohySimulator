@@ -123,6 +123,8 @@ migration also requires adding a row here**.
 
 | 0034 | `0034_voice2_provider_follows_voice.sql` | additive | Voice 2.0 settings retirement (data-only, no schema change, re-run-safe). Carries an unambiguous legacy `default_voice_kokoro_*` value into `tts_default_voice_en`, then DELETEs the retired rows: `tts_provider` (the engine is now derived per voice by exact catalogue membership — VOICE2_PLAN.md), the gendered `default_voice_<provider>_<gender>` family, and any recreated `voice_<provider>_<gender>` slot rows (gender-suffix GLOBs on purpose — a bare `voice_%` would hit `voice_mode_enabled`). Case/persona `case_voice` values untouched. The new keys (`tts_default_voice_<lang>`, `tts_provider_enabled_<p>`) are seeded idempotently by boot code, not here. |
 
+| 0035 | `0035_case_code.sql` | additive | Visible language-bearing case identifier: new nullable `cases.case_code TEXT` + partial unique index, backfilled as `<LANG>-<zero-padded id>` (numeric part = the untouched integer PK, so unique by construction). Also pins the now-immutable case language: `config.case_language` is normalized to a concrete registry code (absent/empty/unknown → `'en'`; a case never "follows the student's UI language" anymore). Malformed-JSON configs are left untouched and coded `EN-…`. Rows inserted after migrations (fresh-DB seeders) are stamped by the `ensureCaseCodes()` boot sweep. |
+
 **To add a new migration**: append a row above. ID + filename match the SQL
 file. Set `Type` per the policy. `Notes` is freeform — what changed and why
 in one sentence.

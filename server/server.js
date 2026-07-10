@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 import db, { dbReady } from './db.js';
 import dbAdapter from './dbAdapter.js';
 import { runSeeders, needsSeeding } from './seeders/index.js';
+import { ensureCaseCodes } from './seeders/cases.js';
 import seedStemiCourse from './seedStemiCourse.js';
 import { loadKokoro } from './services/kokoroTts.js';
 import { auditPersonaAndCaseVoices } from './healthChecks/voiceCatalogueAudit.js';
@@ -272,6 +273,16 @@ async function initializeAndStart() {
     // Idempotently fill the default "Basic course" with STEMI lesson content +
     // a clinical-reasoning survey (no-op once seeded). Non-fatal on failure.
     await seedStemiCourse();
+
+    // Every case must carry a visible language-bearing case_code (IT-0042).
+    // Migration 0035 backfilled pre-existing rows; this sweep covers rows the
+    // seeders just inserted (they run after migrations) and self-heals any
+    // insert path that skipped stamping. Idempotent, non-fatal on failure.
+    try {
+        await ensureCaseCodes(db);
+    } catch (err) {
+        bootLog.error('case code sweep failed', { error: err.message, fatal: false });
+    }
 
     // Voice 2.0 seeding (VOICE2_PLAN.md §5.5). There is no platform engine
     // setting anymore — each voice plays on its own (derived) engine. What

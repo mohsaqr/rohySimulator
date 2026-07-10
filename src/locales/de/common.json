@@ -35,6 +35,7 @@
   "room_chat_sub": "Chat",
   "room_consultant": "Facharzt",
   "room_consultant_sub": "Nachbesprechung",
+  "room_course": "Kurs",
   "room_examination": "Untersuchung",
   "room_examination_sub": "körperliche Untersuchung",
   "room_lab": "Labor",
@@ -58,5 +59,11 @@
   "unknown": "Unbekannt",
   "unlimited": "Unbegrenzt",
   "very_confident": "Sehr sicher",
+  "voice_default_note": "Keine Stimme für diesen Sprecher konfiguriert — die Standardstimme der Sprache wird abgespielt: {playing}.",
+  "voice_engine_free": "kostenlos",
+  "voice_engine_paid": "kostenpflichtig",
+  "voice_engine_unavailable": "nicht verfügbar",
+  "voice_group_other": "Sonstige",
+  "voice_unplayable_note": "Die konfigurierte Stimme {requested} kann auf {provider} nicht abgespielt werden — es wird nichts gesprochen, bis das behoben ist.",
   "yes": "Ja"
 }

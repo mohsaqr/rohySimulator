@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -312,6 +312,26 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
     // Cases State
     const [cases, setCases] = useState([]);
     const [, setSelectedCaseId] = useState(null);
+    // Course → cases browsing: GET /cases carries each case's course
+    // (course_name via the one-case⇄one-course join). Courses render
+    // alphabetically; cases without a course collect in a trailing
+    // "Unassigned" group (educator-only in enforced installs — students
+    // never see unassigned cases there).
+    const caseGroups = useMemo(() => {
+        const byCourse = new Map();
+        for (const c of cases) {
+            const key = c.course_name || '';
+            if (!byCourse.has(key)) byCourse.set(key, []);
+            byCourse.get(key).push(c);
+        }
+        const named = [...byCourse.keys()]
+            .filter(k => k !== '')
+            .sort((a, b) => a.localeCompare(b))
+            .map(name => ({ key: name, name, cases: byCourse.get(name) }));
+        return byCourse.has('')
+            ? [...named, { key: '__unassigned', name: null, cases: byCourse.get('') }]
+            : named;
+    }, [cases]);
     // Stash shape: { _stashedAt: ISO string, _caseId: number|'new', ...rest of editingCase }.
     // The _stashedAt + _caseId let the wizard show a "Resumed draft from X"
     // banner so admins know this isn't a fresh open from the server.
@@ -412,6 +432,14 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             toast.error(t('toast_course_assign_failed', { defaultValue: 'Could not update the course assignment.' }));
         }
         loadCaseAssignments();
+        // Re-fetch the catalog too: the list is grouped by course_name, so the
+        // reassigned case has to move into its new group.
+        try {
+            const data = await apiFetch('/cases');
+            setCases(data.cases || []);
+        } catch (err) {
+            console.error('Failed to refresh cases after course change', err);
+        }
     };
 
     // Load Cases on Mount
@@ -752,12 +780,36 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                         </div>
                                     )}
 
-                                    <div className="grid gap-3">
-                                        {cases.map(c => (
+                                    <div className="space-y-5">
+                                        {caseGroups.map(group => (
+                                        <div key={group.key}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-sm font-bold text-gray-800">
+                                                {group.name ?? t('course_group_unassigned')}
+                                            </span>
+                                            <span className="text-xs text-gray-500">({group.cases.length})</span>
+                                        </div>
+                                        <div className="grid gap-3">
+                                        {group.cases.map(c => (
                                             <div key={c.id} className={`rohy-card p-4 rounded-lg flex justify-between items-center ${c.is_default ? 'rohy-card-active' : ''}`}>
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2">
                                                         <span className="font-bold text-gray-900">{c.name}</span>
+                                                        {/* Language flag + visible case code — the case's own
+                                                            immutable language, independent of the UI language. */}
+                                                        {LANGUAGES[c.config?.case_language] && (
+                                                            <span title={LANGUAGES[c.config.case_language].native}>
+                                                                {LANGUAGES[c.config.case_language].flag}
+                                                            </span>
+                                                        )}
+                                                        {c.case_code && (
+                                                            <span
+                                                                className="px-2 py-0.5 font-mono text-xs rounded border bg-gray-100 text-gray-700 border-gray-300"
+                                                                title={t('case_code_title')}
+                                                            >
+                                                                {c.case_code}
+                                                            </span>
+                                                        )}
                                                         {c.is_default && (
                                                             <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded border border-green-300">{t('badge_default')}</span>
                                                         )}
@@ -852,8 +904,10 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                     exportedAt: new Date().toISOString(),
                                                                     ...c
                                                                 };
-                                                                // Remove database ID for portability
+                                                                // Remove database ID + stamped code for portability
+                                                                // (an import is a new case and gets its own code).
                                                                 delete caseJSON.id;
+                                                                delete caseJSON.case_code;
 
                                                                 const json = JSON.stringify(caseJSON, null, 2);
                                                                 const blob = new Blob([json], { type: 'application/json' });
@@ -889,6 +943,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                         id: undefined // Remove ID so it creates a new case
                                                                     };
                                                                     delete duplicatedCase.id;
+                                                                    // The copy gets its own server-stamped code.
+                                                                    delete duplicatedCase.case_code;
                                                                     localStorage.removeItem('rohy_editing_case');
                                                                     console.log('[ConfigPanel] Duplicating case:', c.name);
                                                                     setEditingCase(duplicatedCase);
@@ -904,6 +960,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                     )}
                                                 </div>
                                             </div>
+                                        ))}
+                                        </div>
+                                        </div>
                                         ))}
                                         {cases.length === 0 && (
                                             <div className="text-neutral-500 text-center py-8">
@@ -3467,15 +3526,28 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                     />
                                 </div>
                                 <div>
-                                    <label className="label-xs">{t('demo_case_language')}</label>
+                                    <label className="label-xs flex items-center gap-2">
+                                        {t('demo_case_language')}
+                                        {caseData.case_code && (
+                                            <span
+                                                className="px-1.5 py-0.5 font-mono text-[10px] rounded border border-neutral-600 bg-neutral-800 text-neutral-300"
+                                                title={t('case_code_title')}
+                                            >
+                                                {caseData.case_code}
+                                            </span>
+                                        )}
+                                    </label>
+                                    {/* Case language is IMMUTABLE: pick it at creation, locked
+                                        afterwards (the server ignores changes anyway — the case's
+                                        dialogue behavior and its case_code prefix never change). */}
                                     <select
-                                        value={caseData.config?.case_language || ''}
-                                        onChange={e => updateConfig('case_language', e.target.value || null)}
-                                        className="input-dark"
+                                        value={caseData.config?.case_language || 'en'}
+                                        onChange={e => updateConfig('case_language', e.target.value)}
+                                        disabled={Boolean(caseData.id)}
+                                        className="input-dark disabled:opacity-60 disabled:cursor-not-allowed"
                                     >
-                                        <option value="">{t('demo_case_language_follow')}</option>
                                         {Object.entries(LANGUAGES).map(([code, lang]) => (
-                                            <option key={code} value={code}>{lang.native} ({code})</option>
+                                            <option key={code} value={code}>{lang.flag} {lang.native} ({code})</option>
                                         ))}
                                     </select>
                                     <p className="text-[11px] text-neutral-500 mt-1">

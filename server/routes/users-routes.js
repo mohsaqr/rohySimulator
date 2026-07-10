@@ -405,9 +405,13 @@ router.get('/users/preferences', authenticateToken, (req, res) => {
         (err, prefs) => {
             if (err) return res.status(500).json({ error: err.message });
             if (!prefs) {
+                // language: null (not 'en') — "no preference stored" must stay
+                // distinguishable from a deliberate English pick, or the client
+                // overwrites the user's pre-login localStorage choice with 'en'
+                // on every refresh (LanguageContext falls back correctly on null).
                 return res.json({
                     theme: 'dark',
-                    language: 'en',
+                    language: null,
                     notification_settings: null,
                     dashboard_layout: null,
                     default_llm_settings: null,
@@ -438,7 +442,10 @@ router.put('/users/preferences', authenticateToken, (req, res) => {
 
         const merged = {
             theme: theme !== undefined ? (theme || 'dark') : (oldPrefs?.theme || 'dark'),
-            language: language !== undefined ? (language || 'en') : (oldPrefs?.language || 'en'),
+            // NULL, never a fabricated 'en': a first-ever PUT that only carries
+            // default_llm_settings must not mint a row claiming the user chose
+            // English (that row would defeat the GET null-language fallback).
+            language: language !== undefined ? (language || null) : (oldPrefs?.language ?? null),
             notification_settings: keepOrJson(notification_settings, oldPrefs?.notification_settings),
             dashboard_layout: keepOrJson(dashboard_layout, oldPrefs?.dashboard_layout),
             default_llm_settings: keepOrJson(default_llm_settings, oldPrefs?.default_llm_settings),

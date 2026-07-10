@@ -233,6 +233,28 @@ describe('per-case courses: seed shape, assignment endpoints, student gating', (
         expect([200, 201]).toContain(start.status);
     });
 
+    // ---- Course annotation on the catalog ---------------------------------------
+    it('GET /cases carries each case\'s course (course_name) for grouping', async () => {
+        const a = await json(await admin('/api/cases'));
+        const byId = new Map(a.cases.map((c) => [c.id, c]));
+
+        expect(byId.get(defaultCase.id).course_name).toBe('Basic course');
+        // otherCases[0] was assigned to 'Sepsis module' by the previous test.
+        expect(byId.get(otherCases[0].id).course_name).toBe('Sepsis module');
+        // The remaining seeded cases ship unassigned → null course.
+        for (const c of otherCases.slice(1)) {
+            expect(byId.get(c.id).course_name).toBeNull();
+        }
+
+        // The enforced student sees only cases whose course they belong to —
+        // never a null-course (unassigned) case.
+        const s = await json(await student('/api/cases'));
+        expect(s.cases.length).toBeGreaterThan(0);
+        for (const c of s.cases) {
+            expect(c.course_name).not.toBeNull();
+        }
+    });
+
     // ---- Assignment endpoints ---------------------------------------------------
     it('GET /courses/case-assignments maps every case to its course (educator+); student is 403', async () => {
         const res = await admin('/api/courses/case-assignments');

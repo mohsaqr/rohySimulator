@@ -5,6 +5,13 @@
  * Usage:
  *   - Automatically runs on server startup if database is empty
  *   - Can also be run manually: node server/seeders/index.js
+ *
+ * The Basic course (default class + STEMI lesson/MCQ/survey + default-case
+ * link) is part of the fresh-DB seed CONTRACT but is created by
+ * server/seedStemiCourse.js, which server.js runs unconditionally right
+ * after these seeders — migration 0031 no-ops on fresh installs because it
+ * runs before any users exist. Contract pinned by
+ * tests/server/seed-basic-course.test.js.
  */
 
 import { seedUsers, defaultUsers } from './users.js';

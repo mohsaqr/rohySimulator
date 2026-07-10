@@ -35,6 +35,7 @@
   "room_chat_sub": "chat",
   "room_consultant": "Consulente",
   "room_consultant_sub": "debriefing",
+  "room_course": "Corso",
   "room_examination": "Visita",
   "room_examination_sub": "esame obiettivo",
   "room_lab": "Laboratorio",
@@ -58,5 +59,11 @@
   "unknown": "Sconosciuto",
   "unlimited": "Illimitato",
   "very_confident": "Molto sicuro",
+  "voice_default_note": "Nessuna voce configurata per questo parlante — verrà riprodotta la voce predefinita della lingua: {playing}.",
+  "voice_engine_free": "gratuito",
+  "voice_engine_paid": "a pagamento",
+  "voice_engine_unavailable": "non disponibile",
+  "voice_group_other": "Altro",
+  "voice_unplayable_note": "La voce configurata {requested} non può essere riprodotta su {provider} — non verrà pronunciato nulla finché non viene corretto.",
   "yes": "Sì"
 }

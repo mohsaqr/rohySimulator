@@ -15,6 +15,7 @@ import {
 
 
 import { logger } from '../logger.js';
+import { caseCodeFor, normalizeCaseLanguage } from '../shared/caseCode.js';
 import {
     auditSuccess,
     canManageOwnedResource,
@@ -52,6 +53,27 @@ try {
 
 const router = express.Router();
 
+// Stamp the visible case code after an INSERT. The audit chain writes on its
+// own DEDICATED sqlite connection (audit-chain.js) and logAudit fires right
+// before this UPDATE; with no busy_timeout on the shared handle an
+// overlapping audit write surfaces as SQLITE_BUSY. Retry briefly with
+// backoff — the boot sweep (ensureCaseCodes) is the last-resort repair.
+function stampCaseCode(caseCode, caseId, tenant, cb, attempt = 0) {
+    dbAdapter.run(
+        `UPDATE cases SET case_code = ? WHERE id = ? AND tenant_id = ?`,
+        [caseCode, caseId, tenant],
+        (err) => {
+            if (err && /SQLITE_BUSY/.test(err.message) && attempt < 4) {
+                return setTimeout(
+                    () => stampCaseCode(caseCode, caseId, tenant, cb, attempt + 1),
+                    25 * (attempt + 1)
+                );
+            }
+            cb(err);
+        }
+    );
+}
+
 router.get('/cases', authenticateToken, async (req, res) => {
     const canReview = canReadAcrossUsers(req.user);
 
@@ -59,19 +81,34 @@ router.get('/cases', authenticateToken, async (req, res) => {
     // enforcement is ON they additionally must be assigned the case (in-window)
     // via a class they belong to — the tenant default case is always visible so
     // "Basic course" members are never locked out. Flag OFF = legacy behaviour.
+    //
+    // Every tier also carries the case's course (course_id/course_name) so the
+    // case browser can group by course. MIN(cohort_id) mirrors the
+    // one-case⇄one-course tiebreaker used by GET /courses/case-assignments.
+    const courseJoin = `
+        LEFT JOIN (SELECT cc.case_id, MIN(cc.cohort_id) AS cohort_id
+                     FROM cohort_cases cc
+                     JOIN cohorts x ON x.id = cc.cohort_id AND x.deleted_at IS NULL
+                    WHERE cc.deleted_at IS NULL
+                    GROUP BY cc.case_id) a ON a.case_id = c.id
+        LEFT JOIN cohorts co ON co.id = a.cohort_id AND co.tenant_id = c.tenant_id`;
     let sql;
     let params;
     if (canReview) {
-        sql = "SELECT * FROM cases WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, created_at DESC";
+        sql = `SELECT c.*, co.id AS course_id, co.name AS course_name FROM cases c ${courseJoin}
+               WHERE c.tenant_id = ? AND c.deleted_at IS NULL
+               ORDER BY c.is_default DESC, c.created_at DESC`;
         params = [tenantId(req)];
     } else if (isEnforcedStudent(req.user)) {
-        sql = `SELECT c.* FROM cases c
+        sql = `SELECT c.*, co.id AS course_id, co.name AS course_name FROM cases c ${courseJoin}
                WHERE c.tenant_id = ? AND c.deleted_at IS NULL AND c.is_available = 1
                  AND ( c.is_default = 1 OR ${cohortCaseVisibleExists('c')} )
                ORDER BY c.is_default DESC, c.created_at DESC`;
         params = [tenantId(req), req.user.id];
     } else {
-        sql = "SELECT * FROM cases WHERE tenant_id = ? AND deleted_at IS NULL AND is_available = 1 ORDER BY is_default DESC, created_at DESC";
+        sql = `SELECT c.*, co.id AS course_id, co.name AS course_name FROM cases c ${courseJoin}
+               WHERE c.tenant_id = ? AND c.deleted_at IS NULL AND c.is_available = 1
+               ORDER BY c.is_default DESC, c.created_at DESC`;
         params = [tenantId(req)];
     }
 
@@ -243,6 +280,10 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
     // these as top-level fields; without this merge they were silently dropped.
     const scenarioWithSource = mergeScenarioSource(scenario, { scenario_template, scenario_from_repository, scenario_duration });
     const safeConfig = clampInitialVitals(config || {});
+    // Case language is pinned at creation and immutable afterwards: normalize
+    // the author's pick to a concrete registry code (absent/junk → default).
+    // The visible case_code prefix derives from it and therefore never changes.
+    safeConfig.case_language = normalizeCaseLanguage(safeConfig);
 
     const sql = `INSERT INTO cases (name, description, system_prompt, config, scenario,
                  patient_name, patient_gender, patient_age, chief_complaint, difficulty_level,
@@ -302,7 +343,17 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
             name, description, system_prompt, config, scenario, tenant_id: tenantId(req)
         });
 
-        res.json({ id: caseId, ...req.body });
+        // Stamp the visible case code (needs the autoincrement id, hence a
+        // follow-up UPDATE). Server-generated only — anything the client sent
+        // is ignored. On failure the boot sweep (ensureCaseCodes) repairs it.
+        const caseCode = caseCodeFor(safeConfig, caseId);
+        stampCaseCode(caseCode, caseId, tenantId(req), (codeErr) => {
+            if (codeErr) {
+                (req.log || routesCasesLog).warn('case code stamp failed', { caseId, error: codeErr.message });
+                return res.json({ id: caseId, ...req.body, config: safeConfig });
+            }
+            res.json({ id: caseId, ...req.body, config: safeConfig, case_code: caseCode });
+        });
     });
 });
 
@@ -333,9 +384,21 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
             return res.status(500).json({ error: err.message });
         }
 
+        // Case language is IMMUTABLE: whatever the client sends, the stored
+        // language wins. This keeps the case's dialogue behavior (and its
+        // visible case_code prefix) fixed for the case's whole life.
+        let storedConfig = null;
+        try {
+            storedConfig = oldCase?.config ? JSON.parse(oldCase.config) : null;
+        } catch { /* malformed legacy config — fall through to normalization */ }
+        safeConfig.case_language = storedConfig
+            ? normalizeCaseLanguage(storedConfig)
+            : normalizeCaseLanguage(safeConfig);
+
         const sql = `UPDATE cases SET
                      name = ?, description = ?, system_prompt = ?, config = ?, scenario = ?,
                      patient_name = ?, patient_gender = ?, patient_age = ?, chief_complaint = ?, difficulty_level = ?,
+                     case_code = COALESCE(case_code, ?),
                      last_modified_by = ?, updated_at = CURRENT_TIMESTAMP, version = COALESCE(version, 0) + 1
                      WHERE id = ? AND tenant_id = ?`;
         const params = [
@@ -349,6 +412,7 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
             patientAge,
             chiefComplaint,
             difficultyLevel,
+            caseCodeFor(safeConfig, Number(caseId)),
             req.user.id,
             caseId,
             tenantId(req)
@@ -392,7 +456,8 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
                 name, description, system_prompt, config, scenario, tenant_id: tenantId(req)
             });
 
-            res.json({ id: caseId, ...req.body });
+            // Echo the config actually stored (immutable case_language pinned).
+            res.json({ id: caseId, ...req.body, config: safeConfig });
         });
     });
 });
@@ -872,38 +937,54 @@ router.post('/cases/:caseId/restore/:versionId', authenticateToken, requireAdmin
             if (!version) return res.status(404).json({ error: 'Version not found' });
 
             const config = JSON.parse(version.config_snapshot);
-            const sql = `UPDATE cases SET
-                         name = ?, description = ?, system_prompt = ?, config = ?, scenario = ?,
-                         last_modified_by = ?, updated_at = CURRENT_TIMESTAMP, version = version + 1
-                         WHERE id = ?`;
+            const restoredConfig = config.config || {};
 
-            dbAdapter.run(sql, [
-                config.name,
-                config.description,
-                config.system_prompt,
-                JSON.stringify(config.config || {}),
-                config.scenario ? JSON.stringify(config.scenario) : null,
-                req.user.id,
-                caseId
-            ], function(err) {
-                if (err) return res.status(500).json({ error: err.message });
+            dbAdapter.get(`SELECT config FROM cases WHERE id = ?`, [caseId], (curErr, currentCase) => {
+                if (curErr) return res.status(500).json({ error: curErr.message });
 
-                // Log audit and create new version
-                logAudit({
-                    userId: req.user.id,
-                    username: req.user.username,
-                    action: 'RESTORE_CASE_VERSION',
-                    resourceType: 'case',
-                    resourceId: caseId,
-                    metadata: { restored_from_version: version.version_number },
-                    ipAddress,
-                    userAgent,
-                    status: 'success'
+                // Case language is IMMUTABLE — a restore brings back content,
+                // never a different language. Pin the current stored language
+                // over whatever the snapshot carried (pre-0035 snapshots may
+                // lack the field entirely).
+                let currentConfig = null;
+                try {
+                    currentConfig = currentCase?.config ? JSON.parse(currentCase.config) : null;
+                } catch { /* malformed legacy config — normalization below covers it */ }
+                restoredConfig.case_language = normalizeCaseLanguage(currentConfig || restoredConfig);
+
+                const sql = `UPDATE cases SET
+                             name = ?, description = ?, system_prompt = ?, config = ?, scenario = ?,
+                             last_modified_by = ?, updated_at = CURRENT_TIMESTAMP, version = version + 1
+                             WHERE id = ?`;
+
+                dbAdapter.run(sql, [
+                    config.name,
+                    config.description,
+                    config.system_prompt,
+                    JSON.stringify(restoredConfig),
+                    config.scenario ? JSON.stringify(config.scenario) : null,
+                    req.user.id,
+                    caseId
+                ], function(err) {
+                    if (err) return res.status(500).json({ error: err.message });
+
+                    // Log audit and create new version
+                    logAudit({
+                        userId: req.user.id,
+                        username: req.user.username,
+                        action: 'RESTORE_CASE_VERSION',
+                        resourceType: 'case',
+                        resourceId: caseId,
+                        metadata: { restored_from_version: version.version_number },
+                        ipAddress,
+                        userAgent,
+                        status: 'success'
+                    });
+
+                    createCaseVersion(caseId, req.user.id, 'restored', `Restored from version ${version.version_number}`, config);
+
+                    res.json({ message: 'Case restored successfully', restoredFromVersion: version.version_number });
                 });
-
-                createCaseVersion(caseId, req.user.id, 'restored', `Restored from version ${version.version_number}`, config);
-
-                res.json({ message: 'Case restored successfully', restoredFromVersion: version.version_number });
             });
         }
     );
