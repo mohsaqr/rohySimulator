@@ -1,16 +1,20 @@
 # Embedding the avatar kit
 
-`kits/talking-avatars/` is a self-contained, lift-and-drop kit for putting a
-lipsynced talking head into a third-party app. It is **meant to be copied
-into your project, not installed as an npm package** — there is no published
-package and `package.json` is marked `private`. The `package.json`
-`peerDependencies` / `optionalDependencies` lists exist to tell you what to
-add to *your* install list.
+The talking-avatars kit is a self-contained, lift-and-drop kit for putting a
+lipsynced talking head into a third-party app. It now lives as a **standalone
+workspace-sibling repo** at `../talking-avatars/` (relocated out of this repo's
+`kits/`), and carries its own `SKILL.md` (a Claude Code skill) and `LEARNINGS.md`.
+It is **meant to be copied into your project, not installed as an npm package** —
+there is no published package and `package.json` is marked `private`. The
+`package.json` `peerDependencies` / `optionalDependencies` lists exist to tell
+you what to add to *your* install list.
 
 ## What the kit contains
 
 ```text
-kits/talking-avatars/
+talking-avatars/   (workspace sibling — ../talking-avatars/)
+  SKILL.md     Claude Code skill — integration guide + gotchas
+  LEARNINGS.md Distilled production lessons
   client/      React + three.js front-end pieces
   server/      Drop-in Express TTS route + provider services
   glbs/        Sample avatar GLBs

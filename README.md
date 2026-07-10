@@ -286,7 +286,8 @@ rohySimulator/
 │   └── data/                          # 215 lab tests, 32 lab panels, 16 scenario templates,
 │                                      # investigation templates, exam regions, scenario timelines
 ├── public/avatars/heads/              # 28 GLB avatars + manifest.json
-├── kits/talking-avatars/              # Standalone, embeddable voice + avatar kit
+│                                      # (the standalone embeddable voice+avatar kit now
+│                                      #  lives as a workspace sibling: ../talking-avatars/)
 ├── scripts/
 │   ├── audit-*.sh                     # 18 enterprise audit scripts (E1-E9 + per-area)
 │   ├── retention-sweep.js             # Cron-able log retention sweeper (E7)
@@ -386,7 +387,7 @@ Plus **18 enterprise audit shell scripts** at `scripts/audit-*.sh` (one per E-st
 
 | Document | What's inside |
 |---|---|
-| [`kits/talking-avatars/`](kits/talking-avatars/) | Embeddable voice + avatar kit (standalone tarball at `kits/talking-avatars.tar.gz`). |
+| [`../talking-avatars/`](../talking-avatars/) | Embeddable voice + avatar kit — now a **standalone workspace-sibling repo** (relocated out of `kits/`). Ships a Claude Code skill (`SKILL.md`) and `LEARNINGS.md`. |
 
 ---
 
@@ -439,7 +440,7 @@ Development tips:
 
 ## Embedding the Voice + Avatar Kit
 
-The talking-avatars stack is also distributed as a **standalone embeddable kit** at [`kits/talking-avatars/`](kits/talking-avatars/) — a self-contained drop-in bundle of the entire talking-head + lipsync + TTS pipeline. Includes the 28-avatar GLB library, server-side TTS routes (Google + Kokoro), client-side `PatientAvatar` component, viseme map, and a vanilla-JS standalone example. Tarball at `kits/talking-avatars.tar.gz`.
+The talking-avatars stack is also distributed as a **standalone embeddable kit**, now relocated to a workspace-sibling repo at [`../talking-avatars/`](../talking-avatars/) — a self-contained drop-in bundle of the entire talking-head + lipsync + TTS pipeline. Includes the 28-avatar GLB library, server-side TTS routes (Google + Kokoro), client-side `PatientAvatar` component, viseme map, a vanilla-JS standalone example, a Claude Code skill (`SKILL.md`), and a distilled `LEARNINGS.md`.
 
 ---
 
