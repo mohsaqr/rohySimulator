@@ -65,6 +65,15 @@ export const LANGUAGES = {
         sttLabel: 'German',
         llmDirective: 'Always respond in German (Deutsch), regardless of the language the student writes in. Antworte immer auf Deutsch.',
         dir: 'ltr'
+    },
+    es: {
+        name: 'Spanish',
+        native: 'Español',
+        flag: '🇪🇸',
+        stt: 'es-ES',
+        sttLabel: 'Spanish',
+        llmDirective: 'Always respond in Spanish (español), regardless of the language the student writes in. Responde siempre en español.',
+        dir: 'ltr'
     }
 };
 
@@ -76,8 +85,7 @@ export const STT_DIALECTS = [
     { code: 'en-GB', label: 'English (UK)' },
     { code: 'tr-TR', label: 'Turkish' },
     { code: 'ar-SA', label: 'Arabic (Saudi)' },
-    { code: 'fr-FR', label: 'French' },
-    { code: 'es-ES', label: 'Spanish' }
+    { code: 'fr-FR', label: 'French' }
 ];
 
 export function isKnownLanguage(code) {

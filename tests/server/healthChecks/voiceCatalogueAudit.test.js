@@ -56,9 +56,9 @@ describe('auditPersonaAndCaseVoices (Voice 2.0)', () => {
         const adapter = makeDbAdapter({ settings: {}, rows: [] });
         const result = await auditPersonaAndCaseVoices(adapter, log);
         const unset = result.defaults.filter(d => d.status === 'unset').map(d => d.language).sort();
-        expect(unset).toEqual(['de', 'en', 'fi', 'it', 'sv']);
+        expect(unset).toEqual(['de', 'en', 'es', 'fi', 'it', 'sv']);
         const warned = log.warn.mock.calls.filter(c => c[0] === 'no default voice for language');
-        expect(warned.length).toBe(5);
+        expect(warned.length).toBe(6);
     });
 
     it('a playable default (kokoro af_bella) audits ok; the German gap is still named', async () => {

@@ -88,7 +88,7 @@ describe('case codes: stamping, uniqueness, immutable language', () => {
                 expect(Number(row.case_code.split('-')[1])).toBe(row.id);
                 // The sweep pinned a concrete language into config.
                 const config = JSON.parse(row.config);
-                expect(['en', 'it', 'fi', 'sv', 'de']).toContain(config.case_language);
+                expect(['en', 'it', 'fi', 'sv', 'de', 'es']).toContain(config.case_language);
                 expect(row.case_code.split('-')[0]).toBe(config.case_language.toUpperCase());
             }
         });

@@ -106,16 +106,48 @@ STRINGS TO TRANSLATE:
 ${JSON.stringify(entries, null, 2)}`;
 }
 
-async function translateBatch(token, lang, entries) {
-    const res = await fetch(`${BASE_URL}/api/proxy/llm`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-            messages: [{ role: 'user', content: translationPrompt(lang, entries) }],
-            system_prompt: 'You are a precise software localization engine. You output only valid JSON.'
-        })
-    });
-    if (!res.ok) throw new Error(`/proxy/llm ${res.status}: ${await res.text()}`);
+// A large namespace (authoring_config has ~600 keys) translated in one call
+// makes the LLM run past the proxy's upstream timeout. Split into sub-batches
+// small enough to complete reliably; results merge back into one namespace
+// file. The de/it/fi/sv locales never hit this because they grew a few keys at
+// a time as the app evolved — es is the first from-scratch full translation.
+const MAX_KEYS_PER_BATCH = 50;
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+function chunkEntries(entries, size) {
+    const keys = Object.keys(entries);
+    const chunks = [];
+    for (let i = 0; i < keys.length; i += size) {
+        chunks.push(Object.fromEntries(keys.slice(i, i + size).map(k => [k, entries[k]])));
+    }
+    return chunks;
+}
+
+async function translateBatch(token, lang, entries, attempt = 0) {
+    let res;
+    try {
+        res = await fetch(`${BASE_URL}/api/proxy/llm`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: translationPrompt(lang, entries) }],
+                system_prompt: 'You are a precise software localization engine. You output only valid JSON.'
+            })
+        });
+    } catch (err) {
+        // Network-level failure (socket hangup, DNS) — retry a couple of times.
+        if (attempt < 2) { await sleep(2000 * (attempt + 1)); return translateBatch(token, lang, entries, attempt + 1); }
+        throw err;
+    }
+    if (!res.ok) {
+        const body = await res.text();
+        // 429/5xx (incl. upstream_timeout) are transient — back off and retry.
+        if ((res.status === 429 || res.status >= 500) && attempt < 2) {
+            await sleep(2000 * (attempt + 1));
+            return translateBatch(token, lang, entries, attempt + 1);
+        }
+        throw new Error(`/proxy/llm ${res.status}: ${body}`);
+    }
     const data = await res.json();
     const text = data?.choices?.[0]?.message?.content || '';
     const jsonText = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
@@ -148,14 +180,21 @@ const token = await getToken();
 for (const [lang, nss] of Object.entries(deltas)) {
     mkdirSync(join(LOCALES, lang), { recursive: true });
     for (const [ns, entries] of Object.entries(nss)) {
-        console.log(`Translating ${Object.keys(entries).length} key(s) → ${lang}/${ns}.json`);
-        const translated = await translateBatch(token, lang, entries);
+        const total = Object.keys(entries).length;
+        const chunks = chunkEntries(entries, MAX_KEYS_PER_BATCH);
         const targetPath = join(LOCALES, lang, `${ns}.json`);
-        const existing = existsSync(targetPath) ? readJson(targetPath) : {};
-        const merged = Object.fromEntries(
-            Object.entries({ ...existing, ...translated }).sort(([a], [b]) => a.localeCompare(b))
-        );
-        writeFileSync(targetPath, JSON.stringify(merged, null, 2) + '\n');
+        for (let i = 0; i < chunks.length; i++) {
+            const label = chunks.length > 1 ? ` [batch ${i + 1}/${chunks.length}]` : '';
+            console.log(`Translating ${Object.keys(chunks[i]).length}/${total} key(s) → ${lang}/${ns}.json${label}`);
+            const translated = await translateBatch(token, lang, chunks[i]);
+            // Merge + write after every chunk so a mid-namespace failure is
+            // resumable — a re-run skips keys already on disk.
+            const existing = existsSync(targetPath) ? readJson(targetPath) : {};
+            const merged = Object.fromEntries(
+                Object.entries({ ...existing, ...translated }).sort(([a], [b]) => a.localeCompare(b))
+            );
+            writeFileSync(targetPath, JSON.stringify(merged, null, 2) + '\n');
+        }
     }
 }
 writeFileSync(HASHES_PATH, JSON.stringify(nextHashes, null, 2) + '\n');

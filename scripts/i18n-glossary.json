@@ -104,5 +104,31 @@
     "BID": "2×/Tag",
     "TID": "3×/Tag",
     "Peak": "Spitzenwirkung"
+  },
+  "es": {
+    "chest pain": "dolor torácico",
+    "shortness of breath": "disnea",
+    "blood pressure": "presión arterial",
+    "heart rate": "frecuencia cardíaca",
+    "respiratory rate": "frecuencia respiratoria",
+    "oxygen saturation": "saturación de oxígeno",
+    "temperature": "temperatura",
+    "chief complaint": "motivo de consulta",
+    "medical history": "antecedentes médicos",
+    "physical examination": "exploración física",
+    "auscultation": "auscultación",
+    "palpation": "palpación",
+    "lab results": "resultados de laboratorio",
+    "radiology": "radiología",
+    "vital signs": "constantes vitales",
+    "patient": "paciente",
+    "dose": "dosis",
+    "administer": "administrar",
+    "BP": "PA",
+    "ECG": "ECG",
+    "IV Push": "bolo intravenoso",
+    "BID": "2 veces/día",
+    "TID": "3 veces/día",
+    "Peak": "pico"
   }
 }

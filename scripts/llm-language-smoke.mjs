@@ -32,7 +32,8 @@ const BASE_URL = process.env.ROHY_BASE_URL || 'http://localhost:3000';
 const STOPWORDS = {
     it: ['sono', 'che', 'non', 'per', 'una', 'con', 'come', 'anche', 'molto', 'dolore', 'bene', 'grazie'],
     fi: ['olen', 'minulla', 'mutta', 'kanssa', 'koska', 'kipu', 'hyvin', 'kiitos', 'joka', 'tämä', 'kun'],
-    sv: ['jag', 'är', 'och', 'att', 'det', 'har', 'inte', 'som', 'med', 'ont', 'tack', 'mycket']
+    sv: ['jag', 'är', 'och', 'att', 'det', 'har', 'inte', 'som', 'med', 'ont', 'tack', 'mycket'],
+    es: ['estoy', 'tengo', 'siento', 'muy', 'también', 'porque', 'usted', 'está', 'gracias', 'pecho', 'dolor', 'bien']
 };
 const MIN_HITS = 2;
 
