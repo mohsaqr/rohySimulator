@@ -62,9 +62,12 @@
   "type_message_to_agent": "Kirjoita viesti — vastaanottaja: {role}",
   "type_message_to_begin_history": "Aloita potilaan esitietojen kartoitus kirjoittamalla viesti alle",
   "voice": "Ääni",
+  "voice_default_not_configured": "Tälle puhujalle ei ole määritetty ääntä — toistetaan oletusääni ”{voice}”.",
+  "voice_language_mismatch": "Määritetty ääni \"{voice}\" ei puhu istunnon kieltä ({language}). Valitse sopiva ääni kohdasta Asetukset → Agenttipersoonat tai tapauseditorista.",
   "voice_not_valid_for_engine": "Ääni ei kelpaa tälle moottorille. Aseta oletus ylläpidossa → Avatarit ja äänet.",
   "voice_on": "Ääni käytössä",
   "voice_playback_failed": "Äänen toisto epäonnistui: {msg}",
+  "voice_wrong_provider": "Määritetty ääni ”{voice}” vaatii moottorin ”{provider}”, joka ei ole käytettävissä tällä palvelimella. Määritettyjä ääniä ei koskaan korvata — korjaa moottori kohdassa Asetukset → Ääni tai valitse ääni uudelleen tapauseditorissa / agenttipersoonissa.",
   "wait_consultant_0": "Kutsutaan konsulttia…",
   "wait_consultant_1": "Käy läpi potilaskertomusta ja tämänhetkisiä vitaalielintoimintoja",
   "wait_consultant_2": "Pohtii erotusdiagnooseja ja jatkotoimia",
@@ -78,6 +81,5 @@
   "wait_relative_0": "Tavoitellaan omaisia…",
   "wait_relative_1": "Omaiset ovat tulossa odotusaulasta",
   "wait_relative_2": "Omaiset lähestyvät huonetta",
-  "waiting_for_response": "Odotetaan vastausta...",
-  "voice_language_mismatch": "Määritetty ääni \"{{voice}}\" ei puhu istunnon kieltä ({{language}}). Valitse sopiva ääni kohdasta Asetukset → Agenttipersoonat tai tapauseditorista."
+  "waiting_for_response": "Odotetaan vastausta..."
 }

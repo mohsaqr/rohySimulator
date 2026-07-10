@@ -495,3 +495,38 @@ describe('voiceService — auditionWirePayload routes through ttsFetch + attachS
         expect(auditionSource.stop).toHaveBeenCalled();
     });
 });
+
+// ---------------------------------------------------------------------------
+// Block 2.0 — Voice 2.0 v1.4 wire truth
+// ---------------------------------------------------------------------------
+// Sovereignty semantics: the wire IS the truth — the server plays the
+// literal requested voice or errors, never a stand-in. What the ring
+// buffer must carry is the `language` field each request keyed on (shown
+// in the DiagnosticBar's lang column and re-sent by the ▶ replay so an
+// audition reproduces the same request).
+
+describe('voiceService — wire entries are literal and carry the language (2.0)', () => {
+    it('the session language reaches the /api/tts body AND the wire history', async () => {
+        const session = VoiceService.beginSpeechSession({ voice: 'alloy', language: 'de' });
+        session.enqueue('ein satz');
+        await session.flush();
+
+        const sent = sentRequests.find(r => r.body?.voice === 'alloy');
+        expect(sent).toBeTruthy();
+        expect(sent.body.language).toBe('de');
+        const entry = getRecentTtsRequests().find(w => w.voice === 'alloy');
+        expect(entry.language).toBe('de');
+    });
+
+    it('an ok wire entry is literal — no substitution metadata exists', async () => {
+        const session = VoiceService.beginSpeechSession({ voice: 'af_bella', language: 'en' });
+        session.enqueue('plain sentence');
+        await session.flush();
+
+        const entry = getRecentTtsRequests().find(w => w.voice === 'af_bella');
+        expect(entry).toBeTruthy();
+        expect(entry.status).toBe('ok');
+        expect(entry.substitutedVoice).toBeUndefined();
+        expect(entry.requestedVoice).toBeUndefined();
+    });
+});

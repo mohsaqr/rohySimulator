@@ -11,8 +11,12 @@ describe('DiagnosticBar role gate', () => {
         expect(isDiagBarRoleAllowed({ role: 'admin' })).toBe(true);
     });
 
-    it('allows educator', () => {
-        expect(isDiagBarRoleAllowed({ role: 'educator' })).toBe(true);
+    it('blocks educator (the bar became admin-only — a developer/debug surface)', () => {
+        // DIAG_BAR_VISIBLE_ROLES was narrowed to admin-only in the
+        // lessons-port pass (the bar sits over the room nav and exposes
+        // operational metadata); this test previously pinned the older
+        // educator-visible policy and had been failing ever since.
+        expect(isDiagBarRoleAllowed({ role: 'educator' })).toBe(false);
     });
 
     it('blocks reviewer', () => {

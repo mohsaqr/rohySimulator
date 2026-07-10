@@ -128,7 +128,19 @@ export function isKokoroLoaded() {
     return !!_instance;
 }
 
+// Test-only fake (mirrors ROHY_TEST_FAKE_GOOGLE_TTS): synthesize without
+// the ~330 MB model so route tests can exercise kokoro-played fallbacks in
+// CI. Voice validity is still enforced upstream by the derivation layer's
+// static package catalogue.
+function fakeKokoroActive() {
+    return process.env.NODE_ENV === 'test' && process.env.ROHY_TEST_FAKE_KOKORO_TTS === '1';
+}
+
 export async function synthesizeKokoro({ text, voice, speed }) {
+    if (fakeKokoroActive()) {
+        const pcm = Buffer.alloc(2400 * 2); // 0.1s of silence @24kHz int16
+        return Buffer.concat([buildWavHeader(pcm.length, 24000), pcm]);
+    }
     const tts = await loadKokoro();
     if (!tts.voices[voice]) {
         const err = new Error(`unknown Kokoro voice "${voice}"`);
@@ -154,6 +166,10 @@ export async function synthesizeKokoro({ text, voice, speed }) {
 // awaits forever. Using the splitter directly fixes both the dropped
 // last sentence and the hung "fails to end" symptoms.
 export async function* synthesizeKokoroStream({ text, voice, speed }) {
+    if (fakeKokoroActive()) {
+        yield { sampleRate: 24000, pcm: Buffer.alloc(2400 * 2) };
+        return;
+    }
     const tts = await loadKokoro();
     if (!tts.voices[voice]) {
         const err = new Error(`unknown Kokoro voice "${voice}"`);

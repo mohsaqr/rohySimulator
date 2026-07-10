@@ -50,6 +50,7 @@
   "field_temperature": "Temperatur",
   "field_unlock_trigger": "Freischalt-Auslöser",
   "field_voice": "Stimme ({provider})",
+  "field_voice_any_engine": "Stimme (beliebige aktivierte Engine)",
   "header_edit": "Bearbeiten: {name}",
   "header_new": "Neue Agenten-Persona",
   "hint_context_filter": "Welchen Ausschnitt des Falls der Agent zur Laufzeit sehen kann.",
@@ -87,6 +88,7 @@
   "no_provider_set": "kein Anbieter festgelegt",
   "no_standard_seeded": "Keine Standardvorlagen initialisiert.",
   "no_tts_provider_configured": "Kein TTS-Anbieter konfiguriert. Legen Sie zuerst einen unter Einstellungen → Stimme fest.",
+  "no_usable_engines": "Keine TTS-Engine ist auf diesem Server nutzbar — installieren Sie Kokoro/Piper oder hinterlegen Sie einen Cloud-API-Schlüssel unter Einstellungen → Stimme.",
   "no_voice_resolved": "Keine Stimme aufgelöst",
   "no_voice_set": "keine Stimme festgelegt",
   "opt_avail_absent": "Abwesend (nicht verfügbar)",
@@ -195,7 +197,13 @@
   "unset": "nicht gesetzt",
   "untitled": "Ohne Titel",
   "via": "über",
+  "voice_default_note": "Hier ist keine Stimme festgelegt — die Standardstimme der Plattform „{playing}“ wird abgespielt.",
+  "voice_engine_free": "kostenlos · lokal",
   "voice_engine_help": "Die TTS-Engine wird plattformweit unter Einstellungen → Stimme festgelegt. Wählen Sie eine Stimme aus dem Katalog dieser Engine. Fälle können dies pro Fall im Fall-Editor übersteuern.",
-  "will_play": "Wird abgespielt:",
-  "voice_group_other": "Sonstige"
+  "voice_engine_paid": "kostenpflichtig · API",
+  "voice_engine_unavailable": "nicht verfügbar",
+  "voice_engines_help": "Unten sind Stimmen aller aktivierten Engines aufgeführt — jede Stimme wird auf ihrer eigenen Engine abgespielt (kostenlose lokale Engines und kostenpflichtige Cloud-APIs sind gekennzeichnet). Leer lassen, um den Standard der Patienten-Persona zu erben.",
+  "voice_group_other": "Sonstige",
+  "voice_unplayable_note": "„{requested}“ benötigt die Engine „{provider}“, die hier nicht verfügbar ist. Konfigurierte Stimmen werden nie ersetzt — die Wiedergabe schlägt mit einem Fehler fehl, bis die Engine repariert oder die Stimme neu gewählt wird.",
+  "will_play": "Wird abgespielt:"
 }

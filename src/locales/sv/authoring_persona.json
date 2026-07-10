@@ -50,6 +50,7 @@
   "field_temperature": "Temperatur",
   "field_unlock_trigger": "Upplåsningsutlösare",
   "field_voice": "Röst ({provider})",
+  "field_voice_any_engine": "Röst (valfri aktiverad motor)",
   "header_edit": "Redigera: {name}",
   "header_new": "Ny agentpersona",
   "hint_context_filter": "Vilken del av fallet agenten kan se vid körning.",
@@ -87,6 +88,7 @@
   "no_provider_set": "ingen leverantör angiven",
   "no_standard_seeded": "Inga standardmallar initierade.",
   "no_tts_provider_configured": "Ingen TTS-leverantör konfigurerad. Ange en under Inställningar → Röst först.",
+  "no_usable_engines": "Ingen TTS-motor är användbar på denna server — installera Kokoro/Piper eller lägg till en moln-API-nyckel i Inställningar → Röst.",
   "no_voice_resolved": "Ingen röst kunde lösas",
   "no_voice_set": "ingen röst angiven",
   "opt_avail_absent": "Frånvarande (inte tillgänglig)",
@@ -195,7 +197,13 @@
   "unset": "ej angivet",
   "untitled": "Namnlös",
   "via": "via",
+  "voice_default_note": "Ingen röst är angiven här — plattformens standardröst ”{playing}” spelas upp.",
+  "voice_engine_free": "gratis · lokal",
   "voice_engine_help": "TTS-motorn ställs in plattformsövergripande under Inställningar → Röst. Välj en röst från motorns katalog. Fall kan åsidosätta detta per fall i fallredigeraren.",
-  "will_play": "Spelar upp:",
-  "voice_group_other": "Övriga"
+  "voice_engine_paid": "betald · API",
+  "voice_engine_unavailable": "inte tillgänglig",
+  "voice_engines_help": "Nedan listas röster från alla aktiverade motorer — varje röst spelas upp på sin egen motor (gratis lokala motorer och betalda moln-API:er är märkta). Lämna tomt för att ärva patientpersonans standard.",
+  "voice_group_other": "Övriga",
+  "voice_unplayable_note": "”{requested}” kräver motorn ”{provider}”, som inte är tillgänglig här. Konfigurerade röster ersätts aldrig — uppspelningen misslyckas med ett fel tills motorn åtgärdas eller rösten väljs om.",
+  "will_play": "Spelar upp:"
 }

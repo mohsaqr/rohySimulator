@@ -1,48 +1,31 @@
-// Boot-time audit: detect persona / case `case_voice` values that aren't
-// valid for the platform's active TTS provider. The runtime returns
-// 400 invalid_voice when this happens, but learners hit the error before
-// admins notice — moving the detection to boot turns "voice broken on
-// production for three weeks" into "single warn line on every restart
-// that names every stale row."
+// Boot-time voice audit (Voice 2.0 v1.4 — sovereign case voices).
 //
-// The audit is non-fatal. If anything in here throws (catalogue load
-// failure, JSON in DB malformed, dbAdapter not yet ready) the server
-// keeps running; the warning we'd have logged is the only thing lost.
+// Two jobs, both non-fatal (any throw is caught by the caller; the server
+// keeps running and only the warning is lost):
+//
+//   1. Audit the per-language DEFAULT voices. Under v1.4 these serve ONLY
+//      speakers with NO voice configured (a configured voice is literal —
+//      never substituted), so a missing/unplayable default means "unset
+//      personas in this language have nothing to play". Named loudly at
+//      every boot because the gap only hurts mid-class, when it's too late.
+//
+//   2. Audit stored persona/case `case_voice` values against their OWN
+//      derived engine's usability. There is no "active provider" anymore —
+//      a voice is healthy iff the engine it belongs to (derived by exact
+//      catalogue membership) is usable on this box. Every stale row is
+//      enumerated with its blunt consequence: playback fails loudly until
+//      it is re-picked or its engine is restored.
 
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-// Match server/routes/proxy-routes.js — the same dir piper voices land in
-// after install-piper.sh runs. Keep this in lockstep; if the install path
-// ever moves, both files have to follow.
-const PIPER_DIR = path.join(__dirname, '..', 'data', 'piper');
-
-async function buildValidator(provider) {
-    switch (provider) {
-        case 'kokoro': {
-            const { isKokoroVoice } = await import('../services/kokoroTts.js');
-            return (v) => isKokoroVoice(v);
-        }
-        case 'openai': {
-            const { isOpenaiVoice } = await import('../services/openaiTts.js');
-            return async (v) => isOpenaiVoice(v);
-        }
-        case 'google': {
-            const { isGoogleVoice } = await import('../services/googleTts.js');
-            return async (v) => isGoogleVoice(v);
-        }
-        case 'piper':
-            return async (v) =>
-                typeof v === 'string'
-                && v.endsWith('.onnx')
-                && fs.existsSync(path.join(PIPER_DIR, v));
-        default:
-            return null;
-    }
-}
+import {
+    deriveVoiceProvider,
+    getProviderStatus,
+    defaultVoiceKey,
+} from '../services/ttsProviders.js';
+import {
+    guessVoiceProvider,
+    voiceMatchesLanguage,
+} from '../shared/voiceIdentity.js';
+import { LANGUAGES } from '../shared/languages.js';
 
 function safeParseConfig(raw) {
     if (!raw) return null;
@@ -81,55 +64,107 @@ function fetchVoiceRows(dbAdapter) {
 }
 
 /**
- * Run the audit. Logs one of three outcomes:
- *   - `tts_provider unset; skipping voice catalogue audit` (no provider set)
- *   - `voice catalogue audit clean` (nothing stored or everything valid)
- *   - `stale case_voice values detected` with the offending rows enumerated
- *
- * The detected stale rows are also returned to the caller — useful for tests
- * and for potential follow-on remediation hooks (auto-clear behind a flag,
- * Prometheus gauge, etc.).
+ * Audit the per-language default voices. Returns one entry per registry
+ * language: { language, voice, status: 'ok'|'unset'|'unplayable', detail }.
+ * Also builds the "is there a playable default for lang X?" map the
+ * case-voice audit uses for its will-play messages.
+ */
+async function auditDefaultVoices(dbAdapter, log, statusCache) {
+    // Read provider policy/keys through the SAME db handle the audit was
+    // given (tests pass a fake adapter; production passes the singleton).
+    const settingsReader = (key) => getSetting(dbAdapter, key);
+    const providerStatus = (provider) => getProviderStatus(provider, { getSetting: settingsReader });
+
+    const defaults = [];
+    for (const lang of Object.keys(LANGUAGES)) {
+        const voice = await getSetting(dbAdapter, defaultVoiceKey(lang));
+        if (!voice) {
+            defaults.push({ language: lang, voice: null, status: 'unset', detail: null });
+            log.warn('no default voice for language', {
+                language: lang,
+                key: defaultVoiceKey(lang),
+                hint: `${LANGUAGES[lang].name} speakers with NO voice configured have nothing to play — set a default in Settings → Voice (a local Piper voice is outage-proof), or configure voices on every persona/case. Configured voices are unaffected: they are literal and never substituted.`
+            });
+            continue;
+        }
+        const { provider } = await deriveVoiceProvider(voice);
+        let detail = null;
+        if (!provider) {
+            detail = `default voice "${voice}" is in no provider's catalogue`;
+        } else {
+            const status = statusCache[provider] ?? (statusCache[provider] = await providerStatus(provider));
+            if (!status.usable) {
+                detail = `default voice "${voice}" needs ${provider}, which is not usable (${status.reason})`;
+            } else if (voiceMatchesLanguage(voice, provider, lang) === false) {
+                detail = `default voice "${voice}" (${provider}) does not speak "${lang}"`;
+            }
+        }
+        if (detail) {
+            defaults.push({ language: lang, voice, status: 'unplayable', detail });
+            log.warn('default voice unplayable', { language: lang, voice, detail });
+        } else {
+            defaults.push({ language: lang, voice, status: 'ok', detail: null });
+        }
+    }
+    return defaults;
+}
+
+/**
+ * Run the audit. Logs the per-language default gaps, then either
+ * `voice catalogue audit clean` or `stale case_voice values detected`
+ * with every offending row enumerated and its runtime consequence named.
  *
  * @param {{ get: Function, all: Function }} dbAdapter
  * @param {{ info: Function, warn: Function }} log
- * @returns {Promise<{ provider: string|null, checked: number, stale: Array }>}
+ * @returns {Promise<{ checked: number, stale: Array, defaults: Array }>}
  */
 export async function auditPersonaAndCaseVoices(dbAdapter, log) {
-    const provider = await getSetting(dbAdapter, 'tts_provider');
-    if (!provider) {
-        log.info('tts_provider unset; skipping voice catalogue audit');
-        return { provider: null, checked: 0, stale: [] };
-    }
-
-    const validator = await buildValidator(provider);
-    if (!validator) {
-        log.warn('cannot audit case_voice values; unknown provider', { provider });
-        return { provider, checked: 0, stale: [] };
-    }
+    const settingsReader = (key) => getSetting(dbAdapter, key);
+    const statusCache = {}; // provider → status, probed at most once per audit
+    const defaults = await auditDefaultVoices(dbAdapter, log, statusCache);
 
     const rows = await fetchVoiceRows(dbAdapter);
-
     const stale = [];
     for (const row of rows) {
         const cv = extractCaseVoice(row);
         if (!cv) continue;
-        let ok;
-        try { ok = await validator(cv); }
-        catch { ok = false; }
-        if (!ok) {
-            stale.push({ kind: row.kind, id: row.id, name: row.name, case_voice: cv });
+
+        let derived = null;
+        try { derived = (await deriveVoiceProvider(cv)).provider; } catch { derived = null; }
+        let problem = null;
+        if (!derived) {
+            problem = 'voice is in no provider\'s catalogue';
+        } else {
+            const status = statusCache[derived]
+                ?? (statusCache[derived] = await getProviderStatus(derived, { getSetting: settingsReader }));
+            if (!status.usable) problem = `its engine "${derived}" is not usable (${status.reason})`;
         }
+        if (!problem) continue;
+
+        // What will actually happen at play time (truth clause in the log):
+        // a CONFIGURED voice is literal (VOICE2_PLAN.md v1.4 — the case
+        // sound reigns supreme), so a stale row fails loudly, always. The
+        // per-language defaults only serve rows with NO voice configured.
+        const guess = derived || guessVoiceProvider(cv);
+        stale.push({
+            kind: row.kind,
+            id: row.id,
+            name: row.name,
+            case_voice: cv,
+            provider: guess,
+            problem,
+            consequence: 'playback fails loudly until re-picked or its engine is restored (configured voices are never substituted)'
+        });
     }
 
     if (stale.length === 0) {
-        log.info('voice catalogue audit clean', { provider, checked: rows.length });
+        log.info('voice catalogue audit clean', { checked: rows.length });
     } else {
         log.warn('stale case_voice values detected', {
-            provider,
             stale_count: stale.length,
             entries: stale,
-            hint: `These rows store a voice id that the active "${provider}" provider doesn't have. /api/tts returns 400 invalid_voice until each one is re-picked in Settings → Agent Personas (for kind=persona) or the case editor (for kind=case).`
+            hint: 'Each row stores a voice whose engine cannot play it on this server. Re-pick in Settings → Agent Personas (kind=persona) or the case editor (kind=case); the "consequence" field says what plays meanwhile.'
         });
     }
-    return { provider, checked: rows.length, stale };
+    return { checked: rows.length, stale, defaults };
 }

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { useVoice } from '../../contexts/VoiceContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { AgentService } from '../../services/AgentService';
 import { VoiceService } from '../../services/voiceService';
 import { apiFetch } from '../../services/apiClient';
@@ -32,7 +33,7 @@ import { baseUrl } from '../../config/api';
 import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
 import { resolveVoice } from '../../utils/voiceResolver.js';
-import { voiceGenderLabel, groupVoicesByLanguage } from '../../utils/voiceCatalogue.js';
+import { useAllVoices, VoiceEngineOptions, VoiceSubstitutionNote } from './VoiceEngineOptions.jsx';
 
 // Heavy three.js head viewer — lazy so admins who never open the editor
 // don't pay the bundle cost.
@@ -95,7 +96,6 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
    const [showApiKey, setShowApiKey] = useState(false);
    const [testingLLM, setTestingLLM] = useState(false);
    const [testResult, setTestResult] = useState(null);
-   const [ttsVoices, setTtsVoices] = useState([]);
 
    // VoiceContext entries are populated lazily by ChatInterface; if the
    // admin opens the editor before chatting, fetch them ourselves. Falling
@@ -147,21 +147,10 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
       // eslint-disable-next-line react-hooks/exhaustive-deps
    }, [templateId]);
 
-   // Load voices for the platform's TTS provider. Per-persona tts_provider
-   // pickers were removed 2026-05-12 — the provider is a platform-wide
-   // decision read from Voice Settings, so a stale persona authored under a
-   // different engine can't leak its provider into the runtime. If the
-   // platform setting is missing we don't fetch a catalogue at all; the
-   // admin has to set a provider in Voice Settings first.
-   useEffect(() => {
-      const provider = voiceSettings?.tts_provider;
-      if (!provider) { setTtsVoices([]); return; }
-      let cancelled = false;
-      apiFetch(`/tts/voices?provider=${provider}`)
-         .then(d => { if (!cancelled) setTtsVoices(d.voices || []); })
-         .catch(() => { if (!cancelled) setTtsVoices([]); });
-      return () => { cancelled = true; };
-   }, [voiceSettings?.tts_provider]);
+   // Voice 2.0: every usable engine's catalogue is offered (the voice owns
+   // its engine — there is no platform provider to filter by). Per-persona
+   // tts_provider pickers stay dead: nothing stored may redirect an engine.
+   const allProviders = useAllVoices();
 
    // Stop any in-flight preview when the editor unmounts. Otherwise the
    // user could leave with a Kokoro buffer still draining into headphones.
@@ -183,24 +172,24 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
       return resolveCamera(headManifest, template.avatar_url, cfg.avatar_camera);
    }, [headManifest, template?.avatar_url, cfg.avatar_camera]);
 
-   // Voice resolution goes through the shared util. The resolver is now
-   // single-tier (case_voice or null) and returns the platform provider —
-   // there's no editor-only catalogue fallback, so the preview button stays
-   // disabled until the admin picks a voice.
+   // Voice resolution goes through the shared util (Voice 2.0 tiers:
+   // persona voice on its own engine → language default → loud fail),
+   // keyed to the SESSION language (same useLanguage source as the chat)
+   // so the preview and the runtime pick the same per-language default.
+   const { caseLanguage } = useLanguage();
    const resolvedVoice = useMemo(() => {
       if (!template) return null;
       return resolveVoice({
          voice: template.config?.voice,
-         voiceSettings
+         voiceSettings,
+         language: caseLanguage
       });
-   }, [template, voiceSettings]);
+   }, [template, voiceSettings, caseLanguage]);
 
    const resolvedVoiceFile = resolvedVoice?.file || null;
-   const resolvedProvider = resolvedVoice?.provider || voiceSettings?.tts_provider || null;
+   const resolvedProvider = resolvedVoice?.provider || null;
    const resolvedRate = resolvedVoice?.rate ?? 1.0;
    const resolvedPitch = resolvedVoice?.pitch;
-   // Show every voice in the platform provider's catalogue — no slot filter.
-   const voiceOptions = ttsVoices;
 
    // ─── mutators ──────────────────────────────────────────────────────────
    const set = (updater) => setTemplate(prev => updater({ ...prev }));
@@ -570,27 +559,16 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                      <p className="text-[11px] text-neutral-500 -mt-2">
                         {t('voice_engine_help')}
                      </p>
-                     <Field label={t('field_voice', { provider: voiceSettings?.tts_provider || t('no_provider_set') })}>
+                     <Field label={t('field_voice_any_engine')}>
                         <select
                            value={cfg.voice?.case_voice || ''}
                            onChange={(e) => updateVoiceField('case_voice', e.target.value)}
                            className={inputClass}
-                           disabled={!voiceSettings?.tts_provider}
                         >
                            <option value="">{t('opt_pick_voice')}</option>
-                           {groupVoicesByLanguage(voiceOptions).map(group => (
-                              <optgroup key={group.language || 'other'} label={group.language || t('voice_group_other')}>
-                                 {group.voices.map(v => {
-                                    const genderLabel = voiceGenderLabel(v);
-                                    return (
-                                    <option key={v.filename} value={v.filename}>
-                                       {(v.displayName || v.filename) + (genderLabel ? ` — ${genderLabel}` : '')}
-                                    </option>
-                                    );
-                                 })}
-                              </optgroup>
-                           ))}
+                           <VoiceEngineOptions providers={allProviders} t={t} />
                         </select>
+                        <VoiceSubstitutionNote resolved={resolvedVoice} t={t} />
                      </Field>
                      <div className="grid grid-cols-2 gap-3">
                         <Field label={t('field_speech_rate')}>
@@ -662,14 +640,9 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
                               {resolvedProvider && <> {t('via')} <span className="text-neutral-400 font-mono">{resolvedProvider}</span></>}
                            </p>
                         )}
-                        {!resolvedVoiceFile && !voiceSettings?.tts_provider && (
+                        {!resolvedVoiceFile && Array.isArray(allProviders) && allProviders.every(p => !p.usable) && (
                            <p className="text-[10px] text-amber-400">
-                              {t('no_tts_provider_configured')}
-                           </p>
-                        )}
-                        {!resolvedVoiceFile && voiceSettings?.tts_provider === 'piper' && ttsVoices.length === 0 && (
-                           <p className="text-[10px] text-amber-400">
-                              {t('no_piper_voices_prefix')} <code className="text-amber-200">bash server/scripts/install-piper.sh</code>.
+                              {t('no_usable_engines')}
                            </p>
                         )}
                      </div>

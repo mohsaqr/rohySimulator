@@ -148,6 +148,14 @@ export async function* synthesizeGoogleStream({ text, voice, speed, pitch, apiKe
         throw err;
     }
 
+    if (process.env.NODE_ENV === 'test' && process.env.ROHY_TEST_FAIL_GOOGLE_TTS === '1') {
+        // Simulated request-time outage (quota / network / 5xx) for the
+        // Voice 2.0 runtime-fallback tests. Thrown AFTER the key check so
+        // it exercises the same path a live UPSTREAM_ERROR takes.
+        const err = new Error('simulated Google TTS outage (ROHY_TEST_FAIL_GOOGLE_TTS)');
+        err.code = 'UPSTREAM_ERROR';
+        throw err;
+    }
     if (process.env.NODE_ENV === 'test' && process.env.ROHY_TEST_FAKE_GOOGLE_TTS === '1') {
         yield { sampleRate: SAMPLE_RATE, pcm: Buffer.alloc(SAMPLE_RATE / 10 * 2) };
         return;

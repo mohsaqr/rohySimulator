@@ -50,6 +50,7 @@
   "field_temperature": "Lämpötila",
   "field_unlock_trigger": "Avausliipaisin",
   "field_voice": "Ääni ({provider})",
+  "field_voice_any_engine": "Ääni (mikä tahansa käytössä oleva moottori)",
   "header_edit": "Muokkaa: {name}",
   "header_new": "Uusi agenttipersoona",
   "hint_context_filter": "Mitä osaa tapauksesta agentti näkee ajonaikaisesti.",
@@ -87,6 +88,7 @@
   "no_provider_set": "ei palveluntarjoajaa asetettu",
   "no_standard_seeded": "Vakiomalleja ei ole alustettu.",
   "no_tts_provider_configured": "TTS-palveluntarjoajaa ei ole määritetty. Aseta sellainen ensin kohdassa Asetukset → Ääni.",
+  "no_usable_engines": "Yksikään TTS-moottori ei ole käytettävissä tällä palvelimella — asenna Kokoro/Piper tai lisää pilvi-API-avain kohdassa Asetukset → Ääni.",
   "no_voice_resolved": "Ääntä ei ratkaistu",
   "no_voice_set": "ääntä ei asetettu",
   "opt_avail_absent": "Poissa (ei saatavilla)",
@@ -195,7 +197,13 @@
   "unset": "ei asetettu",
   "untitled": "Nimetön",
   "via": "kautta",
+  "voice_default_note": "Tähän ei ole asetettu ääntä — alustan oletusääni ”{playing}” toistetaan.",
+  "voice_engine_free": "ilmainen · paikallinen",
   "voice_engine_help": "TTS-moottori asetetaan koko alustalle kohdassa Asetukset → Ääni. Valitse ääni kyseisen moottorin luettelosta. Tapaukset voivat ohittaa tämän tapauskohtaisesti tapauseditorissa.",
-  "will_play": "Toistaa:",
-  "voice_group_other": "Muut"
+  "voice_engine_paid": "maksullinen · API",
+  "voice_engine_unavailable": "ei käytettävissä",
+  "voice_engines_help": "Alla on lueteltu kaikkien käytössä olevien moottoreiden äänet — jokainen ääni toistetaan omalla moottorillaan (ilmaiset paikalliset moottorit ja maksulliset pilvi-API:t on merkitty). Jätä tyhjäksi periäksesi potilaspersoonan oletuksen.",
+  "voice_group_other": "Muut",
+  "voice_unplayable_note": "”{requested}” vaatii moottorin ”{provider}”, joka ei ole käytettävissä täällä. Määritettyjä ääniä ei koskaan korvata — toisto epäonnistuu virheellä, kunnes moottori korjataan tai ääni valitaan uudelleen.",
+  "will_play": "Toistaa:"
 }

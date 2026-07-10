@@ -1,35 +1,27 @@
-// Boot-time audit detects stale case_voice values across personas + cases.
-// We test it with a mocked dbAdapter + injectable log so the assertions
-// don't depend on the real SQLite path or the real catalogue services.
+// Boot-time voice audit — Voice 2.0 contract (VOICE2_PLAN.md §5.5).
 //
-// The Kokoro/OpenAI/Google catalogue lookups are exercised by mocking the
-// service modules — vi.mock is hoisted, so the mocks are in place by the
-// time auditPersonaAndCaseVoices imports them dynamically.
+// CONTRACT REWRITE (2026-07): the audit no longer has an "active provider".
+// It audits (a) the per-language default voices — warning loudly for every
+// registry language without a playable fallback — and (b) each stored
+// case_voice against its OWN derived engine's usability, naming the runtime
+// consequence ("plays the en default …" / "has NO fallback …").
+//
+// No service mocks: the REAL catalogues route (same code path as
+// production), and capability is controlled through settings (the audit
+// injects its db adapter as the settings reader) and env stubs. Piper is
+// not installed in CI; kokoro's static package catalogue is always present.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-vi.mock('../../../server/services/kokoroTts.js', () => ({
-    isKokoroVoice: vi.fn(async (v) => ['am_liam', 'af_bella', 'bm_lewis'].includes(v)),
-    loadKokoro: vi.fn(async () => {}),
-}));
-vi.mock('../../../server/services/openaiTts.js', () => ({
-    isOpenaiVoice: vi.fn((v) => ['nova', 'onyx', 'shimmer'].includes(v)),
-}));
-vi.mock('../../../server/services/googleTts.js', () => ({
-    isGoogleVoice: vi.fn((v) => ['en-US-Neural2-A', 'en-US-Neural2-F'].includes(v)),
-}));
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { auditPersonaAndCaseVoices } from '../../../server/healthChecks/voiceCatalogueAudit.js';
 
-function makeDbAdapter({ provider, rows }) {
+function makeDbAdapter({ settings = {}, rows = [] }) {
     return {
         get: (sql, params, cb) => {
-            // The audit only calls .get for the tts_provider setting.
-            cb(null, provider == null ? null : { setting_value: provider });
+            const key = Array.isArray(params) ? params[0] : undefined;
+            cb(null, key in settings ? { setting_value: settings[key] } : null);
         },
-        all: (sql, cb) => {
-            cb(null, rows);
-        },
+        all: (sql, cb) => cb(null, rows),
     };
 }
 
@@ -37,93 +29,123 @@ function makeLog() {
     return { info: vi.fn(), warn: vi.fn() };
 }
 
-describe('auditPersonaAndCaseVoices', () => {
+function personaRow(id, caseVoice, name = `Persona ${id}`) {
+    return { kind: 'persona', id, name, config: JSON.stringify({ voice: { case_voice: caseVoice } }) };
+}
+
+// Baseline settings most tests use: en playable (kokoro's static package
+// catalogue is always present in CI), everything else deliberately unset.
+const EN_DEFAULT = { tts_default_voice_en: 'af_bella' };
+
+describe('auditPersonaAndCaseVoices (Voice 2.0)', () => {
     let log;
 
     beforeEach(() => {
         log = makeLog();
+        // Capability must be deterministic: no cloud keys unless a test sets one.
+        vi.stubEnv('GOOGLE_TTS_API_KEY', '');
+        vi.stubEnv('GOOGLE_API_KEY', '');
+        vi.stubEnv('OPENAI_API_KEY', '');
     });
 
-    it('skips audit when tts_provider is unset', async () => {
-        const adapter = makeDbAdapter({ provider: null, rows: [] });
-        const result = await auditPersonaAndCaseVoices(adapter, log);
-        expect(result).toEqual({ provider: null, checked: 0, stale: [] });
-        expect(log.info).toHaveBeenCalledWith('tts_provider unset; skipping voice catalogue audit');
-        expect(log.warn).not.toHaveBeenCalled();
+    afterEach(() => {
+        vi.unstubAllEnvs();
     });
 
-    it('warns and returns provider when provider is unknown', async () => {
-        const adapter = makeDbAdapter({ provider: 'banana', rows: [] });
+    it('warns per registry language with no default voice (the never-mute gap report)', async () => {
+        const adapter = makeDbAdapter({ settings: {}, rows: [] });
         const result = await auditPersonaAndCaseVoices(adapter, log);
-        expect(result.provider).toBe('banana');
-        expect(result.stale).toEqual([]);
-        expect(log.warn).toHaveBeenCalledWith(
-            'cannot audit case_voice values; unknown provider',
-            { provider: 'banana' }
+        const unset = result.defaults.filter(d => d.status === 'unset').map(d => d.language).sort();
+        expect(unset).toEqual(['de', 'en', 'fi', 'it', 'sv']);
+        const warned = log.warn.mock.calls.filter(c => c[0] === 'no default voice for language');
+        expect(warned.length).toBe(5);
+    });
+
+    it('a playable default (kokoro af_bella) audits ok; the German gap is still named', async () => {
+        const adapter = makeDbAdapter({ settings: { ...EN_DEFAULT }, rows: [] });
+        const result = await auditPersonaAndCaseVoices(adapter, log);
+        const byLang = Object.fromEntries(result.defaults.map(d => [d.language, d]));
+        expect(byLang.en.status).toBe('ok');
+        expect(byLang.de.status).toBe('unset');
+        const deWarn = log.warn.mock.calls.find(
+            c => c[0] === 'no default voice for language' && c[1].language === 'de'
         );
+        expect(deWarn).toBeDefined();
+        expect(deWarn[1].hint).toMatch(/German speakers with NO voice configured/);
     });
 
-    it('logs clean when no rows store a case_voice', async () => {
-        const adapter = makeDbAdapter({ provider: 'kokoro', rows: [] });
-        const result = await auditPersonaAndCaseVoices(adapter, log);
-        expect(result.stale).toEqual([]);
-        expect(log.info).toHaveBeenCalledWith(
-            'voice catalogue audit clean',
-            { provider: 'kokoro', checked: 0 }
-        );
-    });
-
-    it('logs clean when every stored case_voice is in the active catalogue', async () => {
-        const rows = [
-            { kind: 'persona', id: 1, name: 'Patient', config: JSON.stringify({ voice: { case_voice: 'am_liam' } }) },
-            { kind: 'case', id: 7, name: 'Test1', config: JSON.stringify({ voice: { case_voice: 'af_bella' } }) },
-        ];
-        const adapter = makeDbAdapter({ provider: 'kokoro', rows });
-        const result = await auditPersonaAndCaseVoices(adapter, log);
-        expect(result.stale).toEqual([]);
-        expect(log.info).toHaveBeenCalledWith(
-            'voice catalogue audit clean',
-            { provider: 'kokoro', checked: 2 }
-        );
-        expect(log.warn).not.toHaveBeenCalled();
-    });
-
-    it('warns and enumerates every stale row when case_voice is not in the catalogue', async () => {
-        // The exact Orus regression that triggered the three-week chase:
-        // a case kept a Google voice id under a kokoro provider.
-        const rows = [
-            { kind: 'persona', id: 2, name: 'Default Patient', config: JSON.stringify({ voice: { case_voice: 'am_liam' } }) },
-            { kind: 'case', id: 1, name: 'Acute Chest Pain - STEMI', config: JSON.stringify({ voice: { case_voice: 'en-US-Chirp3-HD-Orus' } }) },
-            { kind: 'case', id: 7, name: 'Test1', config: JSON.stringify({ voice: { case_voice: 'bm_lewis' } }) },
-            { kind: 'case', id: 99, name: 'AlsoStale', config: JSON.stringify({ voice: { case_voice: 'mystery-voice' } }) },
-        ];
-        const adapter = makeDbAdapter({ provider: 'kokoro', rows });
-
-        const result = await auditPersonaAndCaseVoices(adapter, log);
-
-        expect(result.checked).toBe(4);
-        expect(result.stale).toEqual([
-            { kind: 'case', id: 1, name: 'Acute Chest Pain - STEMI', case_voice: 'en-US-Chirp3-HD-Orus' },
-            { kind: 'case', id: 99, name: 'AlsoStale', case_voice: 'mystery-voice' },
-        ]);
-        expect(log.info).not.toHaveBeenCalled();
-        expect(log.warn).toHaveBeenCalledTimes(1);
-        const [msg, payload] = log.warn.mock.calls[0];
-        expect(msg).toBe('stale case_voice values detected');
-        expect(payload).toMatchObject({
-            provider: 'kokoro',
-            stale_count: 2,
-            entries: result.stale,
+    it('flags a default whose engine is not usable (google voice, no key)', async () => {
+        const adapter = makeDbAdapter({
+            settings: { tts_default_voice_en: 'en-US-Chirp3-HD-Aoede' },
+            rows: []
         });
-        expect(payload.hint).toContain('kokoro');
+        const result = await auditPersonaAndCaseVoices(adapter, log);
+        const en = result.defaults.find(d => d.language === 'en');
+        expect(en.status).toBe('unplayable');
+        expect(en.detail).toMatch(/needs google/);
+        expect(log.warn).toHaveBeenCalledWith('default voice unplayable', expect.objectContaining({ language: 'en' }));
+    });
+
+    it('flags a default whose engine is disabled by policy', async () => {
+        const adapter = makeDbAdapter({
+            settings: { ...EN_DEFAULT, tts_provider_enabled_kokoro: '0' },
+            rows: []
+        });
+        const result = await auditPersonaAndCaseVoices(adapter, log);
+        const en = result.defaults.find(d => d.language === 'en');
+        expect(en.status).toBe('unplayable');
+        expect(en.detail).toMatch(/disabled in settings/);
+    });
+
+    it('logs clean when every stored voice plays on its own usable engine', async () => {
+        const adapter = makeDbAdapter({
+            settings: { ...EN_DEFAULT },
+            rows: [personaRow(1, 'af_bella'), personaRow(2, 'bm_lewis')]
+        });
+        const result = await auditPersonaAndCaseVoices(adapter, log);
+        expect(result.stale).toEqual([]);
+        expect(result.checked).toBe(2);
+        expect(log.info).toHaveBeenCalledWith('voice catalogue audit clean', { checked: 2 });
+    });
+
+    it('a google voice with no key is stale, and the consequence is blunt: it fails, never substitutes', async () => {
+        const adapter = makeDbAdapter({
+            settings: { ...EN_DEFAULT },
+            rows: [personaRow(7, 'en-US-Chirp3-HD-Aoede', 'Cloud Persona')]
+        });
+        const result = await auditPersonaAndCaseVoices(adapter, log);
+        expect(result.stale.length).toBe(1);
+        const entry = result.stale[0];
+        expect(entry.provider).toBe('google');
+        expect(entry.problem).toMatch(/not usable/);
+        // v1.4 sovereignty: configured voices are literal — the en default
+        // must NOT be named as a stand-in, even though it is configured.
+        expect(entry.consequence).toMatch(/fails loudly/);
+        expect(entry.consequence).toMatch(/never substituted/);
+        expect(entry.consequence).not.toMatch(/af_bella/);
+        expect(log.warn).toHaveBeenCalledWith('stale case_voice values detected', expect.objectContaining({
+            stale_count: 1,
+        }));
+    });
+
+    it('an unknown voice id is stale with an honest problem', async () => {
+        const adapter = makeDbAdapter({
+            settings: { ...EN_DEFAULT },
+            rows: [personaRow(9, 'notavoiceanywhere')]
+        });
+        const result = await auditPersonaAndCaseVoices(adapter, log);
+        expect(result.stale.length).toBe(1);
+        expect(result.stale[0].problem).toMatch(/no provider's catalogue/);
     });
 
     it('tolerates malformed config JSON without throwing', async () => {
-        const rows = [
-            { kind: 'persona', id: 5, name: 'BrokenJSON', config: '{not json' },
-            { kind: 'case', id: 6, name: 'OK', config: JSON.stringify({ voice: { case_voice: 'am_liam' } }) },
-        ];
-        const adapter = makeDbAdapter({ provider: 'kokoro', rows });
+        const adapter = makeDbAdapter({
+            settings: { ...EN_DEFAULT },
+            rows: [
+                { kind: 'case', id: 1, name: 'Broken', config: '{not json' },
+                personaRow(2, 'af_bella')
+            ]
+        });
         const result = await auditPersonaAndCaseVoices(adapter, log);
         expect(result.stale).toEqual([]);
         // Broken row contributes to `checked` but is skipped silently — the
@@ -132,59 +154,26 @@ describe('auditPersonaAndCaseVoices', () => {
     });
 
     it('skips rows where case_voice is empty / null', async () => {
-        const rows = [
-            { kind: 'persona', id: 1, name: 'NoVoice', config: JSON.stringify({ voice: {} }) },
-            { kind: 'case', id: 2, name: 'BlankVoice', config: JSON.stringify({ voice: { case_voice: '' } }) },
-            { kind: 'case', id: 3, name: 'NullVoice', config: JSON.stringify({ voice: { case_voice: null } }) },
-        ];
-        const adapter = makeDbAdapter({ provider: 'kokoro', rows });
+        const adapter = makeDbAdapter({
+            settings: { ...EN_DEFAULT },
+            rows: [
+                { kind: 'persona', id: 1, name: 'NoVoice', config: JSON.stringify({ voice: {} }) },
+                { kind: 'case', id: 2, name: 'BlankVoice', config: JSON.stringify({ voice: { case_voice: '' } }) },
+                { kind: 'case', id: 3, name: 'NullVoice', config: JSON.stringify({ voice: { case_voice: null } }) },
+            ]
+        });
         const result = await auditPersonaAndCaseVoices(adapter, log);
         expect(result.stale).toEqual([]);
-        expect(log.info).toHaveBeenCalledWith(
-            'voice catalogue audit clean',
-            { provider: 'kokoro', checked: 3 }
-        );
+        expect(log.info).toHaveBeenCalledWith('voice catalogue audit clean', { checked: 3 });
     });
 
-    it('audits openai voices when openai is the active provider', async () => {
-        const rows = [
-            { kind: 'persona', id: 1, name: 'Patient', config: JSON.stringify({ voice: { case_voice: 'nova' } }) },
-            { kind: 'case', id: 2, name: 'WrongProvider', config: JSON.stringify({ voice: { case_voice: 'am_liam' } }) },
-        ];
-        const adapter = makeDbAdapter({ provider: 'openai', rows });
+    it('a cloud voice with its key present audits clean (capability via env)', async () => {
+        vi.stubEnv('GOOGLE_TTS_API_KEY', 'some-key');
+        const adapter = makeDbAdapter({
+            settings: { ...EN_DEFAULT },
+            rows: [personaRow(3, 'de-DE-Chirp3-HD-Kore')]
+        });
         const result = await auditPersonaAndCaseVoices(adapter, log);
-        expect(result.stale).toEqual([
-            { kind: 'case', id: 2, name: 'WrongProvider', case_voice: 'am_liam' },
-        ]);
-    });
-
-    it('audits google voices when google is the active provider', async () => {
-        const rows = [
-            { kind: 'persona', id: 1, name: 'Patient', config: JSON.stringify({ voice: { case_voice: 'en-US-Neural2-F' } }) },
-            { kind: 'case', id: 2, name: 'OrusBack', config: JSON.stringify({ voice: { case_voice: 'en-US-Chirp3-HD-Orus' } }) },
-        ];
-        const adapter = makeDbAdapter({ provider: 'google', rows });
-        const result = await auditPersonaAndCaseVoices(adapter, log);
-        expect(result.stale).toEqual([
-            { kind: 'case', id: 2, name: 'OrusBack', case_voice: 'en-US-Chirp3-HD-Orus' },
-        ]);
-    });
-
-    it('treats a validator throw as "stale" rather than crashing the audit', async () => {
-        // If kokoroTts.isKokoroVoice() rejects for some reason (e.g. model
-        // not loaded yet), the audit should report the voice as stale and
-        // keep going — it must not abort the whole boot.
-        const kokoro = await import('../../../server/services/kokoroTts.js');
-        kokoro.isKokoroVoice.mockImplementationOnce(async () => { throw new Error('not ready'); });
-        const rows = [
-            { kind: 'persona', id: 1, name: 'Patient', config: JSON.stringify({ voice: { case_voice: 'am_liam' } }) },
-            { kind: 'case', id: 2, name: 'OK', config: JSON.stringify({ voice: { case_voice: 'af_bella' } }) },
-        ];
-        const adapter = makeDbAdapter({ provider: 'kokoro', rows });
-        const result = await auditPersonaAndCaseVoices(adapter, log);
-        // The first row threw → stale. The second is valid → clean.
-        expect(result.stale).toEqual([
-            { kind: 'persona', id: 1, name: 'Patient', case_voice: 'am_liam' },
-        ]);
+        expect(result.stale).toEqual([]);
     });
 });

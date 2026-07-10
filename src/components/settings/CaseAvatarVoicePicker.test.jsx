@@ -1,19 +1,18 @@
 // Tests for CaseAvatarVoicePicker.jsx — the per-case voice/avatar override
 // picker shown inside the case wizard.
 //
-// CONTRACT (post-2026-05-12, after the provider-picker removal):
-//   1. NO PROVIDER PICKER. TTS provider is platform-wide (Voice Settings).
-//      The case voice <select> uses voiceSettings.tts_provider to fetch
-//      its catalogue and disables itself if no provider is configured.
-//   2. TEST VOICE BUTTON: receives the picker's resolved voice, the platform
-//      provider, plus per-case rate/pitch. No `gender` prop (slot logic
-//      removed).
+// CONTRACT (Voice 2.0, 2026-07 — VOICE2_PLAN.md §6.2; supersedes the
+// 2026-05 platform-provider contract):
+//   1. NO PROVIDER PICKER, NO PLATFORM PROVIDER. The picker offers voices
+//      from EVERY usable engine in one select (grouped engine → language,
+//      free/paid badged); each voice plays on its own engine. Unusable
+//      engines appear as a disabled group naming the reason.
+//   2. TEST VOICE BUTTON: receives the resolved voice and its DERIVED
+//      engine, plus per-case rate/pitch.
 //   3. CASE VOICE OVERRIDE: choosing a voice writes
 //      `config.voice.case_voice`. Resetting clears it.
-//   4. INHERIT FROM PATIENT PERSONA: the picker fetches the Patient persona
-//      template and shows its case_voice in the "(inherit …)" placeholder.
-//      No hardcoded provider voice anywhere — if neither case nor persona
-//      has a voice set, the placeholder says "(none set)".
+//   4. INHERIT: case → Patient persona template → the platform's
+//      per-language default voice (each step declared, never silent).
 //   5. PITCH SLIDER UNITS: min=-10, max=10, step=0.25 (semitones).
 //   6. RATE SLIDER: min=0.5, max=1.5, step=0.05.
 //   7. AVATAR LIST: still slot-filtered by patient demographics (avatar
@@ -28,7 +27,6 @@ import { setupServer } from 'msw/node';
 import { renderWithProviders } from '../../../tests/utils/renderWithProviders.jsx';
 
 const testVoiceProps = vi.fn();
-const voiceRequests = [];
 vi.mock('./TestVoiceButton.jsx', () => ({
     default: function TestVoiceButtonStub(props) {
         testVoiceProps(props);
@@ -54,22 +52,40 @@ vi.mock('../chat/PatientAvatar', () => ({
 }));
 
 const sampleVoices = {
-    piper: [
-        { filename: 'en_US-amy-medium.onnx', displayName: 'Amy', gender: 'female' },
-        { filename: 'en_US-ryan-medium.onnx', displayName: 'Ryan', gender: 'male' },
-    ],
     google: [
-        { filename: 'en-US-Neural2-F', displayName: 'Neural2-F', gender: 'female' },
-        { filename: 'en-US-Neural2-J', displayName: 'Neural2-J', gender: 'male' },
+        { filename: 'en-US-Neural2-F', displayName: 'Neural2-F', gender: 'female', language: 'en-US' },
+        { filename: 'en-US-Neural2-J', displayName: 'Neural2-J', gender: 'male', language: 'en-US' },
     ],
     kokoro: [
-        { filename: 'af_bella', displayName: 'Bella', gender: 'female' },
-        { filename: 'am_michael', displayName: 'Michael', gender: 'male' },
+        { filename: 'af_bella', displayName: 'Bella', gender: 'female', language: 'en-US' },
+        { filename: 'am_michael', displayName: 'Michael', gender: 'male', language: 'en-US' },
     ],
     openai: [
-        { filename: 'alloy', displayName: 'Alloy', gender: 'female' },
+        { filename: 'alloy', displayName: 'Alloy', gender: 'neutral', language: 'en' },
     ],
+    piper: [],
 };
+
+// The all-providers /tts/voices shape (Voice 2.0 §5.6): piper is present
+// but unusable, with the reason — pickers must show it as a disabled group
+// rather than hiding it.
+const allProvidersPayload = () => ({
+    providers: [
+        { id: 'kokoro', capable: true, enabled: true, usable: true, reason: null, voices: sampleVoices.kokoro },
+        { id: 'google', capable: true, enabled: true, usable: true, reason: null, voices: sampleVoices.google },
+        { id: 'openai', capable: true, enabled: true, usable: true, reason: null, voices: sampleVoices.openai },
+        { id: 'piper', capable: false, enabled: true, usable: false, reason: 'piper binary not installed', voices: [] },
+    ],
+});
+
+// The Voice 2.0 settings payload: provider status + per-language defaults
+// (none configured in the base fixture — tests that need the default tier
+// override this).
+const voiceSettingsPayload = (extra = {}) => ({
+    voice_mode_enabled: true,
+    providers: allProvidersPayload().providers.map(({ voices: _v, ...status }) => status),
+    ...extra,
+});
 
 const sampleAvatarManifest = {
     all: [
@@ -88,16 +104,17 @@ function defaultHandlers() {
         ),
         http.get('*/api/tts/voices', ({ request }) => {
             const url = new URL(request.url);
-            const provider = url.searchParams.get('provider') || 'kokoro';
-            return HttpResponse.json({ voices: sampleVoices[provider] || [] });
+            const provider = url.searchParams.get('provider');
+            if (provider) {
+                return HttpResponse.json({ provider, voices: sampleVoices[provider] || [] });
+            }
+            return HttpResponse.json(allProvidersPayload());
         }),
         http.get('*/api/auth/verify', () =>
             HttpResponse.json({ user: null }, { status: 401 })
         ),
-        // Default: platform provider = kokoro. Tests that need other
-        // behaviour override this handler explicitly.
         http.get('*/api/platform-settings/voice', () =>
-            HttpResponse.json({ tts_provider: 'kokoro' })
+            HttpResponse.json(voiceSettingsPayload())
         ),
         http.get('*/api/platform-settings/avatars', () => HttpResponse.json({})),
         http.get('*/api/platform-settings/chat', () => HttpResponse.json({})),
@@ -113,7 +130,6 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => {
     server.resetHandlers(...defaultHandlers());
     testVoiceProps.mockClear();
-    voiceRequests.length = 0;
     localStorage.clear();
 });
 afterAll(() => server.close());
@@ -168,22 +184,18 @@ function getAvatarSelect() {
     return found;
 }
 
-async function waitForVoices(provider = 'kokoro') {
-    const expected = sampleVoices[provider] || [];
-    if (expected.length === 0) return;
+async function waitForVoices() {
     await waitFor(() => {
         const select = getCaseVoiceSelect();
-        const optionTexts = Array.from(select.querySelectorAll('option')).map((o) => o.textContent || '');
-        expect(optionTexts.some(t => expected.some(v => t.includes(v.displayName)))).toBe(true);
+        const values = Array.from(select.querySelectorAll('option')).map((o) => o.value);
+        expect(values).toContain('af_bella');
     });
 }
 
-describe('CaseAvatarVoicePicker — provider picker is gone (platform-wide)', () => {
+describe('CaseAvatarVoicePicker — engines, not a provider picker', () => {
     it('does not render a provider <select>', async () => {
         mount();
-        await waitForVoices('kokoro');
-        // The only selects on the page should be avatar + voice — none of
-        // them should expose provider options.
+        await waitForVoices();
         const selects = Array.from(document.querySelectorAll('select'));
         for (const s of selects) {
             const optionValues = Array.from(s.querySelectorAll('option')).map(o => o.value);
@@ -192,14 +204,56 @@ describe('CaseAvatarVoicePicker — provider picker is gone (platform-wide)', ()
         }
     });
 
-    it('disables the case-voice select when no platform provider is configured', async () => {
+    it('offers voices from EVERY usable engine together (mixed engines are legal)', async () => {
+        mount();
+        await waitForVoices();
+        const values = Array.from(getCaseVoiceSelect().querySelectorAll('option')).map(o => o.value);
+        expect(values).toContain('af_bella');          // kokoro
+        expect(values).toContain('en-US-Neural2-J');   // google — same select
+        expect(values).toContain('alloy');             // openai — same select
+    });
+
+    it('labels engine groups with free/paid badges', async () => {
+        mount();
+        await waitForVoices();
+        const groups = Array.from(getCaseVoiceSelect().querySelectorAll('optgroup')).map(g => g.label);
+        expect(groups.some(l => l.startsWith('kokoro') && l.includes('free'))).toBe(true);
+        expect(groups.some(l => l.startsWith('google') && l.includes('paid'))).toBe(true);
+    });
+
+    it('shows an unusable engine as a disabled group naming the reason', async () => {
+        mount();
+        await waitForVoices();
+        const select = getCaseVoiceSelect();
+        const piperGroup = Array.from(select.querySelectorAll('optgroup')).find(g => g.label.startsWith('piper'));
+        expect(piperGroup).toBeTruthy();
+        const opt = piperGroup.querySelector('option');
+        expect(opt.disabled).toBe(true);
+        expect(opt.textContent).toContain('piper binary not installed');
+    });
+
+    it('renders every voice regardless of patient gender (no slot filter)', async () => {
+        mount({
+            id: 'female-case',
+            config: { demographics: { age: 35, gender: 'female' } },
+        });
+        await waitForVoices();
+        const values = Array.from(getCaseVoiceSelect().querySelectorAll('option')).map(o => o.value);
+        expect(values).toContain('am_michael');
+        expect(values).toContain('af_bella');
+    });
+
+    it('does not crash when the voice list request is forbidden', async () => {
         server.use(
-            http.get('*/api/platform-settings/voice', () => HttpResponse.json({}))
+            http.get('*/api/tts/voices', () =>
+                HttpResponse.json({ error: 'forbidden' }, { status: 403 })
+            )
         );
         mount();
         await waitFor(() => {
             const select = getCaseVoiceSelect();
-            expect(select.disabled).toBe(true);
+            // Only the "inherit" placeholder remains.
+            expect(Array.from(select.querySelectorAll('option'))).toHaveLength(1);
         });
     });
 });
@@ -281,82 +335,8 @@ describe('CaseAvatarVoicePicker — avatar list filtering (unchanged)', () => {
     });
 });
 
-describe('CaseAvatarVoicePicker — voice list comes from the platform provider', () => {
-    it('fetches the platform provider voices through /api/tts/voices', async () => {
-        server.use(
-            http.get('*/api/tts/voices', ({ request }) => {
-                voiceRequests.push({ url: request.url });
-                const url = new URL(request.url);
-                const provider = url.searchParams.get('provider') || 'kokoro';
-                return HttpResponse.json({ voices: sampleVoices[provider] || [] });
-            })
-        );
-
-        mount();
-        await waitForVoices('kokoro');
-
-        expect(new URL(voiceRequests[0].url).searchParams.get('provider')).toBe('kokoro');
-    });
-
-    it('does not crash when the voice list request is forbidden', async () => {
-        server.use(
-            http.get('*/api/tts/voices', () =>
-                HttpResponse.json({ error: 'forbidden' }, { status: 403 })
-            )
-        );
-
-        mount();
-
-        await waitFor(() => {
-            const select = getCaseVoiceSelect();
-            // Only the "inherit" placeholder remains.
-            expect(Array.from(select.querySelectorAll('option'))).toHaveLength(1);
-        });
-    });
-
-    it('renders every voice in the platform provider catalogue, regardless of patient gender', async () => {
-        // Slot-filtering was removed. A female patient sees male voices too,
-        // because per-character voice id is the entire model — gender is no
-        // longer used to filter the list.
-        mount({
-            id: 'female-case',
-            config: { demographics: { age: 35, gender: 'female' } },
-        });
-        await waitForVoices('kokoro');
-        const select = getCaseVoiceSelect();
-        const values = Array.from(select.querySelectorAll('option')).map(o => o.value);
-        expect(values).toContain('am_michael');
-        expect(values).toContain('af_bella');
-    });
-
-    it('refetches when the platform provider switches', async () => {
-        // Simulate the admin changing tts_provider from kokoro to google in
-        // Voice Settings — the case picker should reload its catalogue.
-        const { rerender } = mount();
-        await waitForVoices('kokoro');
-
-        server.use(
-            http.get('*/api/platform-settings/voice', () =>
-                HttpResponse.json({ tts_provider: 'google' })
-            )
-        );
-        // Trigger a remount with the new platform settings.
-        rerender(<div />);
-        mount();
-        await waitForVoices('google');
-        const select = getCaseVoiceSelect();
-        const values = Array.from(select.querySelectorAll('option')).map(o => o.value);
-        expect(values).toContain('en-US-Neural2-J');
-    });
-});
-
-describe('CaseAvatarVoicePicker — TestVoiceButton wiring', () => {
-    it('forwards case_voice + platform provider + rate + pitch to TestVoiceButton', async () => {
-        server.use(
-            http.get('*/api/platform-settings/voice', () =>
-                HttpResponse.json({ tts_provider: 'google' })
-            )
-        );
+describe('CaseAvatarVoicePicker — TestVoiceButton wiring (derived engine)', () => {
+    it('forwards case_voice + its DERIVED engine + rate + pitch to TestVoiceButton', async () => {
         mount({
             id: 'c',
             config: {
@@ -368,28 +348,67 @@ describe('CaseAvatarVoicePicker — TestVoiceButton wiring', () => {
                 },
             },
         });
-        await waitForVoices('google');
+        await waitForVoices();
         const stub = screen.getByTestId('test-voice-button-stub');
         expect(stub.getAttribute('data-voice')).toBe('en-US-Neural2-J');
-        expect(stub.getAttribute('data-provider')).toBe('google');
+        expect(stub.getAttribute('data-provider')).toBe('google'); // derived from the id
         expect(stub.getAttribute('data-rate')).toBe('1.1');
         expect(stub.getAttribute('data-pitch')).toBe('2.5');
     });
 
-    it('forwards empty voice when neither case nor patient persona has one set', async () => {
-        // No silent hardcoded fallback — if nothing is configured, the test
-        // button has nothing to play and the admin gets a clear "no voice"
-        // signal in the UI.
+    it('forwards empty voice when nothing is configured and no language default exists', async () => {
         mount();
-        await waitForVoices('kokoro');
+        await waitForVoices();
         const stub = screen.getByTestId('test-voice-button-stub');
         expect(stub.getAttribute('data-voice')).toBe('');
-        expect(stub.getAttribute('data-provider')).toBe('kokoro');
     });
 
+    it('auditions the language default when nothing is configured but a default exists (the truth)', async () => {
+        server.use(
+            http.get('*/api/platform-settings/voice', () =>
+                HttpResponse.json(voiceSettingsPayload({ tts_default_voice_en: 'af_bella' }))
+            )
+        );
+        mount();
+        await waitForVoices();
+        const stub = screen.getByTestId('test-voice-button-stub');
+        await waitFor(() => {
+            expect(stub.getAttribute('data-voice')).toBe('af_bella');
+            expect(stub.getAttribute('data-provider')).toBe('kokoro');
+        });
+        // Truth clause: a default filling in for an unset voice is said out
+        // loud, not implied (Codex P2 — the note used to vanish here).
+        expect(document.body.textContent).toMatch(/No voice is set here/);
+        expect(document.body.textContent).toContain('af_bella');
+    });
+
+    it("the case's OWN language field wins — a de case auditions the de default even in an en session", async () => {
+        // config.case_language beats the session language (that is what the
+        // runtime plays the case in, via useCaseLanguageSync).
+        server.use(
+            http.get('*/api/platform-settings/voice', () =>
+                HttpResponse.json(voiceSettingsPayload({
+                    tts_default_voice_en: 'af_bella',
+                    tts_default_voice_de: 'alloy',
+                }))
+            )
+        );
+        mount({
+            id: 'de-case',
+            config: {
+                case_language: 'de',
+                demographics: { age: 35, gender: 'male' },
+            },
+        });
+        const stub = await screen.findByTestId('test-voice-button-stub');
+        await waitFor(() => {
+            expect(stub.getAttribute('data-voice')).toBe('alloy');
+            expect(stub.getAttribute('data-provider')).toBe('openai');
+        });
+    });
+
+
     it('inherits voice from the Patient persona template when case_voice is unset', async () => {
-        // The picker fetches the Patient persona template; its case_voice is
-        // the only fallback below case-level — no PROVIDER_FALLBACK_VOICE.
         server.use(
             http.get('*/api/agents/templates', () =>
                 HttpResponse.json({
@@ -404,10 +423,80 @@ describe('CaseAvatarVoicePicker — TestVoiceButton wiring', () => {
             )
         );
         mount();
-        await waitForVoices('kokoro');
+        await waitForVoices();
         const stub = screen.getByTestId('test-voice-button-stub');
         await waitFor(() => {
             expect(stub.getAttribute('data-voice')).toBe('af_bella');
+        });
+    });
+
+    it('shows the amber loud-fail note when the saved voice cannot play here (never a stand-in)', async () => {
+        // v1.4 sovereignty: google unusable → the saved google voice FAILS;
+        // the note must say so, and the configured en default must NOT be
+        // offered as what will play.
+        server.use(
+            http.get('*/api/platform-settings/voice', () =>
+                HttpResponse.json(voiceSettingsPayload({
+                    providers: [
+                        { id: 'kokoro', capable: true, enabled: true, usable: true, reason: null },
+                        { id: 'google', capable: false, enabled: true, usable: false, reason: 'no API key' },
+                        { id: 'openai', capable: true, enabled: true, usable: true, reason: null },
+                        { id: 'piper', capable: false, enabled: true, usable: false, reason: 'not installed' },
+                    ],
+                    tts_default_voice_en: 'af_bella',
+                }))
+            )
+        );
+        mount({
+            id: 'c',
+            config: {
+                demographics: { age: 35, gender: 'male' },
+                voice: { case_voice: 'en-US-Neural2-J' },
+            },
+        });
+        await waitForVoices();
+        await waitFor(() => {
+            expect(document.body.textContent).toContain('en-US-Neural2-J');
+            expect(document.body.textContent).toMatch(/never substituted/);
+        });
+        // The audition button has nothing to play — the voice is literal.
+        expect(screen.getByTestId('test-voice-button-stub').getAttribute('data-voice')).toBe('');
+    });
+
+    it('picking a voice FREEZES rate/pitch into the case from the platform values', async () => {
+        server.use(
+            http.get('*/api/platform-settings/voice', () =>
+                HttpResponse.json(voiceSettingsPayload({ tts_rate: 1.2, tts_pitch: -2 }))
+            )
+        );
+        const { captured } = mount();
+        await waitForVoices();
+        fireEvent.change(getCaseVoiceSelect(), { target: { value: 'af_bella' } });
+        await waitFor(() => {
+            expect(captured.current.config.voice).toMatchObject({
+                case_voice: 'af_bella',
+                tts_rate: 1.2,   // pinned at pick time —
+                tts_pitch: -2,   // later platform changes can't alter the case
+            });
+        });
+    });
+
+    it('author-pinned rate/pitch survive a voice re-pick (never overwritten)', async () => {
+        const { captured } = mount({
+            id: 'c',
+            config: {
+                demographics: { age: 35, gender: 'male' },
+                voice: { case_voice: 'am_michael', tts_rate: 0.8, tts_pitch: 3 },
+            },
+        });
+        await waitForVoices();
+        fireEvent.change(getCaseVoiceSelect(), { target: { value: 'af_bella' } });
+        await waitFor(() => {
+            expect(captured.current.config.voice).toMatchObject({
+                case_voice: 'af_bella',
+                tts_rate: 0.8,
+                tts_pitch: 3,
+            });
         });
     });
 });
@@ -415,7 +504,7 @@ describe('CaseAvatarVoicePicker — TestVoiceButton wiring', () => {
 describe('CaseAvatarVoicePicker — pitch slider', () => {
     it('renders a pitch slider with min=-10, max=10, step=0.25 (semitones)', async () => {
         mount();
-        await waitForVoices('kokoro');
+        await waitForVoices();
         const ranges = Array.from(document.querySelectorAll('input[type="range"]'));
         const pitchRange = ranges.find(
             (r) => r.getAttribute('min') === '-10' && r.getAttribute('max') === '10'
@@ -426,13 +515,13 @@ describe('CaseAvatarVoicePicker — pitch slider', () => {
 
     it('renders the helper text "semitones (Google only)" near the pitch label', async () => {
         mount();
-        await waitForVoices('kokoro');
+        await waitForVoices();
         expect(document.body.textContent).toContain('semitones (Google only)');
     });
 
     it('writes config.voice.tts_pitch as a number when the pitch slider moves', async () => {
         const { captured } = mount();
-        await waitForVoices('kokoro');
+        await waitForVoices();
         const ranges = Array.from(document.querySelectorAll('input[type="range"]'));
         const pitchRange = ranges.find(
             (r) => r.getAttribute('min') === '-10' && r.getAttribute('max') === '10'
@@ -447,7 +536,7 @@ describe('CaseAvatarVoicePicker — pitch slider', () => {
 describe('CaseAvatarVoicePicker — rate slider', () => {
     it('renders a rate slider with min=0.5, max=1.5, step=0.05', async () => {
         mount();
-        await waitForVoices('kokoro');
+        await waitForVoices();
         const ranges = Array.from(document.querySelectorAll('input[type="range"]'));
         const rateRange = ranges.find(
             (r) => r.getAttribute('min') === '0.5' && r.getAttribute('max') === '1.5'
@@ -458,7 +547,7 @@ describe('CaseAvatarVoicePicker — rate slider', () => {
 
     it('writes config.voice.tts_rate when the rate slider moves', async () => {
         const { captured } = mount();
-        await waitForVoices('kokoro');
+        await waitForVoices();
         const ranges = Array.from(document.querySelectorAll('input[type="range"]'));
         const rateRange = ranges.find(
             (r) => r.getAttribute('min') === '0.5' && r.getAttribute('max') === '1.5'
@@ -478,11 +567,20 @@ describe('CaseAvatarVoicePicker — inherit handling and case-voice override', (
 
     it('writes config.voice.case_voice when a specific voice is picked', async () => {
         const { captured } = mount();
-        await waitForVoices('kokoro');
+        await waitForVoices();
         const voiceSelect = getCaseVoiceSelect();
         fireEvent.change(voiceSelect, { target: { value: 'am_michael' } });
         await waitFor(() => {
             expect(captured.current.config.voice?.case_voice).toBe('am_michael');
+        });
+    });
+
+    it('a cross-engine pick works the same way (google voice into a kokoro-voiced world)', async () => {
+        const { captured } = mount();
+        await waitForVoices();
+        fireEvent.change(getCaseVoiceSelect(), { target: { value: 'en-US-Neural2-J' } });
+        await waitFor(() => {
+            expect(captured.current.config.voice?.case_voice).toBe('en-US-Neural2-J');
         });
     });
 
@@ -494,7 +592,7 @@ describe('CaseAvatarVoicePicker — inherit handling and case-voice override', (
                 voice: { case_voice: 'am_michael' },
             },
         });
-        await waitForVoices('kokoro');
+        await waitForVoices();
         const voiceSelect = getCaseVoiceSelect();
         fireEvent.change(voiceSelect, { target: { value: '' } });
         await waitFor(() => {
@@ -511,11 +609,58 @@ describe('CaseAvatarVoicePicker — inherit handling and case-voice override', (
             })
         );
         mount(null, { patientTemplateVoice: { case_voice: 'af_bella' } });
-        await waitForVoices('kokoro');
+        await waitForVoices();
         const stub = screen.getByTestId('test-voice-button-stub');
         await waitFor(() => {
             expect(stub.getAttribute('data-voice')).toBe('af_bella');
         });
         expect(templatesFetched).toBe(false);
+    });
+});
+
+// Quarantined last: this test flips the module-global i18n instance to de
+// via a real LanguageProvider; running it after every other test means any
+// residual language state cannot bleed into unrelated assertions.
+describe('CaseAvatarVoicePicker — session-language resolution (LanguageProvider)', () => {
+    it('resolves against the SESSION language — a de session auditions the de default, never the en one', async () => {
+        // The picker keys resolveVoice on useLanguage()'s caseLanguage —
+        // the same source the chat runtime uses (Codex P2: it used to
+        // hardcode en, so non-English cases previewed the wrong fallback).
+        localStorage.setItem('rohy_ui_language', 'de');
+        server.use(
+            http.get('*/api/platform-settings/voice', () =>
+                HttpResponse.json(voiceSettingsPayload({
+                    tts_default_voice_en: 'af_bella',
+                    tts_default_voice_de: 'alloy', // openai — multilingual, usable in the fixture
+                }))
+            )
+        );
+        const { LanguageProvider } = await import('../../contexts/LanguageContext.jsx');
+        function Harness() {
+            const [caseData, setCaseData] = useState({
+                id: 'de-case',
+                config: { demographics: { age: 35, gender: 'male' } },
+            });
+            return (
+                <CaseAvatarVoicePicker caseData={caseData} setCaseData={setCaseData} />
+            );
+        }
+        renderWithProviders(
+            <LanguageProvider><Harness /></LanguageProvider>,
+            { withPatientRecord: false }
+        );
+        try {
+            const stub = await screen.findByTestId('test-voice-button-stub');
+            await waitFor(() => {
+                expect(stub.getAttribute('data-voice')).toBe('alloy');   // the de default
+                expect(stub.getAttribute('data-provider')).toBe('openai');
+            });
+        } finally {
+            // LanguageProvider flipped the module-global i18n instance to de;
+            // localStorage.clear() in afterEach does NOT undo that — reset
+            // explicitly so later tests render English again.
+            const { default: i18n } = await import('../../i18n');
+            await i18n.changeLanguage('en');
+        }
     });
 });

@@ -44,6 +44,12 @@
   "toast_configs_updated": "Hoitomääritykset päivitetty",
   "toast_save_failed": "Tallennus epäonnistui",
   "toast_save_failed_error": "Tallennus epäonnistui: {error}",
+  "voice_default_note": "Tähän ei ole asetettu ääntä — alustan oletusääni ”{playing}” toistetaan.",
+  "voice_engine_free": "ilmainen · paikallinen",
+  "voice_engine_paid": "maksullinen · API",
+  "voice_engine_unavailable": "ei käytettävissä",
+  "voice_engines_help": "Alla on lueteltu kaikkien käytössä olevien moottoreiden äänet — jokainen ääni toistetaan omalla moottorillaan (ilmaiset paikalliset moottorit ja maksulliset pilvi-API:t on merkitty). Jätä tyhjäksi periäksesi potilaspersoonan oletuksen.",
+  "voice_group_other": "Muut",
   "voice_heading": "Ääni",
   "voice_help_after": ". Jätä ääni tyhjäksi periäksesi Potilas-persoonan oletusarvon.",
   "voice_help_before": "TTS-moottori asetetaan alustan laajuisesti kohdassa ",
@@ -51,6 +57,6 @@
   "voice_provider_current_after": ")",
   "voice_provider_current_before": "(tällä hetkellä ",
   "voice_settings_path": "Asetukset → Ääni",
-  "warning_message_label": "Varoitusviesti",
-  "voice_group_other": "Muut"
+  "voice_unplayable_note": "”{requested}” vaatii moottorin ”{provider}”, joka ei ole käytettävissä täällä. Määritettyjä ääniä ei koskaan korvata — toisto epäonnistuu virheellä, kunnes moottori korjataan tai ääni valitaan uudelleen.",
+  "warning_message_label": "Varoitusviesti"
 }

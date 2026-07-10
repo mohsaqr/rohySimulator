@@ -50,6 +50,7 @@
   "field_temperature": "Temperatura",
   "field_unlock_trigger": "Trigger di sblocco",
   "field_voice": "Voce ({provider})",
+  "field_voice_any_engine": "Voce (qualsiasi motore abilitato)",
   "header_edit": "Modifica: {name}",
   "header_new": "Nuova persona agente",
   "hint_context_filter": "Quale porzione del caso l'agente può vedere in fase di esecuzione.",
@@ -87,6 +88,7 @@
   "no_provider_set": "nessun provider impostato",
   "no_standard_seeded": "Nessun modello standard inizializzato.",
   "no_tts_provider_configured": "Nessun provider TTS configurato. Impostane uno in Impostazioni → Voce.",
+  "no_usable_engines": "Nessun motore TTS è utilizzabile su questo server — installa Kokoro/Piper o aggiungi una chiave API cloud in Impostazioni → Voce.",
   "no_voice_resolved": "Nessuna voce risolta",
   "no_voice_set": "nessuna voce impostata",
   "opt_avail_absent": "Assente (non disponibile)",
@@ -195,7 +197,13 @@
   "unset": "non impostato",
   "untitled": "Senza titolo",
   "via": "tramite",
+  "voice_default_note": "Nessuna voce impostata qui — verrà riprodotta la voce predefinita della piattaforma «{playing}».",
+  "voice_engine_free": "gratis · locale",
   "voice_engine_help": "Il motore TTS è impostato a livello di piattaforma in Impostazioni → Voce. Scegli una voce dal catalogo di quel motore. I casi possono sovrascrivere questa impostazione per singolo caso nell'editor del caso.",
-  "will_play": "Riprodurrà:",
-  "voice_group_other": "Altre"
+  "voice_engine_paid": "a pagamento · API",
+  "voice_engine_unavailable": "non disponibile",
+  "voice_engines_help": "Di seguito sono elencate le voci di tutti i motori abilitati — ogni voce viene riprodotta sul proprio motore (i motori locali gratuiti e le API cloud a pagamento sono etichettati). Lascia vuoto per ereditare il valore predefinito della persona Paziente.",
+  "voice_group_other": "Altre",
+  "voice_unplayable_note": "«{requested}» richiede il motore «{provider}», non disponibile qui. Le voci configurate non vengono mai sostituite — la riproduzione fallisce con un errore finché il motore non viene sistemato o la voce riselezionata.",
+  "will_play": "Riprodurrà:"
 }

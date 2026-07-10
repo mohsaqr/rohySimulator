@@ -44,6 +44,12 @@
   "toast_configs_updated": "Behandlungskonfigurationen aktualisiert",
   "toast_save_failed": "Speichern fehlgeschlagen",
   "toast_save_failed_error": "Speichern fehlgeschlagen: {error}",
+  "voice_default_note": "Hier ist keine Stimme festgelegt — die Standardstimme der Plattform „{playing}“ wird abgespielt.",
+  "voice_engine_free": "kostenlos · lokal",
+  "voice_engine_paid": "kostenpflichtig · API",
+  "voice_engine_unavailable": "nicht verfügbar",
+  "voice_engines_help": "Unten sind Stimmen aller aktivierten Engines aufgeführt — jede Stimme wird auf ihrer eigenen Engine abgespielt (kostenlose lokale Engines und kostenpflichtige Cloud-APIs sind gekennzeichnet). Leer lassen, um den Standard der Patienten-Persona zu erben.",
+  "voice_group_other": "Sonstige",
   "voice_heading": "Stimme",
   "voice_help_after": " festgelegt. Lassen Sie die Stimme leer, um den Standard der Patienten-Persona zu übernehmen.",
   "voice_help_before": "Die TTS-Engine wird plattformweit unter ",
@@ -51,6 +57,6 @@
   "voice_provider_current_after": ")",
   "voice_provider_current_before": "(derzeit ",
   "voice_settings_path": "Einstellungen → Stimme",
-  "warning_message_label": "Warnmeldung",
-  "voice_group_other": "Sonstige"
+  "voice_unplayable_note": "„{requested}“ benötigt die Engine „{provider}“, die hier nicht verfügbar ist. Konfigurierte Stimmen werden nie ersetzt — die Wiedergabe schlägt mit einem Fehler fehl, bis die Engine repariert oder die Stimme neu gewählt wird.",
+  "warning_message_label": "Warnmeldung"
 }

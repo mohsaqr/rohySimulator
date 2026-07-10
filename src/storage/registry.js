@@ -51,6 +51,11 @@ export const STORAGE_REGISTRY = Object.freeze({
         purpose: 'Last surface (settings tab / wizard step / TNA / debrief / persona editor) so refresh restores the breadcrumb.',
         lifetime: 'logout',
     },
+    rohy_ui_language: {
+        owner: 'src/contexts/LanguageContext.jsx',
+        purpose: 'Preferred UI language (registry code) chosen at login or in the top bar; hydrates i18n before the user profile loads.',
+        lifetime: 'forever',
+    },
     // Per-session debrief history. Built with `rohy_discussion_history_${sid}`.
     rohy_discussion_history: {
         keyBuilder: (sessionId) => `rohy_discussion_history_${sessionId}`,

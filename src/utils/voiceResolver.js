@@ -1,65 +1,67 @@
-// Single source of truth for voice resolution. ONE tier, no fallbacks.
+// Single source of truth for CLIENT-side voice resolution (Voice 2.0 —
+// VOICE2_PLAN.md; v1.4 sovereignty semantics).
 //
-// 2026-05-12 — RESOLUTION CHAIN COLLAPSED TO ONE EXPLICIT SOURCE.
-// 2026-05-13 — Re-confirmed after a brief tier-2 experiment: every shipped
-//              persona row carries its own `case_voice` (set in
-//              server/db.js DEFAULT_AGENTS). No demographic-slot fallback,
-//              no per-provider hardcoded map, no catalogue scan.
+// 2026-05-12 — resolution collapsed to ONE tier (case_voice or mute) after
+//              hidden fallback tiers spent three weeks lying to admins.
+// 2026-07-10 — Voice 2.0: THE VOICE OWNS ITS ENGINE. Each voice's engine is
+//              derived from the id itself (exact catalogue membership on
+//              the server; the shape patterns are the client's cheap
+//              mirror). There is no platform engine setting.
+// 2026-07-10 — v1.4 (owner: "the case sound reigns supreme"): A CONFIGURED
+//              VOICE IS LITERAL. If the case (or the persona template, when
+//              the case has none) names a voice, that voice plays or the
+//              speaker fails LOUDLY — no template stand-in, no default
+//              stand-in, no cross-engine rescue. The per-language platform
+//              default exists ONLY for speakers with no voice configured
+//              at all. Errors are surfaced honestly everywhere; the
+//              engine-off impact modal in Settings warns admins which
+//              cases a toggle strands before they flip it.
 //
 // Chain (highest-precedence first):
-//   1. voice.case_voice            → tier='override'
-//      The per-character voice id. Patient template carries the default,
-//      the case may override it (see mergePatientVoiceConfig in
-//      ChatInterface). Agent personas store their own case_voice.
-//   2. (nothing)                   → tier=null, file=null
-//      Surface explicitly so the UI can prompt the admin to set one. No
-//      hardcoded provider voice, no slot fallback, no catalogue scan.
+//   1. case-level `case_voice` set → playable ? tier 'override'
+//                                             : tier 'invalid' (LOUD)
+//   2. template `case_voice` set   → playable ? tier 'override'
+//                                             : tier 'invalid' (LOUD)
+//   3. nothing configured → the platform's per-language default voice
+//      (voiceSettings.tts_default_voice_<lang>) → tier 'default',
+//      substituted: true, reason 'not_configured' — announced by every
+//      consumer (toast/editor note). Never crosses a language boundary.
+//   4. nothing playable at all → file null, tier null.
 //
-// Provider is resolved separately from a single source: the platform's
-// voiceSettings.tts_provider. Per-character tts_provider is no longer read
-// at all — switching the active engine is a platform-level decision and
-// reading it from anywhere else lets stale persona configs leak the wrong
-// provider into the runtime (e.g., a Google voice id being shipped to
-// Kokoro because the persona was authored under Google).
+// "Playable" = the voice's shape-derived engine is usable per
+// voiceSettings.providers (capability ∧ enabled, probed by the server).
+// Before settings load the check fails OPEN — the server re-derives with
+// the real catalogues and owns the final word either way.
 
 import { deriveDemographicSlot } from './demographics.js';
+import {
+    isVoiceValidForProvider,
+    guessVoiceProvider,
+    voiceLanguage,
+    voiceMatchesLanguage,
+    primaryLanguage,
+    TTS_PROVIDERS,
+    PAID_TTS_PROVIDERS,
+    isPaidProvider,
+} from '../../server/shared/voiceIdentity.js';
+import { isKnownLanguage, DEFAULT_LANGUAGE } from '../i18n/languages.js';
+
+// Identity helpers live in server/shared/voiceIdentity.js (one module for
+// client + server, like the language registry). Re-exported so existing
+// imports from this file keep working.
+export {
+    isVoiceValidForProvider,
+    guessVoiceProvider,
+    voiceLanguage,
+    voiceMatchesLanguage,
+    primaryLanguage,
+    TTS_PROVIDERS,
+    PAID_TTS_PROVIDERS,
+    isPaidProvider,
+};
 
 function deriveSlot(gender, age) {
     return deriveDemographicSlot(gender, age);
-}
-
-function deriveProvider(voiceSettings) {
-    return voiceSettings?.tts_provider || null;
-}
-
-// Provider-specific voice-id shapes. Used by isVoiceValidForProvider()
-// to give the resolver a cheap, no-network guard against the "Google
-// id leaked onto Kokoro" class of bug. Brittle if a provider introduces
-// a new id shape — for that scenario callers should pass their own
-// `isValid` (e.g., one backed by a cached /tts/voices fetch).
-const VOICE_ID_PATTERNS = {
-    // Kokoro: <accent><gender>_<name> — af_bella, am_michael, bm_lewis, bf_emma.
-    kokoro:  /^[abf][bfm]_[a-z]+$/,
-    // Google: en-US-Neural2-J, en-US-Chirp3-HD-Orus, fr-FR-Wavenet-B.
-    google:  /^[a-z]{2,3}-[A-Z]{2,3}-/,
-    // Piper: filename.onnx — en_US-amy-medium.onnx, fi_FI-harri-medium.onnx.
-    piper:   /\.onnx$/,
-    // OpenAI: short lowercase canonical names. Update if OpenAI ships
-    // more voices; until then the pattern is a closed list.
-    openai:  /^(alloy|echo|fable|onyx|nova|shimmer|coral|sage|ash|verse|ballad)$/i,
-};
-
-/**
- * Cheap pattern-based check: is this voice id plausibly valid for the
- * given provider? Catches cross-provider contamination (the bug class
- * that drove three weeks of voice churn) without needing a catalogue
- * round-trip. If the provider isn't in the pattern map, returns true
- * (don't reject what we don't recognise).
- */
-export function isVoiceValidForProvider(voiceId, provider) {
-    if (!voiceId) return false;
-    const pattern = VOICE_ID_PATTERNS[provider];
-    return pattern ? pattern.test(voiceId) : true;
 }
 
 function pickNum(...vals) {
@@ -71,116 +73,93 @@ function pickNum(...vals) {
     return undefined;
 }
 
-function deriveRatePitch(voice, voiceSettings) {
-    return {
-        rate:  pickNum(voice?.tts_rate,  voiceSettings?.tts_rate),
-        pitch: pickNum(voice?.tts_pitch, voiceSettings?.tts_pitch)
-    };
+/**
+ * Is this voice id playable on a usable engine, per the provider status
+ * the server put in the settings payload? Fail-open before settings load.
+ */
+function playableOnUsableEngine(voiceId, providers) {
+    const engine = guessVoiceProvider(voiceId);
+    if (!engine) return false; // matches no engine's id shape → unplayable anywhere
+    if (!Array.isArray(providers)) return true; // settings not loaded — server decides
+    const status = providers.find(p => p.id === engine);
+    return status ? !!status.usable : true;
 }
 
 /**
  * Resolve which voice file to play for a given speaker.
  *
  * @param {object}   args
- * @param {object}  [args.voice]            Per-speaker config — only `case_voice`,
- *                                          `tts_rate`, `tts_pitch` are read.
- * @param {object}  [args.voiceSettings]    Platform voice settings — `tts_provider`,
- *                                          `tts_rate`, `tts_pitch`.
- * @param {Function}[args.isValid]          Optional `(voiceId) => boolean`. When
- *                                          supplied and the resolved `case_voice`
- *                                          isn't valid for the active provider's
- *                                          catalogue, returns `tier: 'invalid'`
- *                                          and `file: null` so the caller can
- *                                          fall back to the template / surface
- *                                          a clear empty state — instead of
- *                                          shipping a dead string to /api/tts
- *                                          where playback would 400.
+ * @param {object}  [args.voice]          Case-level config — `case_voice`,
+ *                                        `tts_rate`, `tts_pitch`.
+ * @param {object}  [args.templateVoice]  The persona template's voice config,
+ *                                        passed UNMERGED. The template is
+ *                                        the configuration when the case
+ *                                        sets nothing; it is NOT a stand-in
+ *                                        for an unplayable case voice
+ *                                        (sovereignty: a configured voice
+ *                                        plays literally or fails loudly).
+ * @param {object}  [args.voiceSettings]  Platform voice settings payload —
+ *                                        `providers` (status array),
+ *                                        `tts_default_voice_<lang>`,
+ *                                        `tts_rate`, `tts_pitch`.
+ * @param {string}  [args.language]       Registry code of the session/case
+ *                                        language; selects WHICH default
+ *                                        voice may substitute. Absent ⇒ 'en'.
+ * @param {Function}[args.isValid]        Optional `(voiceId) => boolean`
+ *                                        override of the playability check
+ *                                        (tests, catalogue-backed callers).
  *
  * @returns {{
- *   file: string|null,
- *   provider: string|null,
+ *   file: string|null,           // what will play
+ *   requestedFile: string|null,  // what the config asked for
+ *   provider: string|null,       // derived engine of `file` (display truth)
  *   rate: number|undefined,
  *   pitch: number|undefined,
- *   tier: 'override'|'invalid'|null
+ *   tier: 'override'|'default'|'invalid'|null,
+ *   substituted: boolean,
+ *   substitutionReason: 'not_configured'|null
  * }}
- *   `file` is null when no `case_voice` is set OR when the value is rejected
- *   by `isValid`. Callers should surface this to the admin instead of
- *   substituting a default — there are no defaults below this tier by design.
  */
-export function resolveVoice({ voice = {}, voiceSettings = null, isValid = null } = {}) {
-    const provider = deriveProvider(voiceSettings);
-    const { rate, pitch } = deriveRatePitch(voice, voiceSettings);
+export function resolveVoice({ voice = {}, templateVoice = null, voiceSettings = null, language = null, isValid = null } = {}) {
+    const playable = typeof isValid === 'function'
+        ? isValid
+        : (id) => playableOnUsableEngine(id, voiceSettings?.providers);
+    const rate  = pickNum(voice?.tts_rate,  templateVoice?.tts_rate,  voiceSettings?.tts_rate);
+    const pitch = pickNum(voice?.tts_pitch, templateVoice?.tts_pitch, voiceSettings?.tts_pitch);
 
-    if (voice?.case_voice) {
-        if (typeof isValid === 'function' && !isValid(voice.case_voice)) {
-            return { file: null, provider, rate, pitch, tier: 'invalid' };
-        }
-        return { file: voice.case_voice, provider, rate, pitch, tier: 'override' };
+    const caseVoice = voice?.case_voice || null;
+    const tmplVoice = templateVoice?.case_voice || null;
+    const requestedFile = caseVoice || tmplVoice || null;
+
+    const result = (file, tier, substitutionReason = null) => ({
+        file,
+        requestedFile,
+        provider: file ? guessVoiceProvider(file) : (requestedFile ? guessVoiceProvider(requestedFile) : null),
+        rate,
+        pitch,
+        tier,
+        substituted: !!substitutionReason,
+        substitutionReason
+    });
+
+    // Sovereignty: whichever voice is CONFIGURED (case first, else the
+    // persona template) is literal — it plays or the speaker fails loudly.
+    // An unplayable configured voice never falls through to anything.
+    if (requestedFile) {
+        return playable(requestedFile)
+            ? result(requestedFile, 'override')
+            : result(null, 'invalid');
     }
 
-    return { file: null, provider, rate, pitch, tier: null };
-}
-
-// ---------------------------------------------------------------------------
-// I18N (2026-07-08): voice LANGUAGE helpers. These are VALIDATION, not
-// resolution — the one-tier case_voice design above is untouched. When the
-// session's caseLanguage doesn't match the configured voice, callers warn
-// loudly (diagnostic bar) and never substitute a different voice; fallback
-// chains stay dead (I18N_PLAN.md §5).
-
-// Kokoro voice-id prefix letter → language of the pack. af_bella = American
-// English female; if_sara would be Italian female if a pack shipped.
-const KOKORO_PREFIX_LANGUAGE = {
-    a: 'en-US', b: 'en-GB', e: 'es-ES', f: 'fr-FR', h: 'hi-IN',
-    i: 'it-IT', j: 'ja-JP', p: 'pt-BR', z: 'zh-CN'
-};
-
-/**
- * Derive the spoken language of a voice id for a given provider.
- *
- * @param {string} voiceId   e.g. 'en_US-amy-medium.onnx', 'en-US-Chirp3-HD-Kore', 'af_bella'.
- * @param {string} provider  'piper' | 'google' | 'kokoro' | 'openai' | 'browser'.
- * @returns {string|null} BCP-47 tag, the sentinel 'multilingual' (provider
- *   follows the input text), or null when unknown — callers must NOT warn on
- *   null (don't reject what we don't recognise, same stance as
- *   isVoiceValidForProvider).
- */
-export function voiceLanguage(voiceId, provider) {
-    if (provider === 'openai' || provider === 'browser') return 'multilingual';
-    if (!voiceId || typeof voiceId !== 'string') return null;
-    if (provider === 'piper') {
-        const m = voiceId.match(/^([a-z]{2})_([A-Z]{2})-/);
-        return m ? `${m[1]}-${m[2]}` : null;
+    // Nothing configured → the platform's per-language default, announced
+    // as a substitution. Strictly language-matched (the German directive).
+    const lang = isKnownLanguage(language) ? language : DEFAULT_LANGUAGE;
+    const defaultVoice = voiceSettings?.[`tts_default_voice_${lang}`] || null;
+    if (defaultVoice && playable(defaultVoice)) {
+        return result(defaultVoice, 'default', 'not_configured');
     }
-    if (provider === 'google') {
-        const m = voiceId.match(/^([a-z]{2,3}-[A-Z]{2,3})-/);
-        return m ? m[1] : null;
-    }
-    if (provider === 'kokoro') {
-        const m = voiceId.match(/^([a-z])[fm]_[a-z]+$/);
-        return m ? (KOKORO_PREFIX_LANGUAGE[m[1]] ?? null) : null;
-    }
-    return null;
-}
 
-/**
- * Does this voice speak the given app language?
- *
- * @param {string} voiceId       Provider voice id.
- * @param {string} provider      TTS provider name.
- * @param {string} languageCode  Registry code ('en', 'it', …) or a BCP-47 tag.
- * @returns {boolean|null} true/false on a definite answer; null when the
- *   voice's language can't be derived (callers must not warn on null).
- */
-export function voiceMatchesLanguage(voiceId, provider, languageCode) {
-    if (!languageCode) return null;
-    const spoken = voiceLanguage(voiceId, provider);
-    if (spoken == null) return null;
-    if (spoken === 'multilingual') return true;
-    // Compare primary subtags only: it-IT matches 'it'; en-GB matches 'en-US'.
-    const spokenPrimary = spoken.split('-')[0].toLowerCase();
-    const wantedPrimary = languageCode.split('-')[0].toLowerCase();
-    return spokenPrimary === wantedPrimary;
+    return result(null, null);
 }
 
 // Re-exported for callers that still need to render a demographic slot label

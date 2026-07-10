@@ -44,6 +44,12 @@
   "toast_configs_updated": "Behandlingskonfigurationer uppdaterade",
   "toast_save_failed": "Det gick inte att spara",
   "toast_save_failed_error": "Det gick inte att spara: {error}",
+  "voice_default_note": "Ingen röst är angiven här — plattformens standardröst ”{playing}” spelas upp.",
+  "voice_engine_free": "gratis · lokal",
+  "voice_engine_paid": "betald · API",
+  "voice_engine_unavailable": "inte tillgänglig",
+  "voice_engines_help": "Nedan listas röster från alla aktiverade motorer — varje röst spelas upp på sin egen motor (gratis lokala motorer och betalda moln-API:er är märkta). Lämna tomt för att ärva patientpersonans standard.",
+  "voice_group_other": "Övriga",
   "voice_heading": "Röst",
   "voice_help_after": ". Lämna rösten tom för att ärva Patient-personans standard.",
   "voice_help_before": "TTS-motorn ställs in plattformsövergripande i ",
@@ -51,6 +57,6 @@
   "voice_provider_current_after": ")",
   "voice_provider_current_before": "(för närvarande ",
   "voice_settings_path": "Inställningar → Röst",
-  "warning_message_label": "Varningsmeddelande",
-  "voice_group_other": "Övriga"
+  "voice_unplayable_note": "”{requested}” kräver motorn ”{provider}”, som inte är tillgänglig här. Konfigurerade röster ersätts aldrig — uppspelningen misslyckas med ett fel tills motorn åtgärdas eller rösten väljs om.",
+  "warning_message_label": "Varningsmeddelande"
 }

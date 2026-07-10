@@ -32,6 +32,7 @@
 import { Lipsync } from 'wawa-lipsync';
 import { apiFetch } from './apiClient.js';
 import EventLogger from './eventLogger.js';
+import { guessVoiceProvider } from '../../server/shared/voiceIdentity.js';
 
 const SR = (typeof window !== 'undefined')
     ? (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -229,7 +230,10 @@ export async function auditionWirePayload(wire, opts = {}) {
         provider: opts.provider ?? wire.provider,
         ...(wire.rate != null && { rate: wire.rate }),
         ...(wire.pitch != null && { pitch: wire.pitch }),
-        ...(wire.gender && { gender: wire.gender })
+        ...(wire.gender && { gender: wire.gender }),
+        // Replay the captured fallback-language field too — an audition
+        // must reproduce the SAME substitution decision the runtime made.
+        ...(wire.language && { language: wire.language })
     });
     const buf = await res.arrayBuffer();
     const decoded = await audioCtx.decodeAudioData(buf.slice(0));
@@ -259,6 +263,10 @@ async function ttsFetch(streaming, body, signal) {
         rate: body?.rate ?? null,
         pitch: body?.pitch ?? null,
         gender: body?.gender ?? null,
+        // The fallback-language tiebreak the server keyed on — without it
+        // the DiagnosticBar can't verify WHICH language default a
+        // substitution decision used.
+        language: body?.language ?? null,
         textChars: fullText.length,
         textPreview,
         // Keep the full text in-memory only — never logged. Used by the
@@ -305,6 +313,11 @@ async function ttsFetch(streaming, body, signal) {
                 throw new Error(err);
             }
         }
+        // v1.4 sovereignty: the wire IS the truth — the server plays the
+        // literal requested voice or errors, never a stand-in, so the ok
+        // entry needs no substitution metadata. (The client-side default
+        // tier for unconfigured speakers resolves BEFORE the request, so
+        // the voice on the wire is always the voice that plays.)
         emitTtsRequest({ ...wire, status: 'ok', httpStatus: res.status, durationMs: Date.now() - sentAt });
         return res;
     } catch (err) {
@@ -357,16 +370,19 @@ async function speakOneSentence(session, text) {
     const body = { text, voice: session.voice };
     if (session.rate != null) body.rate = session.rate;
     if (session.pitch != null) body.pitch = session.pitch;
-    // Forward gender so the server can pick a gender-appropriate fallback
-    // voice if the requested voice isn't in the active provider's catalogue.
+    // Legacy fields the server still accepts but no longer consults on the
+    // main route (Voice 2.0: the engine is derived from the voice id).
     if (session.gender) body.gender = session.gender;
-    // Provider override — when the caller explicitly named an engine
-    // (eg. settings preview), forward it so the server doesn't silently
-    // fall through to the platform default.
     if (session.provider) body.provider = session.provider;
+    // Session language — the server's fallback-language tiebreak for voices
+    // whose spoken language can't be derived from the id (openai
+    // multilingual voices). Guarantees a de case never falls back to an
+    // English default (VOICE2_PLAN.md §5.3).
+    if (session.language) body.language = session.language;
 
     let res;
-    let stream = session.provider !== 'piper';
+    const engine = session.provider || guessVoiceProvider(session.voice);
+    let stream = engine !== 'piper';
     if (stream) {
         try {
             res = await ttsFetch(true, body, session.abort.signal);
@@ -416,7 +432,7 @@ async function speakOneSentence(session, text) {
 // enqueue(), each of which fires its own /tts request and gets scheduled
 // onto the shared audio timeline. Call flush() when done to wait for all
 // audio to drain and fire onEnd. cancel() aborts everything immediately.
-function beginSpeechSession({ voice, rate, pitch, gender, provider, onStart, onVisemes, onEnd, onError }) {
+function beginSpeechSession({ voice, rate, pitch, gender, provider, language, onStart, onVisemes, onEnd, onError }) {
     teardown();  // cancel any prior session/single-shot
 
     const session = {
@@ -426,7 +442,7 @@ function beginSpeechSession({ voice, rate, pitch, gender, provider, onStart, onV
         endTime: 0,
         chain: Promise.resolve(),
         abort: new AbortController(),
-        voice, rate, pitch, gender, provider,
+        voice, rate, pitch, gender, provider, language,
         emit: makeVisemeEmitter(onVisemes),
         onStart, onEnd, onError
     };
@@ -615,7 +631,7 @@ export const VoiceService = {
 
     // Single-shot speak. Sends the whole text in one TTS call. Wraps the
     // session API so there's still one audio code path.
-    async speak({ text, voice, rate, pitch, gender, provider, onStart, onVisemes, onEnd, onError }) {
+    async speak({ text, voice, rate, pitch, gender, provider, language, onStart, onVisemes, onEnd, onError }) {
         if (!text || typeof text !== 'string') {
             onError?.(new Error('text is required'));
             return;
@@ -624,7 +640,7 @@ export const VoiceService = {
             onError?.(new Error('voice filename is required'));
             return;
         }
-        const session = beginSpeechSession({ voice, rate, pitch, gender, provider, onStart, onVisemes, onEnd, onError });
+        const session = beginSpeechSession({ voice, rate, pitch, gender, provider, language, onStart, onVisemes, onEnd, onError });
         session.enqueue(text);
         // flush() resolves after audio drains; we don't await it here so the
         // caller's `await speak()` returns once dispatch is in motion (matches

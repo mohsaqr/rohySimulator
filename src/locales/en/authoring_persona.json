@@ -50,6 +50,7 @@
   "field_temperature": "Temperature",
   "field_unlock_trigger": "Unlock trigger",
   "field_voice": "Voice ({provider})",
+  "field_voice_any_engine": "Voice (any enabled engine)",
   "header_edit": "Edit: {name}",
   "header_new": "New Agent Persona",
   "hint_context_filter": "What slice of the case the agent can see at runtime.",
@@ -87,6 +88,7 @@
   "no_provider_set": "no provider set",
   "no_standard_seeded": "No standard templates seeded.",
   "no_tts_provider_configured": "No TTS provider configured. Set one in Settings → Voice first.",
+  "no_usable_engines": "No TTS engine is usable on this server — install Kokoro/Piper or add a cloud API key in Settings → Voice.",
   "no_voice_resolved": "No voice resolved",
   "no_voice_set": "no voice set",
   "opt_avail_absent": "Absent (not available)",
@@ -195,7 +197,13 @@
   "unset": "unset",
   "untitled": "Untitled",
   "via": "via",
+  "voice_default_note": "No voice is set here — the platform default “{playing}” will play.",
+  "voice_engine_free": "free · local",
   "voice_engine_help": "The TTS engine is set platform-wide in Settings → Voice. Pick a voice from that engine's catalogue. Cases can override this per-case in the Case editor.",
-  "will_play": "Will play:",
-  "voice_group_other": "Other"
+  "voice_engine_paid": "paid · API",
+  "voice_engine_unavailable": "unavailable",
+  "voice_engines_help": "Voices from every enabled engine are listed below — each voice plays on its own engine (free local engines and paid cloud APIs are labelled). Leave empty to inherit the Patient persona's default.",
+  "voice_group_other": "Other",
+  "voice_unplayable_note": "“{requested}” needs the “{provider}” engine, which is not available here. Configured voices are never substituted — playback fails with an error until the engine is fixed or the voice is re-picked.",
+  "will_play": "Will play:"
 }

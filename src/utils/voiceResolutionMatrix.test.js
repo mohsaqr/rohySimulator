@@ -1,17 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { resolveVoice } from './voiceResolver.js';
 
-// 2026-05-12 — voice resolution collapsed to a single tier. Per-character
-// `case_voice` is THE source; everything below it (per-gender slots,
-// hardcoded provider maps, catalogue fallbacks) was removed because the
-// stacked fallbacks made it impossible to tell which place was authoritative.
-//
-// This matrix locks the new contract across the four providers:
-//   1. With case_voice    → that voice file, with provider = platform's
-//                           tts_provider (NOT voice.tts_provider; that field
-//                           is intentionally ignored).
-//   2. Without case_voice → file:null, tier:null. Caller must surface this
-//                           as a visible error — no silent substitution.
+// Voice 2.0 v1.4 resolution matrix (CONTRACT REWRITE 2026-07 —
+// VOICE2_PLAN.md, sovereignty semantics). Per provider, this locks:
+//   1. A voice plays on its own DERIVED engine whenever that engine is
+//      usable — tier 'override'.
+//   2. A stored voice.tts_provider field stays dead (the saga leak guard:
+//      nothing stored can redirect an engine).
+//   3. With the voice's engine unusable, the speaker FAILS LOUDLY — a
+//      configured voice is literal; the language default is NOT a stand-in
+//      (owner: "the case sound reigns supreme").
+//   4. Nothing configured and no default → file:null (loud path).
 
 const PROVIDERS = ['piper', 'kokoro', 'google', 'openai'];
 
@@ -22,39 +21,58 @@ const CASE_VOICE_OVERRIDE = {
     openai: 'echo'
 };
 
-describe('voice resolution matrix — case_voice is the only source', () => {
+const ALL_USABLE = {
+    providers: PROVIDERS.map(id => ({ id, capable: true, enabled: true, usable: true, reason: null }))
+};
+
+const usableExcept = (excluded) => ({
+    providers: PROVIDERS.map(id => ({
+        id, capable: id !== excluded, enabled: true, usable: id !== excluded, reason: null
+    })),
+    tts_default_voice_en: 'am_adam' // present on purpose: it must NOT stand in
+});
+
+describe('voice resolution matrix — the voice owns its engine, and is literal', () => {
     PROVIDERS.forEach(provider => {
-        it(`${provider}: case_voice present → that voice plays, override tier`, () => {
+        it(`${provider}: its voice plays on its own DERIVED engine, override tier`, () => {
             const r = resolveVoice({
                 voice: { case_voice: CASE_VOICE_OVERRIDE[provider] },
-                voiceSettings: { tts_provider: provider }
+                voiceSettings: ALL_USABLE
             });
             expect(r.file).toBe(CASE_VOICE_OVERRIDE[provider]);
-            expect(r.provider).toBe(provider);
+            expect(r.provider).toBe(provider); // derived from the id — no platform engine exists
             expect(r.tier).toBe('override');
+            expect(r.substituted).toBe(false);
         });
 
-        it(`${provider}: case_voice absent → file:null (no hardcoded fallback)`, () => {
+        it(`${provider}: a stored voice.tts_provider field cannot redirect the engine`, () => {
+            const otherProvider = PROVIDERS.find(p => p !== provider);
+            const r = resolveVoice({
+                voice: { case_voice: CASE_VOICE_OVERRIDE[provider], tts_provider: otherProvider },
+                voiceSettings: ALL_USABLE
+            });
+            expect(r.provider).toBe(provider); // the id decides, the stale field is dead
+        });
+
+        it(`${provider}: engine unusable → LOUD FAIL — the default never stands in for a configured voice`, () => {
+            const r = resolveVoice({
+                voice: { case_voice: CASE_VOICE_OVERRIDE[provider] },
+                voiceSettings: usableExcept(provider)
+            });
+            expect(r.file).toBeNull();
+            expect(r.tier).toBe('invalid');
+            expect(r.substituted).toBe(false);
+            expect(r.requestedFile).toBe(CASE_VOICE_OVERRIDE[provider]);
+            expect(r.provider).toBe(provider); // names the engine to fix
+        });
+
+        it(`${provider}: nothing configured, no default → file:null (loud path)`, () => {
             const r = resolveVoice({
                 voice: {},
-                voiceSettings: { tts_provider: provider }
+                voiceSettings: ALL_USABLE
             });
             expect(r.file).toBeNull();
             expect(r.tier).toBeNull();
-            // Provider is still reported so the caller can render a useful error.
-            expect(r.provider).toBe(provider);
-        });
-
-        it(`${provider}: voice.tts_provider is ignored (platform wins)`, () => {
-            // Persona was authored under a different provider — that stale
-            // value used to leak through and silently override the platform.
-            // It no longer does.
-            const otherProvider = PROVIDERS.find(p => p !== provider);
-            const r = resolveVoice({
-                voice: { case_voice: 'x', tts_provider: otherProvider },
-                voiceSettings: { tts_provider: provider }
-            });
-            expect(r.provider).toBe(provider);
         });
     });
 });

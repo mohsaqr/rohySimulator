@@ -121,6 +121,8 @@ migration also requires adding a row here**.
 
 | 0033 | `0033_cohort_auto_enroll.sql` | additive | New defaulted `cohorts.auto_enroll INTEGER NOT NULL DEFAULT 0` flag + a data step setting it to 1 on the existing "Basic course" rows. Cohorts with `auto_enroll = 1` are the ones every tenant user is enrolled into on register/login (`ensureAutoEnrollMemberships`), replacing the hardcoded name match so the per-case dedicated courses (boot seed) get the same treatment. Existing teacher-made cohorts keep 0 = pre-migration behaviour; old code never reads the column. |
 
+| 0034 | `0034_voice2_provider_follows_voice.sql` | additive | Voice 2.0 settings retirement (data-only, no schema change, re-run-safe). Carries an unambiguous legacy `default_voice_kokoro_*` value into `tts_default_voice_en`, then DELETEs the retired rows: `tts_provider` (the engine is now derived per voice by exact catalogue membership — VOICE2_PLAN.md), the gendered `default_voice_<provider>_<gender>` family, and any recreated `voice_<provider>_<gender>` slot rows (gender-suffix GLOBs on purpose — a bare `voice_%` would hit `voice_mode_enabled`). Case/persona `case_voice` values untouched. The new keys (`tts_default_voice_<lang>`, `tts_provider_enabled_<p>`) are seeded idempotently by boot code, not here. |
+
 **To add a new migration**: append a row above. ID + filename match the SQL
 file. Set `Type` per the policy. `Notes` is freeform — what changed and why
 in one sentence.

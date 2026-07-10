@@ -44,6 +44,12 @@
   "toast_configs_updated": "Configurazioni dei trattamenti aggiornate",
   "toast_save_failed": "Salvataggio non riuscito",
   "toast_save_failed_error": "Salvataggio non riuscito: {error}",
+  "voice_default_note": "Nessuna voce impostata qui — verrà riprodotta la voce predefinita della piattaforma «{playing}».",
+  "voice_engine_free": "gratis · locale",
+  "voice_engine_paid": "a pagamento · API",
+  "voice_engine_unavailable": "non disponibile",
+  "voice_engines_help": "Di seguito sono elencate le voci di tutti i motori abilitati — ogni voce viene riprodotta sul proprio motore (i motori locali gratuiti e le API cloud a pagamento sono etichettati). Lascia vuoto per ereditare il valore predefinito della persona Paziente.",
+  "voice_group_other": "Altre",
   "voice_heading": "Voce",
   "voice_help_after": ". Lascia vuota la voce per ereditare il valore predefinito della persona Paziente.",
   "voice_help_before": "Il motore TTS è impostato a livello di piattaforma in ",
@@ -51,6 +57,6 @@
   "voice_provider_current_after": ")",
   "voice_provider_current_before": "(attualmente ",
   "voice_settings_path": "Impostazioni → Voce",
-  "warning_message_label": "Messaggio di avviso",
-  "voice_group_other": "Altre"
+  "voice_unplayable_note": "«{requested}» richiede il motore «{provider}», non disponibile qui. Le voci configurate non vengono mai sostituite — la riproduzione fallisce con un errore finché il motore non viene sistemato o la voce riselezionata.",
+  "warning_message_label": "Messaggio di avviso"
 }

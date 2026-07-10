@@ -62,9 +62,12 @@
   "type_message_to_agent": "Geben Sie eine Nachricht ein, um mit {role} zu kommunizieren",
   "type_message_to_begin_history": "Geben Sie unten eine Nachricht ein, um die Anamnese des Patienten zu beginnen",
   "voice": "Stimme",
+  "voice_default_not_configured": "Für diesen Sprecher ist keine Stimme konfiguriert — die Standardstimme „{voice}“ wird abgespielt.",
+  "voice_language_mismatch": "Die konfigurierte Stimme „{voice}\" spricht nicht die Sitzungssprache ({language}). Wählen Sie eine passende Stimme unter Einstellungen → Agenten-Personas oder im Fall-Editor.",
   "voice_not_valid_for_engine": "Stimme für diese Engine nicht gültig. Legen Sie einen Standard unter Admin → Avatare & Stimmen fest.",
   "voice_on": "Stimme an",
   "voice_playback_failed": "Sprachwiedergabe fehlgeschlagen: {msg}",
+  "voice_wrong_provider": "Die konfigurierte Stimme „{voice}“ benötigt die Engine „{provider}“, die auf diesem Server nicht verfügbar ist. Konfigurierte Stimmen werden nie ersetzt — beheben Sie die Engine unter Einstellungen → Stimme oder wählen Sie die Stimme im Fall-Editor / unter Agenten-Personas neu.",
   "wait_consultant_0": "Der Facharzt wird gerufen …",
   "wait_consultant_1": "Krankenakte und aktuelle Vitalparameter werden geprüft",
   "wait_consultant_2": "Differentialdiagnosen und nächste Schritte werden erwogen",
@@ -78,6 +81,5 @@
   "wait_relative_0": "Die Angehörigen werden kontaktiert …",
   "wait_relative_1": "Angehörige auf dem Weg aus dem Wartebereich",
   "wait_relative_2": "Angehörige nähern sich dem Raum",
-  "waiting_for_response": "Warte auf Antwort …",
-  "voice_language_mismatch": "Die konfigurierte Stimme „{{voice}}\" spricht nicht die Sitzungssprache ({{language}}). Wählen Sie eine passende Stimme unter Einstellungen → Agenten-Personas oder im Fall-Editor."
+  "waiting_for_response": "Warte auf Antwort …"
 }

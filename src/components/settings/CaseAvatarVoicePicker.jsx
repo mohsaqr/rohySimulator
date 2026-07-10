@@ -4,11 +4,12 @@ import { Loader2, RotateCcw } from 'lucide-react';
 import { baseUrl } from '../../config/api.js';
 import { apiFetch } from '../../services/apiClient.js';
 import { useVoice } from '../../contexts/VoiceContext.jsx';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
 import TestVoiceButton from './TestVoiceButton.jsx';
 import { resolveVoice } from '../../utils/voiceResolver.js';
-import { voiceGenderLabel, groupVoicesByLanguage } from '../../utils/voiceCatalogue.js';
+import { useAllVoices, VoiceEngineOptions, VoiceSubstitutionNote } from './VoiceEngineOptions.jsx';
 import { avatarsForSlot } from '../../utils/resolveAvatar.js';
 import { deriveDemographicSlot } from '../../utils/demographics.js';
 
@@ -20,9 +21,11 @@ import { deriveDemographicSlot } from '../../utils/demographics.js';
 //   config.voice.tts_rate      — server tempo (0.5–1.5), blank = inherit
 //   config.voice.tts_pitch     — provider pitch in semitones, blank = inherit
 //
-// TTS provider is platform-wide (Settings → Voice). It's deliberately not
-// editable per-case — having the provider in two places is what made it
-// impossible to tell which engine the runtime would actually use.
+// Voice 2.0: THE VOICE OWNS ITS ENGINE. The picker offers every usable
+// engine's catalogue (grouped engine → language, with free/paid badges);
+// picking any offered voice is a complete choice — the runtime derives the
+// engine from the id. There is no per-case provider AND no platform
+// provider; nothing stored can redirect an engine (the saga guard).
 
 // Pull in the 3D head only when the editor is open (~250 KB gzip lazy chunk).
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar'));
@@ -35,8 +38,15 @@ function avatarSlotFor(config) {
 
 export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTemplateVoice = null }) {
     const { t } = useTranslation('authoring_case');
+    // The language decides WHICH per-language default may substitute. The
+    // case's own config.case_language wins (that's what the runtime plays
+    // it in — useCaseLanguageSync); a case without one follows the session
+    // language, same source (useLanguage) the chat runtime resolves with.
+    // Either way the editor's preview cannot disagree with playback.
+    const { caseLanguage: sessionLanguage } = useLanguage();
+    const caseLanguage = caseData?.config?.case_language || sessionLanguage;
     const [manifest, setManifest] = useState(null);
-    const [voices, setVoices] = useState([]);
+    const allProviders = useAllVoices();
     const {
         voiceSettings: ctxVoiceSettings,
         setVoiceSettings
@@ -54,24 +64,27 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
     const cameraOverride = config.avatar_camera || null;
     const slot = avatarSlotFor(config);
 
-    // The "what plays if you leave this case blank" preview comes from the
-    // Patient persona template. That's the only fallback that exists now —
-    // there's no hardcoded provider voice.
+    // The "what plays if you leave this case blank" preview: the Patient
+    // persona template, then the platform's language default. Case and
+    // template go to the resolver UNMERGED (Voice 2.0 P3: an unplayable
+    // case override falls back to the template instead of masking it).
     const inheritedResolvedVoice = resolveVoice({
-        voice: templateVoice || {},
-        voiceSettings
+        voice: {},
+        templateVoice: templateVoice || {},
+        voiceSettings,
+        language: caseLanguage
     });
     const resolvedVoice = resolveVoice({
-        voice: { ...(templateVoice || {}), ...voice },
-        voiceSettings
+        voice,
+        templateVoice: templateVoice || {},
+        voiceSettings,
+        language: caseLanguage
     });
 
     const effectiveProvider = resolvedVoice.provider;
     const inheritedVoice = inheritedResolvedVoice.file || '';
     const inheritedRate = inheritedResolvedVoice.rate;
     const inheritedPitch = inheritedResolvedVoice.pitch;
-    // Voice list is the full platform-provider catalogue — no slot filter.
-    const voiceOptions = voices;
 
     useEffect(() => {
         let cancelled = false;
@@ -112,14 +125,6 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
         return () => { cancelled = true; };
     }, [voiceSettings, setVoiceSettings]);
 
-    useEffect(() => {
-        if (!effectiveProvider) { setVoices([]); return; }
-        let cancelled = false;
-        apiFetch(`/tts/voices?provider=${encodeURIComponent(effectiveProvider)}`)
-            .then(d => { if (!cancelled) setVoices(d.voices || []); })
-            .catch(() => { if (!cancelled) setVoices([]); });
-        return () => { cancelled = true; };
-    }, [effectiveProvider]);
 
     const updateAvatarId = (val) => {
         setCaseData(prev => {
@@ -151,6 +156,34 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
             const nextVoice = { ...(prev.config?.voice || {}) };
             if (val === '' || val === null || val === undefined) delete nextVoice[key];
             else nextVoice[key] = val;
+            const nextConfig = { ...(prev.config || {}) };
+            if (Object.keys(nextVoice).length === 0) delete nextConfig.voice;
+            else nextConfig.voice = nextVoice;
+            return { ...prev, config: nextConfig };
+        });
+    };
+
+    // Sovereignty (VOICE2_PLAN.md v1.4): picking a voice FREEZES the case's
+    // sound. If the author hasn't pinned rate/pitch yet, the CURRENT
+    // platform values are written into the case at pick time — later
+    // platform slider changes can never alter how an authored case sounds.
+    // The reset buttons still allow deliberate unpinning back to inherit.
+    const pickVoice = (val) => {
+        setCaseData(prev => {
+            const nextVoice = { ...(prev.config?.voice || {}) };
+            if (!val) {
+                delete nextVoice.case_voice;
+            } else {
+                nextVoice.case_voice = val;
+                if (nextVoice.tts_rate == null || nextVoice.tts_rate === '') {
+                    const r = Number(voiceSettings?.tts_rate);
+                    nextVoice.tts_rate = Number.isFinite(r) ? r : 1.0;
+                }
+                if (nextVoice.tts_pitch == null || nextVoice.tts_pitch === '') {
+                    const p = Number(voiceSettings?.tts_pitch);
+                    nextVoice.tts_pitch = Number.isFinite(p) ? p : 0;
+                }
+            }
             const nextConfig = { ...(prev.config || {}) };
             if (Object.keys(nextVoice).length === 0) delete nextConfig.voice;
             else nextConfig.voice = nextVoice;
@@ -241,9 +274,7 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
                 <header>
                     <h3 className="text-sm font-bold text-neutral-200">{t('voice_heading')}</h3>
                     <p className="text-[11px] text-neutral-500 mt-0.5">
-                        {t('voice_help_before')}<span className="text-neutral-300">{t('voice_settings_path')}</span>
-                        {effectiveProvider ? <> {t('voice_provider_current_before')}<span className="font-mono text-neutral-300">{effectiveProvider}</span>{t('voice_provider_current_after')}</> : t('voice_no_provider')}
-                        {t('voice_help_after')}
+                        {t('voice_engines_help')}
                     </p>
                 </header>
 
@@ -264,27 +295,14 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
                         <select
                             className="input-dark flex-1 min-w-0"
                             value={voice.case_voice || ''}
-                            onChange={e => updateVoice('case_voice', e.target.value)}
-                            disabled={!effectiveProvider}
+                            onChange={e => pickVoice(e.target.value)}
                         >
                             <option value="">
                                 {inheritedVoice
                                     ? t('inherit_voice_with', { voice: inheritedVoice })
                                     : t('inherit_voice_none')}
                             </option>
-                            {groupVoicesByLanguage(voiceOptions).map(group => (
-                                <optgroup key={group.language || 'other'} label={group.language || t('voice_group_other')}>
-                                    {group.voices.map(v => {
-                                        const genderLabel = voiceGenderLabel(v);
-                                        const tag = genderLabel ? ` — ${genderLabel}` : '';
-                                        return (
-                                            <option key={v.filename} value={v.filename}>
-                                                {(v.displayName || v.filename) + tag}
-                                            </option>
-                                        );
-                                    })}
-                                </optgroup>
-                            ))}
+                            <VoiceEngineOptions providers={allProviders} t={t} />
                         </select>
                         <TestVoiceButton
                             voice={resolvedVoice.file || ''}
@@ -293,6 +311,7 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
                             pitch={resolvedVoice.pitch}
                         />
                     </div>
+                    <VoiceSubstitutionNote resolved={resolvedVoice} t={t} />
                 </div>
 
                 <SliderRow

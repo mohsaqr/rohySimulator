@@ -19,6 +19,16 @@ import {
 } from '../redaction.js';
 import { logger } from '../logger.js';
 import { DEFAULT_TURNAROUND_MINUTES } from '../lib/turnaround.js';
+import { TTS_PROVIDERS, voiceMatchesLanguage } from '../shared/voiceIdentity.js';
+import { LANGUAGES } from '../shared/languages.js';
+import {
+    deriveVoiceProvider,
+    getAllProviderStatus,
+    defaultVoiceKey,
+    defaultVoiceKeys,
+    providerEnabledKey,
+    providerEnabledKeys,
+} from '../services/ttsProviders.js';
 import {
     auditSuccess,
     redactAuditSetting,
@@ -1417,27 +1427,13 @@ router.put('/platform-settings/chat', authenticateToken, requireAdmin, async (re
 // All fields are nullable except voice_mode_enabled (defaults false).
 // No frontend defaults — admin must populate before voice mode is usable.
 
-const VOICE_TTS_PROVIDERS = ['piper', 'kokoro', 'openai', 'google', 'browser'];
-
-// Subset of TTS providers that have an actual voice catalogue served by
-// /api/tts (i.e. excluding 'browser', which speaks via the client's Web
-// Speech API). The platform stores per-provider voice slots and per-provider
-// persona-default voices ONLY for these four — that's what makes switching
-// between, say, Kokoro and Google preserve each provider's settings instead
-// of the old globally-stored single voice ID that broke on switch.
-const TTS_PROVIDERS_WITH_CATALOG = ['piper', 'kokoro', 'openai', 'google'];
+// Voice 2.0 (VOICE2_PLAN.md §5.4): there is no `tts_provider` engine
+// setting, no per-provider `voice_<p>_<gender>` slot keys, and no
+// `default_voice_<p>_<gender>` persona-default keys — the voice endpoints
+// own exactly ONE defaults family: `tts_default_voice_<lang>` (one per
+// registry language) plus `tts_provider_enabled_<p>` policy toggles.
+// Migration 0034 deletes the retired rows.
 const VOICE_GENDERS = ['male', 'female', 'child'];
-
-// `voice_<provider>_<gender>` — per-provider voice slot. Replaces the old
-// `piper_voice_<gender>` keys (which were misnamed: they served all
-// providers but lived under one provider's prefix).
-const VOICE_SLOT_KEYS = TTS_PROVIDERS_WITH_CATALOG
-    .flatMap(p => VOICE_GENDERS.map(g => `voice_${p}_${g}`));
-
-// `default_voice_<provider>_<gender>` — per-provider persona-default voice.
-// Replaces the old flat `default_voice_<gender>` (which broke on switch).
-const PERSONA_DEFAULT_VOICE_KEYS = TTS_PROVIDERS_WITH_CATALOG
-    .flatMap(p => VOICE_GENDERS.map(g => `default_voice_${p}_${g}`));
 const VOICE_STT_PROVIDERS = ['browser'];
 const VOICE_AVATAR_TYPES = ['3d_head', 'none'];
 
@@ -1462,7 +1458,7 @@ const isBcp47 = (s) => typeof s === 'string' && /^[a-zA-Z]{2,3}(-[A-Za-z0-9]{2,8
 router.get('/platform-settings/voice', authenticateToken, async (req, res) => {
     try {
         const flatKeys = [
-            'voice_mode_enabled', 'tts_provider',
+            'voice_mode_enabled',
             'tts_rate', 'tts_pitch',
             'stt_provider', 'stt_language',
             'avatar_type', 'llm_model_voice',
@@ -1470,13 +1466,11 @@ router.get('/platform-settings/voice', authenticateToken, async (req, res) => {
         ];
         const raw = {};
         for (const k of flatKeys) raw[k] = await getPlatformSetting(k);
-        for (const k of VOICE_SLOT_KEYS) raw[k] = await getPlatformSetting(k);
 
         const toFloat = (v) => v === null || v === undefined || v === '' ? null : parseFloat(v);
 
         const out = {
             voice_mode_enabled: raw.voice_mode_enabled === 'true',
-            tts_provider: raw.tts_provider || null,
             tts_rate: toFloat(raw.tts_rate),
             tts_pitch: toFloat(raw.tts_pitch),
             stt_provider: raw.stt_provider || null,
@@ -1488,7 +1482,17 @@ router.get('/platform-settings/voice', authenticateToken, async (req, res) => {
             openai_tts_api_key_set: !!raw.openai_tts_api_key || !!process.env.OPENAI_API_KEY,
             openai_tts_api_key_via_env: !raw.openai_tts_api_key && !!process.env.OPENAI_API_KEY
         };
-        for (const k of VOICE_SLOT_KEYS) out[k] = raw[k] || null;
+        // Voice 2.0: per-language default voices (the fallback safety net,
+        // VOICE2_PLAN.md §5.5) + per-provider enable toggles + live provider
+        // status so the client never re-probes capability itself.
+        for (const lang of Object.keys(LANGUAGES)) {
+            out[defaultVoiceKey(lang)] = (await getPlatformSetting(defaultVoiceKey(lang))) || null;
+        }
+        for (const p of TTS_PROVIDERS) {
+            const v = await getPlatformSetting(providerEnabledKey(p));
+            out[providerEnabledKey(p)] = v !== '0' && v !== 'false';
+        }
+        out.providers = await getAllProviderStatus();
         res.json(out);
     } catch (err) {
         (req.log || routesLlmLog).error('voice platform settings read failed', { error: err.message });
@@ -1501,12 +1505,13 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
     try {
         const body = req.body || {};
         const allowed = new Set([
-            'voice_mode_enabled', 'tts_provider',
+            'voice_mode_enabled',
             'tts_rate', 'tts_pitch',
             'stt_provider', 'stt_language',
             'avatar_type', 'llm_model_voice',
             'google_tts_api_key', 'openai_tts_api_key',
-            ...VOICE_SLOT_KEYS
+            ...defaultVoiceKeys(),
+            ...providerEnabledKeys()
         ]);
 
         for (const key of Object.keys(body)) {
@@ -1523,6 +1528,7 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
         };
 
         const writes = [];
+        const warnings = [];
         const setIfPresent = (key, val) => writes.push([key, val]);
 
         if ('voice_mode_enabled' in body) {
@@ -1531,21 +1537,47 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
             }
             setIfPresent('voice_mode_enabled', body.voice_mode_enabled ? 'true' : 'false');
         }
-        if ('tts_provider' in body) {
-            if (body.tts_provider !== null && !VOICE_TTS_PROVIDERS.includes(body.tts_provider)) {
-                return res.status(400).json({ error: `tts_provider must be one of ${VOICE_TTS_PROVIDERS.join(', ')}` });
+        // Per-language default voices (VOICE2_PLAN.md §5.5). Validation is
+        // the same catalogue authority /api/tts routes with — a typo'd
+        // default cannot be saved. Tolerant on check ERRORS: "not found
+        // anywhere" rejects, "couldn't check" saves with a warning (an
+        // admin must be able to save a kokoro default on a box where the
+        // kokoro import is broken). A voice that provably speaks the wrong
+        // language rejects; unknown language passes.
+        for (const lang of Object.keys(LANGUAGES)) {
+            const k = defaultVoiceKey(lang);
+            if (!(k in body)) continue;
+            const v = body[k];
+            if (v === null || v === '' || v === undefined) {
+                setIfPresent(k, ''); // clearing restores loud-fail for this language
+                continue;
             }
-            setIfPresent('tts_provider', body.tts_provider || '');
-        }
-        // Per-provider voice slots: voice_<provider>_<gender>. Same safety
-        // check used for the legacy piper_voice_* keys, applied uniformly.
-        for (const k of VOICE_SLOT_KEYS) {
-            if (k in body) {
-                if (body[k] !== null && body[k] !== '' && !isSafeVoiceFilename(body[k])) {
-                    return res.status(400).json({ error: `${k} must be a safe voice id` });
+            if (typeof v !== 'string' || !isSafeVoiceFilename(v)) {
+                return res.status(400).json({ error: `${k} must be a safe voice id` });
+            }
+            const { provider, checkErrors } = await deriveVoiceProvider(v);
+            if (!provider) {
+                if (checkErrors.length > 0) {
+                    warnings.push(`${k}: could not verify "${v}" (catalogue check failed for: ${checkErrors.join(', ')}); saved unverified`);
+                    setIfPresent(k, v);
+                    continue;
                 }
-                setIfPresent(k, body[k] || '');
+                return res.status(400).json({ error: `${k}: voice "${v}" is in no provider's catalogue` });
             }
+            if (voiceMatchesLanguage(v, provider, lang) === false) {
+                return res.status(400).json({ error: `${k}: voice "${v}" (${provider}) does not speak "${lang}"` });
+            }
+            setIfPresent(k, v);
+        }
+        // Per-provider enable toggles (VOICE2_PLAN.md §5.2 — the cost
+        // policy switch; capability is probed, never stored).
+        for (const p of TTS_PROVIDERS) {
+            const k = providerEnabledKey(p);
+            if (!(k in body)) continue;
+            if (typeof body[k] !== 'boolean') {
+                return res.status(400).json({ error: `${k} must be boolean` });
+            }
+            setIfPresent(k, body[k] ? '1' : '0');
         }
         if ('tts_rate' in body) {
             const v = validateRange(body.tts_rate, 0.5, 1.5);
@@ -1607,33 +1639,32 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
             await setAuditedPlatformSetting(req, k, v, 'update_platform_voice_settings');
         }
 
-        res.json({ message: 'Voice settings updated successfully', updated: writes.map(w => w[0]) });
+        res.json({
+            message: 'Voice settings updated successfully',
+            updated: writes.map(w => w[0]),
+            ...(warnings.length > 0 ? { warnings } : {})
+        });
     } catch (err) {
         (req.log || routesLlmLog).error('voice platform settings update failed', { error: err.message });
         res.status(500).json({ error: 'Failed to update voice settings' });
     }
 });
 
-// Per-gender persona defaults. Cases inherit these by patient gender
-// unless overridden individually. Two key shapes:
+// Per-gender persona defaults — FLAT, provider-independent keys only:
+//   default_avatar_<gender>   — GLB filename, no TTS interaction
+//   default_rate_<gender>     — TTS speed (0.5–1.5), applies to any engine
+//   default_pitch_<gender>    — provider pitch in semitones (-10–10)
 //
-//   FLAT (provider-independent):
-//     default_avatar_<gender>   — GLB filename, no TTS interaction
-//     default_rate_<gender>     — TTS speed (0.5–1.5), applies to any engine
-//     default_pitch_<gender>    — provider pitch in semitones (-10–10)
-//
-//   PER-PROVIDER (because voice IDs are provider-specific):
-//     default_voice_<provider>_<gender>  — voice ID for that provider
-//
-// The flat `default_voice_<gender>` from before was the source of "switching
-// providers breaks playback" — a Google voice ID can't be synthesized by
-// Kokoro. Those legacy keys are dropped by migration 0022 and no longer
-// recreated on boot.
+// Voice defaults do NOT live here. The gendered per-provider
+// `default_voice_<provider>_<gender>` family (a no-op since the 2026-05
+// resolver collapse) is retired by migration 0034; the live defaults are
+// the per-LANGUAGE `tts_default_voice_<lang>` keys on
+// /platform-settings/voice (VOICE2_PLAN.md §5.5).
 const PERSONA_GENDERS = VOICE_GENDERS;
 const PERSONA_FLAT_FIELDS = ['avatar', 'rate', 'pitch'];
 const PERSONA_FLAT_KEYS = PERSONA_GENDERS
     .flatMap(g => PERSONA_FLAT_FIELDS.map(f => `default_${f}_${g}`));
-const PERSONA_KEYS = new Set([...PERSONA_FLAT_KEYS, ...PERSONA_DEFAULT_VOICE_KEYS]);
+const PERSONA_KEYS = new Set(PERSONA_FLAT_KEYS);
 
 // GET /api/platform-settings/avatars - Per-gender persona defaults (any authed user)
 router.get('/platform-settings/avatars', authenticateToken, async (req, res) => {
@@ -1665,7 +1696,6 @@ router.put('/platform-settings/avatars', authenticateToken, requireAdmin, async 
             }
         }
         const isSafeGlb   = (v) => typeof v === 'string' && /^[a-zA-Z0-9_-]+\.glb$/.test(v);
-        const isSafeVoice = (v) => typeof v === 'string' && /^[a-zA-Z0-9_.-]+$/.test(v) && !v.includes('..');
         const inRange = (v, lo, hi) => {
             const n = Number(v);
             return Number.isFinite(n) && n >= lo && n <= hi;
@@ -1681,9 +1711,6 @@ router.put('/platform-settings/avatars', authenticateToken, requireAdmin, async 
             }
             if (k.startsWith('default_avatar_') && !isSafeGlb(raw)) {
                 return res.status(400).json({ error: `${k} must be a safe GLB filename` });
-            }
-            if (k.startsWith('default_voice_') && !isSafeVoice(raw)) {
-                return res.status(400).json({ error: `${k} must be a safe voice filename` });
             }
             if (k.startsWith('default_rate_')  && !inRange(raw, 0.5, 1.5)) {
                 return res.status(400).json({ error: `${k} must be between 0.5 and 1.5` });

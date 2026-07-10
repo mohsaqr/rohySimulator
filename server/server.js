@@ -213,14 +213,16 @@ function startHttpsServer(port) {
 
 // Fire-and-forget Kokoro warmup. The model is ~330 MB and the first /tts
 // call after boot otherwise pays the full load cost (~2 s on M-series CPU,
-// longer cold). Triggering loadKokoro() at boot — only when the platform's
-// tts_provider is set to 'kokoro' — eliminates that delay for the first
-// real request without blocking startup.
+// longer cold). Voice 2.0: there is no platform engine setting — kokoro is
+// the seeded safety-net engine (en/it default voices) and the shipped
+// personas carry kokoro voices, so warm it whenever the admin hasn't
+// disabled it. Skipped only on an explicit `tts_provider_enabled_kokoro=0`
+// (a deliberately kokoro-free deployment shouldn't pay the load).
 function maybeWarmupKokoro() {
     dbAdapter.get(
-        "SELECT setting_value FROM platform_settings WHERE setting_key = 'tts_provider'",
+        "SELECT setting_value FROM platform_settings WHERE setting_key = 'tts_provider_enabled_kokoro'",
         (err, row) => {
-            if (err || !row || row.setting_value !== 'kokoro') return;
+            if (!err && row && (row.setting_value === '0' || row.setting_value === 'false')) return;
             loadKokoro().catch((e) => {
                 kokoroLog.warn('warmup failed', { error: e?.message || String(e) });
             });
@@ -271,17 +273,27 @@ async function initializeAndStart() {
     // a clinical-reasoning survey (no-op once seeded). Non-fatal on failure.
     await seedStemiCourse();
 
-    // Default platform tts_provider to kokoro on a fresh install — Kokoro
-    // is the offline default and the shipped persona case_voice values
-    // (am_michael, af_bella, etc. in server/db.js DEFAULT_AGENTS) are
-    // Kokoro voice ids. Without this, a fresh boot has no tts_provider
-    // set and the runtime refuses to play. setSettingIfEmpty is idempotent
-    // and ON CONFLICT DO NOTHING — admins who picked another provider
-    // through the UI are not overwritten.
+    // Voice 2.0 seeding (VOICE2_PLAN.md §5.5). There is no platform engine
+    // setting anymore — each voice plays on its own (derived) engine. What
+    // gets seeded is the never-mute safety net: one default voice per
+    // registry LANGUAGE, seeded only where a free local engine can actually
+    // SYNTHESIZE that language. That is en only: kokoro-js's runtime voice
+    // map is English-only (28 a/b-prefix voices — the Italian/Japanese
+    // .bin packs in the package are NOT exposed by the model, verified
+    // 2026-07-10), and we can't assume Piper files exist. de/it/fi/sv stay
+    // unseeded; the boot audit names each gap loudly until an admin
+    // installs a Piper voice (de_DE-thorsten, it_IT-riccardo, fi_FI-harri,
+    // sv_SE-nst) or picks a default. Provider enable toggles seed to
+    // enabled (capability gating — no API key ⇒ unusable — already
+    // protects cost). setSettingIfEmpty is ON CONFLICT DO NOTHING, so
+    // admin values and the migration-0034 carry-over are never overwritten.
     try {
-        await setSettingIfEmpty('tts_provider', 'kokoro');
+        await setSettingIfEmpty('tts_default_voice_en', 'af_bella');
+        for (const p of ['kokoro', 'google', 'openai', 'piper']) {
+            await setSettingIfEmpty(`tts_provider_enabled_${p}`, '1');
+        }
     } catch (e) {
-        migrationLog.warn('default tts_provider seed failed', { error: e.message });
+        migrationLog.warn('voice defaults seed failed', { error: e.message });
     }
 
     // Start the server, then trigger TTS warmup async.
@@ -290,8 +302,9 @@ async function initializeAndStart() {
     installGracefulShutdown([httpServer, httpsServer].filter(Boolean));
     maybeWarmupKokoro();
 
-    // Fire-and-forget audit of stored case_voice values vs the active
-    // provider's catalogue. Non-fatal; just logs. See
+    // Fire-and-forget audit of stored case_voice values against their own
+    // DERIVED engines' usability, plus the per-language default voices
+    // themselves (Voice 2.0). Non-fatal; just logs. See
     // server/healthChecks/voiceCatalogueAudit.js for the full rationale.
     // Delay so kokoro's warmup has a chance to populate its catalogue
     // first (Kokoro's voice list loads alongside the model).

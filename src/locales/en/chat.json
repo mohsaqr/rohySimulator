@@ -62,9 +62,12 @@
   "type_message_to_agent": "Type a message to communicate with the {role}",
   "type_message_to_begin_history": "Type a message below to begin taking the patient's history",
   "voice": "Voice",
+  "voice_default_not_configured": "No voice is configured for this speaker — playing the platform default voice “{voice}”.",
+  "voice_language_mismatch": "The configured voice \"{voice}\" does not speak the session language ({language}). Pick a matching voice in Settings → Agent Personas or the case editor.",
   "voice_not_valid_for_engine": "Voice not valid for this engine. Set a default in admin → Avatars & voices.",
   "voice_on": "Voice on",
   "voice_playback_failed": "Voice playback failed: {msg}",
+  "voice_wrong_provider": "The configured voice “{voice}” needs the “{provider}” engine, which is not available on this server. Configured voices are never substituted — fix the engine in Settings → Voice, or re-pick the voice in the case editor / Agent Personas.",
   "wait_consultant_0": "Paging the consultant…",
   "wait_consultant_1": "Reviewing the chart and current vitals",
   "wait_consultant_2": "Considering differentials and next steps",
@@ -78,6 +81,5 @@
   "wait_relative_0": "Reaching the family…",
   "wait_relative_1": "Family on the way from the waiting area",
   "wait_relative_2": "Family is approaching the room",
-  "waiting_for_response": "Waiting for response...",
-  "voice_language_mismatch": "The configured voice \"{{voice}}\" does not speak the session language ({{language}}). Pick a matching voice in Settings → Agent Personas or the case editor."
+  "waiting_for_response": "Waiting for response..."
 }

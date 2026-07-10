@@ -18,7 +18,7 @@ import { useVoice } from '../../contexts/VoiceContext';
 import { stripStageDirections } from '../../utils/stageDirections';
 import { parseConfig } from '../../utils/parseConfig';
 import { extractCompleteSentences } from '../../utils/sentenceSplit';
-import { resolveVoice, isVoiceValidForProvider, voiceMatchesLanguage } from '../../utils/voiceResolver';
+import { resolveVoice, voiceMatchesLanguage } from '../../utils/voiceResolver';
 import { useToast } from '../../contexts/ToastContext';
 import { useNotifications } from '../../notifications/useNotifications';
 import { SOURCES, SEVERITY } from '../../notifications/types';
@@ -182,25 +182,29 @@ function isAvatarAlarmSpeechForceOff() {
 }
 
 // Merge the patient's voice config: template is the base, the active case
-// overrides field-by-field. Empty/null/undefined values from the case mean
-// "inherit" — they don't clobber the template's value. Used by both the
-// patient chat path and the alarm-speech path so any future edge case
-// (e.g., "rate=0 should still override") lands in one place.
-//
-// Only voice-shape fields (case_voice, tts_rate, tts_pitch) propagate.
-// tts_provider is intentionally dropped: provider is a platform-level
-// decision read from voiceSettings only, so a stale persona authored
-// under a different engine can't leak its provider into the runtime.
-const PATIENT_VOICE_FIELDS = ['case_voice', 'tts_rate', 'tts_pitch'];
-function mergePatientVoiceConfig(caseVoice, templateVoice) {
-    const out = {};
-    for (const k of PATIENT_VOICE_FIELDS) {
-        const tv = templateVoice?.[k];
-        if (tv !== '' && tv != null) out[k] = tv;
-        const cv = caseVoice?.[k];
-        if (cv !== '' && cv != null) out[k] = cv;
-    }
-    return out;
+// Voice 2.0: case and template voice configs are passed to resolveVoice
+// UNMERGED (the old mergePatientVoiceConfig pre-merge meant an invalid
+// case-level voice masked a valid template voice — plan P3). The resolver
+// owns case-over-template precedence, validation-aware fallback, and the
+// rate/pitch inherit chain, so this component and DiagnosticBar cannot
+// diverge.
+
+// One-time default-voice toast, deduped by the (played, provider) pair for
+// the page lifetime: a re-render or repeated utterance never re-toasts.
+// v1.4 sovereignty: the ONLY substitution left is the platform default
+// standing in for a speaker with NO voice configured — configured voices
+// are literal and fail loudly instead (ttsErrorToast carries the server's
+// honest message for those).
+const _substitutionToastShown = new Set();
+function notifySubstitutionOnce(toast, t, r) {
+    if (!r?.substituted || !r.file) return;
+    const key = `${r.file}|${r.provider}`;
+    if (_substitutionToastShown.has(key)) return;
+    _substitutionToastShown.add(key);
+    console.warn('[voice] playing platform default', {
+        playing: r.file, provider: r.provider, reason: r.substitutionReason
+    });
+    toast?.info?.(t('voice_default_not_configured', { voice: r.file }));
 }
 
 export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, currentVitals, personaRefreshCounter = 0 }) {
@@ -268,6 +272,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // VoiceContext must stay platform-only; patient/case overrides are passed
     // directly to resolveSpeakerVoice at the patient TTS callsite.
     const [globalVoiceSettings, setGlobalVoiceSettings] = useState(null);
+    // In-flight /platform-settings/voice fetch — awaited by the voice-mode
+    // send path so a send during the first render can't race to mute.
+    const voiceSettingsPromiseRef = useRef(null);
 
     // Multi-agent state
     const [activeTab, setActiveTab] = useState('patient'); // 'patient' or agent_type
@@ -328,12 +335,18 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         loadChatSettings();
     }, []);
 
-    // Load voice settings + avatar manifest + platform default avatars in parallel.
+    // Load voice settings + avatar manifest + platform default avatars in
+    // parallel. The voice-settings PROMISE is kept in a ref so a voice-mode
+    // send fired before the fetch resolves can await it instead of taking
+    // the mute path (first-render race — VOICE2_PLAN.md §6.1; already
+    // resolved after first load, so the await is free in the steady state).
     useEffect(() => {
         let cancelled = false;
+        const voicePromise = apiFetch('/platform-settings/voice');
+        voiceSettingsPromiseRef.current = voicePromise;
         (async () => {
             const [voiceRes, manifestRes, avatarsRes] = await Promise.allSettled([
-                apiFetch('/platform-settings/voice'),
+                voicePromise,
                 fetch(baseUrl('/avatars/heads/manifest.json')).then(r => r.ok ? r.json() : Promise.reject(new Error('manifest fetch'))),
                 apiFetch('/platform-settings/avatars'),
             ]);
@@ -1004,23 +1017,18 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         }
     };
 
-    // Voice resolution goes through the shared util in src/utils/voiceResolver.js.
-    // See that file's header for the full chain. Returning the resolver's full
-    // shape (file/provider/rate/pitch/tier) lets callers forward the picked
-    // engine to the server — without that, /api/tts silently falls back to
-    // the platform default tts_provider and learners hear the wrong engine.
-    // Pattern-based validator that rejects cross-provider voice ids
-    // (the root cause of the STEMI "invalid voice" three-week saga:
-    // case stored `en-US-Neural2-J`, platform switched to Kokoro, the
-    // dead string sailed through to /api/tts where the engine rejected
-    // it mid-session). With the validator in place, the resolver
-    // returns `{ file: null, tier: 'invalid' }` and the caller falls
-    // back to the template — silent, clean, no toast.
-    const resolveSpeakerVoice = useCallback((override) => resolveVoice({
-        voice: override,
-        voiceSettings,
-        isValid: (id) => isVoiceValidForProvider(id, voiceSettings?.tts_provider),
-    }), [voiceSettings]);
+    // Voice resolution goes through the shared util in src/utils/voiceResolver.js
+    // (see that file's header for the full Voice 2.0 chain). Case + template
+    // are passed UNMERGED — the P3 fix lives in the resolver — the session
+    // language selects which platform default may substitute, and validity
+    // comes from the providers status the server put in voiceSettings.
+    // There is no engine setting: each voice's engine derives from its id.
+    const resolveSpeakerVoice = useCallback((caseVoice, templateVoice = null, settings = voiceSettings) => resolveVoice({
+        voice: caseVoice,
+        templateVoice,
+        voiceSettings: settings,
+        language: caseLanguage,
+    }), [voiceSettings, caseLanguage]);
 
     const handleSendToPatient = async (overrideText) => {
         const text = (overrideText ?? input).trim();
@@ -1052,31 +1060,42 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         let speech = null;
         let voiceErrored = false;
         if (voiceMode) {
-            // Patient voice precedence (locked 2026-05-12):
+            // Patient voice precedence (Voice 2.0):
             //   1. activeCase.config.voice.case_voice  — per-case override.
-            //      Optional; admins set this in the Case Avatar/Voice picker
-            //      when a specific case needs a different voice than the
-            //      platform default for the Patient template.
-            //   2. patientTemplate.config.voice         — Patient agent persona.
-            //      THIS is what an admin edits when they want "all my
-            //      patients to sound like this." It's the de-facto default.
-            //   3. PROVIDER_FALLBACK_VOICE              — hardcoded.
+            //   2. patientTemplate.config.voice        — Patient persona
+            //      default ("all my patients sound like this").
+            //   3. tts_default_voice_<language>        — the platform's
+            //      language-matched safety net. Never crosses a language
+            //      boundary; every use is announced (toast + wire headers).
+            // Each voice plays on its OWN engine (derived from the id) —
+            // there is no platform engine setting anymore.
             //
-            // Before today, the patient persona's voice field was a no-op:
-            // the chat read only activeCase.config.voice and ignored the
-            // template. Admins who set the voice in the persona editor (the
-            // discoverable place) saw nothing change.
-            const override = mergePatientVoiceConfig(activeCase?.config?.voice, patientTemplate?.config?.voice);
-            const r = resolveSpeakerVoice(override);
+            // First-render race: settings may still be in flight on the
+            // very first send — await the mount-time fetch promise instead
+            // of misresolving against null settings.
+            let settings = voiceSettings;
+            if (!settings && voiceSettingsPromiseRef.current) {
+                try { settings = await voiceSettingsPromiseRef.current; }
+                catch { settings = null; /* loud path below, never a wrong voice */ }
+            }
+            const r = resolveSpeakerVoice(activeCase?.config?.voice, patientTemplate?.config?.voice, settings);
             if (!r.file) {
-                // No silent fallback by design (see voiceResolver.js header).
-                // If neither the case nor the Patient persona has a
-                // case_voice set, the patient stays mute and the admin gets
-                // a loud toast pointing at the two places they can fix it.
-                console.warn('[voice] no voice resolved for case', { provider: r.provider });
-                toast?.error?.(t('no_voice_configured_case'));
+                // No playable voice AND no language default — mute with
+                // truth. Two distinct stories (plan P2): a voice IS
+                // configured but can't play here, vs nothing configured.
+                console.warn('[voice] no voice resolved for case', {
+                    requested: r.requestedFile, tier: r.tier, provider: r.provider
+                });
+                if (r.tier === 'invalid') {
+                    toast?.error?.(t('voice_wrong_provider', {
+                        voice: r.requestedFile, provider: r.provider || '?'
+                    }));
+                } else {
+                    toast?.error?.(t('no_voice_configured_case'));
+                }
                 voiceErrored = true;
             } else {
+                notifySubstitutionOnce(toast, t, r);
                 // Language↔voice mismatch guard (i18n hassle of 2026-07:
                 // an English Google/Kokoro voice reading a translated
                 // session sounds broken but produced zero user-visible
@@ -1096,10 +1115,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     voice: r.file,
                     rate: r.rate,
                     pitch: r.pitch,
-                    // Forward the resolved engine — without this the server
-                    // silently routes to the platform default tts_provider
-                    // and a Piper-configured case would actually play Google.
+                    // Display/diagnostic only — the server derives the
+                    // engine from the voice id itself (Voice 2.0).
                     provider: r.provider,
+                    // Fallback-language tiebreak for multilingual voice ids
+                    // — a de session must never fall back to an en default.
+                    language: caseLanguage,
                     onStart: () => setSpeaking(true),
                     onVisemes: setVisemes,
                     onEnd: () => {
@@ -1193,16 +1214,24 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const spokenText = stripStageDirections(responseText);
         if (!spokenText || responseText.startsWith('Error:')) return;
         if (!r.file) {
-            console.warn('[voice] no voice resolved for agent', { provider: r.provider });
-            toast?.error?.(t('no_voice_configured_agent'));
+            console.warn('[voice] no voice resolved for agent', {
+                requested: r.requestedFile, tier: r.tier, provider: r.provider
+            });
+            if (r.tier === 'invalid') {
+                toast?.error?.(t('voice_wrong_provider', { voice: r.requestedFile, provider: r.provider || '?' }));
+            } else {
+                toast?.error?.(t('no_voice_configured_agent'));
+            }
             return;
         }
+        notifySubstitutionOnce(toast, t, r);
         VoiceService.speak({
             text: spokenText,
             voice: r.file,
             rate: r.rate,
             pitch: r.pitch,
             provider: r.provider,
+            language: caseLanguage,
             onStart: () => setSpeaking(true),
             onVisemes: setVisemes,
             onEnd: () => {
@@ -1220,11 +1249,11 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const speakPatientAlarm = useCallback(({ text }) => {
         if (!voiceMode || activeTab !== 'patient') return false;
         if (prefs.avatarAlarmSpeechEnabled === false || isAvatarAlarmSpeechForceOff()) return false;
-        const override = mergePatientVoiceConfig(activeCase?.config?.voice, patientTemplate?.config?.voice);
-        const r = resolveSpeakerVoice(override);
+        const r = resolveSpeakerVoice(activeCase?.config?.voice, patientTemplate?.config?.voice);
         const spokenText = stripStageDirections(text);
         if (!spokenText || !r.file) return false;
 
+        notifySubstitutionOnce(toast, t, r);
         setMessages(prev => [...prev, { role: 'assistant', content: spokenText }]);
         EventLogger.messageReceived(spokenText, COMPONENTS.CHAT_INTERFACE);
         VoiceService.speak({
@@ -1233,6 +1262,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             rate: r.rate,
             pitch: r.pitch,
             provider: r.provider,
+            language: caseLanguage,
             onStart: () => setSpeaking(true),
             onVisemes: setVisemes,
             onEnd: () => {

@@ -324,19 +324,20 @@ test.describe('voice runtime contract', () => {
         await context.close();
     });
 
-    test('4. voice provider routing — body.provider=google reaches the wire when platform tts_provider=google', async ({ adminPage, baseURL }) => {
-        // Locks two pieces:
-        //   a) PUT /platform-settings/voice accepts tts_provider='google'.
-        //   b) A subsequent /api/tts request keeps body.provider intact
-        //      so the server routes to googleTts.js. A previous regression
-        //      stripped the body.provider field and silently fell back to
-        //      the platform default.
+    test('4. voice engine routing — the voice id itself reaches the wire (Voice 2.0: the voice owns its engine)', async ({ adminPage, baseURL }) => {
+        // CONTRACT REWRITE (Voice 2.0): there is no platform tts_provider —
+        // the server derives the engine from the voice id by catalogue
+        // membership. What must survive on the wire is the literal voice id
+        // (a google-shaped id routes to googleTts.js server-side); the
+        // legacy body.provider field may still be sent by old callers but
+        // no longer decides anything.
         const ctx = await adminApiCtx(baseURL);
         try {
+            // The retired engine key must be rejected loudly (migration 0034).
             const put = await ctx.put('/api/platform-settings/voice', {
                 data: { tts_provider: 'google' }
             });
-            expect(put.ok()).toBeTruthy();
+            expect(put.status()).toBe(400);
         } finally {
             await ctx.dispose();
         }
@@ -346,15 +347,14 @@ test.describe('voice runtime contract', () => {
         await adminPage.waitForFunction(() => !!window.localStorage.getItem('token'));
 
         await ttsFromPage(adminPage, {
-            text: 'Provider lock.',
+            text: 'Engine derivation lock.',
             voice: 'en-US-Neural2-J',
-            provider: 'google',
             pitch: 0
         });
 
         await waitForCaptured(captured, 1);
         expect(captured.length).toBeGreaterThanOrEqual(1);
-        expect(captured[0].body.provider).toBe('google');
+        expect(captured[0].body.voice).toBe('en-US-Neural2-J');
     });
 
     test('5. wire history is populated after a TTS call (DiagnosticBar feed)', async ({ adminPage }) => {
@@ -517,10 +517,8 @@ test.describe('voice runtime contract', () => {
         // Anything other than 400 from the missing-pitch case is a pass.
         const ctx = await adminApiCtx(baseURL);
         try {
-            // Make sure provider is set to something the server can attempt.
-            await ctx.put('/api/platform-settings/voice', {
-                data: { tts_provider: 'piper' }
-            });
+            // Voice 2.0: no engine setting to arrange — the piper-shaped
+            // voice id below routes itself.
             const res = await ctx.post('/api/tts', {
                 data: {
                     text: 'No pitch field at all.',

@@ -62,9 +62,12 @@
   "type_message_to_agent": "Scrivi un messaggio per comunicare con {role}",
   "type_message_to_begin_history": "Scrivi un messaggio qui sotto per iniziare a raccogliere l'anamnesi del paziente",
   "voice": "Voce",
+  "voice_default_not_configured": "Nessuna voce configurata per questo parlante — viene riprodotta la voce predefinita «{voice}».",
+  "voice_language_mismatch": "La voce configurata \"{voice}\" non parla la lingua della sessione ({language}). Scegli una voce corrispondente in Impostazioni → Personas agente o nell'editor del caso.",
   "voice_not_valid_for_engine": "Voce non valida per questo motore. Imposta una voce predefinita in admin → Avatar e voci.",
   "voice_on": "Voce attiva",
   "voice_playback_failed": "Riproduzione vocale non riuscita: {msg}",
+  "voice_wrong_provider": "La voce configurata «{voice}» richiede il motore «{provider}», non disponibile su questo server. Le voci configurate non vengono mai sostituite — sistema il motore in Impostazioni → Voce o riseleziona la voce nell'editor del caso / in Personas agente.",
   "wait_consultant_0": "Sto chiamando il consulente…",
   "wait_consultant_1": "Sta rivedendo la cartella e i parametri vitali attuali",
   "wait_consultant_2": "Sta valutando le diagnosi differenziali e i prossimi passi",
@@ -78,6 +81,5 @@
   "wait_relative_0": "Sto contattando la famiglia…",
   "wait_relative_1": "La famiglia sta arrivando dalla sala d'attesa",
   "wait_relative_2": "La famiglia si sta avvicinando alla stanza",
-  "waiting_for_response": "In attesa di risposta...",
-  "voice_language_mismatch": "La voce configurata \"{{voice}}\" non parla la lingua della sessione ({{language}}). Scegli una voce corrispondente in Impostazioni → Personas agente o nell'editor del caso."
+  "waiting_for_response": "In attesa di risposta..."
 }

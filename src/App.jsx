@@ -13,6 +13,7 @@ import UserProfilePanel from './components/settings/UserProfilePanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
+import { useCaseLanguageSync } from './hooks/useCaseLanguageSync';
 import TopBarControls from './components/common/TopBarControls';
 // Lazy so the TipTap/react-query lessons bundle stays out of the main chunk,
 // loading only when a user opens the lessons room.
@@ -92,6 +93,9 @@ function MainApp() {
    // Restore and validate session from localStorage on mount
    const [activeCase, setActiveCase] = useState(null);
    const [sessionId, setSessionId] = useState(null);
+   // A case with config.case_language overrides the session dialogue
+   // language (LLM directive, STT locale, fallback voice) while active.
+   useCaseLanguageSync(activeCase);
    const [selectedResult, setSelectedResult] = useState(null);
    // currentRoom drives the in-session bottom navigator. One of:
    //   'chat'        — main patient-chat UI (default)

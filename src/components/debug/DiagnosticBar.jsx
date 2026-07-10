@@ -22,7 +22,7 @@ import { useVoice } from '../../contexts/VoiceContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiFetch } from '../../services/apiClient';
 import EventLogger from '../../services/eventLogger';
-import { resolveVoice, voiceMatchesLanguage, voiceLanguage } from '../../utils/voiceResolver';
+import { resolveVoice, voiceMatchesLanguage, voiceLanguage, guessVoiceProvider } from '../../utils/voiceResolver';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { LANGUAGES } from '../../i18n/languages';
 import { parseConfig } from '../../utils/parseConfig';
@@ -281,26 +281,28 @@ export default function DiagnosticBar() {
                 if (cancelled) return;
                 const speakers = [];
 
-                // Patient row — merge template voice with case overrides, same
-                // shape as mergePatientVoiceConfig() in ChatInterface.
+                // Patient row — case + template passed UNMERGED to the same
+                // resolver ChatInterface uses (Voice 2.0): the resolver owns
+                // precedence and validation-aware fallback, so the bar's
+                // prediction cannot diverge from the runtime.
                 const caseConfig = parseConfig(caseData?.case?.config || caseData?.config);
                 const patientTemplate = (templatesData?.templates || [])
                     .find(t => t.agent_type === 'patient');
                 const patientTemplateVoice = parseConfig(patientTemplate?.config)?.voice || {};
-                const mergedPatientVoice = { ...patientTemplateVoice };
-                for (const [k, v] of Object.entries(caseConfig?.voice || {})) {
-                    if (v !== '' && v != null) mergedPatientVoice[k] = v;
-                }
                 const patientResolved = resolveVoice({
-                    voice: mergedPatientVoice,
-                    voiceSettings
+                    voice: caseConfig?.voice || {},
+                    templateVoice: patientTemplateVoice,
+                    voiceSettings,
+                    language: caseLanguage
                 });
                 speakers.push({
                     role: 'patient',
                     name: caseConfig?.patient_name || caseData?.case?.name || 'Patient',
                     file: patientResolved.file,
                     provider: patientResolved.provider,
-                    tier: patientResolved.tier
+                    tier: patientResolved.tier,
+                    requestedFile: patientResolved.requestedFile,
+                    substituted: patientResolved.substituted
                 });
 
                 // Each configured agent row.
@@ -308,14 +310,17 @@ export default function DiagnosticBar() {
                     const cfg = parseConfig(a.config);
                     const r = resolveVoice({
                         voice: cfg?.voice,
-                        voiceSettings
+                        voiceSettings,
+                        language: caseLanguage
                     });
                     speakers.push({
                         role: a.agent_type || 'agent',
                         name: a.name || a.agent_type,
                         file: r.file,
                         provider: r.provider,
-                        tier: r.tier
+                        tier: r.tier,
+                        requestedFile: r.requestedFile,
+                        substituted: r.substituted
                     });
                 }
                 if (!cancelled) setConfiguredSpeakers(speakers);
@@ -324,7 +329,7 @@ export default function DiagnosticBar() {
             }
         })();
         return () => { cancelled = true; };
-    }, [enabled, caseId, voiceSettings]);
+    }, [enabled, caseId, voiceSettings, caseLanguage]);
 
     const toggleEnabled = useCallback((next) => {
         setDiagnosticBarEnabled(userId, next);
@@ -358,8 +363,10 @@ export default function DiagnosticBar() {
     // verdicts (unknown voice shape) never warn.
     const langMismatch = useMemo(() => {
         if (!caseLanguage || caseLanguage === 'en') return null;
+        // The wire is literal under v1.4 — what was sent is what played.
         const voice = lastTts?.voice || speakerVoice;
-        const provider = lastTts?.voice ? lastTts?.provider : voiceSettings?.tts_provider;
+        // Voice 2.0: the engine is derived from the voice id itself.
+        const provider = guessVoiceProvider(voice) || (lastTts?.voice ? lastTts?.provider : activeSpeakerRow?.provider);
         if (!voice || !provider) return null;
         if (voiceMatchesLanguage(voice, provider, caseLanguage) !== false) return null;
         return {
@@ -368,7 +375,7 @@ export default function DiagnosticBar() {
             spoken: voiceLanguage(voice, provider),
             wanted: LANGUAGES[caseLanguage]?.name || caseLanguage
         };
-    }, [caseLanguage, lastTts, speakerVoice, voiceSettings?.tts_provider]);
+    }, [caseLanguage, lastTts, speakerVoice, activeSpeakerRow]);
 
     // Build the compact one-liner. Show only fields that have a value so the
     // bar stays readable. Voice tier appears next to the file so the user can
@@ -379,15 +386,16 @@ export default function DiagnosticBar() {
         const parts = [];
         if (llm?.provider) parts.push(`LLM: ${llm.provider}/${llm.model || '(default)'}`);
         const wireVoice = lastTts?.voice;
-        const wireProvider = lastTts?.provider;
         if (wireVoice) {
-            // Live row wins. Surface the literal voice that was last sent on
-            // the wire so the bar's headline matches what the user is hearing.
-            parts.push(`TTS wire: ${wireProvider || '?'} · ${wireVoice}`);
-        } else if (voiceSettings?.tts_provider) {
-            const v = speakerVoice || activeVoiceSlot(voiceSettings, activeParticipant);
+            // Live row wins — and under v1.4 the wire is literal: the voice
+            // sent is the voice heard (or an error, shown by the status).
+            const engine = guessVoiceProvider(wireVoice) || lastTts?.provider || '?';
+            parts.push(`TTS wire: ${engine} · ${wireVoice}`);
+        } else if (speakerVoice) {
+            // Static prediction: the voice's own derived engine (Voice 2.0 —
+            // there is no platform engine setting).
             const tierTag = speakerTier ? ` (${speakerTier})` : '';
-            parts.push(`TTS: ${voiceSettings.tts_provider}${v ? ` · ${v}${tierTag}` : ''}`);
+            parts.push(`TTS: ${activeSpeakerRow?.provider || '?'} · ${speakerVoice}${tierTag}`);
         }
         if (langMismatch) parts.push(`⚠ voice ≠ ${langMismatch.wanted}`);
         parts.push(voiceMode ? 'voice ON' : 'voice OFF');
@@ -395,7 +403,7 @@ export default function DiagnosticBar() {
         if (eventStatus.sessionId) parts.push(`s${eventStatus.sessionId}`);
         if (user?.tenant_id) parts.push(`t${user.tenant_id}`);
         return parts.join(' · ');
-    }, [llm, voiceSettings, voiceMode, speakerVoice, speakerTier, activeParticipant, eventStatus.sessionId, user?.tenant_id, lastTts, langMismatch]);
+    }, [llm, voiceSettings, voiceMode, speakerVoice, speakerTier, activeSpeakerRow, activeParticipant, eventStatus.sessionId, user?.tenant_id, lastTts, langMismatch]);
 
     // Audit #22: hard role gate. Non-admin/educator users see nothing,
     // even if their localStorage flag says enabled. Returning early
@@ -465,16 +473,27 @@ export default function DiagnosticBar() {
                             <Row k="apiKey" v={maskKey(llm?.apiKey)} />
                         </Section>
                         <Section title="Voice (platform)">
-                            <Row k="tts_provider" v={voiceSettings?.tts_provider} />
+                            {/* Voice 2.0: no engine setting — each voice plays on
+                                its own derived engine. What matters platform-wide
+                                is which engines are usable and the per-language
+                                default (fallback) voices. */}
+                            <Row
+                                k="engines"
+                                v={(voiceSettings?.providers || [])
+                                    .map(p => `${p.id}${p.usable ? '✓' : `✗(${p.reason || 'unavailable'})`}`)
+                                    .join(' · ')}
+                            />
+                            {Object.keys(LANGUAGES).map(lang => (
+                                <Row
+                                    key={lang}
+                                    k={`default_${lang}`}
+                                    v={voiceSettings?.[`tts_default_voice_${lang}`] || '(unset — loud fail)'}
+                                    warn={!voiceSettings?.[`tts_default_voice_${lang}`]}
+                                />
+                            ))}
                             <Row k="tts_rate" v={voiceSettings?.tts_rate} />
                             <Row k="tts_pitch" v={voiceSettings?.tts_pitch} />
                             <Row k="voice_mode_enabled" v={String(voiceSettings?.voice_mode_enabled ?? '')} />
-                            {/* Legacy voice_<provider>_<slot> rows were removed when
-                                the resolver collapsed to one tier (2026-05-13). If
-                                a deployment still has stored values for those keys
-                                under platform_settings, they are not read by anything
-                                and are not surfaced here either — clean them up via
-                                the catalogue audit log if you want them gone. */}
                         </Section>
                         <Section title="Voice runtime">
                             <Row k="voice mode" v={voiceMode ? 'ON' : 'OFF'} />
@@ -625,6 +644,7 @@ export default function DiagnosticBar() {
                                         <th className="pr-3 py-1 font-normal">when</th>
                                         <th className="pr-3 py-1 font-normal">voice</th>
                                         <th className="pr-3 py-1 font-normal">provider</th>
+                                        <th className="pr-3 py-1 font-normal">lang</th>
                                         <th className="pr-3 py-1 font-normal">rate</th>
                                         <th className="pr-3 py-1 font-normal">status</th>
                                         <th className="pr-3 py-1 font-normal">text preview</th>
@@ -654,7 +674,8 @@ export default function DiagnosticBar() {
                                                     {w.sentAt ? `${Math.max(0, Math.round((now - w.sentAt) / 1000))}s ago` : ''}
                                                 </td>
                                                 <td className="pr-3 py-1 text-white">{w.voice || <span className="italic text-neutral-600">none</span>}</td>
-                                                <td className="pr-3 py-1 text-neutral-300">{w.provider || ''}</td>
+                                                <td className="pr-3 py-1 text-neutral-300">{guessVoiceProvider(w.voice) || w.provider || ''}</td>
+                                                <td className="pr-3 py-1 text-neutral-400">{w.language || ''}</td>
                                                 <td className="pr-3 py-1 text-neutral-400">{w.rate ?? ''}</td>
                                                 <td className="pr-3 py-1">
                                                     <WireStatusBadge wire={w} />
@@ -676,11 +697,12 @@ export default function DiagnosticBar() {
 
                     {/* Configured speakers — patient + every agent attached to
                         the case, with the voice each one would actually play
-                        right now. Resolution is one-tier today: case_voice on
-                        the case (or the agent persona) is "override"; anything
-                        else is "no voice" — there are no platform fallbacks.
-                        This is the canonical view for "the setting says X but
-                        I hear Y" questions. */}
+                        right now (v1.4 tiers: override / default / invalid).
+                        Configured voices are literal: an unplayable one is
+                        shown amber with ✗ (it FAILS — never substituted); a
+                        `default`-tier row means nothing is configured and
+                        the platform default speaks. The canonical view for
+                        "the setting says X but I hear Y". */}
                     {configuredSpeakers.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-neutral-800">
                             <div className="text-emerald-400 font-bold tracking-wider uppercase mb-2">
@@ -702,7 +724,11 @@ export default function DiagnosticBar() {
                                             <td className="pr-3 py-1 text-neutral-400">{s.role}</td>
                                             <td className="pr-3 py-1 text-white">{s.name}</td>
                                             <td className="pr-3 py-1 text-white">
-                                                {s.file || <span className="italic text-neutral-600">no voice</span>}
+                                                {s.file
+                                                    ? s.file
+                                                    : (s.requestedFile
+                                                        ? <span className="text-amber-400" title="configured voice can't play here — fails loudly (never substituted)">{s.requestedFile} ✗</span>
+                                                        : <span className="italic text-neutral-600">no voice</span>)}
                                             </td>
                                             <td className="pr-3 py-1 text-neutral-400">{s.provider}</td>
                                             <td className="pr-3 py-1">
@@ -713,7 +739,7 @@ export default function DiagnosticBar() {
                                 </tbody>
                             </table>
                             <div className="mt-2 text-[10px] text-neutral-600">
-                                <code>override</code> = per-speaker <code>case_voice</code> set on either the case or the agent persona. Anything else shows <code>no voice</code> — there are no implicit fallbacks; pick a voice on the persona row.
+                                <code>override</code> = the configured <code>case_voice</code> plays on its own engine. <code>default</code> = nothing configured, the platform's language default speaks. Amber ✗ = the configured voice can't play here and playback FAILS (configured voices are never substituted). <code>no voice</code> = nothing configured and no language default.
                             </div>
                         </div>
                     )}
@@ -917,11 +943,3 @@ function TierBadge({ tier }) {
     );
 }
 
-// Legacy stub. The diagnostic bar used to display a derived
-// "active voice slot" label when the resolver had a slot tier. That tier
-// was removed in 2026-05-13 ("one voice per persona, no slot fallback").
-// The function is kept exported-but-empty so any old call sites still
-// elsewhere in the codebase return an empty string rather than crash.
-function activeVoiceSlot() {
-    return '';
-}

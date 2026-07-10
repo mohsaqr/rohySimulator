@@ -38,6 +38,7 @@ import { Bell as BellIcon, BookOpen } from 'lucide-react';
 // opens the Lessons tab — keeps it out of the main app chunk.
 const LessonAuthoring = lazy(() => import('../lessons/LessonAuthoring'));
 import CaseAvatarVoicePicker from './CaseAvatarVoicePicker';
+import { LANGUAGES } from '../../i18n/languages';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
 // Bug 1 (16.5.2026): the old "Open Body Map Editor" button linked out to
@@ -3464,6 +3465,22 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         className="input-dark"
                                         placeholder={t('demo_mrn_placeholder')}
                                     />
+                                </div>
+                                <div>
+                                    <label className="label-xs">{t('demo_case_language')}</label>
+                                    <select
+                                        value={caseData.config?.case_language || ''}
+                                        onChange={e => updateConfig('case_language', e.target.value || null)}
+                                        className="input-dark"
+                                    >
+                                        <option value="">{t('demo_case_language_follow')}</option>
+                                        {Object.entries(LANGUAGES).map(([code, lang]) => (
+                                            <option key={code} value={code}>{lang.native} ({code})</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-[11px] text-neutral-500 mt-1">
+                                        {t('demo_case_language_help')}
+                                    </p>
                                 </div>
                                 <div className="grid grid-cols-3 gap-3">
                                     <div>

@@ -62,9 +62,12 @@
   "type_message_to_agent": "Skriv ett meddelande för att kommunicera med {role}",
   "type_message_to_begin_history": "Skriv ett meddelande nedan för att börja ta patientens anamnes",
   "voice": "Röst",
+  "voice_default_not_configured": "Ingen röst är konfigurerad för denna talare — standardrösten ”{voice}” spelas upp.",
+  "voice_language_mismatch": "Den konfigurerade rösten \"{voice}\" talar inte sessionens språk ({language}). Välj en matchande röst under Inställningar → Agentpersonas eller i fallredigeraren.",
   "voice_not_valid_for_engine": "Rösten är inte giltig för den här motorn. Ange en standardröst i admin → Avatarer & röster.",
   "voice_on": "Röst på",
   "voice_playback_failed": "Röstuppspelning misslyckades: {msg}",
+  "voice_wrong_provider": "Den konfigurerade rösten ”{voice}” kräver motorn ”{provider}”, som inte är tillgänglig på denna server. Konfigurerade röster ersätts aldrig — åtgärda motorn i Inställningar → Röst eller välj om rösten i fallredigeraren / Agentpersonas.",
   "wait_consultant_0": "Söker överläkaren…",
   "wait_consultant_1": "Går igenom journalen och aktuella vitalparametrar",
   "wait_consultant_2": "Överväger differentialdiagnoser och nästa steg",
@@ -78,6 +81,5 @@
   "wait_relative_0": "Kontaktar familjen…",
   "wait_relative_1": "Familjen är på väg från väntrummet",
   "wait_relative_2": "Familjen närmar sig rummet",
-  "waiting_for_response": "Väntar på svar...",
-  "voice_language_mismatch": "Den konfigurerade rösten \"{{voice}}\" talar inte sessionens språk ({{language}}). Välj en matchande röst under Inställningar → Agentpersonas eller i fallredigeraren."
+  "waiting_for_response": "Väntar på svar..."
 }
