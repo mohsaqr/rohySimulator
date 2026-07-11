@@ -16,7 +16,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
 
-const CODE_SHAPE = /^(EN|IT|FI|SV|DE)-\d{4,}$/;
+const CODE_SHAPE = /^(EN|IT|FI|SV|DE|ES)-\d{4,}$/;
 
 function openDb(dbPath) {
     const sqlite = sqlite3.verbose();

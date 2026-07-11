@@ -31,7 +31,7 @@ const LOCKOUT_MINUTES = 15;
 
 import { logger } from '../logger.js';
 import {
-    ensureBasicCourseMembership,
+    ensureAutoEnrollMemberships,
     isValidRole,
     logAudit,
     roleForStorage,
@@ -170,7 +170,7 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
             // Auto-enrol into the tenant's "Basic course" default class so the
             // new user always has the default case (safety net for enforced
             // access). Idempotent + never throws.
-            await ensureBasicCourseMembership(user.id, defaultTenantId);
+            await ensureAutoEnrollMemberships(user.id, defaultTenantId);
 
             res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
             res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
@@ -311,7 +311,7 @@ router.post('/auth/login', authLimiter, (req, res) => {
 
             // Ensure the returning user is enrolled in "Basic course" (covers
             // users created before the migration / outside the register flow).
-            await ensureBasicCourseMembership(user.id, user.tenant_id || 1);
+            await ensureAutoEnrollMemberships(user.id, user.tenant_id || 1);
 
             // Set HttpOnly cookie alongside the JSON token. Cookie-aware
             // clients (apiFetch with credentials:'include') get the

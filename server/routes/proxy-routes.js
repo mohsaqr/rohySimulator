@@ -44,6 +44,7 @@ import {
     enforceBudget,
     recordUsage
 } from '../usage-budget.js';
+import { LLM_MODEL_REGISTRY, defaultModelFor } from '../shared/llmCatalogue.js';
 
 const radiologyLog = logger('radiology');
 const routesLlmLog = logger('routes-llm-tts');
@@ -465,7 +466,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             }));
 
             requestPayload = {
-                model: model || 'claude-3-5-sonnet-20241022',
+                model: model || defaultModelFor('anthropic'),
                 max_tokens: maxOutputTokens || 1024,
                 messages: anthropicMessages
             };
@@ -811,14 +812,8 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
 
 // Get all scenarios (public + user's private ones)
 
-const LLM_MODEL_REGISTRY = [
-    { id: 'claude-opus-4-7',           label: 'Claude Opus 4.7',          tier: 'flagship' },
-    { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6',        tier: 'balanced' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',         tier: 'fast' },
-    { id: 'claude-3-5-sonnet-20241022',label: 'Claude 3.5 Sonnet (legacy)', tier: 'legacy' },
-    { id: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku (legacy)',  tier: 'legacy' }
-];
-
+// Model catalogue served to the settings UI. Source of truth:
+// server/shared/llmCatalogue.js (also drives the pickers and pricing seed).
 router.get('/llm/models', authenticateToken, (req, res) => {
     res.json({ models: LLM_MODEL_REGISTRY });
 });

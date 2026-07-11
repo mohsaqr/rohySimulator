@@ -18,6 +18,8 @@ import dbAdapter from './dbAdapter.js';
 import { runSeeders, needsSeeding } from './seeders/index.js';
 import { ensureCaseCodes } from './seeders/cases.js';
 import seedStemiCourse from './seedStemiCourse.js';
+import { seedLanguageCases } from './seedLanguageCases.js';
+import { seedLlmDefaults } from './seeders/llmSettings.js';
 import { loadKokoro } from './services/kokoroTts.js';
 import { auditPersonaAndCaseVoices } from './healthChecks/voiceCatalogueAudit.js';
 import { configureSlowQueryThresholdFromDb, instrumentSqliteDb } from './observability.js';
@@ -274,6 +276,11 @@ async function initializeAndStart() {
     // a clinical-reasoning survey (no-op once seeded). Non-fatal on failure.
     await seedStemiCourse();
 
+    // Idempotently seed the native German / Spanish / Italian cases and link
+    // them into the single default "Basic course" alongside the English default
+    // case — one default course holding one case per language. Non-fatal.
+    await seedLanguageCases();
+
     // Every case must carry a visible language-bearing case_code (IT-0042).
     // Migration 0035 backfilled pre-existing rows; this sweep covers rows the
     // seeders just inserted (they run after migrations) and self-heals any
@@ -305,6 +312,15 @@ async function initializeAndStart() {
         }
     } catch (e) {
         migrationLog.warn('voice defaults seed failed', { error: e.message });
+    }
+
+    // Make the platform LLM defaults explicit (non-secret only): provider,
+    // base URL, and enabled flag were previously read-time fallbacks with no
+    // stored rows. setSettingIfEmpty never clobbers an admin's saved value.
+    try {
+        await seedLlmDefaults(setSettingIfEmpty);
+    } catch (e) {
+        migrationLog.warn('llm defaults seed failed', { error: e.message });
     }
 
     // Start the server, then trigger TTS warmup async.

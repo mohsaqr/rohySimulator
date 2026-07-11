@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -39,6 +39,9 @@ import { Bell as BellIcon, BookOpen } from 'lucide-react';
 const LessonAuthoring = lazy(() => import('../lessons/LessonAuthoring'));
 import CaseAvatarVoicePicker from './CaseAvatarVoicePicker';
 import { LANGUAGES } from '../../i18n/languages';
+import { LLM_PROVIDERS, defaultModelFor } from '../../services/llmCatalogue';
+import ModelSelect from './ModelSelect';
+import { friendlyLlmError } from '../../utils/llmErrorMessage';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
 
 // Bug 1 (16.5.2026): the old "Open Body Map Editor" button linked out to
@@ -624,9 +627,18 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             {/* Header */}
             <div className="rohy-admin-header flex items-center justify-between px-6 py-4 border-b border-neutral-800 relative">
                 <div className="flex items-center gap-3">
-                    <span className="rohy-admin-brand-mark">
+                    {/* The gear doubles as a "home" button — clicking it returns
+                        to the simulation (same as ✕ / the Simulation nav item).
+                        It was previously an inert <span>. */}
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label={t('nav_simulation')}
+                        title={t('nav_simulation')}
+                        className="rohy-admin-brand-mark cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                    >
                         <Settings className="w-5 h-5" />
-                    </span>
+                    </button>
                     <div className="flex flex-col leading-tight">
                         <h2 className="text-[0.9375rem] font-bold tracking-tight text-gray-900">
                             {fullPage ? t('header_title_fullpage') : t('header_title_compact')}
@@ -793,15 +805,22 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                         {group.cases.map(c => (
                                             <div key={c.id} className={`rohy-card p-4 rounded-lg flex justify-between items-center ${c.is_default ? 'rohy-card-active' : ''}`}>
                                                 <div className="flex-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-bold text-gray-900">{c.name}</span>
-                                                        {/* Language flag + visible case code — the case's own
-                                                            immutable language, independent of the UI language. */}
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        {/* Prominent language chip — flag + native language name,
+                                                            placed at the FRONT so students can scan the list by
+                                                            language. The case's own immutable language, independent
+                                                            of the UI language. Flag stays in its own text node so it
+                                                            reads as a single emoji. */}
                                                         {LANGUAGES[c.config?.case_language] && (
-                                                            <span title={LANGUAGES[c.config.case_language].native}>
-                                                                {LANGUAGES[c.config.case_language].flag}
+                                                            <span
+                                                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-gray-300 bg-gray-50 text-sm font-semibold text-gray-800"
+                                                                title={LANGUAGES[c.config.case_language].name}
+                                                            >
+                                                                <span className="text-lg leading-none" aria-hidden="true">{LANGUAGES[c.config.case_language].flag}</span>
+                                                                <span>{LANGUAGES[c.config.case_language].native}</span>
                                                             </span>
                                                         )}
+                                                        <span className="font-bold text-gray-900">{c.name}</span>
                                                         {c.case_code && (
                                                             <span
                                                                 className="px-2 py-0.5 font-mono text-xs rounded border bg-gray-100 text-gray-700 border-gray-300"
@@ -1591,21 +1610,10 @@ function UserFieldConfiguration() {
     );
 }
 
-// Provider catalog for the LLM settings tab. `keyPrefix` is the expected
-// start of API keys for that provider — used as a sanity check (warns if
-// mismatched), not a blocker. Defaults updated 2026-05 to current model
-// generations.
-const LLM_PROVIDERS = {
-    lmstudio: { name: 'LM Studio (Local)', defaultBase: 'http://localhost:1234/v1', defaultModel: '', needsKey: false, modelRequired: false, keyPrefix: '', description: 'Local LLM server — no API key needed' },
-    ollama: { name: 'Ollama (Local)', defaultBase: 'http://localhost:11434/v1', defaultModel: 'llama3.2', needsKey: false, modelRequired: true, keyPrefix: '', description: 'Local Ollama server' },
-    openai: { name: 'OpenAI', defaultBase: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', needsKey: true, modelRequired: true, keyPrefix: 'sk-', description: 'GPT-4o, GPT-4o-mini, o1, o3' },
-    anthropic: { name: 'Anthropic (Claude)', defaultBase: 'https://api.anthropic.com/v1', defaultModel: 'claude-sonnet-4-6', needsKey: true, modelRequired: true, keyPrefix: 'sk-ant-', description: 'Claude Opus 4.7, Sonnet 4.6, Haiku 4.5' },
-    openrouter: { name: 'OpenRouter', defaultBase: 'https://openrouter.ai/api/v1', defaultModel: 'anthropic/claude-sonnet-4-6', needsKey: true, modelRequired: true, keyPrefix: 'sk-or-', description: 'Access multiple AI providers via one key' },
-    groq: { name: 'Groq', defaultBase: 'https://api.groq.com/openai/v1', defaultModel: 'llama-3.3-70b-versatile', needsKey: true, modelRequired: true, keyPrefix: 'gsk_', description: 'Ultra-fast inference' },
-    together: { name: 'Together AI', defaultBase: 'https://api.together.xyz/v1', defaultModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', needsKey: true, modelRequired: true, keyPrefix: '', description: 'Open source models' },
-    azure: { name: 'Azure OpenAI', defaultBase: 'https://YOUR-RESOURCE.openai.azure.com/openai/deployments/YOUR-DEPLOYMENT', defaultModel: '', needsKey: true, modelRequired: false, keyPrefix: '', description: 'Azure-hosted OpenAI' },
-    custom: { name: 'Custom OpenAI-Compatible', defaultBase: 'http://localhost:8000/v1', defaultModel: '', needsKey: false, modelRequired: false, keyPrefix: '', description: 'Any OpenAI-compatible API' }
-};
+// Provider catalog + model catalogue now live in the shared source of truth
+// (src/services/llmCatalogue.js → server/shared/llmCatalogue.js). `keyPrefix`
+// there is the expected start of API keys for that provider — a soft sanity
+// check (warns if mismatched), not a blocker.
 
 function validateLlmConfig(cfg, t) {
     const errs = [];
@@ -1671,7 +1679,10 @@ function LLMConfiguration() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState(null); // { ok: boolean } | null
     const [showApiKey, setShowApiKey] = useState(false);
+    const [detectedModels, setDetectedModels] = useState([]); // live ids from the server's /models
+    const [detecting, setDetecting] = useState(false);
 
     const [validationErrors, setValidationErrors] = useState([]);
     const fieldError = (field) => validationErrors.find(e => e.field === field);
@@ -1700,11 +1711,15 @@ function LLMConfiguration() {
 
     const handleProviderChange = (provider) => {
         const providerConfig = LLM_PROVIDERS[provider];
+        // Detected ids belong to the OLD server — drop them so a stale
+        // suggestion can't linger after switching providers. The auto-detect
+        // effect below repopulates for keyless (local) providers.
+        setDetectedModels([]);
         setLlmConfig(prev => ({
             ...prev,
             provider,
             baseUrl: providerConfig.defaultBase,
-            model: providerConfig.defaultModel,
+            model: defaultModelFor(provider),
             apiKey: providerConfig.needsKey ? prev.apiKey : ''
         }));
     };
@@ -1740,8 +1755,58 @@ function LLMConfiguration() {
         }
     };
 
+    // Ask the running server which models it actually has loaded, so the admin
+    // can pick the exact id LM Studio / Ollama / any OpenAI-compatible endpoint
+    // wants. This is the direct answer to the "Multiple models are loaded,
+    // specify a model" 400 — with several models loaded the server won't guess.
+    //
+    // `silent` is the auto-detect path (see the effect below): it repopulates
+    // the picker without toasts, because a local server that's simply switched
+    // off should stay quiet, not nag on every settings visit. The manual button
+    // passes silent=false so an explicit click always gives feedback.
+    const handleDetectModels = useCallback(async ({ silent = false } = {}) => {
+        setDetecting(true);
+        try {
+            const data = await apiPost('/platform-settings/llm/models/detect', {
+                provider: llmConfig.provider,
+                baseUrl: llmConfig.baseUrl,
+                apiKey: llmConfig.apiKey,
+            });
+            const models = Array.isArray(data.models) ? data.models : [];
+            setDetectedModels(models);
+            if (models.length === 0) {
+                if (!silent) toast.info(t('toast_no_models_detected'));
+            } else {
+                // If nothing is chosen yet, prefill the first loaded model so a
+                // one-model server is immediately valid and a multi-model server
+                // has a sane starting point the admin can adjust.
+                setLlmConfig(prev => prev.model ? prev : { ...prev, model: models[0] });
+                if (!silent) toast.success(t('toast_models_detected', { count: models.length }));
+            }
+        } catch (err) {
+            if (!silent) toast.error(t('toast_detect_models_failed', { error: err.message }));
+        } finally {
+            setDetecting(false);
+        }
+    }, [llmConfig.provider, llmConfig.baseUrl, llmConfig.apiKey, t, toast]);
+
+    // Auto-detect for keyless (local) providers — LM Studio / Ollama / a custom
+    // localhost server. There's no reason to make the admin click for those: no
+    // API key is at stake and the list is exactly what's running right now. We
+    // debounce so typing a base URL doesn't fire a request per keystroke, and we
+    // stay silent (see above). Cloud providers keep the manual button, since
+    // probing them needs a valid key and shouldn't run unprompted.
+    const providerNeedsKey = (LLM_PROVIDERS[llmConfig.provider] || {}).needsKey;
+    const validBaseUrl = /^https?:\/\/.+/i.test((llmConfig.baseUrl || '').trim());
+    useEffect(() => {
+        if (loading || providerNeedsKey || !validBaseUrl) return undefined;
+        const id = setTimeout(() => { handleDetectModels({ silent: true }); }, 600);
+        return () => clearTimeout(id);
+    }, [loading, providerNeedsKey, validBaseUrl, llmConfig.provider, llmConfig.baseUrl, handleDetectModels]);
+
     const handleTestConnection = async () => {
         setTesting(true);
+        setTestResult(null);
         try {
             // First save the current settings
             await apiPut('/platform-settings/llm', llmConfig);
@@ -1749,12 +1814,15 @@ function LLMConfiguration() {
             // Then test
             const data = await apiPost('/platform-settings/llm/test', {});
             if (data.success) {
+                setTestResult({ ok: true });
                 toast.success(t('toast_connection_success', { response: data.response }));
             } else {
-                toast.error(t('toast_connection_failed', { error: data.error }));
+                setTestResult({ ok: false });
+                toast.error(friendlyLlmError(data.error, t));
             }
         } catch (err) {
-            toast.error(t('toast_connection_test_failed', { error: err.message }));
+            setTestResult({ ok: false });
+            toast.error(friendlyLlmError(err.message, t));
         } finally {
             setTesting(false);
         }
@@ -1839,20 +1907,35 @@ function LLMConfiguration() {
                         )}
                     </div>
 
-                    {/* Model */}
+                    {/* Model — curated catalogue dropdown (tiered) with a
+                        "Custom…" free-text escape, all from the shared catalogue. */}
                     <div>
-                        <label className="block text-sm font-medium text-neutral-300 mb-2">
-                            {t('llm_model')}
-                            {!currentProvider.modelRequired && (
-                                <span className="text-neutral-500 text-xs ml-2">{t('llm_model_optional')}</span>
-                            )}
-                        </label>
-                        <input
-                            type="text"
+                        <div className="flex items-center justify-between mb-2">
+                            <label htmlFor="llm-model" className="block text-sm font-medium text-neutral-300">
+                                {t('llm_model')}
+                                {!currentProvider.modelRequired && (
+                                    <span className="text-neutral-500 text-xs ml-2">{t('llm_model_optional')}</span>
+                                )}
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => handleDetectModels()}
+                                disabled={detecting}
+                                className="text-xs font-medium text-cyan-400 hover:text-cyan-300 disabled:text-neutral-500 flex items-center gap-1.5"
+                            >
+                                {detecting
+                                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('llm_detecting_models')}</>
+                                    : t('llm_detect_models')}
+                            </button>
+                        </div>
+                        <ModelSelect
+                            id="llm-model"
+                            provider={llmConfig.provider}
                             value={llmConfig.model}
-                            onChange={(e) => setLlmConfig(prev => ({ ...prev, model: e.target.value }))}
-                            className={`w-full bg-neutral-800 border rounded-lg p-3 text-white focus:border-cyan-500 outline-none ${fieldError('model') ? 'border-red-500' : 'border-neutral-600'}`}
-                            placeholder={currentProvider.modelRequired ? currentProvider.defaultModel || 'gpt-4o-mini' : t('llm_model_placeholder_optional')}
+                            onChange={(model) => setLlmConfig(prev => ({ ...prev, model }))}
+                            accent="cyan"
+                            invalid={Boolean(fieldError('model'))}
+                            detectedModels={detectedModels}
                         />
                         {fieldError('model') && (
                             <p className="text-xs text-red-400 mt-1">{fieldError('model').message}</p>
@@ -1959,7 +2042,7 @@ function LLMConfiguration() {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex gap-3 pt-4">
+                    <div className="flex items-center gap-3 pt-4">
                         <button
                             onClick={handleSaveLLM}
                             disabled={saving}
@@ -1976,6 +2059,17 @@ function LLMConfiguration() {
                             {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                             {t('btn_test_connection')}
                         </button>
+                        {/* Connection-status pill — plain English (admin surface). */}
+                        {testResult && !testing && (
+                            <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${testResult.ok
+                                    ? 'bg-green-500/10 border-green-500/40 text-green-300'
+                                    : 'bg-red-500/10 border-red-500/40 text-red-300'}`}
+                            >
+                                <span className={`w-2 h-2 rounded-full ${testResult.ok ? 'bg-green-400' : 'bg-red-400'}`} aria-hidden="true"></span>
+                                {testResult.ok ? 'Connected' : 'Not connected'}
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>

@@ -115,17 +115,20 @@ describe('fresh-DB seed: Basic course with its test content', () => {
         });
     });
 
-    it('links exactly the tenant default case into the Basic course', async () => {
+    it('links the tenant default case plus the seeded language cases into the Basic course', async () => {
         await withDb(async (db) => {
             const links = await pAll(
                 db,
-                `SELECT cc.case_id, c.is_default FROM cohort_cases cc
+                `SELECT cc.case_id, c.is_default, c.case_code FROM cohort_cases cc
                    JOIN cases c ON c.id = cc.case_id
                   WHERE cc.cohort_id = ? AND cc.deleted_at IS NULL`,
                 [basic.id]
             );
-            expect(links.length).toBe(1);
-            expect(links[0].is_default).toBe(1);
+            // The single default course carries the English default case and the
+            // three native language cases (one course, one case per language).
+            expect(links.filter((l) => l.is_default === 1).length).toBe(1);
+            const prefixes = links.map((l) => l.case_code.split('-')[0]).sort();
+            expect(prefixes).toEqual(['DE', 'EN', 'ES', 'IT']);
         });
     });
 

@@ -138,4 +138,40 @@ describe('UserProfilePanel apiFetch migration', () => {
 
         await waitFor(() => expect(toast.error).toHaveBeenCalledWith('denied'));
     });
+
+    // CONTRACT: the AI tab's provider list is now catalogue-driven (grouped,
+    // incl. the azure/custom the old hardcoded list lacked) and the model is a
+    // shared curated dropdown (with a Custom… escape), not a free-text box.
+    it('renders the catalogue provider list and model dropdown on the AI tab', async () => {
+        fetchSpy.mockImplementation((url) => {
+            if (typeof url === 'string' && url.endsWith('/api/user/profile')) {
+                return Promise.resolve(jsonResponse({ user: { username: 'learner', name: 'Learner One', email: 'learner@example.com' } }));
+            }
+            if (typeof url === 'string' && url.endsWith('/api/platform-settings/user-fields')) {
+                return Promise.resolve(jsonResponse({ config: {} }));
+            }
+            if (typeof url === 'string' && url.endsWith('/api/users/preferences')) {
+                return Promise.resolve(jsonResponse({ default_llm_settings: { provider: 'anthropic', model: 'claude-opus-4-8' } }));
+            }
+            return Promise.resolve(jsonResponse({}));
+        });
+
+        renderWithProviders(
+            <UserProfilePanel />,
+            { withAuth: false, withNotifications: false, withToast: false }
+        );
+
+        await screen.findByText('Learner One');
+        fireEvent.click(screen.getByRole('button', { name: /ai settings/i }));
+
+        // Grouped provider list now carries azure + custom (missing before) —
+        // these are real <select> options on the provider dropdown.
+        expect(await screen.findByRole('option', { name: 'Azure OpenAI' })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Custom OpenAI-Compatible' })).toBeInTheDocument();
+
+        // Provider preloaded as anthropic → model combobox offers the Claude
+        // line as <datalist> suggestions (queried directly).
+        const ids = Array.from(document.querySelectorAll('datalist option')).map((o) => o.value);
+        expect(ids).toContain('claude-opus-4-8');
+    });
 });

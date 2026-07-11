@@ -1,20 +1,26 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Globe, Check, BookOpen } from 'lucide-react';
+import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Check, BookOpen, Stethoscope } from 'lucide-react';
 import { LANGUAGES } from '../../i18n/languages';
 
-// Persistent top-bar controls: a language switcher (globe) + the settings/
-// account menu (gear). Built ONCE in MainApp and passed into every screen's
-// header via the same `roomNav`-style prop convention, so the settings menu
-// and language switch are reachable from every authenticated screen — not
-// just the chat room where they used to be nested inside PatientVisual.
+// The single persistent top-bar menu: ONE trigger (gear + current-language
+// flag) opening ONE panel that holds the Cases shortcut, profile/settings/help,
+// the language switcher, analytics, and logout. Built ONCE in MainApp and
+// passed into every screen's header via the `roomNav`-style prop convention, so
+// everything is reachable from every authenticated screen — not just the chat
+// room where these controls used to be nested inside PatientVisual.
 //
-// Handlers stay owned by MainApp (they drive MainApp-local route state);
-// this component is purely presentational + owns its own open/close state.
+// Previously this was TWO separate triggers (a globe language switcher + the
+// gear menu); they were merged into one on user request so students in
+// particular have a single obvious place for "switch language / open settings /
+// jump to cases".
 //
-// The dropdown PANELS are rendered through a portal to document.body. The
-// room screens (exam/lab/discussion) use backdrop-blur "glass" panels, and
+// Handlers stay owned by MainApp (they drive MainApp-local route state); this
+// component is purely presentational + owns its own open/close state.
+//
+// The dropdown PANEL is rendered through a portal to document.body. The room
+// screens (exam/lab/discussion) use backdrop-blur "glass" panels, and
 // backdrop-filter creates a new stacking context that paints OVER anything
 // z-indexed inside the header — so a panel rendered in the header flow gets
 // hidden behind the glass. Portalling to <body> with a high z-index escapes
@@ -34,6 +40,7 @@ function anchorTo(el) {
 export default function TopBarControls({
    isAdminUser = false,
    canSeeOyonAnalytics = false,
+   onOpenCases,
    onOpenProfile,
    onOpenSettings,
    onOpenHelp,
@@ -46,26 +53,12 @@ export default function TopBarControls({
 }) {
    const { t } = useTranslation('app');
    const [showMenu, setShowMenu] = useState(false);
-   const [showLang, setShowLang] = useState(false);
-   const [langPos, setLangPos] = useState(null);
    const [menuPos, setMenuPos] = useState(null);
-   const langBtnRef = useRef(null);
    const menuBtnRef = useRef(null);
 
-   const closeAll = useCallback(() => {
-      setShowMenu(false);
-      setShowLang(false);
-   }, []);
+   const closeAll = useCallback(() => setShowMenu(false), []);
 
-   const toggleLang = () => {
-      setShowMenu(false);
-      setShowLang((v) => {
-         if (!v && langBtnRef.current) setLangPos(anchorTo(langBtnRef.current));
-         return !v;
-      });
-   };
    const toggleMenu = () => {
-      setShowLang(false);
       setShowMenu((v) => {
          if (!v && menuBtnRef.current) setMenuPos(anchorTo(menuBtnRef.current));
          return !v;
@@ -75,8 +68,10 @@ export default function TopBarControls({
    const langLabel = (lang) =>
       lang.native === lang.name ? lang.native : `${lang.native} (${lang.name})`;
 
-   // Portalled panel: an invisible full-screen backdrop for click-away plus
-   // the fixed-position menu, both above all in-page stacking contexts.
+   const currentFlag = (LANGUAGES[uiLanguage] || LANGUAGES.en).flag;
+
+   // Portalled panel: an invisible full-screen backdrop for click-away plus the
+   // fixed-position menu, both above all in-page stacking contexts.
    const panel = (pos, id, children) =>
       createPortal(
          <>
@@ -95,58 +90,36 @@ export default function TopBarControls({
 
    return (
       <div className="flex items-center gap-2">
-         {/* Language switcher — small globe, opens a native-language list.
-             System-wide: writes the single global UI language via the same
-             setUiLanguage the login screen and profile use. */}
-         <div className="relative">
-            <button
-               ref={langBtnRef}
-               type="button"
-               onClick={toggleLang}
-               aria-expanded={showLang}
-               aria-controls="app-language-menu"
-               aria-label={t('language_menu_aria')}
-               className={`rohy-topbar-menu-trigger text-sm ${showLang ? 'rohy-topbar-menu-trigger-open' : ''}`}
-            >
-               <Globe className="w-4 h-4 text-[var(--rohy-accent)]" />
-               <span aria-hidden="true">{(LANGUAGES[uiLanguage] || LANGUAGES.en).flag}</span>
-               <ChevronDown className={`w-4 h-4 text-[var(--rohy-muted)] transition-transform ${showLang ? 'rotate-180' : ''}`} />
-            </button>
-            {showLang && langPos && panel(langPos, 'app-language-menu',
-               Object.entries(LANGUAGES).map(([code, lang]) => (
-                  <button
-                     key={code}
-                     type="button"
-                     role="menuitemradio"
-                     aria-checked={uiLanguage === code}
-                     onClick={() => { onSetLanguage?.(code); closeAll(); }}
-                     className="rohy-topbar-menu-item"
-                  >
-                     <Check className={`w-4 h-4 ${uiLanguage === code ? 'opacity-100 text-[var(--rohy-accent)]' : 'opacity-0'}`} />
-                     {lang.flag} {langLabel(lang)}
-                  </button>
-               ))
-            )}
-         </div>
-
-         {/* Settings / account menu — the gear. Now persistent across every
-             screen (previously only rendered inside the chat room). */}
          <div className="relative">
             <button
                ref={menuBtnRef}
                type="button"
                onClick={toggleMenu}
                aria-expanded={showMenu}
-               aria-controls="app-user-menu"
+               aria-controls="app-main-menu"
                aria-label={t('settings_menu_aria')}
                className={`rohy-topbar-menu-trigger text-sm ${showMenu ? 'rohy-topbar-menu-trigger-open' : ''}`}
             >
                <Settings className="w-4 h-4 text-[var(--rohy-accent)]" />
-               <span>{t('settings')}</span>
+               {/* Current language flag rides on the trigger so the language
+                   switch is still glanceable now that the globe is gone. */}
+               <span aria-hidden="true">{currentFlag}</span>
                <ChevronDown className={`w-4 h-4 text-[var(--rohy-muted)] transition-transform ${showMenu ? 'rotate-180' : ''}`} />
             </button>
-            {showMenu && menuPos && panel(menuPos, 'app-user-menu',
+            {showMenu && menuPos && panel(menuPos, 'app-main-menu',
                <>
+                  {/* Cases shortcut — first item, the quick jump students want. */}
+                  {onOpenCases && (
+                     <button
+                        type="button"
+                        onClick={() => { onOpenCases?.(); closeAll(); }}
+                        role="menuitem"
+                        className="rohy-topbar-menu-item"
+                     >
+                        <Stethoscope className="w-4 h-4" />
+                        {t('menu_cases')}
+                     </button>
+                  )}
                   <button
                      type="button"
                      onClick={() => { onOpenProfile?.(); closeAll(); }}
@@ -185,34 +158,53 @@ export default function TopBarControls({
                         {t('lessons', { defaultValue: 'Lessons' })}
                      </button>
                   )}
-                  {(canSeeOyonAnalytics || isAdminUser) && (
-                     <div className="rohy-menu-divider" />
-                  )}
-                  {canSeeOyonAnalytics && (
+
+                  {/* Language section — the old globe menu, folded inline. */}
+                  <div className="rohy-menu-divider" />
+                  <div className="rohy-menu-section-label">{t('menu_language')}</div>
+                  {Object.entries(LANGUAGES).map(([code, lang]) => (
                      <button
+                        key={code}
                         type="button"
-                        onClick={() => { onOpenEmotionAnalytics?.(); closeAll(); }}
-                        role="menuitem"
+                        role="menuitemradio"
+                        aria-checked={uiLanguage === code}
+                        onClick={() => { onSetLanguage?.(code); closeAll(); }}
                         className="rohy-topbar-menu-item"
                      >
-                        <Activity className="w-4 h-4" />
-                        {t('emotion_analytics')}
+                        <Check className={`w-4 h-4 ${uiLanguage === code ? 'opacity-100 text-[var(--rohy-accent)]' : 'opacity-0'}`} />
+                        {lang.flag} {langLabel(lang)}
                      </button>
-                  )}
-                  {isAdminUser && (
-                     <button
-                        type="button"
-                        onClick={() => { onOpenCaseAnalytics?.(); closeAll(); }}
-                        role="menuitem"
-                        className="rohy-topbar-menu-item"
-                     >
-                        <Activity className="w-4 h-4" />
-                        {t('case_analytics')}
-                     </button>
-                  )}
+                  ))}
+
                   {(canSeeOyonAnalytics || isAdminUser) && (
-                     <div className="rohy-menu-divider" />
+                     <>
+                        <div className="rohy-menu-divider" />
+                        {canSeeOyonAnalytics && (
+                           <button
+                              type="button"
+                              onClick={() => { onOpenEmotionAnalytics?.(); closeAll(); }}
+                              role="menuitem"
+                              className="rohy-topbar-menu-item"
+                           >
+                              <Activity className="w-4 h-4" />
+                              {t('emotion_analytics')}
+                           </button>
+                        )}
+                        {isAdminUser && (
+                           <button
+                              type="button"
+                              onClick={() => { onOpenCaseAnalytics?.(); closeAll(); }}
+                              role="menuitem"
+                              className="rohy-topbar-menu-item"
+                           >
+                              <Activity className="w-4 h-4" />
+                              {t('case_analytics')}
+                           </button>
+                        )}
+                     </>
                   )}
+
+                  <div className="rohy-menu-divider" />
                   <button
                      type="button"
                      onClick={() => { onLogout?.(); closeAll(); }}

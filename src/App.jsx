@@ -27,6 +27,7 @@ import DiagnosticBar from './components/debug/DiagnosticBar';
 import { PatientRecordProvider } from './services/PatientRecord';
 import EventLogger, { COMPONENTS, registerWindowLifecycleLogging } from './services/eventLogger';
 import { ApiError, apiFetch, apiPut } from './services/apiClient';
+import { pickLandingCase } from './services/landingCase';
 import { Settings, X, Activity, StopCircle, AlertTriangle } from 'lucide-react';
 import BodyMapDebug from './components/examination/BodyMapDebug';
 import TnaDashboard from './components/analytics/tna/TnaDashboardV2';
@@ -207,18 +208,23 @@ function MainApp() {
       return () => { cancelled = true; };
    }, [sessionId]);
 
-   // Fetch and load default case if no session exists
+   // Fetch and load the landing case if no session exists. A student lands on
+   // the case that speaks THEIR interface language — the demo course carries one
+   // case per language (EN/DE/ES/IT), so a German UI opens the German patient,
+   // a Spanish UI the Spanish one, etc. When no case matches the UI language
+   // (e.g. a Finnish UI with no Finnish case yet), fall back to the tenant
+   // default (the English STEMI), which is always present and always visible.
    const loadDefaultCase = async () => {
       try {
          const data = await apiFetch('/cases');
-         const defaultCase = data?.cases?.find(c => c.is_default);
-         if (defaultCase) {
-            console.log('Auto-loading default case:', defaultCase.name);
-            setActiveCase(defaultCase);
-            EventLogger.caseLoaded(defaultCase.id, defaultCase.name);
+         const landingCase = pickLandingCase(data?.cases || [], uiLanguage);
+         if (landingCase) {
+            console.log('Auto-loading landing case:', landingCase.name, `(ui=${uiLanguage})`);
+            setActiveCase(landingCase);
+            EventLogger.caseLoaded(landingCase.id, landingCase.name);
          }
       } catch (err) {
-         console.error('Failed to load default case:', err);
+         console.error('Failed to load landing case:', err);
       }
    };
 
@@ -545,6 +551,14 @@ function MainApp() {
       EventLogger.componentOpened(COMPONENTS.CONFIG_PANEL, 'Settings');
    };
 
+   // Cases shortcut from the top-bar menu — open Settings straight onto the
+   // case list (the "Select Case" tab students use), not the default tab.
+   const handleOpenCases = () => {
+      setSettingsInitialTab('cases');
+      setShowFullPageSettings(true);
+      EventLogger.componentOpened(COMPONENTS.CONFIG_PANEL, 'Cases');
+   };
+
    const handleCloseSettings = () => {
       setShowFullPageSettings(false);
       // Reset the next-open defaults so the simulator's settings button
@@ -670,6 +684,7 @@ function MainApp() {
       <TopBarControls
          isAdminUser={isAdminUser}
          canSeeOyonAnalytics={canSeeOyonAnalytics}
+         onOpenCases={handleOpenCases}
          onOpenProfile={() => setShowUserProfile(true)}
          onOpenSettings={handleOpenSettings}
          onOpenHelp={() => setShowHelpCenter(true)}

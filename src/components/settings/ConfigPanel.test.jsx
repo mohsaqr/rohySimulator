@@ -524,8 +524,11 @@ describe('ConfigPanel', () => {
         expect(text.indexOf('Basic course')).toBeLessThan(text.indexOf('Corso di cardiologia'));
         expect(text.indexOf('Corso di cardiologia')).toBeLessThan(text.indexOf('Unassigned cases'));
 
-        // Language flag + visible case code on the cards.
+        // Prominent language chip: flag emoji (own text node) + native language
+        // name, plus the visible case code, on the cards.
         expect(screen.getByText('🇮🇹')).toBeInTheDocument();
+        expect(screen.getByText('Italiano')).toBeInTheDocument();
+        expect(screen.getAllByText('English').length).toBeGreaterThan(0);
         expect(screen.getByText('IT-0002')).toBeInTheDocument();
         expect(screen.getByText('EN-0003')).toBeInTheDocument();
 
@@ -577,5 +580,71 @@ describe('ConfigPanel', () => {
         // Group labels are static text — clicking one is not possible
         // because they are not buttons.
         expect(screen.queryByRole('button', { name: /^Content$/i })).not.toBeInTheDocument();
+    });
+
+    // CONTRACT: the LLM screen's model field is a curated catalogue dropdown
+    // (from the shared llmCatalogue) with a "Custom…" escape — not the old
+    // free-text box. Navigating Platform → AI with an Anthropic config shows
+    // the current Claude line.
+    it('renders the model catalogue dropdown on the Platform → AI section', async () => {
+        server.use(
+            http.get('*/api/platform-settings/llm', () => HttpResponse.json({
+                provider: 'anthropic',
+                model: 'claude-opus-4-8',
+                baseUrl: 'https://api.anthropic.com/v1',
+                apiKey: '',
+                enabled: true,
+                maxOutputTokens: '',
+                temperature: '',
+                systemPromptTemplate: ''
+            })),
+        );
+        mount({ initialTab: 'platform' });
+        await waitForAdmin();
+        fireEvent.click(screen.getByRole('button', { name: 'AI / LLM' }));
+        // The model field is an editable combobox; the catalogue is offered as
+        // <datalist> suggestions (queried directly — datalist options have no
+        // reliable ARIA role).
+        const modelInput = await screen.findByLabelText('Model name');
+        expect(modelInput).toBeInTheDocument();
+        const ids = Array.from(document.querySelectorAll('datalist option')).map((o) => o.value);
+        expect(ids).toContain('claude-opus-4-8');
+        expect(ids).toContain('claude-sonnet-5');
+    });
+
+    // CONTRACT: for a keyless local provider (LM Studio / Ollama) the model
+    // picker auto-populates from the running server's live /models list — no
+    // button click needed. This is the answer to LM Studio's "Multiple models
+    // are loaded, specify one" 400: the loaded ids appear as suggestions on
+    // their own.
+    it('auto-detects loaded models for a local provider without a click', async () => {
+        let detectHit = false;
+        server.use(
+            http.get('*/api/platform-settings/llm', () => HttpResponse.json({
+                provider: 'lmstudio',
+                model: '',
+                baseUrl: 'http://localhost:1234/v1',
+                apiKey: '',
+                enabled: true,
+                maxOutputTokens: '',
+                temperature: '',
+                systemPromptTemplate: ''
+            })),
+            http.post('*/api/platform-settings/llm/models/detect', () => {
+                detectHit = true;
+                return HttpResponse.json({ models: ['qwen2.5-7b', 'llama-3.1-8b'], supported: true });
+            }),
+        );
+        mount({ initialTab: 'platform' });
+        await waitForAdmin();
+        fireEvent.click(screen.getByRole('button', { name: 'AI / LLM' }));
+        await screen.findByLabelText('Model name');
+
+        await waitFor(() => {
+            const ids = Array.from(document.querySelectorAll('datalist option')).map((o) => o.value);
+            expect(ids).toContain('qwen2.5-7b');
+            expect(ids).toContain('llama-3.1-8b');
+        }, { timeout: 2500 });
+        expect(detectHit).toBe(true);
     });
 });

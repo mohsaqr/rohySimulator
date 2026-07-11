@@ -520,7 +520,13 @@ export default function VoiceSettingsTab() {
                 </div>
             )}
 
-            <div className="pt-2 flex gap-2">
+            <UsagePanel />
+
+            {/* Sticky save bar — pinned to the bottom of ConfigPanel's scroll
+                pane (.rohy-admin-page, overflow-y-auto) so Save is reachable
+                without scrolling to the end of this long form. Last element
+                in the tab so it stays stuck for the whole scroll range. */}
+            <div className="sticky bottom-0 z-10 bg-[var(--rohy-bg)] border-t border-neutral-200/10 py-3 flex gap-2">
                 <button
                     onClick={save}
                     disabled={saving}
@@ -537,8 +543,6 @@ export default function VoiceSettingsTab() {
                     <RefreshCw className="w-4 h-4" /> Reload
                 </button>
             </div>
-
-            <UsagePanel />
         </div>
     );
 }

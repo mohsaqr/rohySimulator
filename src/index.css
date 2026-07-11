@@ -706,6 +706,15 @@ body,
     opacity: 0.75;
   }
 
+  .rohy-menu-section-label {
+    padding: 0.5rem 1rem 0.25rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--rohy-muted);
+  }
+
   .rohy-topbar-menu-item {
     width: 100%;
     display: flex;
@@ -961,6 +970,21 @@ body,
   [class*="focus:ring-violet-"]:focus,
   [class*="focus:ring-pink-"]:focus {
     --tw-ring-color: rgb(20 184 166 / 0.42) !important;
+  }
+
+  /* Voice controls (chat "Voice on" toggle + "Click to talk" mic). These used
+     to carry `bg-purple-600 hover:bg-purple-500`, but the compat layer above
+     mangles them: its rest-state selector `[class*="bg-purple-50"]` also
+     matches `hover:bg-purple-500` (substring "bg-purple-50" ⊂ "bg-purple-500"),
+     painting the button pale mint (--rohy-accent-soft) under white text = an
+     invisible label. Routing them through a dedicated class that never touches
+     purple sidesteps that entirely and guarantees an AA-contrast solid accent. */
+  .rohy-voice-primary {
+    background-color: var(--rohy-accent-strong);
+    color: #ffffff;
+  }
+  .rohy-voice-primary:hover:not(:disabled) {
+    background-color: var(--rohy-accent-hover);
   }
 
   [class*="from-purple-"],

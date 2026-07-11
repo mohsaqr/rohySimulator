@@ -8,7 +8,6 @@ import { roleAnchor } from '../../utils/roleAnchor';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { sttLocaleFor, DEFAULT_LANGUAGE } from '../../i18n/languages';
-import { caseDisplayLabel } from '../../utils/caseDisplayLabel';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { baseUrl } from '../../config/api';
 import { apiFetch, apiPost } from '../../services/apiClient';
@@ -1414,6 +1413,31 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         });
     };
 
+    // Spacebar push-to-talk. In voice mode on the patient tab, tapping Space
+    // starts a listening turn (and taps again to stop + send) — the same toggle
+    // the mic button drives, so trainees can keep their eyes on the patient
+    // instead of aiming for a button. Guarded so it never hijacks Space while
+    // the user is typing in a field, and never fires on key-repeat (holding the
+    // key) or while the patient is mid-sentence.
+    useEffect(() => {
+        if (!voiceMode || activeTab !== 'patient') return undefined;
+        const onKeyDown = (e) => {
+            if (e.code !== 'Space' && e.key !== ' ') return;
+            if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+            const el = e.target;
+            const tag = el?.tagName;
+            if (el?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
+            if (loading || speaking || !VoiceService.isSttSupported()) return;
+            e.preventDefault();
+            startVoiceTurn();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+        // startVoiceTurn is recreated each render but only reads live refs/state;
+        // the deps below re-arm the guard when the relevant state flips.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [voiceMode, activeTab, loading, speaking, listening]);
+
     const handleSendToAgent = async (agentType) => {
         const agent = agents.find(a => a.agent_type === agentType);
         if (!agent) return;
@@ -1484,10 +1508,17 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         );
     }
 
-    // Get patient info from case config. Never fall back to activeCase.name
-    // for students — that is the diagnosis (Bug 14). caseDisplayLabel applies
-    // the role rule and still returns the real title for educators+.
-    const patientName = caseDisplayLabel(activeCase, user);
+    // Get patient info from case config. On the CONVERSATIONAL surface (the
+    // patient tab, "Click to talk to …", the message placeholder) the label is
+    // ALWAYS the patient's identity — never the case title. The room headers
+    // still use caseDisplayLabel so educators know which case they're observing,
+    // but "talk to <case title>" would announce the diagnosis to everyone
+    // (Bug 14 + user report 2026-07-11), so here the title never leaks, not even
+    // for authors. Falls back to a neutral "Patient" when the case set no name.
+    const patientName =
+        activeCase?.config?.patient_name ||
+        activeCase?.patient_name ||
+        t('patient_generic');
     const patientAvatar = activeCase?.config?.patient_avatar || '';
 
     // Get current conversation based on active tab
@@ -1586,7 +1617,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                             title={voiceMode ? t('switch_to_text_mode') : t('switch_to_voice_mode')}
                             className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition-colors ${
                                 voiceMode
-                                    ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                                    ? 'rohy-voice-primary'
                                     : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300'
                             }`}
                         >
@@ -1949,7 +1980,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                     ? 'bg-green-600 hover:bg-green-500 text-white'
                                     : speaking
                                     ? 'bg-blue-700 text-white cursor-not-allowed'
-                                    : 'bg-purple-600 hover:bg-purple-500 text-white disabled:bg-neutral-700 disabled:text-neutral-500'
+                                    : 'rohy-voice-primary disabled:bg-neutral-700 disabled:text-neutral-500'
                             }`}
                         >
                             {listening ? (
@@ -1979,9 +2010,11 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                 </>
                             )}
                         </button>
-                        {input && (
+                        {input ? (
                             <div className="text-xs text-neutral-500 px-1 italic truncate">{input}</div>
-                        )}
+                        ) : (!listening && !speaking && !loading && sttSupported && (
+                            <div className="text-[11px] text-neutral-500 text-center select-none">{t('talk_hint_space')}</div>
+                        ))}
                     </div>
                 ) : (
                     <form onSubmit={handleSend} className="relative">

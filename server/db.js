@@ -7,6 +7,7 @@ import { seedCuratedMedications } from '../scripts/seed-curated-medications.js';
 import { seedLabTestsFromJson } from '../scripts/seed-lab-tests-from-json.js';
 import { importLoincMapping } from '../scripts/import-loinc-mapping.js';
 import { seedPediatricRanges } from '../scripts/seed-pediatric-ranges.js';
+import { pricingSeedRows } from './shared/llmCatalogue.js';
 import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -461,15 +462,10 @@ async function seedDefaultAgents() {
 
 
 async function seedDefaultModelPricing() {
-    const defaultPricing = [
-        ['openai', 'gpt-3.5-turbo', 0.0005, 0.0015],
-        ['openai', 'gpt-4', 0.03, 0.06],
-        ['openai', 'gpt-4-turbo', 0.01, 0.03],
-        ['openai', 'gpt-4o', 0.005, 0.015],
-        ['openai', 'gpt-4o-mini', 0.00015, 0.0006],
-        ['ollama', 'default', 0, 0],
-        ['lmstudio', 'default', 0, 0]
-    ];
+    // Built from the shared catalogue (server/shared/llmCatalogue.js) so the
+    // pricing rows track the same current models the pickers offer. Still
+    // INSERT OR IGNORE below, so admin-tuned rows are never clobbered.
+    const defaultPricing = pricingSeedRows();
 
     for (const [provider, model, input, output] of defaultPricing) {
         await runDb(

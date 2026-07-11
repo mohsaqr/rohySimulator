@@ -264,24 +264,17 @@ async function ensureBasicCourses() {
     if (changes) log.info('created Basic course cohorts', { created: changes });
 }
 
-// Course layout invariant (idempotent, per tenant with a live Basic course):
-//   (a) the tenant's DEFAULT case (cases.is_default = 1) is linked to the
-//       "Basic course" — and ONLY the default case lives there;
-//   (b) every OTHER live case has its OWN dedicated course: a cohort named
-//       exactly after the case (created if missing — same owner/tenant as the
-//       Basic course, join_code allocated the same way POST /cohorts does),
-//       linked via cohort_cases. auto_enroll stays 0: these courses are the
-//       ACCESS layer — a teacher enrols students (or shares the join code) to
-//       grant the case; nobody is enrolled automatically;
-//   (c) DATA REPAIR — any live link between a NON-default case and the Basic
-//       course is soft-deleted (undoes the earlier "link every orphan to
-//       Basic course" behaviour of this seed).
-// Teacher-made assignments to any OTHER cohort are never touched: a case that
-// already has a live link to a non-Basic cohort keeps it and gets nothing new.
-// Cases, like agents, are assigned to a course or not — no course is
-// manufactured per case. The Basic course carries exactly the default case;
-// any other case is visible to students only once a teacher assigns it to a
-// course they're enrolled in (unassigned = educator-only, per cases-routes).
+// Course layout (idempotent, per tenant with a live Basic course):
+// the tenant's DEFAULT case (cases.is_default = 1) is linked to the single
+// default "Basic course" that every user is auto-enrolled in. The seeded
+// language cases are added alongside it by server/seedLanguageCases.js, so the
+// one default course carries the default case PLUS one case per language —
+// students pick the language they want by picking the case (each is flagged by
+// its own immutable case language). Teachers may add or remove further cases;
+// their assignments to any cohort are never touched here. (Earlier revisions
+// stripped every non-default case out of the Basic course to keep it to a
+// single case — that repair is intentionally gone: the default course now
+// holds many cases.)
 async function ensureBasicCourseCaseLink() {
     const basicCourses = await dbAdapter.all(
         `SELECT id, tenant_id, owner_user_id FROM cohorts
@@ -299,23 +292,6 @@ async function ensureBasicCourseCaseLink() {
                      WHERE cc.cohort_id = ? AND cc.case_id = c.id AND cc.deleted_at IS NULL)`,
             [basic.id, basic.tenant_id, basic.id]
         );
-
-        // Repair: the Basic course holds ONLY the default case. (Undoes the
-        // 2026-07-09 blanket linking of every orphan case to Basic course.)
-        const { changes: repaired } = await dbAdapter.run(
-            `UPDATE cohort_cases SET deleted_at = CURRENT_TIMESTAMP
-              WHERE cohort_id = ? AND deleted_at IS NULL
-                AND case_id IN (
-                    SELECT c.id FROM cases c
-                     WHERE c.tenant_id = ? AND c.deleted_at IS NULL
-                       AND (c.is_default IS NULL OR c.is_default != 1))`,
-            [basic.id, basic.tenant_id]
-        );
-        if (repaired) {
-            log.info('unlinked non-default cases from Basic course', {
-                tenant_id: basic.tenant_id, unlinked: repaired,
-            });
-        }
     }
 }
 

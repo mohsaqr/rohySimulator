@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import {
     User, Mail, Phone, Building2, MapPin, GraduationCap,
     Lock, Save, Loader2, Eye, EyeOff, AlertCircle, CheckCircle,
-    Bot, Server, Key, Hash, Globe
+    Bot, Server, Key, Globe
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../contexts/ToastContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { LANGUAGES } from '../../i18n/languages';
+import { LLM_PROVIDERS, defaultModelFor } from '../../services/llmCatalogue';
+import ModelSelect from './ModelSelect';
 import { ApiError, apiFetch, apiPut } from '../../services/apiClient';
 import JoinClassPanel from './JoinClassPanel';
 
@@ -405,8 +407,10 @@ export default function UserProfilePanel({ _onClose }) {
                             </p>
                         </div>
 
-                        {/* Save Button */}
-                        <div className="pt-4 border-t border-neutral-800">
+                        {/* Save Button — sticky action bar pinned to the bottom
+                            of the scroll body so Save is reachable without
+                            scrolling to the end of the form. */}
+                        <div className="sticky bottom-0 z-10 py-4 bg-neutral-900/95 backdrop-blur border-t border-neutral-800">
                             <button
                                 onClick={handleSaveProfile}
                                 disabled={saving}
@@ -532,39 +536,57 @@ export default function UserProfilePanel({ _onClose }) {
                         <div className="space-y-4">
                             <h3 className="text-sm font-bold text-neutral-300">{t('ai_provider_configuration')}</h3>
 
-                            {/* Provider */}
+                            {/* Provider — grouped from the shared catalogue (adds
+                                the azure/custom the hardcoded list was missing).
+                                Picking a provider prefills base URL + default model;
+                                the empty option means "use the platform default". */}
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-neutral-400">{t('provider')}</label>
                                 <select
                                     value={aiSettings.provider}
-                                    onChange={(e) => setAiSettings(prev => ({ ...prev, provider: e.target.value }))}
+                                    onChange={(e) => {
+                                        const provider = e.target.value;
+                                        if (!provider) {
+                                            setAiSettings(prev => ({ ...prev, provider: '', model: '', baseUrl: '' }));
+                                            return;
+                                        }
+                                        const cfg = LLM_PROVIDERS[provider];
+                                        setAiSettings(prev => ({
+                                            ...prev,
+                                            provider,
+                                            baseUrl: cfg ? cfg.defaultBase : prev.baseUrl,
+                                            model: defaultModelFor(provider)
+                                        }));
+                                    }}
                                     className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
                                 >
                                     <option value="">{t('use_platform_default')}</option>
-                                    <option value="openai">OpenAI</option>
-                                    <option value="anthropic">Anthropic (Claude)</option>
-                                    <option value="lmstudio">LM Studio (Local)</option>
-                                    <option value="ollama">Ollama (Local)</option>
-                                    <option value="openrouter">OpenRouter</option>
-                                    <option value="groq">Groq</option>
-                                    <option value="together">Together AI</option>
+                                    {['local', 'cloud', 'other'].map(group => (
+                                        <optgroup key={group} label={{ local: 'Local', cloud: 'Cloud', other: 'Other' }[group]}>
+                                            {Object.entries(LLM_PROVIDERS)
+                                                .filter(([, p]) => p.group === group)
+                                                .map(([key, p]) => (
+                                                    <option key={key} value={key}>{p.name}</option>
+                                                ))}
+                                        </optgroup>
+                                    ))}
                                 </select>
                             </div>
 
-                            {/* Model */}
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-neutral-400">{t('model')}</label>
-                                <div className="relative">
-                                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-                                    <input
-                                        type="text"
+                            {/* Model — shared curated dropdown (+ Custom escape).
+                                Only meaningful once a concrete provider is chosen. */}
+                            {aiSettings.provider && (
+                                <div className="space-y-1">
+                                    <label htmlFor="user-ai-model" className="text-xs font-medium text-neutral-400">{t('model')}</label>
+                                    <ModelSelect
+                                        id="user-ai-model"
+                                        provider={aiSettings.provider}
                                         value={aiSettings.model}
-                                        onChange={(e) => setAiSettings(prev => ({ ...prev, model: e.target.value }))}
-                                        placeholder={t('model_placeholder')}
-                                        className="w-full pl-10 pr-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:border-blue-500 focus:outline-none"
+                                        onChange={(model) => setAiSettings(prev => ({ ...prev, model }))}
+                                        accent="blue"
                                     />
                                 </div>
-                            </div>
+                            )}
 
                             {/* Base URL */}
                             <div className="space-y-1">
@@ -636,8 +658,10 @@ export default function UserProfilePanel({ _onClose }) {
                             </div>
                         </div>
 
-                        {/* Save Button */}
-                        <div className="pt-4 border-t border-neutral-800">
+                        {/* Save Button — sticky action bar pinned to the bottom
+                            of the scroll body so Save is reachable without
+                            scrolling to the end of the form. */}
+                        <div className="sticky bottom-0 z-10 py-4 bg-neutral-900/95 backdrop-blur border-t border-neutral-800">
                             <button
                                 onClick={handleSaveAiSettings}
                                 disabled={saving}

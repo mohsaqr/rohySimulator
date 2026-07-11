@@ -93,13 +93,15 @@ export function cohortCaseVisibleExists(caseAlias = 'c') {
 }
 
 /**
- * Idempotently enrol a user into their tenant's "Basic course" default class —
- * the safety net that guarantees every student always has the default case, so
- * enforcement can never lock anyone out. No-op if the class is absent for the
- * tenant or the user is already a live member. Never throws (login/register must
- * not fail on this).
+ * Idempotently enrol a user into every AUTO-ENROL class in their tenant
+ * (`cohorts.auto_enroll = 1`) — the safety net that guarantees every student
+ * always has the default class (the "Basic course"), so enforcement can never
+ * lock anyone out. One INSERT per matching cohort the user is not already a
+ * live member of. No-op if no auto-enrol class exists for the tenant. Never
+ * throws (login/register must not fail on this). The seedStemiCourse comment
+ * already names this hook `ensureAutoEnrollMemberships`.
  */
-export async function ensureBasicCourseMembership(userId, tenant_id) {
+export async function ensureAutoEnrollMemberships(userId, tenant_id) {
     if (!userId) return;
     try {
         await dbRun(
@@ -107,7 +109,7 @@ export async function ensureBasicCourseMembership(userId, tenant_id) {
              SELECT c.id, ?
                FROM cohorts c
               WHERE c.tenant_id = ?
-                AND c.name = 'Basic course'
+                AND c.auto_enroll = 1
                 AND c.deleted_at IS NULL
                 AND NOT EXISTS (
                     SELECT 1 FROM cohort_members m
@@ -115,7 +117,7 @@ export async function ensureBasicCourseMembership(userId, tenant_id) {
             [userId, tenant_id, userId]
         );
     } catch (err) {
-        routesCasesLog.warn('ensureBasicCourseMembership failed', { user_id: userId, tenant_id, error: err.message });
+        routesCasesLog.warn('ensureAutoEnrollMemberships failed', { user_id: userId, tenant_id, error: err.message });
     }
 }
 

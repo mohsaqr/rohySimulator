@@ -1308,6 +1308,51 @@ router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, asyn
     }
 });
 
+// POST /api/platform-settings/llm/models/detect - list the models the configured
+// server actually has loaded (Admin only). LM Studio (and every other
+// OpenAI-compatible server) refuses to guess when more than one model is loaded
+// — it returns 400 "Multiple models are loaded. Please specify a model." — so the
+// admin needs to know the exact ids on offer. This proxies the provider's
+// standard `GET <baseUrl>/models` list so the picker can be populated live.
+//
+// Body params (baseUrl/apiKey/provider) let the caller detect against UNSAVED
+// edits; each falls back to the persisted platform setting when omitted.
+router.post('/platform-settings/llm/models/detect', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const provider = req.body?.provider || await getPlatformSetting('llm_provider') || DEFAULT_LLM_SETTINGS.provider;
+        const baseUrl = (req.body?.baseUrl ?? await getPlatformSetting('llm_base_url')) || DEFAULT_LLM_SETTINGS.baseUrl;
+        const apiKey = (req.body?.apiKey ?? await getPlatformSetting('llm_api_key')) || '';
+
+        if (provider === 'anthropic') {
+            // Anthropic has no OpenAI-style /models list to enumerate here; the
+            // curated catalogue already covers it, so there's nothing to detect.
+            return res.json({ models: [], supported: false });
+        }
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+        const endpoint = `${String(baseUrl).replace(/\/$/, '')}/models`;
+
+        (req.log || routesLlmLog).info('llm models detect', { provider, endpoint });
+        const resp = await fetch(endpoint, { method: 'GET', headers });
+        if (!resp.ok) {
+            const errText = await resp.text();
+            return res.status(400).json({ error: `Model list request returned ${resp.status}: ${errText}` });
+        }
+        const data = await resp.json();
+        // OpenAI-compatible shape: { data: [{ id }, …] }. Fall back to a bare
+        // array in case a server returns the list directly.
+        const rows = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+        const models = rows
+            .map((m) => (typeof m === 'string' ? m : m?.id))
+            .filter((id) => typeof id === 'string' && id.trim() !== '');
+        res.json({ models, supported: true });
+    } catch (err) {
+        (req.log || routesLlmLog).error('llm models detect failed', { error: err.message });
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/platform-settings/rate-limits - Get rate limit configuration
 router.get('/platform-settings/rate-limits', authenticateToken, async (req, res) => {
     try {

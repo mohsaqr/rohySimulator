@@ -19,7 +19,7 @@ import {
     auditSuccess,
     buildUserPurgePlan,
     dbGet,
-    ensureBasicCourseMembership,
+    ensureAutoEnrollMemberships,
     executeUserPurge,
     isValidRole,
     logAudit,
@@ -320,7 +320,7 @@ router.post('/users/import', authenticateToken, requireAdmin, async (req, res) =
                     );
                 });
                 results.created.push({ row: rowNo, id: newId, username, email, role: finalRole, class: cohort?.name || null });
-                await ensureBasicCourseMembership(newId, tid);
+                await ensureAutoEnrollMemberships(newId, tid);
                 if (cohort) {
                     const outcome = await enrollUserInCohort(cohort.id, newId);
                     results.enrolled.push({ row: rowNo, username, class: cohort.name, outcome });

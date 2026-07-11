@@ -66,6 +66,7 @@ describe('per-case courses: seed shape, assignment endpoints, student gating', (
     let server;
     let admin, student, outsider; // outsider = educator with no manageable seeded cohort
     let defaultCase, otherCases;  // rows from the seeded cases table
+    let languageCases, legacyOtherCases; // otherCases split: seeded-into-the-default-course vs unassigned
     let basicCourseId;
 
     async function withDb(fn) {
@@ -95,9 +96,24 @@ describe('per-case courses: seed shape, assignment endpoints, student gating', (
                 db, `SELECT id FROM cohorts WHERE name = 'Basic course' AND deleted_at IS NULL`
             );
             basicCourseId = basic?.id;
+
+            // Split the non-default cases: the seeded language cases (shipped
+            // inside the single default "Basic course") vs the legacy ones that
+            // ship unassigned.
+            const basicLinks = await pAll(
+                db,
+                `SELECT cc.case_id FROM cohort_cases cc
+                  WHERE cc.cohort_id = ? AND cc.deleted_at IS NULL`,
+                [basicCourseId]
+            );
+            const basicCaseIds = new Set(basicLinks.map((l) => l.case_id));
+            languageCases = otherCases.filter((c) => basicCaseIds.has(c.id));
+            legacyOtherCases = otherCases.filter((c) => !basicCaseIds.has(c.id));
         });
         expect(defaultCase).toBeTruthy();
         expect(otherCases.length).toBeGreaterThan(0);
+        expect(languageCases.length).toBe(3);      // de / es / it
+        expect(legacyOtherCases.length).toBeGreaterThan(0);
         expect(basicCourseId).toBeTruthy();
 
         admin = authedFetch(server.baseUrl, await login(server.baseUrl, 'admin', 'admin123'));
@@ -114,22 +130,26 @@ describe('per-case courses: seed shape, assignment endpoints, student gating', (
     });
 
     // ---- Seed shape ---------------------------------------------------------
-    it('boot seed links ONLY the default case to Basic course', async () => {
+    it('boot seed links the default case PLUS the language cases into the single Basic course', async () => {
         await withDb(async (db) => {
             const links = await pAll(
                 db,
                 `SELECT case_id FROM cohort_cases WHERE cohort_id = ? AND deleted_at IS NULL`,
                 [basicCourseId]
             );
-            expect(links.map((l) => l.case_id)).toEqual([defaultCase.id]);
+            const linked = links.map((l) => l.case_id).sort((a, b) => a - b);
+            const expected = [defaultCase.id, ...languageCases.map((c) => c.id)].sort((a, b) => a - b);
+            expect(linked).toEqual(expected);
         });
     });
 
-    it('non-default cases ship UNASSIGNED — the seed manufactures no per-case courses', async () => {
-        // Cases, like agents, are assigned to a course or not. Until a teacher
-        // assigns one, a non-default case has no course (and is educator-only).
+    it('legacy non-default cases ship UNASSIGNED; seeded language cases ship in the default Basic course', async () => {
+        // Legacy non-default cases, like agents, are assigned to a course or
+        // not — until a teacher assigns one they have no course (educator-only).
+        // The seeded language cases are the exception: each ships already linked
+        // to the single default "Basic course".
         await withDb(async (db) => {
-            for (const c of otherCases) {
+            for (const c of legacyOtherCases) {
                 const link = await pGet(
                     db,
                     `SELECT cc.id FROM cohort_cases cc
@@ -139,7 +159,19 @@ describe('per-case courses: seed shape, assignment endpoints, student gating', (
                 );
                 expect(link, `case ${c.id} (${c.name}) should have no course`).toBeFalsy();
             }
-            // And no cohort was auto-created per case.
+            for (const c of languageCases) {
+                const link = await pGet(
+                    db,
+                    `SELECT co.name FROM cohort_cases cc
+                       JOIN cohorts co ON co.id = cc.cohort_id AND co.deleted_at IS NULL
+                      WHERE cc.case_id = ? AND cc.deleted_at IS NULL`,
+                    [c.id]
+                );
+                expect(link, `language case ${c.id} (${c.name}) should be in the default course`).toBeTruthy();
+                expect(link.name).toBe('Basic course');
+            }
+            // No cohort was auto-created *named after a case* — there is one
+            // default course, not a course per case/language.
             const cohorts = await pAll(
                 db, `SELECT name FROM cohorts WHERE deleted_at IS NULL`
             );
@@ -149,24 +181,8 @@ describe('per-case courses: seed shape, assignment endpoints, student gating', (
         });
     });
 
-    it('DATA REPAIR: a stale non-default→Basic link is soft-deleted on the next seed pass (idempotency of layout)', async () => {
-        // The boot seed already ran against a fresh DB, so simulate yesterday's
-        // blanket linking and assert the layout invariant the seed enforces:
-        // no live Basic-course link for a non-default case survives.
-        await withDb(async (db) => {
-            const live = await pGet(
-                db,
-                `SELECT COUNT(*) AS n FROM cohort_cases cc
-                  WHERE cc.cohort_id = ? AND cc.deleted_at IS NULL
-                    AND cc.case_id IN (SELECT id FROM cases WHERE is_default != 1)`,
-                [basicCourseId]
-            );
-            expect(live.n).toBe(0);
-        });
-    });
-
-    // ---- Login enrollment (Basic course only) --------------------------------
-    it('login enrols the student into Basic course but NOT into per-case courses', async () => {
+    // ---- Login enrollment (the single default course) ------------------------
+    it('login enrols the student into the default Basic course', async () => {
         await withDb(async (db) => {
             const studentRow = await pGet(db, `SELECT id FROM users WHERE username = 'student'`);
             const memberships = await pAll(
@@ -181,9 +197,10 @@ describe('per-case courses: seed shape, assignment endpoints, student gating', (
     });
 
     // ---- Student-facing gating ------------------------------------------------
-    it('student catalog lists only the default case; educator/admin see all', async () => {
+    it('student catalog lists the default case plus the language cases in the default course', async () => {
         const s = await json(await student('/api/cases'));
-        expect(s.cases.map((c) => c.id)).toEqual([defaultCase.id]);
+        const expected = [defaultCase.id, ...languageCases.map((c) => c.id)].sort((a, b) => a - b);
+        expect(s.cases.map((c) => c.id).sort((a, b) => a - b)).toEqual(expected);
 
         const a = await json(await admin('/api/cases'));
         expect(a.cases.length).toBe(1 + otherCases.length);
@@ -239,10 +256,15 @@ describe('per-case courses: seed shape, assignment endpoints, student gating', (
         const byId = new Map(a.cases.map((c) => [c.id, c]));
 
         expect(byId.get(defaultCase.id).course_name).toBe('Basic course');
-        // otherCases[0] was assigned to 'Sepsis module' by the previous test.
+        // otherCases[0] (a legacy case) was assigned to 'Sepsis module' by the
+        // previous test.
         expect(byId.get(otherCases[0].id).course_name).toBe('Sepsis module');
-        // The remaining seeded cases ship unassigned → null course.
-        for (const c of otherCases.slice(1)) {
+        // The seeded language cases live in the single default Basic course.
+        for (const c of languageCases) {
+            expect(byId.get(c.id).course_name).toBe('Basic course');
+        }
+        // The remaining LEGACY cases ship unassigned → null course.
+        for (const c of legacyOtherCases.slice(1)) {
             expect(byId.get(c.id).course_name).toBeNull();
         }
 
@@ -264,10 +286,14 @@ describe('per-case courses: seed shape, assignment endpoints, student gating', (
 
         const byCase = new Map(body.data.map((r) => [r.caseId, r]));
         expect(byCase.get(defaultCase.id).cohortName).toBe('Basic course');
-        // otherCases[0] was assigned to 'Sepsis module' by the earlier test;
-        // the rest remain unassigned (cohortId null) — no per-case courses.
+        // otherCases[0] (legacy) was assigned to 'Sepsis module' by the earlier
+        // test; the seeded language cases map to the default Basic course; the
+        // rest of the legacy cases remain unassigned (cohortId null).
         expect(byCase.get(otherCases[0].id).cohortName).toBe('Sepsis module');
-        for (const c of otherCases.slice(1)) {
+        for (const c of languageCases) {
+            expect(byCase.get(c.id).cohortName).toBe('Basic course');
+        }
+        for (const c of legacyOtherCases.slice(1)) {
             expect(byCase.get(c.id).cohortId).toBeNull();
         }
 
