@@ -39,6 +39,7 @@ import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
 import OyonCaptureWidget from './components/oyon/OyonCaptureWidget';
 import AoiRegion from './components/oyon/AoiRegion';
 import { HelpCenter, OnboardingTour } from './help';
+import FirstRunGate, { useSetup } from './components/setup/FirstRunGate';
 
 // Persistence rule: a session ends ONLY through the Exit or End buttons
 // (or an explicit case-switch). Refresh, tab close, idle time — none of
@@ -82,6 +83,8 @@ function MainApp() {
    const [settingsNavNonce] = useState(0);
    const { user, logout, isAdmin } = useAuth();
    const { uiLanguage, setUiLanguage } = useLanguage();
+   // Recall path for the first-run wizard ("Platform setup" menu item).
+   const { openSetupWizard } = useSetup();
    const isAdminUser = isAdmin();
    const canSeeOyonAnalytics = user?.role === 'educator' || user?.role === 'admin';
    const [sessionValidated, setSessionValidated] = useState(false);
@@ -690,6 +693,7 @@ function MainApp() {
          onOpenHelp={() => setShowHelpCenter(true)}
          onOpenEmotionAnalytics={() => setShowOyonAnalytics(true)}
          onOpenCaseAnalytics={() => setShowTnaAnalytics(true)}
+         onOpenSetup={isAdminUser ? openSetupWizard : undefined}
          onLogout={() => {
             EventLogger.log('CLICKED', 'button', { objectId: 'logout', objectName: 'Logout', component: COMPONENTS.APP });
             logout();
@@ -1236,6 +1240,11 @@ function AuthenticatedApp({ showRegister, setShowRegister }) {
       return <LoginPage onSwitchToRegister={() => setShowRegister(true)} />;
    }
 
-   // Show main app if authenticated
-   return <MainApp />;
+   // Show main app if authenticated — behind the first-run gate (admin
+   // setup wizard / student first-run screen, each shown until completed).
+   return (
+      <FirstRunGate>
+         <MainApp />
+      </FirstRunGate>
+   );
 }

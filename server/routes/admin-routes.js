@@ -38,9 +38,12 @@ import {
 } from '../services/ttsProviders.js';
 import {
     auditSuccess,
+    dbAll,
+    dbGet,
     redactAuditSetting,
     redactRows,
     resetCohortCaseEnforcementCache,
+    tenantId,
     verifySessionOwnership
 } from './_helpers.js';
 
@@ -1150,6 +1153,127 @@ router.put('/platform-settings/cohort-case-enforcement', authenticateToken, requ
         await setAuditedPlatformSetting(req, 'enforce_cohort_case_access', enabled ? 'true' : 'false', 'update_cohort_case_enforcement');
         resetCohortCaseEnforcementCache();
         res.json({ enabled });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Platform default UI language -------------------------------------------
+// The language brand-new users (and the pre-login login screen) start in.
+// Per-user choice always wins once made; this only seeds the fallback chain
+// (server pref → localStorage pick → THIS → 'en'). GET is public — the login
+// page needs it before any token exists (same posture as the monitor GET).
+router.get('/platform-settings/language', async (req, res) => {
+    try {
+        const value = await getPlatformSetting('default_ui_language');
+        res.json({
+            default_ui_language: value && LANGUAGES[value] ? value : 'en'
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.put('/platform-settings/language', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const code = req.body?.default_ui_language;
+        if (typeof code !== 'string' || !LANGUAGES[code]) {
+            return res.status(400).json({
+                error: `default_ui_language must be one of: ${Object.keys(LANGUAGES).join(', ')}`
+            });
+        }
+        await setAuditedPlatformSetting(req, 'default_ui_language', code, 'update_default_ui_language');
+        res.json({ default_ui_language: code });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- First-run setup (admin wizard) ------------------------------------------
+// One derived-status read powering the whole checklist; the wizard renders a
+// green/amber/red chip per step from this and never invents server state.
+// Everything here is a cheap re-read of settings the dedicated routes own —
+// this endpoint deliberately has NO write side beyond the completion flag.
+router.get('/setup/status', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const [
+            provider, model, baseUrl, apiKey, llmEnabled,
+            voiceEnabled, defaultLang, setupCompleted, affectRaw
+        ] = await Promise.all([
+            'llm_provider', 'llm_model', 'llm_base_url', 'llm_api_key', 'llm_enabled',
+            'voice_mode_enabled', 'default_ui_language', 'setup_completed', 'affect_routing'
+        ].map(getPlatformSetting));
+
+        const voiceDefaultRows = await Promise.all(
+            Object.keys(LANGUAGES).map(async (code) => [code, Boolean(await getPlatformSetting(defaultVoiceKey(code)))])
+        );
+        const languagesMissingDefaultVoice = voiceDefaultRows
+            .filter(([, present]) => !present)
+            .map(([code]) => code);
+
+        const cases = await dbAll(
+            `SELECT id, name, case_code, is_default,
+                    lower(coalesce(json_extract(config, '$.case_language'), 'en')) AS case_language
+               FROM cases
+              WHERE tenant_id = ? AND deleted_at IS NULL AND is_available = 1
+              ORDER BY is_default DESC, case_code ASC`,
+            [tenantId(req)]
+        );
+        const casesByLanguage = Object.fromEntries(Object.keys(LANGUAGES).map(code => [
+            code, cases.filter(c => c.case_language === code).length
+        ]));
+        const defaultCase = cases.find(c => c.is_default) || null;
+
+        const oyonRow = await dbGet(
+            'SELECT emotion_capture_enabled FROM oyon_settings WHERE tenant_id = ?',
+            [String(tenantId(req))]
+        );
+
+        res.json({
+            setup_completed: setupCompleted === 'true',
+            llm: {
+                provider: provider || 'lmstudio',
+                model: model || '',
+                base_url: baseUrl || '',
+                key_present: Boolean(apiKey),
+                enabled: llmEnabled !== 'false'
+            },
+            language: {
+                default_ui_language: defaultLang && LANGUAGES[defaultLang] ? defaultLang : 'en'
+            },
+            cases: {
+                total: cases.length,
+                by_language: casesByLanguage,
+                default_case: defaultCase
+                    ? { id: defaultCase.id, name: defaultCase.name, case_code: defaultCase.case_code, case_language: defaultCase.case_language }
+                    : null,
+                list: cases.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    case_code: c.case_code,
+                    case_language: c.case_language,
+                    is_default: Boolean(c.is_default)
+                }))
+            },
+            voice: {
+                enabled: voiceEnabled === 'true',
+                languages_missing_default_voice: languagesMissingDefaultVoice
+            },
+            oyon: { enabled: Boolean(oyonRow?.emotion_capture_enabled) },
+            affect: { enabled: normalizeAffectSettings(affectRaw).enabled }
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Completion flag. "Finish" and "Dismiss" both land here — either way the
+// wizard stops auto-showing; it stays reachable from the top-bar menu.
+router.put('/platform-settings/setup', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const completed = req.body?.completed === true || req.body?.completed === 'true';
+        await setAuditedPlatformSetting(req, 'setup_completed', completed ? 'true' : 'false', 'update_setup_completed');
+        res.json({ completed });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

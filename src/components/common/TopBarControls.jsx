@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Check, BookOpen, Stethoscope } from 'lucide-react';
+import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Check, BookOpen, Stethoscope, ListChecks } from 'lucide-react';
 import { LANGUAGES } from '../../i18n/languages';
 
 // The single persistent top-bar menu: ONE trigger (gear + current-language
@@ -47,6 +47,7 @@ export default function TopBarControls({
    onOpenLessons,
    onOpenEmotionAnalytics,
    onOpenCaseAnalytics,
+   onOpenSetup,
    onLogout,
    uiLanguage,
    onSetLanguage,
@@ -199,6 +200,19 @@ export default function TopBarControls({
                            >
                               <Activity className="w-4 h-4" />
                               {t('case_analytics')}
+                           </button>
+                        )}
+                        {/* Recall the first-run setup checklist — it is
+                            dismissible, so it must stay reachable forever. */}
+                        {isAdminUser && onOpenSetup && (
+                           <button
+                              type="button"
+                              onClick={() => { onOpenSetup(); closeAll(); }}
+                              role="menuitem"
+                              className="rohy-topbar-menu-item"
+                           >
+                              <ListChecks className="w-4 h-4" />
+                              {t('menu_setup')}
                            </button>
                         )}
                      </>

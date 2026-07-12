@@ -13,7 +13,7 @@
 // The context carries a usable English default so components render
 // unchanged outside the provider (unit tests, storybook-style harnesses).
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { apiFetch, apiPut } from '../services/apiClient';
 import { LANGUAGES, DEFAULT_LANGUAGE, isKnownLanguage } from '../i18n/languages';
@@ -46,6 +46,21 @@ const storedLang = () => {
     }
 };
 
+// Admin-set platform default (platform_settings.default_ui_language). Sits
+// between the user's own choices and the hardcoded 'en' in the fallback
+// chain: server pref → pre-login localStorage pick → platform default → 'en'.
+// Fetched once per page load (public endpoint — the login screen needs it
+// before any token exists); any failure degrades to 'en'.
+let platformDefaultPromise = null;
+const fetchPlatformDefault = () => {
+    if (!platformDefaultPromise) {
+        platformDefaultPromise = apiFetch('/platform-settings/language')
+            .then(data => (isKnownLanguage(data?.default_ui_language) ? data.default_ui_language : DEFAULT_LANGUAGE))
+            .catch(() => DEFAULT_LANGUAGE);
+    }
+    return platformDefaultPromise;
+};
+
 const DEFAULT_CONTEXT = {
     uiLanguage: DEFAULT_LANGUAGE,
     caseLanguage: DEFAULT_LANGUAGE,
@@ -74,23 +89,37 @@ export function LanguageProvider({ children }) {
         let cancelled = false;
         setCaseOverride(null);
         if (!user) {
-            // Logged out: honour the login-screen choice parked in localStorage.
-            setUiLanguageState(storedLang() || DEFAULT_LANGUAGE);
+            // Logged out: honour the login-screen choice parked in localStorage,
+            // else the admin's platform default (async; the brief default-language
+            // render while it loads only affects the login screen).
+            const parked = storedLang();
+            setUiLanguageState(parked || DEFAULT_LANGUAGE);
             setHydrated(true);
-            return undefined;
+            if (!parked) {
+                fetchPlatformDefault().then(code => {
+                    if (!cancelled && !storedLang()) setUiLanguageState(code);
+                });
+            }
+            return () => { cancelled = true; };
         }
         setHydrated(false);
-        apiFetch('/users/preferences')
-            .then(prefs => {
-                if (cancelled) return;
+        Promise.all([
+            // Preference failure must not poison hydration: resolve null and
+            // keep the current language, exactly as the old single-fetch did.
+            apiFetch('/users/preferences').catch(err => {
+                console.error('[Language] Failed to load preference, staying on default:', err);
+                return null;
+            }),
+            fetchPlatformDefault()
+        ])
+            .then(([prefs, platformDefault]) => {
+                if (cancelled || prefs === null) return;
                 // Server preference wins; if none stored yet, keep the language
-                // the user picked pre-login rather than snapping back to English.
-                const next = isKnownLanguage(prefs?.language) ? prefs.language : (storedLang() || DEFAULT_LANGUAGE);
+                // the user picked pre-login; a truly fresh user gets the
+                // admin-set platform default rather than hardcoded English.
+                const next = isKnownLanguage(prefs?.language) ? prefs.language : (storedLang() || platformDefault);
                 setUiLanguageState(next);
                 try { localStorage.setItem(LS_KEY, next); } catch { /* private mode */ }
-            })
-            .catch(err => {
-                console.error('[Language] Failed to load preference, staying on default:', err);
             })
             .finally(() => {
                 if (!cancelled) setHydrated(true);

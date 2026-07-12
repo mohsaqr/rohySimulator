@@ -125,6 +125,8 @@ migration also requires adding a row here**.
 
 | 0035 | `0035_case_code.sql` | additive | Visible language-bearing case identifier: new nullable `cases.case_code TEXT` + partial unique index, backfilled as `<LANG>-<zero-padded id>` (numeric part = the untouched integer PK, so unique by construction). Also pins the now-immutable case language: `config.case_language` is normalized to a concrete registry code (absent/empty/unknown → `'en'`; a case never "follows the student's UI language" anymore). Malformed-JSON configs are left untouched and coded `EN-…`. Rows inserted after migrations (fresh-DB seeders) are stamped by the `ensureCaseCodes()` boot sweep. |
 
+| 0036 | `0036_user_onboarding_settings.sql` | additive | Per-user onboarding/first-run prefs: one nullable `user_preferences.onboarding_settings JSON` column (`first_run_done`, `voice_mode`, `oyon_consent`). NULL = never onboarded, so every existing user sees the new first-run screen once (deliberate — it surfaces the previously silent emotion-capture consent). Single nullable ADD COLUMN; pre-migration code never selects it. |
+
 **To add a new migration**: append a row above. ID + filename match the SQL
 file. Set `Type` per the policy. `Notes` is freeform — what changed and why
 in one sentence.

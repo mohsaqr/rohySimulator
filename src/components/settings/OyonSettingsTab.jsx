@@ -62,6 +62,13 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
    const toggleDefaultConsent = (next) => {
       setDefaultConsent(next);
       try { localStorage.setItem(CONSENT_PREF_KEY, next ? '1' : '0'); } catch { /* storage blocked */ }
+      // Mirror server-side (merge PUT; onboarding keys are shallow-merged so
+      // this can't erase first_run_done) — the choice must follow the user
+      // across devices, not stay parked in one browser.
+      apiFetch('/users/preferences', {
+         method: 'PUT',
+         json: { onboarding_settings: { oyon_consent: next } },
+      }).catch(() => { /* local flag still applies on this device */ });
    };
 
    const toggleValenceGraph = (next) => {

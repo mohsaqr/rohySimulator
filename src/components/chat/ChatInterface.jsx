@@ -16,6 +16,7 @@ import { VoiceService } from '../../services/voiceService';
 import { useVoice } from '../../contexts/VoiceContext';
 import { sanitizeResponseText } from '../../utils/plainText';
 import { parseConfig } from '../../utils/parseConfig';
+import { parseOnboardingSettings } from '../../utils/onboardingSettings';
 import { extractCompleteSentences } from '../../utils/sentenceSplit';
 import { resolveVoice, voiceMatchesLanguage } from '../../utils/voiceResolver';
 import { useToast } from '../../contexts/ToastContext';
@@ -380,6 +381,21 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             VoiceService.stopListening();
         }
     }, [voiceSettings, voiceMode]);
+
+    // Apply the user's saved voice preference (first-run screen,
+    // onboarding_settings.voice_mode) once per mount, after the platform
+    // voice settings confirm voice mode exists at all. One-shot: after this,
+    // the header toggle is the user's live control and we never fight it.
+    const voicePrefAppliedRef = useRef(false);
+    useEffect(() => {
+        if (voicePrefAppliedRef.current || !voiceSettings?.voice_mode_enabled) return;
+        voicePrefAppliedRef.current = true;
+        apiFetch('/users/preferences')
+            .then(prefs => {
+                if (parseOnboardingSettings(prefs).voice_mode === true) setVoiceMode(true);
+            })
+            .catch(() => { /* preference is a nicety — stay off on failure */ });
+    }, [voiceSettings]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Cleanup voice resources when the case changes or component unmounts.
     useEffect(() => {

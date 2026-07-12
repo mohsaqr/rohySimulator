@@ -415,7 +415,8 @@ router.get('/users/preferences', authenticateToken, (req, res) => {
                     notification_settings: null,
                     dashboard_layout: null,
                     default_llm_settings: null,
-                    default_monitor_settings: null
+                    default_monitor_settings: null,
+                    onboarding_settings: null
                 });
             }
             res.json(redactRow(prefs));
@@ -428,7 +429,7 @@ router.get('/users/preferences', authenticateToken, (req, res) => {
 // profile panel saving only { default_llm_settings } silently reset
 // language and theme back to defaults on every AI-settings save.
 router.put('/users/preferences', authenticateToken, (req, res) => {
-    const { theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings } = req.body;
+    const { theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings, onboarding_settings } = req.body;
 
     dbAdapter.get(`SELECT * FROM user_preferences WHERE user_id = ? AND tenant_id = ?`, [req.user.id, tenantId(req)], (readErr, oldPrefs) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
@@ -440,6 +441,11 @@ router.put('/users/preferences', authenticateToken, (req, res) => {
                 ? (incoming ? JSON.stringify(incoming) : null)
                 : (stored ?? null);
 
+        // Stored JSON string → object, tolerating NULL and legacy garbage.
+        const parseStored = (stored) => {
+            try { return JSON.parse(stored || '{}') || {}; } catch { return {}; }
+        };
+
         const merged = {
             theme: theme !== undefined ? (theme || 'dark') : (oldPrefs?.theme || 'dark'),
             // NULL, never a fabricated 'en': a first-ever PUT that only carries
@@ -450,12 +456,22 @@ router.put('/users/preferences', authenticateToken, (req, res) => {
             dashboard_layout: keepOrJson(dashboard_layout, oldPrefs?.dashboard_layout),
             default_llm_settings: keepOrJson(default_llm_settings, oldPrefs?.default_llm_settings),
             default_monitor_settings: keepOrJson(default_monitor_settings, oldPrefs?.default_monitor_settings),
-            accessibility_settings: keepOrJson(accessibility_settings, oldPrefs?.accessibility_settings)
+            accessibility_settings: keepOrJson(accessibility_settings, oldPrefs?.accessibility_settings),
+            // Onboarding keys are SHALLOW-MERGED, not replaced: the first-run
+            // screen writes { first_run_done, voice_mode, oyon_consent } once,
+            // but later single-key writes (a consent flip in Settings → Oyon)
+            // must not erase the sibling keys.
+            onboarding_settings: onboarding_settings !== undefined
+                ? JSON.stringify({
+                    ...parseStored(oldPrefs?.onboarding_settings),
+                    ...(onboarding_settings && typeof onboarding_settings === 'object' ? onboarding_settings : {})
+                  })
+                : (oldPrefs?.onboarding_settings ?? null)
         };
 
         dbAdapter.run(
-            `INSERT INTO user_preferences (user_id, theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings, tenant_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO user_preferences (user_id, theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings, onboarding_settings, tenant_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(user_id) DO UPDATE SET
              theme = excluded.theme,
              language = excluded.language,
@@ -464,6 +480,7 @@ router.put('/users/preferences', authenticateToken, (req, res) => {
              default_llm_settings = excluded.default_llm_settings,
              default_monitor_settings = excluded.default_monitor_settings,
              accessibility_settings = excluded.accessibility_settings,
+             onboarding_settings = excluded.onboarding_settings,
              updated_at = CURRENT_TIMESTAMP`,
             [
                 req.user.id,
@@ -474,6 +491,7 @@ router.put('/users/preferences', authenticateToken, (req, res) => {
                 merged.default_llm_settings,
                 merged.default_monitor_settings,
                 merged.accessibility_settings,
+                merged.onboarding_settings,
                 tenantId(req)
             ],
             function(err) {

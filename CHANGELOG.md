@@ -9,6 +9,32 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.7.1] — 2026-07-12
+
+### Added
+
+- **First-run setup for administrators.** New admins land in a six-step
+  setup checklist: connect the AI engine (with a live connection test —
+  students can't chat until it passes, and the wizard says so), pick the
+  platform's default language, confirm the default course and case, enable
+  voice, enable emotion capture, and choose who sees which cases. Every step
+  is optional and everything stays editable later — the checklist can be
+  dismissed and reopened any time from the menu → **Platform setup**.
+- **A welcome screen for students and teachers.** On first login you pick
+  your language, see the case you'll start with, choose whether you want to
+  talk to the patient out loud (with a microphone check), and — where the
+  camera-based emotion capture is enabled — see and decide the consent that
+  was previously set silently. Teachers get a pointer to case authoring.
+  Choices are saved to your account, so they follow you across devices.
+- **Platform default language.** Administrators can now set the language new
+  users start in (previously always English). Each user's own choice still
+  wins.
+
+### Fixed
+
+- Your "talk to the patient" preference now survives a page reload instead
+  of resetting to off every time.
+
 ## [2.7.0] — 2026-07-12
 
 ### Added

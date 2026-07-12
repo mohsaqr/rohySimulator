@@ -7,6 +7,7 @@ import { loadOyonElement } from './loadOyonElement';
 import { elementSettings, persistBody, OYON_ASSET_BASE } from './captureBridge';
 import { getAois, onAois } from './screenAois';
 import { publishAffectSample, publishAffectWindows, clearAffect } from '../../utils/latestAffect';
+import { parseOnboardingSettings } from '../../utils/onboardingSettings';
 
 export const VALENCE_GRAPH_PREF_KEY = 'oyon.showValenceGraph';
 export const CONSENT_PREF_KEY = 'oyon.defaultConsent';
@@ -64,6 +65,22 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
       caseRef.current = caseId;
       roomRef.current = room;
    }, [sessionId, caseId, room]);
+
+   // The server-side consent default (user_preferences.onboarding_settings
+   // .oyon_consent, set on the first-run screen / Settings → Oyon) wins over
+   // whatever this browser parked earlier: write it through to localStorage
+   // once per mount so readConsentPref() stays the single choke point and
+   // the choice follows the user across devices.
+   useEffect(() => {
+      apiFetch('/users/preferences')
+         .then(prefs => {
+            const consent = parseOnboardingSettings(prefs).oyon_consent;
+            if (typeof consent === 'boolean') {
+               try { localStorage.setItem(CONSENT_PREF_KEY, consent ? '1' : '0'); } catch { /* private mode */ }
+            }
+         })
+         .catch(() => { /* fall back to the local flag */ });
+   }, []);
 
    const ensureConsent = useCallback(async () => {
       const sid = sessionRef.current;
