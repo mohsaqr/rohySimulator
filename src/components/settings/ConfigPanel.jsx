@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera, ScanFace } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
@@ -26,6 +26,7 @@ import MedicationManager from './MedicationManager';
 import AgentTemplateManager from './AgentTemplateManager';
 import CaseTreatmentConfig from './CaseTreatmentConfig';
 import VoiceSettingsTab from './VoiceSettingsTab';
+import AffectRoutingTab from './AffectRoutingTab';
 import AvatarsSettingsTab from './AvatarsSettingsTab';
 import NotificationsSettingsTab from './NotificationsSettingsTab';
 import OyonSettingsTab from './OyonSettingsTab';
@@ -586,6 +587,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                 { id: 'agents', label: t('tab_agents'), icon: Users, visible: admin },
                 { id: 'avatars', label: t('tab_avatars'), icon: Image, visible: admin },
                 { id: 'voice', label: t('tab_voice'), icon: Mic, visible: admin },
+                { id: 'affect', label: t('tab_affect'), icon: ScanFace, visible: admin },
             ],
         },
         {
@@ -1268,6 +1270,11 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     {/* --- VOICE TAB (Admin Only) --- */}
                     {activeTab === 'voice' && isAdmin() && (
                         <VoiceSettingsTab />
+                    )}
+
+                    {/* --- AFFECT ROUTING TAB (Admin Only) --- */}
+                    {activeTab === 'affect' && isAdmin() && (
+                        <AffectRoutingTab />
                     )}
 
                     {/* --- NOTIFICATIONS TAB (all users) --- */}

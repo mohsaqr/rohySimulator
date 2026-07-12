@@ -33,6 +33,8 @@ import {
     formatPersonalityForPrompt,
 } from '../../utils/casePromptContext';
 import { setLastPatientPrompt } from '../../utils/lastPatientPrompt';
+import { getAffectSnapshot } from '../../utils/latestAffect';
+import { buildAffectSignal } from '../../utils/affectSignal';
 import { pickWaitPhase, formatRemaining, waitProgressPct } from '../../utils/agentWait';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
@@ -1029,6 +1031,20 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         language: caseLanguage,
     }), [voiceSettings, caseLanguage]);
 
+    // Affect routing (Plan A): platform config fetched once per mount into a
+    // ref — the live affect stream itself never touches React state here
+    // (latestAffect.js is read only at send time), so nothing re-renders at
+    // capture rate. Fetch failure = routing stays off; the server is the
+    // authoritative gate anyway.
+    const affectSettingsRef = useRef(null);
+    useEffect(() => {
+        let cancelled = false;
+        apiFetch('/platform-settings/affect')
+            .then(cfg => { if (!cancelled && cfg?.enabled) affectSettingsRef.current = cfg; })
+            .catch(() => { /* affect routing unavailable — chat unaffected */ });
+        return () => { cancelled = true; };
+    }, []);
+
     const handleSendToPatient = async (overrideText) => {
         const text = (overrideText ?? input).trim();
         if (!text) return;
@@ -1149,6 +1165,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 // Server appends the output-language directive for this code
                 // (systemPromptAssembly) — never inject it into the prompt here.
                 caseLanguage,
+                // Observed learner affect: structured signal read from the
+                // consent-gated live store at send time; the server renders
+                // and appends the actual note (same contract as caseLanguage).
+                studentAffect: buildAffectSignal(getAffectSnapshot(), affectSettingsRef.current),
                 onDelta: (delta) => {
                     acc += delta;
                     const display = sanitizeResponseText(acc);

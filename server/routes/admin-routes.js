@@ -22,6 +22,13 @@ import { DEFAULT_TURNAROUND_MINUTES } from '../lib/turnaround.js';
 import { TTS_PROVIDERS, voiceMatchesLanguage } from '../shared/voiceIdentity.js';
 import { LANGUAGES } from '../shared/languages.js';
 import {
+    AFFECT_MODES,
+    AFFECT_PROVIDER_POLICIES,
+    AFFECT_REACTIVITIES,
+    DEFAULT_AFFECT_ROUTING,
+    normalizeAffectSettings,
+} from '../shared/affectNote.js';
+import {
     deriveVoiceProvider,
     getAllProviderStatus,
     defaultVoiceKey,
@@ -1692,6 +1699,72 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
     } catch (err) {
         (req.log || routesLlmLog).error('voice platform settings update failed', { error: err.message });
         res.status(500).json({ error: 'Failed to update voice settings' });
+    }
+});
+
+// --- Affect routing (Plan A, todo/plan-a-implementation-spec.md) -------------
+// One JSON platform key (`affect_routing`) holding the whole config, stored
+// normalized. GET is any-authed-user — the chat client needs the routing
+// decision (mode, thresholds) before it computes a signal; there is nothing
+// sensitive in it. PUT is admin-only. The proxy route re-reads the stored
+// value on every LLM call, so the server stays the authoritative gate no
+// matter what a stale client sends.
+
+// GET /api/platform-settings/affect - Affect-routing config (any authed user)
+router.get('/platform-settings/affect', authenticateToken, async (req, res) => {
+    try {
+        const raw = await getPlatformSetting('affect_routing');
+        res.json(normalizeAffectSettings(raw));
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to load affect settings' });
+    }
+});
+
+// PUT /api/platform-settings/affect - Update affect-routing config (Admin only)
+router.put('/platform-settings/affect', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const allowed = new Set(Object.keys(DEFAULT_AFFECT_ROUTING));
+        for (const key of Object.keys(body)) {
+            if (!allowed.has(key)) {
+                return res.status(400).json({ error: `Unknown setting: ${key} (endpoint: /platform-settings/affect)` });
+            }
+        }
+        // Loud validation (voice-settings pattern): reject bad values rather
+        // than silently coercing — an admin must know their input didn't take.
+        if ('enabled' in body && typeof body.enabled !== 'boolean') {
+            return res.status(400).json({ error: 'enabled must be boolean' });
+        }
+        if ('affect_mode' in body && !AFFECT_MODES.includes(body.affect_mode)) {
+            return res.status(400).json({ error: `affect_mode must be one of: ${AFFECT_MODES.join(', ')}` });
+        }
+        if ('providers' in body && !AFFECT_PROVIDER_POLICIES.includes(body.providers)) {
+            return res.status(400).json({ error: `providers must be one of: ${AFFECT_PROVIDER_POLICIES.join(', ')}` });
+        }
+        if ('reactivity' in body && !AFFECT_REACTIVITIES.includes(body.reactivity)) {
+            return res.status(400).json({ error: `reactivity must be one of: ${AFFECT_REACTIVITIES.join(', ')}` });
+        }
+        if ('may_acknowledge' in body && typeof body.may_acknowledge !== 'boolean') {
+            return res.status(400).json({ error: 'may_acknowledge must be boolean' });
+        }
+        if ('min_confidence' in body) {
+            const f = Number(body.min_confidence);
+            if (!Number.isFinite(f) || f < 0 || f > 1) {
+                return res.status(400).json({ error: 'min_confidence must be a number between 0 and 1' });
+            }
+        }
+        if ('max_age_ms' in body) {
+            const f = Number(body.max_age_ms);
+            if (!Number.isFinite(f) || f < 1000 || f > 120000) {
+                return res.status(400).json({ error: 'max_age_ms must be between 1000 and 120000' });
+            }
+        }
+        const current = normalizeAffectSettings(await getPlatformSetting('affect_routing'));
+        const merged = normalizeAffectSettings({ ...current, ...body });
+        await setAuditedPlatformSetting(req, 'affect_routing', JSON.stringify(merged), 'update_affect_settings');
+        res.json(merged);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update affect settings' });
     }
 });
 

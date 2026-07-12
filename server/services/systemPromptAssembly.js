@@ -56,9 +56,14 @@ function toTrimmedString(value) {
  *   line and the full directive inside the trailing response contract.
  *   Unknown/missing codes add no language blocks (body-sourced value —
  *   never trusted to be valid); the plain-speech rules apply regardless.
+ * @param {string} [parts.studentAffectNote]     Transient per-turn observed-
+ *   affect block, already validated and RENDERED SERVER-SIDE by
+ *   resolveAffectNote (shared/affectNote.js) — never raw client text. Sits
+ *   after the stable case content (it changes every turn) but before the
+ *   response contract, which keeps recency.
  * @returns {string}
  */
-export function assembleSystemPrompt({ system_prompt = '', systemPromptTemplate = '', caseLanguage = '' } = {}) {
+export function assembleSystemPrompt({ system_prompt = '', systemPromptTemplate = '', caseLanguage = '', studentAffectNote = '' } = {}) {
     const directive = llmDirectiveFor(caseLanguage);
     // A non-null directive implies a known registry code.
     let languageLead = '';
@@ -73,6 +78,7 @@ export function assembleSystemPrompt({ system_prompt = '', systemPromptTemplate 
         languageLead,
         toTrimmedString(system_prompt),
         toTrimmedString(systemPromptTemplate),
+        toTrimmedString(studentAffectNote),
         responseContract
     ].filter(Boolean);
     return blocks.join(SEPARATOR);

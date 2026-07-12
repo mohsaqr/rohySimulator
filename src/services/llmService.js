@@ -88,7 +88,7 @@ export const LLMService = {
      * accumulated full text on completion. Falls back to non-streaming if the
      * server doesn't return text/event-stream.
      */
-    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null, persistInteractions = true, caseLanguage = null } = {}) {
+    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null, persistInteractions = true, caseLanguage = null, studentAffect = null } = {}) {
         const lastMsg = messages[messages.length - 1];
         // `silent` lets callers (e.g. the discussion opening turn) suppress
         // the user-side /interactions write so meta-prompts and sentinels
@@ -137,6 +137,11 @@ export const LLMService = {
             // Patient-dialogue language — server-side directive injection,
             // same contract as sendMessage above.
             if (caseLanguage) body.case_language = caseLanguage;
+            // Observed learner affect (Plan A). Structured signal only —
+            // the server validates it against the canonical vocabulary and
+            // renders the transient prompt block itself (shared/affectNote);
+            // same append-on-the-server contract as case_language.
+            if (studentAffect) body.student_affect = studentAffect;
             // Per-persona LLM routing. When the caller (patient chat,
             // discussant, any agent) passes a template id, the server reads
             // that template's llm_provider / llm_model / llm_api_key /

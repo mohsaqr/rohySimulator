@@ -16,6 +16,7 @@ import { spawn } from 'node:child_process';
 import { buildWavHeader } from '../services/wav.js';
 import { EvenByteAligner } from '../lib/pcmAlign.js';
 import { assembleSystemPrompt } from '../services/systemPromptAssembly.js';
+import { resolveAffectNote } from '../shared/affectNote.js';
 import {
     TTS_PROVIDERS,
     guessVoiceProvider,
@@ -44,7 +45,7 @@ import {
     enforceBudget,
     recordUsage
 } from '../usage-budget.js';
-import { LLM_MODEL_REGISTRY, defaultModelFor } from '../shared/llmCatalogue.js';
+import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor } from '../shared/llmCatalogue.js';
 
 const radiologyLog = logger('radiology');
 const routesLlmLog = logger('routes-llm-tts');
@@ -98,7 +99,7 @@ const extractUpstreamError = (errText) => {
 };
 
 router.post('/proxy/llm', authenticateToken, async (req, res) => {
-    const { messages, system_prompt, session_id, agent_llm_config, session_mode, case_language } = req.body;
+    const { messages, system_prompt, session_id, agent_llm_config, session_mode, case_language, student_affect } = req.body;
     const userId = req.user.id;
     const today = new Date().toISOString().split('T')[0];
     const startTime = Date.now();
@@ -447,7 +448,27 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // invariant — case content leads, platform template trails, and the
         // output-language directive (case_language, registry-validated)
         // trails everything so it stays dominant.
-        let fullSystemPrompt = assembleSystemPrompt({ system_prompt, systemPromptTemplate, caseLanguage: case_language });
+        //
+        // Observed learner affect (Plan A): the client sends a structured
+        // signal only; resolveAffectNote is the single authoritative gate
+        // (feature enabled, provider policy local-vs-cloud on the RESOLVED
+        // provider, signal validity/freshness/confidence) and composes the
+        // note from enum-validated fields — client text never reaches the
+        // prompt through this field. Invalid/stale/disallowed → ''.
+        let studentAffectNote = '';
+        if (student_affect) {
+            const affectSettings = await getPlatformLLMSetting('affect_routing', '');
+            studentAffectNote = resolveAffectNote(student_affect, {
+                providerGroup: LLM_PROVIDERS[provider]?.group,
+                settings: affectSettings
+            });
+            if (studentAffectNote) {
+                (req.log || routesLlmLog).info('student affect routed', {
+                    session_id, mode: student_affect?.mode, provider
+                });
+            }
+        }
+        let fullSystemPrompt = assembleSystemPrompt({ system_prompt, systemPromptTemplate, caseLanguage: case_language, studentAffectNote });
 
         // 9. Build request based on provider type
         let llmHeaders = { 'Content-Type': 'application/json' };

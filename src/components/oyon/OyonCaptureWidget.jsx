@@ -6,6 +6,7 @@ import { liveAnxiousIndex, ANXIOUS_FLAG_THRESHOLD } from './anxiousIndex';
 import { loadOyonElement } from './loadOyonElement';
 import { elementSettings, persistBody, OYON_ASSET_BASE } from './captureBridge';
 import { getAois, onAois } from './screenAois';
+import { publishAffectSample, publishAffectWindows, clearAffect } from '../../utils/latestAffect';
 
 export const VALENCE_GRAPH_PREF_KEY = 'oyon.showValenceGraph';
 export const CONSENT_PREF_KEY = 'oyon.defaultConsent';
@@ -157,6 +158,7 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
             if (state === 'stopped') {
                setEmotion(null);
                setValenceTrack([]);
+               clearAffect();
             }
          }
       };
@@ -176,12 +178,26 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
          if (Number.isFinite(d.valence)) {
             setValenceTrack(prev => [...prev, d.valence].slice(-VALENCE_BUFFER));
          }
+         // Live-affect store (Plan A): published only behind the same consent
+         // gate that guards window persistence — no consent, no routable
+         // affect. ChatInterface reads this at send time (latestAffect.js).
+         if (persistGateRef.current) {
+            publishAffectSample({
+               dominant: d.dominant ?? null,
+               confidence: Number.isFinite(d.confidence) ? d.confidence : null,
+               valence: Number.isFinite(d.valence) ? d.valence : null,
+               arousal: Number.isFinite(d.arousal) ? d.arousal : null,
+               anxiousIndex: anxious,
+               ts: Date.now(),
+            });
+         }
       };
 
       const onWindow = (e) => {
          const windows = e?.detail?.windows;
          if (!Array.isArray(windows) || windows.length === 0) return;
          if (!persistGateRef.current) return; // local-only capture
+         publishAffectWindows(windows); // A2 aggregate/trend feedstock
          void persistWindows(windows, {
             sessionId: sessionRef.current,
             caseId: caseRef.current,

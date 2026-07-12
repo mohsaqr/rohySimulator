@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.7.0] — 2026-07-12
+
+### Added
+
+- **The patient senses how you're doing.** When an administrator enables
+  affect routing, the AI patient is told each turn how you currently appear
+  (from the consent-gated Oyon emotion capture) and reacts in character — a
+  frightened patient settles when you seem calm, and gets more distressed
+  when you seem flustered. The patient never claims to see or measure your
+  emotions. Off by default, admin-configurable (signal type, confidence and
+  freshness thresholds), and restricted to local AI providers unless
+  explicitly widened. Nothing is routed without your capture consent.
+
 ## [2.5.0] — 2026-07-04
 
 ### Added
