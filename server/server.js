@@ -123,9 +123,13 @@ if (fs.existsSync(oyonRoot)) {
     app.use('/standalone', express.static(path.join(oyonRoot, 'standalone')));
 }
 
-// Health Check
-app.get('/', (req, res) => {
-    //res.send('Virtual Patient Platform Backend is Running');
+// Serve the SPA shell. `/register` is listed EXPLICITLY rather than behind a
+// catch-all: this app has no client router, so `/` was the only path that ever
+// served index.html — and an invite link (/register?invite=TOKEN) therefore 404s
+// in production while working fine under `npm run dev`, because Vite's history
+// fallback silently covers it. A wildcard would fix it and also swallow the
+// /docs mounts below, so we name the one path we actually need.
+function serveAppShell(req, res) {
     const frontendPath = path.join(__dirname, "..", "frontend");
 
     if (fs.existsSync(frontendPath)) {
@@ -134,7 +138,10 @@ app.get('/', (req, res) => {
         req.log?.error('frontend folder missing', { frontend_path: frontendPath });
         res.status(404).json({ error: 'Frontend not found' });
     }
-});
+}
+
+app.get('/', serveAppShell);
+app.get('/register', serveAppShell);
 
 app.use('/uploads', express.static(path.join(__dirname, "..", "public","uploads")));
 

@@ -12,13 +12,41 @@ import { roleLabel } from '../../../constants/roleLabels';
 import { listCohorts } from '../../../services/cohortsService';
 import * as userService from '../../../services/userService';
 import { initials, avatarClass, roleBadgeClass, statusBadgeClass, relativeTime, formatDate } from './usersUi';
+import { getRegistrationSettings } from '../../../services/registrationService';
 import UserFormModal from './UserFormModal';
 import UserDetailDrawer from './UserDetailDrawer';
 import UserImportWizard from './UserImportWizard';
 import BulkOperationsModal from './BulkOperationsModal';
+import InvitesPanel from './InvitesPanel';
 
 const ROLE_RANK = { guest: 0, student: 1, user: 1, reviewer: 2, educator: 3, admin: 4 };
 const rank = (r) => ROLE_RANK[r] ?? 0;
+
+/** People · Invites. One roster, two things you do to it. */
+function WorkspaceViewSwitch({ view, setView, t }) {
+    const views = [
+        { id: 'people', label: t('view_people'), icon: Users },
+        { id: 'invites', label: t('view_invites'), icon: KeyRound },
+    ];
+    return (
+        <div className="inline-flex rounded-lg border border-neutral-200 bg-neutral-50 p-0.5">
+            {views.map(({ id, label, icon: Icon }) => (
+                <button
+                    key={id}
+                    type="button"
+                    aria-pressed={view === id}
+                    onClick={() => setView(id)}
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        view === id ? 'bg-white shadow-sm text-teal-800' : 'text-neutral-600 hover:text-neutral-900'
+                    }`}
+                >
+                    <Icon className="w-3.5 h-3.5" />
+                    {label}
+                </button>
+            ))}
+        </div>
+    );
+}
 
 export default function UsersWorkspace() {
     const { t } = useTranslation('teacher_users');
@@ -29,6 +57,11 @@ export default function UsersWorkspace() {
     const [users, setUsers] = useState([]);
     const [cohorts, setCohorts] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const [view, setView] = useState('people');   // people | invites
+    // Read only so the Invites view can tell an admin when their invites are
+    // pointless (registration is open — anyone can sign up without one).
+    const [policyMode, setPolicyMode] = useState(null);
 
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
@@ -63,6 +96,14 @@ export default function UsersWorkspace() {
     }, [toast]);
 
     useEffect(() => { load(); }, [load]);
+
+    // Non-fatal: the Invites view just skips its "registration is open" note if
+    // the policy can't be read. Never let it break the roster.
+    useEffect(() => {
+        getRegistrationSettings()
+            .then((p) => setPolicyMode(p.mode))
+            .catch(() => setPolicyMode(null));
+    }, []);
 
     const canActOn = useCallback((u) => u.id !== me?.id && rank(u.role) < myRank, [me, myRank]);
 
@@ -237,8 +278,24 @@ export default function UsersWorkspace() {
         </button>
     );
 
+    // Invites live HERE, behind a segmented control, rather than as their own
+    // top-level settings tab: minting an invite is roster work (it carries a role
+    // and a course, and the admin is already looking at the people it will admit),
+    // and ConfigPanel's tab gate is hand-duplicated in two places, so every new
+    // top-level tab is a chance to get the visibility wrong.
+    if (view === 'invites') {
+        return (
+            <div className="space-y-4">
+                <WorkspaceViewSwitch view={view} setView={setView} t={t} />
+                <InvitesPanel cohorts={cohorts} policyMode={policyMode} />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-4">
+            <WorkspaceViewSwitch view={view} setView={setView} t={t} />
+
             {/* Header */}
             <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>

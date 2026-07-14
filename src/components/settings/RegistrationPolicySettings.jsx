@@ -17,9 +17,8 @@ const MODES = [
 ];
 
 // Modes whose machinery ships in a later phase. Shown but not selectable, so an
-// admin can see where this is going without being able to pick a mode that would
-// currently behave like something else.
-const NOT_YET_AVAILABLE = new Set(['approval', 'invite']);
+// admin can never pick a mode that would quietly behave like a different one.
+const NOT_YET_AVAILABLE = new Set(['approval']);
 
 export default function RegistrationPolicySettings() {
     const { t } = useTranslation('authoring_config');

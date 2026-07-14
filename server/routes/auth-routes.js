@@ -32,6 +32,7 @@ const LOCKOUT_MINUTES = 15;
 import { logger } from '../logger.js';
 import {
     emailDomainAllowed,
+    enrollUserInCohort,
     ensureAutoEnrollMemberships,
     isValidRole,
     logAudit,
@@ -40,6 +41,14 @@ import {
     tenantId,
     validatePassword
 } from './_helpers.js';
+import {
+    claimInviteUse,
+    findInviteByToken,
+    INVITE_ERRORS,
+    inviteRejection,
+    recordInviteUse,
+    releaseInviteUse,
+} from '../lib/invites.js';
 
 function authCookieOptions(maxAgeSeconds = 4 * 60 * 60) {
     return {
@@ -185,17 +194,52 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
     // lets an admin ship an instance as `closed` and still claim it — without
     // this ordering, a closed fresh install would have no path to a first admin
     // at all, which is the exact dead end 2.5.2 fixed.
+    let invite = null;
     if (!isBootstrapClaim) {
         const policy = await registrationPolicy();
+        const suppliedToken = req.body?.invite || req.body?.invite_code || null;
+
+        // A token that was SUPPLIED but is not usable is always an error, in
+        // every mode. Quietly ignoring it and creating a plain student instead
+        // would silently drop the role and course the invite was carrying — the
+        // user would land in the wrong place and nobody would know why.
+        if (suppliedToken) {
+            invite = await findInviteByToken(suppliedToken);
+            const reason = inviteRejection(invite);
+            if (reason) {
+                invite = null;
+                return res.status(400).json({ code: `invite_${reason}`, error: INVITE_ERRORS[reason] });
+            }
+            if (!emailDomainAllowed(email, invite.email_pattern ? [invite.email_pattern] : [])) {
+                return res.status(400).json({
+                    code: 'email_domain_not_allowed',
+                    error: `This invite is limited to @${invite.email_pattern} addresses.`
+                });
+            }
+        }
 
         if (policy.mode === 'closed') {
+            // Closed rejects invites too. Honouring a stale invite here would make
+            // 'closed' quietly equivalent to 'invite', which is not what the admin
+            // who just locked the door asked for. (Outstanding invites are only
+            // SUSPENDED — flip back to invite mode and they work again.)
             return res.status(403).json({
                 code: 'registration_closed',
                 error: policy.message || 'Registration is closed. Ask an administrator to create your account.'
             });
         }
 
-        if (!emailDomainAllowed(email, policy.domains)) {
+        if (policy.mode === 'invite' && !invite) {
+            return res.status(403).json({
+                code: 'invite_required',
+                error: policy.message || 'You need an invite link or code to create an account here.'
+            });
+        }
+
+        // An invite carries its own email rule (checked above) and OVERRIDES the
+        // global allowlist — inviting an external examiner to a @uef.fi-only
+        // instance is a deliberate act by an admin, not an accident.
+        if (!invite && !emailDomainAllowed(email, policy.domains)) {
             return res.status(400).json({
                 code: 'email_domain_not_allowed',
                 error: `Registration is limited to these email domains: ${policy.domains.join(', ')}.`
@@ -206,8 +250,23 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
     let finalRole = 'student';
     if (isBootstrapClaim) {
         finalRole = 'admin';
+    } else if (invite) {
+        // The role is the INVITE's, never the request body's. An admin decided
+        // this when they minted it, and the rank ceiling was enforced there.
+        finalRole = invite.role;
     } else if (getRoleRank(requestedRole) > ROLE_RANKS.student) {
         return res.status(403).json({ error: 'Only admins can create elevated accounts' });
+    }
+
+    // Claim the use BEFORE creating the user. The conditional UPDATE re-checks
+    // revoked/expired/exhausted atomically, so two people racing for the last
+    // use of an invite cannot both win. If the INSERT below then fails (e.g. a
+    // duplicate username), we hand the use back.
+    if (invite) {
+        const claimed = await claimInviteUse(invite.id);
+        if (!claimed) {
+            return res.status(400).json({ code: 'invite_exhausted', error: INVITE_ERRORS.exhausted });
+        }
     }
 
     try {
@@ -215,10 +274,11 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
         const password_hash = await bcrypt.hash(password, 10);
 
         // Insert user
-        const defaultTenantId = 1;
+        const defaultTenantId = invite?.tenant_id || 1;
         const sql = `INSERT INTO users (username, name, email, password_hash, role, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`;
         dbAdapter.run(sql, [username, name || null, email, password_hash, finalRole, defaultTenantId], async function (err) {
             if (err) {
+                if (invite) await releaseInviteUse(invite.id);
                 if (err.message.includes('UNIQUE')) {
                     return res.status(409).json({ error: 'Username or email already exists' });
                 }
@@ -254,6 +314,22 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
             // access). Idempotent + never throws.
             await ensureAutoEnrollMemberships(user.id, defaultTenantId);
 
+            // An invite that names a course puts you IN that course. This is the
+            // whole reason a teacher shares an invite link rather than telling
+            // people to sign up and hunt for a join code.
+            if (invite) {
+                if (invite.cohort_id) {
+                    try {
+                        await enrollUserInCohort(invite.cohort_id, user.id);
+                    } catch (e) {
+                        (req.log || authLog).warn('invite course enrolment failed', {
+                            user_id: user.id, cohort_id: invite.cohort_id, error: e.message
+                        });
+                    }
+                }
+                await recordInviteUse(invite.id, user.id, ipAddress);
+            }
+
             res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
             res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
 
@@ -264,7 +340,10 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                 resourceType: 'user',
                 resourceId: String(user.id),
                 resourceName: username,
-                newValue: { username, email, role: finalRole, tenant_id: defaultTenantId },
+                newValue: {
+                    username, email, role: finalRole, tenant_id: defaultTenantId,
+                    ...(invite ? { via_invite: invite.id } : {})
+                },
                 tenantId: defaultTenantId,
                 ipAddress,
                 userAgent

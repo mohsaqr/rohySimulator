@@ -104,9 +104,12 @@ export const AuthProvider = ({ children }) => {
         return data;
     };
 
-    const register = async (username, email, password) => {
-        const data = await AuthService.register(username, email, password);
-        setUser(data.user);
+    // `extra` carries the invite token when one was used. Guarded setUser because
+    // a future approval-mode registration answers 202 with NO user and NO token —
+    // setUser(undefined) there would log the caller into a ghost session.
+    const register = async (username, email, password, extra = {}) => {
+        const data = await AuthService.register(username, email, password, extra);
+        if (data?.user) setUser(data.user);
         return data;
     };
 

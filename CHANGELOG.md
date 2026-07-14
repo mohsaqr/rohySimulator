@@ -9,6 +9,36 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.7.6] — 2026-07-14
+
+### Added
+
+- **Invites — a link and a code, and they are the same thing.** An administrator
+  can mint an invite in Settings → Users → Invites, choose the role and the course
+  it grants, cap how many people may use it, and set when it expires. Share it as
+  a link (`/register?invite=…`) or read the code out loud — both are the same
+  token, so there is nothing to keep in sync. Anyone who uses it lands in the
+  course automatically.
+- **Invite-only registration.** With the mode set to *Invite only*, an invite is
+  required to sign up. A valid invite also gets someone in when self-registration
+  is otherwise closed — that is what an invite is: a named exception to the rule
+  on the front door.
+- Invites are revocable (people who already joined keep their accounts), and every
+  redemption is recorded. The code itself never reaches the audit log.
+
+### Fixed
+
+- **Invite links would have 404'd in production.** Only `/` ever served the app,
+  so any path-based link died at the web server — invisible in development, where
+  Vite's history fallback quietly covers it. `/register` is now served explicitly
+  (not by a wildcard, which would have swallowed the docs site).
+
+### Notes
+
+- Rohy still cannot send email, so an invite is a copy-paste artifact — like the
+  course join codes teachers already share. The dialog puts the link and the code
+  in front of you, ready to copy, rather than making you hunt for them.
+
 ## [2.7.5] — 2026-07-14
 
 ### Added

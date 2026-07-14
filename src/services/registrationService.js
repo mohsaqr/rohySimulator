@@ -1,12 +1,14 @@
-// Client API for the registration policy. Mirrors userService.js — thin wrappers
-// over apiClient.
+// Client API for the registration policy and invites. Mirrors userService.js —
+// thin wrappers over apiClient.
 //
-// Two audiences:
-//   * getRegistrationPolicy() is PUBLIC (auth: false) and read by the logged-out
-//     login screen to decide whether to offer "Create an account". It is a HINT,
-//     never a control — POST /auth/register re-reads the policy server-side.
+// Three audiences:
+//   * getRegistrationPolicy() / previewInvite() are PUBLIC (auth: false) and read
+//     by the logged-out auth screens. They are HINTS, never controls — POST
+//     /auth/register re-reads the policy and re-checks the invite server-side.
 //   * get/saveRegistrationSettings() are the admin surface behind Platform → Users.
-import { apiGet, apiPut } from './apiClient';
+//   * the invite CRUD is the admin surface behind Users → Invites.
+import { apiGet, apiPost, apiPut, apiDelete } from './apiClient';
+import { baseUrl } from '../config/api';
 
 /** Public: what the login screen may offer. Never requires a token. */
 export const getRegistrationPolicy = () =>
@@ -18,6 +20,33 @@ export const getRegistrationSettings = () => apiGet('/platform-settings/registra
 /** Admin: write the policy. `email_domains` may be an array or a comma string. */
 export const saveRegistrationSettings = ({ mode, email_domains = [], message = '' }) =>
     apiPut('/platform-settings/registration', { mode, email_domains, message });
+
+// --- Invites ----------------------------------------------------------------
+
+/** Public: what someone arriving on an invite link should be told. */
+export const previewInvite = (token) =>
+    apiGet(`/auth/invite/${encodeURIComponent(token)}`, { auth: false });
+
+export const listInvites = () => apiGet('/registration-invites');
+export const createInvite = (payload) => apiPost('/registration-invites', payload);
+export const revokeInvite = (id) => apiDelete(`/registration-invites/${id}`);
+export const listInviteUses = (id) => apiGet(`/registration-invites/${id}/uses`);
+
+/**
+ * The shareable link for an invite.
+ *
+ * Built through baseUrl() rather than by hand: in production Vite sets
+ * `base: '/rohy/'`, so a hardcoded `${origin}/register?...` produces a link that
+ * 404s for every person you send it to — and you would only find out from the
+ * people who could not get in. One implementation, shared by the UI and its tests.
+ */
+export const inviteLink = (token) =>
+    `${window.location.origin}${baseUrl('/register')}?invite=${encodeURIComponent(token)}`;
+
+/** Group a token for display: ABCD-EFGH-JKLM. Purely cosmetic — the server
+ *  normalises whatever comes back, so a user may type it either way. */
+export const formatInviteCode = (token) =>
+    String(token || '').replace(/(.{4})(?=.)/g, '$1-');
 
 /**
  * The shape the UI falls back to when the probe cannot be reached.

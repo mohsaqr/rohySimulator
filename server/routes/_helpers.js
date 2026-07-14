@@ -224,6 +224,35 @@ export async function ensureAutoEnrollMemberships(userId, tenant_id) {
     }
 }
 
+/**
+ * Enrol one user into one class, idempotently and revive-aware.
+ *
+ * Lives here (rather than in users-routes.js, where it was born) because three
+ * separate paths now need it: the CSV import wizard, the admin roster, and
+ * invite redemption. A revived membership resets `status` and clears the
+ * enrolment window — without that, re-enrolling someone who was removed leaves
+ * them a member who still cannot see anything.
+ *
+ * @returns {Promise<'already'|'revived'|'enrolled'>}
+ */
+export async function enrollUserInCohort(cohortId, userId) {
+    const existing = await dbGet(
+        `SELECT id, deleted_at FROM cohort_members WHERE cohort_id = ? AND user_id = ?
+          ORDER BY (deleted_at IS NULL) DESC, id DESC LIMIT 1`,
+        [cohortId, userId]
+    );
+    if (existing && existing.deleted_at == null) return 'already';
+    if (existing) {
+        await dbRun(
+            `UPDATE cohort_members SET deleted_at = NULL, status = 'active', enrolled_from = NULL, enrolled_until = NULL WHERE id = ?`,
+            [existing.id]
+        );
+        return 'revived';
+    }
+    await dbRun(`INSERT INTO cohort_members (cohort_id, user_id) VALUES (?, ?)`, [cohortId, userId]);
+    return 'enrolled';
+}
+
 export const SOFT_DELETE_TABLES = [
     'cases',
     'sessions',

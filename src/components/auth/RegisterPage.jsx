@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
-import { UserPlus, User, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
+import { UserPlus, User, Mail, Lock, AlertCircle, CheckCircle, KeyRound } from 'lucide-react';
 
-export default function RegisterPage({ onSwitchToLogin, policy }) {
+export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, invite, inviteToken }) {
     const { t } = useTranslation('auth');
     const [formData, setFormData] = useState({
         username: '',
@@ -11,11 +11,22 @@ export default function RegisterPage({ onSwitchToLogin, policy }) {
         password: '',
         confirmPassword: ''
     });
+    // Prefilled and locked when we arrived on a WORKING invite link; empty and
+    // editable when the link was bad, so the user can paste a fresh code rather
+    // than being stuck staring at a dead one.
+    const [inviteCode, setInviteCode] = useState(invite?.valid ? inviteToken : '');
+    const [codeLocked, setCodeLocked] = useState(Boolean(invite?.valid));
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const { register } = useAuth();
 
-    const allowedDomains = policy?.email_domains || [];
+    // An invite's own email rule beats the platform's list — an admin inviting an
+    // external examiner to a single-domain instance meant to do that.
+    const allowedDomains = invite?.valid && invite.email_domain
+        ? [invite.email_domain]
+        : (policy?.email_domains || []);
+    const inviteRequired = Boolean(policy?.invite_required);
+    const showInviteField = inviteRequired || Boolean(inviteToken) || Boolean(invite);
     // True only while the users table is genuinely empty. The old footer claimed
     // "the first user becomes an administrator" unconditionally, which was a lie
     // to every visitor after the first one.
@@ -63,7 +74,10 @@ export default function RegisterPage({ onSwitchToLogin, policy }) {
         setLoading(true);
 
         try {
-            await register(formData.username, formData.email, formData.password);
+            await register(formData.username, formData.email, formData.password, {
+                invite: inviteCode || undefined,
+            });
+            onRegistered?.();
         } catch (err) {
             setError(err.message || t('registration_failed'));
         } finally {
@@ -94,7 +108,64 @@ export default function RegisterPage({ onSwitchToLogin, policy }) {
                         </div>
                     )}
 
+                    {/* You arrived on a working invite link: say what it gets you,
+                        BEFORE the form. Someone who was sent a link wants to know
+                        they're in the right place. */}
+                    {invite?.valid && (
+                        <div className="mb-4 p-3 bg-emerald-900/30 border border-emerald-500/50 rounded-lg flex items-start gap-2 text-emerald-100">
+                            <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                            <span className="text-sm">
+                                {invite.cohort_name
+                                    ? t('invite_valid_with_course', { course: invite.cohort_name })
+                                    : t('invite_valid')}
+                            </span>
+                        </div>
+                    )}
+
+                    {/* The link was real but is no longer usable. Don't strand
+                        them: the code field below is cleared and editable so they
+                        can paste a fresh one. */}
+                    {invite && !invite.valid && (
+                        <div className="mb-4 p-3 bg-amber-900/30 border border-amber-500/50 rounded-lg flex items-start gap-2 text-amber-100">
+                            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                            <span className="text-sm">{t(`invite_invalid_${invite.reason}`, t('invite_invalid_not_found'))}</span>
+                        </div>
+                    )}
+
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        {/* Invite code — first, because it determines what the rest
+                            of this form even gets you (role, course). */}
+                        {showInviteField && (
+                            <div>
+                                <label className="block text-sm font-medium text-neutral-300 mb-2">
+                                    {t('invite_code')}
+                                </label>
+                                <div className="relative">
+                                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500" />
+                                    <input
+                                        type="text"
+                                        name="invite"
+                                        value={inviteCode}
+                                        onChange={(e) => setInviteCode(e.target.value)}
+                                        disabled={loading || codeLocked}
+                                        autoComplete="off"
+                                        placeholder={t('invite_code_placeholder')}
+                                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-10 pr-4 py-3 text-white uppercase tracking-wider placeholder:normal-case placeholder:tracking-normal placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-60"
+                                        required={inviteRequired}
+                                    />
+                                </div>
+                                {codeLocked && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { setCodeLocked(false); setInviteCode(''); }}
+                                        className="mt-1.5 text-xs text-blue-400 hover:text-blue-300"
+                                    >
+                                        {t('invite_use_different_code')}
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
                         {/* Username */}
                         <div>
                             <label className="block text-sm font-medium text-neutral-300 mb-2">

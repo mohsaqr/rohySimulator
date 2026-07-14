@@ -19,6 +19,7 @@ import {
     auditSuccess,
     buildUserPurgePlan,
     dbGet,
+    enrollUserInCohort,
     ensureAutoEnrollMemberships,
     executeUserPurge,
     isValidRole,
@@ -212,25 +213,10 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
 });
 
 // Idempotent, revive-aware enrol of a user into a cohort (local to import).
-async function enrollUserInCohort(cohortId, userId) {
-    const existing = await dbAdapter.get(
-        `SELECT id, deleted_at FROM cohort_members WHERE cohort_id = ? AND user_id = ?
-          ORDER BY (deleted_at IS NULL) DESC, id DESC LIMIT 1`,
-        [cohortId, userId]
-    );
-    if (existing && existing.deleted_at == null) return 'already';
-    if (existing) {
-        // Fresh re-enrolment on revive (mirror upsertMember): reset lifecycle to
-        // active + clear the window so access is actually restored.
-        await dbAdapter.run(
-            `UPDATE cohort_members SET deleted_at = NULL, status = 'active', enrolled_from = NULL, enrolled_until = NULL WHERE id = ?`,
-            [existing.id]
-        );
-        return 'revived';
-    }
-    await dbAdapter.run(`INSERT INTO cohort_members (cohort_id, user_id) VALUES (?, ?)`, [cohortId, userId]);
-    return 'enrolled';
-}
+// Moved to _helpers.js so the invite-redemption path (registration-routes.js)
+// enrols through the SAME revive-aware logic instead of growing a second,
+// subtly-different copy. Re-exported here under its original name so the many
+// call sites below read unchanged.
 
 // POST /api/users/import - Wizard commit: create users AND enrol them into a
 // class, with a validate-only `dryRun`. Reuses the batch validation rules and

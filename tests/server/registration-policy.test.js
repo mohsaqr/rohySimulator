@@ -107,9 +107,14 @@ describe.each(['open', 'approval', 'invite', 'closed'])(
             if (mode === 'closed') {
                 expect(res.status).toBe(403);
                 expect(res.body.code).toBe('registration_closed');
+            } else if (mode === 'invite') {
+                // The claim above went through WITHOUT an invite (bootstrap
+                // bypasses the policy). Everyone after them needs one.
+                expect(res.status).toBe(403);
+                expect(res.body.code).toBe('invite_required');
             } else {
-                // open (and, until their phases land, approval/invite) still admit
-                // a self-registering student.
+                // open (and, until the approval queue lands, 'approval') still
+                // admit a self-registering student.
                 expect(res.status).toBe(201);
                 expect(res.body.user.role).toBe('student');
             }

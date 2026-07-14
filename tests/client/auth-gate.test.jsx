@@ -13,10 +13,15 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 
 const getRegistrationPolicy = vi.fn();
+const previewInvite = vi.fn();
 
 vi.mock('../../src/services/registrationService', async () => {
     const actual = await vi.importActual('../../src/services/registrationService');
-    return { ...actual, getRegistrationPolicy: (...args) => getRegistrationPolicy(...args) };
+    return {
+        ...actual,
+        getRegistrationPolicy: (...args) => getRegistrationPolicy(...args),
+        previewInvite: (...args) => previewInvite(...args),
+    };
 });
 
 // The auth screens pull in AuthContext (network) and LanguageContext. Stub them
@@ -32,15 +37,78 @@ vi.mock('../../src/components/auth/LoginPage', () => ({
     ),
 }));
 vi.mock('../../src/components/auth/RegisterPage', () => ({
-    default: () => <div>register-screen</div>,
+    default: ({ invite, inviteToken }) => (
+        <div>
+            <span>register-screen</span>
+            {inviteToken && <span>token:{inviteToken}</span>}
+            {invite?.valid && <span>invited-to:{invite.cohort_name}</span>}
+            {invite && !invite.valid && <span>invite-bad:{invite.reason}</span>}
+        </div>
+    ),
 }));
 
 const { default: AuthGate } = await import('../../src/components/auth/AuthGate.jsx');
 
 beforeEach(() => {
     getRegistrationPolicy.mockReset();
+    previewInvite.mockReset();
+    window.history.replaceState({}, '', '/');
 });
 afterEach(cleanup);
+
+// Arriving on an invite link. The token is read from the QUERY STRING (not the
+// pathname) so /register?invite=X and /?invite=X both work — which matters
+// because /register only reaches the app at all thanks to an explicit Express
+// route; a proxy that misroutes it must not take the feature down with it.
+describe('AuthGate with an invite link', () => {
+    it('goes straight to register and names the course you were invited to', async () => {
+        window.history.replaceState({}, '', '/register?invite=ABCD1234EFGH');
+        getRegistrationPolicy.mockResolvedValue({ mode: 'invite', self_registration: true });
+        previewInvite.mockResolvedValue({ valid: true, role: 'student', cohort_name: 'Cardiology 101' });
+
+        render(<AuthGate />);
+
+        // No "click Create Account" step — you followed a link, you are registering.
+        await waitFor(() => expect(screen.getByText('register-screen')).toBeTruthy());
+        expect(screen.getByText('token:ABCD1234EFGH')).toBeTruthy();
+        expect(screen.getByText('invited-to:Cardiology 101')).toBeTruthy();
+    });
+
+    it('still lets you register when the invite is dead, so you can paste a fresh code', async () => {
+        window.history.replaceState({}, '', '/register?invite=DEADDEADDEAD');
+        getRegistrationPolicy.mockResolvedValue({ mode: 'invite', self_registration: true });
+        previewInvite.mockResolvedValue({ valid: false, reason: 'expired' });
+
+        render(<AuthGate />);
+
+        await waitFor(() => expect(screen.getByText('register-screen')).toBeTruthy());
+        expect(screen.getByText('invite-bad:expired')).toBeTruthy();
+    });
+
+    // A valid invite is a named exception, issued by an admin, to the rule on the
+    // front door — so it outranks a closed platform.
+    it('a valid invite gets you in even when self-registration is closed', async () => {
+        window.history.replaceState({}, '', '/?invite=ABCD1234EFGH');
+        getRegistrationPolicy.mockResolvedValue({ mode: 'closed', self_registration: false });
+        previewInvite.mockResolvedValue({ valid: true, role: 'student', cohort_name: 'Sepsis' });
+
+        render(<AuthGate />);
+
+        await waitFor(() => expect(screen.getByText('register-screen')).toBeTruthy());
+        expect(screen.getByText('invited-to:Sepsis')).toBeTruthy();
+    });
+
+    it('waits for the invite preview before rendering anything', () => {
+        window.history.replaceState({}, '', '/register?invite=SLOWSLOWSLOW');
+        getRegistrationPolicy.mockResolvedValue({ mode: 'invite', self_registration: true });
+        previewInvite.mockReturnValue(new Promise(() => {}));   // never settles
+
+        render(<AuthGate />);
+
+        expect(screen.queryByText('register-screen')).toBeNull();
+        expect(screen.queryByText('login-screen')).toBeNull();
+    });
+});
 
 describe('AuthGate', () => {
     it('offers registration when the platform is open', async () => {

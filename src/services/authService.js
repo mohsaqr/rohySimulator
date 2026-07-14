@@ -15,12 +15,15 @@ import { apiUrl } from '../config/api';
 // passing { rememberToken: true } to login/register.
 
 export const AuthService = {
-    async register(username, email, password, { rememberToken = false } = {}) {
+    async register(username, email, password, { rememberToken = false, invite } = {}) {
         const response = await fetch(apiUrl(`/auth/register`), {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, email, password })
+            // `invite` is sent only when there is one — an absent key and an empty
+            // string are NOT the same to the server: an empty-but-present token
+            // would be a supplied-and-invalid invite, which is a 400 by design.
+            body: JSON.stringify({ username, email, password, ...(invite ? { invite } : {}) })
         });
 
         const data = await response.json();
