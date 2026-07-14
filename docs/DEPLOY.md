@@ -49,7 +49,8 @@ Walk this before any user touches the box:
 - [ ] **HTTPS in front** of Express. Never expose port 4000 directly. nginx, Caddy, or Cloudflare Tunnel are all fine.
 - [ ] **`FRONTEND_URL`** set to your public origin so CORS allows only that origin.
 - [ ] **Default seeded users disabled** (default in `NODE_ENV=production` — confirm `ALLOW_DEFAULT_USERS` is *not* set).
-- [ ] **First admin password rotated** if you used `--admin-bootstrap`. Default credentials are intentionally short-lived.
+- [ ] **First admin provisioned** with `ROHY_ADMIN_USERNAME` + `ROHY_ADMIN_PASSWORD` before the box is reachable — otherwise the first stranger to hit the signup page claims the instance as admin. See [Getting the first admin](#getting-the-first-admin).
+- [ ] **First admin password rotated** if you used `--admin-bootstrap` or `ALLOW_DEFAULT_USERS`. Default credentials are intentionally short-lived.
 - [ ] **Rate limits reviewed** in Platform Settings → Rate limits.
 - [ ] **LLM API keys scoped** to this app — at minimum, separate from your personal keys. Anthropic / OpenAI / Google all support per-project keys.
 - [ ] **Retention sweep cron installed** (see [§ Retention](#retention) below).
@@ -178,6 +179,9 @@ Set in `/etc/rohy/env` (systemd) or `deploy/docker/.env` (compose):
 | `ROHY_DB` | platform-default | Override the SQLite file location. Use this for non-default install paths. |
 | `OYON_ENABLED` | `1` | Disable Oyon routes (`0`) — Settings tab shows a friendly panel, binary bundles still ship. |
 | `ALLOW_DEFAULT_USERS` | unset | Set to `1` to keep seeded `admin/admin123` etc. in production (do not use unless you're seeding and immediately rotating). |
+| `ROHY_ADMIN_USERNAME` | unset | With `ROHY_ADMIN_PASSWORD`, provisions the first admin on first boot — the recommended production bootstrap. Applied only while the `users` table is empty. |
+| `ROHY_ADMIN_PASSWORD` | unset | Password for the provisioned admin. Must satisfy the normal policy (8+ chars, upper, lower, digit) or the seeder refuses it and logs why. |
+| `ROHY_ADMIN_EMAIL` | `<username>@rohy.local` | Optional email for the provisioned admin. |
 
 ### Observability
 
@@ -403,6 +407,29 @@ with WAL mode in `bench/`).
 ---
 
 ## Multi-user setup
+
+### Getting the first admin
+
+A fresh install has no admin until you make one, and in `NODE_ENV=production`
+the seeder deliberately refuses to create `admin/admin123`. Three ways in, all
+of which apply **only while the `users` table is empty**:
+
+| How | When to use it | What happens |
+|---|---|---|
+| `ROHY_ADMIN_USERNAME` + `ROHY_ADMIN_PASSWORD` | Recommended for production / Docker | The seeder creates that admin on first boot with *your* password. No well-known credential ever exists. |
+| Register the first account in the UI | Small/trusted installs, evaluation | The first account to sign up claims the instance as admin. Everyone after is a student. |
+| `ALLOW_DEFAULT_USERS=1` | Dev and demo only | Seeds `admin/admin123` + `student/student123`. Log in, change the password, unset the variable. |
+
+If you left all three unset and someone has already signed up, they are a
+student and the instance has no admin. Promote them directly:
+
+```bash
+sqlite3 /var/lib/rohy/database.sqlite \
+  "UPDATE users SET role='admin' WHERE username='<their-username>';"
+```
+
+They must log out and back in — the JWT carries the role, so an existing token
+stays a student token until it is reissued.
 
 ### Roles
 

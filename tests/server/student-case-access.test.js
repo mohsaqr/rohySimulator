@@ -63,12 +63,26 @@ function authed(baseUrl, token) {
 describe('student case access', () => {
     let server;
     let student;
+    let admin;
     let ids = {};
+
+    // Flip the `enforce_cohort_case_access` platform flag through the admin API
+    // rather than writing platform_settings directly: the route also busts the
+    // 15s in-process cache, so the next student request sees the new value.
+    async function setEnforcement(enabled) {
+        const res = await admin('/api/platform-settings/cohort-case-enforcement', {
+            method: 'PUT',
+            body: JSON.stringify({ enabled }),
+        });
+        if (!res.ok) throw new Error(`setEnforcement(${enabled}) -> ${res.status}: ${await res.text()}`);
+        expect((await res.json()).enabled).toBe(enabled);
+    }
 
     beforeAll(async () => {
         server = await startTestServer({ seed: false });
         const db = await openDb(server.dbPath);
         try {
+            ids.admin = await seedUser(db, 'sca-admin', 'admin');
             ids.teacher = await seedUser(db, 'sca-teacher', 'educator');
             ids.student = await seedUser(db, 'sca-student', 'student');
             ids.defaultCase = await seedCase(db, { name: 'Default assigned fallback', isDefault: true });
@@ -90,29 +104,79 @@ describe('student case access', () => {
             await closeDb(db);
         }
         student = authed(server.baseUrl, await login(server.baseUrl, 'sca-student'));
+        admin = authed(server.baseUrl, await login(server.baseUrl, 'sca-admin'));
     }, 90_000);
 
     afterAll(async () => {
         if (server) await server.close();
     });
 
-    it('students see only the default case and cases assigned through active course enrolment', async () => {
-        const list = await student('/api/cases');
-        expect(list.status).toBe(200);
-        const visibleIds = (await list.json()).cases.map(c => c.id);
-        expect(visibleIds).toContain(ids.defaultCase);
-        expect(visibleIds).toContain(ids.assignedCase);
-        expect(visibleIds).not.toContain(ids.unassignedCase);
+    // The flag ships OFF, and an install that never opts in must behave exactly
+    // as it did before cohort-case enforcement existed: any available case is
+    // visible and launchable. Enforcement used to apply to every student
+    // regardless of the flag, which silently locked down all existing installs
+    // and made the admin toggle a no-op.
+    describe('with enforcement OFF (the shipped default)', () => {
+        beforeAll(async () => {
+            await setEnforcement(false);
+        });
+
+        it('students see every available case, assigned or not', async () => {
+            const list = await student('/api/cases');
+            expect(list.status).toBe(200);
+            const visibleIds = (await list.json()).cases.map(c => c.id);
+            expect(visibleIds).toContain(ids.defaultCase);
+            expect(visibleIds).toContain(ids.assignedCase);
+            expect(visibleIds).toContain(ids.unassignedCase);
+        });
+
+        it('students can read and launch an unassigned case', async () => {
+            const read = await student(`/api/cases/${ids.unassignedCase}`);
+            expect(read.status).toBe(200);
+
+            const launch = await student('/api/sessions', {
+                method: 'POST',
+                body: JSON.stringify({ case_id: ids.unassignedCase, student_name: 'sca-student' }),
+            });
+            expect(launch.status).toBe(200);
+        });
     });
 
-    it('students cannot directly read or launch an available but unassigned case', async () => {
-        const read = await student(`/api/cases/${ids.unassignedCase}`);
-        expect(read.status).toBe(404);
-
-        const launch = await student('/api/sessions', {
-            method: 'POST',
-            body: JSON.stringify({ case_id: ids.unassignedCase, student_name: 'sca-student' }),
+    describe('with enforcement ON', () => {
+        beforeAll(async () => {
+            await setEnforcement(true);
         });
-        expect(launch.status).toBe(403);
+
+        afterAll(async () => {
+            await setEnforcement(false);
+        });
+
+        it('students see only the default case and cases assigned through active course enrolment', async () => {
+            const list = await student('/api/cases');
+            expect(list.status).toBe(200);
+            const visibleIds = (await list.json()).cases.map(c => c.id);
+            expect(visibleIds).toContain(ids.defaultCase);
+            expect(visibleIds).toContain(ids.assignedCase);
+            expect(visibleIds).not.toContain(ids.unassignedCase);
+        });
+
+        it('students cannot directly read or launch an available but unassigned case', async () => {
+            const read = await student(`/api/cases/${ids.unassignedCase}`);
+            expect(read.status).toBe(404);
+
+            const launch = await student('/api/sessions', {
+                method: 'POST',
+                body: JSON.stringify({ case_id: ids.unassignedCase, student_name: 'sca-student' }),
+            });
+            expect(launch.status).toBe(403);
+        });
+
+        it('educators keep full visibility while enforcement is on', async () => {
+            const teacher = authed(server.baseUrl, await login(server.baseUrl, 'sca-teacher'));
+            const list = await teacher('/api/cases');
+            expect(list.status).toBe(200);
+            const visibleIds = (await list.json()).cases.map(c => c.id);
+            expect(visibleIds).toContain(ids.unassignedCase);
+        });
     });
 });

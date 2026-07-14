@@ -1,10 +1,22 @@
 /**
  * User Seeder
- * Seeds default admin and student users when database is empty
+ * Seeds the first users when the database is empty.
+ *
+ * Two bootstrap paths, because a fresh production install must be able to reach
+ * an admin account without ever shipping a well-known password:
+ *
+ *   1. Operator-provisioned (ROHY_ADMIN_USERNAME + ROHY_ADMIN_PASSWORD) — seeds
+ *      a single admin with the operator's own credentials. Allowed in production.
+ *   2. Development defaults (admin/admin123 + student/student123) — refused in
+ *      production unless ALLOW_DEFAULT_USERS=1.
+ *
+ * If neither applies, the instance boots with zero users and the first account
+ * registered through the UI claims it as admin (see routes/auth-routes.js).
  */
 
 import bcrypt from 'bcrypt';
 import { logger } from '../logger.js';
+import { validatePassword } from '../routes/_helpers.js';
 
 const seederLog = logger('seeder');
 
@@ -26,17 +38,58 @@ export const defaultUsers = [
 ];
 
 /**
+ * The operator-provisioned admin described by the environment, or null when the
+ * environment does not ask for one. Carries no well-known password, which is
+ * why — unlike `defaultUsers` — it is allowed to seed in production.
+ *
+ * @param {Object} env - Environment to read (defaults to process.env)
+ * @returns {Object|null} A user record shaped like `defaultUsers` entries
+ */
+export function provisionedAdmin(env = process.env) {
+    const username = (env.ROHY_ADMIN_USERNAME || '').trim();
+    const password = env.ROHY_ADMIN_PASSWORD || '';
+    if (!username || !password) return null;
+
+    return {
+        username,
+        name: (env.ROHY_ADMIN_NAME || '').trim() || 'System Administrator',
+        email: (env.ROHY_ADMIN_EMAIL || '').trim() || `${username}@rohy.local`,
+        password,
+        role: 'admin'
+    };
+}
+
+/**
  * Seed users into the database
  * @param {Object} db - SQLite database instance
- * @returns {Promise<{seeded: number, skipped: number}>}
+ * @param {Object} env - Environment to read (defaults to process.env)
+ * @returns {Promise<{seeded: number, skipped: number, blocked?: boolean, provisioned?: boolean}>}
  */
-export async function seedUsers(db) {
+export async function seedUsers(db, env = process.env) {
+    const provisioned = provisionedAdmin(env);
+
+    // An operator-provisioned admin uses the operator's own password, so the
+    // production guard below does not apply to it — but a weak one would lock
+    // them out at the login screen (same policy as /auth/register), so refuse
+    // it loudly rather than seeding an account that cannot be used.
+    if (provisioned) {
+        const check = validatePassword(provisioned.password);
+        if (!check.valid) {
+            seederLog.error('ROHY_ADMIN_PASSWORD rejected', { errors: check.errors });
+            return { seeded: 0, skipped: 0, blocked: true, provisioned: true };
+        }
+    }
+
+    const toSeed = provisioned ? [provisioned] : defaultUsers;
+
     return new Promise((resolve, reject) => {
         // Refuse to seed default credentials in production unless explicitly
         // overridden — admin123/student123 is a dev convenience that must
         // never silently land in a real deployment.
-        if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEFAULT_USERS !== '1') {
-            seederLog.warn('default user seeding blocked in production');
+        if (!provisioned && env.NODE_ENV === 'production' && env.ALLOW_DEFAULT_USERS !== '1') {
+            seederLog.warn('default user seeding blocked in production', {
+                hint: 'set ROHY_ADMIN_USERNAME + ROHY_ADMIN_PASSWORD to provision an admin, or register the first account through the UI to claim the instance'
+            });
             resolve({ seeded: 0, skipped: 0, blocked: true });
             return;
         }
@@ -54,12 +107,12 @@ export async function seedUsers(db) {
                 return;
             }
 
-            seederLog.info('no users found, seeding defaults');
+            seederLog.info('no users found, seeding', { provisioned: Boolean(provisioned) });
 
             let seeded = 0;
             const errors = [];
 
-            for (const user of defaultUsers) {
+            for (const user of toSeed) {
                 try {
                     const password_hash = await bcrypt.hash(user.password, 10);
 
@@ -91,7 +144,7 @@ export async function seedUsers(db) {
             if (errors.length > 0 && seeded === 0) {
                 reject(new Error('Failed to seed any users'));
             } else {
-                resolve({ seeded, skipped: 0 });
+                resolve({ seeded, skipped: 0, provisioned: Boolean(provisioned) });
             }
         });
     });

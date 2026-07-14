@@ -10,7 +10,9 @@
 //     manageable; one-case⇄one-course invariant).
 //   * Enrollment-gated case visibility for students: the case catalog,
 //     case fetch, and session start are all limited to the default case plus
-//     cases granted through a live course membership.
+//     cases granted through a live course membership. This gating is OPT-IN
+//     (`enforce_cohort_case_access`, shipped OFF), so these tests turn it on
+//     through the admin toggle first; the last test covers the OFF default.
 //
 // Spawns the real server against an EMPTY database, so the real boot path
 // (seeders → seedStemiCourse) produces the layout under test.
@@ -119,7 +121,23 @@ describe('per-case courses: seed shape, assignment endpoints, student gating', (
         admin = authedFetch(server.baseUrl, await login(server.baseUrl, 'admin', 'admin123'));
         student = authedFetch(server.baseUrl, await login(server.baseUrl, 'student', 'student123'));
         outsider = authedFetch(server.baseUrl, await login(server.baseUrl, 'cc-outsider', PASSWORD));
+
+        // Course-scoped case access is OPT-IN (`enforce_cohort_case_access`,
+        // shipped OFF). The gating assertions below describe an install that has
+        // opted in, so turn it on through the real admin toggle — which also
+        // busts the 15s flag cache. The final test covers the shipped default.
+        await setEnforcement(true);
     }, 90_000);
+
+    // Flip the platform enforcement flag through the admin API.
+    async function setEnforcement(enabled) {
+        const res = await admin('/api/platform-settings/cohort-case-enforcement', {
+            method: 'PUT',
+            body: JSON.stringify({ enabled }),
+        });
+        if (!res.ok) throw new Error(`setEnforcement(${enabled}) → ${res.status}: ${await res.text()}`);
+        expect((await res.json()).enabled).toBe(enabled);
+    }
 
     afterAll(async () => {
         if (server) {
@@ -275,6 +293,28 @@ describe('per-case courses: seed shape, assignment endpoints, student gating', (
         for (const c of s.cases) {
             expect(c.course_name).not.toBeNull();
         }
+    });
+
+    // ---- The shipped default ------------------------------------------------
+    // Everything above describes an install that opted in. With the flag OFF —
+    // which is what a fresh install actually ships — course membership must not
+    // restrict anything: an unassigned case is visible and launchable. The three
+    // gating sites used to ignore the flag entirely, so this was silently false.
+    it('with enforcement OFF (the shipped default) a student sees and can launch an unassigned case', async () => {
+        await setEnforcement(false);
+
+        const unassigned = legacyOtherCases[legacyOtherCases.length - 1];
+        const list = await json(await student('/api/cases'));
+        expect(list.cases.some((c) => c.id === unassigned.id)).toBe(true);
+
+        const detail = await student(`/api/cases/${unassigned.id}`);
+        expect(detail.status).toBe(200);
+
+        const start = await student('/api/sessions', {
+            method: 'POST',
+            body: JSON.stringify({ case_id: unassigned.id, student_name: 'Demo Student' }),
+        });
+        expect([200, 201]).toContain(start.status);
     });
 
     // ---- Assignment endpoints ---------------------------------------------------

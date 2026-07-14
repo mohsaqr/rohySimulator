@@ -33,7 +33,7 @@ export const tenantId = (req) => resolveTenant(req);
 // always bypass. When the flag is absent or unreadable we treat it as OFF, so a
 // settings glitch can never lock every student out (fail-safe / non-breaking).
 
-/** True when the caller is subject to cohort-case enforcement (a student). */
+/** True when the caller ranks below reviewer, i.e. enforcement *could* apply. */
 export const isEnforcedStudent = (user) => !canReadAcrossUsers(user);
 
 let _enforceCache = { value: null, at: 0 };
@@ -60,6 +60,19 @@ export async function cohortCaseEnforcementOn() {
 /** Drop the cached flag after a toggle (admin route / tests call this). */
 export function resetCohortCaseEnforcementCache() {
     _enforceCache = { value: null, at: 0 };
+}
+
+/**
+ * The single gate every case-visibility site shares: catalog (GET /cases),
+ * direct read (GET /cases/:id) and session launch (POST /sessions). True only
+ * when the caller is below reviewer rank AND the admin has opted in. Call this
+ * rather than testing rank and flag separately — the three sites previously
+ * tested rank alone, which enforced course scoping on every install whether or
+ * not the admin had turned it on.
+ */
+export async function caseAccessEnforcedFor(user) {
+    if (!isEnforcedStudent(user)) return false;
+    return cohortCaseEnforcementOn();
 }
 
 /**
