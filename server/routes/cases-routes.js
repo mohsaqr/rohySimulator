@@ -19,10 +19,10 @@ import {
     auditSuccess,
     canManageOwnedResource,
     canReadAcrossUsers,
+    caseAccessEnforcedFor,
     clampInitialVitals,
     cohortCaseVisibleExists,
     createCaseVersion,
-    isEnforcedStudent,
     logAudit,
     mergeScenarioSource,
     parseAuditJson,
@@ -54,6 +54,7 @@ const router = express.Router();
 
 router.get('/cases', authenticateToken, async (req, res) => {
     const canReview = canReadAcrossUsers(req.user);
+    const enforced = await caseAccessEnforcedFor(req.user);
 
     // Reviewer+ inspect all cases. Students see available cases; when cohort-case
     // enforcement is ON they additionally must be assigned the case (in-window)
@@ -64,7 +65,7 @@ router.get('/cases', authenticateToken, async (req, res) => {
     if (canReview) {
         sql = "SELECT * FROM cases WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, created_at DESC";
         params = [tenantId(req)];
-    } else if (isEnforcedStudent(req.user)) {
+    } else if (enforced) {
         sql = `SELECT c.* FROM cases c
                WHERE c.tenant_id = ? AND c.deleted_at IS NULL AND c.is_available = 1
                  AND ( c.is_default = 1 OR ${cohortCaseVisibleExists('c')} )
@@ -112,12 +113,13 @@ router.get('/cases', authenticateToken, async (req, res) => {
 
 // GET /api/cases/:id - Authenticated users can read a live case in their tenant
 router.get('/cases/:id', authenticateToken, async (req, res) => {
+    const enforced = await caseAccessEnforcedFor(req.user);
     let sql;
     let params;
     if (canReadAcrossUsers(req.user)) {
         sql = `SELECT * FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`;
         params = [req.params.id, tenantId(req)];
-    } else if (isEnforcedStudent(req.user)) {
+    } else if (enforced) {
         // Same gate as GET /cases; a hidden case returns the existing 404 (no
         // existence leak — "not assigned" is indistinguishable from "not found").
         sql = `SELECT c.* FROM cases c

@@ -42,12 +42,19 @@ export async function runSeeders(db) {
         results.cases.error = err.message;
     }
 
+    // Only the dev-default path creates the well-known accounts worth naming in
+    // the boot log; a provisioned admin is the operator's own credential.
+    const namedDefaults = results.users.seeded > 0 && !results.users.provisioned
+        ? defaultUsers.map((u) => ({ role: u.role, username: u.username }))
+        : [];
+
     seederLog.info('database seeding completed', {
         users_seeded: results.users.seeded,
         users_skipped: results.users.skipped,
+        users_provisioned: Boolean(results.users.provisioned),
         cases_seeded: results.cases.seeded,
         cases_skipped: results.cases.skipped,
-        default_users_created: results.users.seeded > 0 ? defaultUsers.map((u) => ({ role: u.role, username: u.username })) : []
+        default_users_created: namedDefaults
     });
 
     return results;

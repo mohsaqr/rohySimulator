@@ -48,6 +48,13 @@ services:
       ROHY_TRUST_PROXY: "${ROHY_TRUST_PROXY:-loopback}"
       # First-boot only: seed admin/admin123. REMOVE after first login.
       ALLOW_DEFAULT_USERS: "${ALLOW_DEFAULT_USERS:-}"
+      # Recommended bootstrap: provision the first admin with your OWN password
+      # (no well-known credential ever exists). Applied on first boot only, when
+      # the users table is empty. Leave empty and the first account registered
+      # through the UI claims the instance as admin instead.
+      ROHY_ADMIN_USERNAME: "${ROHY_ADMIN_USERNAME:-}"
+      ROHY_ADMIN_PASSWORD: "${ROHY_ADMIN_PASSWORD:-}"
+      ROHY_ADMIN_EMAIL: "${ROHY_ADMIN_EMAIL:-}"
       # JWT_SECRET is auto-generated and persisted to the volume on first
       # boot. Override here only if you have an external secret manager.
       JWT_SECRET: "${JWT_SECRET:-}"

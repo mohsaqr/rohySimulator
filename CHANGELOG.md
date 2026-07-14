@@ -9,6 +9,39 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.5.2] — 2026-07-14
+
+### Fixed
+
+- **A fresh install can reach an admin again.** In `NODE_ENV=production` the
+  seeder refuses to create the well-known `admin`/`admin123` account, and
+  `/auth/register` forced every signup to `student` — so a freshly pulled
+  Docker image had no path to an admin at all. Settings showed only three
+  tabs, the case list showed one case, and case authoring was invisible,
+  which read as a broken build rather than a permissions state. Now: set
+  `ROHY_ADMIN_USERNAME` + `ROHY_ADMIN_PASSWORD` to provision the first admin
+  with your own password (works in production, no default credential ever
+  exists), or leave them unset and the first account registered through the
+  UI claims the instance. Both apply only while the `users` table is empty.
+- **The cohort-case enforcement toggle actually does something.** Course-scoped
+  case access is documented and shipped as opt-in (`enforce_cohort_case_access`,
+  default OFF), but the case catalog, the direct case read, and the session
+  launch gate all applied it to every student unconditionally — the flag was
+  read by nobody and the admin toggle was a no-op. Since 0030 that has quietly
+  restricted students on every install to the default case plus whatever a
+  course assigned them. All three sites now consult the flag through one shared
+  `caseAccessEnforcedFor()` gate, so an install that never opts in behaves as
+  documented: students see every available case.
+
+### Added
+
+- `ROHY_ADMIN_USERNAME` / `ROHY_ADMIN_PASSWORD` / `ROHY_ADMIN_EMAIL` — provision
+  the first admin at boot. Wired through `deploy/docker/compose.yml`; the
+  entrypoint now announces which bootstrap path is live. A weak password is
+  refused loudly rather than seeding an account nobody can log into.
+- DEPLOY.md gains a "Getting the first admin" section, including how to promote
+  an existing account that got stuck as a student.
+
 ## [2.5.0] — 2026-07-04
 
 ### Added

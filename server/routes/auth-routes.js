@@ -121,8 +121,15 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
         });
     });
 
+    // The first account on an empty instance claims it as admin, whatever role
+    // it asked for. The client never sends one (AuthService.register takes only
+    // username/email/password), so requiring `role: 'admin'` here left a fresh
+    // install with no reachable path to an admin at all: production also refuses
+    // to seed the default users (seeders/users.js). Operators who would rather
+    // not race a stranger for the claim should provision the admin up front with
+    // ROHY_ADMIN_USERNAME/ROHY_ADMIN_PASSWORD, which leaves the table non-empty.
     let finalRole = 'student';
-    if (userCount === 0 && requestedRole === 'admin') {
+    if (userCount === 0) {
         finalRole = 'admin';
     } else if (getRoleRank(requestedRole) > ROLE_RANKS.student) {
         return res.status(403).json({ error: 'Only admins can create elevated accounts' });

@@ -63,13 +63,18 @@ mkdir -p "$DB_PARENT"
 # 4. HF cache --------------------------------------------------------------
 mkdir -p "${TRANSFORMERS_CACHE:-/var/cache/rohy-hf}"
 
-# 5. Optional first-boot bootstrap mode ------------------------------------
-# ALLOW_DEFAULT_USERS=1 seeds admin/admin123 on first boot. Operator should
-# set this once, log in, change the password, then unset. We log the
-# warning every boot so accidentally leaving it on is noisy.
-if [ "${ALLOW_DEFAULT_USERS:-0}" = "1" ]; then
+# 5. First-boot admin bootstrap --------------------------------------------
+# Three ways an instance reaches its first admin. All apply only while the
+# users table is empty; announce which one is live so a stuck operator can see
+# it in the boot log rather than guessing at the login screen.
+if [ -n "${ROHY_ADMIN_USERNAME:-}" ] && [ -n "${ROHY_ADMIN_PASSWORD:-}" ]; then
+    echo "[entrypoint] admin bootstrap: provisioning '${ROHY_ADMIN_USERNAME}' from ROHY_ADMIN_* (first boot only, if users table is empty)." >&2
+elif [ "${ALLOW_DEFAULT_USERS:-0}" = "1" ]; then
     echo "[entrypoint] WARNING: ALLOW_DEFAULT_USERS=1 — admin/admin123 will be seeded if users table is empty." >&2
     echo "[entrypoint] After first login + password change, REMOVE this env var and restart the container." >&2
+else
+    echo "[entrypoint] admin bootstrap: none configured — the FIRST account registered through the UI will claim this instance as admin." >&2
+    echo "[entrypoint] To provision an admin instead, set ROHY_ADMIN_USERNAME + ROHY_ADMIN_PASSWORD and start with an empty DB volume." >&2
 fi
 
 # 6. Exec the command ------------------------------------------------------

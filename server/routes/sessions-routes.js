@@ -15,8 +15,8 @@ import {
 import { logger } from '../logger.js';
 import {
     canReadAcrossUsers,
+    caseAccessEnforcedFor,
     cohortCaseVisibleExists,
-    isEnforcedStudent,
     redactRow,
     tenantId,
     verifySessionOwnership
@@ -45,9 +45,10 @@ router.post('/sessions', authenticateToken, async (req, res) => {
     const { case_id, student_name, llm_settings, monitor_settings } = req.body;
     const user_id = req.user.id;
 
-    // Students are always limited to the default case plus cases assigned
-    // through active course enrolments/date windows. Reviewer+ bypass.
-    const enforceLaunchAccess = isEnforcedStudent(req.user);
+    // When cohort-case enforcement is ON, students are limited to the default
+    // case plus cases assigned through active course enrolments/date windows.
+    // Reviewer+ bypass, and so does everyone while the flag is OFF.
+    const enforceLaunchAccess = await caseAccessEnforcedFor(req.user);
 
     // If no llm_settings provided, check user preferences for default settings
     let effectiveLlmSettings = llm_settings || {};
