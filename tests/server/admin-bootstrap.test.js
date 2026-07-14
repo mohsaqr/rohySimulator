@@ -5,9 +5,9 @@
 // 'student' — which together left a fresh Docker install with NO reachable
 // path to an admin at all. Both bootstrap routes are covered here.
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { startTestServer } from '../utils/startTestServer.js';
-import { provisionedAdmin } from '../../server/seeders/users.js';
+import { adminEnv, provisionedAdmin } from '../../server/seeders/users.js';
 
 const STRONG = 'BootstrapPass1';
 
@@ -37,13 +37,13 @@ async function login(baseUrl, username, password) {
 describe('provisionedAdmin()', () => {
     it('is null unless BOTH username and password are given', () => {
         expect(provisionedAdmin({})).toBeNull();
-        expect(provisionedAdmin({ ROHY_ADMIN_USERNAME: 'ops' })).toBeNull();
-        expect(provisionedAdmin({ ROHY_ADMIN_PASSWORD: STRONG })).toBeNull();
-        expect(provisionedAdmin({ ROHY_ADMIN_USERNAME: '   ', ROHY_ADMIN_PASSWORD: STRONG })).toBeNull();
+        expect(provisionedAdmin({ username: 'ops' })).toBeNull();
+        expect(provisionedAdmin({ password: STRONG })).toBeNull();
+        expect(provisionedAdmin({ username: '   ', password: STRONG })).toBeNull();
     });
 
     it('defaults name and email, and always carries the admin role', () => {
-        const user = provisionedAdmin({ ROHY_ADMIN_USERNAME: 'ops', ROHY_ADMIN_PASSWORD: STRONG });
+        const user = provisionedAdmin({ username: 'ops', password: STRONG });
         expect(user).toMatchObject({
             username: 'ops',
             email: 'ops@rohy.local',
@@ -55,11 +55,27 @@ describe('provisionedAdmin()', () => {
 
     it('honours an explicit email', () => {
         const user = provisionedAdmin({
-            ROHY_ADMIN_USERNAME: 'ops',
-            ROHY_ADMIN_PASSWORD: STRONG,
-            ROHY_ADMIN_EMAIL: 'ops@hospital.example',
+            username: 'ops',
+            password: STRONG,
+            email: 'ops@hospital.example',
         });
         expect(user.email).toBe('ops@hospital.example');
+    });
+
+    // The seeder reads the environment through adminEnv() rather than taking an
+    // injected env object, because gen-config.mjs discovers variables by scanning
+    // for the literal `process.env.X`. An indirected read silently drops them from
+    // the generated config reference — which is exactly what happened to
+    // ALLOW_DEFAULT_USERS on the first cut of this change.
+    it('reads the ROHY_ADMIN_* environment by default', () => {
+        vi.stubEnv('ROHY_ADMIN_USERNAME', 'from-env');
+        vi.stubEnv('ROHY_ADMIN_PASSWORD', STRONG);
+        try {
+            expect(adminEnv()).toMatchObject({ username: 'from-env', password: STRONG });
+            expect(provisionedAdmin()).toMatchObject({ username: 'from-env', role: 'admin' });
+        } finally {
+            vi.unstubAllEnvs();
+        }
     });
 });
 

@@ -100,7 +100,7 @@ function classify(name) {
         n.includes('JWT') || n.includes('TLS') ||
         n.endsWith('_KEY') || n.endsWith('_SECRET') || n.endsWith('_TOKEN') ||
         n === 'ALLOW_DEFAULT_USERS' || n === 'ROHY_DISABLE_AUTH_RATE_LIMIT' ||
-        n === 'ROHY_TRUST_PROXY'
+        n === 'ROHY_TRUST_PROXY' || n.startsWith('ROHY_ADMIN_')
     ) {
         return 'Auth/security';
     }
@@ -145,6 +145,7 @@ function isSecret(name) {
         n.endsWith('_KEY') ||
         n.endsWith('_SECRET') ||
         n.endsWith('_TOKEN') ||
+        n.endsWith('_PASSWORD') ||
         n.includes('API_KEY')
     );
 }
@@ -161,6 +162,10 @@ const PURPOSES = {
     TLS_CERT_PATH: 'Path to TLS certificate; must be paired with `TLS_KEY_PATH`.',
     TLS_KEY_PATH: 'Path to TLS private key; must be paired with `TLS_CERT_PATH`.',
     ALLOW_DEFAULT_USERS: 'Bootstrap-only flag to seed default users on first boot.',
+    ROHY_ADMIN_USERNAME: 'Provisions the first admin on first boot (with ROHY_ADMIN_PASSWORD). Applied only while the users table is empty.',
+    ROHY_ADMIN_PASSWORD: 'Password for the provisioned first admin. Must satisfy the normal password policy or the seeder refuses it.',
+    ROHY_ADMIN_EMAIL: 'Email for the provisioned first admin. Defaults to <username>@rohy.local.',
+    ROHY_ADMIN_NAME: 'Display name for the provisioned first admin. Defaults to "System Administrator".',
     ROHY_TRUST_PROXY: 'Express `trust proxy` setting (proxy hop count / IP / preset).',
     ROHY_DISABLE_AUTH_RATE_LIMIT: 'Disables the auth-endpoint rate limiter (dev/test).',
     ROHY_DB: 'Absolute path to the SQLite database file.',

@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Regenerate with `npm run docs:gen:data`. One section per table; columns in declaration order.
 
-**80 tables.**
+**88 tables.**
 
 ## `active_sessions`
 
@@ -336,6 +336,7 @@ Stores cases records.
 | `last_modified_by` | INTEGER | — | — |
 | `deleted_at` | DATETIME | — | — |
 | `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | `0004_tenants.sql` |
+| `case_code` | TEXT | — | `0035_case_code.sql` |
 
 ## `client_logs`
 
@@ -437,6 +438,23 @@ Stores cohort members records.
 | `enrolled_from` | DATETIME | — | `0030_cohort_case_windows.sql` |
 | `enrolled_until` | DATETIME | — | `0030_cohort_case_windows.sql` |
 
+## `cohort_surveys`
+
+Stores cohort surveys records.
+
+**Introduced by:** migration `0032_lessons.sql`
+
+**Cross-cutting:** `soft-delete`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `cohort_id` | INTEGER | NOT NULL REFERENCES cohorts(id) | — |
+| `survey_id` | INTEGER | NOT NULL REFERENCES surveys(id) | — |
+| `order_index` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `added_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+| `deleted_at` | DATETIME | — | — |
+
 ## `cohorts`
 
 Stores cohorts records.
@@ -458,6 +476,7 @@ Stores cohorts records.
 | `starts_at` | DATETIME | — | `0027_cohort_entity.sql` |
 | `ends_at` | DATETIME | — | `0027_cohort_entity.sql` |
 | `settings` | JSON | — | `0027_cohort_entity.sql` |
+| `auto_enroll` | INTEGER | NOT NULL DEFAULT 0 | `0033_cohort_auto_enroll.sql` |
 
 ## `custom_drug_group_items`
 
@@ -885,6 +904,78 @@ Stores learning events records.
 | `vital_etco2` | REAL | — | `0018_learning_events_vitals.sql` |
 | `vital_rhythm` | TEXT | — | `0018_learning_events_vitals.sql` |
 | `room` | TEXT | — | `0021_learning_events_room.sql` |
+
+## `lesson_progress`
+
+Stores lesson progress records.
+
+**Introduced by:** migration `0032_lessons.sql`
+
+**Cross-cutting:** `audit (created_at, updated_at)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `user_id` | INTEGER | NOT NULL REFERENCES users(id) | — |
+| `lesson_id` | INTEGER | NOT NULL REFERENCES lessons(id) | — |
+| `cohort_id` | INTEGER | NOT NULL REFERENCES cohorts(id) | — |
+| `is_completed` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `completed_at` | DATETIME | — | — |
+| `time_spent` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+| `updated_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+
+## `lesson_sections`
+
+Stores lesson sections records.
+
+**Introduced by:** migration `0032_lessons.sql`
+
+**Cross-cutting:** `soft-delete` · `audit (created_at, updated_at)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `lesson_id` | INTEGER | NOT NULL REFERENCES lessons(id) | — |
+| `title` | TEXT | — | — |
+| `type` | TEXT | NOT NULL DEFAULT 'text' | — |
+| `content` | TEXT | — | — |
+| `file_name` | TEXT | — | — |
+| `file_url` | TEXT | — | — |
+| `file_type` | TEXT | — | — |
+| `file_size` | INTEGER | — | — |
+| `order_index` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+| `updated_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+| `deleted_at` | DATETIME | — | — |
+
+## `lessons`
+
+Stores lessons records.
+
+**Introduced by:** migration `0032_lessons.sql`
+
+**Cross-cutting:** `soft-delete` · `tenant-scoped` · `audit (created_at, updated_at)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `cohort_id` | INTEGER | NOT NULL REFERENCES cohorts(id) | — |
+| `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | — |
+| `title` | TEXT | NOT NULL | — |
+| `description` | TEXT | — | — |
+| `content` | TEXT | — | — |
+| `content_type` | TEXT | NOT NULL DEFAULT 'text' | — |
+| `video_url` | TEXT | — | — |
+| `duration` | INTEGER | — | — |
+| `order_index` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `is_published` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `is_free` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `available_from` | DATETIME | — | — |
+| `available_until` | DATETIME | — | — |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+| `updated_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+| `deleted_at` | DATETIME | — | — |
 
 ## `llm_model_pricing`
 
@@ -1595,6 +1686,76 @@ Stores settings logs records.
 | `timestamp` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
 | `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | `0004_tenants.sql` |
 
+## `survey_answers`
+
+Stores survey answers records.
+
+**Introduced by:** migration `0032_lessons.sql`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `response_id` | INTEGER | NOT NULL REFERENCES survey_responses(id) | — |
+| `question_id` | INTEGER | NOT NULL REFERENCES survey_questions(id) | — |
+| `answer_value` | TEXT | NOT NULL | — |
+
+## `survey_questions`
+
+Stores survey questions records.
+
+**Introduced by:** migration `0032_lessons.sql`
+
+**Cross-cutting:** `soft-delete` · `audit (created_at)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `survey_id` | INTEGER | NOT NULL REFERENCES surveys(id) | — |
+| `question_text` | TEXT | NOT NULL | — |
+| `question_type` | TEXT | NOT NULL | — |
+| `options` | TEXT | — | — |
+| `is_required` | INTEGER | NOT NULL DEFAULT 1 | — |
+| `order_index` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+| `deleted_at` | DATETIME | — | — |
+
+## `survey_responses`
+
+Stores survey responses records.
+
+**Introduced by:** migration `0032_lessons.sql`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `survey_id` | INTEGER | NOT NULL REFERENCES surveys(id) | — |
+| `user_id` | INTEGER | REFERENCES users(id) | — |
+| `cohort_id` | INTEGER | — | — |
+| `context` | TEXT | NOT NULL DEFAULT 'standalone' | — |
+| `context_id` | INTEGER | — | — |
+| `completed_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+
+## `surveys`
+
+Stores surveys records.
+
+**Introduced by:** migration `0032_lessons.sql`
+
+**Cross-cutting:** `soft-delete` · `tenant-scoped` · `audit (created_at, updated_at)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | — |
+| `title` | TEXT | NOT NULL | — |
+| `description` | TEXT | — | — |
+| `created_by_id` | INTEGER | NOT NULL REFERENCES users(id) | — |
+| `is_published` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `is_anonymous` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+| `updated_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+| `deleted_at` | DATETIME | — | — |
+
 ## `system_audit_log`
 
 Stores system audit log records.
@@ -1791,6 +1952,7 @@ Stores user preferences records.
 | `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
 | `updated_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
 | `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | `0004_tenants.sql` |
+| `onboarding_settings` | JSON | — | `0036_user_onboarding_settings.sql` |
 
 ## `users`
 

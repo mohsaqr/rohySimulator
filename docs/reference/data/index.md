@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Produced by `scripts/docs-gen/gen-data.mjs` from `server/db.js`, `migrations/0001_initial.sql` (the bootstrap schema) and all `migrations/*.sql`. Regenerate with `npm run docs:gen:data`.
 
-**80 tables** in the durable data model.
+**88 tables** in the durable data model.
 
 > Note: `server/db.js` no longer holds inline `CREATE TABLE` DDL — it delegates to the migration runner. The canonical bootstrap schema is `migrations/0001_initial.sql`, treated here as the base schema. SQLite rebuild-scaffold tables (`*_new`/`*_old`) are intentionally excluded.
 
@@ -23,7 +23,7 @@ These columns recur across many tables and carry platform-wide semantics (see `C
 
 Schema evolves only through versioned `migrations/*.sql`. Each migration is classified **additive** (previous-version code still runs) or **destructive** in `migrations/MANIFEST.md`, which `bin/rohy-update` reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.
 
-Parsed **30 migration files** beyond the base schema (`0001_initial.sql`).
+Parsed **35 migration files** beyond the base schema (`0001_initial.sql`).
 
 | Migration | Class | Note |
 | --- | --- | --- |
@@ -58,6 +58,11 @@ Parsed **30 migration files** beyond the base schema (`0001_initial.sql`).
 | `0029_oyon_records_room.sql` | additive | Oyon v2: nullable `room TEXT` on `oyon_emotion_records` — the simulator room active when the window was captured (stamped client-side by the capture widget). Feeds the per-room gaze breakdown in Settings → Oyon Learning Analytics → Gaze. Single nullable ADD COLUMN. |
 | `0030_cohort_case_windows.sql` | additive | Adds per-assignment date windows (`cohort_cases.available_from/until`, nullable = open) and enrollment lifecycle (`cohort_members.status` TEXT NOT NULL DEFAULT 'active', `enrolled_from/until` nullable) for enforced, date-scoped, class-centric case access, plus two partial live indexes for the enforcement JOIN. Strictly additive: every add is nullable or defaulted, nothing dropped/renamed/narrowed. Existing rows get open windows + `active` status, and the enforcement that reads these columns is gated behind the platform flag `enforce_cohort_case_access` (default OFF) — so applying this migration changes no behaviour until an admin opts in. `status` allowed set 'active'\\|'completed'\\|'dropped' enforced at the app layer (SQLite can't ALTER-add a CHECK). |
 | `0031_basic_course_default.sql` | additive | Data backfill — per tenant with a staff user, seeds one "Basic course" default class (owned by the tenant's lowest-id admin, else educator), assigns the tenant default case (`cases.is_default=1`) to it with open windows, and enrols every non-deleted user. This is the safety net for enforced case access: with the flag on, every user still has ≥ 1 case (the default) so nobody is locked out. Only INSERTs into cohorts/cohort_cases/cohort_members; no schema change; NOT EXISTS guards + 0025/0027 partial-uniques make it re-run-safe. Tenants with no admin/educator are skipped (NOT NULL owner FK). New users are enrolled post-migration by `ensureBasicCourseMembership()` on register/login. |
+| `0032_lessons.sql` | additive | Lessons (lectures + sections + progress) and surveys, bound to cohorts. Eight new tables (`lessons`, `lesson_sections`, `lesson_progress`, `surveys`, `cohort_surveys`, `survey_questions`, `survey_responses`, `survey_answers`) for the ported LAILA/chatoyon lesson authoring + survey feature. INTEGER PK autoincrement; INTEGER `cohort_id`/`tenant_id`/user FKs, non-cascading (soft-delete via `deleted_at`, matching 0025). Strictly additive: brand-new tables only, nothing existing altered. The source's `chatbot` section type is omitted (deferred). |
+| `0033_cohort_auto_enroll.sql` | additive | New defaulted `cohorts.auto_enroll INTEGER NOT NULL DEFAULT 0` flag + a data step setting it to 1 on the existing "Basic course" rows. Cohorts with `auto_enroll = 1` are the ones every tenant user is enrolled into on register/login (`ensureAutoEnrollMemberships`), replacing the hardcoded name match so the per-case dedicated courses (boot seed) get the same treatment. Existing teacher-made cohorts keep 0 = pre-migration behaviour; old code never reads the column. |
+| `0034_voice2_provider_follows_voice.sql` | additive | Voice 2.0 settings retirement (data-only, no schema change, re-run-safe). Carries an unambiguous legacy `default_voice_kokoro_*` value into `tts_default_voice_en`, then DELETEs the retired rows: `tts_provider` (the engine is now derived per voice by exact catalogue membership — VOICE2_PLAN.md), the gendered `default_voice_&lt;provider&gt;_&lt;gender&gt;` family, and any recreated `voice_&lt;provider&gt;_&lt;gender&gt;` slot rows (gender-suffix GLOBs on purpose — a bare `voice_%` would hit `voice_mode_enabled`). Case/persona `case_voice` values untouched. The new keys (`tts_default_voice_&lt;lang&gt;`, `tts_provider_enabled_&lt;p&gt;`) are seeded idempotently by boot code, not here. |
+| `0035_case_code.sql` | additive | Visible language-bearing case identifier: new nullable `cases.case_code TEXT` + partial unique index, backfilled as `&lt;LANG&gt;-&lt;zero-padded id&gt;` (numeric part = the untouched integer PK, so unique by construction). Also pins the now-immutable case language: `config.case_language` is normalized to a concrete registry code (absent/empty/unknown → `'en'`; a case never "follows the student's UI language" anymore). Malformed-JSON configs are left untouched and coded `EN-…`. Rows inserted after migrations (fresh-DB seeders) are stamped by the `ensureCaseCodes()` boot sweep. |
+| `0036_user_onboarding_settings.sql` | additive | Per-user onboarding/first-run prefs: one nullable `user_preferences.onboarding_settings JSON` column (`first_run_done`, `voice_mode`, `oyon_consent`). NULL = never onboarded, so every existing user sees the new first-run screen once (deliberate — it surfaces the previously silent emotion-capture consent). Single nullable ADD COLUMN; pre-migration code never selects it. |
 
 ## Tables by concern
 
@@ -116,6 +121,10 @@ Parsed **30 migration files** beyond the base schema (`0001_initial.sql`).
 ### Platform & retention
 
 `platform_settings`
+
+### Other
+
+`cohort_surveys`, `lesson_progress`, `lesson_sections`, `lessons`, `survey_answers`, `survey_questions`, `survey_responses`, `surveys`
 
 ---
 

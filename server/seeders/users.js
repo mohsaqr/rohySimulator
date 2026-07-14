@@ -38,22 +38,41 @@ export const defaultUsers = [
 ];
 
 /**
+ * Read the ROHY_ADMIN_* environment. These stay as direct member reads on the
+ * process environment because scripts/docs-gen/gen-config.mjs discovers
+ * variables by statically scanning source for exactly that shape — route the
+ * lookup through an injected object and the variable silently disappears from
+ * the generated config reference (which is what happened to ALLOW_DEFAULT_USERS
+ * on the first cut of this change).
+ *
+ * @returns {{username?: string, password?: string, email?: string, name?: string}}
+ */
+export function adminEnv() {
+    return {
+        username: process.env.ROHY_ADMIN_USERNAME,
+        password: process.env.ROHY_ADMIN_PASSWORD,
+        email: process.env.ROHY_ADMIN_EMAIL,
+        name: process.env.ROHY_ADMIN_NAME
+    };
+}
+
+/**
  * The operator-provisioned admin described by the environment, or null when the
  * environment does not ask for one. Carries no well-known password, which is
  * why — unlike `defaultUsers` — it is allowed to seed in production.
  *
- * @param {Object} env - Environment to read (defaults to process.env)
+ * @param {Object} vars - Admin env values (defaults to adminEnv())
  * @returns {Object|null} A user record shaped like `defaultUsers` entries
  */
-export function provisionedAdmin(env = process.env) {
-    const username = (env.ROHY_ADMIN_USERNAME || '').trim();
-    const password = env.ROHY_ADMIN_PASSWORD || '';
+export function provisionedAdmin(vars = adminEnv()) {
+    const username = (vars.username || '').trim();
+    const password = vars.password || '';
     if (!username || !password) return null;
 
     return {
         username,
-        name: (env.ROHY_ADMIN_NAME || '').trim() || 'System Administrator',
-        email: (env.ROHY_ADMIN_EMAIL || '').trim() || `${username}@rohy.local`,
+        name: (vars.name || '').trim() || 'System Administrator',
+        email: (vars.email || '').trim() || `${username}@rohy.local`,
         password,
         role: 'admin'
     };
@@ -62,11 +81,10 @@ export function provisionedAdmin(env = process.env) {
 /**
  * Seed users into the database
  * @param {Object} db - SQLite database instance
- * @param {Object} env - Environment to read (defaults to process.env)
  * @returns {Promise<{seeded: number, skipped: number, blocked?: boolean, provisioned?: boolean}>}
  */
-export async function seedUsers(db, env = process.env) {
-    const provisioned = provisionedAdmin(env);
+export async function seedUsers(db) {
+    const provisioned = provisionedAdmin();
 
     // An operator-provisioned admin uses the operator's own password, so the
     // production guard below does not apply to it — but a weak one would lock
@@ -86,7 +104,7 @@ export async function seedUsers(db, env = process.env) {
         // Refuse to seed default credentials in production unless explicitly
         // overridden — admin123/student123 is a dev convenience that must
         // never silently land in a real deployment.
-        if (!provisioned && env.NODE_ENV === 'production' && env.ALLOW_DEFAULT_USERS !== '1') {
+        if (!provisioned && process.env.NODE_ENV === 'production' && process.env.ALLOW_DEFAULT_USERS !== '1') {
             seederLog.warn('default user seeding blocked in production', {
                 hint: 'set ROHY_ADMIN_USERNAME + ROHY_ADMIN_PASSWORD to provision an admin, or register the first account through the UI to claim the instance'
             });
