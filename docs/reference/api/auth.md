@@ -9,9 +9,9 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `POST` | `/api/auth/login` | `(none)` | `server/routes/auth-routes.js:204` |
-| `POST` | `/api/auth/logout` | `authenticateToken` | `server/routes/auth-routes.js:466` |
-| `GET` | `/api/auth/profile` | `authenticateToken` | `server/routes/auth-routes.js:449` |
-| `POST` | `/api/auth/refresh` | `authenticateToken` | `server/routes/auth-routes.js:383` |
+| `POST` | `/api/auth/login` | `(none)` | `server/routes/auth-routes.js:211` |
+| `POST` | `/api/auth/logout` | `authenticateToken` | `server/routes/auth-routes.js:473` |
+| `GET` | `/api/auth/profile` | `authenticateToken` | `server/routes/auth-routes.js:456` |
+| `POST` | `/api/auth/refresh` | `authenticateToken` | `server/routes/auth-routes.js:390` |
 | `POST` | `/api/auth/register` | `(none)` | `server/routes/auth-routes.js:99` |
-| `GET` | `/api/auth/verify` | `authenticateToken` | `server/routes/auth-routes.js:350` |
+| `GET` | `/api/auth/verify` | `authenticateToken` | `server/routes/auth-routes.js:357` |
