@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import AuthLayout from './AuthLayout';
 import LoginPage from './LoginPage';
 import RegisterPage from './RegisterPage';
 import {
@@ -40,6 +41,10 @@ export default function AuthGate() {
     const [invite, setInvite] = useState(null);          // {valid, role, cohort_name, …}
     const [invitePending, setInvitePending] = useState(Boolean(inviteToken));
     const [showRegister, setShowRegister] = useState(Boolean(inviteToken));
+    // "Register with an invitation code" on the login card: same register form,
+    // but with the code field already open — the holder of a code must never
+    // have to hunt for where it goes.
+    const [startWithCode, setStartWithCode] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -73,16 +78,17 @@ export default function AuthGate() {
         } catch { /* history is not load-bearing here */ }
     };
 
-    // Hold the whole card until we know. Flashing a login screen without the
-    // register link and then popping it in reads as a bug.
+    // Hold the CARD until we know — but show the brand panel immediately, so
+    // the wait reads as the product loading, not a blank screen. Flashing a
+    // login card without the register link and then popping it in reads as a bug.
     if (!policy || invitePending) {
         return (
-            <div className="flex items-center justify-center h-screen bg-neutral-950">
-                <div className="text-center">
+            <AuthLayout>
+                <div className="text-center py-16">
                     <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                     <p className="text-neutral-400">{t('loading')}</p>
                 </div>
-            </div>
+            </AuthLayout>
         );
     }
 
@@ -92,20 +98,30 @@ export default function AuthGate() {
 
     if (showRegister && canRegister) {
         return (
-            <RegisterPage
-                policy={policy}
-                invite={invite}
-                inviteToken={inviteToken}
-                onRegistered={clearInviteFromUrl}
-                onSwitchToLogin={() => { setShowRegister(false); clearInviteFromUrl(); }}
-            />
+            <AuthLayout>
+                <RegisterPage
+                    policy={policy}
+                    invite={invite}
+                    inviteToken={inviteToken}
+                    startWithCode={startWithCode}
+                    onRegistered={clearInviteFromUrl}
+                    onSwitchToLogin={() => {
+                        setShowRegister(false);
+                        setStartWithCode(false);
+                        clearInviteFromUrl();
+                    }}
+                />
+            </AuthLayout>
         );
     }
 
     return (
-        <LoginPage
-            policy={policy}
-            onSwitchToRegister={canRegister ? () => setShowRegister(true) : null}
-        />
+        <AuthLayout>
+            <LoginPage
+                policy={policy}
+                onSwitchToRegister={canRegister ? () => setShowRegister(true) : null}
+                onSwitchToInvite={canRegister ? () => { setStartWithCode(true); setShowRegister(true); } : null}
+            />
+        </AuthLayout>
     );
 }

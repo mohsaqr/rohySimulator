@@ -9,6 +9,29 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.7.7] — 2026-07-14
+
+### Added
+
+- **A front door worth arriving at.** The logged-out screens now sit in a split layout:
+  a brand panel that says what Rohy is — AI patients, an AI care team, real labs and
+  radiology, consent-bound affect capture, process analytics — beside the sign-in card.
+  The language picker moved into that panel, so it is chosen once and the whole
+  login/register flow follows.
+- **The invite code has a home on the login card.** "Register with an invitation code"
+  opens the register form with the code field already expanded. A code is one artifact
+  with two deliveries — a link and something you can read down the phone — so the box
+  is now reachable in *every* mode that permits registration, not only invite-only.
+  Left collapsed behind a one-line prompt otherwise, and marked optional when it is.
+
+### Fixed
+
+- **The register form no longer accepts passwords the server rejects.** It asked for six
+  characters; the server demanded eight with an uppercase letter, a lowercase letter and
+  a number, and refused the account after the fact. The rules are now shown as a live
+  checklist as you type, from `src/utils/passwordRules.js` — the client mirror of the
+  server's `validatePassword()`. Password fields can be revealed.
+
 ## [2.7.6] — 2026-07-14
 
 ### Added

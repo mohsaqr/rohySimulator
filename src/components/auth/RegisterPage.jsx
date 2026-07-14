@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserPlus, User, Mail, Lock, AlertCircle, CheckCircle, KeyRound } from 'lucide-react';
+import { PASSWORD_RULES, passwordMeetsRules } from '../../utils/passwordRules';
 
-export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, invite, inviteToken }) {
+export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, invite, inviteToken, startWithCode = false }) {
     const { t } = useTranslation('auth');
     const [formData, setFormData] = useState({
         username: '',
@@ -26,7 +27,18 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
         ? [invite.email_domain]
         : (policy?.email_domains || []);
     const inviteRequired = Boolean(policy?.invite_required);
-    const showInviteField = inviteRequired || Boolean(inviteToken) || Boolean(invite);
+    // An invite is one artifact with two deliveries: a link, and a code you can
+    // read down the phone. The code has to be enterable in EVERY mode that lets
+    // you register — an invite still carries a role and a course when the
+    // platform is open, so a recipient with no box to type it into would sign up
+    // as a plain student and the invite would silently go unused.
+    //
+    // But an always-open code box is noise for the 95% who were just told "go
+    // sign up", so it starts collapsed behind a one-line prompt, and expands on
+    // its own whenever a code is actually in play (link arrival, or invite-only).
+    const [codeOpen, setCodeOpen] = useState(
+        startWithCode || inviteRequired || Boolean(inviteToken) || Boolean(invite)
+    );
     // True only while the users table is genuinely empty. The old footer claimed
     // "the first user becomes an administrator" unconditionally, which was a lie
     // to every visitor after the first one.
@@ -50,7 +62,7 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
             return false;
         }
 
-        if (formData.password.length < 6) {
+        if (!passwordMeetsRules(formData.password)) {
             setError(t('password_too_short'));
             return false;
         }
@@ -85,16 +97,9 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
         }
     };
 
+    // Pure card — the split-panel shell around it is AuthLayout, owned by AuthGate.
     return (
-        <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
-            <div className="w-full max-w-md">
-                {/* Logo/Header */}
-            <div className="text-center mb-8">
-                <h1 className="text-4xl font-bold text-white mb-2">Rohy</h1>
-                <p className="text-neutral-400">{t('platform_tagline')}</p>
-            </div>
-
-                {/* Register Card */}
+        <div>
                 <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 shadow-2xl">
                     <div className="flex items-center gap-2 mb-6">
                         <UserPlus className="w-6 h-6 text-blue-400" />
@@ -135,7 +140,18 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Invite code — first, because it determines what the rest
                             of this form even gets you (role, course). */}
-                        {showInviteField && (
+                        {!codeOpen && (
+                            <button
+                                type="button"
+                                onClick={() => setCodeOpen(true)}
+                                className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                            >
+                                <KeyRound className="w-4 h-4" />
+                                {t('invite_have_code')}
+                            </button>
+                        )}
+
+                        {codeOpen && (
                             <div>
                                 <label className="block text-sm font-medium text-neutral-300 mb-2">
                                     {t('invite_code')}
@@ -162,6 +178,12 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
                                     >
                                         {t('invite_use_different_code')}
                                     </button>
+                                )}
+                                {/* Say it is optional, or an open-mode signup who
+                                    opened this box out of curiosity will think they
+                                    are now required to produce a code they don't have. */}
+                                {!inviteRequired && !codeLocked && (
+                                    <p className="mt-1.5 text-xs text-neutral-500">{t('invite_code_optional')}</p>
                                 )}
                             </div>
                         )}
@@ -256,12 +278,17 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
                             </div>
                         </div>
 
-                        {/* Password Requirements */}
-                        <div className="text-xs text-neutral-500 space-y-1">
-                            <div className="flex items-center gap-2">
-                                <CheckCircle className={`w-3 h-3 ${formData.password.length >= 6 ? 'text-green-500' : 'text-neutral-700'}`} />
-                                <span>{t('password_req_length')}</span>
-                            </div>
+                        {/* Password requirements — the LIVE mirror of the server's
+                            validatePassword(). One row per rule, ticking as you
+                            type, so nobody meets the policy for the first time as
+                            a 400 after submit. */}
+                        <div className="text-xs text-neutral-500 grid grid-cols-2 gap-x-4 gap-y-1">
+                            {PASSWORD_RULES.map(({ key, test }) => (
+                                <div key={key} className="flex items-center gap-2">
+                                    <CheckCircle className={`w-3 h-3 ${test(formData.password) ? 'text-green-500' : 'text-neutral-700'}`} />
+                                    <span>{t(`password_req_${key}`)}</span>
+                                </div>
+                            ))}
                             <div className="flex items-center gap-2">
                                 <CheckCircle className={`w-3 h-3 ${formData.password === formData.confirmPassword && formData.password ? 'text-green-500' : 'text-neutral-700'}`} />
                                 <span>{t('password_req_match')}</span>
@@ -302,14 +329,13 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
                     </div>
                 </div>
 
-                {/* Footer. Only true while the instance is unclaimed — this used to
-                    be shown to everyone, promising admin to visitor number 400. */}
+                {/* Only true while the instance is unclaimed — this used to be
+                    shown to everyone, promising admin to visitor number 400. */}
                 {isClaimingInstance && (
                     <div className="mt-6 text-center text-neutral-500 text-xs">
                         <p>{t('first_user_admin_note')}</p>
                     </div>
                 )}
-            </div>
         </div>
     );
 }
