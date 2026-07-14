@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.7.4] — 2026-07-14
+
+### Security
+
+- **An admin could take over another admin's account.** `PUT /users/:id` and
+  `DELETE /users/:id` checked the *requested* role against the caller but never
+  the *target's* rank — unlike `PATCH /users/:id/status` and
+  `POST /users/bulk-action`, which both refuse a target at or above the caller.
+  So any admin could open a peer admin in the edit form and set a new password.
+  The Users table hid the Delete button for peers but rendered **Edit**
+  unconditionally, and a hidden button is not a security boundary: the API is
+  reachable directly. Both routes now carry the same target-rank guard as their
+  siblings (editing *yourself* is still allowed), and the client only offers Edit
+  where the server would accept it.
+
 ## [2.7.2] — 2026-07-14
 
 Ports the two fixes released as 2.5.2 on the 2.5.x line (see below); both bugs

@@ -16,7 +16,11 @@ const ROLE_OPTIONS = [
 ];
 const STATUSES = ['active', 'inactive', 'suspended'];
 
-export default function UserDetailDrawer({ user, cohorts, canAct, myRank, onChanged, onEdit, onDelete }) {
+// `canAct` = may suspend/delete/reassign this user (peers and superiors excluded).
+// `canEdit` is deliberately WIDER: it also covers editing yourself, which the
+// server permits (PUT /users/:id). Defaults to canAct so an older caller that
+// doesn't pass it can never accidentally widen the surface.
+export default function UserDetailDrawer({ user, cohorts, canAct, canEdit = canAct, myRank, onChanged, onEdit, onDelete }) {
     const { t } = useTranslation('teacher_users');
     const roleOptLabel = (v) => t('opt_role_' + (v === 'educator' ? 'teacher' : v));
     const statusLabel = (s) => t('opt_status_' + s);
@@ -147,7 +151,9 @@ export default function UserDetailDrawer({ user, cohorts, canAct, myRank, onChan
                         {inherited.map(c => <span key={c.id} className="rohy-count-pill">{c.name}</span>)}
                     </div>
                     <div className="flex items-center gap-2 pt-1 border-t border-neutral-200">
-                        <button className="rohy-btn rohy-btn-secondary !py-1 !text-xs mt-3" onClick={onEdit}><Pencil className="w-3.5 h-3.5" /> {t('btn_edit')}</button>
+                        {canEdit && (
+                            <button className="rohy-btn rohy-btn-secondary !py-1 !text-xs mt-3" onClick={onEdit}><Pencil className="w-3.5 h-3.5" /> {t('btn_edit')}</button>
+                        )}
                         {canAct && (
                             <button className="rohy-btn rohy-btn-danger !py-1 !text-xs mt-3" onClick={onDelete}><Trash2 className="w-3.5 h-3.5" /> {t('btn_delete')}</button>
                         )}

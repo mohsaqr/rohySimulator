@@ -672,6 +672,17 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
         );
         if (!prior) return res.status(404).json({ error: 'User not found' });
 
+        // Same target-rank guard as PATCH /users/:id/status and POST
+        // /users/bulk-action. Without it this route let any admin open a PEER
+        // admin and set a new password (the body.password branch below hashes
+        // and writes it) — lateral account takeover, audit row only. Editing
+        // yourself stays allowed; the role/status checks below still bound what
+        // you may change about you.
+        const isSelf = String(targetUserId) === String(req.user.id);
+        if (!isSelf && getRoleRank(prior.role) >= getRoleRank(req.user.role)) {
+            return res.status(403).json({ error: 'Cannot modify a user at or above your role' });
+        }
+
         if (requestedRole && !isValidRole(requestedRole)) {
             return res.status(400).json({ error: 'Invalid role' });
         }
@@ -856,6 +867,14 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
     dbAdapter.get('SELECT id, username, email, role, tenant_id FROM users WHERE id = ? AND tenant_id = ?', [userId, tenantId(req)], (targetErr, targetUser) => {
         if (targetErr) return res.status(500).json({ error: targetErr.message });
         if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
+        // Same target-rank guard as PATCH /users/:id/status and POST
+        // /users/bulk-action. This route never had one — it was masked only by
+        // the client hiding the Delete button for peers, which is not a
+        // security boundary (the API is reachable directly).
+        if (getRoleRank(targetUser.role) >= getRoleRank(req.user.role)) {
+            return res.status(403).json({ error: 'Cannot delete a user at or above your role' });
+        }
 
     dbAdapter.get('SELECT COUNT(*) as count FROM case_versions WHERE changed_by = ?', [userId], (versionErr, versionRow) => {
         if (versionErr) return res.status(500).json({ error: versionErr.message });

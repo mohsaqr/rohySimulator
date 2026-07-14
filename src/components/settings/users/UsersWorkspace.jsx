@@ -443,6 +443,11 @@ export default function UsersWorkspace() {
                             {!loading && filtered.map(u => {
                                 const expanded = expandedId === u.id;
                                 const actionable = canActOn(u);
+                                // Edit tracks what the server allows (PUT /users/:id), which is
+                                // NOT the same set as Delete: you may edit yourself, but never a
+                                // peer or superior. Rendering Edit unconditionally is how an admin
+                                // used to reach another admin's password field.
+                                const editable = actionable || u.id === me?.id;
                                 return (
                                     <Fragment key={u.id}>
                                         <tr className={`rohy-table-row ${expanded ? 'bg-neutral-50' : ''}`}>
@@ -476,7 +481,9 @@ export default function UsersWorkspace() {
                                             <td className="px-3 py-2.5 rohy-table-muted whitespace-nowrap">{formatDate(u.created_at)}</td>
                                             <td className="px-3 py-2.5">
                                                 <div className="flex items-center justify-end gap-1">
-                                                    <button className="rohy-subtle-button p-1.5 rounded" title={t('title_edit')} onClick={() => setFormUser(u)}><Pencil className="w-3.5 h-3.5" /></button>
+                                                    {editable && (
+                                                        <button className="rohy-subtle-button p-1.5 rounded" title={t('title_edit')} onClick={() => setFormUser(u)}><Pencil className="w-3.5 h-3.5" /></button>
+                                                    )}
                                                     {actionable && (
                                                         <button className="rohy-danger-icon-button p-1.5 rounded" title={t('title_delete')} onClick={() => onDelete(u)}><Trash2 className="w-3.5 h-3.5" /></button>
                                                     )}
@@ -493,6 +500,7 @@ export default function UsersWorkspace() {
                                                         user={u}
                                                         cohorts={cohorts}
                                                         canAct={actionable}
+                                                        canEdit={editable}
                                                         myRank={myRank}
                                                         onChanged={load}
                                                         onEdit={() => setFormUser(u)}
