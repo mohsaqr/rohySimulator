@@ -5,7 +5,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { LANGUAGES } from '../../i18n/languages';
 import { LogIn, User, Lock, AlertCircle, Globe } from 'lucide-react';
 
-export default function LoginPage({ onSwitchToRegister }) {
+export default function LoginPage({ onSwitchToRegister, policy }) {
     const { t } = useTranslation('auth');
     const { uiLanguage, setUiLanguage } = useLanguage();
     const [username, setUsername] = useState('');
@@ -129,17 +129,27 @@ export default function LoginPage({ onSwitchToRegister }) {
                         </button>
                     </form>
 
-                    {/* Register Link */}
+                    {/* Register link — or an explanation of its absence.
+                        `onSwitchToRegister` is null when the platform does not
+                        offer self-registration. Leaving a blank gap there reads as
+                        a broken page, and there is no "email us" fallback to lean
+                        on: the platform cannot send mail. So say plainly who to ask. */}
                     <div className="mt-6 text-center">
-                        <p className="text-neutral-400 text-sm">
-                            {t('no_account_prompt')}{' '}
-                            <button
-                                onClick={onSwitchToRegister}
-                                className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
-                            >
-                                {t('create_account')}
-                            </button>
-                        </p>
+                        {onSwitchToRegister ? (
+                            <p className="text-neutral-400 text-sm">
+                                {t('no_account_prompt')}{' '}
+                                <button
+                                    onClick={onSwitchToRegister}
+                                    className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
+                                >
+                                    {t('create_account')}
+                                </button>
+                            </p>
+                        ) : (
+                            <p className="text-neutral-500 text-sm">
+                                {policy?.message || t('registration_closed_hint')}
+                            </p>
+                        )}
                     </div>
                 </div>
 

@@ -75,6 +75,96 @@ export async function caseAccessEnforcedFor(user) {
     return cohortCaseEnforcementOn();
 }
 
+// --- Registration policy ----------------------------------------------------
+// How people get accounts, set by an admin in Platform → Users:
+//
+//   open     anyone who can reach the URL self-registers   (the historical behaviour)
+//   approval anyone may request; an admin approves          (phase 3)
+//   invite   self-registration requires an invite           (phase 2)
+//   closed   no self-registration; admins create users
+//
+// ABSENT SETTING = 'open'. That is what makes this non-breaking: an existing
+// install that never opts in behaves exactly as it did before the feature
+// existed. Fresh installs are seeded to a safe mode by server/seeders.
+//
+// The bootstrap (empty users table → first account claims the instance as
+// admin) is checked BEFORE this policy in POST /auth/register and bypasses it
+// entirely, so a fresh box stays claimable in every mode.
+
+export const REGISTRATION_MODES = ['open', 'approval', 'invite', 'closed'];
+export const DEFAULT_REGISTRATION_MODE = 'open';
+
+let _policyCache = { value: null, at: 0 };
+const POLICY_CACHE_MS = 15000;
+
+/** Normalise the stored comma-separated domain list into bare hostnames. */
+function parseDomains(raw) {
+    if (!raw) return [];
+    return raw
+        .split(',')
+        .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
+        .filter(Boolean);
+}
+
+/**
+ * The current registration policy (cached ~15s).
+ *
+ * Deliberately UNLIKE cohortCaseEnforcementOn(): on a read error we serve the
+ * last-good cached value rather than the default. A transient DB failure must
+ * never silently re-open a closed instance. We only fall back to 'open' when
+ * there has never been a successful read — and that case is safe, because an
+ * instance nobody has ever configured is a fresh one, which the bootstrap
+ * covers regardless of mode.
+ *
+ * @returns {Promise<{mode: string, domains: string[], message: string|null}>}
+ */
+export async function registrationPolicy() {
+    const now = Date.now();
+    if (_policyCache.value && now - _policyCache.at < POLICY_CACHE_MS) {
+        return _policyCache.value;
+    }
+    try {
+        const rows = await dbAll(
+            `SELECT setting_key, setting_value FROM platform_settings
+              WHERE setting_key IN ('registration_mode', 'registration_email_domains', 'registration_message')`
+        );
+        const byKey = Object.fromEntries((rows || []).map((r) => [r.setting_key, r.setting_value]));
+        const stored = byKey.registration_mode;
+        const value = {
+            mode: REGISTRATION_MODES.includes(stored) ? stored : DEFAULT_REGISTRATION_MODE,
+            domains: parseDomains(byKey.registration_email_domains),
+            message: byKey.registration_message || null
+        };
+        _policyCache = { value, at: now };
+        return value;
+    } catch (err) {
+        if (_policyCache.value) {
+            routesCasesLog.warn('registration policy read failed, serving cached value', { error: err.message });
+            return _policyCache.value;
+        }
+        routesCasesLog.warn('registration policy unreadable, defaulting to open', { error: err.message });
+        return { mode: DEFAULT_REGISTRATION_MODE, domains: [], message: null };
+    }
+}
+
+/** Drop the cached policy after a write (admin route / tests call this). */
+export function resetRegistrationPolicyCache() {
+    _policyCache = { value: null, at: 0 };
+}
+
+/**
+ * True when `email` is acceptable under an allowlist. An empty list allows
+ * everything. Domains are matched on the exact host after '@' (a sub-domain of
+ * an allowed domain is NOT allowed — 'evil.uef.fi' must not pass a 'uef.fi'
+ * allowlist just because it ends with it).
+ */
+export function emailDomainAllowed(email, domains) {
+    if (!domains || domains.length === 0) return true;
+    const host = String(email || '').split('@')[1]?.toLowerCase();
+    if (!host) return false;
+    return domains.includes(host);
+}
+
 /**
  * SQL `EXISTS (...)` fragment: true when the given cases-row alias is assigned,
  * in-window, to a live active in-window membership of the bound user. Contains

@@ -42,7 +42,10 @@ import {
     dbGet,
     redactAuditSetting,
     redactRows,
+    REGISTRATION_MODES,
+    registrationPolicy,
     resetCohortCaseEnforcementCache,
+    resetRegistrationPolicyCache,
     tenantId,
     verifySessionOwnership
 } from './_helpers.js';
@@ -1153,6 +1156,58 @@ router.put('/platform-settings/cohort-case-enforcement', authenticateToken, requ
         await setAuditedPlatformSetting(req, 'enforce_cohort_case_access', enabled ? 'true' : 'false', 'update_cohort_case_enforcement');
         resetCohortCaseEnforcementCache();
         res.json({ enabled });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Registration policy ----------------------------------------------------
+// How people get accounts: open | approval | invite | closed. Absent = 'open'
+// (the historical behaviour), which is what makes this non-breaking for installs
+// that never opt in. The public read used by the login screen is
+// GET /auth/registration-policy — this pair is the ADMIN surface.
+router.get('/platform-settings/registration', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const policy = await registrationPolicy();
+        res.json({
+            mode: policy.mode,
+            email_domains: policy.domains,
+            message: policy.message
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.put('/platform-settings/registration', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const mode = req.body?.mode;
+        if (!REGISTRATION_MODES.includes(mode)) {
+            return res.status(400).json({ error: `mode must be one of: ${REGISTRATION_MODES.join(', ')}` });
+        }
+
+        // Accept an array or a comma-separated string; store canonical bare
+        // hostnames so the reader never has to guess ('@UEF.fi ' → 'uef.fi').
+        const rawDomains = Array.isArray(req.body?.email_domains)
+            ? req.body.email_domains.join(',')
+            : (req.body?.email_domains || '');
+        const domains = String(rawDomains)
+            .split(',')
+            .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
+            .filter(Boolean);
+        const bad = domains.find((d) => !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d));
+        if (bad) {
+            return res.status(400).json({ error: `'${bad}' is not a valid email domain` });
+        }
+
+        const message = typeof req.body?.message === 'string' ? req.body.message.slice(0, 500) : '';
+
+        await setAuditedPlatformSetting(req, 'registration_mode', mode, 'update_registration_policy');
+        await setAuditedPlatformSetting(req, 'registration_email_domains', domains.join(','), 'update_registration_policy');
+        await setAuditedPlatformSetting(req, 'registration_message', message, 'update_registration_policy');
+        resetRegistrationPolicyCache();
+
+        res.json({ mode, email_domains: domains, message: message || null });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

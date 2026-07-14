@@ -16,6 +16,7 @@
 
 import { seedUsers, defaultUsers } from './users.js';
 import { seedCases, defaultCases } from './cases.js';
+import { seedRegistrationPolicy } from './registrationPolicy.js';
 import { logger } from '../logger.js';
 
 const seederLog = logger('seeder');
@@ -30,7 +31,8 @@ export async function runSeeders(db) {
 
     const results = {
         users: { seeded: 0, skipped: 0, error: null },
-        cases: { seeded: 0, skipped: 0, error: null }
+        cases: { seeded: 0, skipped: 0, error: null },
+        registration: { seeded: 0, skipped: 0, error: null }
     };
 
     // Seed users first
@@ -47,6 +49,16 @@ export async function runSeeders(db) {
     } catch (err) {
         seederLog.error('case seeding failed', { error: err.message });
         results.cases.error = err.message;
+    }
+
+    // A fresh install should not be wide open on first boot. Non-fatal: if this
+    // fails the instance falls back to 'open' (absent = open), which is the
+    // pre-feature behaviour — never a hard boot failure over a default.
+    try {
+        results.registration = await seedRegistrationPolicy(db);
+    } catch (err) {
+        seederLog.error('registration policy seeding failed', { error: err.message });
+        results.registration.error = err.message;
     }
 
     // Only the dev-default path creates the well-known accounts worth naming in

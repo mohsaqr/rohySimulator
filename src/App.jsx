@@ -4,8 +4,7 @@ import PatientMonitor from './components/monitor/PatientMonitor';
 import PatientVisual from './components/patient/PatientVisual';
 import ChatInterface from './components/chat/ChatInterface';
 import ConfigPanel from './components/settings/ConfigPanel';
-import LoginPage from './components/auth/LoginPage';
-import RegisterPage from './components/auth/RegisterPage';
+import AuthGate from './components/auth/AuthGate';
 import OrdersDrawer from './components/orders/OrdersDrawer';
 import LabResultsModal from './components/investigations/LabResultsModal';
 import RadiologyResultsModal from './components/investigations/RadiologyResultsModal';
@@ -1134,10 +1133,6 @@ function BodyMapDebugApp() {
 }
 
 export default function App() {
-   // showRegister must be declared before any conditional return so its
-   // hook ordering stays stable across renders (Rules of Hooks).
-   const [showRegister, setShowRegister] = useState(false);
-
    if (isBodyMapDebug) {
       return <BodyMapDebugApp />;
    }
@@ -1152,10 +1147,7 @@ export default function App() {
                    TTS mismatch warnings) can key off caseLanguage. */}
                <LanguageProvider>
                   <VoiceProvider>
-                     <AuthenticatedApp
-                        showRegister={showRegister}
-                        setShowRegister={setShowRegister}
-                     />
+                     <AuthenticatedApp />
                      {/* Surfaces. They render fixed-position UI / side effects, so they
                          can sit at the root regardless of which page is active. */}
                      <ToastSurface />
@@ -1216,7 +1208,7 @@ function NotificationApiBridge() {
    return null;
 }
 
-function AuthenticatedApp({ showRegister, setShowRegister }) {
+function AuthenticatedApp() {
    const { t } = useTranslation('app');
    const { user, loading } = useAuth();
 
@@ -1232,12 +1224,11 @@ function AuthenticatedApp({ showRegister, setShowRegister }) {
       );
    }
 
-   // Show login/register if not authenticated
+   // Show login/register if not authenticated. AuthGate owns the login↔register
+   // toggle and the registration-policy probe that decides whether registering is
+   // even on offer.
    if (!user) {
-      if (showRegister) {
-         return <RegisterPage onSwitchToLogin={() => setShowRegister(false)} />;
-      }
-      return <LoginPage onSwitchToRegister={() => setShowRegister(true)} />;
+      return <AuthGate />;
    }
 
    // Show main app if authenticated — behind the first-run gate (admin

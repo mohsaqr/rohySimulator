@@ -88,6 +88,15 @@ describe('admin bootstrap: operator-provisioned (ROHY_ADMIN_*)', () => {
     beforeAll(async () => {
         server = await startTestServer({
             seed: false,
+            // This file is about WHO GETS WHICH ROLE, not about the registration
+            // policy. A fresh install now seeds registration_mode='closed', which
+            // would make every post-claim signup 403 — including the elevated-role
+            // case below, which would then pass for the wrong reason (refused as
+            // 'registration_closed' rather than as 'only admins can create
+            // elevated accounts'). Pin the mode to open so the role logic is what
+            // is actually under test. The closed default is covered by
+            // tests/server/registration-policy.test.js.
+            platformSettings: { registration_mode: 'open' },
             env: {
                 NODE_ENV: 'production',
                 ROHY_ADMIN_USERNAME: 'ops',
@@ -131,6 +140,9 @@ describe('admin bootstrap: first signup claims an unclaimed instance', () => {
     beforeAll(async () => {
         server = await startTestServer({
             seed: false,
+            // See the note above: pin the mode so this file keeps testing the role
+            // logic rather than the (new) closed-by-default fresh-install policy.
+            platformSettings: { registration_mode: 'open' },
             env: {
                 NODE_ENV: 'production',
                 FRONTEND_URL: 'http://localhost',

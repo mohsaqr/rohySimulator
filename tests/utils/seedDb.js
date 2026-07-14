@@ -76,10 +76,15 @@ function pExec(db, sql) {
  * @param {object} [opts]
  * @param {boolean} [opts.seed=false]   Insert minimal default rows.
  * @param {string}  [opts.label='test'] Used for the tempdir prefix.
+ * @param {object}  [opts.platformSettings] key→value rows written BEFORE the
+ *   server boots. Needed for anything the server reads through a cache: writing
+ *   `registration_mode` into a RUNNING server's DB looks unchanged for up to 15s
+ *   (see registrationPolicy() in server/routes/_helpers.js), so a test that wants
+ *   a mode in force from the first request must seed it here, not over HTTP.
  * @returns {Promise<{db, dbPath, dir, run, get, all, exec, cleanup}>}
  */
 export async function createTestDb(opts = {}) {
-    const { seed = false, label = 'test' } = opts;
+    const { seed = false, label = 'test', platformSettings = null } = opts;
     const { dir, file } = makeTempDbPath(label);
     const db = await open(file);
 
@@ -87,6 +92,17 @@ export async function createTestDb(opts = {}) {
 
     if (seed) {
         await seedMinimal(db);
+    }
+
+    if (platformSettings) {
+        for (const [key, value] of Object.entries(platformSettings)) {
+            await pRun(
+                db,
+                `INSERT INTO platform_settings (setting_key, setting_value) VALUES (?, ?)
+                 ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value`,
+                [key, String(value)]
+            );
+        }
     }
 
     let cleanedUp = false;

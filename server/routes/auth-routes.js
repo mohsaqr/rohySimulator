@@ -31,9 +31,11 @@ const LOCKOUT_MINUTES = 15;
 
 import { logger } from '../logger.js';
 import {
+    emailDomainAllowed,
     ensureAutoEnrollMemberships,
     isValidRole,
     logAudit,
+    registrationPolicy,
     roleForStorage,
     tenantId,
     validatePassword
@@ -79,6 +81,17 @@ const registerLimiter = rateLimit({
     legacyHeaders: false
 });
 
+// The registration-policy probe is public and fires once per logged-out page
+// load, so it needs a far higher ceiling than register itself — but it is still
+// an unauthenticated endpoint that hits the DB, so it does not go unbounded.
+const policyLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: RATE_LIMIT_DISABLED ? 100_000 : 60,
+    message: { error: 'Too many requests. Please try again shortly.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -95,6 +108,43 @@ try {
 }
 
 const router = express.Router();
+
+// GET /api/auth/registration-policy — PUBLIC (pre-token, by design).
+//
+// The login screen has to know whether to offer "Create an account" before
+// anyone has authenticated. This is a HINT for the UI, never a control: the
+// real gate is POST /auth/register, which re-reads the policy server-side.
+//
+// Deliberately leaks nothing: no user count, no hint whether a given
+// username/email exists, no invite tokens, no pending-request counts.
+// `bootstrap` (the users table is empty) IS included, because the register
+// screen must be able to say "claim this instance" — and it is already
+// trivially observable by registering and seeing whether you come back an admin.
+router.get('/auth/registration-policy', policyLimiter, async (req, res) => {
+    try {
+        const policy = await registrationPolicy();
+        const userCount = await new Promise((resolve, reject) => {
+            dbAdapter.get('SELECT COUNT(*) as count FROM users', (err, row) => {
+                if (err) reject(err); else resolve(row.count);
+            });
+        });
+        const bootstrap = userCount === 0;
+
+        res.json({
+            mode: policy.mode,
+            // A fresh instance is always claimable, whatever the mode says.
+            self_registration: bootstrap || policy.mode !== 'closed',
+            invite_required: !bootstrap && policy.mode === 'invite',
+            approval_required: !bootstrap && policy.mode === 'approval',
+            email_domains: policy.domains,
+            message: policy.message,
+            bootstrap
+        });
+    } catch (err) {
+        (req.log || authLog).warn('registration policy probe failed', { error: err.message });
+        res.status(500).json({ error: 'Could not read the registration policy' });
+    }
+});
 
 router.post('/auth/register', registerLimiter, async (req, res) => {
     const { username, name, email, password, role = 'student' } = req.body;
@@ -128,8 +178,33 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
     // to seed the default users (seeders/users.js). Operators who would rather
     // not race a stranger for the claim should provision the admin up front with
     // ROHY_ADMIN_USERNAME/ROHY_ADMIN_PASSWORD, which leaves the table non-empty.
+    const isBootstrapClaim = userCount === 0;
+
+    // THE REGISTRATION POLICY GATE, and the ordering matters: the bootstrap
+    // claim is resolved FIRST and bypasses the policy entirely. That is what
+    // lets an admin ship an instance as `closed` and still claim it — without
+    // this ordering, a closed fresh install would have no path to a first admin
+    // at all, which is the exact dead end 2.5.2 fixed.
+    if (!isBootstrapClaim) {
+        const policy = await registrationPolicy();
+
+        if (policy.mode === 'closed') {
+            return res.status(403).json({
+                code: 'registration_closed',
+                error: policy.message || 'Registration is closed. Ask an administrator to create your account.'
+            });
+        }
+
+        if (!emailDomainAllowed(email, policy.domains)) {
+            return res.status(400).json({
+                code: 'email_domain_not_allowed',
+                error: `Registration is limited to these email domains: ${policy.domains.join(', ')}.`
+            });
+        }
+    }
+
     let finalRole = 'student';
-    if (userCount === 0) {
+    if (isBootstrapClaim) {
         finalRole = 'admin';
     } else if (getRoleRank(requestedRole) > ROLE_RANKS.student) {
         return res.status(403).json({ error: 'Only admins can create elevated accounts' });

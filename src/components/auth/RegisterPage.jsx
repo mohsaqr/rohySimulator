@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserPlus, User, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
 
-export default function RegisterPage({ onSwitchToLogin }) {
+export default function RegisterPage({ onSwitchToLogin, policy }) {
     const { t } = useTranslation('auth');
     const [formData, setFormData] = useState({
         username: '',
@@ -14,6 +14,12 @@ export default function RegisterPage({ onSwitchToLogin }) {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const { register } = useAuth();
+
+    const allowedDomains = policy?.email_domains || [];
+    // True only while the users table is genuinely empty. The old footer claimed
+    // "the first user becomes an administrator" unconditionally, which was a lie
+    // to every visitor after the first one.
+    const isClaimingInstance = Boolean(policy?.bootstrap);
 
     const handleChange = (e) => {
         setFormData(prev => ({
@@ -127,6 +133,16 @@ export default function RegisterPage({ onSwitchToLogin }) {
                                     required
                                 />
                             </div>
+                            {/* Tell them the rule BEFORE they submit — the server
+                                enforces it either way, but finding out on submit is
+                                a needless round trip. */}
+                            {allowedDomains.length > 0 && (
+                                <p className="mt-1.5 text-xs text-neutral-500">
+                                    {t('email_domain_hint', {
+                                        domains: allowedDomains.map((d) => `@${d}`).join(', '),
+                                    })}
+                                </p>
+                            )}
                         </div>
 
                         {/* Password */}
@@ -215,10 +231,13 @@ export default function RegisterPage({ onSwitchToLogin }) {
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="mt-6 text-center text-neutral-500 text-xs">
-                    <p>{t('first_user_admin_note')}</p>
-                </div>
+                {/* Footer. Only true while the instance is unclaimed — this used to
+                    be shown to everyone, promising admin to visitor number 400. */}
+                {isClaimingInstance && (
+                    <div className="mt-6 text-center text-neutral-500 text-xs">
+                        <p>{t('first_user_admin_note')}</p>
+                    </div>
+                )}
             </div>
         </div>
     );

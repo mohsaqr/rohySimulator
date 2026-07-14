@@ -83,12 +83,15 @@ async function waitForReady(baseUrl, child, { timeoutMs = 60_000 } = {}) {
  * @param {object} [opts.env]               Extra env vars for the child.
  * @param {boolean} [opts.seed=false]       Pass through to createTestDb.
  * @param {boolean} [opts.silent=true]      Pipe stdout/stderr away from the parent.
+ * @param {object} [opts.platformSettings]  platform_settings rows written before boot
+ *   (for cached settings like `registration_mode` that a live write wouldn't surface
+ *   for up to 15s). Pass through to createTestDb.
  * @returns {Promise<{baseUrl, port, dbPath, close}>}
  */
 export async function startTestServer(opts = {}) {
-    const { port: fixedPort, env = {}, seed = false, silent = true } = opts;
+    const { port: fixedPort, env = {}, seed = false, silent = true, platformSettings = null } = opts;
 
-    const { dbPath, cleanup: cleanupDb } = await createTestDb({ seed, label: 'srv' });
+    const { dbPath, cleanup: cleanupDb } = await createTestDb({ seed, label: 'srv', platformSettings });
 
     // Retry the spawn if the child dies before becoming ready. The only
     // expected early death is a port race (another parallel test grabbed the

@@ -9,6 +9,35 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.7.5] — 2026-07-14
+
+### Added
+
+- **Registration is no longer always open.** An administrator now chooses how
+  people get accounts, in Settings → Platform → Users: **Open** (anyone who can
+  reach the page signs up — what Rohy has always done) or **Closed** (only
+  administrators create accounts). *Approval required* and *Invite only* appear
+  in the picker and land next.
+- **Allowed email domains.** Restrict self-registration to your institution's
+  domains. Accounts an administrator creates are never restricted.
+- **A message for people who can't sign up.** With registration closed the login
+  screen no longer shows a dead "Create Account" link; it shows who to ask, using
+  the text you set.
+
+### Changed
+
+- **A brand-new install is now closed by default.** Previously any freshly
+  deployed instance was open to whoever found the URL. **Existing installs are
+  untouched** — with no setting stored, registration stays open exactly as before,
+  and upgrading changes nothing.
+- **The first account still claims a fresh instance**, in every mode. The
+  bootstrap is resolved before the policy is consulted and bypasses it entirely,
+  so shipping an instance as closed can never leave it with no way to reach a
+  first administrator.
+- The register screen no longer tells every visitor that "the first user will
+  automatically become an administrator" — it says so only while that is actually
+  true.
+
 ## [2.7.4] — 2026-07-14
 
 ### Security
