@@ -9,6 +9,20 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.5.4] — 2026-07-19
+
+### Fixed
+
+- **Oyon emotion capture now starts on fresh installs.** The browser-side
+  ONNX Runtime selects `ort-wasm-simd-threaded.asyncify.{mjs,wasm}` for the
+  classifier, but the 2.5.x installer copied only the plain SIMD/threaded
+  pair. Both asyncify companions are now provisioned from the installed
+  `onnxruntime-web` package in npm, Docker, local, bootstrap, and air-gap
+  installation paths.
+- Fresh-install, deployed-host, air-gap, and release-image checks now treat
+  both asyncify files as required assets, preventing the same 404 regression
+  from reaching another release.
+
 ## [2.5.2] — 2026-07-14
 
 ### Fixed
