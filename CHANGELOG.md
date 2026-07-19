@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.5.6] — 2026-07-19
+
+### Fixed
+
+- **Release verification now checks the real MediaPipe model path.** The
+  published image correctly ships
+  `standalone/models/mediapipe/face_landmarker.task`, but the release-only
+  probe omitted the `mediapipe/` directory and falsely reported a 404. The
+  published-image gate now mirrors the complete fresh-install asset list, and
+  a regression test keeps both workflows aligned.
+
 ## [2.5.5] — 2026-07-19
 
 ### Fixed
