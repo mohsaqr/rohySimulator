@@ -303,19 +303,25 @@ jobs:
           # non-200 here, the published image is broken from an
           # operator's POV regardless of what CI thinks.
           MISSING=0
-          for p in \
-              standalone/ \
-              standalone/logs.html \
-              standalone/vendor/onnxruntime-web/ort.min.mjs \
-              standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.mjs \
-              standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.wasm \
-              standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs \
-              standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm \
-              standalone/vendor/mediapipe/vision_bundle.mjs \
-              standalone/vendor/dynajs/index.js \
-              standalone/vendor/rohy-tna/NetworkGraph.js \
-              standalone/models/face_landmarker.task \
-              standalone/models/emotion/enet_b0_8_va_mtl.onnx ; do
+          declare -a paths=(
+            standalone/
+            standalone/logs.html
+            standalone/vendor/onnxruntime-web/ort.min.mjs
+            standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.mjs
+            standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.wasm
+            standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs
+            standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm
+            standalone/vendor/mediapipe/vision_bundle.mjs
+            standalone/vendor/dynajs/index.js
+            standalone/vendor/rohy-tna/NetworkGraph.js
+            standalone/vendor/rohy-tna/SequencePlots.js
+            standalone/vendor/rohy-tna/tnaColors.js
+            standalone/models/mediapipe/face_landmarker.task
+            standalone/models/emotion/enet_b0_8_va_mtl.onnx
+            standalone/models/emotion/mobilevit_va_mtl.onnx
+            standalone/models/emotion/mbf_va_mtl.onnx
+          )
+          for p in "${paths[@]}"; do
             code=$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:4000/$p")
             if [ "$code" != "200" ]; then
               echo "  ✗ /$p → $code"
