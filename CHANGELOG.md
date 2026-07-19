@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.5.5] — 2026-07-19
+
+### Fixed
+
+- **Published-image release verification now reaches the Oyon probes.** The
+  verifier booted the production container without its required
+  `FRONTEND_URL`, so the entrypoint correctly stopped before `/api/health` and
+  the release workflow could not inspect the assets it had just published.
+  The verifier now supplies the same explicit localhost origin used by the
+  fresh-install Docker gate, with a regression assertion covering the boot
+  contract.
+
 ## [2.5.4] — 2026-07-19
 
 ### Fixed

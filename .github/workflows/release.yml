@@ -277,6 +277,7 @@ jobs:
             -p 4000:4000 \
             -e JWT_SECRET="$(openssl rand -hex 32)" \
             -e NODE_ENV=production \
+            -e FRONTEND_URL=http://localhost:4000 \
             -e ALLOW_DEFAULT_USERS=1 \
             -e OYON_ENABLED=1 \
             ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}

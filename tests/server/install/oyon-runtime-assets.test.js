@@ -17,6 +17,10 @@ describe('Oyon ONNX Runtime packaging contract', () => {
     techTest.indexOf('# REQUIRED set:'),
     techTest.indexOf('# OPTIONAL set:'),
   );
+  const releaseBootBlock = release.slice(
+    release.indexOf('- name: Boot the container as if on a fresh box'),
+    release.indexOf('- name: Wait for /api/health'),
+  );
 
   it.each(requiredAssets)('requires %s in every install and verification path', (asset) => {
     expect(installer).toContain(asset);
@@ -24,5 +28,9 @@ describe('Oyon ONNX Runtime packaging contract', () => {
     expect(freshInstall).toContain(`standalone/vendor/onnxruntime-web/${asset}`);
     expect(release).toContain(`standalone/vendor/onnxruntime-web/${asset}`);
     expect(airgap).toContain(asset);
+  });
+
+  it('boots the published image with its required browser origin', () => {
+    expect(releaseBootBlock).toContain('-e FRONTEND_URL=http://localhost:4000');
   });
 });
