@@ -97,12 +97,15 @@ copy_vendor() {
   printf '  ✓ %s\n' "$dest"
 }
 
-# ONNX Runtime Web — only the files the default SIMD+threaded wasm backend
-# loads. The app never loads the jsep/asyncify/webgpu variants (tech-test.sh
-# treats those as optional), so shipping them would just bloat the image by
-# ~50 MB of unused .wasm.
+# ONNX Runtime Web — the SIMD+threaded wasm backend AND its asyncify variant.
+# onnxruntime-web loads `ort-wasm-simd-threaded.asyncify.{mjs,wasm}` at runtime
+# for the classifier's inference path. Omitting either file produces a 404,
+# prevents the emotion model from loading, and leaves the Oyon pill in Error.
+# jsep/webgpu/jspi remain excluded because those execution providers are off.
 if ort_dist="$(resolve_in_node_modules onnxruntime-web/dist)"; then
-  for f in ort.min.mjs ort-wasm-simd-threaded.mjs ort-wasm-simd-threaded.wasm; do
+  for f in ort.min.mjs \
+           ort-wasm-simd-threaded.mjs ort-wasm-simd-threaded.wasm \
+           ort-wasm-simd-threaded.asyncify.mjs ort-wasm-simd-threaded.asyncify.wasm; do
     copy_vendor "$ort_dist/$f" "$VENDOR/onnxruntime-web/$f" "onnxruntime-web/$f"
   done
 else

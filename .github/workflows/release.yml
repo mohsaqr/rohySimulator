@@ -308,6 +308,8 @@ jobs:
               standalone/vendor/onnxruntime-web/ort.min.mjs \
               standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.mjs \
               standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.wasm \
+              standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs \
+              standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm \
               standalone/vendor/mediapipe/vision_bundle.mjs \
               standalone/vendor/dynajs/index.js \
               standalone/vendor/rohy-tna/NetworkGraph.js \

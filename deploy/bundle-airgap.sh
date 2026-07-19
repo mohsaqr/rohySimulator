@@ -152,6 +152,18 @@ if [[ "$MODE" == "source" || "$MODE" == "both" ]]; then
         echo "FATAL: OyonR vendor assets missing. Run 'bash OyonR/scripts/download-models.sh' first." >&2
         exit 1
     fi
+    for asset in \
+        ort.min.mjs \
+        ort-wasm-simd-threaded.mjs \
+        ort-wasm-simd-threaded.wasm \
+        ort-wasm-simd-threaded.asyncify.mjs \
+        ort-wasm-simd-threaded.asyncify.wasm; do
+        if [[ ! -s "$REPO_SRC/OyonR/standalone/vendor/onnxruntime-web/$asset" ]]; then
+            echo "FATAL: required Oyon ONNX Runtime asset missing: $asset" >&2
+            echo "       Run 'bash OyonR/scripts/download-models.sh' first." >&2
+            exit 1
+        fi
+    done
 fi
 
 if (( WITH_HF_CACHE )); then

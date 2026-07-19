@@ -132,7 +132,8 @@ jobs:
 
       # Explicit probes for the exact files the May-2026 deploys were
       # missing. Each maps 1:1 to a paper-cut bug we shipped a fix for:
-      #   - ort.min.mjs / ort-wasm-simd-threaded.{mjs,wasm} →
+      #   - ort.min.mjs / ort-wasm-simd-threaded.{mjs,wasm} and the
+      #     asyncify pair →
       #     download-models.sh asset list
       #   - dynajs/index.js, rohy-tna/NetworkGraph.js →
       #     accidentally gitignored under standalone/vendor/
@@ -150,6 +151,8 @@ jobs:
             standalone/vendor/onnxruntime-web/ort.min.mjs
             standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.mjs
             standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.wasm
+            standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs
+            standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm
             standalone/vendor/mediapipe/vision_bundle.mjs
             standalone/vendor/dynajs/index.js
             standalone/vendor/rohy-tna/NetworkGraph.js
