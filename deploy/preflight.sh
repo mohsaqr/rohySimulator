@@ -28,7 +28,7 @@
 #   - ROHY_DB absolute path; parent dir exists + writable
 #   - TRANSFORMERS_CACHE set + parent dir exists + writable
 #   - Disk space at ROHY_DB parent (>= 500 MB free)
-#   - dynajs sibling repo built (if file:../dynajs is in package.json)
+#   - ladyna sibling repo built (if file:../tna-js is in package.json)
 #   - PORT and HTTPS_PORT free (no other listener)
 #   - Optional: Piper venv present if tts_provider may be piper
 
@@ -265,23 +265,23 @@ else
     esac
 fi
 
-# -- 8. dynajs sibling -----------------------------------------------------
-printf '\n[8/9] checking dynajs sibling (if used)\n'
-if grep -q '"dynajs"' "$REPO_DIR/package.json" 2>/dev/null; then
-    if grep -q '"dynajs": "file:' "$REPO_DIR/package.json"; then
-        dynajs_dir="$(cd "$REPO_DIR/.." && pwd)/dynajs"
-        if [[ -f "$dynajs_dir/dist/index.mjs" || -f "$dynajs_dir/dist/index.js" ]]; then
-            ok "dynajs/dist built at $dynajs_dir"
-        elif [[ -d "$dynajs_dir" ]]; then
-            warn "dynajs found at $dynajs_dir but dist/ empty — run 'cd $dynajs_dir && npm install' (note: NOT npm ci)"
+# -- 8. ladyna sibling -----------------------------------------------------
+printf '\n[8/9] checking ladyna sibling (if used)\n'
+if grep -q '"ladyna"' "$REPO_DIR/package.json" 2>/dev/null; then
+    if grep -q '"ladyna": "file:' "$REPO_DIR/package.json"; then
+        ladyna_dir="$(cd "$REPO_DIR/.." && pwd)/tna-js"
+        if [[ -f "$ladyna_dir/dist/index.mjs" || -f "$ladyna_dir/dist/index.js" ]]; then
+            ok "ladyna/dist built at $ladyna_dir"
+        elif [[ -d "$ladyna_dir" ]]; then
+            warn "ladyna found at $ladyna_dir but dist/ empty — run 'cd $ladyna_dir && npm install' (note: NOT npm ci)"
         else
-            fail "dynajs sibling expected at $dynajs_dir but missing — clone it before deploy"
+            fail "ladyna sibling expected at $ladyna_dir but missing — clone it before deploy"
         fi
     else
-        ok "dynajs from registry (not file:../) — npm ci handles it"
+        ok "ladyna from registry (not file:../) — npm ci handles it"
     fi
 else
-    ok "dynajs not in package.json"
+    ok "ladyna not in package.json"
 fi
 
 # -- 9. Port availability --------------------------------------------------

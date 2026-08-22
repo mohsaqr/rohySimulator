@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { DiscourseAggregator } from '../src/aggregation/DiscourseAggregator.js';
 import { SignalEventLog } from '../src/logging/SignalEventLog.js';
 import { validateEmotionEvent } from '../src/validation/validateEmotionPayload.js';
-import { tna, stateFrequencies } from '../standalone/vendor/dynajs/index.js';
+import { tna, stateCounts } from '../standalone/vendor/ladyna/dist/index.js';
 
 // ---------- A. Single analyze() + finalize(): window shape and metrics ----------
 {
@@ -146,14 +146,14 @@ import { tna, stateFrequencies } from '../standalone/vendor/dynajs/index.js';
   assert.ok(stored.every((e) => e.modality === 'discourse'));
   assert.ok(stored.every((e) => e.state_vocabulary === 'discourse-states-v1'));
 
-  // ---------- J. toSequences({ modality: 'discourse' }) round trip into dynajs tna() ----------
+  // ---------- J. toSequences({ modality: 'discourse' }) round trip into ladyna tna() ----------
   const sequences = log.toSequences({ modality: 'discourse' });
   assert.equal(sequences.length, 1);
   assert.deepEqual(sequences[0], ['request', 'question', 'statement']);
 
   const model = tna(sequences);
   assert.deepEqual([...model.labels].sort(), ['question', 'request', 'statement']);
-  const freq = stateFrequencies(sequences);
+  const freq = stateCounts(sequences);
   assert.equal(freq.request, 1);
   assert.equal(freq.question, 1);
   assert.equal(freq.statement, 1);

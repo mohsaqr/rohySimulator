@@ -5,7 +5,7 @@ import { PatternsPanel } from '@/components/patterns/PatternsPanel';
  * Analyze · Patterns — sequence-structure views over emotion-state OR
  * signal-event sequences: sub-patterns (LAILA-style), the most-frequency
  * tree, and the disentangled simplicial (dismantled small multiples).
- * Compute from dynajs + tnaj; the simplicial blobs use the shipping
+ * Compute from ladyna + tnaj; the simplicial blobs use the shipping
  * carm-tna renderer.
  *
  * PatternsPanel owns the channel picker (Affect / Typing / Discourse /

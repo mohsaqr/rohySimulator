@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { centralities, ftna, summary, tna } from 'dynajs';
+import { centralities, ftna, summary, tna } from 'ladyna';
 
 const labels = ['A', 'B', 'C'];
 const sequences = [

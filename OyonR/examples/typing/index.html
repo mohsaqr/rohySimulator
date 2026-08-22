@@ -129,7 +129,7 @@ import { validateEmotionEvent } from '/src/validation/validateEmotionPayload.js'
 import { SignalEventLog } from '/src/logging/SignalEventLog.js';
 import { IndexedDbOyonStore } from '/src/storage/IndexedDbOyonStore.js';
 import { createSignalEventPersistence, readSignalEvents } from '/src/storage/SignalEventStore.js';
-import { tna } from '/standalone/vendor/dynajs/index.js';
+import { tna } from '/standalone/vendor/ladyna/dist/index.js';
 
 const el = id => document.getElementById(id);
 const composer = el('composer');
@@ -150,7 +150,7 @@ function renderTnaFrom(seqs) {
   let model;
   try { model = tna(seqs); } catch (err) { el('tna').textContent = `tna() threw: ${err.message}`; return; }
   const labels = model.labels || [...new Set(chain)];
-  // dynajs returns a flat row-major matrix as { data, rows, cols }, not a
+  // ladyna returns a flat row-major matrix as { data, rows, cols }, not a
   // nested array — index is i*cols + j.
   const w = model.weights;
   if (!w?.data) { el('tna').innerHTML = `<pre>${JSON.stringify(model, null, 1)}</pre>`; return; }
@@ -166,7 +166,7 @@ function renderTnaFrom(seqs) {
   }).join('');
   el('tna').innerHTML = `<div style="overflow-x:auto"><table>${head}${rows}</table></div>
     <p class="sub" style="margin:.5rem 0 0">Row-stochastic: each row sums to 1. Fed straight from
-    <code>SignalEventLog.toSequences()</code> into dynajs <code>tna()</code> — no adapter code.</p>`;
+    <code>SignalEventLog.toSequences()</code> into ladyna <code>tna()</code> — no adapter code.</p>`;
 }
 
 function renderStates() {

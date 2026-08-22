@@ -1,4 +1,4 @@
-// Tests for TransitionMiniCard — the compact dynajs/LAILA TNA card added to
+// Tests for TransitionMiniCard — the compact ladyna/LAILA TNA card added to
 // the Gaze tab, and its pure buildTransitionModel helper.
 
 import { describe, it, expect } from 'vitest';
@@ -7,7 +7,7 @@ import React from 'react';
 import TransitionMiniCard, { buildTransitionModel } from './TransitionMiniCard.jsx';
 
 describe('buildTransitionModel', () => {
-    it('builds a dynajs frequency TNA model with directed transition counts', () => {
+    it('builds a ladyna frequency TNA model with directed transition counts', () => {
         const seqs = [['A', 'B', 'A'], ['A', 'B', 'C']];
         const analysis = buildTransitionModel(seqs, ['A', 'B', 'C']);
 
@@ -46,7 +46,7 @@ describe('TransitionMiniCard', () => {
         expect(screen.getByText('TNA Network')).toBeInTheDocument();
         expect(screen.getByText('Transition Heatmap')).toBeInTheDocument();
         expect(screen.getByText('Centrality')).toBeInTheDocument();
-        expect(screen.queryByText(/dynajs model/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/ladyna model/i)).not.toBeInTheDocument();
         // Measure pills present and switchable.
         expect(screen.getByRole('button', { name: 'InStrength' })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Betweenness' }));

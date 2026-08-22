@@ -58,7 +58,7 @@ export function SequenceView() {
   const unit = channelUnit(channel);
 
   // One chain per session (or per session+capture for events), pooled by
-  // dynajs tna() — no phantom transitions between distinct sessions/captures
+  // ladyna tna() — no phantom transitions between distinct sessions/captures
   // when the filter scope aggregates them.
   const sequences = useMemo(
     () => channel === 'emotion'

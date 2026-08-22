@@ -176,17 +176,17 @@ export const THIRD_PARTY = [
  *
  * They are listed rather than omitted because a reader needs to know what is
  * vendored, and because "no separate licence" must be a recorded, verifiable
- * decision rather than an absence that looks like an oversight. `dynajs` was
+ * decision rather than an absence that looks like an oversight. `ladyna` (formerly `dynajs`) was
  * genuinely missing from NOTICE.md before this file existed.
  */
 export const FIRST_PARTY_VENDORED = [
   {
-    id: 'dynajs',
-    name: 'dynajs 0.1.0',
-    version: '0.1.0',
-    source: 'https://github.com/mohsaqr/dynajs',
-    vendoredAt: 'standalone/vendor/dynajs',
-    note: 'Extracted from tnaj and codynaj; Carm ecosystem, covered by LICENSE.',
+    id: 'ladyna',
+    name: 'ladyna 1.8.13',
+    version: '1.8.13',
+    source: 'https://github.com/mohsaqr/tna-js',
+    vendoredAt: 'standalone/vendor/ladyna',
+    note: 'The tnaj/ladyna engine dist; Carm ecosystem, covered by LICENSE.',
   },
 ];
 

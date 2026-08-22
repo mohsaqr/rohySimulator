@@ -332,7 +332,7 @@ cmd_apply() {
   ( cd "$ROHY_REPO_DIR" && git checkout "$target" ) || rollback_to "$snapshot" "$cur" "git checkout failed"
 
   # 4. npm install + build
-  # `npm install`, NOT `npm ci`: rohy's file: siblings (dynajs/oyon) make
+  # `npm install`, NOT `npm ci`: rohy's file: siblings (ladyna/oyon) make
   # npm ci's strict lock check environment-fragile — a lock valid on the
   # build machine fails `npm ci` on a clean host. Every other supported
   # path (Docker, bootstrap.sh, local-install.sh) already uses npm install.

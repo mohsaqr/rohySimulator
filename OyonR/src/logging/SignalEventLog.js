@@ -13,7 +13,7 @@ const DEFAULT_MAX_EVENTS = 50000;
  * §3.6: aggregate windows cannot support sequence analysis (TNA, process
  * mining, lag-sequential) because that needs one ordered, state-labelled row
  * per event — this is that row source, and `toSequences()` is the direct
- * feed into dynajs `tna()` with no reshape step.
+ * feed into ladyna `tna()` with no reshape step.
  *
  * `sequence_index` (not wall-clock `timestamp`) is the ordering key
  * everywhere in this class: timestamps are not monotonic across a tab
@@ -172,7 +172,7 @@ export class SignalEventLog {
    * Sorting uses `sequence_index`, not `timestamp`: wall-clock time is not
    * monotonic across a tab suspend, so it cannot be trusted to order events.
    *
-   * The result feeds dynajs `tna()` directly (string[][], one array per
+   * The result feeds ladyna `tna()` directly (string[][], one array per
    * session/group), with no reshape step.
    */
   toSequences({ groupBy = 'session_id', modality = null } = {}) {

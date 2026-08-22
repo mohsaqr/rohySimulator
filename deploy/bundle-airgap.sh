@@ -10,7 +10,7 @@
 #
 # Two output formats:
 #   --mode=source   Tarball of the repo + node_modules + Oyon vendor + Piper
-#                   + (optionally) the HF cache and dynajs sibling. Operator
+#                   + (optionally) the HF cache and ladyna sibling. Operator
 #                   extracts and runs the embedded airgap-install.sh. Needs
 #                   node + sqlite3 + (nginx|caddy) already on target host.
 #   --mode=docker   docker save'd image + compose.yml + Caddyfile + install.sh.
@@ -19,7 +19,7 @@
 #
 # Usage:
 #   deploy/bundle-airgap.sh                                          # both, no HF cache
-#   deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs
+#   deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-ladyna
 #   deploy/bundle-airgap.sh --mode=docker --output=/srv/builds
 #   deploy/bundle-airgap.sh --dry-run                                # plan only
 #
@@ -37,7 +37,7 @@ set -euo pipefail
 MODE="both"
 OUTPUT_DIR=""
 WITH_HF_CACHE=0
-WITH_DYNAJS=0
+WITH_LADYNA=0
 WITH_PIPER="auto"   # auto | yes | no
 SKIP_CHECKSUM=0
 DRY_RUN=0
@@ -47,7 +47,7 @@ for arg in "$@"; do
         --mode=source|--mode=docker|--mode=both) MODE="${arg#--mode=}" ;;
         --output=*)      OUTPUT_DIR="${arg#--output=}" ;;
         --with-hf-cache) WITH_HF_CACHE=1 ;;
-        --with-dynajs)   WITH_DYNAJS=1 ;;
+        --with-ladyna)   WITH_LADYNA=1 ;;
         --with-piper)    WITH_PIPER="yes" ;;
         --no-piper)      WITH_PIPER="no" ;;
         --skip-checksum) SKIP_CHECKSUM=1 ;;
@@ -115,7 +115,7 @@ printf 'mode            : %s\n' "$MODE"
 printf 'commit          : %s\n' "$GIT_SHA"
 printf 'platform        : %s\n' "$PLATFORM"
 printf 'with hf cache   : %s\n' "$([[ $WITH_HF_CACHE -eq 1 ]] && echo yes || echo no)"
-printf 'with dynajs     : %s\n' "$([[ $WITH_DYNAJS -eq 1 ]] && echo yes || echo no)"
+printf 'with ladyna     : %s\n' "$([[ $WITH_LADYNA -eq 1 ]] && echo yes || echo no)"
 printf 'with piper      : %s\n' "$WITH_PIPER"
 printf 'dry-run         : %s\n' "$([[ $DRY_RUN -eq 1 ]] && echo yes || echo no)"
 echo ""
@@ -175,10 +175,10 @@ if (( WITH_HF_CACHE )); then
     fi
 fi
 
-if (( WITH_DYNAJS )); then
-    DYNAJS_DIR="$(cd "$REPO_SRC/.." && pwd)/dynajs"
-    if [[ ! -d "$DYNAJS_DIR" ]]; then
-        echo "FATAL: --with-dynajs requested but $DYNAJS_DIR not found." >&2
+if (( WITH_LADYNA )); then
+    LADYNA_DIR="$(cd "$REPO_SRC/.." && pwd)/tna-js"
+    if [[ ! -d "$LADYNA_DIR" ]]; then
+        echo "FATAL: --with-ladyna requested but $LADYNA_DIR not found." >&2
         exit 1
     fi
 fi
@@ -212,7 +212,7 @@ build_source_bundle() {
             echo "  include: server/data/piper/ (~$(sizeof "$REPO_SRC/server/data/piper"))"
         fi
         (( WITH_HF_CACHE )) && echo "  include: hf-cache from $HF_CACHE (~$(sizeof "$HF_CACHE"))"
-        (( WITH_DYNAJS ))   && echo "  include: dynajs from $DYNAJS_DIR"
+        (( WITH_LADYNA ))   && echo "  include: ladyna from $LADYNA_DIR"
         echo "[source] (dry-run) would tar -> $OUTPUT_DIR/rohy-airgap-source-${STAMP}.tar.gz"
         return
     fi
@@ -257,10 +257,10 @@ build_source_bundle() {
         rsync -a "$HF_CACHE/" "$root/hf-cache/"
     fi
 
-    if (( WITH_DYNAJS )); then
-        echo "[source] adding dynajs from $DYNAJS_DIR"
-        mkdir -p "$root/dynajs"
-        rsync -a --exclude='.git/' "$DYNAJS_DIR/" "$root/dynajs/"
+    if (( WITH_LADYNA )); then
+        echo "[source] adding ladyna from $LADYNA_DIR"
+        mkdir -p "$root/tna-js"
+        rsync -a --exclude='.git/' "$LADYNA_DIR/" "$root/tna-js/"
     fi
 
     # Embed the offline installer. Heredoc keeps it inline with this script
@@ -356,11 +356,11 @@ if [[ -d "$BUNDLE/hf-cache" ]]; then
     chown -R "$ROHY_USER:$ROHY_USER" "$HF_DIR"
 fi
 
-if [[ -d "$BUNDLE/dynajs" ]]; then
-    DYNAJS_DST="$(cd "$REPO_DIR/.." && pwd)/dynajs"
-    echo "[airgap] placing dynajs sibling at $DYNAJS_DST"
-    rsync -a "$BUNDLE/dynajs/" "$DYNAJS_DST/"
-    chown -R "$ROHY_USER:$ROHY_USER" "$DYNAJS_DST"
+if [[ -d "$BUNDLE/tna-js" ]]; then
+    LADYNA_DST="$(cd "$REPO_DIR/.." && pwd)/tna-js"
+    echo "[airgap] placing ladyna sibling at $LADYNA_DST"
+    rsync -a "$BUNDLE/tna-js/" "$LADYNA_DST/"
+    chown -R "$ROHY_USER:$ROHY_USER" "$LADYNA_DST"
 fi
 
 # Env file — generate fresh JWT, never reuse across deploys.
@@ -437,7 +437,7 @@ INSTALLER_EOF
   "build_host": "$(uname -srm)",
   "platform": "${PLATFORM}",
   "with_hf_cache": $([[ $WITH_HF_CACHE -eq 1 ]] && echo true || echo false),
-  "with_dynajs": $([[ $WITH_DYNAJS -eq 1 ]] && echo true || echo false),
+  "with_ladyna": $([[ $WITH_LADYNA -eq 1 ]] && echo true || echo false),
   "with_piper": ${piper_in_bundle},
   "node_modules_size": "$(sizeof "$root/repo/node_modules" 2>/dev/null || echo unknown)",
   "oyon_size": "$(sizeof "$root/repo/OyonR" 2>/dev/null || echo unknown)"

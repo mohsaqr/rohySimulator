@@ -2,7 +2,7 @@
  * Centrality measures for the transition network, and the maths for sizing
  * nodes by one.
  *
- * The measures themselves come from dynajs (`centralities(model)`); this
+ * The measures themselves come from ladyna (`centralities(model)`); this
  * module turns that raw output into something a table and a renderer can both
  * consume, so the two can never disagree about ranking or scale.
  */

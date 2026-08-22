@@ -344,13 +344,13 @@ function AboutPage() {
                  * separate license: the Carm License above already covers the
                  * whole ecosystem. Listing it means "no separate license" is a
                  * visible decision rather than an absence a reader would have
-                 * to notice — dynajs was missing from the notices entirely
+                 * to notice — ladyna was missing from the notices entirely
                  * before this page listed it.
                  */}
                 <p className="m-0 border-t border-line pt-3 text-xs text-ink-3">
                   <span className="font-medium text-ink-2">Vendored Carm ecosystem code:</span>{' '}
-                  dynajs 0.1.0 (<code>standalone/vendor/dynajs</code>), extracted from tnaj and
-                  codynaj. No separate license text — the Carm Research License above applies to
+                  ladyna 1.8.13 (<code>standalone/vendor/ladyna</code>), the tnaj/ladyna
+                  analysis engine. No separate license text — the Carm Research License above applies to
                   Carm and every component of the Carm ecosystem, this included.
                 </p>
               </CardContent>

@@ -43,18 +43,18 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-      # `dynajs` is a sibling file: dependency in package.json
-      # (`"dynajs": "file:../dynajs"`). The CI runner only checks out
+      # `ladyna` is a sibling file: dependency in package.json
+      # (`"ladyna": "file:../tna-js"`). The CI runner only checks out
       # this repo, so the path doesn't exist until we clone it next to
       # the workspace. `npm ci` happily resolves a file: dep to an empty
       # stub when the path is missing, which then explodes at bundle /
-      # test time when something does `import {...} from 'dynajs'`.
-      # `npm install` (not ci) is needed inside the dynajs clone so its
+      # test time when something does `import {...} from 'ladyna'`.
+      # `npm install` (not ci) is needed inside the ladyna clone so its
       # prepare script produces dist/. Same recipe as the Dockerfile.
-      - name: Clone dynajs sibling
+      - name: Clone ladyna sibling
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
-          cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
+          git clone --depth 1 https://github.com/mohsaqr/tna-js.git ../tna-js
+          cd ../tna-js && npm install --prefer-offline --no-audit --no-fund
       - name: Install dependencies
         run: npm ci
       - name: Build
@@ -77,10 +77,10 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       # See the Build job for why this step exists.
-      - name: Clone dynajs sibling
+      - name: Clone ladyna sibling
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
-          cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
+          git clone --depth 1 https://github.com/mohsaqr/tna-js.git ../tna-js
+          cd ../tna-js && npm install --prefer-offline --no-audit --no-fund
       - name: Install dependencies
         run: npm ci
       - name: Run tests with coverage and JUnit
@@ -144,10 +144,10 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       # See the Build job for why this step exists.
-      - name: Clone dynajs sibling
+      - name: Clone ladyna sibling
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
-          cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
+          git clone --depth 1 https://github.com/mohsaqr/tna-js.git ../tna-js
+          cd ../tna-js && npm install --prefer-offline --no-audit --no-fund
       - name: Install dependencies
         run: npm ci
       # The audit-*.sh scripts (except audit-observability.sh, which spins

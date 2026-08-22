@@ -2,7 +2,7 @@
 #
 # Why this exists: every paper-cut bug we hit on a fresh Docker deploy in
 # May 2026 — ORT/wasm version drift, the asyncify 404 / WebGPU bundle
-# mismatch, missing rohy-tna and dynajs vendor files, missing model
+# mismatch, missing rohy-tna and ladyna vendor files, missing model
 # .onnx files, the standalone bearer-token gap — would have been caught
 # by a single CI run that did `git clone && docker build && docker run
 # && open in browser`. The repo's other CI (ci.yml) verifies units and
@@ -135,7 +135,7 @@ jobs:
       #   - ort.min.mjs / ort-wasm-simd-threaded.{mjs,wasm} and the
       #     asyncify pair →
       #     download-models.sh asset list
-      #   - dynajs/index.js, rohy-tna/NetworkGraph.js →
+      #   - ladyna/index.js, rohy-tna/NetworkGraph.js →
       #     accidentally gitignored under standalone/vendor/
       #   - models/emotion/*.onnx → download-models.sh emotion blobs
       #   - models/face_landmarker.task → MediaPipe model
@@ -154,7 +154,7 @@ jobs:
             standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs
             standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm
             standalone/vendor/mediapipe/vision_bundle.mjs
-            standalone/vendor/dynajs/index.js
+            standalone/vendor/ladyna/dist/index.js
             standalone/vendor/rohy-tna/NetworkGraph.js
             standalone/vendor/rohy-tna/SequencePlots.js
             standalone/vendor/rohy-tna/tnaColors.js
@@ -234,7 +234,7 @@ jobs:
             });
             expect(res.ok()).toBeTruthy();
 
-            // Settle for any deferred imports (NetworkGraph, dynajs, ORT init).
+            // Settle for any deferred imports (NetworkGraph, ladyna, ORT init).
             await page.waitForTimeout(3000);
 
             const realErrors = consoleErrors.filter(e => !e.toLowerCase().includes('favicon'));

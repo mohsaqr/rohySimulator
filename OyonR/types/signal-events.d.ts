@@ -101,7 +101,7 @@ export interface SignalEventLogOptions {
 
 /**
  * The complete, ordered, per-event log behind every modality's discrete
- * state stream. `toSequences()` feeds dynajs `tna()` directly with no
+ * state stream. `toSequences()` feeds ladyna `tna()` directly with no
  * reshape step; `toLongFormat()` is the TraMineR-style long format.
  */
 export class SignalEventLog {

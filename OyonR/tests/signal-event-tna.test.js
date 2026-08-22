@@ -1,7 +1,7 @@
 // The payoff test for SignalEventLog (audio_text.md §3.6): a realistic mixed
 // typing session recorded through the public record() API must be directly
 // consumable by the existing TNA machinery via toSequences(), with no
-// adapter/reshape code in between — exactly the same vendored dynajs used by
+// adapter/reshape code in between — exactly the same vendored ladyna used by
 // tests/transition-network.test.js and the app's TNA pooling.
 import assert from 'node:assert/strict';
 import { SignalEventLog } from '../src/logging/SignalEventLog.js';
@@ -9,9 +9,9 @@ import {
   tna,
   ftna,
   centralities,
-  stateFrequencies,
+  stateCounts,
   discoverPatterns,
-} from '../standalone/vendor/dynajs/index.js';
+} from '../standalone/vendor/ladyna/dist/index.js';
 
 const log = new SignalEventLog({
   now: () => 1_700_000_000_000,
@@ -24,7 +24,7 @@ log.start({ capture_id: 'cap-1', session_id: 'sess-1' });
 // commit — a plausible CJK input), a final insert, a last pause, then submit.
 // `target` and `source` are stamped to mirror real host usage (a co-writing
 // chat composer, with the IME segment plausibly AI-suggested); neither field
-// participates in the state chain dynajs consumes.
+// participates in the state chain ladyna consumes.
 const target = { kind: 'chat_composer', id: 'composer-1' };
 const session = [
   { state: 'start', source: 'user' },
@@ -56,7 +56,7 @@ const sequences = log.toSequences();
 assert.equal(sequences.length, 1, 'a single session must produce a single chain');
 assert.deepEqual(sequences[0], session.map((e) => e.state), 'chain must match record() order (sequence_index)');
 
-// --- shape: 8 distinct states, alphabetically labelled by dynajs -------------------
+// --- shape: 8 distinct states, alphabetically labelled by ladyna -------------------
 const EXPECTED_LABELS = [
   'start',
   'commit',
@@ -105,8 +105,8 @@ for (let i = 0; i < freqModel.weights.rows; i += 1) {
 }
 assert.equal(totalEdges, session.length - 1);
 
-// --- stateFrequencies: hand-counted occurrences per state --------------------------
-const freq = stateFrequencies(sequences);
+// --- stateCounts: hand-counted occurrences per state --------------------------
+const freq = stateCounts(sequences);
 assert.equal(freq.insert, 5);
 assert.equal(freq.pause, 3);
 assert.equal(freq.delete, 2);
@@ -125,7 +125,7 @@ assert.ok(cent.measures.OutStrength instanceof Float64Array);
 // --- pattern discovery still works unmodified over the log's sequences -------------
 const patterns = discoverPatterns(sequences, { type: 'ngram', len: [2], minFreq: 1 });
 assert.ok(Array.isArray(patterns.patterns) && patterns.patterns.length > 0);
-// dynajs joins n-gram states with "->"; pause->insert occurs twice (see
+// ladyna joins n-gram states with "->"; pause->insert occurs twice (see
 // the hand count above), so it must surface here with frequency 2.
 const pauseToInsert = patterns.patterns.find((p) => p.pattern === 'pause->insert');
 assert.ok(pauseToInsert, 'the pause->insert 2-gram must be discoverable from the log-derived sequence');

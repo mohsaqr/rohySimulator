@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { ftna, centralities } from 'dynajs';
+import { ftna, centralities } from 'ladyna';
 import { TnaNetworkGraph } from '../tna/laila/TnaNetworkGraph';
 import { CentralityBarChart } from '../tna/laila/CentralityBarChart';
 import { createColorMap } from '../tna/laila/colorFix';
 
 /*
  * Compact TNA card for the Gaze tab. The network and centrality chart are the
- * same dynajs/LAILA primitives used by the main Analytics → Network tab:
+ * same ladyna/LAILA primitives used by the main Analytics → Network tab:
  * ftna() builds the frequency transition model, TnaNetworkGraph reads the
  * model directly, and CentralityBarChart renders centralities(model).
  */
@@ -28,7 +28,7 @@ function deriveLabels(sequences, labels) {
 }
 
 /**
- * Build the dynajs model consumed by the shared LAILA graph components.
+ * Build the ladyna model consumed by the shared LAILA graph components.
  *
  * @returns {{sequences:string[][], labels:string[], model:object|null,
  *            centralityData:object|null, colorMap:Record<string,string>}}

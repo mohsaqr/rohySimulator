@@ -1,0 +1,85 @@
+{
+  "name": "ladyna",
+  "version": "1.8.13",
+  "description": "Transition Network Analysis for JavaScript/TypeScript",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js",
+      "require": "./dist/core/index.cjs"
+    },
+    "./analysis": {
+      "types": "./dist/analysis/index.d.ts",
+      "import": "./dist/analysis/index.js",
+      "require": "./dist/analysis/index.cjs"
+    },
+    "./sequences": {
+      "types": "./dist/sequences/index.d.ts",
+      "import": "./dist/sequences/index.js",
+      "require": "./dist/sequences/index.cjs"
+    },
+    "./stats": {
+      "types": "./dist/stats/index.d.ts",
+      "import": "./dist/stats/index.js",
+      "require": "./dist/stats/index.cjs"
+    },
+    "./htna": {
+      "types": "./dist/htna/index.d.ts",
+      "import": "./dist/htna/index.js",
+      "require": "./dist/htna/index.cjs"
+    },
+    "./transitiontrees": {
+      "types": "./dist/transitiontrees/index.d.ts",
+      "import": "./dist/transitiontrees/index.js",
+      "require": "./dist/transitiontrees/index.cjs"
+    },
+    "./lagdynamics": {
+      "types": "./dist/lagdynamics/index.d.ts",
+      "import": "./dist/lagdynamics/index.js",
+      "require": "./dist/lagdynamics/index.cjs"
+    },
+    "./processmining": {
+      "types": "./dist/processmining/index.d.ts",
+      "import": "./dist/processmining/index.js",
+      "require": "./dist/processmining/index.cjs"
+    },
+    "./light": {
+      "types": "./dist/light.d.ts",
+      "import": "./dist/light.js",
+      "require": "./dist/light.cjs"
+    },
+    "./wasm": {
+      "types": "./dist/wasm/index.d.ts",
+      "browser": "./dist/wasm/index-web.js",
+      "import": "./dist/wasm/index.js",
+      "require": "./dist/wasm/index.cjs"
+    },
+    "./wasm/web": {
+      "types": "./dist/wasm/index-web.d.ts",
+      "import": "./dist/wasm/index-web.js"
+    },
+    "./full": {
+      "types": "./dist/full/index.d.ts",
+      "browser": "./dist/full/index-web.js",
+      "import": "./dist/full/index.js",
+      "require": "./dist/full/index.cjs"
+    },
+    "./full/web": {
+      "types": "./dist/full/index-web.d.ts",
+      "import": "./dist/full/index-web.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "SEE LICENSE IN LICENSE"
+}

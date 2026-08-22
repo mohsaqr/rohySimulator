@@ -69,7 +69,7 @@ function el(name, attrs = {}, children = []) {
 }
 
 // Render a TNA model into a container as SVG, faithful to Rohy's NetworkGraph.
-// model is the dynajs TNA shape: { labels, weights (Matrix), inits (Float64Array) }.
+// model is the ladyna TNA shape: { labels, weights (Matrix), inits (Float64Array) }.
 // Options: { svgWidth=960, graphHeight=500, nodeRadius=25, showSelfLoops=true, showEdgeLabels=false,
 //            nodeRadii=null }.
 //

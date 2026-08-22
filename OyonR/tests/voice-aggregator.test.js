@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { VoiceTurnAggregator } from '../src/aggregation/VoiceTurnAggregator.js';
 import { validateEmotionEvent } from '../src/validation/validateEmotionPayload.js';
 import { SignalEventLog } from '../src/logging/SignalEventLog.js';
-import { tna, ftna } from '../standalone/vendor/dynajs/index.js';
+import { tna, ftna } from '../standalone/vendor/ladyna/dist/index.js';
 
 const FRAME_MS = 100;
 const T0 = 1000;
@@ -380,7 +380,7 @@ const OYON_TRACK_SETTINGS = {
   assert.equal(win3.quality.loudness_contaminated, true);
 }
 
-// ─── Scenario I: recordEvent → SignalEventLog → dynajs tna() round trip ───
+// ─── Scenario I: recordEvent → SignalEventLog → ladyna tna() round trip ───
 // Controller-shaped state events pass through recordEvent into the per-event
 // log in record() shape, and toSequences({ modality: 'voice' }) feeds tna()
 // with no reshape step — the same payoff contract as signal-event-tna.test.js.

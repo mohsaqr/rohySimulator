@@ -1,7 +1,7 @@
 // Process Map (DFG) tab — faithful React port of carmdash's bupaR-style
 // PROCESS MAP (moodle-tna: network-tab.ts renderDFGCard + buildBupaRDFG /
 // computeAutoThreshold / pruneDFG, and svg-process-map.ts geometry), replacing
-// the older dynajs/dagre-routed version.
+// the older ladyna/dagre-routed version.
 //
 // What the port provides:
 //   - Absolute | Relative | Case metric pills. Relative = per-source Markov

@@ -1,4 +1,4 @@
-// Sequence pattern mining tab (dynajs discoverPatterns). Upgraded to the
+// Sequence pattern mining tab (ladyna discoverPatterns). Upgraded to the
 // newest chatoyon-plus/LAILA feature set: the two length panels are one
 // shared PatternPanel component, and PatternTable renders the redesigned
 // stacked rows (tinted pills + support bars) instead of the old numeric grid.
@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from './i18nShim';
-import { discoverPatterns } from 'dynajs';
+import { discoverPatterns } from 'ladyna';
 import { Loading } from './Loading';
 import { PatternTable } from './PatternTable';
 

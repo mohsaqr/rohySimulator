@@ -135,11 +135,11 @@ assert.match(
   /Vendored Carm ecosystem code/,
   'the About page must name vendored first-party code even when it needs no separate license',
 );
-assert.match(about, /standalone\/vendor\/dynajs/, 'the About page must name where dynajs is vendored');
+assert.match(about, /standalone\/vendor\/ladyna/, 'the About page must name where ladyna is vendored');
 assert.doesNotMatch(
   about,
-  /dynajs[^)]{0,80}MIT/,
-  'dynajs is Carm-licensed like the rest of the ecosystem — it must not be shown as MIT',
+  /ladyna[^)]{0,80}MIT/,
+  'ladyna is Carm-licensed like the rest of the ecosystem — it must not be shown as MIT',
 );
 
 console.log('app-about-contracts.test.js passed');

@@ -235,7 +235,7 @@ Common bundler flags:
 |---|---|
 | `--mode=source\|docker\|both` | Source tarball (needs node + sqlite3 on target), `docker save`d image (needs only docker), or both |
 | `--with-hf-cache` | Bundle `$TRANSFORMERS_CACHE` so Kokoro TTS works offline on first request |
-| `--with-dynajs` | Bundle the `../dynajs` sibling clone if `package.json` uses `file:../dynajs` |
+| `--with-ladyna` | Bundle the `../tna-js` sibling clone if `package.json` uses `file:../tna-js` |
 | `--no-piper` / `--with-piper` | Exclude/require the Piper venv (auto-detected; saves ~326 MB if excluded) |
 
 **Cross-platform note**: bundles are platform-stamped because they
