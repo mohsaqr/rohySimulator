@@ -12,7 +12,7 @@
 #   sudo deploy/bootstrap.sh \
 #        --frontend-url https://your-host/rohy \
 #        --admin-bootstrap \
-#        --with-dynajs --prewarm-kokoro                 # one-shot, no second pass
+#        --with-ladyna --prewarm-kokoro                 # one-shot, no second pass
 #
 #   sudo deploy/bootstrap.sh --no-nginx                 # skip nginx (BYO ingress)
 #   sudo deploy/bootstrap.sh --reverse-proxy=caddy      # use Caddy instead of nginx
@@ -25,7 +25,7 @@
 #   --frontend-url URL   Write FRONTEND_URL=URL into the env file
 #                        (eliminates the "edit env then re-run" loop)
 #   --admin-bootstrap    Set ALLOW_DEFAULT_USERS=1 in env (REMOVE after first login)
-#   --with-dynajs        Auto-clone dynajs sibling if missing, then build it
+#   --with-ladyna        Auto-clone ladyna sibling if missing, then build it
 #   --prewarm-kokoro     Download the Kokoro model now (~330 MB) so first
 #                        TTS request doesn't sit on a slow download
 #   --reverse-proxy=X    nginx (default) | caddy | none
@@ -39,13 +39,13 @@
 #   ROHY_HF_CACHE=/var/cache/rohy-hf
 #   ROHY_ENV_FILE=/etc/rohy/env
 #   ROHY_PORT=4000
-#   ROHY_DYNAJS_URL=https://github.com/mohsaqr/dynajs.git
-#   ROHY_DYNAJS_REF=main
+#   ROHY_LADYNA_URL=https://github.com/mohsaqr/tna-js.git
+#   ROHY_LADYNA_REF=main
 #
 # What it does, in order:
 #   1. Detect distro + install package prereqs (apt | dnf | brew).
 #   2. Create persistent dirs + chown them to ROHY_USER.
-#   3. (--with-dynajs) Clone + build dynajs sibling if missing.
+#   3. (--with-ladyna) Clone + build ladyna sibling if missing.
 #   4. (unless --skip-build) `npm install && npm run build` for rohy.
 #   5. (unless --no-piper) Install Piper venv. Failure is loud, not silent.
 #   6. (--prewarm-kokoro) Download Kokoro model into ROHY_HF_CACHE now.
@@ -62,7 +62,7 @@ set -euo pipefail
 DO_PROXY="nginx"        # nginx | caddy | none
 DO_PIPER=1
 DO_BUILD=1
-DO_DYNAJS=0
+DO_LADYNA=0
 DO_PREWARM=0
 DO_ADMIN_BOOTSTRAP=0
 DRY_RUN=0
@@ -76,7 +76,7 @@ for arg in "$@"; do
         --reverse-proxy=none)  DO_PROXY="none" ;;
         --no-piper)            DO_PIPER=0 ;;
         --skip-build)          DO_BUILD=0 ;;
-        --with-dynajs)         DO_DYNAJS=1 ;;
+        --with-ladyna)         DO_LADYNA=1 ;;
         --prewarm-kokoro)      DO_PREWARM=1 ;;
         --admin-bootstrap)     DO_ADMIN_BOOTSTRAP=1 ;;
         --frontend-url=*)      ARG_FRONTEND_URL="${arg#--frontend-url=}" ;;
@@ -97,8 +97,8 @@ ROHY_DATA_DIR="${ROHY_DATA_DIR:-/opt/data/rohy}"
 ROHY_HF_CACHE="${ROHY_HF_CACHE:-/var/cache/rohy-hf}"
 ROHY_ENV_FILE="${ROHY_ENV_FILE:-/etc/rohy/env}"
 ROHY_PORT="${ROHY_PORT:-4000}"
-ROHY_DYNAJS_URL="${ROHY_DYNAJS_URL:-https://github.com/mohsaqr/dynajs.git}"
-ROHY_DYNAJS_REF="${ROHY_DYNAJS_REF:-main}"
+ROHY_LADYNA_URL="${ROHY_LADYNA_URL:-https://github.com/mohsaqr/tna-js.git}"
+ROHY_LADYNA_REF="${ROHY_LADYNA_REF:-main}"
 
 REPO_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -158,7 +158,7 @@ printf 'pkg mgr        : %s\n' "$PKG_MGR"
 printf 'reverse proxy  : %s\n' "$DO_PROXY"
 printf 'piper step     : %s\n' "$([[ $DO_PIPER -eq 1 ]] && echo yes || echo skipped)"
 printf 'build step     : %s\n' "$([[ $DO_BUILD -eq 1 ]] && echo yes || echo skipped)"
-printf 'dynajs step    : %s\n' "$([[ $DO_DYNAJS -eq 1 ]] && echo yes || echo skipped)"
+printf 'ladyna step    : %s\n' "$([[ $DO_LADYNA -eq 1 ]] && echo yes || echo skipped)"
 printf 'kokoro prewarm : %s\n' "$([[ $DO_PREWARM -eq 1 ]] && echo yes || echo skipped)"
 printf 'frontend url   : %s\n' "${ARG_FRONTEND_URL:-<edit env file later>}"
 printf 'admin seed     : %s\n' "$([[ $DO_ADMIN_BOOTSTRAP -eq 1 ]] && echo "yes (REMOVE after first login)" || echo no)"
@@ -221,68 +221,68 @@ for d in "$ROHY_DATA_DIR" "$ROHY_HF_CACHE" "$(dirname "$ROHY_ENV_FILE")"; do
 done
 run chown -R "$ROHY_USER:$ROHY_USER" "$ROHY_DATA_DIR" "$ROHY_HF_CACHE"
 
-# -- 3. dynajs sibling ----------------------------------------------------
-DYNAJS_DIR="$(cd "$REPO_SRC/.." && pwd)/dynajs"
-if (( DO_DYNAJS )); then
-    printf '\n[3/10] dynajs sibling\n'
-    if [[ ! -d "$DYNAJS_DIR/.git" ]]; then
-        printf '  cloning %s -> %s (ref=%s)\n' "$ROHY_DYNAJS_URL" "$DYNAJS_DIR" "$ROHY_DYNAJS_REF"
-        run sudo -u "$ROHY_USER" git clone "$ROHY_DYNAJS_URL" "$DYNAJS_DIR"
-        run sudo -u "$ROHY_USER" git -C "$DYNAJS_DIR" checkout "$ROHY_DYNAJS_REF"
+# -- 3. ladyna sibling ----------------------------------------------------
+LADYNA_DIR="$(cd "$REPO_SRC/.." && pwd)/tna-js"
+if (( DO_LADYNA )); then
+    printf '\n[3/10] ladyna sibling\n'
+    if [[ ! -d "$LADYNA_DIR/.git" ]]; then
+        printf '  cloning %s -> %s (ref=%s)\n' "$ROHY_LADYNA_URL" "$LADYNA_DIR" "$ROHY_LADYNA_REF"
+        run sudo -u "$ROHY_USER" git clone "$ROHY_LADYNA_URL" "$LADYNA_DIR"
+        run sudo -u "$ROHY_USER" git -C "$LADYNA_DIR" checkout "$ROHY_LADYNA_REF"
     else
-        # Existing clone — fetch and verify it matches ROHY_DYNAJS_REF.
-        # Without this, an upgrade run that sets ROHY_DYNAJS_REF=v0.2.0
+        # Existing clone — fetch and verify it matches ROHY_LADYNA_REF.
+        # Without this, an upgrade run that sets ROHY_LADYNA_REF=v0.2.0
         # would silently keep building against whatever ref was checked out
         # last time. We fetch first (so the ref is resolvable even if it
         # was added upstream after the original clone), then compare the
         # current HEAD to the resolved target. If they differ, we either
-        # check out the new ref (default) or warn-only (DYNAJS_REF_LOCK=1
-        # for operators who manage dynajs by hand).
-        printf '  dynajs already present at %s — verifying ref=%s\n' "$DYNAJS_DIR" "$ROHY_DYNAJS_REF"
+        # check out the new ref (default) or warn-only (LADYNA_REF_LOCK=1
+        # for operators who manage ladyna by hand).
+        printf '  ladyna already present at %s — verifying ref=%s\n' "$LADYNA_DIR" "$ROHY_LADYNA_REF"
         if (( DRY_RUN )); then
-            printf '  [dry-run] would: git fetch --tags && rev-parse HEAD vs %s; checkout if mismatch\n' "$ROHY_DYNAJS_REF"
+            printf '  [dry-run] would: git fetch --tags && rev-parse HEAD vs %s; checkout if mismatch\n' "$ROHY_LADYNA_REF"
         else
-            sudo -u "$ROHY_USER" git -C "$DYNAJS_DIR" fetch --tags --quiet origin || \
+            sudo -u "$ROHY_USER" git -C "$LADYNA_DIR" fetch --tags --quiet origin || \
                 printf '  ! git fetch failed (offline?) — comparing against existing local refs only\n' >&2
-            current_sha=$(sudo -u "$ROHY_USER" git -C "$DYNAJS_DIR" rev-parse HEAD 2>/dev/null || echo "")
+            current_sha=$(sudo -u "$ROHY_USER" git -C "$LADYNA_DIR" rev-parse HEAD 2>/dev/null || echo "")
             # `rev-parse --verify --quiet` is the only form that returns
             # empty + non-zero exit when the ref doesn't resolve. The plain
             # form echoes the literal ref name to stdout on failure, which
             # would have made target_sha look "non-empty but bogus" and the
             # subsequent checkout would noisy-fail in production.
-            target_sha=$(sudo -u "$ROHY_USER" git -C "$DYNAJS_DIR" rev-parse --verify --quiet "${ROHY_DYNAJS_REF}^{commit}" 2>/dev/null || echo "")
+            target_sha=$(sudo -u "$ROHY_USER" git -C "$LADYNA_DIR" rev-parse --verify --quiet "${ROHY_LADYNA_REF}^{commit}" 2>/dev/null || echo "")
             if [[ -z "$target_sha" ]]; then
-                printf '  ! target ref "%s" not resolvable in %s — skipping checkout (left as-is)\n' "$ROHY_DYNAJS_REF" "$DYNAJS_DIR" >&2
+                printf '  ! target ref "%s" not resolvable in %s — skipping checkout (left as-is)\n' "$ROHY_LADYNA_REF" "$LADYNA_DIR" >&2
             elif [[ "$current_sha" == "$target_sha" ]]; then
-                printf '  ✓ dynajs already at %s (%s)\n' "$ROHY_DYNAJS_REF" "${current_sha:0:10}"
-            elif [[ "${DYNAJS_REF_LOCK:-0}" == "1" ]]; then
-                printf '  ! WARNING: dynajs HEAD=%s but ROHY_DYNAJS_REF=%s (=%s).\n' \
-                    "${current_sha:0:10}" "$ROHY_DYNAJS_REF" "${target_sha:0:10}" >&2
-                printf '  ! DYNAJS_REF_LOCK=1 set — leaving checkout alone. Re-run without lock to update.\n' >&2
+                printf '  ✓ ladyna already at %s (%s)\n' "$ROHY_LADYNA_REF" "${current_sha:0:10}"
+            elif [[ "${LADYNA_REF_LOCK:-0}" == "1" ]]; then
+                printf '  ! WARNING: ladyna HEAD=%s but ROHY_LADYNA_REF=%s (=%s).\n' \
+                    "${current_sha:0:10}" "$ROHY_LADYNA_REF" "${target_sha:0:10}" >&2
+                printf '  ! LADYNA_REF_LOCK=1 set — leaving checkout alone. Re-run without lock to update.\n' >&2
             else
                 printf '  drift detected: HEAD=%s -> checking out %s (=%s)\n' \
-                    "${current_sha:0:10}" "$ROHY_DYNAJS_REF" "${target_sha:0:10}"
-                run sudo -u "$ROHY_USER" git -C "$DYNAJS_DIR" checkout "$ROHY_DYNAJS_REF"
+                    "${current_sha:0:10}" "$ROHY_LADYNA_REF" "${target_sha:0:10}"
+                run sudo -u "$ROHY_USER" git -C "$LADYNA_DIR" checkout "$ROHY_LADYNA_REF"
                 # Force a rebuild on ref change — old dist/ would otherwise
                 # outlive the source it was built from.
-                run sudo -u "$ROHY_USER" rm -rf "$DYNAJS_DIR/dist"
+                run sudo -u "$ROHY_USER" rm -rf "$LADYNA_DIR/dist"
             fi
         fi
     fi
-    if [[ ! -f "$DYNAJS_DIR/dist/index.mjs" && ! -f "$DYNAJS_DIR/dist/index.js" ]]; then
-        printf '  building dynajs (npm install runs the prepare script that produces dist/)\n'
-        run sudo -u "$ROHY_USER" bash -c "cd '$DYNAJS_DIR' && npm install --prefer-offline --no-audit --no-fund"
-        if [[ ! -f "$DYNAJS_DIR/dist/index.mjs" && ! -f "$DYNAJS_DIR/dist/index.js" ]]; then
-            printf '  ! dynajs build did not produce dist/. Run manually: cd %s && npm install\n' "$DYNAJS_DIR" >&2
+    if [[ ! -f "$LADYNA_DIR/dist/index.mjs" && ! -f "$LADYNA_DIR/dist/index.js" ]]; then
+        printf '  building ladyna (npm install runs the prepare script that produces dist/)\n'
+        run sudo -u "$ROHY_USER" bash -c "cd '$LADYNA_DIR' && npm install --prefer-offline --no-audit --no-fund"
+        if [[ ! -f "$LADYNA_DIR/dist/index.mjs" && ! -f "$LADYNA_DIR/dist/index.js" ]]; then
+            printf '  ! ladyna build did not produce dist/. Run manually: cd %s && npm install\n' "$LADYNA_DIR" >&2
             exit 1
         fi
     fi
 else
-    printf '\n[3/10] dynajs sibling — SKIPPED (--with-dynajs to enable)\n'
-    if [[ -f "$REPO_SRC/package.json" ]] && grep -q '"dynajs": "file:' "$REPO_SRC/package.json" 2>/dev/null; then
-        if [[ ! -d "$DYNAJS_DIR/.git" ]]; then
-            printf '  ! WARNING: package.json references dynajs at file:../dynajs but %s does not exist.\n' "$DYNAJS_DIR" >&2
-            printf '  ! Re-run with --with-dynajs, or clone it manually before npm install.\n' >&2
+    printf '\n[3/10] ladyna sibling — SKIPPED (--with-ladyna to enable)\n'
+    if [[ -f "$REPO_SRC/package.json" ]] && grep -q '"ladyna": "file:' "$REPO_SRC/package.json" 2>/dev/null; then
+        if [[ ! -d "$LADYNA_DIR/.git" ]]; then
+            printf '  ! WARNING: package.json references ladyna at file:../tna-js but %s does not exist.\n' "$LADYNA_DIR" >&2
+            printf '  ! Re-run with --with-ladyna, or clone it manually before npm install.\n' >&2
         fi
     fi
 fi

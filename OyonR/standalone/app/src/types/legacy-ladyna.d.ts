@@ -1,6 +1,6 @@
-// Ambient types for the vendored dynajs bundle (standalone/vendor/dynajs),
-// aliased `legacy-dynajs`. Only the surface the patterns panel uses.
-declare module 'legacy-dynajs' {
+// Ambient types for the vendored ladyna bundle (standalone/vendor/ladyna),
+// aliased `legacy-ladyna`. Only the surface the patterns panel uses.
+declare module 'legacy-ladyna' {
   export interface PatternEntry {
     pattern: string;
     length: number;

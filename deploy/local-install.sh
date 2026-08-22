@@ -11,7 +11,7 @@
 #
 # What it does (idempotent):
 #   1. Verifies node ≥20, npm, git are on PATH (helps you install if not).
-#   2. Clones the dynajs sibling repo if missing, builds it.
+#   2. Clones the ladyna sibling repo if missing, builds it.
 #   3. Runs `npm install` + `npm run build` for rohy.
 #   4. Generates a local `.env` with a fresh JWT_SECRET (only if absent).
 #   5. Optionally pre-warms the Kokoro HF cache so the first TTS request
@@ -67,7 +67,7 @@ done
 
 # -- paths -----------------------------------------------------------------
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-DYNAJS_DIR="$(cd "$REPO_DIR/.." && pwd)/dynajs"
+LADYNA_DIR="$(cd "$REPO_DIR/.." && pwd)/tna-js"
 ENV_FILE="$REPO_DIR/.env"
 
 cd "$REPO_DIR"
@@ -100,21 +100,21 @@ ok "npm $(npm --version)"
 command -v git >/dev/null 2>&1 || die "git not found. Install git via your package manager."
 ok "git $(git --version | awk '{print $3}')"
 
-# -- step 2: dynajs sibling -------------------------------------------------
-say "checking dynajs sibling at $DYNAJS_DIR"
+# -- step 2: ladyna sibling -------------------------------------------------
+say "checking ladyna sibling at $LADYNA_DIR"
 
-if [[ ! -d "$DYNAJS_DIR/.git" ]]; then
-    warn "dynajs not found — cloning"
-    git clone https://github.com/mohsaqr/dynajs.git "$DYNAJS_DIR"
+if [[ ! -d "$LADYNA_DIR/.git" ]]; then
+    warn "ladyna not found — cloning"
+    git clone https://github.com/mohsaqr/tna-js.git "$LADYNA_DIR"
 fi
 
-if [[ ! -f "$DYNAJS_DIR/dist/index.mjs" && ! -f "$DYNAJS_DIR/dist/index.js" ]]; then
-    say "building dynajs (npm install runs the prepare script that creates dist/)"
-    (cd "$DYNAJS_DIR" && npm install --prefer-offline --no-audit --no-fund)
-    [[ -f "$DYNAJS_DIR/dist/index.mjs" || -f "$DYNAJS_DIR/dist/index.js" ]] \
-        || die "dynajs build did not produce dist/. Look at: cd $DYNAJS_DIR && npm install"
+if [[ ! -f "$LADYNA_DIR/dist/index.mjs" && ! -f "$LADYNA_DIR/dist/index.js" ]]; then
+    say "building ladyna (npm install runs the prepare script that creates dist/)"
+    (cd "$LADYNA_DIR" && npm install --prefer-offline --no-audit --no-fund)
+    [[ -f "$LADYNA_DIR/dist/index.mjs" || -f "$LADYNA_DIR/dist/index.js" ]] \
+        || die "ladyna build did not produce dist/. Look at: cd $LADYNA_DIR && npm install"
 fi
-ok "dynajs ready at $DYNAJS_DIR"
+ok "ladyna ready at $LADYNA_DIR"
 
 # -- step 3: rohy install + build ------------------------------------------
 if (( SKIP_BUILD )); then

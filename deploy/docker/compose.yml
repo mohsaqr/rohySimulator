@@ -33,8 +33,8 @@ services:
         # Set INCLUDE_PIPER=1 if you want Piper TTS bundled. Adds ~150 MB
         # to the image. Kokoro/Google/OpenAI work without it.
         INCLUDE_PIPER: "${INCLUDE_PIPER:-0}"
-        # Pin a dynajs commit for reproducible builds. Default is main.
-        DYNAJS_GIT_REF: "${DYNAJS_GIT_REF:-main}"
+        # Pin a ladyna commit for reproducible builds. Default is main.
+        LADYNA_GIT_REF: "${LADYNA_GIT_REF:-main}"
     image: rohy:latest
     container_name: rohy
     restart: unless-stopped

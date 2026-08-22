@@ -12,7 +12,7 @@ import {
     getCohortRoster, getCohortGrid, getCohortStudent,
     getCohortPulse, getCohortFeed, downloadCohortExport,
 } from '../../services/cohortsService';
-import { tna, prune, centralities, layout as dynaLayout } from 'dynajs';
+import { tna, prune, centralities, layout as dynaLayout } from 'ladyna';
 import { ActivityTimelineChart } from '../analytics/tna/laila/ActivityTimelineChart';
 import { ActivityHeatmap } from '../analytics/tna/laila/ActivityHeatmap';
 import { ActivityDonutChart } from '../analytics/tna/laila/ActivityDonutChart';
@@ -193,7 +193,7 @@ function AnalyticsSkeleton() {
     );
 }
 
-// TNA / sequence section. The dynajs pipeline (transition model → prune →
+// TNA / sequence section. The ladyna pipeline (transition model → prune →
 // centralities → layout) is exactly what the admin dashboard runs — same
 // library, same maths — rendered directly in this view's light report
 // cards (no embedded shell). `sequences` come pre-merged from the scoped

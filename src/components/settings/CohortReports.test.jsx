@@ -10,10 +10,10 @@ vi.mock('../../contexts/ToastContext', async (importActual) => {
     return { ...actual, useToast: () => toast };
 });
 
-// Stub the heavy SVG/dynajs analytics pieces so rendering the native
+// Stub the heavy SVG/ladyna analytics pieces so rendering the native
 // AnalyticsView stays light in jsdom — the unit under test here is the
 // cohort tab wiring + scoped fetches, not the chart internals.
-vi.mock('dynajs', () => ({
+vi.mock('ladyna', () => ({
     tna: () => ({ labels: [], weights: [], inits: [] }),
     prune: (m) => m,
     centralities: () => ({ labels: [], measures: {} }),

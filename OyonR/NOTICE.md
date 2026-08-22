@@ -35,11 +35,10 @@ when this copy is a release or two behind. Both are given for every component.
 
 | Component | License | Vendored at |
 |---|---|---|
-| dynajs 0.1.0 | Carm Research License v1.4 — covered by [`LICENSE`](LICENSE) | `standalone/vendor/dynajs` |
+| ladyna 1.8.13 | Carm Research License v1.4 — covered by [`LICENSE`](LICENSE) | `standalone/vendor/ladyna` |
 
-`dynajs` is Carm ecosystem code (extracted from
-[tnaj](https://github.com/mohsaqr/tna-js) and
-[codynaj](https://github.com/mohsaqr/codynaj)), so it carries **no separate
+`ladyna` is Carm ecosystem code (the built dist of
+[tnaj / ladyna](https://github.com/mohsaqr/tna-js)), so it carries **no separate
 license file**: the Carm Research License at [`LICENSE`](LICENSE) applies to
 "Carm and all associated products, libraries, tools, and components in the
 Carm ecosystem", which includes it. A second copy of identical terms beside
@@ -47,7 +46,8 @@ the first would be a copy to keep in sync, not an additional grant.
 
 It is listed rather than omitted because a reader needs to know what is
 vendored, and because "no separate license" should be a recorded decision
-rather than an absence that looks like an oversight — `dynajs` was in fact
+rather than an absence that looks like an oversight — `ladyna` (then
+named `dynajs`) was in fact
 missing from this file entirely until 2026-07-26.
 
 `scripts/licenses.manifest.mjs` is the single source of truth for this table.
@@ -106,7 +106,7 @@ accompany the asset when it joins that release.
 | `vendor/mediapipe/wasm/*` | `@mediapipe/tasks-vision` | Apache 2.0 |
 | `vendor/onnxruntime-web/*` | `onnxruntime-web` | MIT |
 | `vendor/webgazer/face_mesh/*` | WebGazer-vendored FaceMesh assets | Apache 2.0 (FaceMesh) |
-| `vendor/dynajs/*` | first-party, extracted from [tnaj](https://github.com/mohsaqr/tna-js) / [codynaj](https://github.com/mohsaqr/codynaj) | Carm Research License v1.4 (see `LICENSE`) |
+| `vendor/ladyna/*` | first-party, the built dist of [tnaj / ladyna](https://github.com/mohsaqr/tna-js) | Carm Research License v1.4 (see `LICENSE`) |
 
 These are consumed at runtime by the standalone demo. The `peerDependencies`
 entry in `package.json` lists the npm-installable equivalents for

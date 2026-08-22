@@ -25,7 +25,7 @@
  * this) can each be sorted internally, but the interleaving BETWEEN channels
  * is unrecoverable once the events live in different ordering domains.
  * `log.toSequences()` with no modality filter returns that interleaved
- * chain, ready for dynajs `tna()`.
+ * chain, ready for ladyna `tna()`.
  *
  * ── What it wires together ───────────────────────────────────────────────
  *   SignalEventLog                (src/logging/)  ordered per-event log

@@ -613,7 +613,7 @@ export interface VoiceWindow {
 /**
  * One entry of the per-event stream `VoiceTurnAggregator.recordEvent()`
  * re-emits through `options.onEvent` — SignalEventLog `record()` shape, so
- * it feeds the per-event log (and dynajs `tna()`) directly.
+ * it feeds the per-event log (and ladyna `tna()`) directly.
  */
 export interface VoiceAggregatorEvent {
   modality: 'voice';

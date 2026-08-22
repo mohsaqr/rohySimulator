@@ -88,7 +88,7 @@
  * `OYON_VOICE_STATES`) and re-emits each one through `options.onEvent` in
  * the SignalEventLog `record()` shape (`{ modality: 'voice', state, source,
  * timestamp, monotonic_ms, detail }`) so a host can wire the voice state
- * stream straight into the per-event log and from there into dynajs `tna()`.
+ * stream straight into the per-event log and from there into ladyna `tna()`.
  * This class does not synthesize states of its own — the controller owns the
  * turn state machine — and `start()` therefore dispatches nothing (the
  * controller's own 'start' event arrives via `recordEvent`).

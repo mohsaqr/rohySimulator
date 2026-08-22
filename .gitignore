@@ -51,7 +51,7 @@ OyonR/node_modules/
 # small (≤300 KB combined), are not fetched by any download script,
 # and the standalone HTML page hard-imports them — without them in the
 # repo a fresh install / Docker build serves /oyon/standalone/logs.html
-# with broken NetworkGraph + dynajs imports.
+# with broken NetworkGraph + ladyna imports.
 OyonR/standalone/vendor/onnxruntime-web/
 OyonR/standalone/vendor/mediapipe/
 OyonR/standalone/models/
@@ -123,10 +123,6 @@ tests/e2e/.auth/
 /OyonR/examples/rohy-addon/README.md
 /OyonR/examples/rohy-backend/ATTACH_BACKEND.md
 /OyonR/scripts/README.md
-# Upstream dynajs library docs — third-party content. We only need
-# index.js / index.d.ts / package.json from the vendored copy.
-/OyonR/standalone/vendor/dynajs/README.md
-/OyonR/standalone/vendor/dynajs/LEARNINGS.md
 
 # i18n change-detection sidecar: a per-key sha256 manifest of the English
 # source strings, consumed by scripts/translate-locales.mjs (delta

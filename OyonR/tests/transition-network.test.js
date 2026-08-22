@@ -1,16 +1,16 @@
-// Verifies the dynajs library (vendored under standalone/vendor/dynajs)
+// Verifies the ladyna library (vendored under standalone/vendor/ladyna)
 // produces the expected TNA shape when fed the same window data the Oyon
 // logs dashboard groups by session. We exercise the same conversion the
 // dashboard performs (grouping windows by session_id, normalising
 // dominant_emotion to lowercase tokens) so that any drift between the
-// emit format and the dynajs input contract trips this test.
+// emit format and the ladyna input contract trips this test.
 import assert from 'node:assert/strict';
 import {
   tna,
   centralities,
-  stateFrequencies,
+  stateCounts,
   discoverPatterns,
-} from '../standalone/vendor/dynajs/index.js';
+} from '../standalone/vendor/ladyna/dist/index.js';
 
 function normalize(value) {
   if (!value) return 'insufficient';
@@ -74,7 +74,7 @@ const cent = centralities(model, { loops: true, normalize: true });
 assert.equal(cent.labels.length, 3);
 assert.ok(cent.measures.InStrength instanceof Float64Array);
 
-const freq = stateFrequencies(sequences);
+const freq = stateCounts(sequences);
 assert.equal(freq.happy, 4);
 assert.equal(freq.neutral, 3);
 assert.equal(freq.sad, 2);

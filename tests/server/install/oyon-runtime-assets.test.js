@@ -15,7 +15,7 @@ const requiredStaticPaths = [
   'standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs',
   'standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm',
   'standalone/vendor/mediapipe/vision_bundle.mjs',
-  'standalone/vendor/dynajs/index.js',
+  'standalone/vendor/ladyna/dist/index.js',
   'standalone/vendor/rohy-tna/NetworkGraph.js',
   'standalone/vendor/rohy-tna/SequencePlots.js',
   'standalone/vendor/rohy-tna/tnaColors.js',

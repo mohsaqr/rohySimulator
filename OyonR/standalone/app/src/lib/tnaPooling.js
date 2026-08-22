@@ -5,7 +5,7 @@
  *
  * Within a single continuous capture, sessions don't fragment a chain — but
  * when the dashboard aggregates DISTINCT sessions (the 'all'/'past' filter
- * scopes), session boundaries are real discontinuities. dynajs `tna()`
+ * scopes), session boundaries are real discontinuities. ladyna `tna()`
  * accepts an array of sequences and pools transitions across them, so the
  * whole fix is in how the sequences are built.
  *
@@ -38,7 +38,7 @@ function normalizedEmotion(value) {
  * interaction, ai_assist) are the same shape of problem — group by session,
  * order, project to a state label — so they reuse this function rather than a
  * near-duplicate: pass `stateOf` and `orderOf`. Everything downstream
- * (dynajs `tna()`, `discoverPatterns`, `lsa`, CentralityPanel) consumes
+ * (ladyna `tna()`, `discoverPatterns`, `lsa`, CentralityPanel) consumes
  * `string[][]` and does not care which channel produced it.
  *
  * @param {Array<object>} records
@@ -101,7 +101,7 @@ export function buildEventSequences(events, modality = null) {
 
 /**
  * Transition counts pooled across the per-session chains — exposed mainly
- * for tests (the dashboard feeds the sequences to dynajs `tna()` instead).
+ * for tests (the dashboard feeds the sequences to ladyna `tna()` instead).
  *
  * @param {string[][]} sequences
  * @returns {Map<string, number>}  keys are `${from}→${to}`
