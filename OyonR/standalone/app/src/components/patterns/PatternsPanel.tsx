@@ -14,7 +14,7 @@ import { buildSessionSequences, buildEventSequences } from '@/lib/tnaPooling';
 import { CHANNEL_OPTIONS, channelUnit, channelLabel } from '@/lib/analyticsChannel';
 import { useChannelStore } from '@/lib/channelStore';
 import { emotionColor } from '@/lib/emotionColors';
-import { discoverPatterns } from 'legacy-dynajs';
+import { discoverPatterns } from 'legacy-ladyna';
 import { contextTree, commonPathways, plotTree, buildHypa } from 'legacy-tnaj';
 import { drawSimplicialOverlay } from '@/components/simplicial/simplicialOverlay.js';
 import { loadDemoData } from '@/legacy/demoFixture.js';
@@ -26,7 +26,7 @@ import { tweakTreeSvg } from '@/lib/treeSvgTweaks';
  * over the pooled state sequences of whichever channel is selected (emotion
  * windows by default; typing/discourse/interaction/ai_assist/all pool the
  * signal-event log instead — see @/lib/analyticsChannel):
- *   1. Sub-patterns (short + long) — LAILA-v3's PatternsTab split, via dynajs
+ *   1. Sub-patterns (short + long) — LAILA-v3's PatternsTab split, via ladyna
  *      discoverPatterns + the LAILA PatternTable.
  *   2. Most-frequency tree — tnaj contextTree + plotTree (SVG) + top pathways.
  *   3. Disentangled simplicial — the shipping carm-tna blob overlay, drawn one

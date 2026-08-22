@@ -220,18 +220,18 @@ export const FIRST_PARTY_VENDORED = [
         note: 'Carm ecosystem, covered by LICENSE; carries its own third-party notices in place.',
     },
     {
-        id: 'dynajs',
-        name: 'dynajs (TNA analytics engine)',
-        version: '0.1.0',
-        source: 'https://github.com/mohsaqr/dynajs',
-        // Not vendored in-tree: resolved as a sibling `file:../dynajs`
-        // dependency and copied into the image at /opt/dynajs. There is no
+        id: 'ladyna',
+        name: 'ladyna (TNA analytics engine)',
+        version: '1.8.13',
+        source: 'https://github.com/mohsaqr/tna-js',
+        // Not vendored in-tree: resolved as a sibling `file:../tna-js`
+        // dependency and copied into the image at /opt/ladyna. There is no
         // committed path to assert, so the contract test checks only that
         // NOTICE.md names it.
         vendoredAt: null,
-        installedFrom: 'file:../dynajs',
-        shipsAs: '/opt/dynajs in the Docker runtime image',
-        note: 'Carm ecosystem, covered by LICENSE. Extracted from tnaj and codynaj.',
+        installedFrom: 'file:../tna-js',
+        shipsAs: '/opt/ladyna in the Docker runtime image',
+        note: 'Carm ecosystem, covered by LICENSE. The tnaj/ladyna engine (formerly dynajs).',
     },
 ];
 

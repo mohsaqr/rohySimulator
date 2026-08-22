@@ -164,5 +164,5 @@ test('About embeds full third-party license texts, including the GPL', async ({ 
   // above covers it — but it must still be NAMED, or shipping it and shipping
   // nothing look identical to a reader.
   await expect(page.getByText('Vendored Carm ecosystem code:')).toBeVisible();
-  await expect(page.getByText('standalone/vendor/dynajs')).toBeVisible();
+  await expect(page.getByText('standalone/vendor/ladyna')).toBeVisible();
 });

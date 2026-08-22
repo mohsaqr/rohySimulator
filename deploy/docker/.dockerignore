@@ -30,7 +30,7 @@ playwright-report
 .vscode
 
 # Sibling repos that we clone fresh inside the Dockerfile
-../dynajs
+../tna-js
 ../JStats
 
 # Docs and source-control noise that bloat the context

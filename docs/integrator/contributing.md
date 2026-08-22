@@ -80,7 +80,7 @@ more, and don't "fix" them by widening rule disables.
 npm run build           # vite build --base=/rohy/ → dist/ → frontend/
 ```
 
-`dynajs` (a `file:` sibling dependency) must be built before `npm run build`
+`ladyna` (a `file:` sibling dependency) must be built before `npm run build`
 here. The other `file:` dependency, `oyon`, is the in-repo `OyonR/`
 workspace.
 

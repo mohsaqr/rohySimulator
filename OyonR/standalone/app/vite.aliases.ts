@@ -23,8 +23,8 @@ export function makeAliases(appDir: string, repoRoot: string) {
     // Legacy vendor modules used unmodified by the ported logs-dashboard
     // renderers under src/legacy/.
     {
-      find: 'legacy-dynajs',
-      replacement: path.resolve(repoRoot, 'standalone/vendor/dynajs/index.js'),
+      find: 'legacy-ladyna',
+      replacement: path.resolve(repoRoot, 'standalone/vendor/ladyna/dist/index.js'),
     },
     {
       find: 'legacy-tnaj',

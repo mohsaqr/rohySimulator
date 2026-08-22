@@ -150,8 +150,8 @@ jobs:
 
       # Bundler defaults: source mode, no HF cache (saves ~330 MB; Kokoro
       # downloads on first request anyway), no Piper (saves ~326 MB; Piper
-      # is opt-in TTS), no dynajs sibling (not needed when OyonR
-      # standalone/vendor/dynajs is already tracked in-repo). Operators
+      # is opt-in TTS), no ladyna sibling (not needed when OyonR
+      # standalone/vendor/ladyna is already tracked in-repo). Operators
       # who need any of the above can rebuild with `--with-*` flags.
       - name: Build air-gap source tarball
         run: |
@@ -343,7 +343,7 @@ jobs:
             standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs
             standalone/vendor/onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm
             standalone/vendor/mediapipe/vision_bundle.mjs
-            standalone/vendor/dynajs/index.js
+            standalone/vendor/ladyna/dist/index.js
             standalone/vendor/rohy-tna/NetworkGraph.js
             standalone/vendor/rohy-tna/SequencePlots.js
             standalone/vendor/rohy-tna/tnaColors.js

@@ -5,7 +5,7 @@
 //   - React Query → useState + useEffect + fetch (matches the rohy pattern
 //     used elsewhere, e.g. MedicationManager).
 //   - Course → Case in labels and the filter selector.
-//   - Adds a 6th tab: Process Map (dynajs DFG + dagre, see ProcessMap.jsx).
+//   - Adds a 6th tab: Process Map (ladyna DFG + dagre, see ProcessMap.jsx).
 //   - 12 educational states → 10 clinical states (see clinicalStates.js).
 //
 // Six tabs:
@@ -36,7 +36,7 @@ import OyonSessionsView from '../../oyon/OyonSessionsView';
 import {
     tna, ftna, ctna, atna,
     centralities, prune, summary, layout as dynaLayout,
-} from 'dynajs';
+} from 'ladyna';
 import { apiFetch } from '../../../services/apiClient';
 
 import { TnaNetworkGraph } from './laila/TnaNetworkGraph';

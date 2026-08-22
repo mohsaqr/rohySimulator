@@ -1,5 +1,5 @@
 import { enrichWindowsWithDynamics } from '../src/analytics/DynamicalFeatures.js';
-import { tna, centralities, stateFrequencies, discoverPatterns } from './vendor/dynajs/index.js';
+import { tna, centralities, stateCounts, discoverPatterns } from './vendor/ladyna/dist/index.js';
 import { renderNetworkGraph } from './vendor/rohy-tna/NetworkGraph.js';
 import { renderDistributionPlot, renderIndexPlot } from './vendor/rohy-tna/SequencePlots.js';
 
@@ -721,7 +721,7 @@ function computeTna(windows) {
   } catch (err) {
     console.warn('[oyon] centralities() failed', err);
   }
-  const freq = stateFrequencies(sequences);
+  const freq = stateCounts(sequences);
   let patterns = { patterns: [] };
   try {
     patterns = discoverPatterns(sequences, { type: 'ngram', len: [2, 3], minFreq: 2 });

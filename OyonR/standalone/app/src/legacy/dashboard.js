@@ -4,7 +4,7 @@
 // unchanged. Do not "improve" the math here — cross-references against the
 // legacy dashboard depend on byte-identical numerics.
 
-import { tna, centralities, stateFrequencies, discoverPatterns } from 'legacy-dynajs';
+import { tna, centralities, stateCounts, discoverPatterns } from 'legacy-ladyna';
 import { renderNetworkGraph } from 'legacy-tna/NetworkGraph.js';
 import { renderDistributionPlot, renderIndexPlot } from 'legacy-tna/SequencePlots.js';
 import { enrichWindowsWithDynamics } from 'oyon';
@@ -348,7 +348,7 @@ export function enrichWindows(rawWindows) {
 
 export function buildSequencesFromWindows(windows) {
   // A transition is state → state. We build one time-ordered sequence
-  // across every window (sessions don't fragment the chain). dynajs
+  // across every window (sessions don't fragment the chain). ladyna
   // computes transitions on consecutive states in this sequence.
   const sorted = windows
     .slice()
@@ -363,7 +363,7 @@ export function computeTna(windows) {
 
 // Same TNA pipeline over caller-built sequences. The sequence dashboard
 // uses this with one chain per session (lib/tnaPooling.js) so aggregating
-// distinct sessions never fabricates a cross-session transition; dynajs
+// distinct sessions never fabricates a cross-session transition; ladyna
 // tna() pools transition counts across the sequences array.
 export function computeTnaFromSequences(sequences) {
   if (!sequences.length) return null;
@@ -380,7 +380,7 @@ export function computeTnaFromSequences(sequences) {
   } catch (err) {
     console.warn('[oyon] centralities() failed', err);
   }
-  const freq = stateFrequencies(sequences);
+  const freq = stateCounts(sequences);
   let patterns = { patterns: [] };
   try {
     patterns = discoverPatterns(sequences, { type: 'ngram', len: [2, 3], minFreq: 2 });
