@@ -167,7 +167,7 @@ Replaced 4 parallel notification systems (Toast, useAlarms, EventLogger, native 
 
 ### Analytics (TNA + xAPI event log)
 
-- **Transition Network Analysis dashboard** — Sequences of trainee actions are mined into a directed weighted graph via [`tnaj`](https://github.com/mohsaqr/tna-js). Includes:
+- **Transition Network Analysis dashboard** — Sequences of trainee actions are mined into a directed weighted graph via [`tnaj`](https://github.com/mohsaqr/ladyna). Includes:
   - Network graph with curved bidirectional edges and self-loops
   - Levenshtein-distance + Ward's D2 hierarchical clustering of trainee behaviour
   - InStrength centrality, frequency, distribution, and sequence index plots
@@ -333,7 +333,7 @@ Observability + governance: `llm_usage`, `llm_request_log`, `llm_model_pricing`,
 | **Backend** | Node 22+, Express 5, SQLite 3 (`sqlite3` async API + Promise adapter), JWT, bcrypt, multer, express-rate-limit |
 | **TTS** | Piper (local CLI), Kokoro (`kokoro-js`, in-process ONNX), Google Cloud TTS, OpenAI TTS |
 | **LLM** | Anthropic Claude, OpenAI, Google Gemini, LM Studio, Ollama (proxied through `/api/proxy/llm`) |
-| **Analytics** | [`tnaj`](https://github.com/mohsaqr/tna-js) — `tna`, `clusterSequences`, `centralities` |
+| **Analytics** | [`tnaj`](https://github.com/mohsaqr/ladyna) — `tna`, `clusterSequences`, `centralities` |
 | **Testing** | Vitest 4 (client jsdom + server node projects), React Testing Library, msw, supertest, Playwright |
 | **CI** | GitHub Actions (lint → build, test, audit, e2e) + Codecov gate (project ±1%, patch 60%) |
 

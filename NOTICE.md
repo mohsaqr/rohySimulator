@@ -59,7 +59,7 @@ than an absence that looks like an oversight.
 | Component | Where it lives | How it reaches a user |
 |---|---|---|
 | [Oyon](https://github.com/mohsaqr/Oyon) 3.3.x | [`OyonR/`](OyonR/) — vendored in-tree, git-tracked | Express serves `/oyon/*` and `/standalone/*` from it; `COPY`ed into the Docker runtime image |
-| [ladyna](https://github.com/mohsaqr/tna-js) 1.8.13 | resolved as the sibling dependency `file:../tna-js` | bundled into the client analytics build; copied to `/opt/tna-js` in the runtime image |
+| [ladyna](https://github.com/mohsaqr/ladyna) 1.8.13 | resolved as the sibling dependency `file:../tna-js` | bundled into the client analytics build; copied to `/opt/tna-js` in the runtime image |
 
 ### Oyon's own third-party licenses are carried in place
 

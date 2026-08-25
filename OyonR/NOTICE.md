@@ -38,7 +38,7 @@ when this copy is a release or two behind. Both are given for every component.
 | ladyna 1.8.13 | Carm Research License v1.4 — covered by [`LICENSE`](LICENSE) | `standalone/vendor/ladyna` |
 
 `ladyna` is Carm ecosystem code (the built dist of
-[tnaj / ladyna](https://github.com/mohsaqr/tna-js)), so it carries **no separate
+[tnaj / ladyna](https://github.com/mohsaqr/ladyna)), so it carries **no separate
 license file**: the Carm Research License at [`LICENSE`](LICENSE) applies to
 "Carm and all associated products, libraries, tools, and components in the
 Carm ecosystem", which includes it. A second copy of identical terms beside
@@ -106,7 +106,7 @@ accompany the asset when it joins that release.
 | `vendor/mediapipe/wasm/*` | `@mediapipe/tasks-vision` | Apache 2.0 |
 | `vendor/onnxruntime-web/*` | `onnxruntime-web` | MIT |
 | `vendor/webgazer/face_mesh/*` | WebGazer-vendored FaceMesh assets | Apache 2.0 (FaceMesh) |
-| `vendor/ladyna/*` | first-party, the built dist of [tnaj / ladyna](https://github.com/mohsaqr/tna-js) | Carm Research License v1.4 (see `LICENSE`) |
+| `vendor/ladyna/*` | first-party, the built dist of [tnaj / ladyna](https://github.com/mohsaqr/ladyna) | Carm Research License v1.4 (see `LICENSE`) |
 
 These are consumed at runtime by the standalone demo. The `peerDependencies`
 entry in `package.json` lists the npm-installable equivalents for

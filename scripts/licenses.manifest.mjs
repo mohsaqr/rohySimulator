@@ -223,7 +223,7 @@ export const FIRST_PARTY_VENDORED = [
         id: 'ladyna',
         name: 'ladyna (TNA analytics engine)',
         version: '1.8.13',
-        source: 'https://github.com/mohsaqr/tna-js',
+        source: 'https://github.com/mohsaqr/ladyna',
         // Not vendored in-tree: resolved as a sibling `file:../tna-js`
         // dependency and copied into the image at /opt/ladyna. There is no
         // committed path to assert, so the contract test checks only that

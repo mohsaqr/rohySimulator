@@ -184,7 +184,7 @@ export const FIRST_PARTY_VENDORED = [
     id: 'ladyna',
     name: 'ladyna 1.8.13',
     version: '1.8.13',
-    source: 'https://github.com/mohsaqr/tna-js',
+    source: 'https://github.com/mohsaqr/ladyna',
     vendoredAt: 'standalone/vendor/ladyna',
     note: 'The tnaj/ladyna engine dist; Carm ecosystem, covered by LICENSE.',
   },

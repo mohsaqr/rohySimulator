@@ -105,7 +105,17 @@ say "checking ladyna sibling at $LADYNA_DIR"
 
 if [[ ! -d "$LADYNA_DIR/.git" ]]; then
     warn "ladyna not found — cloning"
-    git clone https://github.com/mohsaqr/tna-js.git "$LADYNA_DIR"
+    # mohsaqr/ladyna is PRIVATE (the dynajs it replaced was public), and the
+    # checkout dir is tna-js while the repo is ladyna — both deliberate.
+    # Anonymous https returns 404, which git reports as "repository not
+    # found"; that means no access, not a wrong URL. Override ROHY_LADYNA_URL
+    # with an ssh/token URL you can read, or point it at your own fork.
+    if ! git clone --branch "${ROHY_LADYNA_REF:-v1.8.22}"             "${ROHY_LADYNA_URL:-git@github.com:mohsaqr/ladyna.git}" "$LADYNA_DIR"; then
+        die "could not clone ladyna into $LADYNA_DIR.
+  ladyna is a private dependency. Set ROHY_LADYNA_URL to a URL you can read
+  (ssh key, deploy key, or token) and re-run, e.g.
+    ROHY_LADYNA_URL=git@github.com:mohsaqr/ladyna.git $0"
+    fi
 fi
 
 if [[ ! -f "$LADYNA_DIR/dist/index.mjs" && ! -f "$LADYNA_DIR/dist/index.js" ]]; then

@@ -76,10 +76,22 @@ jobs:
       # but the cached layer still has it." Burn ~10 min once a day to
       # be sure the build is reproducible from scratch.
       - name: Build rohy production image (no cache)
+        env:
+          # ladyna is a PRIVATE repo; the Dockerfile clones it over SSH via a
+          # forwarded agent, so no credential ever lands in an image layer.
+          LADYNA_DEPLOY_KEY: ${{ secrets.LADYNA_DEPLOY_KEY }}
+          DOCKER_BUILDKIT: '1'
         run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$LADYNA_DEPLOY_KEY" > ~/.ssh/ladyna_ci
+          chmod 600 ~/.ssh/ladyna_ci
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          eval "$(ssh-agent -s)" >/dev/null
+          ssh-add ~/.ssh/ladyna_ci
           docker build \
             --no-cache \
             --progress=plain \
+            --ssh default \
             -f deploy/docker/Dockerfile \
             -t rohy:ci \
             .

@@ -52,8 +52,21 @@ jobs:
       # `npm install` (not ci) is needed inside the ladyna clone so its
       # prepare script produces dist/. Same recipe as the Dockerfile.
       - name: Clone ladyna sibling
+        env:
+          LADYNA_DEPLOY_KEY: ${{ secrets.LADYNA_DEPLOY_KEY }}
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/tna-js.git ../tna-js
+          # ladyna is a PRIVATE repo, so an anonymous clone 404s.
+          # LADYNA_DEPLOY_KEY is a read-only DEPLOY KEY on mohsaqr/ladyna
+          # (repo-scoped, unlike an account-wide PAT). The checkout dir is
+          # tna-js while the repo is `ladyna` — that mismatch is deliberate
+          # and matches rohy's "ladyna": "file:../tna-js".
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$LADYNA_DEPLOY_KEY" > ~/.ssh/ladyna_ci
+          chmod 600 ~/.ssh/ladyna_ci
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          GIT_SSH_COMMAND='ssh -i ~/.ssh/ladyna_ci -o IdentitiesOnly=yes' \
+            git clone --depth 1 --branch v1.8.22 \
+              git@github.com:mohsaqr/ladyna.git ../tna-js
           cd ../tna-js && npm install --prefer-offline --no-audit --no-fund
       - name: Install dependencies
         run: npm ci
@@ -78,8 +91,21 @@ jobs:
           cache: npm
       # See the Build job for why this step exists.
       - name: Clone ladyna sibling
+        env:
+          LADYNA_DEPLOY_KEY: ${{ secrets.LADYNA_DEPLOY_KEY }}
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/tna-js.git ../tna-js
+          # ladyna is a PRIVATE repo, so an anonymous clone 404s.
+          # LADYNA_DEPLOY_KEY is a read-only DEPLOY KEY on mohsaqr/ladyna
+          # (repo-scoped, unlike an account-wide PAT). The checkout dir is
+          # tna-js while the repo is `ladyna` — that mismatch is deliberate
+          # and matches rohy's "ladyna": "file:../tna-js".
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$LADYNA_DEPLOY_KEY" > ~/.ssh/ladyna_ci
+          chmod 600 ~/.ssh/ladyna_ci
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          GIT_SSH_COMMAND='ssh -i ~/.ssh/ladyna_ci -o IdentitiesOnly=yes' \
+            git clone --depth 1 --branch v1.8.22 \
+              git@github.com:mohsaqr/ladyna.git ../tna-js
           cd ../tna-js && npm install --prefer-offline --no-audit --no-fund
       - name: Install dependencies
         run: npm ci
@@ -145,8 +171,21 @@ jobs:
           cache: npm
       # See the Build job for why this step exists.
       - name: Clone ladyna sibling
+        env:
+          LADYNA_DEPLOY_KEY: ${{ secrets.LADYNA_DEPLOY_KEY }}
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/tna-js.git ../tna-js
+          # ladyna is a PRIVATE repo, so an anonymous clone 404s.
+          # LADYNA_DEPLOY_KEY is a read-only DEPLOY KEY on mohsaqr/ladyna
+          # (repo-scoped, unlike an account-wide PAT). The checkout dir is
+          # tna-js while the repo is `ladyna` — that mismatch is deliberate
+          # and matches rohy's "ladyna": "file:../tna-js".
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$LADYNA_DEPLOY_KEY" > ~/.ssh/ladyna_ci
+          chmod 600 ~/.ssh/ladyna_ci
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          GIT_SSH_COMMAND='ssh -i ~/.ssh/ladyna_ci -o IdentitiesOnly=yes' \
+            git clone --depth 1 --branch v1.8.22 \
+              git@github.com:mohsaqr/ladyna.git ../tna-js
           cd ../tna-js && npm install --prefer-offline --no-audit --no-fund
       - name: Install dependencies
         run: npm ci

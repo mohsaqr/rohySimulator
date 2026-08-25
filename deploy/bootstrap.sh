@@ -39,8 +39,8 @@
 #   ROHY_HF_CACHE=/var/cache/rohy-hf
 #   ROHY_ENV_FILE=/etc/rohy/env
 #   ROHY_PORT=4000
-#   ROHY_LADYNA_URL=https://github.com/mohsaqr/tna-js.git
-#   ROHY_LADYNA_REF=main
+#   ROHY_LADYNA_URL=https://github.com/mohsaqr/ladyna.git
+#   ROHY_LADYNA_REF=v1.8.22
 #
 # What it does, in order:
 #   1. Detect distro + install package prereqs (apt | dnf | brew).
@@ -97,8 +97,11 @@ ROHY_DATA_DIR="${ROHY_DATA_DIR:-/opt/data/rohy}"
 ROHY_HF_CACHE="${ROHY_HF_CACHE:-/var/cache/rohy-hf}"
 ROHY_ENV_FILE="${ROHY_ENV_FILE:-/etc/rohy/env}"
 ROHY_PORT="${ROHY_PORT:-4000}"
-ROHY_LADYNA_URL="${ROHY_LADYNA_URL:-https://github.com/mohsaqr/tna-js.git}"
-ROHY_LADYNA_REF="${ROHY_LADYNA_REF:-main}"
+# mohsaqr/ladyna is PRIVATE and the checkout dir is tna-js while the repo is
+# ladyna — both deliberate. The ssh form is the default because anonymous
+# https 404s; override with a token URL or your own fork if you prefer.
+ROHY_LADYNA_URL="${ROHY_LADYNA_URL:-git@github.com:mohsaqr/ladyna.git}"
+ROHY_LADYNA_REF="${ROHY_LADYNA_REF:-v1.8.22}"
 
 REPO_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 

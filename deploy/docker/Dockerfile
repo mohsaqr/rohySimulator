@@ -22,11 +22,22 @@
 # Pin the ladyna commit (recommended for reproducible builds):
 #   docker build -f deploy/docker/Dockerfile \
 #     --build-arg LADYNA_GIT_REF=<sha-or-tag> -t rohy:latest .
+#
+# ladyna is a PRIVATE repo (the public dynajs it replaced needed no auth), so
+# the build needs read access. It is forwarded as a BuildKit SSH AGENT, never
+# a build-arg — a build-arg would be recorded in the image history:
+#   eval "$(ssh-agent -s)"; ssh-add ~/.ssh/<key-with-read-access>
+#   DOCKER_BUILDKIT=1 docker build -f deploy/docker/Dockerfile \
+#     --ssh default -t rohy:latest .
+# Set LADYNA_GIT_URL=https://github.com/... instead if you have made your own
+# fork public and want an anonymous clone.
+# The repo is mohsaqr/**ladyna** but the checkout dir is **tna-js** — the name
+# mismatch is deliberate and matches rohy's "ladyna": "file:../tna-js".
 
 ARG NODE_VERSION=22-bookworm-slim
 ARG INCLUDE_PIPER=0
-ARG LADYNA_GIT_URL=https://github.com/mohsaqr/tna-js.git
-ARG LADYNA_GIT_REF=main
+ARG LADYNA_GIT_URL=git@github.com:mohsaqr/ladyna.git
+ARG LADYNA_GIT_REF=v1.8.22
 
 # ===========================================================================
 # Stage 1: builder
@@ -47,8 +58,12 @@ RUN apt-get update -qq \
 # Clone + build ladyna FIRST so its dist/ exists before rohy's npm install
 # runs. Layer is cached on LADYNA_GIT_REF.
 WORKDIR /workspace
-RUN git clone --depth 1 --branch "${LADYNA_GIT_REF}" "${LADYNA_GIT_URL}" tna-js \
- || git clone "${LADYNA_GIT_URL}" tna-js && cd tna-js && git checkout "${LADYNA_GIT_REF}"
+# The agent is mounted for this RUN only, so no credential reaches a layer.
+RUN --mount=type=ssh \
+    set -eu; \
+    mkdir -p -m 700 /root/.ssh; \
+    ssh-keyscan -t ed25519 github.com >> /root/.ssh/known_hosts 2>/dev/null; \
+    git clone --depth 1 --branch "${LADYNA_GIT_REF}" "${LADYNA_GIT_URL}" tna-js
 WORKDIR /workspace/tna-js
 # Use install (not ci) so the prepare script that produces dist/ runs.
 RUN npm install --prefer-offline --no-audit --no-fund

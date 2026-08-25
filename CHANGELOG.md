@@ -9,6 +9,40 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.57] — 2026-08-25
+
+### Fixed
+
+- **The one-engine (dynajs → ladyna) refactor could not install anywhere.** Two
+  independent faults, both of which fail *quietly* because a missing `file:`
+  sibling resolves to an empty stub that only explodes at bundle time:
+  - **Wrong repository.** Every clone pointed at `github.com/mohsaqr/tna-js`,
+    which does not exist. The GitHub repo is **`mohsaqr/ladyna`**; `tna-js` is
+    only the checkout directory name (the same folder≠repo trap as
+    `JStats` ← `mohsaqr/Carm`). Fixed in 14 places: CI (×3), `Dockerfile`,
+    `bootstrap.sh`, `local-install.sh`, both licence manifests, `README.md` and
+    both `NOTICE.md` files.
+  - **Private vs public.** `dynajs` was a public repo and cloned anonymously;
+    `ladyna` is private, so every anonymous clone 404s. Access is now wired
+    explicitly: the server reads it through a `github-ladyna` SSH alias backed
+    by a read-only deploy key; CI uses a `LADYNA_DEPLOY_KEY` repo secret (also
+    a read-only deploy key, repo-scoped rather than an account-wide PAT); the
+    Docker build forwards an ssh agent via `--mount=type=ssh` so no credential
+    is ever recorded in an image layer. Air-gap bundling needs nothing — it
+    rsyncs the local sibling.
+  - CI had never run on the refactor (the last runs predate it), which is why
+    neither fault was caught.
+- **The ladyna ref is now pinned** to the new `v1.8.22` tag instead of floating
+  on `main`, in `Dockerfile` (`LADYNA_GIT_REF`), `bootstrap.sh`
+  (`ROHY_LADYNA_REF`) and CI. Bump all of them together.
+
+### Changed
+
+- `bootstrap.sh` / `local-install.sh` default to the ssh clone URL and now fail
+  with an explicit "ladyna is a private dependency, set `ROHY_LADYNA_URL`"
+  message. **Consequence:** an outside operator can no longer self-host without
+  being granted read access to ladyna — that was possible while dynajs was public.
+
 ## [2.9.56] — 2026-08-25
 
 ### Added
