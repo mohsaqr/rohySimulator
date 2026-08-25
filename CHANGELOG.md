@@ -9,6 +9,28 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.53] — 2026-08-25
+
+### Fixed
+
+- **The horn button on the Alarm System panel now silences a sounding alarm**
+  (bug report 2.9.37 #6). `routeNotification()` runs once at `notify()` time and
+  its result is frozen onto `notification.routedSurfaces`; `AudioSurface`
+  filtered on that snapshot, so flipping `prefs.audioMuted` while an alarm was
+  already sounding never reached it — the oscillator kept beeping until the
+  breach was acknowledged or resolved. `AudioSurface` now re-checks
+  `prefs.audioMuted` live. This mirrors `routing.js` rather than widening it:
+  `audioMuted` is the one mute applied unconditionally there (it is *not*
+  bypassed by critical clinical, unlike DND / minSeverity / mutedSources), so
+  muting is meant to silence even a life-threatening alarm. Unmuting pages
+  again while the breach is still active. Acknowledge/Snooze were never
+  affected — they remove the notification from `active`.
+- **`AudioSurface` has tests for the first time.** It was previously untestable:
+  the shared `tests/setup.js` AudioContext stub has no `createOscillator()`, so
+  the surface threw on mount. The new suite supplies its own instrumented
+  AudioContext instead of widening the global stub, and includes a control test
+  (ack silences) so a mute failure cannot be mistaken for a blind harness.
+
 ## [2.9.52] — 2026-08-16
 
 ### Added

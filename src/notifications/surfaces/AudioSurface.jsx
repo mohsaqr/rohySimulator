@@ -29,12 +29,16 @@ function pickPattern(audioActive) {
 export default function AudioSurface() {
     const { active, prefs } = useNotifications();
 
-    // Filter to active audio-routed notifications. routedSurfaces is computed
-    // at notify() time and respects audioMuted, so this list is empty when
-    // the user has muted audio — no need to re-check the pref here.
+    // Filter to active audio-routed notifications. routedSurfaces is a snapshot
+    // taken at notify() time, so on its own it cannot reflect a mute the user
+    // applies while an alarm is ALREADY sounding — that was the horn button
+    // doing nothing mid-alarm. Re-check audioMuted live here. This mirrors
+    // routing.js rather than widening it: audioMuted is the one mute applied
+    // unconditionally there, so it silences even a critical clinical alarm.
     const audioActive = useMemo(() => {
+        if (prefs.audioMuted) return [];
         return active.filter(n => Array.isArray(n.routedSurfaces) && n.routedSurfaces.includes(SURFACES.AUDIO));
-    }, [active]);
+    }, [active, prefs.audioMuted]);
 
     const pattern = pickPattern(audioActive);
 
