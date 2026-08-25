@@ -9,6 +9,23 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.56] — 2026-08-25
+
+### Added
+
+- **Body Map silhouettes can be reset to the bundled default** (bug report
+  2.9.37 #4). An admin could replace a silhouette but had no way back. There is
+  nothing to "reset" in a database — `useBodyImage()` probes
+  `/uploads/bodymap/<type>.png` → `.svg` → the bundled `/<type>.png`, so the new
+  admin-only `DELETE /api/body-image/:type` removes the uploaded override and
+  the reader falls through to the default on its own. Both extensions go: either
+  one left behind would keep shadowing. Idempotent — resetting an already-default
+  slot is a 200 with `wasCustom: false`, not a 404 — and audited as
+  `reset_body_image`. The four hand-copied slot blocks in the Body Map editor
+  were collapsed into one `BodyImageSlot` component so the new action exists
+  once rather than four times; the type allowlist is now shared with the upload
+  route so the two cannot disagree. Strings in all six languages.
+
 ## [2.9.55] — 2026-08-25
 
 ### Added

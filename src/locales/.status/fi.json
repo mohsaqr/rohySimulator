@@ -1651,6 +1651,13 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.bodymap_reset_default": {
+    "src": "bc5b45ae7b60",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.bodymap_subtitle": {
     "src": "7edbbfb347fe",
     "state": "machine",
@@ -5179,6 +5186,20 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.toast_image_already_default": {
+    "src": "dc9b673f4bef",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.toast_image_reset": {
+    "src": "e23bfe5d0f91",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.toast_image_too_large": {
     "src": "a53da6a90e94",
     "state": "machine",
@@ -5258,6 +5279,13 @@
   },
   "authoring_config.toast_remove_agent_failed": {
     "src": "71771586d92e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.toast_reset_failed": {
+    "src": "0b9db9623321",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,

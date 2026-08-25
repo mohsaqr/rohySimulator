@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera, ScanFace, Stethoscope } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera, ScanFace, Stethoscope, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
@@ -73,6 +73,46 @@ const wizardStepNumber = (key) => WIZARD_STEP_KEYS.indexOf(key) + 1;
 function BodyImagePreview({ type, version, alt }) {
     const { src, onError } = useBodyImage(type, version);
     return <img src={src} onError={onError} alt={alt} className="w-16 h-24 object-contain bg-neutral-700 rounded" />;
+}
+
+/**
+ * One of the four body-silhouette slots: thumbnail, an upload dropzone, and a
+ * reset-to-default action. Extracted from four hand-copied blocks so the reset
+ * added for the 2.9.37 report exists once rather than four times.
+ */
+function BodyImageSlot({ type, label, alt, version, onUpload, onReset, t, toast }) {
+    return (
+        <div className="space-y-2">
+            <label className="text-sm font-medium">{label}</label>
+            <div className="flex gap-2">
+                <BodyImagePreview type={type} version={version} alt={alt} />
+                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
+                    <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = '';
+                        if (file) {
+                            onUpload(file, type)
+                                .then(() => toast.success(t('toast_image_uploaded')))
+                                .catch(err => toast.error(t('toast_upload_failed', { error: err.error || err.message })));
+                        }
+                    }} />
+                    <Upload className="w-5 h-5 text-neutral-500" />
+                </label>
+            </div>
+            <button
+                type="button"
+                onClick={() => {
+                    onReset(type)
+                        .then((r) => toast.success(r?.wasCustom ? t('toast_image_reset') : t('toast_image_already_default')))
+                        .catch(err => toast.error(t('toast_reset_failed', { error: err.error || err.message })));
+                }}
+                className="w-full flex items-center justify-center gap-1.5 px-2 py-1 text-xs rounded border border-neutral-600 text-neutral-300 hover:bg-neutral-700 transition-colors"
+            >
+                <RotateCcw className="w-3.5 h-3.5" />
+                {t('bodymap_reset_default')}
+            </button>
+        </div>
+    );
 }
 
 /**
@@ -630,6 +670,15 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             method: 'POST',
             body: formData,
         });
+        setBodyImageVersion(Date.now());
+        return res;
+    };
+    // Reset = delete the uploaded override. useBodyImage() probes
+    // /uploads/bodymap/<type>.png → .svg → the bundled /<type>.png, so removing
+    // the override IS the restore — bumping the version makes the already
+    // mounted preview re-probe and land on the default (2.9.37 report, bug 4).
+    const resetBodyImage = async (type) => {
+        const res = await apiFetch(`/body-image/${type}`, { method: 'DELETE' });
         setBodyImageVersion(Date.now());
         return res;
     };
@@ -1269,74 +1318,46 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                         {t('bodymap_images_help')}
                                     </p>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">{t('bodymap_male_front')}</label>
-                                            <div className="flex gap-2">
-                                                <BodyImagePreview type="man-front" version={bodyImageVersion} alt="Male front" />
-                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
-                                                    <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (file) {
-                                                            uploadBodyImage(file, 'man-front')
-                                                                .then(() => toast.success(t('toast_image_uploaded')))
-                                                                .catch(err => toast.error(t('toast_upload_failed', { error: err.error || err.message })));
-                                                        }
-                                                    }} />
-                                                    <Upload className="w-5 h-5 text-neutral-500" />
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">{t('bodymap_male_back')}</label>
-                                            <div className="flex gap-2">
-                                                <BodyImagePreview type="man-back" version={bodyImageVersion} alt="Male back" />
-                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
-                                                    <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (file) {
-                                                            uploadBodyImage(file, 'man-back')
-                                                                .then(() => toast.success(t('toast_image_uploaded')))
-                                                                .catch(err => toast.error(t('toast_upload_failed', { error: err.error || err.message })));
-                                                        }
-                                                    }} />
-                                                    <Upload className="w-5 h-5 text-neutral-500" />
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">{t('bodymap_female_front')}</label>
-                                            <div className="flex gap-2">
-                                                <BodyImagePreview type="woman-front" version={bodyImageVersion} alt="Female front" />
-                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
-                                                    <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (file) {
-                                                            uploadBodyImage(file, 'woman-front')
-                                                                .then(() => toast.success(t('toast_image_uploaded')))
-                                                                .catch(err => toast.error(t('toast_upload_failed', { error: err.error || err.message })));
-                                                        }
-                                                    }} />
-                                                    <Upload className="w-5 h-5 text-neutral-500" />
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">{t('bodymap_female_back')}</label>
-                                            <div className="flex gap-2">
-                                                <BodyImagePreview type="woman-back" version={bodyImageVersion} alt="Female back" />
-                                                <label className="flex-1 flex items-center justify-center border-2 border-dashed border-neutral-600 rounded cursor-pointer hover:border-teal-500 transition-colors">
-                                                    <input type="file" accept=".svg,.png" className="hidden" onChange={(e) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (file) {
-                                                            uploadBodyImage(file, 'woman-back')
-                                                                .then(() => toast.success(t('toast_image_uploaded')))
-                                                                .catch(err => toast.error(t('toast_upload_failed', { error: err.error || err.message })));
-                                                        }
-                                                    }} />
-                                                    <Upload className="w-5 h-5 text-neutral-500" />
-                                                </label>
-                                            </div>
-                                        </div>
+                                        <BodyImageSlot
+                                            type="man-front"
+                                            label={t('bodymap_male_front')}
+                                            alt="Male front"
+                                            version={bodyImageVersion}
+                                            onUpload={uploadBodyImage}
+                                            onReset={resetBodyImage}
+                                            t={t}
+                                            toast={toast}
+                                        />
+                                        <BodyImageSlot
+                                            type="man-back"
+                                            label={t('bodymap_male_back')}
+                                            alt="Male back"
+                                            version={bodyImageVersion}
+                                            onUpload={uploadBodyImage}
+                                            onReset={resetBodyImage}
+                                            t={t}
+                                            toast={toast}
+                                        />
+                                        <BodyImageSlot
+                                            type="woman-front"
+                                            label={t('bodymap_female_front')}
+                                            alt="Female front"
+                                            version={bodyImageVersion}
+                                            onUpload={uploadBodyImage}
+                                            onReset={resetBodyImage}
+                                            t={t}
+                                            toast={toast}
+                                        />
+                                        <BodyImageSlot
+                                            type="woman-back"
+                                            label={t('bodymap_female_back')}
+                                            alt="Female back"
+                                            version={bodyImageVersion}
+                                            onUpload={uploadBodyImage}
+                                            onReset={resetBodyImage}
+                                            t={t}
+                                            toast={toast}
+                                        />
                                     </div>
                                 </div>
                             </div>

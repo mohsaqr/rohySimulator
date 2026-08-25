@@ -12,6 +12,7 @@ import {
 
 
 
+import { auditSuccess } from './_helpers.js';
 import { logger } from '../logger.js';
 
 
@@ -191,18 +192,21 @@ router.post('/uploads/file', authenticateToken, requireEducator, fileUpload.sing
 router.post('/uploads/video', authenticateToken, requireEducator, videoUpload.single('file'), sendUploaded);
 
 // --- BODY IMAGE UPLOAD (Admin Only) ---
+// The four silhouette slots. Shared by the upload and the reset route so the
+// two can never disagree about what a valid slot is.
+const BODY_IMAGE_TYPES = ['man-front', 'man-back', 'woman-front', 'woman-back'];
+
 router.post('/upload-body-image', authenticateToken, requireAdmin, uploadBodyImage.single('image'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const validTypes = ['man-front', 'man-back', 'woman-front', 'woman-back'];
     const imageType = req.body.type;
 
-    if (!validTypes.includes(imageType)) {
+    if (!BODY_IMAGE_TYPES.includes(imageType)) {
         // Delete the uploaded file
         fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'Invalid image type. Must be one of: ' + validTypes.join(', ') });
+        return res.status(400).json({ error: 'Invalid image type. Must be one of: ' + BODY_IMAGE_TYPES.join(', ') });
     }
 
     // Get file extension
@@ -240,6 +244,49 @@ router.post('/upload-body-image', authenticateToken, requireAdmin, uploadBodyIma
         (req.log || routesCasesLog).error('body image save failed', { error: err.message });
         res.status(500).json({ error: 'Failed to save image: ' + err.message });
     }
+});
+
+// DELETE /api/body-image/:type - restore the bundled default silhouette.
+//
+// There is nothing to "reset" in a database: useBodyImage() probes
+// /uploads/bodymap/<type>.png → .svg → the bundled /<type>.png, so removing
+// the uploaded override IS the reset — the reader falls through to the
+// default on its own. Both extensions go, because either one would keep
+// shadowing the default (2.9.37 report, bug 4).
+router.delete('/body-image/:type', authenticateToken, requireAdmin, (req, res) => {
+    const imageType = req.params.type;
+    if (!BODY_IMAGE_TYPES.includes(imageType)) {
+        return res.status(400).json({
+            error: 'Invalid image type. Must be one of: ' + BODY_IMAGE_TYPES.join(', '),
+            code: 'INVALID_BODY_IMAGE_TYPE',
+        });
+    }
+
+    const bodymapDir = path.join(__dirname, '../../public/uploads/bodymap');
+    const removed = [];
+    try {
+        for (const ext of ['.png', '.svg']) {
+            const candidate = path.join(bodymapDir, `${imageType}${ext}`);
+            if (fs.existsSync(candidate)) {
+                fs.unlinkSync(candidate);
+                removed.push(`${imageType}${ext}`);
+            }
+        }
+    } catch (err) {
+        (req.log || routesCasesLog).error('body image reset failed', { error: err.message, type: imageType });
+        return res.status(500).json({ error: 'Failed to reset image: ' + err.message });
+    }
+
+    // Idempotent: resetting a slot that never had an override is a success
+    // with removed: [] — the slot is already showing the default.
+    auditSuccess(req, {
+        action: 'reset_body_image',
+        resourceType: 'body_image',
+        resourceId: imageType,
+        resourceName: imageType,
+        oldValue: { removed },
+    });
+    res.json({ success: true, type: imageType, removed, wasCustom: removed.length > 0 });
 });
 
 // --- BODY MAP REGIONS ---

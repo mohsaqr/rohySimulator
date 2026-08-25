@@ -787,13 +787,38 @@ describe('ConfigPanel — body-map preview upload visibility (source contract)',
     // cache-buster — even a correctly stored upload never repainted. They now
     // go through BodyImagePreview (useBodyImage: uploaded URL first, onError
     // fallback to the bundled default via baseUrl, versioned cache-buster).
+    //
+    // The four hand-copied slot blocks were collapsed into <BodyImageSlot> when
+    // the reset-to-default action landed (2.9.37 report, bug 4), so the version
+    // now reaches the preview through one hop. The lock follows the indirection
+    // rather than relaxing: every slot must still pass the cache-buster, and
+    // the slot must still hand it to BodyImagePreview.
     it('renders previews through BodyImagePreview, not relative bundle paths', async () => {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const src = fs.readFileSync(path.resolve(__dirname, 'ConfigPanel.jsx'), 'utf8');
         expect(src).not.toMatch(/src="\.\/(man|woman)-(front|back)\.png"/);
         for (const type of ['man-front', 'man-back', 'woman-front', 'woman-back']) {
-            expect(src).toMatch(new RegExp(`<BodyImagePreview type="${type}" version=\\{bodyImageVersion\\}`));
+            expect(src).toMatch(new RegExp(`<BodyImageSlot\\s+type="${type}"`));
         }
+        // Every slot passes the versioned cache-buster down…
+        expect(src.match(/version=\{bodyImageVersion\}/g) ?? []).toHaveLength(4);
+        // …and the slot is what feeds BodyImagePreview.
+        expect(src).toMatch(/<BodyImagePreview type=\{type\} version=\{version\}/);
+    });
+
+    // Regression lock: an uploaded silhouette could not be reverted to the
+    // bundled default (2.9.37 report, bug 4). The reset is a DELETE of the
+    // override — useBodyImage() then falls through to /<type>.png on its own.
+    it('offers a reset-to-default action that DELETEs the override', async () => {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const src = fs.readFileSync(path.resolve(__dirname, 'ConfigPanel.jsx'), 'utf8');
+        expect(src).toMatch(/apiFetch\(`\/body-image\/\$\{type\}`, \{ method: 'DELETE' \}\)/);
+        // The preview must re-probe afterwards or the browser repaints the
+        // cached override and the reset looks like it did nothing.
+        expect(src).toMatch(/resetBodyImage[\s\S]{0,400}setBodyImageVersion\(Date\.now\(\)\)/);
+        // All four slots get the action, not just the first.
+        expect(src.match(/onReset=\{resetBodyImage\}/g) ?? []).toHaveLength(4);
     });
 });
