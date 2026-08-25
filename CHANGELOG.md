@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.55] — 2026-08-25
+
+### Added
+
+- **Lesson authors get an inline preview of an attached image** (bug report
+  2.9.37 #3). `FileCard` already offered a "View" action that opens the file in
+  a new tab, but an author checking a lesson before publishing should not have
+  to leave the page to confirm they attached the right scan. The lesson editor
+  now renders the image above the file card. Deliberately editor-only — the
+  student-facing card is unchanged — and image-only, since a PDF in an `<img>`
+  is a broken-image icon, which is worse than the card alone. This adds the
+  first tests to the vendored `src/components/lessons/**` module.
+
 ## [2.9.54] — 2026-08-25
 
 ### Fixed

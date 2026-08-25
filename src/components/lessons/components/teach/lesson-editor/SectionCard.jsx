@@ -6,6 +6,7 @@ import { resolveFileUrl } from '../../../api/client';
 import { SectionBodyEditor } from './SectionBodyEditor';
 import { BlockCard } from './BlockCard';
 import { FileCard } from '../../course/FileCard';
+import { previewKind } from '../../../utils/filePreview';
 
 /**
  * One section of a lesson: a card with reorder handle/arrows, an inline
@@ -63,8 +64,23 @@ export const SectionCard = ({
       );
     }
     if (section.type === 'file') {
+      // Authoring-only inline preview. FileCard already offers a "View" action
+      // that opens the file in a new tab, but an author checking a lesson
+      // before publishing should not have to leave the page to confirm they
+      // attached the right image (2.9.37 report, bug 3). Student-facing views
+      // keep the plain card — this preview is deliberately editor-only.
+      const fileHref = section.fileUrl ? resolveFileUrl(section.fileUrl) : null;
+      const isImage = fileHref && previewKind(section.fileName || '', section.fileType) === 'image';
       return (
         <div className="space-y-2">
+          {isImage && (
+            <img
+              src={fileHref}
+              alt={section.fileName || ''}
+              className="max-h-64 w-auto max-w-full rounded-lg border object-contain"
+              style={{ borderColor: colors.border }}
+            />
+          )}
           <FileCard
             fileName={section.fileName || 'file'}
             fileType={section.fileType}
