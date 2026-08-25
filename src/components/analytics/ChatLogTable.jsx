@@ -77,6 +77,20 @@ function speakerFor(row) {
         if (row.role === 'user') return 'student';
         return row.role || null;
     }
+    // learning_events. `role` here is COALESCE(message_role, verb), so it only
+    // names a speaker for the two chat verbs — every other verb (TTS_PLAYED,
+    // EXPRESSED_EMOTION, STT_RESULT…) arrives as a verb string and genuinely
+    // has no speaker. `model` carries le.component, which is what separates
+    // the patient thread (ChatInterface) from the debrief discussant
+    // (DiscussionScreen); supporting agents never emit these events — they go
+    // through handleSendToAgent → agent_conversations (source 'agent' above).
+    if (row.source === 'event') {
+        if (row.role === 'user') return 'student';
+        if (row.role === 'assistant') {
+            return row.model === 'DiscussionScreen' ? 'discussant' : 'patient';
+        }
+        return null;
+    }
     return null;
 }
 
@@ -84,6 +98,7 @@ const SPEAKER_COLOR = {
     patient: 'bg-blue-900/40 text-blue-300',
     student: 'bg-emerald-900/40 text-emerald-300',
     consultant: 'bg-teal-900/40 text-teal-300',
+    discussant: 'bg-violet-900/40 text-violet-300',
 };
 
 const COLUMNS = [

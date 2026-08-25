@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.54] — 2026-08-25
+
+### Fixed
+
+- **The Chat Log now names the speaker for `learning_events` rows** (bug report
+  2.9.37 #5). `speakerFor()` resolved a speaker for `interaction`, `agent` and
+  `team` rows but returned nothing for `event` rows, so a feed dominated by them
+  read as a wall of bare `assistant` against a "—" speaker. Those rows now
+  resolve too, split by `le.component`: the patient thread (`ChatInterface`) and
+  the debrief discussant (`DiscussionScreen`) are no longer conflated. Non-chat
+  verbs (`TTS_PLAYED`, `EXPRESSED_EMOTION`, `STT_RESULT`…) arrive with `role` set
+  to the verb itself and correctly stay blank rather than being swept into
+  "patient". Client-only — no schema, API or docs change.
+  - Note: the `role` column itself is unchanged and must stay that way. `role`
+    is the LLM wire protocol (`user`/`assistant`/`system`); rewriting it to
+    `patient`/`consultant` as the report suggested would corrupt the payload
+    sent to the model. Supporting agents were already correctly named — they
+    write to `agent_conversations` with an `agent_type`, never to `interactions`.
+
 ## [2.9.53] — 2026-08-25
 
 ### Fixed

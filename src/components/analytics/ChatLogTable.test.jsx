@@ -79,4 +79,45 @@ describe('ChatLogTable speaker column', () => {
         expect(screen.getByText('patient')).toBeInTheDocument();
         expect(screen.getByText('student')).toBeInTheDocument();
     });
+
+    // Regression lock: learning_events rows (source 'event') resolved to no
+    // speaker at all, so a feed dominated by them was a wall of bare
+    // "assistant" with a "—" speaker — reported as bug 5 of the 2.9.37 report
+    // ("the log does not clearly indicate whether an AI-generated message came
+    // from the virtual patient, the consultant, or others"). `model` carries
+    // le.component, which separates the patient thread from the debrief.
+    it('resolves a speaker for learning_event chat rows, split by component', async () => {
+        apiFetchMock.mockResolvedValue({
+            events: [
+                row({ source: 'event', role: 'user', content: 'Any allergies?', model: 'ChatInterface', extra: 'SENT_MESSAGE' }),
+                row({ source: 'event', role: 'assistant', content: 'None that I know of.', model: 'ChatInterface', extra: 'RECEIVED_MESSAGE' }),
+                row({ source: 'event', role: 'assistant', content: 'Walk me through your reasoning.', model: 'DiscussionScreen', extra: 'RECEIVED_MESSAGE' }),
+            ],
+            sources: { event: 3 },
+        });
+        render(<ChatLogTable />);
+
+        expect(await screen.findByText('speaker')).toBeInTheDocument();
+        expect(screen.getByText('patient')).toBeInTheDocument();
+        expect(screen.getByText('student')).toBeInTheDocument();
+        // The debrief discussant is NOT the patient.
+        expect(screen.getByText('discussant')).toBeInTheDocument();
+    });
+
+    // Non-chat verbs arrive with `role` = the verb itself (message_role is
+    // NULL), and genuinely have no speaker — they must stay blank rather than
+    // being swept into "patient".
+    it('leaves non-chat event verbs without a speaker', async () => {
+        apiFetchMock.mockResolvedValue({
+            events: [
+                row({ source: 'event', role: 'TTS_PLAYED', content: 'spoken', model: 'ChatInterface', extra: 'TTS_PLAYED' }),
+            ],
+            sources: { event: 1 },
+        });
+        render(<ChatLogTable />);
+
+        expect(await screen.findByText('speaker')).toBeInTheDocument();
+        expect(screen.queryByText('patient')).not.toBeInTheDocument();
+        expect(screen.queryByText('student')).not.toBeInTheDocument();
+    });
 });
