@@ -53,8 +53,33 @@ export const manifest = {
     // "malignancy"). A capability nothing consumes is dead weight in a
     // manifest whose whole job is to make intent reviewable. grading.js is
     // intact and tested if tutor-side marking wants it later.
-    capabilities: ['persist'],
+    capabilities: ['persist', 'remote'],
     minRole: 'student',
+
+    // Remote content. Whole-slide images are the reason this exists: a single
+    // scanned slide is gigabytes of pyramid tiles, which has no business inside
+    // rohy's Docker image, its backups, or its air-gap bundle. With this block
+    // a case addresses a slide as `remote:tiles/case42/slide1.dzi` and rohy
+    // relays it from whichever host the OPERATOR configured in
+    // ROHY_PLUGIN_ORIGINS — the case never names a host, so the same case runs
+    // against a university's slide server and against a local one unchanged.
+    //
+    // Nothing here is required: a case whose `dzi` is a plain '/slides/…' path
+    // is served by rohy as before. Remote is an option, not a migration.
+    remote: {
+        // '/tiles' is the DZI pyramid (descriptor + tile images); '/gross' is
+        // the specimen photography SpecimenTray renders. Two prefixes rather
+        // than one open mount, so a mis-typed path is a 403 here instead of a
+        // request rohy makes on the author's behalf.
+        paths: ['/tiles', '/gross'],
+        // A .dzi descriptor is XML and tile servers disagree about which XML
+        // content type to send; the images are whatever the pyramid was encoded
+        // as. text/html is conspicuously absent — see plugins-routes.js.
+        contentTypes: [
+            'application/xml', 'text/xml',
+            'image/jpeg', 'image/png', 'image/webp',
+        ],
+    },
 
     // The authoring slot. `CaseAuthor` is a second top-level surface in the
     // upstream package — a case editor, not a room — and before RPS-1 grew

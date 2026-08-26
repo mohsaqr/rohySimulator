@@ -15,6 +15,7 @@
 
 import path from 'node:path';
 import { logger } from '../logger.js';
+import { parsePluginOrigins } from '../lib/pluginRemoteOrigins.js';
 
 const MIN_JWT_SECRET_LENGTH = 32;
 const defaultLog = logger('env');
@@ -45,6 +46,17 @@ export function validateEnv(env = process.env) {
             `JWT_SECRET is only ${env.JWT_SECRET.length} chars. ` +
             `Recommend ≥${MIN_JWT_SECRET_LENGTH} for production-grade entropy.`
         );
+    }
+
+    // ROHY_PLUGIN_ORIGINS — fatal if malformed. Checked here rather than left
+    // to the first tile request, because the failure mode this prevents is an
+    // operator who believes slides are coming from a host rohy never contacts.
+    if (env.ROHY_PLUGIN_ORIGINS) {
+        try {
+            parsePluginOrigins(env.ROHY_PLUGIN_ORIGINS);
+        } catch (err) {
+            errors.push(err.message);
+        }
     }
 
     // PORT / HTTPS_PORT — must be numeric if set.

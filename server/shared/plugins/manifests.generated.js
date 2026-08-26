@@ -8,10 +8,24 @@ export const PLUGIN_MANIFESTS = [
             "minRole": "educator"
         },
         "capabilities": [
-            "persist"
+            "persist",
+            "remote"
         ],
         "id": "pathology",
         "minRole": "student",
+        "remote": {
+            "contentTypes": [
+                "application/xml",
+                "text/xml",
+                "image/jpeg",
+                "image/png",
+                "image/webp"
+            ],
+            "paths": [
+                "/tiles",
+                "/gross"
+            ]
+        },
         "room": {
             "accent": "fuchsia",
             "icon": "Microscope",

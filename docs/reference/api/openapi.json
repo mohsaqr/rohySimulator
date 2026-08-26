@@ -8101,6 +8101,41 @@
         ]
       }
     },
+    "/api/plugins/{pluginId}/*splat": {
+      "get": {
+        "summary": "Get /plugins/:pluginId/*splat",
+        "tags": [
+          "plugins"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/plugins-routes.js:118",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireStudent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/api/proxy/llm": {
       "post": {
         "summary": "Create /proxy/llm",

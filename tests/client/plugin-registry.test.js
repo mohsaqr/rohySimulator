@@ -13,6 +13,7 @@ import {
 import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generated.js';
 import { VERBS, OBJECT_TYPES } from '../../src/services/eventLogger.js';
 import { VERB_FALLBACKS, resolveClinicalState } from '../../src/components/analytics/tna/clinicalStates.js';
+import { resolveRemoteRefs, createPluginContext } from '../../src/plugins/context.js';
 
 const validManifest = (over = {}) => ({
     id: 'demo',
@@ -290,3 +291,93 @@ describe('the shipped pathology manifest', () => {
     });
 });
 
+describe("the 'remote' capability", () => {
+    const remoteManifest = (over = {}) => validManifest({
+        capabilities: ['remote'],
+        remote: { paths: ['/tiles'], contentTypes: ['image/jpeg'] },
+        ...over,
+    });
+
+    it('accepts a well-formed declaration', () => {
+        expect(() => validateManifest(remoteManifest())).not.toThrow();
+    });
+
+    it('refuses a manifest that names its own origin', () => {
+        // The whole security property of the proxy is that a host is operator
+        // configuration. A manifest is written by whoever ships the plugin, so
+        // letting it pick the host would hand host selection to the plugin.
+        expect(() => validateManifest(remoteManifest({
+            remote: { origin: 'https://evil.example', paths: ['/tiles'], contentTypes: ['image/jpeg'] },
+        }))).toThrow(/may not choose a host/);
+    });
+
+    it('refuses a capability with no declaration, and a declaration with no capability', () => {
+        expect(() => validateManifest(validManifest({ capabilities: ['remote'] })))
+            .toThrow(/declares no 'remote' block/);
+        expect(() => validateManifest(validManifest({
+            capabilities: [], remote: { paths: ['/tiles'], contentTypes: ['image/jpeg'] },
+        }))).toThrow(/does not request the 'remote' capability/);
+    });
+
+    it('refuses an unbounded proxy', () => {
+        expect(() => validateManifest(remoteManifest({
+            remote: { paths: [], contentTypes: ['image/jpeg'] },
+        }))).toThrow(/open relay/);
+        expect(() => validateManifest(remoteManifest({
+            remote: { paths: ['/tiles'], contentTypes: [] },
+        }))).toThrow(/text\/html/);
+    });
+
+    it('refuses a path prefix carrying traversal or a parameter', () => {
+        ['/tiles/..', '/tiles/:id', 'tiles', '/tiles/'].forEach((prefix) => {
+            expect(() => validateManifest(remoteManifest({
+                remote: { paths: [prefix], contentTypes: ['image/jpeg'] },
+            }))).toThrow(/literal/);
+        });
+    });
+});
+
+describe('remote: reference resolution', () => {
+    it('rewrites a remote: string to the plugin proxy mount', () => {
+        expect(resolveRemoteRefs('remote:tiles/s1.dzi', 'pathology'))
+            .toBe('/api/plugins/pathology/tiles/s1.dzi');
+    });
+
+    it('leaves a plain path alone, so remote is an option and not a migration', () => {
+        expect(resolveRemoteRefs('/slides/local.dzi', 'pathology')).toBe('/slides/local.dzi');
+    });
+
+    it('walks the whole case rather than a list of known URL fields', () => {
+        // The host does not know which of a plugin's keys hold URLs, and would
+        // be wrong about it after the plugin's next release.
+        const out = resolveRemoteRefs({
+            slides: [{ id: 's1', dzi: 'remote:tiles/a.dzi' }],
+            specimens: [{ plates: [{ src: 'remote:gross/p.jpg' }] }],
+            zoom: 40, examMode: false, key: null,
+        }, 'pathology');
+        expect(out.slides[0].dzi).toBe('/api/plugins/pathology/tiles/a.dzi');
+        expect(out.specimens[0].plates[0].src).toBe('/api/plugins/pathology/gross/p.jpg');
+        expect(out).toMatchObject({ zoom: 40, examMode: false, key: null });
+    });
+
+    it('encodes per segment so a filename cannot smuggle a separator', () => {
+        expect(resolveRemoteRefs('remote:tiles/a b/c%2fd.jpg', 'p'))
+            .toBe('/api/plugins/p/tiles/a%20b/c%252fd.jpg');
+    });
+
+    it('only resolves for a plugin that requested the capability', () => {
+        const withCap = createPluginContext({
+            manifest: { id: 'p', capabilities: ['remote'] },
+            caseConfig: { p: { dzi: 'remote:tiles/a.dzi' } },
+        });
+        const without = createPluginContext({
+            manifest: { id: 'p', capabilities: [] },
+            caseConfig: { p: { dzi: 'remote:tiles/a.dzi' } },
+        });
+        expect(withCap.data.dzi).toBe('/api/plugins/p/tiles/a.dzi');
+        // Left verbatim: a plugin that never asked cannot be handed a proxy URL
+        // by a case config, and the string stays visibly unresolved rather than
+        // silently becoming a path that would 404.
+        expect(without.data.dzi).toBe('remote:tiles/a.dzi');
+    });
+});

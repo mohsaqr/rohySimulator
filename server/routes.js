@@ -22,6 +22,7 @@ import lessonsRoutes from './routes/lessons-routes.js';
 import surveysRoutes from './routes/surveys-routes.js';
 import healthRoutes from './routes/health-routes.js';
 import helpRoutes from './routes/help-routes.js';
+import pluginsRoutes from './routes/plugins-routes.js';
 import { routeTimeout } from './middleware/routeTimeout.js';
 
 // Oyon mounts in three possible states. The stub matters because earlier
@@ -77,7 +78,14 @@ const generalLimiter = rateLimit({
     message: { error: 'Too many requests. Please slow down.' },
     standardHeaders: true,
     legacyHeaders: false,
-    skip: (req) => req.path.startsWith('/tts') || req.path.startsWith('/proxy/llm')
+    // /plugins is exempt for the same reason as /tts: a deep-zoom pan is
+    // hundreds of legitimate requests in seconds, and generalLimiter is keyed
+    // by IP — a lab behind one NAT would exhaust the whole building's budget on
+    // one student reading a slide. plugins-routes.js carries its own per-user
+    // limiter instead.
+    skip: (req) => req.path.startsWith('/tts')
+        || req.path.startsWith('/proxy/llm')
+        || req.path.startsWith('/plugins/')
 });
 
 // Health + readiness mounted BEFORE the rate limiter so monitoring probes
@@ -114,6 +122,7 @@ router.use(cohortsRoutes);
 router.use(lessonsRoutes);
 router.use(surveysRoutes);
 router.use(helpRoutes);
+router.use(pluginsRoutes);
 if (oyonRoutes) {
     router.use('/addons/oyon', oyonRoutes);
 } else if (oyonDisabledReason) {

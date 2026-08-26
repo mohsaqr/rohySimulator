@@ -9,6 +9,67 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.61] — 2026-08-26
+
+### Added
+
+- **A plugin's bulk content can now live on another server** (RPS-1 1.2, the
+  `remote` capability). A whole-slide pyramid is gigabytes; carrying it in
+  rohy's Docker image, its backups and its air-gap bundle was never a packaging
+  inconvenience so much as a different product. A plugin declares
+  `capabilities: ['remote']` plus a `remote` block naming the path prefixes and
+  content types it needs; a case then writes `remote:tiles/case42/slide1.dzi`
+  and the browser is handed `/api/plugins/pathology/tiles/case42/slide1.dzi` —
+  same origin, so rohy's CSP never has to hear about the slide host.
+- `GET /api/plugins/:pluginId/*`, the read-only relay behind it. This is also
+  the first plugin surface rohy's *server* renders, and therefore the first
+  place `minRole` is enforced server-side rather than declared and trusted.
+- `ROHY_PLUGIN_ORIGINS`, a `<pluginId>=<origin>` allowlist. Unset — the default
+  — means no plugin has a remote origin and every proxy route answers 503: a
+  fresh install talks to nothing. A malformed entry stops the server booting,
+  because the failure that matters is an operator believing slides come from a
+  host rohy never contacts.
+
+### Security
+
+- **The origin is operator configuration and nothing else.** A manifest naming
+  `remote.origin` is rejected outright, and a case config cannot name a host at
+  all — it picks a path. rohy has already paid for the alternative once:
+  `proxy-routes.js` accepts a client-supplied `endpoint` and then deliberately
+  ignores it, because honouring it was an SSRF and API-key exfiltration hole. A
+  plugin proxy is the same risk wearing a friendlier name.
+- The proxy does not follow redirects. `fetch`'s default is `follow`, and with
+  it an origin allowlist is advisory: the configured slide host could return a
+  302 to the cloud metadata endpoint and rohy would fetch it with the server's
+  own network position. A 3xx is a 502.
+- A path outside the manifest's declared prefixes is refused **before the
+  upstream is contacted** — a check applied to the response would already have
+  fetched whatever it was refusing.
+- Traversal is stopped in both of its spellings, which turn out to be caught by
+  different checks: `%2e%2e/` is normalised away by Express before routing and
+  fails the prefix test, while `..%2f` survives as a single decoded segment
+  containing a separator and fails the segment test. Dropping either check
+  leaves one spelling live.
+- An undeclared content type is a 502. Relaying `text/html` from the configured
+  origin would serve attacker-controlled markup from rohy's own origin — an
+  HTML-injection primitive handed out by a well-meaning image proxy.
+- GET only; 32 MB and 15 s upstream budgets; client cookies, `Authorization` and
+  query strings are not forwarded upstream and upstream `Set-Cookie` is not
+  returned. The two sides share a path and nothing else.
+
+### Changed
+
+- The plugin proxy is exempt from `generalLimiter` and carries its own limiter
+  at 2000/min keyed by (tenant, user). `generalLimiter` is 600/min keyed by IP,
+  and a deep-zoom pan is hundreds of requests in seconds — in a teaching lab
+  behind one NAT address, one student reading a slide would otherwise spend the
+  whole building's budget.
+- `remote:` references are resolved by the HOST, in `createPluginContext`, and
+  only for a plugin that requested the capability. The pathology adapter needed
+  no code for any of this, which is the test that the seam is real: resolving it
+  per-descriptor would have made every future plugin reimplement the same walk,
+  differently.
+
 ## [2.9.60] — 2026-08-26
 
 ### Security

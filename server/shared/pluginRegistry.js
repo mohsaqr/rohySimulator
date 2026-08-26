@@ -37,7 +37,28 @@ export const CLINICAL_STATES = [
     'documenting', 'monitoring', 'regulating', 'reflecting', 'navigating',
 ];
 
-export const CAPABILITIES = ['llm', 'uploads', 'notify', 'persist'];
+export const CAPABILITIES = ['llm', 'uploads', 'notify', 'persist', 'remote'];
+
+/**
+ * A plugin's remote-content declaration (`manifest.remote`), which is what the
+ * 'remote' capability grants: rohy mounts a read-only proxy at
+ * `/api/plugins/<id>/…` and the plugin's case config addresses it as
+ * `remote:<path>`.
+ *
+ * The ORIGIN is deliberately absent from this declaration. It is operator
+ * configuration (`ROHY_PLUGIN_ORIGINS`), never manifest or case data, because
+ * the same mistake has already been made once in this codebase: the LLM proxy
+ * accepted a client-supplied `endpoint` and that was an SSRF and key-exfil hole
+ * (see proxy-routes.js). A case author can choose a PATH; only an operator can
+ * choose a HOST.
+ *
+ * @typedef  {object}   PluginRemote
+ * @property {string[]} paths         path prefixes the proxy will serve, each
+ *                                    beginning with '/' (e.g. ['/tiles'])
+ * @property {string[]} contentTypes  MIME types the upstream may return; any
+ *                                    other response is refused as a 502
+ */
+
 
 /** Mirrors ROLE_RANKS in server/middleware/auth.js. Duplicated rather than
  *  imported because this module is loaded by the CLIENT too, and auth.js
@@ -177,7 +198,41 @@ export function validateManifest(manifest) {
             throw new Error(`Plugin '${manifest.id}' interprets '${pair}', which involves neither its own verbs nor its own object types`);
         }
     });
-    (manifest.capabilities || []).forEach((cap) => {
+    // Remote content (§ the 'remote' capability). The declaration and the
+    // capability must agree in both directions: a manifest that describes a
+    // proxy it never requested is a review hazard, and a capability with no
+    // declaration would mount a proxy that serves nothing.
+    const caps = manifest.capabilities || [];
+    const remote = manifest.remote;
+    if (remote && !caps.includes('remote')) {
+        throw new Error(`Plugin '${manifest.id}' declares 'remote' content but does not request the 'remote' capability`);
+    }
+    if (caps.includes('remote') && !remote) {
+        throw new Error(`Plugin '${manifest.id}' requests the 'remote' capability but declares no 'remote' block saying which paths and content types it needs`);
+    }
+    if (remote) {
+        if (remote.origin !== undefined) {
+            throw new Error(`Plugin '${manifest.id}' declares remote.origin. A manifest may not choose a host — the origin comes from ROHY_PLUGIN_ORIGINS, so an operator decides what rohy's server will talk to`);
+        }
+        if (!Array.isArray(remote.paths) || remote.paths.length === 0) {
+            throw new Error(`Plugin '${manifest.id}' declares 'remote' with no paths — an unbounded proxy onto the configured origin is not a capability, it is an open relay`);
+        }
+        remote.paths.forEach((prefix) => {
+            if (typeof prefix !== 'string' || !/^\/[a-z0-9][a-z0-9_-]*(\/[a-z0-9][a-z0-9_-]*)*$/.test(prefix)) {
+                throw new Error(`Plugin '${manifest.id}' remote path '${prefix}' must be a literal '/lower-kebab' prefix — no parameters, no traversal, no trailing slash`);
+            }
+        });
+        if (!Array.isArray(remote.contentTypes) || remote.contentTypes.length === 0) {
+            throw new Error(`Plugin '${manifest.id}' declares 'remote' with no contentTypes — without an allowlist the proxy would happily relay text/html from the configured origin`);
+        }
+        remote.contentTypes.forEach((type) => {
+            if (typeof type !== 'string' || !/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(type)) {
+                throw new Error(`Plugin '${manifest.id}' remote contentType '${type}' is not a bare 'type/subtype'`);
+            }
+        });
+    }
+
+    caps.forEach((cap) => {
         if (!CAPABILITIES.includes(cap)) {
             throw new Error(`Plugin '${manifest.id}' requests unknown capability '${cap}'`);
         }

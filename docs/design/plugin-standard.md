@@ -136,13 +136,16 @@ far from its cause.
 | R13 | if `authoring` is declared it MUST carry `labelKey` and `minRole` | an unlabelled entry, and an editor inheriting a learner-level gate |
 | R14 | `authoring.minRole` is at least as strong as `minRole` | editing a case being easier to reach than reading it |
 | R15 | `authoring` and `authorComponent` appear together or not at all | a manifest entry routing to nothing, or a component nothing can reach and no `minRole` gates |
+| R16 | `remote` and the `remote` capability appear together or not at all | a manifest describing a proxy it never requested, or a proxy mounted onto nothing |
+| R17 | `remote.origin` is **forbidden** | a manifest choosing which host rohy's server will talk to. See §7a |
+| R18 | `remote.paths` are literal `/lower-kebab` prefixes and `remote.contentTypes` is a non-empty list of bare `type/subtype` | an unbounded proxy — an open relay onto the configured origin — and an image proxy that will happily relay `text/html` from it |
 
 Roles: `guest student reviewer educator admin` (mirrors `ROLE_RANKS` in
 `server/middleware/auth.js`; a contract test asserts the copies agree).
 
 Clinical states: `assessing examining investigating treating communicating
 documenting monitoring regulating reflecting navigating`.
-Capabilities: `llm uploads notify persist`.
+Capabilities: `llm uploads notify persist remote`.
 Icons: `Microscope FlaskConical Scan Stethoscope BookOpen GraduationCap`.
 Accents: `fuchsia teal indigo`.
 
@@ -214,6 +217,94 @@ to clinical states instead of a literal bucket.
 The server validates every verb against one registry
 (`server/shared/learningVerbs.js`), on **both** `POST /learning-events` and
 `POST /learning-events/batch`.
+
+---
+
+## 7a. Remote content *(added in 1.2)*
+
+A plugin whose material is too large to ship inside rohy declares the `remote`
+capability. A whole-slide pyramid is gigabytes; putting it in the Docker image,
+the backups and the air-gap bundle is not a packaging inconvenience, it is a
+different product.
+
+```js
+capabilities: ['persist', 'remote'],
+remote: {
+    paths: ['/tiles', '/gross'],
+    contentTypes: ['application/xml', 'text/xml', 'image/jpeg', 'image/png', 'image/webp'],
+},
+```
+
+A case then addresses the content with a `remote:` reference:
+
+```json
+{ "slides": [{ "id": "s1", "dzi": "remote:tiles/case42/slide1.dzi" }] }
+```
+
+and the browser receives `/api/plugins/pathology/tiles/case42/slide1.dzi` — same
+origin, so the CSP never has to hear about the slide host.
+
+### A case author picks a path; an operator picks a host
+
+The origin is absent from the manifest **and** from the case, by rule (R17). It
+comes from one place only:
+
+```
+ROHY_PLUGIN_ORIGINS="pathology=https://slides.example.edu"
+```
+
+This is the load-bearing decision of the whole feature and it is not
+hypothetical caution: `proxy-routes.js` accepts a client-supplied `endpoint` and
+then deliberately ignores it, because honouring it was an SSRF and API-key
+exfiltration hole. A plugin proxy is the same risk with a friendlier name.
+Anyone who can edit a case can choose a *path*; only someone who can edit the
+server's environment can choose a *host*.
+
+It also makes cases portable. A case that named `https://slides.example.edu`
+would pin one deployment's infrastructure into content meant to move between
+them; a `remote:` reference runs unchanged against a university's slide server
+and a laptop's.
+
+### Why proxy instead of widening the CSP
+
+Naming the slide host in `img-src` is one line in `server/security-headers.js`
+and it is the wrong line. It puts a third-party origin inside the page's trust
+boundary for every case and every tenant, permanently, and it moves the decision
+about what rohy may load from the server to the browser. Proxying keeps the CSP
+at `'self'`, keeps upstream reachability a server-side fact, and makes *who may
+read which slide* a question rohy can answer.
+
+### What the proxy refuses
+
+`GET /api/plugins/:pluginId/*` is authenticated, `minRole`-gated (the first
+place `minRole` is actually enforced), and read-only. It refuses:
+
+| Refusal | Why |
+|---|---|
+| any origin not in `ROHY_PLUGIN_ORIGINS` | 503 rather than a guess |
+| **redirects** — `redirect: 'manual'`, 3xx → 502 | fetch's default is `follow`; with it, the slide host could hand rohy the cloud metadata endpoint and rohy would fetch it with the server's own network position |
+| a path outside the declared prefixes | 403, **before the upstream is contacted** — a check applied to the response would already have fetched the secret |
+| traversal, in both spellings | `%2e%2e/` is normalised away by the router and caught by the prefix check; `..%2f` survives as one segment containing a separator and is caught by the segment check. Dropping either leaves one spelling live |
+| a content type the manifest did not declare | relaying `text/html` would serve attacker-controlled markup from rohy's own origin |
+| a body over 32 MB, or 15 s of silence | what a compromised or simply broken upstream can push through rohy before anyone notices |
+| any method but GET | a proxy that can POST is a confused deputy holding rohy's network position |
+
+Client cookies, `Authorization` and query strings are not forwarded upstream;
+upstream `Set-Cookie` is not returned. The two sides share a path and nothing
+else. Responses are `Cache-Control: private, max-age=86400` — private because
+they passed a per-user check, long because tile immutability is what keeps a
+deep-zoom pan off the network at all.
+
+The route is exempt from `generalLimiter` and carries its own limiter at
+2000/min keyed by **(tenant, user)**. `generalLimiter` is 600/min keyed by IP,
+and a teaching lab is a room of students behind one NAT address: one learner
+reading a slide would otherwise spend the whole building's budget.
+
+### What it is not
+
+It is not a general fetch capability, an upload path, or a way to reach a
+service that needs credentials — there is no upstream-authentication design yet.
+It is a read-only relay of declared paths from one operator-configured host.
 
 ---
 
@@ -399,9 +490,12 @@ Ordered by how much they matter to a plugin author.
 
 1. **No narrowed `log()` adapter** — `ctx.eventLogger` is the mutable global
    singleton (§6).
-2. **No server-side plugin routes.** `/api/plugins/<id>` is designed but
-   unmounted, so `ctx.store` is per-browser: fine for drafts, not for anything
-   that must survive a device change.
+2. **`/api/plugins/<id>` serves reads, not writes.** The `remote` proxy (§7a)
+   is mounted as of 1.2, so bulk content can live off-box — but there is still
+   no write path, so `ctx.store` remains per-browser: fine for drafts, not for
+   anything that must survive a device change.
+   Nor is there an upstream-authentication design: the proxy can only reach a
+   host that will serve it unauthenticated from rohy's network position.
 3. **No plugin/version attribution on rows.** Events store neither `plugin_id`
    nor manifest version, and clinical state is resolved with the currently
    installed maps — so upgrading or removing a plugin retroactively reinterprets
@@ -411,8 +505,10 @@ Ordered by how much they matter to a plugin author.
    currently leaves via the plugin's own export. This is the gap that keeps the
    authoring slot from being end-to-end.
 5. **No per-tenant enable/disable** (the `oyon_settings` table is the pattern to
-   copy). `minRole` and `authoring.minRole` ARE enforced as of 1.1, in
-   `registry.resolve()` and `PluginAuthor` respectively.
+   copy). `minRole` and `authoring.minRole` ARE enforced — as of 1.1 in
+   `registry.resolve()` and `PluginAuthor`, and as of 1.2 server-side in the
+   remote proxy, which is the first surface rohy's *server* renders on a
+   plugin's behalf.
 6. **No LLM grant exists**, so `capabilities.llm` is always absent.
 7. **No cleanup path for `rohy_plugin:*`** — a `session` lifetime is declared
    but nothing clears the keys, so state persists on shared browsers.
@@ -445,7 +541,6 @@ now rely on.
   and a teaching lab shares one NAT address, so telemetry from one noisy client
   spent the whole room's budget. The route-level limiter is keyed by
   (tenant, user) at 240/min against a legitimate ~12/min.
-
 
 ---
 
