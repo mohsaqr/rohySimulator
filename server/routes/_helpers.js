@@ -849,23 +849,52 @@ export function createCaseVersion(caseId, userId, changeType, description, confi
  * from the sessions row. Client-supplied values for those columns are
  * ignored. A stale/replayed batch can no longer mislabel a row.
  *
+ * `principal` — pass it on any path where the SESSION ID CAME FROM THE CLIENT.
+ * Deriving the trinity from the sessions row stops a caller *mislabelling* a
+ * row, but on its own it does the opposite of protecting the victim: a
+ * same-tenant user who guesses another learner's integer session id gets an
+ * event written under THAT learner's user_id and case_id, correctly attributed
+ * by the server to someone who never performed it. Forged rows then flow
+ * straight into the analytics the platform exists to produce. With `principal`
+ * supplied, a session the principal does not own resolves to
+ * { found: false, reason: 'not_owner' }.
+ *
+ * Omit `principal` only where the server itself chose the session id and is
+ * deliberately writing on the owner's behalf — the instructor lab-value edit in
+ * orders-routes.js is the one such caller, and it is reached through its own
+ * educator guard.
+ *
  * Returns:
- *   { found: true, user_id, case_id }       — session exists in tenant
- *   { found: false, reason: 'cross_tenant' } — id exists outside tenant or not at all
+ *   { found: true, user_id, case_id }        — session exists, and is the principal's
+ *   { found: false, reason: 'cross_tenant' } — id exists outside tenant, is soft-deleted, or not at all
+ *   { found: false, reason: 'not_owner' }    — exists in tenant, belongs to someone else
  *
  * Callers should drop events whose trinity cannot be resolved.
  */
-export function resolveSessionTrinity(sessionId, tenant_id) {
+export function resolveSessionTrinity(sessionId, tenant_id, { principal = null } = {}) {
     return new Promise((resolve) => {
         if (sessionId === undefined || sessionId === null || sessionId === '') {
             return resolve({ found: false, reason: 'no_session_id' });
         }
+        // `deleted_at IS NULL`: a soft-deleted session is a right-to-erasure
+        // tombstone. Writing a fresh event against it re-creates analysable
+        // activity for a person who asked to be forgotten, and the purge has
+        // already run — nothing would come back to collect it.
         dbAdapter.get(
-            'SELECT user_id, case_id FROM sessions WHERE id = ? AND tenant_id = ?',
+            'SELECT user_id, case_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
             [sessionId, tenant_id],
             (err, row) => {
                 if (err) return resolve({ found: false, reason: 'db_error' });
                 if (!row) return resolve({ found: false, reason: 'cross_tenant' });
+                // Rank does NOT widen this. verifySessionOwnership lets staff
+                // reach any session in their tenant because reaching is reading
+                // and acting AS THEMSELVES; here the write is attributed to the
+                // session owner, so an educator bypass would let staff author
+                // learner activity that is indistinguishable from the learner's
+                // own. Nobody needs that, so nobody gets it.
+                if (principal && Number(row.user_id) !== Number(principal.id)) {
+                    return resolve({ found: false, reason: 'not_owner' });
+                }
                 resolve({ found: true, user_id: row.user_id, case_id: row.case_id });
             }
         );

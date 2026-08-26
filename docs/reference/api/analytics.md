@@ -9,51 +9,51 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `PUT` | `/api/alarms/:id/acknowledge` | `authenticateToken` | `server/routes/analytics-routes.js:2678` |
-| `GET` | `/api/alarms/config` | `authenticateToken` | `server/routes/analytics-routes.js:2723` |
-| `POST` | `/api/alarms/config` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2764` |
-| `GET` | `/api/alarms/config/:userId` | `authenticateToken` | `server/routes/analytics-routes.js:2739` |
-| `POST` | `/api/alarms/log` | `authenticateToken` | `server/routes/analytics-routes.js:2654` |
-| `GET` | `/api/analytics/case-insights` | `authenticateToken` | `server/routes/analytics-routes.js:1409` |
-| `GET` | `/api/analytics/daily-counts` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2885` |
-| `GET` | `/api/analytics/filter-options` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2944` |
-| `GET` | `/api/analytics/hourly-counts` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2895` |
-| `GET` | `/api/analytics/login-logs` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:312` |
-| `GET` | `/api/analytics/sessions` | `authenticateToken` | `server/routes/analytics-routes.js:163` |
-| `GET` | `/api/analytics/sessions/:id` | `authenticateToken` | `server/routes/analytics-routes.js:199` |
-| `GET` | `/api/analytics/settings-logs` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:331` |
-| `GET` | `/api/analytics/stats` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2924` |
-| `GET` | `/api/analytics/summary` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2915` |
-| `GET` | `/api/analytics/timeline-series` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2906` |
-| `GET` | `/api/analytics/tna-sequences` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2855` |
-| `GET` | `/api/analytics/top-resources` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2935` |
-| `GET` | `/api/analytics/user-stats/:userId` | `authenticateToken` | `server/routes/analytics-routes.js:228` |
-| `GET` | `/api/chat-log/feed` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:1836` |
-| `GET` | `/api/chat-log/turns` | `authenticateToken` | `server/routes/analytics-routes.js:1323` |
-| `GET` | `/api/client-logs` | `authenticateToken, requireEducator` | `server/routes/analytics-routes.js:810` |
-| `POST` | `/api/client-logs/batch` | `authenticateToken` | `server/routes/analytics-routes.js:764` |
-| `GET` | `/api/emotion-logs` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:3000` |
-| `POST` | `/api/emotion-logs` | `authenticateToken` | `server/routes/analytics-routes.js:2981` |
-| `GET` | `/api/export/complete-session/:sessionId` | `authenticateToken` | `server/routes/analytics-routes.js:364` |
-| `GET` | `/api/export/learning-events` | `authenticateToken` | `server/routes/analytics-routes.js:1720` |
-| `GET` | `/api/export/questionnaire-responses` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:3028` |
-| `GET` | `/api/export/system-log/:source` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2179` |
-| `POST` | `/api/interactions` | `authenticateToken` | `server/routes/analytics-routes.js:120` |
-| `GET` | `/api/interactions/:session_id` | `authenticateToken` | `server/routes/analytics-routes.js:141` |
-| `POST` | `/api/learning-events` | `authenticateToken` | `server/routes/analytics-routes.js:498` |
-| `GET` | `/api/learning-events/all` | `authenticateToken` | `server/routes/analytics-routes.js:1018` |
-| `GET` | `/api/learning-events/analytics/summary` | `authenticateToken` | `server/routes/analytics-routes.js:926` |
-| `POST` | `/api/learning-events/batch` | `authenticateToken` | `server/routes/analytics-routes.js:598` |
-| `GET` | `/api/learning-events/detailed/:sessionId` | `authenticateToken` | `server/routes/analytics-routes.js:1604` |
-| `GET` | `/api/learning-events/moments` | `authenticateToken` | `server/routes/analytics-routes.js:1300` |
-| `GET` | `/api/learning-events/recent` | `authenticateToken` | `server/routes/analytics-routes.js:990` |
-| `GET` | `/api/learning-events/session/:id` | `authenticateToken` | `server/routes/analytics-routes.js:846` |
-| `GET` | `/api/learning-events/user/:id` | `authenticateToken` | `server/routes/analytics-routes.js:874` |
-| `GET` | `/api/learning-events/verbs` | `(none)` | `server/routes/analytics-routes.js:985` |
-| `GET` | `/api/questionnaire-responses` | `authenticateToken` | `server/routes/analytics-routes.js:3114` |
-| `POST` | `/api/questionnaire-responses` | `authenticateToken` | `server/routes/analytics-routes.js:3095` |
-| `GET` | `/api/sessions/:id/events` | `authenticateToken` | `server/routes/analytics-routes.js:463` |
-| `POST` | `/api/settings/log` | `authenticateToken` | `server/routes/analytics-routes.js:271` |
-| `GET` | `/api/system-log/feed` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2268` |
-| `GET` | `/api/system-log/table/:name` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2607` |
-| `GET` | `/api/system-log/tables` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2581` |
+| `PUT` | `/api/alarms/:id/acknowledge` | `authenticateToken` | `server/routes/analytics-routes.js:2770` |
+| `GET` | `/api/alarms/config` | `authenticateToken` | `server/routes/analytics-routes.js:2815` |
+| `POST` | `/api/alarms/config` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2856` |
+| `GET` | `/api/alarms/config/:userId` | `authenticateToken` | `server/routes/analytics-routes.js:2831` |
+| `POST` | `/api/alarms/log` | `authenticateToken` | `server/routes/analytics-routes.js:2746` |
+| `GET` | `/api/analytics/case-insights` | `authenticateToken` | `server/routes/analytics-routes.js:1501` |
+| `GET` | `/api/analytics/daily-counts` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2977` |
+| `GET` | `/api/analytics/filter-options` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:3036` |
+| `GET` | `/api/analytics/hourly-counts` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2987` |
+| `GET` | `/api/analytics/login-logs` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:332` |
+| `GET` | `/api/analytics/sessions` | `authenticateToken` | `server/routes/analytics-routes.js:183` |
+| `GET` | `/api/analytics/sessions/:id` | `authenticateToken` | `server/routes/analytics-routes.js:219` |
+| `GET` | `/api/analytics/settings-logs` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:351` |
+| `GET` | `/api/analytics/stats` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:3016` |
+| `GET` | `/api/analytics/summary` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:3007` |
+| `GET` | `/api/analytics/timeline-series` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2998` |
+| `GET` | `/api/analytics/tna-sequences` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2947` |
+| `GET` | `/api/analytics/top-resources` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:3027` |
+| `GET` | `/api/analytics/user-stats/:userId` | `authenticateToken` | `server/routes/analytics-routes.js:248` |
+| `GET` | `/api/chat-log/feed` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:1928` |
+| `GET` | `/api/chat-log/turns` | `authenticateToken` | `server/routes/analytics-routes.js:1415` |
+| `GET` | `/api/client-logs` | `authenticateToken, requireEducator` | `server/routes/analytics-routes.js:902` |
+| `POST` | `/api/client-logs/batch` | `authenticateToken` | `server/routes/analytics-routes.js:856` |
+| `GET` | `/api/emotion-logs` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:3092` |
+| `POST` | `/api/emotion-logs` | `authenticateToken` | `server/routes/analytics-routes.js:3073` |
+| `GET` | `/api/export/complete-session/:sessionId` | `authenticateToken` | `server/routes/analytics-routes.js:384` |
+| `GET` | `/api/export/learning-events` | `authenticateToken` | `server/routes/analytics-routes.js:1812` |
+| `GET` | `/api/export/questionnaire-responses` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:3120` |
+| `GET` | `/api/export/system-log/:source` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2271` |
+| `POST` | `/api/interactions` | `authenticateToken` | `server/routes/analytics-routes.js:140` |
+| `GET` | `/api/interactions/:session_id` | `authenticateToken` | `server/routes/analytics-routes.js:161` |
+| `POST` | `/api/learning-events` | `authenticateToken` | `server/routes/analytics-routes.js:518` |
+| `GET` | `/api/learning-events/all` | `authenticateToken` | `server/routes/analytics-routes.js:1110` |
+| `GET` | `/api/learning-events/analytics/summary` | `authenticateToken` | `server/routes/analytics-routes.js:1018` |
+| `POST` | `/api/learning-events/batch` | `authenticateToken` | `server/routes/analytics-routes.js:646` |
+| `GET` | `/api/learning-events/detailed/:sessionId` | `authenticateToken` | `server/routes/analytics-routes.js:1696` |
+| `GET` | `/api/learning-events/moments` | `authenticateToken` | `server/routes/analytics-routes.js:1392` |
+| `GET` | `/api/learning-events/recent` | `authenticateToken` | `server/routes/analytics-routes.js:1082` |
+| `GET` | `/api/learning-events/session/:id` | `authenticateToken` | `server/routes/analytics-routes.js:938` |
+| `GET` | `/api/learning-events/user/:id` | `authenticateToken` | `server/routes/analytics-routes.js:966` |
+| `GET` | `/api/learning-events/verbs` | `(none)` | `server/routes/analytics-routes.js:1077` |
+| `GET` | `/api/questionnaire-responses` | `authenticateToken` | `server/routes/analytics-routes.js:3206` |
+| `POST` | `/api/questionnaire-responses` | `authenticateToken` | `server/routes/analytics-routes.js:3187` |
+| `GET` | `/api/sessions/:id/events` | `authenticateToken` | `server/routes/analytics-routes.js:483` |
+| `POST` | `/api/settings/log` | `authenticateToken` | `server/routes/analytics-routes.js:291` |
+| `GET` | `/api/system-log/feed` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2360` |
+| `GET` | `/api/system-log/table/:name` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2699` |
+| `GET` | `/api/system-log/tables` | `authenticateToken, requireAdmin` | `server/routes/analytics-routes.js:2673` |

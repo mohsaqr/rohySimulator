@@ -20,14 +20,13 @@ import { SOURCES } from '../notifications/types';
 // spread silently overwrite one. See docs/design/plugin-standard.md.
 import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generated.js';
 import { foldManifests } from '../../server/shared/pluginRegistry.js';
+// SEVERITY / CATEGORIES / the verb->metadata map moved to server/shared/ so the
+// SERVER can derive severity+category on ingest instead of dropping both
+// columns. Re-exported here because ~40 call sites import them from this
+// module; the definitions, not the exports, are what moved.
+import { SEVERITY, CATEGORIES, VERB_METADATA, DEFAULT_VERB_METADATA } from '../../server/shared/learningVerbs.js';
 
-export const SEVERITY = {
-    DEBUG: 'DEBUG',
-    INFO: 'INFO',
-    ACTION: 'ACTION',
-    IMPORTANT: 'IMPORTANT',
-    CRITICAL: 'CRITICAL',
-};
+export { SEVERITY, CATEGORIES };
 
 // Map xAPI severity strings → notification severity.
 const SEV_MAP = {
@@ -38,17 +37,6 @@ const SEV_MAP = {
     CRITICAL: 'critical',
 };
 
-
-export const CATEGORIES = {
-    SESSION: 'SESSION',
-    NAVIGATION: 'NAVIGATION',
-    CLINICAL: 'CLINICAL',
-    COMMUNICATION: 'COMMUNICATION',
-    MONITORING: 'MONITORING',
-    CONFIGURATION: 'CONFIGURATION',
-    ASSESSMENT: 'ASSESSMENT',
-    ERROR: 'ERROR',
-};
 
 const BASE_VERBS = {
     STARTED_SESSION: 'STARTED_SESSION', ENDED_SESSION: 'ENDED_SESSION',
@@ -101,97 +89,6 @@ const BASE_VERBS = {
 };
 
 
-const BASE_VERB_METADATA = {
-    STARTED_SESSION: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.SESSION },
-    ENDED_SESSION: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.SESSION },
-    RESUMED_SESSION: { severity: SEVERITY.INFO, category: CATEGORIES.SESSION },
-    IDLE_TIMEOUT: { severity: SEVERITY.INFO, category: CATEGORIES.SESSION },
-    UNLOAD: { severity: SEVERITY.INFO, category: CATEGORIES.SESSION },
-    VIEWED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
-    OPENED: { severity: SEVERITY.INFO, category: CATEGORIES.NAVIGATION },
-    CLOSED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
-    NAVIGATED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
-    SWITCHED_TAB: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
-    LOST_FOCUS: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
-    RESUMED_FOCUS: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
-    CLICKED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
-    SELECTED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
-    DESELECTED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
-    TOGGLED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
-    EXPANDED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
-    COLLAPSED: { severity: SEVERITY.DEBUG, category: CATEGORIES.NAVIGATION },
-    ORDERED_LAB: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
-    CANCELLED_LAB: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    VIEWED_LAB_RESULT: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    SEARCHED_LABS: { severity: SEVERITY.DEBUG, category: CATEGORIES.CLINICAL },
-    FILTERED_LABS: { severity: SEVERITY.DEBUG, category: CATEGORIES.CLINICAL },
-    LAB_RESULT_READY: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    ORDERED_IMAGING: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
-    CANCELLED_IMAGING: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    VIEWED_RADIOLOGY_RESULT: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    ORDERED_MEDICATION: { severity: SEVERITY.CRITICAL, category: CATEGORIES.CLINICAL },
-    ADMINISTERED_MEDICATION: { severity: SEVERITY.CRITICAL, category: CATEGORIES.CLINICAL },
-    CANCELLED_MEDICATION: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
-    ORDERED_TREATMENT: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
-    PERFORMED_INTERVENTION: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
-    ORDERED_IV_FLUID: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
-    STARTED_OXYGEN: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
-    STOPPED_OXYGEN: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    ORDERED_NURSING: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    DISCONTINUED_TREATMENT: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
-    TREATMENT_EFFECT_STARTED: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    TREATMENT_EFFECT_PEAKED: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    TREATMENT_EFFECT_ENDED: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    CONTRAINDICATED_TREATMENT_ORDERED: { severity: SEVERITY.CRITICAL, category: CATEGORIES.CLINICAL },
-    EXPECTED_TREATMENT_GIVEN: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.ASSESSMENT },
-    EXPECTED_TREATMENT_MISSED: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.ASSESSMENT },
-    PERFORMED_PHYSICAL_EXAM: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
-    OPENED_EXAM_PANEL: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    CLOSED_EXAM_PANEL: { severity: SEVERITY.DEBUG, category: CATEGORIES.CLINICAL },
-    SENT_MESSAGE: { severity: SEVERITY.INFO, category: CATEGORIES.COMMUNICATION },
-    RECEIVED_MESSAGE: { severity: SEVERITY.INFO, category: CATEGORIES.COMMUNICATION },
-    COPIED_MESSAGE: { severity: SEVERITY.DEBUG, category: CATEGORIES.COMMUNICATION },
-    STT_RESULT: { severity: SEVERITY.DEBUG, category: CATEGORIES.COMMUNICATION },
-    STT_ERROR: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.ERROR },
-    TTS_PLAYED: { severity: SEVERITY.DEBUG, category: CATEGORIES.COMMUNICATION },
-    ADJUSTED_VITAL: { severity: SEVERITY.INFO, category: CATEGORIES.MONITORING },
-    ACKNOWLEDGED_ALARM: { severity: SEVERITY.INFO, category: CATEGORIES.MONITORING },
-    SILENCED_ALARM: { severity: SEVERITY.INFO, category: CATEGORIES.MONITORING },
-    ALARM_TRIGGERED: { severity: SEVERITY.CRITICAL, category: CATEGORIES.MONITORING },
-    VIEWED_TRENDS: { severity: SEVERITY.INFO, category: CATEGORIES.MONITORING },
-    EDITED_LAB_VALUE: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.CLINICAL },
-    VIEWED_PATIENT_SUMMARY: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    VIEWED_HISTORY: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    VIEWED_MEDICATIONS: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    VIEWED_ALLERGIES: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    WROTE_NOTE: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    SAVED_NOTE: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    UPDATED_NOTE: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    SUBMITTED_DEBRIEF: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.ASSESSMENT },
-    CHANGED_SETTING: { severity: SEVERITY.INFO, category: CATEGORIES.CONFIGURATION },
-    SAVED_SETTING: { severity: SEVERITY.INFO, category: CATEGORIES.CONFIGURATION },
-    RESET_SETTING: { severity: SEVERITY.INFO, category: CATEGORIES.CONFIGURATION },
-    LOADED_CASE: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.SESSION },
-    VIEWED_PATIENT_INFO: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    VIEWED_RECORDS: { severity: SEVERITY.INFO, category: CATEGORIES.CLINICAL },
-    SAVED_CASE: { severity: SEVERITY.INFO, category: CATEGORIES.CONFIGURATION },
-    EXPORTED_CASE: { severity: SEVERITY.INFO, category: CATEGORIES.CONFIGURATION },
-    STARTED_SCENARIO: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.SESSION },
-    PAUSED_SCENARIO: { severity: SEVERITY.INFO, category: CATEGORIES.SESSION },
-    RESUMED_SCENARIO: { severity: SEVERITY.INFO, category: CATEGORIES.SESSION },
-    COMPLETED_SCENARIO: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.ASSESSMENT },
-    RESET_SCENARIO: { severity: SEVERITY.INFO, category: CATEGORIES.SESSION },
-    SUBMITTED: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.ASSESSMENT },
-    ANSWERED: { severity: SEVERITY.INFO, category: CATEGORIES.ASSESSMENT },
-    ATTEMPTED: { severity: SEVERITY.INFO, category: CATEGORIES.ASSESSMENT },
-    CORRECT_ANSWER: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.ASSESSMENT },
-    INCORRECT_ANSWER: { severity: SEVERITY.INFO, category: CATEGORIES.ASSESSMENT },
-    EXPRESSED_EMOTION: { severity: SEVERITY.INFO, category: CATEGORIES.COMMUNICATION },
-    ERROR_OCCURRED: { severity: SEVERITY.CRITICAL, category: CATEGORIES.ERROR },
-    API_ERROR: { severity: SEVERITY.CRITICAL, category: CATEGORIES.ERROR },
-    VALIDATION_ERROR: { severity: SEVERITY.INFO, category: CATEGORIES.ERROR },
-};
-
 const BASE_OBJECT_TYPES = {
     SESSION: 'session', CASE: 'case', LAB_TEST: 'lab_test', LAB_RESULT: 'lab_result',
     RADIOLOGY_ORDER: 'radiology_order', RADIOLOGY_RESULT: 'radiology_result',
@@ -228,16 +125,14 @@ const BASE_COMPONENTS = {
 // import site keeps working; plugin rows simply extend them.
 const MERGED = foldManifests(PLUGIN_MANIFESTS, {
     verbs: BASE_VERBS,
-    verbMetadata: BASE_VERB_METADATA,
     objectTypes: BASE_OBJECT_TYPES,
     components: BASE_COMPONENTS,
 });
 export const VERBS = MERGED.verbs;
 export const OBJECT_TYPES = MERGED.objectTypes;
 export const COMPONENTS = MERGED.components;
-const VERB_METADATA = MERGED.verbMetadata;
 
-const getVerbMetadata = (verb) => VERB_METADATA[verb] || { severity: SEVERITY.INFO, category: CATEGORIES.NAVIGATION };
+const getVerbMetadata = (verb) => VERB_METADATA[verb] || DEFAULT_VERB_METADATA;
 
 class EventLoggerService {
     constructor() {
@@ -332,6 +227,13 @@ class EventLoggerService {
             // these fields are advisory — but session_id needs to be right.
             data: {
                 verb, objectType,
+                // Both the xAPI severity AND the xAPI category ride in data.*.
+                // The top-level `severity` above is the NOTIFICATION severity
+                // (lowercase, drives DND/threshold routing) and mapping it back
+                // is lossy — ACTION collapses into 'info' and returns as INFO.
+                // The server persists learning_events.severity, so it gets the
+                // unmapped value rather than a round-tripped approximation.
+                severity,
                 category,
                 sessionId: this.sessionId,
                 userId: this.userId,

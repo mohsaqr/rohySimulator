@@ -9,6 +9,66 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.60] — 2026-08-26
+
+### Security
+
+- **A learning event can no longer be forged into another learner's session.**
+  `resolveSessionTrinity()` verified that a `session_id` belonged to the
+  caller's tenant, but never that it belonged to the *caller*. Because the
+  server deliberately derives `(user_id, case_id)` from the sessions row rather
+  than trusting the client, that gap did more than let a forged row through — it
+  stamped the row with the victim's identity, producing activity that is
+  indistinguishable from the real thing in every analytics surface, export and
+  TNA sequence rohy builds. Any authenticated user could do it by counting
+  upward through integer session ids. The resolver now takes an optional
+  `principal`; both `POST /api/learning-events` (403) and
+  `POST /api/learning-events/batch` (dropped, counted as `not_owner`, and logged
+  with the offending session ids) pass it. Rank does not widen this — a bypass
+  for staff would let an educator author learner activity, and no feature needs
+  that. Server-derived writes that legitimately act on the owner's behalf, such
+  as the instructor lab-value edit in `orders-routes.js`, omit `principal` and
+  are gated by their own educator guard.
+- Session lookups in the resolver now exclude soft-deleted rows
+  (`deleted_at IS NULL`). Writing a fresh event against an erasure tombstone
+  re-created analysable activity for someone who had asked to be forgotten,
+  after the purge that would have collected it had already run.
+
+### Fixed
+
+- **`learning_events.severity` and `.category` are actually written.** Both
+  columns exist, both carry `CHECK` constraints, and the client faithfully sent
+  both — but neither `INSERT` listed them, so every row ever ingested through
+  the canonical endpoints landed NULL in both. The verb→metadata map moved from
+  `src/services/eventLogger.js` to `server/shared/learningVerbs.js`, next to the
+  verb whitelist it belongs with, so the server can *derive* severity and
+  category from the verb instead of depending on the client to supply them.
+  Plugin manifests already declare metadata per verb (RPS-1 rule R7); that
+  declaration now reaches the database.
+- A caller may still override either value — `LAB_RESULT_READY` is genuinely
+  `IMPORTANT` for an abnormal result and `INFO` otherwise — but only within the
+  enum. An out-of-enum value used to be impossible to send at all (the column
+  was dropped); now it is rejected as `invalid_event_metadata` rather than
+  coerced silently or left to fail the `CHECK` constraint, where it would have
+  surfaced as an infrastructure `db_error` and hidden the client bug.
+- EventLogger stamps the exact xAPI severity into the notification payload.
+  It previously survived the round trip only through the lowercase notification
+  severity, which is lossy: `ACTION` collapsed into `info` and came back `INFO`.
+
+### Changed
+
+- `POST /api/learning-events/batch` now caps a batch at 500 events
+  (`batch_too_large`), matching BackendSurface's own queue cap, and runs behind
+  a per-user rate limiter at 240/min. The endpoint was not unlimited before —
+  `routes.js` mounts a 600/min general limiter over all of `/api` — but that one
+  is keyed by IP, and rohy is deployed to teaching labs where a room of students
+  shares one NAT address. The highest-volume endpoint in the product was
+  spending a budget it shared with every other request from the building. A
+  legitimate client sends roughly 12 batches a minute.
+- `dropped_reasons` on the batch response gains `not_owner` and
+  `invalid_metadata`. Folding either into `cross_tenant` or `db_error` would
+  have hidden the two failures most worth seeing.
+
 ## [2.9.59] — 2026-08-26
 
 ### Added

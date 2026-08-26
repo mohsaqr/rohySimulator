@@ -258,7 +258,10 @@ function sendTelemetry(events, immediate) {
                 session_id: n.sessionId || null,
                 verb: n.data?.verb || defaultVerbFor(n),
                 object_type: n.data?.objectType || 'notification',
-                severity: NOTIFY_TO_XAPI_SEVERITY[n.severity] || 'INFO',
+                // EventLogger stamps the exact xAPI severity into data.*;
+                // the map below is the fallback for un-typed notifications that
+                // only ever had a notification-severity to begin with.
+                severity: n.data?.severity || NOTIFY_TO_XAPI_SEVERITY[n.severity] || 'INFO',
                 category: n.data?.category || 'NAVIGATION',
                 object_id: n.data?.objectId || null,
                 object_name: n.data?.objectName || n.title || null,

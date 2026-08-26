@@ -25,7 +25,7 @@ import {
     ROLE_RANKS,
     hasRoleAtLeast,
 } from '../middleware/auth.js';
-import { LEARNING_VERBS } from '../shared/learningVerbs.js';
+import { LEARNING_VERBS, resolveEventMetadata } from '../shared/learningVerbs.js';
 
 
 
@@ -54,6 +54,26 @@ const clientLogLimiter = rateLimit({
     legacyHeaders: false,
     keyGenerator: (req) => `${req.user?.tenant_id || 'tenant'}:${req.user?.id || 'user'}`
 });
+
+// The telemetry batch endpoint had neither a size cap nor a limiter while the
+// neighbouring client-log endpoint had both — so the cheapest endpoint to abuse
+// was the one writing into the analytics store. BackendSurface flushes every
+// 5s (src/notifications/defaults.js: telemetryFlushIntervalMs) plus on
+// visibility-hidden and ENDED_SESSION, so a busy legitimate client sends well
+// under 20/min; 240 leaves an order of magnitude of headroom and still bounds
+// a hostile one.
+const learningEventLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 240,
+    message: { error: 'Too many learning-event batches. Please slow down.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `${req.user?.tenant_id || 'tenant'}:${req.user?.id || 'user'}`
+});
+
+// BackendSurface caps its own queue at MAX_QUEUE = 500, so a legitimate flush
+// can never exceed that. Anything larger is a client bug or an attack.
+const MAX_BATCH_EVENTS = 500;
 
 const COURSE_META_SQL = (userExpr, tenantExpr) => `
     (SELECT GROUP_CONCAT(DISTINCT cm.cohort_id)
@@ -522,12 +542,35 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
         return res.status(400).json({ error: 'object_type is required' });
     }
 
+    // severity/category are real columns with CHECK constraints, and both used
+    // to be dropped on the floor here — every row this endpoint wrote landed
+    // NULL in both. The verb registry supplies the default; a caller override
+    // is honoured only if it is inside the enum.
+    const meta = resolveEventMetadata(verb, req.body);
+    if (!meta.ok) {
+        return res.status(400).json({
+            error: `Invalid ${meta.field}: ${meta.value}`,
+            code: 'invalid_event_metadata',
+        });
+    }
+
     let user_id;
     let case_id;
 
     if (session_id) {
-        const trinity = await resolveSessionTrinity(session_id, tenantId(req));
+        // `principal` is what stops a same-tenant user writing events into
+        // someone else's session — see resolveSessionTrinity.
+        const trinity = await resolveSessionTrinity(session_id, tenantId(req), { principal: req.user });
         if (!trinity.found) {
+            if (trinity.reason === 'not_owner') {
+                req.log?.warn('learning event rejected: session not owned by principal', {
+                    session_id, user_id: req.user.id,
+                });
+                return res.status(403).json({
+                    error: 'session does not belong to this user',
+                    reason: trinity.reason,
+                });
+            }
             return res.status(404).json({
                 error: 'session not found in tenant',
                 reason: trinity.reason,
@@ -548,8 +591,9 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
             component, parent_component,
             result, duration_ms, context,
             message_content, message_role, tenant_id,
+            severity, category,
             room
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     dbAdapter.run(sql, [
@@ -568,6 +612,8 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
         message_content || null,
         message_role || null,
         tenantId(req),
+        meta.severity,
+        meta.category,
         room || null,
     ], function(err) {
         if (err) {
@@ -590,12 +636,14 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
 //     inserted, dropped, total,
 //     dropped_reasons: {
 //       cross_tenant: <int>,
+//       not_owner: <int>,
 //       missing_required_field: <int>,
 //       unknown_verb: <int>,
+//       invalid_metadata: <int>,
 //       db_error: <int>,
 //     }
 //   }
-router.post('/learning-events/batch', authenticateToken, async (req, res) => {
+router.post('/learning-events/batch', authenticateToken, learningEventLimiter, async (req, res) => {
     const { events } = req.body;
     const reqTenantId = tenantId(req);
     const principalUserId = req.user.id;
@@ -603,13 +651,21 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
     if (!Array.isArray(events) || events.length === 0) {
         return res.status(400).json({ error: 'events array is required' });
     }
+    if (events.length > MAX_BATCH_EVENTS) {
+        return res.status(400).json({
+            error: `events must contain at most ${MAX_BATCH_EVENTS} items`,
+            code: 'batch_too_large',
+        });
     }
 
-    // Resolve trinity once per distinct session_id.
+    // Resolve trinity once per distinct session_id. `principal` is passed so a
+    // batch cannot carry events for a session the caller doesn't own — the
+    // server would otherwise derive the VICTIM's user_id and write the forged
+    // row under their name.
     const distinctSessionIds = [...new Set(events.map(e => e.session_id).filter(Boolean))];
     const trinityCache = new Map();
     await Promise.all(distinctSessionIds.map(async (sid) => {
-        trinityCache.set(sid, await resolveSessionTrinity(sid, reqTenantId));
+        trinityCache.set(sid, await resolveSessionTrinity(sid, reqTenantId, { principal: req.user }));
     }));
 
     const sql = `
@@ -619,6 +675,7 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
             component, parent_component,
             result, duration_ms, context,
             message_content, message_role, timestamp, tenant_id,
+            severity, category,
             vital_hr, vital_spo2, vital_bp_sys, vital_bp_dia,
             vital_rr, vital_temp, vital_etco2, vital_rhythm,
             room
@@ -633,8 +690,10 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
     let dropped = 0;
     const droppedReasons = {
         cross_tenant: 0,
+        not_owner: 0,
         missing_required_field: 0,
         unknown_verb: 0,
+        invalid_metadata: 0,
         db_error: 0,
     };
 
@@ -661,13 +720,32 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
                 continue;
             }
 
+            // Same enum guard as the single-event route. An out-of-enum value
+            // would fail the CHECK constraint at INSERT and be counted as a
+            // db_error, which hides a client bug behind an infrastructure
+            // reason — so it is rejected by name instead.
+            const meta = resolveEventMetadata(event.verb, event);
+            if (!meta.ok) {
+                dropped++;
+                droppedReasons.invalid_metadata++;
+                continue;
+            }
+
             let user_id;
             let case_id;
             if (event.session_id) {
                 const trinity = trinityCache.get(event.session_id);
                 if (!trinity || !trinity.found) {
                     dropped++;
-                    droppedReasons.cross_tenant++;
+                    // A forged session id and a foreign-tenant one are different
+                    // failures: one is a client pointing at a stale session, the
+                    // other is a caller reaching for someone else's. Counting
+                    // them apart is what makes the second visible.
+                    if (trinity?.reason === 'not_owner') {
+                        droppedReasons.not_owner++;
+                    } else {
+                        droppedReasons.cross_tenant++;
+                    }
                     continue;
                 }
                 user_id = trinity.user_id;
@@ -695,6 +773,8 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
                     event.message_role || null,
                     event.timestamp || new Date().toISOString(),
                     reqTenantId,
+                    meta.severity,
+                    meta.category,
                     event.vital_hr ?? null,
                     event.vital_spo2 ?? null,
                     event.vital_bp_sys ?? null,
@@ -714,6 +794,18 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
         await Promise.all(runPromises);
     } finally {
         try { await stmt.finalize(); } catch { /* finalize errors don't change the response */ }
+    }
+
+    // A batch carrying events for a session the caller doesn't own is either a
+    // client bug pointing at a stale id or someone probing the id space. Either
+    // way it is worth a line: dropped counts alone are returned to the caller
+    // and never reach an operator.
+    if (droppedReasons.not_owner > 0) {
+        req.log?.warn('learning-events batch contained events for sessions the caller does not own', {
+            user_id: principalUserId,
+            dropped: droppedReasons.not_owner,
+            session_ids: distinctSessionIds.filter((sid) => trinityCache.get(sid)?.reason === 'not_owner'),
+        });
     }
 
     res.json({

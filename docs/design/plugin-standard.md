@@ -418,16 +418,34 @@ Ordered by how much they matter to a plugin author.
    but nothing clears the keys, so state persists on shared browsers.
 8. **Runtime/third-party loading is out of scope** (§1).
 
-### Pre-existing rohy issues surfaced during review
+### Pre-existing rohy issues surfaced during review — now fixed
 
-Not caused by RPS-1, but they affect every plugin's data:
+Not caused by RPS-1, but they affected every plugin's data. All three were
+closed in v2.9.60; kept here because they define guarantees a plugin author can
+now rely on.
 
-- `resolveSessionTrinity()` checks tenant membership but **not session
-  ownership** or `deleted_at`, so any authenticated same-tenant user can insert
-  events attributed to another learner's session.
-- Both canonical ingest endpoints **drop `severity` and `category`**, so all
-  rows land with NULL despite the columns and the manifest requirement.
-- The batch endpoint has **no size cap and no rate limit**.
+- **Session ownership.** `resolveSessionTrinity()` checked tenant membership but
+  not ownership, and deriving `(user_id, case_id)` from the sessions row made
+  that worse rather than better: a forged event arrived correctly attributed to
+  the victim. It now takes an optional `principal` and returns
+  `reason: 'not_owner'` for a session the caller does not own — passed by both
+  ingest endpoints, and not widened by rank. It also excludes soft-deleted
+  sessions. **A plugin's events are attributable**: a row naming a learner means
+  that learner's browser produced it.
+- **`severity` / `category` are persisted.** Both were dropped at ingestion, so
+  every row landed NULL. The verb→metadata map moved from
+  `src/services/eventLogger.js` to `server/shared/learningVerbs.js`, so the
+  server now *derives* both from the verb — which is what makes a manifest's
+  mandatory `verbMetadata` (R7) mean something. A caller may override within the
+  enum; an out-of-enum value is rejected as `invalid_event_metadata` rather than
+  coerced or left to fail the CHECK constraint.
+- **Batch cap and per-user rate limit.** `MAX_BATCH_EVENTS = 500` matches
+  BackendSurface's own queue cap. The endpoint was not strictly unlimited before
+  — `routes.js` mounts a 600/min global limiter — but that one is keyed by IP,
+  and a teaching lab shares one NAT address, so telemetry from one noisy client
+  spent the whole room's budget. The route-level limiter is keyed by
+  (tenant, user) at 240/min against a legitimate ~12/min.
+
 
 ---
 
