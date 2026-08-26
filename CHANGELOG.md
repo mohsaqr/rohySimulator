@@ -9,6 +9,26 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.62] — 2026-08-26
+
+### Fixed
+
+- **`npm ci` rejected the lockfile, so CI and Docs both failed at the install
+  step.** v2.9.59 added a real dependency (`openseadragon`, for the pathology
+  slide viewer) and the lockfile was refreshed with
+  `npm install --package-lock-only` under npm 11 / Node 25. That pruned nested
+  entries a Node 22 `npm ci` still expects — `@docsearch/js`'s own react@18.3.1
+  and friends, which vitepress pulls in — leaving `package.json` and
+  `package-lock.json` out of sync from npm 10's point of view. Nothing was
+  wrong with the dependency set; the lockfile was simply written by the wrong
+  npm.
+- Regenerated from the last CI-green lockfile using Node 22.17 / npm 10.9, the
+  version CI pins, and verified with `npm ci --dry-run`. **Refresh this
+  lockfile with the Node version in `.github/workflows/ci.yml`, not whatever
+  node is on PATH** — a newer npm silently produces a lockfile that only a
+  newer npm will accept, and the failure surfaces on a runner rather than
+  locally.
+
 ## [2.9.61] — 2026-08-26
 
 ### Added
