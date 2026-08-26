@@ -14,6 +14,12 @@
 
 import { getExternalApi } from '../notifications/externalApi';
 import { SOURCES } from '../notifications/types';
+// Plugin vocabulary (RPS-1). rohy no longer points at any individual plugin
+// folder: every registered plugin's verbs arrive through the generated
+// manifests, and foldManifests THROWS on a collision instead of letting a
+// spread silently overwrite one. See docs/design/plugin-standard.md.
+import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generated.js';
+import { foldManifests } from '../../server/shared/pluginRegistry.js';
 
 export const SEVERITY = {
     DEBUG: 'DEBUG',
@@ -32,6 +38,7 @@ const SEV_MAP = {
     CRITICAL: 'critical',
 };
 
+
 export const CATEGORIES = {
     SESSION: 'SESSION',
     NAVIGATION: 'NAVIGATION',
@@ -43,7 +50,7 @@ export const CATEGORIES = {
     ERROR: 'ERROR',
 };
 
-export const VERBS = {
+const BASE_VERBS = {
     STARTED_SESSION: 'STARTED_SESSION', ENDED_SESSION: 'ENDED_SESSION',
     RESUMED_SESSION: 'RESUMED_SESSION', IDLE_TIMEOUT: 'IDLE_TIMEOUT',
     UNLOAD: 'UNLOAD',
@@ -93,7 +100,8 @@ export const VERBS = {
     ERROR_OCCURRED: 'ERROR_OCCURRED', API_ERROR: 'API_ERROR', VALIDATION_ERROR: 'VALIDATION_ERROR',
 };
 
-const VERB_METADATA = {
+
+const BASE_VERB_METADATA = {
     STARTED_SESSION: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.SESSION },
     ENDED_SESSION: { severity: SEVERITY.IMPORTANT, category: CATEGORIES.SESSION },
     RESUMED_SESSION: { severity: SEVERITY.INFO, category: CATEGORIES.SESSION },
@@ -184,7 +192,7 @@ const VERB_METADATA = {
     VALIDATION_ERROR: { severity: SEVERITY.INFO, category: CATEGORIES.ERROR },
 };
 
-export const OBJECT_TYPES = {
+const BASE_OBJECT_TYPES = {
     SESSION: 'session', CASE: 'case', LAB_TEST: 'lab_test', LAB_RESULT: 'lab_result',
     RADIOLOGY_ORDER: 'radiology_order', RADIOLOGY_RESULT: 'radiology_result',
     CHAT_MESSAGE: 'chat_message', VITAL_SIGN: 'vital_sign', ALARM: 'alarm',
@@ -203,7 +211,7 @@ export const OBJECT_TYPES = {
     ROOM: 'room',
 };
 
-export const COMPONENTS = {
+const BASE_COMPONENTS = {
     CHAT_INTERFACE: 'ChatInterface', PATIENT_MONITOR: 'PatientMonitor',
     PATIENT_VISUAL: 'PatientVisual', ORDERS_DRAWER: 'OrdersDrawer',
     LAB_RESULTS_MODAL: 'LabResultsModal', CONFIG_PANEL: 'ConfigPanel',
@@ -215,6 +223,19 @@ export const COMPONENTS = {
     SESSION_LOG_VIEWER: 'SessionLogViewer', VITAL_TRENDS: 'VitalTrends',
     DISCUSSION_SCREEN: 'DiscussionScreen',
 };
+
+// Merged vocabularies. The exported names are unchanged, so every existing
+// import site keeps working; plugin rows simply extend them.
+const MERGED = foldManifests(PLUGIN_MANIFESTS, {
+    verbs: BASE_VERBS,
+    verbMetadata: BASE_VERB_METADATA,
+    objectTypes: BASE_OBJECT_TYPES,
+    components: BASE_COMPONENTS,
+});
+export const VERBS = MERGED.verbs;
+export const OBJECT_TYPES = MERGED.objectTypes;
+export const COMPONENTS = MERGED.components;
+const VERB_METADATA = MERGED.verbMetadata;
 
 const getVerbMetadata = (verb) => VERB_METADATA[verb] || { severity: SEVERITY.INFO, category: CATEGORIES.NAVIGATION };
 

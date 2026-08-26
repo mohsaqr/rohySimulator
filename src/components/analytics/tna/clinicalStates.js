@@ -1,3 +1,10 @@
+// Plugin state rows (RPS-1). Every registered plugin contributes its own
+// verb->state mapping through the generated manifests, so this file no longer
+// names any individual plugin. foldManifests throws on a collision rather than
+// letting a spread silently redefine what an existing verb means.
+import { PLUGIN_MANIFESTS } from '../../../../server/shared/plugins/manifests.generated.js';
+import { foldManifests } from '../../../../server/shared/pluginRegistry.js';
+
 // Clinical-state resolver — the simulator-domain analogue of LAILA's
 // 12 educational learning states (learning/progressing/engaged/…). Where
 // LAILA's space is shaped by "what type of LMS object did the student
@@ -46,7 +53,7 @@ export const CLINICAL_STATES = [
 ];
 
 // Verb-default fallback: fires when no explicit pair or object override hits.
-export const VERB_FALLBACKS = {
+const BASE_VERB_FALLBACKS = {
     // Sessions / case lifecycle
     STARTED_SESSION: 'regulating',
     RESUMED_SESSION: 'regulating',
@@ -146,7 +153,7 @@ export const VERB_FALLBACKS = {
 };
 
 // Object-type forced interpretations (override verb default).
-export const OBJECT_OVERRIDES = {
+const BASE_OBJECT_OVERRIDES = {
     vital_sign: 'monitoring',
     alarm: 'monitoring',
     monitor: 'monitoring',
@@ -193,7 +200,7 @@ export const OBJECT_OVERRIDES = {
 };
 
 // Explicit verb:object pairs that need to override the chain.
-export const DEFAULT_INTERPRETATIONS = {
+const BASE_DEFAULT_INTERPRETATIONS = {
     // Patient record reviewing — verb is generic VIEWED, but the object
     // tells us the trainee is assessing, not navigating.
     'VIEWED:patient_record': 'assessing',
@@ -216,6 +223,17 @@ export const DEFAULT_INTERPRETATIONS = {
     'OPENED:treatment_drawer': 'treating',
     'OPENED:medication_picker': 'treating',
 };
+
+// Merged maps. Exported names unchanged so resolveClinicalState() and the
+// settings-tab override UI keep working untouched.
+const MERGED_STATES = foldManifests(PLUGIN_MANIFESTS, {
+    verbFallbacks: BASE_VERB_FALLBACKS,
+    objectOverrides: BASE_OBJECT_OVERRIDES,
+    interpretations: BASE_DEFAULT_INTERPRETATIONS,
+});
+export const VERB_FALLBACKS = MERGED_STATES.verbFallbacks;
+export const OBJECT_OVERRIDES = MERGED_STATES.objectOverrides;
+export const DEFAULT_INTERPRETATIONS = MERGED_STATES.interpretations;
 
 /**
  * Resolve a single (verb, object_type) pair to a clinical state.

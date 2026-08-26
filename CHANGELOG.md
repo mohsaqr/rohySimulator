@@ -9,6 +9,52 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.59] — 2026-08-26
+
+### Added
+
+- **RPS-1, a plugin standard: a room, a vocabulary and a session, declared not
+  hardcoded.** Installing the Pathology room previously meant hand-editing five
+  shared files (`App.jsx`'s `ROOM_KEYS`, `RoomNavigator`'s `ROOM_DEFS`,
+  `eventLogger.js`, `clinicalStates.js`, and the server's verb whitelist), each
+  carrying a "delete this if you remove the folder" comment. A plugin now
+  declares itself in a manifest and rohy names no individual plugin anywhere.
+  - `src/plugins/<id>/manifest.js` (pure data: room, vocabulary, states,
+    capabilities) + `index.jsx` (component, availability gate, prop adapter).
+  - Manifests are frozen into `server/shared/plugins/manifests.generated.js` via
+    `npm run plugins:gen`, with `npm run plugins:check` failing on drift — the
+    server needs a plugin's verb list and the Docker runtime stage copies
+    `server/` but not `src/`.
+  - Discovery uses `import.meta.glob`, so deleting a plugin directory still
+    leaves a bootable app instead of becoming a build failure.
+  - Spec: `docs/design/plugin-standard.md`.
+- **Plugin state is persisted by the host.** `ctx.store` (async,
+  localStorage-backed, registered as `rohy_plugin` with a `session` lifetime).
+  Pathology annotations, draft reports and diagnoses now survive leaving and
+  re-entering the room; previously `onAnnotationsChange` was never wired at the
+  mount site and every annotation was discarded on unmount.
+
+### Fixed
+
+- **Plugin verbs were accepted or rejected depending on which endpoint the
+  client used.** `POST /learning-events` validated against a hardcoded
+  `LEARNING_VERBS` array containing zero pathology verbs, while
+  `POST /learning-events/batch` checked only that a verb was present. Pathology
+  events survived solely because `EventLogger` batches; any single-event post
+  returned 400. Both paths now validate against one registry
+  (`server/shared/learningVerbs.js`), and batch reports an `unknown_verb` drop
+  reason.
+- **A plugin vocabulary collision was silent.** Plugin verbs and TNA state rows
+  were merged with a raw object spread, so a future rohy verb colliding with a
+  plugin verb would have overwritten it and quietly changed what existing
+  `learning_events` rows meant. All merges now go through `mergeNamespace()`,
+  which throws — plugin-vs-rohy and plugin-vs-plugin alike. The vendored
+  pathology package shipped a throwing `mergePathologyStates()` for exactly this
+  and the integration had bypassed it.
+- **A case with no pathology material no longer shows a Pathology tab.** Plugins
+  gate themselves via `available(ctx)`; the navigator hides a declined room
+  rather than opening onto an empty state.
+
 ## [2.9.58] — 2026-08-26
 
 ### Fixed

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import PatientMonitor from './components/monitor/PatientMonitor';
 import PatientVisual from './components/patient/PatientVisual';
@@ -35,6 +35,7 @@ import OyonConsentUpdate from './components/oyon/OyonConsentUpdate';
 import DiscussionScreen from './components/discussion/DiscussionScreen';
 import PhysicalExamScreen from './components/exam/PhysicalExamScreen';
 import InvestigationsScreen from './components/investigations/InvestigationsScreen';
+import { registry as pluginRegistry, PluginRoom } from './plugins/index.js';
 import RoomNavigator from './components/common/RoomNavigator';
 import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
 import OyonCaptureWidget from './components/oyon/OyonCaptureWidget';
@@ -115,8 +116,9 @@ function MainApp() {
    //   'examination' — PhysicalExamScreen
    //   'lab'         — InvestigationsScreen, Laboratory active
    //   'radiology'   — InvestigationsScreen, Radiology active
+   //   'pathology'   — PathologyScreen (whole-slide review)
    //   'consultant'  — DiscussionScreen (debrief room)
-   // All five are peers. Visiting the consultant does NOT end the
+   // All six are peers. Visiting the consultant does NOT end the
    // session — that's the End & Debrief button in the patient room.
    // Ending the session also sends the user here (caseEnded=true) but
    // leaving via the nav while the session is live just navigates back.
@@ -280,7 +282,56 @@ function MainApp() {
    // serialisable blob so we don't end up with N localStorage keys to
    // keep in sync.
    const VIEW_STORAGE_KEY = 'rohy_view';
-   const ROOM_KEYS = ['chat', 'examination', 'lab', 'radiology', 'consultant'];
+   // --- Plugin plumbing (RPS-1) -------------------------------------------
+   // A plugin's case material rides on the case config under its own id, so
+   // the manifest id is also the config key — one identity, nothing to keep
+   // in sync. The snapshot wins over the live case for the same reason every
+   // other room prefers it: a running session must not shift under the learner.
+   const pluginCaseConfig = caseSnapshot?.config ?? activeCase?.config ?? null;
+   const pluginSession = useMemo(() => ({
+      id: sessionId,
+      caseId: activeCase?.id ?? null,
+      userId: user?.id ?? null,
+      role: user?.role ?? 'guest',
+      language: uiLanguage,
+      examMode: false,
+   }), [sessionId, activeCase?.id, user?.id, user?.role, uiLanguage]);
+
+   // Which plugin rooms this case actually offers. A plugin gates itself —
+   // pathology declines a case with no slides — so the navigator shows no tab
+   // rather than a tab onto an empty state.
+   const enabledPlugins = useMemo(
+      () => pluginRegistry
+         .resolve((m) => ({ data: pluginCaseConfig?.[m.id] ?? null, session: pluginSession }))
+         .map((p) => p.manifest.id),
+      [pluginCaseConfig, pluginSession],
+   );
+
+   // Any room key owned by a plugin resolves to the generic PluginRoom mount —
+   // but only if the plugin actually accepted this case. Without the
+   // availability check here, a plugin that declined would still mount and
+   // render its own empty state, which is the thing available() exists to
+   // prevent.
+   const activePlugin = enabledPlugins.includes(currentRoom)
+      ? pluginRegistry.get(currentRoom)
+      : null;
+
+   // A room can become unavailable underneath the learner (case switch, or a
+   // restored `rohy_view` blob naming a plugin room this case does not offer).
+   // Leaving currentRoom pointing at a room nothing renders would strand the
+   // user on the patient screen with no tab highlighted.
+   useEffect(() => {
+      if (pluginRegistry.get(currentRoom) && !enabledPlugins.includes(currentRoom)) {
+         setCurrentRoom('chat');
+      }
+   }, [currentRoom, enabledPlugins]);
+
+   // Core rooms plus whatever plugins are installed (RPS-1). This list used to
+   // name 'pathology' literally; a plugin now contributes its room key through
+   // its manifest, so installing the next one touches no file in src/ outside
+   // its own directory.
+   const ROOM_KEYS = ['chat', 'examination', 'lab', 'radiology', 'consultant']
+      .concat(pluginRegistry.manifests().map((m) => m.room.key));
    const captureView = useCallback(() => {
       let view = 'home';
       if (personaEditorTarget !== null) view = 'persona-editor';
@@ -896,6 +947,7 @@ function MainApp() {
                   <RoomNavigator
                      currentRoom={currentRoom}
                      onSelectRoom={navigateToRoom}
+                     enabledPlugins={enabledPlugins}
                      onOpenCourse={openCourseForCase}
                      sessionId={sessionId}
                   />
@@ -912,8 +964,40 @@ function MainApp() {
                   <RoomNavigator
                      currentRoom={currentRoom}
                      onSelectRoom={navigateToRoom}
+                     enabledPlugins={enabledPlugins}
                      onOpenCourse={openCourseForCase}
                      sessionId={sessionId}
+                  />
+               }
+            />
+         ) : activePlugin ? (
+            // Generic plugin mount. App knows the room key and the case
+            // config; everything plugin-specific — which prop is called
+            // `pathologyCase`, how annotations persist — lives in the
+            // plugin's own descriptor under src/plugins/<id>/.
+            //
+            // No LLM capability is granted here. rohy's LLMService exposes
+            // sendMessage/streamMessage bound to the PATIENT conversation, so
+            // granting it would write a plugin's prompts into the case
+            // transcript. A plugin requesting `llm` gets nothing until a
+            // narrowed {complete({system, prompt})} adapter exists, and is
+            // expected to degrade — pathology leaves a grade "undecided" and
+            // surfaces it for tutor review.
+            <PluginRoom
+               pluginId={currentRoom}
+               topBarControls={topBarControls}
+               caseTitle={activeCase?.name ?? null}
+               session={pluginSession}
+               caseConfig={pluginCaseConfig}
+               eventLogger={EventLogger}
+               navigate={navigateToRoom}
+               roomNav={
+                  <RoomNavigator
+                     currentRoom={currentRoom}
+                     onSelectRoom={navigateToRoom}
+                     onOpenCourse={openCourseForCase}
+                     sessionId={sessionId}
+                     enabledPlugins={enabledPlugins}
                   />
                }
             />
@@ -928,6 +1012,7 @@ function MainApp() {
                   <RoomNavigator
                      currentRoom={currentRoom}
                      onSelectRoom={navigateToRoom}
+                     enabledPlugins={enabledPlugins}
                      onOpenCourse={openCourseForCase}
                      sessionId={sessionId}
                   />
@@ -1061,6 +1146,7 @@ function MainApp() {
                <RoomNavigator
                   currentRoom={currentRoom}
                   onSelectRoom={navigateToRoom}
+                  enabledPlugins={enabledPlugins}
                   onOpenCourse={openCourseForCase}
                   sessionId={sessionId}
                />

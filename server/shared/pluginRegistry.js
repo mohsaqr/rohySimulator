@@ -1,0 +1,258 @@
+/**
+ * Rohy Plugin Standard (RPS-1) — the shared half.
+ *
+ * This file is imported by BOTH the client and the server, so it lives under
+ * server/shared/ per the rule in CLAUDE.md: the Docker runtime stage copies
+ * server/ but not src/, so server code importing from src/ works locally and
+ * crashes in the image.
+ *
+ * It is DATA ONLY. No React, no DOM, no lucide icons — a manifest describes a
+ * plugin, it does not implement one. The runtime half (component, mount
+ * lifecycle, availability gate) lives in src/plugins/registry.js.
+ *
+ * What a manifest buys, and why each field exists:
+ *
+ *   id          the plugin's single identity — room key, verb namespace,
+ *               case-config key, audit id and API mount path are all derived
+ *               from it. One identity, never four that can drift apart.
+ *   room        how the plugin appears in the bottom RoomNavigator. `icon` and
+ *               `accent` are STRINGS resolved against static allowlists on the
+ *               client: a manifest cannot carry a React component (this module
+ *               is server-importable), and Tailwind cannot JIT a class name it
+ *               never sees as a literal.
+ *   vocabulary  the xAPI verbs / object types the plugin emits. The SERVER
+ *               needs this to validate POST /learning-events, which is the
+ *               whole reason a manifest exists instead of a plain JS object
+ *               registered at import time.
+ *   states      how those verbs resolve to TNA clinical states, so plugin rows
+ *               are analysable instead of falling through to a literal bucket.
+ *   capabilities what the host must GRANT. A capability is a narrowed adapter
+ *               the host builds — never a reference to a host singleton. See
+ *               src/plugins/context.js for why that distinction is load-bearing.
+ */
+
+/** Clinical states a plugin verb may resolve to. Mirrors clinicalStates.js. */
+export const CLINICAL_STATES = [
+    'assessing', 'examining', 'investigating', 'treating', 'communicating',
+    'documenting', 'monitoring', 'regulating', 'reflecting', 'navigating',
+];
+
+export const CAPABILITIES = ['llm', 'uploads', 'notify', 'persist'];
+
+/** Mirrors ROLE_RANKS in server/middleware/auth.js. Duplicated rather than
+ *  imported because this module is loaded by the CLIENT too, and auth.js
+ *  pulls in server-only middleware. If the ranks there change, change these —
+ *  a contract test asserts the two agree. */
+export const ROLE_RANKS = { guest: 0, student: 1, reviewer: 2, educator: 3, admin: 4 };
+
+/** Room keys rohy owns. A plugin claiming one produces a duplicate navigator
+ *  tab and a plugin that can never mount, since the core rooms are matched
+ *  earlier in App.jsx's render chain. */
+export const CORE_ROOM_KEYS = ['chat', 'examination', 'lab', 'radiology', 'consultant'];
+
+/** These mirror the CHECK constraints on learning_events (migration 0001).
+ *  A verb declaring anything else does not fail loudly — the INSERT is
+ *  rejected by sqlite and the event is simply lost. */
+export const SEVERITIES = ['DEBUG', 'INFO', 'ACTION', 'IMPORTANT', 'CRITICAL'];
+export const CATEGORIES = [
+    'SESSION', 'NAVIGATION', 'CLINICAL', 'COMMUNICATION',
+    'MONITORING', 'CONFIGURATION', 'ASSESSMENT', 'ERROR',
+];
+
+const REQUIRED = ['id', 'room', 'vocabulary'];
+
+function validateRole(role, id, field) {
+    if (role === undefined) return;
+    if (!Object.prototype.hasOwnProperty.call(ROLE_RANKS, role)) {
+        throw new Error(
+            `Plugin '${id}' declares ${field} '${role}', which is not a rohy role `
+            + `(${Object.keys(ROLE_RANKS).join(', ')})`
+        );
+    }
+}
+
+/**
+ * May this role open that surface?
+ *
+ * Exported because `minRole` was declared by the standard from day one and
+ * enforced NOWHERE — a decorative field that reads like a guarantee. Adding a
+ * second one for authoring without a shared check would have doubled the
+ * problem instead of solving it.
+ *
+ * @param {string|undefined} role      the viewer's role
+ * @param {string|undefined} required  the surface's minRole; undefined means open
+ * @returns {boolean}
+ */
+export function roleAllows(role, required) {
+    if (required === undefined) return true;
+    const have = ROLE_RANKS[role === 'user' ? 'student' : role] ?? ROLE_RANKS.guest;
+    return have >= (ROLE_RANKS[required] ?? 0);
+}
+
+/**
+ * Merge a plugin namespace into a host one, THROWING on any collision.
+ *
+ * This is the single most important function in the standard. The pathology
+ * package shipped `mergePathologyStates()` for exactly this and rohy's wiring
+ * bypassed it with a raw spread — so a future rohy verb colliding with a
+ * plugin verb would have been silently overwritten, and the analytics rows
+ * for one of them would quietly change meaning. A spread cannot be made safe
+ * by a comment; it has to be made impossible.
+ */
+export function mergeNamespace(base, additions, { label, source }) {
+    const collisions = Object.keys(additions || {}).filter((k) => k in (base || {}));
+    if (collisions.length > 0) {
+        throw new Error(
+            `Plugin '${source}' collides with rohy's ${label}: ${collisions.join(', ')}. `
+            + `Rename the plugin's key — a silent overwrite would change what existing rows mean.`
+        );
+    }
+    return { ...base, ...additions };
+}
+
+/** Validate a manifest at registration time rather than at first render. */
+export function validateManifest(manifest) {
+    REQUIRED.forEach((field) => {
+        if (!manifest || manifest[field] === undefined) {
+            throw new Error(`Plugin manifest is missing required field '${field}'`);
+        }
+    });
+    if (!/^[a-z][a-z0-9_]*$/.test(manifest.id)) {
+        throw new Error(`Plugin id '${manifest.id}' must be lower_snake_case — it becomes a room key and a URL segment`);
+    }
+    if (manifest.room.key !== manifest.id) {
+        throw new Error(`Plugin '${manifest.id}' declares room.key '${manifest.room.key}' — they must match, so one id identifies the plugin everywhere`);
+    }
+    if (CORE_ROOM_KEYS.includes(manifest.id)) {
+        throw new Error(`Plugin id '${manifest.id}' is a core rohy room — it would render a duplicate navigator tab and could never mount`);
+    }
+    const verbs = manifest.vocabulary.verbs || {};
+    Object.entries(verbs).forEach(([verb, meta]) => {
+        if (!meta || !meta.severity || !meta.category) {
+            throw new Error(`Plugin '${manifest.id}' verb ${verb} has no severity/category — it would throw at emit time`);
+        }
+        // Not cosmetic: these are CHECK constraints on learning_events. A verb
+        // declaring severity 'URGENT' is accepted everywhere in JS and then
+        // silently dropped by sqlite at INSERT — the worst possible failure
+        // for an analytics event, because nothing surfaces the loss.
+        if (!SEVERITIES.includes(meta.severity)) {
+            throw new Error(`Plugin '${manifest.id}' verb ${verb} declares severity '${meta.severity}'; learning_events only accepts ${SEVERITIES.join(', ')}`);
+        }
+        if (!CATEGORIES.includes(meta.category)) {
+            throw new Error(`Plugin '${manifest.id}' verb ${verb} declares category '${meta.category}'; learning_events only accepts ${CATEGORIES.join(', ')}`);
+        }
+    });
+
+    const states = manifest.states || {};
+    const fallbacks = states.verbFallbacks || {};
+    Object.keys(verbs).forEach((verb) => {
+        const state = fallbacks[verb];
+        // A verb with NO mapping does not error anywhere — it falls through to
+        // resolveClinicalState's literal `${verb}_${objectType}` bucket and
+        // quietly pollutes every TNA model with a state nobody declared.
+        if (state === undefined) {
+            throw new Error(`Plugin '${manifest.id}' verb ${verb} has no verbFallback — it would resolve to a literal TNA bucket instead of a clinical state`);
+        }
+        if (!CLINICAL_STATES.includes(state)) {
+            throw new Error(`Plugin '${manifest.id}' verb ${verb} maps to '${state}', which is not a clinical state`);
+        }
+    });
+
+    // Ownership. mergeNamespace catches a plugin OVERWRITING an existing key,
+    // but it cannot catch a plugin CLAIMING an unclaimed one that semantically
+    // belongs to rohy: `DEFAULT_INTERPRETATIONS` has no 'ORDERED_LAB:lab_test'
+    // row today, so a plugin could add one and silently reclassify a core
+    // clinical event as 'reflecting' in every TNA model. A plugin may only
+    // make claims about its own vocabulary.
+    const ownVerbs = new Set(Object.keys(verbs));
+    const ownTypes = new Set(Object.values(manifest.vocabulary.objectTypes || {}));
+    Object.keys(states.objectOverrides || {}).forEach((type) => {
+        if (!ownTypes.has(type)) {
+            throw new Error(`Plugin '${manifest.id}' overrides object_type '${type}', which it does not declare`);
+        }
+    });
+    Object.keys(states.interpretations || {}).forEach((pair) => {
+        const [verb, objectType] = pair.split(':');
+        if (!ownVerbs.has(verb) && !ownTypes.has(objectType)) {
+            throw new Error(`Plugin '${manifest.id}' interprets '${pair}', which involves neither its own verbs nor its own object types`);
+        }
+    });
+    (manifest.capabilities || []).forEach((cap) => {
+        if (!CAPABILITIES.includes(cap)) {
+            throw new Error(`Plugin '${manifest.id}' requests unknown capability '${cap}'`);
+        }
+    });
+
+    validateRole(manifest.minRole, manifest.id, 'minRole');
+
+    // --- the authoring slot (optional) ------------------------------------
+    //
+    // A plugin's room is where a learner USES its material. An authoring
+    // surface is where someone MAKES that material, and the two have opposite
+    // gates: the room declines a case with no data, the editor exists
+    // precisely when there is none yet. So authoring is its own slot rather
+    // than a second mode of the room.
+    if (manifest.authoring !== undefined) {
+        const authoring = manifest.authoring;
+        if (!authoring || typeof authoring !== 'object') {
+            throw new Error(`Plugin '${manifest.id}' declares 'authoring' that is not an object`);
+        }
+        if (!authoring.labelKey) {
+            throw new Error(`Plugin '${manifest.id}' authoring has no labelKey — its entry would render blank`);
+        }
+        // REQUIRED, not defaulted. Authoring writes the material every learner
+        // is then assessed against; silently inheriting a student-level
+        // default would be the most consequential possible default to get
+        // wrong, so the manifest has to say it out loud.
+        if (authoring.minRole === undefined) {
+            throw new Error(
+                `Plugin '${manifest.id}' authoring has no minRole. Authoring writes the material learners are `
+                + `assessed against, so the manifest must state who may open it rather than inheriting a default.`
+            );
+        }
+        validateRole(authoring.minRole, manifest.id, 'authoring.minRole');
+        // A surface that edits the case cannot be easier to reach than the
+        // surface that merely reads it.
+        const roomRank = ROLE_RANKS[manifest.minRole ?? 'student'];
+        if (ROLE_RANKS[authoring.minRole] < roomRank) {
+            throw new Error(
+                `Plugin '${manifest.id}' authoring.minRole '${authoring.minRole}' is weaker than its room minRole `
+                + `'${manifest.minRole ?? 'student'}' — editing a case cannot be easier to reach than reading it`
+            );
+        }
+    }
+
+    return manifest;
+}
+
+/**
+ * Fold a list of manifests into the merged vocabulary/state maps rohy uses.
+ * Every merge goes through mergeNamespace, so two plugins that collide with
+ * each other fail exactly as loudly as one colliding with rohy.
+ */
+export function foldManifests(manifests, base = {}) {
+    const out = {
+        verbs: { ...(base.verbs || {}) },
+        verbMetadata: { ...(base.verbMetadata || {}) },
+        objectTypes: { ...(base.objectTypes || {}) },
+        components: { ...(base.components || {}) },
+        verbFallbacks: { ...(base.verbFallbacks || {}) },
+        objectOverrides: { ...(base.objectOverrides || {}) },
+        interpretations: { ...(base.interpretations || {}) },
+    };
+    manifests.forEach((m) => {
+        validateManifest(m);
+        const v = m.vocabulary || {};
+        const s = m.states || {};
+        const src = m.id;
+        const verbNames = Object.fromEntries(Object.keys(v.verbs || {}).map((k) => [k, k]));
+        out.verbs = mergeNamespace(out.verbs, verbNames, { label: 'VERBS', source: src });
+        out.verbMetadata = mergeNamespace(out.verbMetadata, v.verbs || {}, { label: 'VERB_METADATA', source: src });
+        out.objectTypes = mergeNamespace(out.objectTypes, v.objectTypes || {}, { label: 'OBJECT_TYPES', source: src });
+        out.components = mergeNamespace(out.components, v.components || {}, { label: 'COMPONENTS', source: src });
+        out.verbFallbacks = mergeNamespace(out.verbFallbacks, s.verbFallbacks || {}, { label: 'VERB_FALLBACKS', source: src });
+        out.objectOverrides = mergeNamespace(out.objectOverrides, s.objectOverrides || {}, { label: 'OBJECT_OVERRIDES', source: src });
+        out.interpretations = mergeNamespace(out.interpretations, s.interpretations || {}, { label: 'DEFAULT_INTERPRETATIONS', source: src });
+    });
+    return out;
+}

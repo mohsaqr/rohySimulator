@@ -143,6 +143,33 @@ describe('learning-events trinity invariant (server-enforced)', () => {
         expect(rows.length).toBe(0); // cross-tenant event never persisted
     });
 
+    // Regression lock: /learning-events/batch used to accept ANY verb while the
+    // single-event route validated an allowlist, so validation depended on which
+    // endpoint the client called — and since the client batches, nothing was
+    // validated in production. Both paths now share server/shared/learningVerbs.js.
+    it('drops an unknown verb in batch instead of inserting it', async () => {
+        const res = await fetch(`${server.baseUrl}/api/learning-events/batch`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+                events: [{ session_id: null, verb: 'PRE_SESSION_PROBE', object_type: 'COMPONENT' }],
+            }),
+        });
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.inserted).toBe(0);
+        expect(body.dropped).toBe(1);
+        expect(body.dropped_reasons.unknown_verb).toBe(1);
+
+        const db = await openDb(server.dbPath);
+        try {
+            const rows = await pAll(db, "SELECT id FROM learning_events WHERE verb = 'PRE_SESSION_PROBE'");
+            expect(rows.length).toBe(0);
+        } finally {
+            await closeDb(db);
+        }
+    });
+
     it('forces case_id NULL for events without session_id and uses JWT user_id', async () => {
         const res = await fetch(`${server.baseUrl}/api/learning-events/batch`, {
             method: 'POST',
@@ -151,14 +178,18 @@ describe('learning-events trinity invariant (server-enforced)', () => {
                 events: [{
                     session_id: null,
                     case_id: caseIdWrong, // ignored
-                    verb: 'PRE_SESSION_PROBE', // not in allowlist; treated as missing field? Use a valid one.
+                    verb: 'SCROLLED', // a real allowlisted verb, unique in this file
                     object_type: 'COMPONENT',
                 }],
             }),
         });
-        // PRE_SESSION_PROBE isn't in the verb allowlist for /learning-events
-        // (single endpoint validates), but the batch endpoint accepts any
-        // verb the row schema accepts. So this should succeed.
+        // This used to post 'PRE_SESSION_PROBE' and assert it was INSERTED,
+        // pinning a split-brain: /learning-events validated the verb allowlist
+        // while /batch checked only that a verb field existed. Since the client
+        // batches, that meant nothing was validated in practice. Both paths now
+        // share one registry (server/shared/learningVerbs.js), so the trinity
+        // invariant is exercised with a real verb and the rejection of an
+        // unknown one is asserted separately below.
         expect(res.status).toBe(200);
         const body = await res.json();
         expect(body.inserted).toBe(1);
@@ -166,7 +197,7 @@ describe('learning-events trinity invariant (server-enforced)', () => {
         const db = await openDb(server.dbPath);
         try {
             const row = await pAll(db,
-                `SELECT user_id, case_id, session_id FROM learning_events WHERE verb = 'PRE_SESSION_PROBE' ORDER BY id DESC LIMIT 1`);
+                `SELECT user_id, case_id, session_id FROM learning_events WHERE verb = 'SCROLLED' ORDER BY id DESC LIMIT 1`);
             expect(row.length).toBe(1);
             expect(row[0].session_id).toBeNull();
             expect(row[0].case_id).toBeNull();

@@ -1,7 +1,7 @@
 {
   "name": "rohy",
   "private": true,
-  "version": "2.9.58",
+  "version": "2.9.59",
   "description": "Virtual Patient Simulation Platform for Medical Education",
   "author": {
     "name": "Mohammed Saqr",
@@ -22,7 +22,7 @@
     "license:verify": "node scripts/sync-licenses.mjs --strict && vitest run --project=server tests/server/license-contract.test.js",
     "license:latest": "node scripts/check-license-version.mjs",
     "postinstall": "npm run setup:oyon",
-    "prebuild": "npm run verify:oyon && npm run license:sync",
+    "prebuild": "npm run verify:oyon && npm run license:sync && npm run plugins:check",
     "production": "NODE_ENV=production node server/server.js",
     "build": "{ npm run docs:build || echo '[build] docs:build failed — continuing without the docs site'; } && vite build --base=/rohy/ && rm -rf frontend && mkdir -p frontend && cp -rf dist/. frontend/",
     "lint": "eslint .",
@@ -52,7 +52,9 @@
     "i18n:translate": "node scripts/translate-locales.mjs",
     "i18n:status": "node scripts/i18n/status.mjs",
     "i18n:xliff:export": "node scripts/i18n/xliff-export.mjs",
-    "i18n:xliff:import": "node scripts/i18n/xliff-import.mjs"
+    "i18n:xliff:import": "node scripts/i18n/xliff-import.mjs",
+    "plugins:gen": "node scripts/gen-plugin-manifests.mjs",
+    "plugins:check": "node scripts/gen-plugin-manifests.mjs --check"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -83,6 +85,7 @@
     "lucide-react": "^0.562.0",
     "marked": "^17.0.6",
     "multer": "^2.0.2",
+    "openseadragon": "^6.1.0",
     "oyon": "file:./OyonR",
     "papaparse": "^5.5.4",
     "react": "^19.2.0",

@@ -1,7 +1,29 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlaskConical, GraduationCap, MessageCircle, Scan, Stethoscope, BookOpen } from 'lucide-react';
+import { FlaskConical, GraduationCap, MessageCircle, Microscope, Scan, Stethoscope, BookOpen } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
+import { PLUGIN_MANIFESTS } from '../../../server/shared/plugins/manifests.generated.js';
+
+// Static allowlists for what a plugin manifest may ask for. A manifest is
+// server-importable DATA, so it carries the strings 'Microscope' / 'fuchsia'
+// rather than a React component and a class list. Both must be resolved
+// against literals here: Tailwind's JIT only emits a class it can see written
+// out, so a computed `bg-${accent}-500/15` would silently render unstyled.
+const PLUGIN_ICONS = { Microscope, FlaskConical, Scan, Stethoscope, BookOpen, GraduationCap };
+const PLUGIN_ACCENTS = {
+    fuchsia: {
+        iconText: 'text-fuchsia-300', activeText: 'text-fuchsia-200',
+        activeBg: 'bg-fuchsia-500/15', activeRing: 'ring-fuchsia-500/30', activeBar: 'bg-fuchsia-400',
+    },
+    teal: {
+        iconText: 'text-teal-300', activeText: 'text-teal-200',
+        activeBg: 'bg-teal-500/15', activeRing: 'ring-teal-500/30', activeBar: 'bg-teal-400',
+    },
+    indigo: {
+        iconText: 'text-indigo-300', activeText: 'text-indigo-200',
+        activeBg: 'bg-indigo-500/15', activeRing: 'ring-indigo-500/30', activeBar: 'bg-indigo-400',
+    },
+};
 
 // Bottom navigation bar shared across every in-session surface — main
 // chat, PhysicalExamScreen, InvestigationsScreen, DiscussionScreen.
@@ -9,7 +31,7 @@ import { apiFetch } from '../../services/apiClient';
 // chat first.
 //
 // `currentRoom` is one of: 'chat' | 'examination' | 'lab' |
-// 'radiology' | 'consultant'. All five are peer rooms — visiting the
+// 'radiology' | 'pathology' | 'consultant'. All six are peer rooms — visiting the
 // Consultant doesn't end the session; that's a separate action wired
 // up by the patient room's End & Debrief button.
 //
@@ -25,9 +47,10 @@ import { apiFetch } from '../../services/apiClient';
 // dot on the matching button. Replaces the floating "Ordered Tests"
 // mini-window that used to clutter the patient screen (retired
 // 2026-05-14). Skip the prop on test mounts that don't need the badge.
-const ROOM_DEFS = [
+const CORE_ROOM_DEFS = [
     {
         key: 'chat',
+        order: 10,
         labelKey: 'room_chat',
         subKey: 'room_chat_sub',
         icon: MessageCircle,
@@ -39,6 +62,7 @@ const ROOM_DEFS = [
     },
     {
         key: 'examination',
+        order: 20,
         labelKey: 'room_examination',
         subKey: 'room_examination_sub',
         icon: Stethoscope,
@@ -50,6 +74,7 @@ const ROOM_DEFS = [
     },
     {
         key: 'lab',
+        order: 30,
         labelKey: 'room_lab',
         subKey: 'room_lab_sub',
         icon: FlaskConical,
@@ -62,6 +87,7 @@ const ROOM_DEFS = [
     },
     {
         key: 'radiology',
+        order: 40,
         labelKey: 'room_radiology',
         subKey: 'room_radiology_sub',
         icon: Scan,
@@ -74,6 +100,7 @@ const ROOM_DEFS = [
     },
     {
         key: 'consultant',
+        order: 90,
         labelKey: 'room_consultant',
         subKey: 'room_consultant_sub',
         icon: GraduationCap,
@@ -84,6 +111,31 @@ const ROOM_DEFS = [
         activeBar: 'bg-amber-400',
     },
 ];
+
+// Plugin rooms (RPS-1). A plugin that declares a room appears here without
+// rohy naming it — this file used to carry a hand-written pathology entry, and
+// the point of the standard is that adding the next room is a manifest, not an
+// edit to a shared component. A manifest asking for an icon or accent that is
+// not allowlisted is skipped rather than rendered broken.
+const PLUGIN_ROOM_DEFS = PLUGIN_MANIFESTS
+    .map((m) => {
+        const icon = PLUGIN_ICONS[m.room.icon];
+        const accent = PLUGIN_ACCENTS[m.room.accent];
+        if (!icon || !accent) return null;
+        return {
+            key: m.room.key,
+            order: m.room.order ?? 50,
+            labelKey: m.room.labelKey,
+            subKey: m.room.subKey,
+            icon,
+            isPlugin: true,
+            ...accent,
+        };
+    })
+    .filter(Boolean);
+
+export const ROOM_DEFS = [...CORE_ROOM_DEFS, ...PLUGIN_ROOM_DEFS]
+    .sort((a, b) => a.order - b.order);
 
 // 10s cadence matches OrdersDrawer's polling cost-vs-staleness tradeoff
 // closely enough that the badge feels live without doubling the request
@@ -124,7 +176,14 @@ function useReadyCounts(sessionId) {
     return counts;
 }
 
-export default function RoomNavigator({ currentRoom, onSelectRoom, onOpenCourse = null, sessionId = null }) {
+export default function RoomNavigator({
+    currentRoom, onSelectRoom, onOpenCourse = null, sessionId = null,
+    // Which plugin rooms this case actually offers. `null` means "no opinion"
+    // so existing mounts (and tests) render every room exactly as before; App
+    // passes the resolved list so a case carrying no pathology material shows
+    // no Pathology tab, rather than a tab onto an empty state.
+    enabledPlugins = null,
+}) {
     const { t } = useTranslation('common');
     const counts = useReadyCounts(sessionId);
     return (
@@ -132,7 +191,9 @@ export default function RoomNavigator({ currentRoom, onSelectRoom, onOpenCourse 
             className="flex items-stretch gap-1 px-3 py-2 bg-slate-950/95 backdrop-blur border-t border-slate-800 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.6)]"
             aria-label={t('room_navigation')}
         >
-            {ROOM_DEFS.map((room) => (
+            {ROOM_DEFS
+                .filter((room) => !room.isPlugin || enabledPlugins === null || enabledPlugins.includes(room.key))
+                .map((room) => (
                 <RoomButton
                     key={room.key}
                     room={room}

@@ -63,6 +63,17 @@ export const STORAGE_REGISTRY = Object.freeze({
         purpose: 'Discussant chat transcript per session.',
         lifetime: 'session',
     },
+    // Per-plugin, per-session state owned by the host on a plugin's behalf
+    // (RPS-1). A plugin persists nothing itself — it hands the host its whole
+    // document and the host decides where it lives — so this one key covers
+    // every installed plugin rather than each one inventing its own namespace.
+    // Built with `rohy_plugin:${pluginId}:${sessionId}:${name}`.
+    rohy_plugin: {
+        keyBuilder: (pluginId, sessionId, name) => `rohy_plugin:${pluginId}:${sessionId}:${name}`,
+        owner: 'src/plugins/context.js',
+        purpose: 'Plugin-owned document (e.g. pathology annotations, draft reports) for one session.',
+        lifetime: 'session',
+    },
     // ── Settings & editor state ─────────────────────────────────────────────
     rohy_editing_case: {
         owner: 'src/components/settings/ConfigPanel.jsx',

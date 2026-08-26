@@ -25,6 +25,7 @@ import {
     ROLE_RANKS,
     hasRoleAtLeast,
 } from '../middleware/auth.js';
+import { LEARNING_VERBS } from '../shared/learningVerbs.js';
 
 
 
@@ -484,59 +485,9 @@ router.get('/sessions/:id/events', authenticateToken, async (req, res) => {
 
 // --- LEARNING ANALYTICS ENDPOINTS ---
 
-// Standard xAPI-style verbs for learning analytics
-const LEARNING_VERBS = [
-    // Session lifecycle
-    'STARTED_SESSION', 'ENDED_SESSION', 'RESUMED_SESSION', 'IDLE_TIMEOUT', 'UNLOAD',
-    // Navigation
-    'VIEWED', 'OPENED', 'CLOSED', 'NAVIGATED', 'SWITCHED_TAB',
-    'SCROLLED', 'LOST_FOCUS', 'RESUMED_FOCUS',
-    // Interactions
-    'CLICKED', 'SELECTED', 'DESELECTED', 'TOGGLED', 'EXPANDED', 'COLLAPSED',
-    // Lab/Investigation actions
-    'ORDERED_LAB', 'CANCELLED_LAB', 'VIEWED_LAB_RESULT', 'SEARCHED_LABS',
-    'FILTERED_LABS', 'LAB_RESULT_READY',
-    // Radiology / imaging actions
-    'ORDERED_IMAGING', 'CANCELLED_IMAGING', 'VIEWED_RADIOLOGY_RESULT',
-    // Medication/treatment actions
-    'ORDERED_MEDICATION', 'ADMINISTERED_MEDICATION', 'CANCELLED_MEDICATION',
-    'ORDERED_TREATMENT', 'PERFORMED_INTERVENTION', 'ORDERED_IV_FLUID',
-    'STARTED_OXYGEN', 'STOPPED_OXYGEN', 'ORDERED_NURSING',
-    'DISCONTINUED_TREATMENT', 'TREATMENT_EFFECT_STARTED',
-    'TREATMENT_EFFECT_PEAKED', 'TREATMENT_EFFECT_ENDED',
-    'CONTRAINDICATED_TREATMENT_ORDERED', 'EXPECTED_TREATMENT_GIVEN',
-    'EXPECTED_TREATMENT_MISSED',
-    // Physical examination
-    'PERFORMED_PHYSICAL_EXAM', 'OPENED_EXAM_PANEL', 'CLOSED_EXAM_PANEL',
-    // Chat interactions
-    'SENT_MESSAGE', 'RECEIVED_MESSAGE', 'COPIED_MESSAGE',
-    'EDITED_MESSAGE', 'STT_RESULT', 'STT_ERROR', 'TTS_PLAYED',
-    // Monitor interactions
-    'ADJUSTED_VITAL', 'ACKNOWLEDGED_ALARM', 'SILENCED_ALARM',
-    'ALARM_TRIGGERED', 'VIEWED_TRENDS',
-    // Instructor / case authoring
-    'EDITED_LAB_VALUE',
-    // Patient record
-    'VIEWED_PATIENT_SUMMARY', 'VIEWED_HISTORY', 'VIEWED_MEDICATIONS',
-    'VIEWED_ALLERGIES',
-    // Documentation / debrief
-    'WROTE_NOTE', 'SAVED_NOTE', 'UPDATED_NOTE', 'SUBMITTED_DEBRIEF',
-    // Settings
-    'CHANGED_SETTING', 'SAVED_SETTING', 'RESET_SETTING',
-    // Case interactions
-    'LOADED_CASE', 'VIEWED_PATIENT_INFO', 'VIEWED_RECORDS',
-    'SAVED_CASE', 'EXPORTED_CASE',
-    // Scenario interactions
-    'STARTED_SCENARIO', 'PAUSED_SCENARIO', 'RESUMED_SCENARIO',
-    'COMPLETED_SCENARIO', 'RESET_SCENARIO',
-    // Submissions
-    'SUBMITTED', 'ANSWERED', 'ATTEMPTED', 'CORRECT_ANSWER',
-    'INCORRECT_ANSWER',
-    // Emotion
-    'EXPRESSED_EMOTION',
-    // Errors
-    'ERROR_OCCURRED', 'API_ERROR', 'VALIDATION_ERROR'
-];
+// Verb whitelist lives in server/shared/learningVerbs.js — one registry
+// shared by the single-event route, the batch route, and its tests.
+
 
 // POST /api/learning-events - Log a learning event
 //
@@ -640,6 +591,7 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
 //     dropped_reasons: {
 //       cross_tenant: <int>,
 //       missing_required_field: <int>,
+//       unknown_verb: <int>,
 //       db_error: <int>,
 //     }
 //   }
@@ -650,6 +602,7 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
 
     if (!Array.isArray(events) || events.length === 0) {
         return res.status(400).json({ error: 'events array is required' });
+    }
     }
 
     // Resolve trinity once per distinct session_id.
@@ -670,6 +623,7 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
             vital_rr, vital_temp, vital_etco2, vital_rhythm,
             room
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                  ?, ?,
                   ?, ?, ?, ?, ?, ?, ?, ?,
                   ?)
     `;
@@ -680,6 +634,7 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
     const droppedReasons = {
         cross_tenant: 0,
         missing_required_field: 0,
+        unknown_verb: 0,
         db_error: 0,
     };
 
@@ -693,6 +648,16 @@ router.post('/learning-events/batch', authenticateToken, async (req, res) => {
             if (!event.verb || !event.object_type) {
                 dropped++;
                 droppedReasons.missing_required_field++;
+                continue;
+            }
+            // Same whitelist as the single-event route. These two paths used
+            // to disagree — /learning-events rejected any verb outside the
+            // hardcoded array while /batch accepted anything with a verb
+            // field, so whether an event was validated depended on which code
+            // path the client happened to take.
+            if (!LEARNING_VERBS.includes(event.verb)) {
+                dropped++;
+                droppedReasons.unknown_verb++;
                 continue;
             }
 

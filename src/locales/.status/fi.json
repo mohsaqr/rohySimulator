@@ -11878,6 +11878,27 @@
     "reviewer": null,
     "risk": "low"
   },
+  "common.room_pathology": {
+    "src": "6e5cf6c39a78",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.room_pathology_author": {
+    "src": "4bd901b6e34f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.room_pathology_sub": {
+    "src": "4f9c6c148bdd",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "common.room_radiology": {
     "src": "ac75d345f9d5",
     "state": "machine",
