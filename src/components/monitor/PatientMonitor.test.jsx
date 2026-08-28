@@ -32,7 +32,7 @@
 
 import React from 'react';
 import { describe, it, expect, beforeAll, afterEach, afterAll, beforeEach, vi } from 'vitest';
-import { act, waitFor } from '@testing-library/react';
+import { act, fireEvent, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
@@ -720,5 +720,48 @@ describe('PatientMonitor — caseEnded freezes the monitor (ISSUE-0015)', () => 
         expect(src).toMatch(/if \(!activeScenario \|\| !scenarioPlaying \|\| caseEnded\) return;/);
         expect(src).toMatch(/if \(caseEnded\) return undefined;[\s\S]*?const interval = setInterval\(\(\) => \{\s*const p = simulationParams\.current;/);
         expect(src).toMatch(/if \(isPlaying && !caseEnded\) \{/);
+    });
+});
+
+// =======================================================================
+// ISSUE-0012 — a case's alternative evolutions show up in the Scenarios tab
+// =======================================================================
+describe('PatientMonitor — scenario.alternatives (ISSUE-0012)', () => {
+    const withAlternatives = {
+        ...baseCase,
+        scenario: {
+            ...baseCase.scenario,
+            alternatives: [
+                { id: 'worse', name: 'Deteriorates into shock', description: 'BP falls', timeline: [{ time: 0, params: { hr: 90 } }, { time: 60, params: { hr: 140 } }] },
+                { id: 'better', name: 'Responds to fluids', timeline: [{ time: 0, params: { hr: 90 } }] },
+                { id: 'empty', name: 'Ignored (no frames)', timeline: [] },
+            ],
+        },
+    };
+
+    async function openScenariosTab(utils) {
+        const { findByTitle, findByRole } = utils;
+        fireEvent.click(await findByTitle(/monitor settings/i));
+        fireEvent.click(await findByRole('button', { name: /^scenarios$/i }));
+    }
+
+    it('lists each alternative with a timeline beside the case scenario; frameless ones are skipped', async () => {
+        const utils = mount({ caseData: withAlternatives, isAdmin: true });
+        await openScenariosTab(utils);
+        expect(await utils.findByText('Deteriorates into shock')).toBeTruthy();
+        expect(await utils.findByText('BP falls')).toBeTruthy();
+        expect(await utils.findByText('Responds to fluids')).toBeTruthy();
+        // Description fallback for an alternative that has none.
+        expect(await utils.findByText('Alternative evolution of this case')).toBeTruthy();
+        expect(utils.queryByText('Ignored (no frames)')).toBeNull();
+        // The case's own scenario is still there.
+        expect(await utils.findByText(/Test Case - Scenario/)).toBeTruthy();
+    });
+
+    it('a case without alternatives lists only its own scenario (no regression)', async () => {
+        const utils = mount({ isAdmin: true });
+        await openScenariosTab(utils);
+        expect(await utils.findByText(/Test Case - Scenario/)).toBeTruthy();
+        expect(utils.queryByText('Deteriorates into shock')).toBeNull();
     });
 });

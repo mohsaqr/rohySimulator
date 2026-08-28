@@ -9,6 +9,7 @@
   "bp_dia_label": "PA Dia",
   "bp_sys_label": "PA Sys",
   "build_custom_trend": "Crear Tendencia Personalizada",
+  "case_alternative_description_fallback": "Evolución alternativa de este caso",
   "case_ended_frozen": "Caso finalizado — constantes congeladas",
   "case_scenario_description_fallback": "Escenario de caso",
   "case_scenario_name": "{name} - Escenario",

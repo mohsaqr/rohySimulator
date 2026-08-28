@@ -46,6 +46,47 @@ import { LLM_PROVIDERS, defaultModelFor } from '../../services/llmCatalogue';
 import ModelSelect from './ModelSelect';
 import { friendlyLlmError } from '../../utils/llmErrorMessage';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
+
+// ---- Alternative evolutions (QA ISSUE-0012) ----
+// A case's scenario JSON may carry `alternatives: [{ id, name, description,
+// timeline, source }]`. The primary scenario can be replaced or removed
+// without losing them, and they can exist with no primary at all (an
+// instructor-triggered case). Server-side contract: cases-routes.js
+// normaliseScenarioAlternatives().
+
+/** Carry `prev.alternatives` onto `next` (or onto an empty shell when `next` is null). */
+export function keepScenarioAlternatives(prev, next) {
+    const alternatives = Array.isArray(prev?.alternatives) ? prev.alternatives : [];
+    if (alternatives.length === 0) return next;
+    return { ...(next || { enabled: true, autoStart: false, timeline: [] }), alternatives };
+}
+
+/** Resolve a Quick-Templates pick (`_db_<id>` or a built-in key) into a stored alternative. */
+export function scenarioAlternativeFromPick(value, publicScenarios) {
+    if (!value) return null;
+    if (value.startsWith('_db_')) {
+        const id = parseInt(value.replace('_db_', ''), 10);
+        const s = publicScenarios.find(x => x.id === id);
+        if (!s) return null;
+        return {
+            id: `repo_${s.id}`,
+            name: s.name,
+            description: s.description || '',
+            timeline: s.timeline,
+            source: { kind: 'repository', id: s.id, name: s.name }
+        };
+    }
+    const tmpl = SCENARIO_TEMPLATES[value];
+    if (!tmpl) return null;
+    const duration = tmpl.duration || 30;
+    return {
+        id: `tmpl_${value}`,
+        name: tmpl.name,
+        description: tmpl.description || '',
+        timeline: scaleScenarioTimeline(tmpl, duration).timeline,
+        source: { kind: 'template', id: value, duration_minutes: duration }
+    };
+}
 import { RHYTHMS, DEFAULT_RHYTHM, resolveRhythm } from '../../services/rhythms';
 import { MARITAL_STATUSES, PATIENT_GENDERS, PERSONA_TYPES } from '../../services/patientDemographics';
 import { usesSeededDefaultCourseName } from '../../services/defaultCourse';
@@ -4719,7 +4760,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                                 type="button"
                                                 onClick={() => setCaseData(prev => ({
                                                     ...prev,
-                                                    scenario: null,
+                                                    scenario: keepScenarioAlternatives(prev.scenario, null),
                                                     scenario_duration: undefined,
                                                     scenario_template: null,
                                                     scenario_from_repository: null
@@ -4749,7 +4790,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                         // If a scenario is already attached, picking a different
                                         // template silently clobbers the current timeline. Confirm
                                         // first so admins don't lose customised scenarios.
-                                        const currentlyHasScenario = !!caseData.scenario;
+                                        const currentlyHasScenario = (caseData.scenario?.timeline?.length ?? 0) > 0;
                                         if (currentlyHasScenario && val !== '_repository') {
                                             const ok = await toast.confirm(
                                                 t('confirm_replace_scenario'),
@@ -4763,7 +4804,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             }
                                         }
                                         if (val === 'none') {
-                                            setCaseData(prev => ({ ...prev, scenario_template: null, scenario: null, scenario_duration: undefined, scenario_from_repository: null }));
+                                            setCaseData(prev => ({ ...prev, scenario_template: null, scenario: keepScenarioAlternatives(prev.scenario, null), scenario_duration: undefined, scenario_from_repository: null }));
                                         } else if (val === '_repository') {
                                             // no-op — already applied via repository panel
                                         } else if (val.startsWith('_db_')) {
@@ -4772,7 +4813,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                             if (s) {
                                                 setCaseData(prev => ({
                                                     ...prev,
-                                                    scenario: { enabled: true, autoStart: false, timeline: s.timeline },
+                                                    scenario: keepScenarioAlternatives(prev.scenario, { enabled: true, autoStart: false, timeline: s.timeline }),
                                                     scenario_duration: s.duration_minutes,
                                                     scenario_template: null,
                                                     scenario_from_repository: { id: s.id, name: s.name }
@@ -4785,7 +4826,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                                 ...prev,
                                                 scenario_template: val,
                                                 scenario_duration: dur,
-                                                scenario: tmpl ? scaleScenarioTimeline(tmpl, dur) : null,
+                                                scenario: keepScenarioAlternatives(prev.scenario, tmpl ? scaleScenarioTimeline(tmpl, dur) : null),
                                                 scenario_from_repository: null
                                             }));
                                         }
@@ -4836,7 +4877,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                                 setCaseData(prev => ({
                                                     ...prev,
                                                     scenario_duration: duration,
-                                                    scenario: scaledScenario
+                                                    scenario: keepScenarioAlternatives(prev.scenario, scaledScenario)
                                                 }));
                                             }
                                         }}
@@ -4858,8 +4899,82 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                 </div>
                             )}
 
+                            {/* Alternative evolutions (QA ISSUE-0012) */}
+                            <div className="mt-2 bg-neutral-800/60 border border-neutral-700 rounded p-4 space-y-3">
+                                <div>
+                                    <h5 className="text-sm font-bold text-purple-300">{t('scen_alternatives_title')}</h5>
+                                    <p className="text-xs text-neutral-500 mt-1">{t('scen_alternatives_help')}</p>
+                                </div>
+                                {(caseData.scenario?.alternatives || []).length > 0 ? (
+                                    <ul className="space-y-2" data-testid="scenario-alternatives">
+                                        {caseData.scenario.alternatives.map((alt) => (
+                                            <li key={alt.id} className="flex items-center justify-between gap-3 bg-neutral-900 border border-neutral-700 rounded px-3 py-2">
+                                                <div className="min-w-0">
+                                                    <div className="text-sm text-neutral-200 truncate">{alt.name}</div>
+                                                    <div className="text-xs text-neutral-500">
+                                                        {alt.source?.kind === 'repository' ? t('scen_source_repository') : t('scen_source_builtin')}
+                                                        {' · '}
+                                                        {t('scen_alt_steps', { count: alt.timeline?.length || 0 })}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCaseData(prev => ({
+                                                        ...prev,
+                                                        scenario: keepScenarioAlternatives(
+                                                            { ...prev.scenario, alternatives: prev.scenario.alternatives.filter(a => a.id !== alt.id) },
+                                                            prev.scenario?.timeline?.length ? prev.scenario : null
+                                                        )
+                                                    }))}
+                                                    className="shrink-0 text-xs px-2 py-1 rounded border border-red-700 text-red-400 hover:bg-red-900/40 hover:text-red-300 transition-colors"
+                                                >
+                                                    {t('btn_remove')}
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-xs text-neutral-600">{t('scen_alternatives_empty')}</p>
+                                )}
+                                <select
+                                    value=""
+                                    aria-label={t('scen_add_alternative')}
+                                    onChange={(e) => {
+                                        const alt = scenarioAlternativeFromPick(e.target.value, publicScenarios);
+                                        if (!alt) return;
+                                        if ((caseData.scenario?.alternatives || []).some(a => a.id === alt.id)) {
+                                            toast.info(t('scen_alt_already_added'));
+                                            return;
+                                        }
+                                        setCaseData(prev => {
+                                            const base = prev.scenario || { enabled: true, autoStart: false, timeline: [] };
+                                            return { ...prev, scenario: { ...base, alternatives: [...(base.alternatives || []), alt] } };
+                                        });
+                                    }}
+                                    className="input-dark"
+                                >
+                                    <option value="">{t('scen_add_alternative')}</option>
+                                    {publicScenarios.length > 0 && (
+                                        <optgroup label={t('scen_public_scenarios')}>
+                                            {publicScenarios.map(s => (
+                                                <option key={s.id} value={`_db_${s.id}`}>
+                                                    {s.name}{s.category ? ` — ${s.category}` : ''}
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    )}
+                                    <optgroup label={t('scen_builtin_templates')}>
+                                        {Object.entries(SCENARIO_TEMPLATES).map(([key, template]) => (
+                                            <option key={key} value={key}>
+                                                {template.name} - {template.description}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                </select>
+                            </div>
+
                             {/* Preview */}
-                            {caseData.scenario?.timeline && (
+                            {(caseData.scenario?.timeline?.length ?? 0) > 0 && (
                                 <div className="mt-4 bg-neutral-800 border border-neutral-700 rounded p-4">
                                     <h5 className="text-sm font-bold mb-2 text-teal-300">{t('scen_timeline_preview')}</h5>
                                     <div className="space-y-2 text-xs">
@@ -4876,7 +4991,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                             )}
 
                             {/* Auto-start option */}
-                            {caseData.scenario && (
+                            {(caseData.scenario?.timeline?.length ?? 0) > 0 && (
                                 <div className="flex items-center gap-2">
                                     <input
                                         type="checkbox"

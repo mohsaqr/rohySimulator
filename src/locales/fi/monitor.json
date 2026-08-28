@@ -9,6 +9,7 @@
   "bp_dia_label": "RR diast",
   "bp_sys_label": "RR syst",
   "build_custom_trend": "Luo mukautettu trendi",
+  "case_alternative_description_fallback": "Tämän tapauksen vaihtoehtoinen kulku",
   "case_ended_frozen": "Tapaus päättynyt — vitaalit pysäytetty",
   "case_scenario_description_fallback": "Tapausskenaario",
   "case_scenario_name": "{name} – skenaario",

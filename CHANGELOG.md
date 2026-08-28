@@ -9,6 +9,26 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.67] — 2026-08-28
+
+### Added
+
+- **A case can offer alternative evolutions** (QA ISSUE-0012, from 5th-year
+  students). Besides its own scenario, a case may carry
+  `scenario.alternatives[]` — named trajectories the instructor starts from
+  the monitor's Scenarios tab or switches to mid-case. They never
+  auto-start. Authored in the case wizard's scenario step (add from the
+  repository or a built-in template, remove); the primary can be replaced
+  or removed without losing them, and a case may have alternatives with no
+  primary at all. Stored inside the existing scenario JSON, so the session
+  snapshot, export/import and case versions carry them unchanged.
+  Server-side: at most 8, name required, timeline validated and rhythms
+  canonicalised like the primary; bad input is a 400
+  (`invalid_scenario_alternatives`).
+- Not built on purpose: chaining one evolution after another, and running
+  two at once (two state timelines cannot be superimposed; overlays are what
+  treatment effects already do).
+
 ## [2.9.66] — 2026-08-28
 
 ### Added

@@ -4374,6 +4374,48 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.scen_add_alternative": {
+    "src": "ef0bb7f8bf6f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.scen_alt_already_added": {
+    "src": "2b321a77eeda",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.scen_alt_steps": {
+    "src": "962480d961b8",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.scen_alternatives_empty": {
+    "src": "d1e2537d146e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.scen_alternatives_help": {
+    "src": "821a3563bf2c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.scen_alternatives_title": {
+    "src": "7e0789bec096",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.scen_autostart": {
     "src": "a8c69aa98b76",
     "state": "machine",
@@ -16276,6 +16318,13 @@
   },
   "monitor.build_custom_trend": {
     "src": "1e56505d76de",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "monitor.case_alternative_description_fallback": {
+    "src": "411cfe7c21c6",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,

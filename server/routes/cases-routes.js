@@ -167,6 +167,13 @@ function normaliseCaseForStorage(req, res, body) {
     writeBackPatientGender(safeConfig, patientGender);
     const warnings = [];
     canonicaliseCaseRhythms(safeConfig, scenarioWithSource, warnings);
+    // QA ISSUE-0012: a case may carry alternative evolutions. Validate them
+    // on write (shape + rhythm vocabulary) so the monitor never has to.
+    const alternativesError = normaliseScenarioAlternatives(scenarioWithSource, warnings);
+    if (alternativesError) {
+        res.status(400).json({ error: alternativesError, code: 'invalid_scenario_alternatives' });
+        return null;
+    }
     logVocabularyWarnings(req, 'case', warnings);
 
     // Denormalised columns. The case editor writes the patient name to
@@ -714,6 +721,66 @@ function canonicaliseCaseRhythms(config, scenario, warnings) {
         }
     }
     canonicaliseTimelineRhythms(scenario?.timeline, warnings);
+}
+
+// ---- Alternative evolutions (QA ISSUE-0012) ----
+//
+// A case's scenario JSON may carry `alternatives: [{ id, name, description,
+// timeline, source }]` — other ways the patient can evolve. They never
+// auto-start; the instructor picks one from the monitor's Scenarios tab.
+// Nesting them inside `scenario` (rather than a new column) means the
+// session snapshot, export/import and case versions all carry them for
+// free. Stored fully resolved (timeline embedded), like the primary.
+export const MAX_SCENARIO_ALTERNATIVES = 8;
+
+/**
+ * Validate and normalise `scenario.alternatives` in place. Returns an error
+ * string (→ 400) or null. Unknown fields are dropped, ids are made unique,
+ * rhythms are canonicalised with the same warning path as the primary.
+ */
+export function normaliseScenarioAlternatives(scenario, warnings) {
+    if (!scenario || scenario.alternatives === undefined || scenario.alternatives === null) return null;
+    const raw = scenario.alternatives;
+    if (!Array.isArray(raw)) return 'scenario.alternatives must be an array';
+    if (raw.length > MAX_SCENARIO_ALTERNATIVES) {
+        return `scenario.alternatives: at most ${MAX_SCENARIO_ALTERNATIVES} alternatives per case`;
+    }
+    const seen = new Set();
+    const out = [];
+    for (let i = 0; i < raw.length; i++) {
+        const alt = raw[i];
+        if (!alt || typeof alt !== 'object') return `scenario.alternatives[${i}] is not an object`;
+        const name = typeof alt.name === 'string' ? alt.name.trim().slice(0, 120) : '';
+        if (!name) return `scenario.alternatives[${i}].name is required`;
+        if (!Array.isArray(alt.timeline) || alt.timeline.length === 0) {
+            return `scenario.alternatives[${i}].timeline must be a non-empty array`;
+        }
+        const tlError = validateScenarioTimeline(alt.timeline);
+        if (tlError) return `scenario.alternatives[${i}]: ${tlError}`;
+        const timeline = alt.timeline.map(frame => ({ ...frame }));
+        canonicaliseTimelineRhythms(timeline, warnings);
+
+        let id = typeof alt.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(alt.id) ? alt.id : `alt_${i + 1}`;
+        while (seen.has(id)) id = `${id}_${i + 1}`;
+        seen.add(id);
+
+        const entry = { id, name, timeline };
+        if (typeof alt.description === 'string' && alt.description.trim()) {
+            entry.description = alt.description.trim().slice(0, 500);
+        }
+        if (alt.source && typeof alt.source === 'object') {
+            const { kind, id: srcId, name: srcName, duration_minutes } = alt.source;
+            const source = {};
+            if (kind === 'repository' || kind === 'template') source.kind = kind;
+            if (srcId != null) source.id = srcId;
+            if (typeof srcName === 'string') source.name = srcName;
+            if (Number.isFinite(duration_minutes)) source.duration_minutes = duration_minutes;
+            if (Object.keys(source).length) entry.source = source;
+        }
+        out.push(entry);
+    }
+    scenario.alternatives = out;
+    return null;
 }
 
 /** Log every collected warning once, on the request logger. */

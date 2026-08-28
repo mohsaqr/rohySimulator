@@ -744,22 +744,36 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                timeline: scenarioSource.timeline || []
             };
 
-            // Add case scenario to list if it has a timeline
-            if (caseScenario.timeline.length > 0) {
+            // QA ISSUE-0012: alternative evolutions the case author attached.
+            // They sit in the Scenarios tab next to the case's own scenario;
+            // the instructor starts one by hand (never auto-start).
+            const alternatives = (Array.isArray(scenarioSource.alternatives) ? scenarioSource.alternatives : [])
+               .filter(alt => alt && Array.isArray(alt.timeline) && alt.timeline.length > 0)
+               .map(alt => ({
+                  id: `case_${caseData.id}_alt_${alt.id}`,
+                  name: alt.name,
+                  description: alt.description || t('case_alternative_description_fallback'),
+                  timeline: alt.timeline
+               }));
+            const caseEntries = [...(caseScenario.timeline.length > 0 ? [caseScenario] : []), ...alternatives];
+
+            // Add the case's scenarios to the list if any has a timeline
+            if (caseEntries.length > 0) {
                setScenarioList(prev => {
-                  // Remove any existing case scenario and add new one
+                  // Remove any existing case scenarios and add the new ones
                   const filtered = prev.filter(s => !s.id.startsWith('case_'));
-                  return [...filtered, caseScenario];
+                  return [...filtered, ...caseEntries];
                });
 
-               // A saved anchor for THIS session + scenario means the
-               // trajectory is already running (room switch, page refresh,
-               // or this effect's snapshot-arrival re-run) — resume it at
-               // its true position instead of restarting from t=0.
+               // A saved anchor for THIS session + one of the case's
+               // scenarios means the trajectory is already running (room
+               // switch, page refresh, or this effect's snapshot-arrival
+               // re-run) — resume it at its true position instead of
+               // restarting from t=0.
                const saved = readScenarioAnchor(sessionId);
-               if (saved && saved.scenarioId === caseScenario.id) {
+               if (saved && caseEntries.some(s => s.id === saved.scenarioId)) {
                   applyScenarioAnchor(saved);
-               } else if (scenarioSource.autoStart) {
+               } else if (scenarioSource.autoStart && caseScenario.timeline.length > 0) {
                   // Fresh auto-start: anchor to the session's server start
                   // time when we have it, so the scenario timeline and the
                   // session clock share one time base.
