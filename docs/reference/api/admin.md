@@ -38,31 +38,31 @@ model.
 | `GET` | `/api/master/search-aliases` | `(none)` | `server/routes/admin-routes.js:833` |
 | `GET` | `/api/master/vital-sign-definitions` | `(none)` | `server/routes/admin-routes.js:788` |
 | `GET` | `/api/platform-settings` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1079` |
-| `GET` | `/api/platform-settings/affect` | `authenticateToken` | `server/routes/admin-routes.js:1893` |
-| `PUT` | `/api/platform-settings/affect` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1904` |
-| `GET` | `/api/platform-settings/avatars` | `authenticateToken` | `server/routes/admin-routes.js:1969` |
-| `PUT` | `/api/platform-settings/avatars` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1989` |
-| `GET` | `/api/platform-settings/chat` | `authenticateToken` | `server/routes/admin-routes.js:1627` |
-| `PUT` | `/api/platform-settings/chat` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1642` |
+| `GET` | `/api/platform-settings/affect` | `authenticateToken` | `server/routes/admin-routes.js:1894` |
+| `PUT` | `/api/platform-settings/affect` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1905` |
+| `GET` | `/api/platform-settings/avatars` | `authenticateToken` | `server/routes/admin-routes.js:1970` |
+| `PUT` | `/api/platform-settings/avatars` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1990` |
+| `GET` | `/api/platform-settings/chat` | `authenticateToken` | `server/routes/admin-routes.js:1628` |
+| `PUT` | `/api/platform-settings/chat` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1643` |
 | `GET` | `/api/platform-settings/cohort-case-enforcement` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1144` |
 | `PUT` | `/api/platform-settings/cohort-case-enforcement` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1153` |
 | `GET` | `/api/platform-settings/language` | `(none)` | `server/routes/admin-routes.js:1221` |
 | `PUT` | `/api/platform-settings/language` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1232` |
-| `GET` | `/api/platform-settings/llm` | `authenticateToken` | `server/routes/admin-routes.js:1367` |
-| `PUT` | `/api/platform-settings/llm` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1406` |
-| `POST` | `/api/platform-settings/llm/models/detect` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1506` |
-| `POST` | `/api/platform-settings/llm/test` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1426` |
-| `GET` | `/api/platform-settings/monitor` | `(none)` | `server/routes/admin-routes.js:1590` |
-| `PUT` | `/api/platform-settings/monitor` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1604` |
-| `GET` | `/api/platform-settings/rate-limits` | `authenticateToken` | `server/routes/admin-routes.js:1543` |
-| `PUT` | `/api/platform-settings/rate-limits` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1560` |
+| `GET` | `/api/platform-settings/llm` | `authenticateToken` | `server/routes/admin-routes.js:1368` |
+| `PUT` | `/api/platform-settings/llm` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1407` |
+| `POST` | `/api/platform-settings/llm/models/detect` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1507` |
+| `POST` | `/api/platform-settings/llm/test` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1427` |
+| `GET` | `/api/platform-settings/monitor` | `(none)` | `server/routes/admin-routes.js:1591` |
+| `PUT` | `/api/platform-settings/monitor` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1605` |
+| `GET` | `/api/platform-settings/rate-limits` | `authenticateToken` | `server/routes/admin-routes.js:1544` |
+| `PUT` | `/api/platform-settings/rate-limits` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1561` |
 | `GET` | `/api/platform-settings/registration` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1169` |
 | `PUT` | `/api/platform-settings/registration` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1182` |
-| `PUT` | `/api/platform-settings/setup` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1327` |
+| `PUT` | `/api/platform-settings/setup` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1328` |
 | `GET` | `/api/platform-settings/user-fields` | `authenticateToken` | `server/routes/admin-routes.js:1018` |
 | `PUT` | `/api/platform-settings/user-fields` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1040` |
-| `GET` | `/api/platform-settings/voice` | `authenticateToken` | `server/routes/admin-routes.js:1689` |
-| `PUT` | `/api/platform-settings/voice` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1735` |
+| `GET` | `/api/platform-settings/voice` | `authenticateToken` | `server/routes/admin-routes.js:1690` |
+| `PUT` | `/api/platform-settings/voice` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1736` |
 | `GET` | `/api/sessions/:sessionId/notes` | `authenticateToken` | `server/routes/admin-routes.js:94` |
 | `POST` | `/api/sessions/:sessionId/notes` | `authenticateToken` | `server/routes/admin-routes.js:72` |
 | `GET` | `/api/setup/status` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1252` |

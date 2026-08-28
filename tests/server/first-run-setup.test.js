@@ -137,6 +137,25 @@ describe('first-run setup backend', () => {
             expect(typeof status.oyon.enabled).toBe('boolean');
             expect(status.affect.enabled).toBe(false);
         });
+
+        // Regression lock: ISSUE-0014 — the wizard's Emotion-capture pill read
+        // oyon_settings raw (no row → "Off") while the step body read through
+        // ensureSettings() (lazy default → checkbox ON). On a tenant that has
+        // never saved Oyon settings the two disagreed until the first toggle.
+        it('reports emotion capture ON for a tenant with no oyon_settings row (the lazy default)', async () => {
+            const db = await openDb(server.dbPath);
+            try {
+                await pRun(db, 'DELETE FROM oyon_settings WHERE tenant_id = ?', ['1']);
+            } finally {
+                await closeDb(db);
+            }
+            const res = await admin('/api/setup/status');
+            expect(res.status).toBe(200);
+            const status = await res.json();
+            // The column default (migration 0011) and the lazily-inserted row
+            // both say ON; the pill must say the same thing the checkbox does.
+            expect(status.oyon.enabled).toBe(true);
+        });
     });
 
     describe('/platform-settings/setup (completion flag)', () => {

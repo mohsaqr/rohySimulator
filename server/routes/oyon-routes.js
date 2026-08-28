@@ -8,6 +8,7 @@ import { authenticateToken, hasRoleAtLeast, requireAdmin, ROLE_RANKS } from '../
 import { dbAll, dbGet, dbRun, logAuditAsync, redactRow, tenantId } from './_helpers.js';
 import { logger } from '../logger.js';
 import { rejectionMiddleware, getStats as getRejectionStats } from './oyon-rejection-counter.js';
+import { DEFAULT_RUNTIME, ensureSettings } from '../lib/oyonSettings.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,25 +59,6 @@ function consentCoversModality(consent, modality) {
 }
 const MAX_EMOTION_EVENT_JSON_LENGTH = 20_000;
 const POST_SESSION_CAPTURE_GRACE_MS = 24 * 60 * 60 * 1000;
-
-// Runtime defaults match the hard-coded values previously baked into the
-// frontends. Migration 0012 stamps the same defaults onto oyon_settings, so
-// these are only used if the migration hasn't run yet (defensive).
-const DEFAULT_RUNTIME = {
-    model_profile: 'hse-emotion-mtl',
-    // 500ms ≈ 2 Hz. Earlier we tried 333ms (3Hz) but inference + ONNX
-    // preprocessing run on the React main thread (no app-level worker —
-    // see HANDOFF.md, MediaPipe + module workers don't compose cleanly),
-    // so 3Hz stalls the simulator UI on mid-tier hardware. 500ms keeps the
-    // pill responsive without monopolising the main thread. Admins can
-    // tune per tenant in Settings → Oyon → Capture engine.
-    sample_interval_ms: 500,
-    window_ms: 10000,
-    min_valid_frames: 3,
-    smoothing_alpha: 0.28,
-    min_hold_ms: 3000,
-    min_switch_confidence: 0.5,
-};
 
 const ALLOWED_MODEL_PROFILES = new Set([
     'hse-emotion-mtl',
@@ -778,34 +760,6 @@ router.get('/admin/live', authenticateToken, async (req, res) => {
     oyonLog.debug('admin live read', { user_id: req.user.id, returned: rows.length });
     res.json({ records: rows.map(hydrateRecord) });
 });
-
-async function ensureSettings(currentTenantId) {
-    // Insert ALL runtime fields explicitly. Earlier code relied on the SQL
-    // column DEFAULTs from migration 0012, which still has 1000ms baked in.
-    // Migration 0013 only patched existing rows, so any tenant created
-    // afterwards would silently regress to the laggy 1Hz default. Sourcing
-    // from DEFAULT_RUNTIME here keeps fresh-tenant behaviour aligned with
-    // the runtime contract regardless of what the SQL DEFAULTs say.
-    await dbRun(
-        `INSERT INTO oyon_settings (
-            tenant_id,
-            model_profile, sample_interval_ms, window_ms, min_valid_frames,
-            smoothing_alpha, min_hold_ms, min_switch_confidence
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(tenant_id) DO NOTHING`,
-        [
-            String(currentTenantId),
-            DEFAULT_RUNTIME.model_profile,
-            DEFAULT_RUNTIME.sample_interval_ms,
-            DEFAULT_RUNTIME.window_ms,
-            DEFAULT_RUNTIME.min_valid_frames,
-            DEFAULT_RUNTIME.smoothing_alpha,
-            DEFAULT_RUNTIME.min_hold_ms,
-            DEFAULT_RUNTIME.min_switch_confidence,
-        ]
-    );
-    return dbGet('SELECT * FROM oyon_settings WHERE tenant_id = ?', [String(currentTenantId)]);
-}
 
 async function resolveSession(req, rawSessionId) {
     if (!rawSessionId) return null;

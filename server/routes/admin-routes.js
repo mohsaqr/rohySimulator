@@ -19,6 +19,7 @@ import {
 } from '../redaction.js';
 import { logger } from '../logger.js';
 import { DEFAULT_TURNAROUND_MINUTES } from '../lib/turnaround.js';
+import { ensureSettings } from '../lib/oyonSettings.js';
 import { TTS_PROVIDERS, voiceMatchesLanguage } from '../shared/voiceIdentity.js';
 import { LANGUAGES } from '../shared/languages.js';
 import {
@@ -39,7 +40,6 @@ import {
 import {
     auditSuccess,
     dbAll,
-    dbGet,
     redactAuditSetting,
     redactRows,
     REGISTRATION_MODES,
@@ -1279,10 +1279,11 @@ router.get('/setup/status', authenticateToken, requireAdmin, async (req, res) =>
         ]));
         const defaultCase = cases.find(c => c.is_default) || null;
 
-        const oyonRow = await dbGet(
-            'SELECT emotion_capture_enabled FROM oyon_settings WHERE tenant_id = ?',
-            [String(tenantId(req))]
-        );
+        // ISSUE-0014: read through ensureSettings() — the same lazy-default
+        // path GET /addons/oyon/settings uses — so the wizard's sidebar pill
+        // and its checkbox can never disagree on a tenant that has not
+        // saved Oyon settings yet.
+        const oyonRow = await ensureSettings(tenantId(req));
 
         res.json({
             setup_completed: setupCompleted === 'true',

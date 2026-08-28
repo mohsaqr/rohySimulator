@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.64] — 2026-08-28
+
+### Fixed
+
+- **First-run wizard: the Emotion-capture pill said "Off" while its checkbox
+  was ticked** (QA ISSUE-0014). The tenant's `oyon_settings` row is created
+  lazily by the first reader; the wizard sidebar read the table raw (no row
+  → Off) while the step body read through `ensureSettings()` (inserts the
+  default → On). The two only agreed after one toggle. `/setup/status` now
+  reads through the same `ensureSettings()`, which moved to
+  `server/lib/oyonSettings.js` so it is reachable when the Oyon router is
+  not loaded (`OYON_ENABLED` unset). Regression lock in
+  `tests/server/first-run-setup.test.js`.
+- `docs/reference/**` regenerated (line-number drift in `admin-routes.js`).
+
 ## [2.9.63] — 2026-08-28
 
 ### Fixed
