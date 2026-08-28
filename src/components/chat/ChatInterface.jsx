@@ -209,7 +209,7 @@ function notifySubstitutionOnce(toast, t, r) {
     toast?.info?.(t('voice_default_not_configured', { voice: r.file }));
 }
 
-export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, currentVitals, personaRefreshCounter = 0, signalCapture = null }) {
+export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, currentVitals, personaRefreshCounter = 0, signalCapture = null, caseEnded = false }) {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [sessionId, setSessionId] = useState(null);
@@ -2082,7 +2082,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         <button
                             type="button"
                             onClick={startVoiceTurn}
-                            disabled={loading || !sttSupported || speaking}
+                            disabled={loading || !sttSupported || speaking || caseEnded}
                             className={`w-full py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
                                 listening
                                     ? 'bg-green-600 hover:bg-green-500 text-white'
@@ -2131,8 +2131,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                             ref={setComposerEl}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            disabled={loading || (activeTab !== 'patient' && !agentStatus?.canChat)}
+                            disabled={caseEnded || loading || (activeTab !== 'patient' && !agentStatus?.canChat)}
                             placeholder={
+                                caseEnded ? t('case_ended_placeholder') :
                                 loading ? t('waiting_for_response') :
                                 activeTab !== 'patient' && !agentStatus?.canChat ? t('agent_not_available', { name: currentAgent?.name }) :
                                 t('message_placeholder', { name: activeTab === 'patient' ? patientName : currentAgent?.name })
@@ -2141,7 +2142,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         />
                         <button
                             type="submit"
-                            disabled={loading || !input.trim() || (activeTab !== 'patient' && !agentStatus?.canChat)}
+                            disabled={caseEnded || loading || !input.trim() || (activeTab !== 'patient' && !agentStatus?.canChat)}
                             className="absolute right-2 top-2 p-1.5 bg-blue-600 rounded-md hover:bg-blue-500 transition-colors text-white disabled:bg-neutral-700 disabled:text-neutral-500"
                         >
                             <Send className="w-4 h-4" />

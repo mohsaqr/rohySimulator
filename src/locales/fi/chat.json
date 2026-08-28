@@ -9,6 +9,7 @@
   "agent_status_on_the_way": "Tulossa...",
   "call_agent": "Kutsu {name}",
   "calling_agent": "Kutsutaan {name}…",
+  "case_ended_placeholder": "Tämä tapaus on päättynyt — avaa purkukeskustelu tarkastellaksesi sitä",
   "chat_with_agent": "Keskustele – {name}",
   "click_to_talk": "Napsauta puhuaksesi – {name}",
   "cloud_tts_missing_api_key": "Pilvipohjaisen puhesynteesin API-avain puuttuu. Aseta se ylläpidossa → Ääni ja avatar.",

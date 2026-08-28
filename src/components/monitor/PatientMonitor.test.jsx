@@ -32,7 +32,7 @@
 
 import React from 'react';
 import { describe, it, expect, beforeAll, afterEach, afterAll, beforeEach, vi } from 'vitest';
-import { waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
@@ -502,7 +502,7 @@ describe('PatientMonitor — Stage-5 override guard (covers all mutable scenario
             'utf8'
         );
         // Engine loop is a setInterval inside the scenarioPlaying useEffect.
-        expect(src).toMatch(/if\s*\(!activeScenario\s*\|\|\s*!scenarioPlaying\)\s*return/);
+        expect(src).toMatch(/if\s*\(!activeScenario\s*\|\|\s*!scenarioPlaying\s*\|\|\s*caseEnded\)\s*return/);
         expect(src).toMatch(/setInterval\(\(\)\s*=>/);
         // Frame interpolation reads timeline frame `toFrame` (or fromFrame)
         // and pushes through filterOverrides → setParams.
@@ -675,5 +675,50 @@ describe('PatientMonitor — rhythm aliases resolve to canonical ids', () => {
         expect(src).toMatch(/setRhythm\(canonicalRhythm\(last\.rhythm\)\)/);
         // The label map is the shared one, so every id the buttons render is translated.
         expect(src).toMatch(/const RHYTHM_KEYS = RHYTHM_LABEL_KEYS/);
+    });
+});
+
+// =======================================================================
+// ISSUE-0015 — an ended case must not keep "living" on the monitor
+// =======================================================================
+// Regression lock: after End & Debrief → "Back to patient", the monitor used
+// to keep ticking (session clock, scenario engine, jitter, waveforms) because
+// it only knew `sessionId`, which the host keeps for the debrief. It now
+// takes `caseEnded` / `caseEndedAt` and holds its last frame.
+describe('PatientMonitor — caseEnded freezes the monitor (ISSUE-0015)', () => {
+    it('session clock stops at caseEndedAt and shows the "case ended" badge', async () => {
+        // Fake Date too, so the un-fixed clock (which recomputes from
+        // Date.now() every second) would visibly advance.
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame', 'Date'] });
+        const t0 = Date.now();
+        const { getByTestId, findByText } = mount({
+            sessionId: null,
+            caseEnded: true,
+            caseEndedAt: t0 + 3000,
+        });
+        expect(await findByText('0:03')).toBeTruthy();
+        expect(getByTestId('monitor-case-ended')).toBeTruthy();
+
+        await act(async () => { vi.advanceTimersByTime(5000); });
+        // Still 0:03 — the clock did not follow Date.now() past the end.
+        expect(await findByText('0:03')).toBeTruthy();
+    });
+
+    it('does not render the badge, and keeps ticking, while the case is live', async () => {
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame', 'Date'] });
+        const { queryByTestId, findByText } = mount({ sessionId: null });
+        expect(await findByText('0:00')).toBeTruthy();
+        expect(queryByTestId('monitor-case-ended')).toBeNull();
+        await act(async () => { vi.advanceTimersByTime(4000); });
+        expect(await findByText('0:04')).toBeTruthy();
+    });
+
+    it('source contract: scenario engine, jitter and waveform loops all gate on caseEnded', async () => {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const src = fs.readFileSync(path.resolve(__dirname, 'PatientMonitor.jsx'), 'utf8');
+        expect(src).toMatch(/if \(!activeScenario \|\| !scenarioPlaying \|\| caseEnded\) return;/);
+        expect(src).toMatch(/if \(caseEnded\) return undefined;[\s\S]*?const interval = setInterval\(\(\) => \{\s*const p = simulationParams\.current;/);
+        expect(src).toMatch(/if \(isPlaying && !caseEnded\) \{/);
     });
 });

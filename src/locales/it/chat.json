@@ -9,6 +9,7 @@
   "agent_status_on_the_way": "In arrivo...",
   "call_agent": "Chiama {name}",
   "calling_agent": "Chiamata a {name}…",
+  "case_ended_placeholder": "Questo caso è concluso — apri il debriefing per rivederlo",
   "chat_with_agent": "Chatta con {name}",
   "click_to_talk": "Clicca per parlare con {name}",
   "cloud_tts_missing_api_key": "Manca la chiave API per il TTS cloud. Impostala in admin → Voce e Avatar.",

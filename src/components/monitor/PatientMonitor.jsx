@@ -315,7 +315,13 @@ const canonicalRhythm = (value) => {
    return resolved.ok && resolved.value ? resolved.value : value;
 };
 
-export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdmin: isAdminProp = false }) {
+// `caseEnded` / `caseEndedAt` (ISSUE-0015): once the learner has ended the
+// case, every live loop below (session clock, scenario engine, vitals
+// jitter, waveform animation) holds its last frame. `sessionId` is kept by
+// the host so the debrief can still query the session — ending the CASE and
+// ending the SESSION are different lifecycles, and the monitor follows the
+// former.
+export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdmin: isAdminProp = false, caseEnded = false, caseEndedAt = null }) {
    const { t } = useTranslation('monitor');
    const toast = useToast();
    const { isAdmin: isAdminAuth } = useAuth();
@@ -470,12 +476,16 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    // increments), so a remount or refresh resumes at the true elapsed time.
    useEffect(() => {
       const compute = () => Math.max(0, Math.floor(
-         (Date.now() - (sessionStartMsRef.current ?? mountStartMsRef.current)) / 1000
+         ((caseEnded && caseEndedAt != null ? caseEndedAt : Date.now())
+            - (sessionStartMsRef.current ?? mountStartMsRef.current)) / 1000
       ));
       setElapsedTime(compute());
+      // Case over → the clock shows the elapsed time at the moment of ending
+      // and stops. No interval, nothing to tick.
+      if (caseEnded) return undefined;
       const timer = setInterval(() => setElapsedTime(compute()), 1000);
       return () => clearInterval(timer);
-   }, [sessionId]);
+   }, [sessionId, caseEnded, caseEndedAt]);
 
    // Load platform settings for monitor visibility
    useEffect(() => {
@@ -841,7 +851,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
    // Engine Loop
    useEffect(() => {
-      if (!activeScenario || !scenarioPlaying) return;
+      if (!activeScenario || !scenarioPlaying || caseEnded) return;
 
       const interval = setInterval(() => {
          setScenarioTime(t => {
@@ -978,7 +988,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
       }, 1000); // Update scenario logic every second (interpolation granularity)
 
       return () => clearInterval(interval);
-   }, [activeScenario, scenarioPlaying, scenarioList]);
+   }, [activeScenario, scenarioPlaying, scenarioList, caseEnded]);
    // Deliberately omits params/conditions/rhythm: the engine reads them via
    // refs (simulationParams, conditionsRef) so the interval stays stable.
 
@@ -987,6 +997,9 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
       // Jitter only if NOT in a critical arrested state (though noise might exist)
       // If scenario is driving, we still want jitter ON TOP of the scenario path?
       // Yes, scenario sets the "Target" params, this loop adds noise to "Display".
+
+      // Case over → hold the last displayed values; no jitter, no drift.
+      if (caseEnded) return undefined;
 
       const interval = setInterval(() => {
          const p = simulationParams.current;
@@ -1038,7 +1051,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
       }, 2000);
       return () => clearInterval(interval);
-   }, [rhythm]); // Restart if Rhythm changes
+   }, [rhythm, caseEnded]); // Restart if Rhythm changes
 
 
 
@@ -1107,7 +1120,9 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
          const dt = time - lastTime;
          lastTime = time;
 
-         if (isPlaying) {
+         // Case over → the traces hold their last frame (a frozen monitor
+         // reads as "ended"; a scrolling flat line reads as "dead").
+         if (isPlaying && !caseEnded) {
             updateSimulation(dt);
             drawWaveforms();
          }
@@ -1117,7 +1132,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
       animationId = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(animationId);
-   }, [isPlaying, params, rhythm, conditions]);
+   }, [isPlaying, params, rhythm, conditions, caseEnded]);
 
    // --- Physics Update ---
    // Drives the simulation with a fixed-timestep accumulator at SAMPLE_RATE_HZ
@@ -1360,6 +1375,14 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
             <div aria-hidden="true" style={{ width: 'var(--oyon-pill-w, 0px)' }} />
 
             <div className="flex items-center gap-3 justify-self-end">
+               {caseEnded && (
+                  <span
+                     data-testid="monitor-case-ended"
+                     className="inline-flex items-center px-2 py-1 rounded-md bg-neutral-800 border border-neutral-600 text-[11px] font-semibold uppercase tracking-wide text-amber-300"
+                  >
+                     {t('case_ended_frozen')}
+                  </span>
+               )}
                {/* Session Timer */}
                {monitorSettings.showTimer && (
                   <div className="text-center mr-2 px-3 py-1 bg-neutral-800 rounded-lg">

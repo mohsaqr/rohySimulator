@@ -226,7 +226,7 @@ describe('DiscussionScreen — component contract', () => {
         expect(avatar.getAttribute('data-patient-id')).toBe('d-7');
     });
 
-    it('CONTRACT 5: "Back to Cases" button calls the onClose prop (the close affordance)', async () => {
+    it('CONTRACT 5: "Back to patient" button calls the onClose prop (the close affordance)', async () => {
         fetchDiscussantForCase.mockResolvedValue(makeDiscussant());
         const onClose = vi.fn();
 
@@ -234,7 +234,9 @@ describe('DiscussionScreen — component contract', () => {
             <DiscussionScreen sessionId="sess-1" activeCase={ACTIVE_CASE} onClose={onClose} />
         );
 
-        const back = await screen.findByRole('button', { name: /back to cases/i });
+        // ISSUE-0015: the button goes back to the patient room, not to a case list —
+        // it is labelled for where it actually leads.
+        const back = await screen.findByRole('button', { name: /back to patient/i });
         fireEvent.click(back);
         expect(onClose).toHaveBeenCalledTimes(1);
     });

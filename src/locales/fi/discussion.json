@@ -1,7 +1,7 @@
 {
   "age_y": "{age} v",
   "age_years": "{age} vuotta",
-  "back_to_cases": "Takaisin tapauksiin",
+  "back_to_patient": "Takaisin potilaan luo",
   "case_debrief": "Tapauksen jälkipuinti",
   "case_debrief_summary": "Tapauksen jälkipuinnin yhteenveto",
   "chief_complaint": "Tulosyy",

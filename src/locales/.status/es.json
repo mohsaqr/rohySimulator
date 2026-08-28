@@ -11059,6 +11059,13 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "chat.case_ended_placeholder": {
+    "src": "9c6d1016f6c6",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "chat.chat_with_agent": {
     "src": "d9bba8318ccf",
     "state": "machine",
@@ -12088,8 +12095,8 @@
     "reviewer": null,
     "risk": "low"
   },
-  "discussion.back_to_cases": {
-    "src": "5a1c16c3b39c",
+  "discussion.back_to_patient": {
+    "src": "3b8a791c298e",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -16262,6 +16269,13 @@
   },
   "monitor.build_custom_trend": {
     "src": "1e56505d76de",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "monitor.case_ended_frozen": {
+    "src": "8a06624dcb0f",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,

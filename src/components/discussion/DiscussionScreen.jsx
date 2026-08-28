@@ -133,7 +133,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                         onClick={onClose}
                         className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm flex items-center gap-1.5 transition-colors border border-slate-700"
                     >
-                        <ArrowLeft className="w-4 h-4" /> {t('back_to_cases')}
+                        <ArrowLeft className="w-4 h-4" /> {t('back_to_patient')}
                     </button>
                     <div className="flex items-center gap-2 text-sm min-w-0">
                         <GraduationCap className="w-5 h-5 shrink-0 text-indigo-400" />

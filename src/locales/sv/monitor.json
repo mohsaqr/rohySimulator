@@ -9,6 +9,7 @@
   "bp_dia_label": "BT diast.",
   "bp_sys_label": "BT syst.",
   "build_custom_trend": "Skapa anpassad trend",
+  "case_ended_frozen": "Fallet avslutat — vitalparametrar frysta",
   "case_scenario_description_fallback": "Fallscenario",
   "case_scenario_name": "{name} - scenario",
   "clear_flags": "Rensa flaggor",

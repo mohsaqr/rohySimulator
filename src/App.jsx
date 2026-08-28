@@ -128,6 +128,10 @@ function MainApp() {
    // case as closed (the End button hides itself) and DiscussionScreen
    // renders its calm post-debrief strip. Cleared when a new case loads.
    const [caseEnded, setCaseEnded] = useState(false);
+   // Wall-clock instant the case was ended (ms). PatientMonitor freezes its
+   // session clock at this value instead of Date.now(), so "Back to patient"
+   // from the debrief shows the elapsed time AT the end, not end + debrief.
+   const [caseEndedAt, setCaseEndedAt] = useState(null);
    const [showEndConfirm, setShowEndConfirm] = useState(false);
    const [showHelpCenter, setShowHelpCenter] = useState(false);
    const showExamination = currentRoom === 'examination';
@@ -584,6 +588,7 @@ function MainApp() {
       notifications.ackAll?.();
       setShowEndConfirm(false);
       setCaseEnded(true);
+      setCaseEndedAt(Date.now());
       navigateToRoom('consultant');
    };
 
@@ -606,6 +611,7 @@ function MainApp() {
       setActiveCase(caseData);
       setSessionId(null); // Will be set by ChatInterface when session starts
       setCaseEnded(false);
+      setCaseEndedAt(null);
       setShowFullPageSettings(false);
       // Log case loaded event
       EventLogger.caseLoaded(caseData?.id, caseData?.name);
@@ -1098,6 +1104,7 @@ function MainApp() {
                      activeCase={activeCase}
                      onSessionStart={setSessionId}
                      restoredSessionId={sessionId}
+                     caseEnded={caseEnded}
                      personaRefreshCounter={personaRefreshCounter}
                      signalCapture={signalCapture}
                   />
@@ -1109,11 +1116,16 @@ function MainApp() {
          {/* Right Column (Monitor) - Remaining width (remaining height when
              stacked; the 600px floor is a side-by-side constraint only). */}
          <div className="flex-1 min-h-0 lg:h-full lg:min-w-[600px] bg-black relative">
+            {/* ISSUE-0015: the monitor must know the case is over — "Back to
+                patient" from the debrief lands here, and a still-ticking clock
+                and drifting vitals read as a case that never ended. */}
             <PatientMonitor
                caseParams={activeCase?.config}
                caseData={activeCase}
                sessionId={sessionId}
                isAdmin={isAdmin()}
+               caseEnded={caseEnded}
+               caseEndedAt={caseEndedAt}
             />
          </div>
 

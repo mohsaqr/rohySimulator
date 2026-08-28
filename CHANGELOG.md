@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.65] — 2026-08-28
+
+### Fixed
+
+- **An ended case kept "living" on the monitor** (QA ISSUE-0015). After
+  End & Debrief → back to the patient room, the session clock, scenario
+  engine, vitals jitter and waveforms all kept running, because
+  `PatientMonitor` derived "alive" from `sessionId`, which the host keeps
+  so the debrief can query it. The monitor now takes `caseEnded` /
+  `caseEndedAt`: the clock freezes at the instant the case ended, every
+  loop holds its last frame, and a "Case ended — vitals frozen" badge
+  says so. The chat composer and mic are disabled with an "ended"
+  placeholder.
+- The debrief's "Back to Cases" button is now **"Back to patient"** — it
+  returns to the patient room; there was never a case list behind it.
+
 ## [2.9.64] — 2026-08-28
 
 ### Fixed

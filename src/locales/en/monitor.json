@@ -9,6 +9,7 @@
   "bp_dia_label": "BP Dia",
   "bp_sys_label": "BP Sys",
   "build_custom_trend": "Build Custom Trend",
+  "case_ended_frozen": "Case ended — vitals frozen",
   "case_scenario_description_fallback": "Case scenario",
   "case_scenario_name": "{name} - Scenario",
   "clear_flags": "Clear Flags",

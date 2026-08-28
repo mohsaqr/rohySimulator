@@ -1,7 +1,7 @@
 {
   "age_y": "{age} y",
   "age_years": "{age} years",
-  "back_to_cases": "Back to Cases",
+  "back_to_patient": "Back to patient",
   "case_debrief": "Case Debrief",
   "case_debrief_summary": "Case Debrief Summary",
   "chief_complaint": "Chief complaint",

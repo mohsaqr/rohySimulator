@@ -1,7 +1,7 @@
 {
   "age_y": "{age} y",
   "age_years": "{age} años",
-  "back_to_cases": "Volver a casos",
+  "back_to_patient": "Volver al paciente",
   "case_debrief": "Informe de caso",
   "case_debrief_summary": "Resumen del informe del caso",
   "chief_complaint": "Motivo de consulta",

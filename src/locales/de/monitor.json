@@ -9,6 +9,7 @@
   "bp_dia_label": "Blutdruck dia.",
   "bp_sys_label": "Blutdruck sys.",
   "build_custom_trend": "Benutzerdefinierten Trend erstellen",
+  "case_ended_frozen": "Fall beendet — Vitalwerte eingefroren",
   "case_scenario_description_fallback": "Fallszenario",
   "case_scenario_name": "{name} – Szenario",
   "clear_flags": "Markierungen löschen",
