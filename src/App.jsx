@@ -845,6 +845,10 @@ function MainApp() {
                initialTab={settingsInitialTab}
                initialWizardStep={settingsInitialStep}
                onOpenPersonaEditor={handleOpenPersonaEditor}
+               onLogout={() => {
+                  EventLogger.log('CLICKED', 'button', { objectId: 'logout', objectName: 'Logout', component: COMPONENTS.APP });
+                  logout();
+               }}
                onCaseSaved={(savedCase) => {
                   // If the admin just saved the case that the chat tab has
                   // open, refresh the in-memory `activeCase` so edits (most

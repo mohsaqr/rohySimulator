@@ -3156,6 +3156,13 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.header_logout": {
+    "src": "d0527e4b3d65",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.header_subtitle_compact": {
     "src": "787c0ff21b77",
     "state": "machine",

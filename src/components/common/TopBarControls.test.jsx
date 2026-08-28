@@ -28,10 +28,26 @@ function setup(props = {}) {
 const openMenu = () => fireEvent.click(screen.getByRole('button', { name: 'settings_menu_aria' }));
 
 describe('TopBarControls (consolidated menu)', () => {
-    it('exposes a single trigger, not two', () => {
+    it('exposes a single menu trigger, not two', () => {
         setup();
-        // Only the one menu trigger button is rendered at rest.
-        expect(screen.getAllByRole('button')).toHaveLength(1);
+        // ONE menu trigger at rest (the old globe + gear pair is gone). The
+        // direct logout button beside it is not a menu.
+        const triggers = screen.getAllByRole('button').filter((b) => b.hasAttribute('aria-expanded'));
+        expect(triggers).toHaveLength(1);
+    });
+
+    // Regression lock: ISSUE-0018 — logout was reachable only as the last
+    // dropdown item and pilot testers could not find it.
+    it('offers logout directly in the bar, without opening the menu', () => {
+        const h = setup();
+        expect(screen.queryByRole('menu')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'logout' }));
+        expect(h.onLogout).toHaveBeenCalledTimes(1);
+    });
+
+    it('omits the direct logout button when no handler is provided', () => {
+        setup({ onLogout: undefined });
+        expect(screen.queryByRole('button', { name: 'logout' })).toBeNull();
     });
 
     it('opens one panel holding cases, settings, and the language switch', () => {

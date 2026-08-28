@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.66] — 2026-08-28
+
+### Added
+
+- **Logout is one click away on every screen** (QA ISSUE-0018). It used to
+  exist only as the last item of the top-bar dropdown, below Language,
+  Analytics and Setup, and pilot testers could not find it. A direct
+  Logout button now sits beside the menu trigger, and the full-page
+  Settings header — which has no top-bar menu at all — gets a Logout
+  button beside "Back to Simulation". The menu item stays.
+
 ## [2.9.65] — 2026-08-28
 
 ### Fixed

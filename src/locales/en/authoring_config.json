@@ -282,6 +282,7 @@
   "group_people": "People",
   "group_system": "System",
   "header_back_to_sim": "Back to Simulation",
+  "header_logout": "Logout",
   "header_subtitle_compact": "Workspace configuration",
   "header_subtitle_fullpage": "Manage cases, cohorts, agents & platform configuration",
   "header_title_compact": "Platform Configuration",

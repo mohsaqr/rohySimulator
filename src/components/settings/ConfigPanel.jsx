@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera, ScanFace, Stethoscope, RotateCcw } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera, ScanFace, Stethoscope, RotateCcw, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
@@ -384,7 +384,7 @@ function SettingsOverview({ sections, onSelect }) {
     );
 }
 
-export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'overview', initialWizardStep = 1, onOpenPersonaEditor, onCaseSaved }) {
+export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'overview', initialWizardStep = 1, onOpenPersonaEditor, onCaseSaved, onLogout }) {
     const { t } = useTranslation('authoring_config');
     const { isAdmin, user } = useAuth();
     // Educator+ gate for the Analytics tab (formerly split into an admin-only
@@ -771,14 +771,28 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     </div>
                 </div>
                 {fullPage && (
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="rohy-subtle-button px-3.5 py-2 rounded-lg flex items-center gap-2"
-                    >
-                        <X className="w-4 h-4" />
-                        {t('header_back_to_sim')}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="rohy-subtle-button px-3.5 py-2 rounded-lg flex items-center gap-2"
+                        >
+                            <X className="w-4 h-4" />
+                            {t('header_back_to_sim')}
+                        </button>
+                        {/* ISSUE-0018: the settings page has no top-bar menu,
+                            so it needs its own way out of the account. */}
+                        {onLogout && (
+                            <button
+                                type="button"
+                                onClick={onLogout}
+                                className="rohy-subtle-button px-3.5 py-2 rounded-lg flex items-center gap-2"
+                            >
+                                <LogOut className="w-4 h-4" />
+                                {t('header_logout')}
+                            </button>
+                        )}
+                    </div>
                 )}
             </div>
 

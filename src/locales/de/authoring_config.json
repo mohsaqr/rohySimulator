@@ -282,6 +282,7 @@
   "group_people": "Personen",
   "group_system": "System",
   "header_back_to_sim": "Zurück zur Simulation",
+  "header_logout": "Abmelden",
   "header_subtitle_compact": "Arbeitsbereich-Konfiguration",
   "header_subtitle_fullpage": "Fälle, Kohorten, Agenten & Plattformkonfiguration verwalten",
   "header_title_compact": "Plattformkonfiguration",

@@ -282,6 +282,7 @@
   "group_people": "Personas",
   "group_system": "Sistema",
   "header_back_to_sim": "Volver a la Simulación",
+  "header_logout": "Cerrar sesión",
   "header_subtitle_compact": "Configuración del espacio de trabajo",
   "header_subtitle_fullpage": "Gestionar casos, cohortes, agentes y configuración de la plataforma",
   "header_title_compact": "Configuración de la Plataforma",

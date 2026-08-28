@@ -108,6 +108,22 @@ export default function TopBarControls({
                <span aria-hidden="true">{currentFlag}</span>
                <ChevronDown className={`w-4 h-4 text-[var(--rohy-muted)] transition-transform ${showMenu ? 'rotate-180' : ''}`} />
             </button>
+            {/* ISSUE-0018: logout used to live ONLY as the last item of the
+                dropdown, below Language / Analytics / Setup — pilot testers
+                could not find it. A direct button sits beside the trigger;
+                the menu item stays for anyone who looks there first. */}
+            {onLogout && (
+               <button
+                  type="button"
+                  onClick={() => onLogout()}
+                  aria-label={t('logout')}
+                  title={t('logout')}
+                  className="rohy-topbar-menu-trigger text-sm ml-2"
+               >
+                  <LogOut className="w-4 h-4 text-[var(--rohy-muted)]" />
+                  <span className="max-lg:sr-only">{t('logout')}</span>
+               </button>
+            )}
             {showMenu && menuPos && panel(menuPos, 'app-main-menu',
                <>
                   {/* Cases shortcut — first item, the quick jump students want. */}
