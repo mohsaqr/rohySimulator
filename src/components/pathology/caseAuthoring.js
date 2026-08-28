@@ -23,6 +23,7 @@
 import { ANNOTATION_KINDS, annotationBounds, createAnnotation } from './annotationModel.js';
 import { objectiveCeiling } from './magnification.js';
 import { hasOpticalProfile } from './slideGeometry.js';
+import { canonicalJSONStringify } from './caseCore/canonicalJson.js';
 
 /** The synthetic id for the tissue-bounds rectangle while it is being drawn. */
 export const TISSUE_BOUNDS_ID = '__tissue_bounds__';
@@ -195,13 +196,19 @@ export function validateCase(pathologyCase, maxZoomPixelRatio = 1.1) {
         return [{ severity: 'error', path: 'case', message: 'There is no case to validate.' }];
     }
 
-    const slides = pathologyCase.slides ?? [];
-    const specimens = pathologyCase.specimens ?? [];
+    const slides = Array.isArray(pathologyCase.slides) ? pathologyCase.slides : [];
+    const specimens = Array.isArray(pathologyCase.specimens) ? pathologyCase.specimens : [];
+    if (pathologyCase.slides !== undefined && !Array.isArray(pathologyCase.slides)) {
+        add('error', 'slides', 'slides must be an array.');
+    }
+    if (pathologyCase.specimens !== undefined && !Array.isArray(pathologyCase.specimens)) {
+        add('error', 'specimens', 'specimens must be an array.');
+    }
     if (slides.length === 0 && specimens.length === 0) {
         add('error', 'slides', 'The case has no slides and no gross specimens, so the room will be empty.');
     }
 
-    duplicates(slides.map((s) => s.id)).forEach((id) => {
+    duplicates(slides.map((s) => s?.id)).forEach((id) => {
         add('error', 'slides', `Two slides share the id "${id}". Slide ids must be unique — annotations are stored against them.`);
     });
 
@@ -232,6 +239,10 @@ export function validateCase(pathologyCase, maxZoomPixelRatio = 1.1) {
 
 function validateSlide(slide, i, add) {
     const at = `slides[${i}]`;
+    if (!slide || typeof slide !== 'object' || Array.isArray(slide)) {
+        add('error', at, `Slide ${i + 1} must be an object.`);
+        return;
+    }
     if (!slide.id) add('error', `${at}.id`, 'The slide has no id.');
     if (!slide.dzi) add('error', `${at}.dzi`, `Slide "${slide.label || slide.id}" has no tile source, so nothing will render.`);
     if (!slide.label) add('warning', `${at}.label`, `Slide "${slide.id}" has no label, so the slide list shows nothing useful.`);
@@ -375,6 +386,7 @@ export function isShippable(issues) {
  * @returns {string}
  */
 export function caseToJSON(pathologyCase) {
+    if (pathologyCase?.schemaVersion) return canonicalJSONStringify(pathologyCase);
     const ordered = {
         $comment: pathologyCase.$comment
             ?? 'Authored in the Rohy pathology case editor. Coordinates are SLIDE (level-0) pixels, so they survive a re-export at any archive level.',

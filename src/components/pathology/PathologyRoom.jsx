@@ -17,6 +17,7 @@ import { createReport, snapshotFindings, submitReport } from './report.js';
 import { presetAvailability, formatObjective } from './magnification.js';
 import { isTypingTarget, resolveCommand } from './keymap.js';
 import { captureField, download } from './snapshot.js';
+import { toLegacyViewerCase } from './caseCore/viewerAdapter.js';
 
 /**
  * The Pathology room — a sixth peer alongside Patient, Examination,
@@ -56,6 +57,7 @@ import { captureField, download } from './snapshot.js';
  */
 export function PathologyRoom({
     pathologyCase,
+    rubric = null,
     eventLogger,
     examMode = false,
     onAnnotationsChange,
@@ -64,11 +66,22 @@ export function PathologyRoom({
     initialReports,
 }) {
     const logger = useMemo(() => createPathologyLogger(eventLogger), [eventLogger]);
-    const [activeSlideId, setActiveSlideId] = useState(pathologyCase?.slides?.[0]?.id ?? null);
+    const viewerCase = useMemo(() => (
+        pathologyCase?.schemaVersion ? toLegacyViewerCase(pathologyCase) : pathologyCase
+    ), [pathologyCase]);
+    const [activeSlideId, setActiveSlideId] = useState(viewerCase?.slides?.[0]?.id ?? null);
     const [readResult, setReadResult] = useState(null);
     // Microscopy and gross are peer modules within the room, mirroring the
-    // standalone workstation. A case may carry either, both, or neither.
-    const [module, setModule] = useState('microscopy');
+    // standalone workstation. A case may carry either, both, or neither — so the
+    // room opens on whichever it has. A gross-only case used to open on
+    // Microscopy, which then rendered "No slides in this case" with no tab to
+    // reach the photographs by.
+    const [module, setModule] = useState(() => (
+        (viewerCase?.slides?.length ?? 0) === 0
+        && (viewerCase?.specimens ?? []).some((entry) => (entry.images?.length ?? 0) > 0)
+            ? 'gross'
+            : 'microscopy'
+    ));
 
     // --- viewer state ------------------------------------------------------
     const [viewer, setViewer] = useState(null);
@@ -100,10 +113,10 @@ export function PathologyRoom({
     const drawControlsRef = useRef(null);
     const fileInputRef = useRef(null);
 
-    const slides = pathologyCase?.slides ?? [];
-    const specimens = pathologyCase?.specimens ?? [];
+    const slides = viewerCase?.slides ?? [];
+    const specimens = viewerCase?.specimens ?? [];
     const slide = slides.find((s) => s.id === activeSlideId) ?? null;
-    const task = pathologyCase?.task ?? null;
+    const task = viewerCase?.task ?? null;
     const answerKey = task?.answerKey ?? null;
     // Latest-value refs, synced in an effect rather than during render. Their
     // only readers are the command set and the key handler, both of which run
@@ -111,7 +124,12 @@ export function PathologyRoom({
     const slideRef = useRef(slide);
     const annotationsRef = useRef(null);
 
-    const { accept, finish, startedAt } = useReadRecorder(answerKey, logger, { slide, enabled: !!answerKey });
+    const assessment = rubric ?? answerKey;
+    const { accept, finish, startedAt } = useReadRecorder(assessment, logger, {
+        slide,
+        activityId: task?.id,
+        enabled: !!assessment,
+    });
 
     const annotations = useAnnotations({
         slide,
@@ -304,7 +322,7 @@ export function PathologyRoom({
     const addReport = useCallback(() => {
         reportSeqRef.current += 1;
         const report = createReport({
-            id: `${pathologyCase?.id ?? 'case'}-report-${reportSeqRef.current}`,
+            id: `${viewerCase?.id ?? 'case'}-report-${reportSeqRef.current}`,
             now: Date.now(),
         });
         setReports((current) => {
@@ -314,7 +332,7 @@ export function PathologyRoom({
         });
         setActiveReportId(report.id);
         setSidePanel('report');
-    }, [pathologyCase, onReportsChange]);
+    }, [viewerCase, onReportsChange]);
 
     // Typing does NOT log. A keystroke is not a learning event, and one row per
     // character would bury the activity feed for every other room in Rohy.
@@ -352,7 +370,7 @@ export function PathologyRoom({
         });
     }, [reports, finish, logger, emitReports]);
 
-    if (!pathologyCase) {
+    if (!viewerCase) {
         return (
             <p className="m-auto max-w-sm p-6 text-center text-sm text-slate-500">
                 No pathology material is attached to this case.
@@ -370,9 +388,18 @@ export function PathologyRoom({
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
             {/* Module switcher. Rendered only when the case actually carries
                 both, so a slides-only case is not given a dead tab. */}
-            {slides.length > 0 && specimens.length > 0 && (
+            {/* Shown whenever the case carries both kinds of evidence — counted by
+                photographs, not by parts, so a part with no pictures does not
+                conjure a tab that leads nowhere. */}
+            {slides.length > 0 && specimens.some((entry) => (entry.images?.length ?? 0) > 0) && (
                 <div role="tablist" aria-label="Pathology modules" className="flex shrink-0 gap-1 border-b border-slate-800/80 bg-slate-950/60 px-3 py-1.5">
-                    {[['microscopy', 'Microscopy', slides.length], ['gross', 'Gross', specimens.length]].map(([key, label, count]) => (
+                    {/* Both tabs count the same kind of thing: the evidence
+                        behind them. Counting specimen PARTS here read as
+                        "Gross 2" for two parts holding no photograph at all. */}
+                    {[
+                        ['microscopy', 'Microscopy', slides.length],
+                        ['gross', 'Gross', specimens.reduce((total, entry) => total + (entry.images?.length ?? 0), 0)],
+                    ].map(([key, label, count]) => (
                         <button
                             key={key}
                             type="button"

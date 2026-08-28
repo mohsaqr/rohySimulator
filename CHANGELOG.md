@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.69] — 2026-08-28
+
+### Fixed
+
+- **Pathology: re-vendored from the real upstream, and the record set
+  straight.** 2.9.68 said the package's upstream checkout was retired and the
+  rohy folder canonical. Wrong: upstream is
+  `~/Documents/Github/Pathoyon/rohy-pathology` (its own repo, 429 tests), and
+  rohy's `src/components/pathology/` is a **byte-identical copy of its `src/`**
+  — `INTEGRATION.md` "Copy the package". The copy was also behind: this
+  release brings in `CaseStudio` (the controlled editor `CaseAuthor` now
+  wraps), `caseCore/` (structural + semantic validation, packaging), asset
+  catalogue / slide source / thumbnail modules and previews. Verified
+  `diff -rq` clean apart from the two rohy-only files.
+- ESLint now ignores the vendored folder like it does `OyonR/` — its lint
+  posture is upstream's — while rohy's own `portability.test.js` stays linted
+  and now walks subfolders and allows `react-dom`, matching upstream's
+  `ALLOWED` list. README rewritten with the re-vendor procedure.
+
 ## [2.9.68] — 2026-08-28
 
 ### Changed

@@ -3,6 +3,7 @@ import OpenSeadragon from 'openseadragon';
 import { hasOpticalProfile, viewportSample, scaleBar } from './slideGeometry.js';
 import { fieldOfViewAreaMm2, formatObjective } from './magnification.js';
 import { formatArea } from './annotationModel.js';
+import { slideNetworkOptions, tileSourceForSlide } from './slideSource.js';
 
 /**
  * The slide viewport. Owns the OpenSeadragon instance and nothing else.
@@ -22,7 +23,9 @@ import { formatArea } from './annotationModel.js';
  *
  * Sampling is throttled by the recorder, not here: this component reports
  * every animation frame it is asked about and lets the caller decide what to
- * keep, so the sampling policy lives in exactly one place.
+ * keep, so the sampling policy lives in exactly one place. It also identifies
+ * settled frames: dwell/coverage still see the zoom spring, while analytics
+ * can describe one deliberate objective change rather than every step of it.
  *
  * The viewer instance is published upward through `onViewer` so the toolbar,
  * the keyboard map and the annotation layer all drive ONE viewer. It is passed
@@ -42,6 +45,10 @@ export function SlideCanvas({
     const hostRef = useRef(null);
     const viewerRef = useRef(null);
     const [hud, setHud] = useState(null);
+    const slideRef = useRef(slide);
+    useEffect(() => { slideRef.current = slide; }, [slide]);
+    const tileSource = tileSourceForSlide(slide);
+    const osdPrefixUrl = slide?.osdPrefixUrl ?? '/openseadragon/images/';
 
     // Held in refs so a fresh callback identity at the call site cannot make
     // this effect tear down and rebuild the viewer. That exact mistake once
@@ -58,7 +65,7 @@ export function SlideCanvas({
     useEffect(() => { startedAtRef.current = startedAt; }, [startedAt]);
 
     useEffect(() => {
-        if (!hostRef.current || !slide?.dzi) return undefined;
+        if (!hostRef.current || !tileSource) return undefined;
 
         // Rohy runs React StrictMode (src/main.jsx), which in development
         // mounts every effect, tears it down, and mounts it again. Building
@@ -79,8 +86,9 @@ export function SlideCanvas({
 
             viewer = OpenSeadragon({
                 element: hostRef.current,
-                tileSources: slide.dzi,
-                prefixUrl: slide.osdPrefixUrl ?? '/openseadragon/images/',
+                tileSources: tileSource,
+                prefixUrl: osdPrefixUrl,
+                ...slideNetworkOptions(slideRef.current),
                 showNavigator: true,
                 navigatorPosition: 'BOTTOM_RIGHT',
                 navigatorSizeRatio: 0.14,
@@ -116,7 +124,7 @@ export function SlideCanvas({
                 keyboardNavEnabled: false,
             });
 
-            const sample = () => {
+            const sample = (settled = false) => {
                 const item = viewer.world.getItemAt(0);
                 // Fires before the tile source resolves on first paint.
                 if (!item) return;
@@ -125,32 +133,34 @@ export function SlideCanvas({
                 // calibration. Report that state rather than asking
                 // opticalProfile() for a number it would rightly refuse to
                 // invent. Without this the sampler threw on every frame.
-                if (!hasOpticalProfile(slide)) { setHud({ uncalibrated: true }); return; }
+                const currentSlide = slideRef.current;
+                if (!hasOpticalProfile(currentSlide)) { setHud({ uncalibrated: true }); return; }
                 const next = viewportSample({
                     bounds: viewer.viewport.getBounds(true),
                     // Rotation-invariant scale — see viewportSample's ROTATION note.
                     boundsNoRotate: viewer.viewport.getBoundsNoRotate(true),
                     imageWidthPx: item.getContentSize().x,
                     containerWidthPx: viewer.container.clientWidth,
-                    slide,
+                    slide: currentSlide,
                     t: Date.now() - startedAtRef.current,
                 });
+                next.slideId = currentSlide.id ?? null;
                 setHud({ ...next, rotation: viewer.viewport.getRotation(), flipped: viewer.viewport.getFlip() });
-                onSampleRef.current?.(next);
+                onSampleRef.current?.(next, { settled });
             };
 
             viewer.addHandler('open', () => {
                 viewerRef.current = viewer;
                 onViewerRef.current?.(viewer);
-                sample();
+                sample(true);
             });
-            viewer.addHandler('animation', sample);
-            viewer.addHandler('animation-finish', sample);
+            viewer.addHandler('animation', () => sample(false));
+            viewer.addHandler('animation-finish', () => sample(true));
             // Rotation and flip do not animate, so they need their own trigger
             // or the HUD would go on claiming the slide is upright.
-            viewer.addHandler('rotate', sample);
-            viewer.addHandler('flip', sample);
-            viewer.addHandler('resize', sample);
+            viewer.addHandler('rotate', () => sample(true));
+            viewer.addHandler('flip', () => sample(true));
+            viewer.addHandler('resize', () => sample(true));
         }, 0);
 
         return () => {
@@ -162,7 +172,7 @@ export function SlideCanvas({
             // slide switch leaks a WebGL context.
             if (viewer) viewer.destroy();
         };
-    }, [slide]);
+    }, [slide?.id, tileSource, osdPrefixUrl]);
 
     // The navigator is a DOM element OSD owns. Toggling its display avoids
     // rebuilding the whole viewer — and losing the reader's position — just to

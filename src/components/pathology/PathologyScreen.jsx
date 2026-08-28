@@ -24,6 +24,7 @@ import { PathologyRoom } from './PathologyRoom.jsx';
  */
 export function PathologyScreen({
     pathologyCase,
+    rubric = null,
     caseTitle,
     eventLogger,
     onAnnotationsChange,
@@ -59,6 +60,7 @@ export function PathologyScreen({
 
             <PathologyRoom
                 pathologyCase={pathologyCase}
+                rubric={rubric}
                 eventLogger={eventLogger}
                 onAnnotationsChange={onAnnotationsChange}
                 initialAnnotations={initialAnnotations}

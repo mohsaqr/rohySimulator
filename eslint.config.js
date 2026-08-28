@@ -16,6 +16,12 @@ export default defineConfig([
     'dist/**',
     'frontend/**',
     'OyonR/**',
+    // Byte-identical vendored copy of ~/Documents/Github/Pathoyon/rohy-pathology/src
+    // (INTEGRATION.md "Copy the package"). Same posture as OyonR: lint is
+    // owned upstream; rohy's gate on this folder is portability.test.js,
+    // which IS rohy's and stays linted.
+    'src/components/pathology/**/*.{js,jsx}',
+    '!src/components/pathology/portability.test.js',
     'coverage/**',
     'playwright-report/**',
     'test-results/**',

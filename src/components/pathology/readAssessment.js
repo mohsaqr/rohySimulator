@@ -14,10 +14,12 @@
  * learning_events, and unit-tested without a browser.
  *
  * A "sample" is one viewport observation:
- *   { t, x, y, w, h, objective }
+ *   { t, x, y, w, h, objective, settled? }
  *   t          ms since read start (monotonic; NOT wall clock)
  *   x,y,w,h    viewport rect in SLIDE (level-0) coordinates
  *   objective  objective-equivalent magnification at that instant
+ *   settled    false while a zoom animation is still moving; omitted means
+ *              true for backward compatibility with stored reads
  *
  * TWO DIFFERENT THRESHOLDS, easily and wrongly conflated:
  *   screeningObjective  the low/high power SPLIT, for reporting how the time
@@ -39,6 +41,9 @@
 
 const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 
+/** Ignore sub-hundredth objective jitter when counting deliberate changes. */
+export const DEFAULT_OBJECTIVE_EPSILON = 0.01;
+
 function validateSamples(samples) {
     if (!Array.isArray(samples)) {
         throw new TypeError(`scoreRead(): samples must be an array, received ${typeof samples}`);
@@ -49,6 +54,14 @@ function validateSamples(samples) {
         throw new TypeError(
             `scoreRead(): sample at index ${bad} is missing a finite t/x/y/w/h/objective — `
             + `received ${JSON.stringify(samples[bad])}`,
+        );
+    }
+    const badSettled = samples.findIndex((sample) =>
+        sample.settled !== undefined && typeof sample.settled !== 'boolean');
+    if (badSettled !== -1) {
+        throw new TypeError(
+            `scoreRead(): sample at index ${badSettled} has a non-boolean settled flag — `
+            + `received ${JSON.stringify(samples[badSettled].settled)}`,
         );
     }
     // Out-of-order samples would produce negative dwell. Surface it rather
@@ -101,7 +114,7 @@ function roiOnScreen(roi, sample) {
  *
  * @param {Array} samples    viewport samples, time-ordered
  * @param {object} answerKey {roi: Array, screeningObjective?: number, coverageObjective?: number, tissueBounds?: {x,y,w,h}, coverageGrid?: number}
- * @param {object} [options] {tailMs?: number}
+ * @param {object} [options] {tailMs?: number, objectiveEpsilon?: number}
  * @returns {object} flat, one-level result:
  *   roiTotal, roiReached, roiCoverage, criticalTotal, criticalReached,
  *   totalTimeMs, screeningTimeMs, highPowerTimeMs, objectiveChanges,
@@ -120,6 +133,13 @@ export function scoreRead(samples, answerKey, options = {}) {
     const tailMs = options.tailMs ?? 0;
     if (!isFiniteNumber(tailMs) || tailMs < 0) {
         throw new TypeError(`scoreRead(): options.tailMs must be a finite non-negative number, received ${tailMs}`);
+    }
+    const objectiveEpsilon = options.objectiveEpsilon ?? DEFAULT_OBJECTIVE_EPSILON;
+    if (!isFiniteNumber(objectiveEpsilon) || objectiveEpsilon < 0) {
+        throw new TypeError(
+            'scoreRead(): options.objectiveEpsilon must be a finite non-negative number, '
+            + `received ${objectiveEpsilon}`,
+        );
     }
 
     const durations = sampleDurations(samples, tailMs);
@@ -188,8 +208,17 @@ export function scoreRead(samples, answerKey, options = {}) {
     const objectives = samples.map((s) => s.objective);
     const screeningTimeMs = samples.reduce(
         (a, s, i) => a + (s.objective < screeningObjective ? durations[i] : 0), 0);
-    const objectiveChanges = samples.reduce(
-        (a, s, i) => a + (i > 0 && s.objective !== samples[i - 1].objective ? 1 : 0), 0);
+    // Every animation frame remains in `samples` because it contributes real
+    // dwell, coverage and magnification exposure. A deliberate objective
+    // change, however, is the difference between settled endpoints — not the
+    // number of spring frames retained on the way there.
+    const settledObjectives = samples
+        .filter((sample) => sample.settled !== false)
+        .map((sample) => sample.objective);
+    const objectiveChanges = settledObjectives.reduce(
+        (count, current, index) => count + (
+            index > 0 && Math.abs(current - settledObjectives[index - 1]) > objectiveEpsilon ? 1 : 0
+        ), 0);
     const weightedObjective = samples.reduce((a, s, i) => a + s.objective * durations[i], 0);
 
     // --- spatial coverage -------------------------------------------------

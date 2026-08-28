@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createReadRecorder } from './readRecorder.js';
+import { createCaseReadRecorder, createReadRecorder } from './readRecorder.js';
 
 /**
  * React binding for createReadRecorder.
@@ -14,10 +14,13 @@ import { createReadRecorder } from './readRecorder.js';
  */
 export function useReadRecorder(answerKey, logger, opts = {}) {
     const enabled = opts.enabled ?? true;
+    const caseRubric = answerKey && Array.isArray(answerKey.activities) && typeof answerKey.caseId === 'string';
     const recorder = useMemo(
-        () => (answerKey ? createReadRecorder(answerKey, opts) : null),
+        () => (answerKey
+            ? (caseRubric ? createCaseReadRecorder(answerKey, opts) : createReadRecorder(answerKey, opts))
+            : null),
         // A new answer key is a new read; anything else must not reset it.
-        [answerKey], // eslint-disable-line react-hooks/exhaustive-deps
+        [answerKey, caseRubric], // eslint-disable-line react-hooks/exhaustive-deps
     );
     // The read clock, held as STATE rather than as a ref — and that is a
     // correctness fix, not a style preference.
@@ -53,9 +56,9 @@ export function useReadRecorder(answerKey, logger, opts = {}) {
     const onRoiReachedRef = useRef(onRoiReached);
     useEffect(() => { onRoiReachedRef.current = onRoiReached; }, [onRoiReached]);
 
-    const accept = useCallback((sample) => {
+    const accept = useCallback((sample, observation) => {
         if (!recorder || !enabled) return;
-        const { recorded, roiReached, objectiveChanged } = recorder.accept(sample);
+        const { recorded, roiReached, objectiveChanged } = recorder.accept(sample, observation);
         if (!recorded) return;
 
         if (objectiveChanged) {

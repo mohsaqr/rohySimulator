@@ -119,8 +119,8 @@ function drawScaleBar(ctx, { mppOnScreen, objective, interpolating, dpr, height 
  * megabytes.
  *
  * @param {string} filename
- * @param {string} content   a data: URL, or text when `mimeType` is given
- * @param {string} [mimeType] set for text content, e.g. 'application/geo+json'
+ * @param {string|ArrayBuffer|ArrayBufferView} content a data URL, or Blob-compatible content when `mimeType` is given
+ * @param {string} [mimeType] set for Blob content, e.g. 'application/geo+json'
  */
 export function download(filename, content, mimeType) {
     const href = mimeType

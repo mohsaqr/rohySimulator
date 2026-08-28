@@ -25,13 +25,23 @@ package exists.
 
 ## Where this package lives
 
-`src/components/pathology/` **is** the package — the separate upstream checkout
-(`~/Downloads/Path/rohy-pathology`) has been retired and this folder is
-canonical. Edit it here. What keeps it a package rather than a rohy component
-is not its location but one property, enforced by `portability.test.js` in this
-folder: every import is a sibling file or one of react / openseadragon /
-lucide-react. Rohy's services (`eventLogger`, `t`, the persistence callback)
-arrive as props through the RPS-1 adapter in `src/plugins/pathology/`.
+**Upstream is `~/Documents/Github/Pathoyon/rohy-pathology`** (its own git repo,
+its own `npm test`, `INTEGRATION.md` / `VIEWER.md` / `CASE_FORMATS.md`). This
+folder is a **byte-identical copy of its `src/`** plus two rohy-only files —
+this README and `portability.test.js`. Do not edit the package here; edit
+upstream and re-vendor:
+
+```
+rsync -rc --delete --exclude README.md --exclude portability.test.js \
+  ~/Documents/Github/Pathoyon/rohy-pathology/src/ src/components/pathology/
+diff -rq ~/Documents/Github/Pathoyon/rohy-pathology/src src/components/pathology   # only the two rohy files may differ
+```
+
+Rohy's ESLint ignores this folder (like `OyonR/`) because its lint posture is
+upstream's. Rohy's gate is `portability.test.js`: every import is a file inside
+this folder or one of react / react-dom / openseadragon / lucide-react. Rohy's
+services (`eventLogger`, `t`, the persistence callback) arrive as props through
+the RPS-1 adapter in `src/plugins/pathology/`.
 
 ---
 

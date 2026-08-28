@@ -21,6 +21,8 @@
 export { PathologyScreen } from './PathologyScreen.jsx';   // room + chrome
 export { PathologyRoom } from './PathologyRoom.jsx';       // room, chrome-free (embeds)
 export { CaseAuthor } from './CaseAuthor.jsx';             // the authoring surface
+export { CaseStudio } from './CaseStudio.jsx';             // controlled authoring surface
+export { SlideAssetCard } from './SlideAssetCard.jsx';     // catalog preview/add card
 export { SlideCanvas } from './SlideCanvas.jsx';
 export { SpecimenTray } from './SpecimenTray.jsx';
 export { AnnotationCanvas } from './AnnotationCanvas.jsx';
@@ -37,10 +39,15 @@ export { useReadRecorder } from './useReadRecorder.js';
 export * from './annotationGeometry.js';
 export * from './annotationModel.js';
 export * from './annotationStore.js';
+export * from './assetCatalog.js';
 export * from './caseAuthoring.js';
+export * from './caseCore/index.js';
+export * from './caseStudioModel.js';
+export * from './formatAdapters.js';
 export * from './geojson.js';
 export * from './grading.js';
 export * from './imageAdjustments.js';
+export * from './imageEmbed.js';
 export * from './keymap.js';
 export * from './magnification.js';
 export * from './pathologyEvents.js';
@@ -49,6 +56,10 @@ export * from './readAssessment.js';
 export * from './readRecorder.js';
 export * from './report.js';
 export * from './slideGeometry.js';
+export * from './slideSource.js';
+export * from './specimenNaming.js';
+export * from './slideThumbnail.js';
+export { SlidePreview } from './SlidePreview.jsx';
 export * from './snapshot.js';
 export * from './specimenGeometry.js';
 export * from './viewerCommands.js';
