@@ -211,8 +211,13 @@ function LLMStep({ t, toast, onChanged, tested, setTested }) {
                 </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
+                {/* ISSUE-0017: no `rohy-btn-secondary` on this button — that
+                    class paints the light-theme surface (white) under the
+                    wizard's dark-mode text colour, leaving "Detect models"
+                    unreadable. The wizard is dark-only; style it like its
+                    sibling buttons. */}
                 {!providerInfo.needsKey && (
-                    <button type="button" onClick={detectModels} className="rohy-btn-secondary inline-flex items-center gap-2 px-3 py-2 text-sm border border-neutral-700 rounded-lg text-neutral-300 hover:bg-neutral-800">
+                    <button type="button" onClick={detectModels} className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-neutral-700 rounded-lg text-neutral-300 hover:bg-neutral-800">
                         <RefreshCw className="w-4 h-4" />
                         {t('llm_detect')}
                     </button>

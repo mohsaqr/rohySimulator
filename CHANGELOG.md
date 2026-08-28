@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.63] — 2026-08-28
+
+### Fixed
+
+- **"Detect models" in the first-run wizard was unreadable** (QA ISSUE-0017).
+  The button carried `rohy-btn-secondary`, a light-theme class that paints a
+  white surface, under the dark-only wizard's grey text. It now uses the
+  same plain dark classes as its sibling buttons.
+
 ## [2.9.62] — 2026-08-26
 
 ### Fixed
