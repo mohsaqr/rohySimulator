@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.70] — 2026-08-28
+
+### Documentation
+
+- **RPS-1 1.3 draft — the document contract.** A plugin is part editor, part
+  room; 1.1 named both halves and gated them, and this draft says what travels
+  between them. New §11a: the plugin's slice of the case is one opaque JSON
+  document at `config[<id>]`, handed back whole (§8 applied to authoring),
+  capped at 64 KB, judged by the plugin's own `validate(doc)` (required, R19)
+  and `summarize(doc)` (optional); `available()` must judge the document, not
+  the key (R20); the host owes the editor half a discoverable entry point, a
+  full-page surface, persistence only through the case save, and a
+  manifest-driven server guard. Every new section is marked *(1.3, proposed)*
+  — nothing here is implemented yet, and §14 item 4 stays until it is.
+  Implementation plan: `todo/pathology-authoring-plan.md`.
+
 ## [2.9.69] — 2026-08-28
 
 ### Fixed

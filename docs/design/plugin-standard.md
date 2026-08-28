@@ -1,6 +1,11 @@
 # RPS-1 — the Rohy Plugin Standard
 
-**Status:** implemented, rohy v2.9.59 · **Spec version:** 1.1 · **Last reviewed:** 2026-08-26
+**Status:** 1.0–1.2 implemented (rohy v2.9.59–v2.9.61) · **1.3 DRAFT — specified, not yet implemented** · **Spec version:** 1.3-draft · **Last reviewed:** 2026-08-28
+
+> **Reading this document.** Sections marked *(1.3, proposed)* describe behaviour
+> rohy does not have yet. They are written before the code on purpose — the
+> same discipline as 1.1 and 1.2 — and the marker is removed in the commit that
+> lands the code. Until then, §14 item 4 remains true.
 
 A plugin is a folder that **imports nothing from rohy**, declares itself in a
 manifest, receives a host context, gets a room, and emits events into
@@ -39,6 +44,7 @@ Everything rohy used to hardcode about a room is now one of six slots.
 | **capabilities** | props hand-picked at the mount site in `App.jsx` | manifest + host grant |
 | **data** | `caseSnapshot?.config?.<name>` | `caseConfig[manifest.id]` |
 | **authoring** *(1.1, optional)* | nothing — there was no way to ship an editor | manifest + descriptor |
+| **document** *(1.3, proposed)* | hand-pasting a plugin's export into `config` | descriptor (`validate`, `summarize`) + host case store |
 
 **One id.** The manifest `id` is the room key, the verb namespace, the
 case-config key, the storage namespace and the API mount path. Four identities
@@ -101,15 +107,28 @@ export default {
 
     authorComponent: EcgAuthor,                          // optional; see §11
     authorProps: (ctx, draft) => ({ value: draft.value, onChange: draft.save }),
+
+    // 1.3, proposed — the document contract (§11a). REQUIRED when `authoring`
+    // is declared; `summarize` is optional.
+    validate: (doc) => [/* { level: 'error'|'warning', message } */],
+    summarize: (doc) => ({ count: doc?.strips?.length ?? 0, labelKey: 'ecg_strips_count' }),
 };
 ```
 
-`props()` is what lets a **vendored package keep its own prop vocabulary**.
+`props()` is what lets a **package keep its own prop vocabulary**.
 Pathology wants `pathologyCase` / `initialAnnotations`; the host only knows
 `ctx.data` and a store. The adapter bridges them and lives *outside* the
-plugin's source — so `src/components/pathology/` stays byte-identical to
-upstream. *If plugging something in requires editing it, it is not
+package's source. *If plugging something in requires editing it, it is not
 plug-and-play.*
+
+> **1.3 note — the boundary is a test, and the location is upstream.**
+> `src/components/pathology/` is a byte-identical copy of
+> `~/Documents/Github/Pathoyon/rohy-pathology/src` (re-vendored at v2.9.69).
+> Edit the package upstream and re-vendor; never in rohy. Rohy's ESLint ignores
+> the folder (as it does `OyonR/`), and rohy's own gate on it is
+> `portability.test.js`: every import is a file inside the folder or a declared
+> peer dependency, and rohy's services arrive as props (`eventLogger`, `t`, the
+> persistence callback).
 
 ---
 
@@ -139,6 +158,8 @@ far from its cause.
 | R16 | `remote` and the `remote` capability appear together or not at all | a manifest describing a proxy it never requested, or a proxy mounted onto nothing |
 | R17 | `remote.origin` is **forbidden** | a manifest choosing which host rohy's server will talk to. See §7a |
 | R18 | `remote.paths` are literal `/lower-kebab` prefixes and `remote.contentTypes` is a non-empty list of bare `type/subtype` | an unbounded proxy — an open relay onto the configured origin — and an image proxy that will happily relay `text/html` from it |
+| R19 *(1.3, proposed)* | if `authoring` is declared the descriptor MUST export `validate(doc)` | an editor whose output the host cannot judge — material every learner is assessed against, shipped unreviewable. See §11a |
+| R20 *(1.3, proposed)* | `available(ctx)` judges the **document**, never the key's presence | a saved-but-empty document lighting a room onto nothing — the exact failure `available()` exists to prevent |
 
 Roles: `guest student reviewer educator admin` (mirrors `ROLE_RANKS` in
 `server/middleware/auth.js`; a contract test asserts the copies agree).
@@ -426,10 +447,97 @@ So `PluginAuthor` takes the draft and its save callback as props: whoever
 renders it decides where authored material lives. This is §8's rule applied one
 level up — the plugin hands back its whole document, and the host owns storage.
 
-> **Rohy has no case-config write path yet.** Until it does, a host may render
-> `PluginAuthor` with no `onSave` and the plugin's own export is the way out —
-> pathology writes the case JSON to a file. That is a real limitation, not a
-> design: the seam is in place and needs a store behind it.
+> **Rohy has no case-config write path yet** (true until 1.3 lands). Until it
+> does, a host may render `PluginAuthor` with no `onSave` and the plugin's own
+> export is the way out — pathology writes the case JSON to a file. §11a
+> specifies the store behind the seam.
+
+## 11a. The document *(1.3, proposed)*
+
+A plugin is **part editor, part room**, and the thing that travels between the
+two halves is its *document*: the plugin's slice of the case config,
+`config[manifest.id]`. 1.1 named both halves and gated them; 1.3 says what the
+document is, who judges it, and what the host owes it. Nothing here *needs* to touch a
+plugin's source — pathology's `caseAuthoring.js` already exports `validateCase`
+and `isShippable`; the descriptor adapts them, exactly as `props()` adapts the
+room. (The package is edited upstream and re-vendored — see §3.2 — so the
+hooks are adapters by design; a package that ships its own validator needs no
+change to gain them.)
+
+### 11a.1 Shape
+
+- `config[<id>]` is **one JSON document**, owned by the plugin, opaque to rohy.
+  The host never reads inside it; it stores, snapshots, exports and versions it
+  as a unit. This is §8 applied to authoring: the plugin hands back the *whole*
+  document, never a patch.
+- `null` / absent means **no material**. The host does not invent the key.
+- It is text — paths, `remote:` refs (§7a), coordinates, prose. Bulk bytes live
+  behind the remote proxy, never inline. The server caps a document at
+  **64 KB serialised** (well under the 256 KB request limit, and enough for
+  hundreds of annotations); a plugin that needs more raises it *per plugin* in
+  the manifest, never globally.
+
+### 11a.2 The plugin judges its own document
+
+Two descriptor hooks, both pure functions of the document, both usable on the
+server side one day because they take no context:
+
+| hook | required | returns | the host uses it to |
+|---|---|---|---|
+| `validate(doc)` | **yes** when `authoring` is declared (R19) | `[{ level: 'error' \| 'warning', message }]` | show issues on the wizard card; refuse to mark a case *available to students* while an `error` remains — never refuse to **save** (a half-finished draft must be storable) |
+| `summarize(doc)` | no | `{ count, labelKey }` | print "3 slides" on the card; falls back to *"material present"* |
+
+`available(ctx)` keeps its role — *can this plugin serve this case?* — but R20
+makes explicit what 1.1 left implicit: it decides on the **document**, not on
+whether the key exists. Pathology's `ctx.data != null` is the anti-pattern;
+`ctx.data?.slides?.some(s => s.dzi)` is the rule.
+
+### 11a.3 What the host owes the editor half
+
+The mirror of §6–§9 for rooms. A host is conformant when all five hold:
+
+1. **Discoverable.** Every plugin in `registry.authors(role)` has an entry point
+   the case author can find without knowing the plugin exists — a *Plugins*
+   step in the case wizard, one card per plugin: label (`authoring.labelKey`),
+   `summarize()` line, `validate()` issues, **Open editor**, **Remove**
+   (confirm; sets `config[<id>] = undefined`). The step is hidden when no
+   registered plugin ships an editor.
+2. **A surface, not a panel.** The editor mounts full-page via `PluginAuthor`
+   (like the persona editor), with `value = config[<id>]` and `onSave` writing
+   the whole document back into the wizard's draft. A plugin editor is a
+   workstation — two headers and a wizard footer around it is the wrong frame.
+   The host guards **Discard** on a dirty draft.
+3. **Persistence through the case.** The document is saved by the ordinary case
+   save (`POST/PUT /cases`) and nothing else. That is what buys, with zero
+   plugin code, everything the case already has: the session snapshot
+   (`sessions.case_snapshot.config`, so a learner's room is pinned to the
+   document they started on), export/import, and case versions.
+4. **A server-side guard driven by the manifest snapshot.** For every plugin in
+   `PLUGIN_MANIFESTS` that declares `authoring`, `normaliseCaseForStorage`
+   requires `config[<id>]` to be a plain object within the size cap, and any
+   `remote:` ref inside it to start with one of `manifest.remote.paths`;
+   otherwise `400 { code: 'invalid_plugin_config' }`, never 500. Keys the
+   manifests do not claim are left alone — they are not ours to police.
+5. **Seed-once respected.** Editors seed internal state from `initial*` once
+   (§8 ordering trap). The host mounts the surface only when the document is in
+   hand and keys the mount by `(pluginId, caseId)`.
+
+### 11a.4 Lifecycle of a document
+
+```
+author opens wizard → Plugins step → Open editor
+   → PluginAuthor(value = config[id]) → onSave(whole doc) → wizard draft
+   → PUT /cases (guard: object, ≤64 KB, remote paths)      ← the ONLY write
+   → cases.config[id]
+   → POST /sessions copies it into case_snapshot.config    ← pinned per learner
+   → PluginRoom: available(ctx) judges ctx.data            ← R20
+   → learner works; ctx.store holds THEIR work, per session (§8)
+```
+
+Two documents, two stores, never confused: the **case** document is the
+author's and lives in `config[<id>]`; the **learner's** work is theirs and
+lives in `ctx.store`. 1.1 said this in prose; 1.3 makes each half of the plugin
+write to exactly one of them.
 
 ### The mount
 
@@ -481,6 +589,10 @@ acceptance test** — each of those files used to require one.
 - [ ] If it ships an editor: `authoring` block AND `authorComponent` both present,
       `authoring.minRole` stated and at least as strong as `minRole`, and its
       `labelKey` has an i18n entry (§11)
+- [ ] *(1.3)* If it ships an editor: the descriptor exports `validate(doc)` (R19),
+      `available()` judges the document not the key (R20), and its document
+      round-trips `PUT /cases` → `case_snapshot` → room with no plugin code (§11a)
+- [ ] *(1.3)* A blank document saved from the editor does NOT light the room
 
 ---
 
@@ -503,7 +615,10 @@ Ordered by how much they matter to a plugin author.
 4. **No store behind the authoring seam.** `PluginAuthor` takes `value`/`onSave`
    as props (§11) but rohy has no case-config write path, so authored material
    currently leaves via the plugin's own export. This is the gap that keeps the
-   authoring slot from being end-to-end.
+   authoring slot from being end-to-end. **Specified by 1.3 (§11a, R19, R20);
+   remove this item in the commit that implements it.** Implementation plan:
+   `todo/pathology-authoring-plan.md` (WP1 server guard + WP2 availability, then
+   WP3 wizard step + WP4 surface).
 5. **No per-tenant enable/disable** (the `oyon_settings` table is the pattern to
    copy). `minRole` and `authoring.minRole` ARE enforced — as of 1.1 in
    `registry.resolve()` and `PluginAuthor`, and as of 1.2 server-side in the
@@ -546,7 +661,9 @@ now rely on.
 
 ## 15. Reference implementation
 
-`src/plugins/pathology/` — adapts the vendored `rohy-pathology` package
-(`src/components/pathology/`, byte-identical to upstream) into a room with 23
+`src/plugins/pathology/` — adapts the `rohy-pathology` package
+(`src/components/pathology/`, a byte-identical copy of
+`~/Documents/Github/Pathoyon/rohy-pathology/src`, re-vendored v2.9.69; rohy's
+`portability.test.js` guards the boundary) into a room with 23
 verbs, 9 object types, whole-slide viewing, annotation with QuPath GeoJSON
 interchange, and read-process assessment.
