@@ -27,6 +27,14 @@ export default {
         eventLogger: ctx.eventLogger,
         examMode: ctx.session.examMode,
 
+        // Upstream used to call `useTranslation()` itself, which quietly made
+        // the package unable to render outside a host that had already mounted
+        // an i18n provider — it could only ever be a rohy component. It now
+        // takes `t` as a prop, defaulting to "use the fallback string", so
+        // this is the seam §7 always described and rohy is simply the host
+        // that happens to fill it. Nothing about the visible labels changes.
+        t: ctx.t,
+
         // The persistence seam VIEWER.md specifies: the package persists
         // nothing and hands back the whole document on every mutation, so the
         // host writes it wherever it likes without replaying a change log.

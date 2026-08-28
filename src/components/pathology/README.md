@@ -23,6 +23,18 @@ package exists.
 
 ---
 
+## Where this package lives
+
+`src/components/pathology/` **is** the package — the separate upstream checkout
+(`~/Downloads/Path/rohy-pathology`) has been retired and this folder is
+canonical. Edit it here. What keeps it a package rather than a rohy component
+is not its location but one property, enforced by `portability.test.js` in this
+folder: every import is a sibling file or one of react / openseadragon /
+lucide-react. Rohy's services (`eventLogger`, `t`, the persistence callback)
+arrive as props through the RPS-1 adapter in `src/plugins/pathology/`.
+
+---
+
 ## The seam
 
 Nothing in this package imports from Rohy. Rohy's services arrive as props:

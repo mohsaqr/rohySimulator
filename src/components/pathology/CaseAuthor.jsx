@@ -36,8 +36,12 @@ import {
  * @param {object} props
  * @param {object} [props.initialCase]  a case to edit; a blank one otherwise
  * @param {Function} [props.onChange]   (pathologyCase) => void, after each edit
+ * @param {import('react').ReactNode} [props.topBarControls]  host chrome for
+ *   the header's leading edge — a back link, a save button, whatever the
+ *   embedding app needs. The same slot `PathologyScreen` offers, and for the
+ *   same reason: the editor should not have to know it is inside anything.
  */
-export function CaseAuthor({ initialCase, onChange }) {
+export function CaseAuthor({ initialCase, onChange, topBarControls = null }) {
     const [draft, setDraft] = useState(() => initialCase ?? blankCase());
     const [activeSlideId, setActiveSlideId] = useState(initialCase?.slides?.[0]?.id ?? null);
     const [objective, setObjective] = useState(null);
@@ -123,6 +127,7 @@ export function CaseAuthor({ initialCase, onChange }) {
             aria-label="Pathology case editor"
         >
             <header className="flex shrink-0 items-center gap-3 border-b border-slate-800/80 bg-slate-950/80 px-4 py-2.5">
+                {topBarControls}
                 <span className="shrink-0 text-sm font-semibold">Case</span>
                 <input
                     type="text"

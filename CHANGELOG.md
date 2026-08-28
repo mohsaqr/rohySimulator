@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.68] — 2026-08-28
+
+### Changed
+
+- **The pathology package is now a package, and the tree is its home.**
+  `PathologyScreen` used to call `useTranslation()` — a reach for a host React
+  context that made it render only inside rohy. It now takes `t` as a prop
+  (defaulting to the fallback string); the RPS-1 adapter passes `ctx.t`, so
+  nothing visible changes. `CaseAuthor` gains the same `topBarControls` header
+  slot the room already had. A new `index.js` barrel is the package's public
+  surface for all three ways of consuming it (standalone app, npm dependency,
+  vendored). `portability.test.js` fails the build on any import that is not a
+  sibling file or react / openseadragon / lucide-react — the promise the
+  barrel makes, now enforced. The separate upstream checkout is retired;
+  `src/components/pathology/` is canonical (README: "Where this package lives").
+
 ## [2.9.67] — 2026-08-28
 
 ### Added

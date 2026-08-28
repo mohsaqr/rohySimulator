@@ -1,5 +1,4 @@
 import { Microscope } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 import { PathologyRoom } from './PathologyRoom.jsx';
 
 /**
@@ -10,6 +9,18 @@ import { PathologyRoom } from './PathologyRoom.jsx';
  * This wrapper exists so `PathologyRoom` stays chrome-free and therefore
  * reusable inside a lesson embed, where there is no room navigator and no
  * full-screen header.
+ *
+ * TRANSLATION IS INJECTED, NOT IMPORTED. This file used to call
+ * `useTranslation()` from react-i18next, which is a reach for a host
+ * singleton: the hook reads a React context the embedding app must have
+ * provided, so the package could not render outside Rohy at all. Taking `t` as
+ * a prop — defaulting to "use the fallback string" — makes i18n optional
+ * without making the labels worse, and it is the shape RPS-1 already hands
+ * every plugin as `ctx.t`. With this gone the package imports react,
+ * openseadragon and lucide-react, and nothing else — a guarantee
+ * `tests/portability.test.js` now enforces rather than describes.
+ *
+ * @param {Function} [props.t]  (key, fallback) => string; the host's translator
  */
 export function PathologyScreen({
     pathologyCase,
@@ -22,9 +33,8 @@ export function PathologyScreen({
     examMode = false,
     topBarControls = null,
     roomNav,
+    t = (key, fallback) => fallback,
 }) {
-    const { t } = useTranslation();
-
     return (
         <div className="flex h-screen w-screen flex-col overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-slate-100">
             <header className="flex items-center justify-between border-b border-slate-800/80 bg-slate-950/80 px-6 py-3 shadow-lg shadow-black/20 backdrop-blur">
