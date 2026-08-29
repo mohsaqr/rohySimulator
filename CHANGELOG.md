@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.81] — 2026-08-29
+
+### Fixed
+
+- **Case wizard step strip truncated every label at desktop widths.** With a
+  twelfth step (Plugins, 2.9.73) the desktop-only equal-width row shrank each
+  label to two letters — "De…", "Av…", "Sc…". The strip now wraps at every
+  width with content-sized buttons (as it already did below `xl`), so labels
+  are always readable; a second row is cheaper than an unreadable first one.
+  Hovering a step shows its full name.
+
 ## [2.9.80] — 2026-08-29
 
 ### Added

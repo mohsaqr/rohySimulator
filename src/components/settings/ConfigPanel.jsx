@@ -3783,15 +3783,16 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 </div>
 
                 {/* Clickable Step Navigation.
-                    Eleven steps do not fit one non-shrinking row on anything
-                    narrower than a desktop: `flex-1` cannot shrink a button
-                    below its label's min-content width, so on an iPad the
-                    later steps used to overflow off-screen with no way to
-                    reach them — an author who opened a middle step was
-                    cornered. Below `xl` the row wraps to as many lines as it
-                    needs and buttons size to their content; from `xl` up the
-                    original single equal-width row is unchanged. */}
-                <div className="flex flex-wrap xl:flex-nowrap gap-1">
+                    Twelve steps (Plugins arrived in 2.9.73). The row wraps at
+                    EVERY width and each button sizes to its own label. Two
+                    layouts were tried and both failed: a non-shrinking row
+                    overflowed off-screen on an iPad and cornered an author on
+                    a middle step (bug report 2.9.15), and the desktop-only
+                    equal-width row (`xl:flex-1` + truncate) collapsed every
+                    label to two letters — "De…", "Av…", "Sc…" — the moment a
+                    twelfth step existed. A second row is cheaper than an
+                    unreadable first one. */}
+                <div className="flex flex-wrap gap-1">
                     {visibleSteps.map((s, _idx) => (
                         <button
                             key={s.num}
@@ -3800,7 +3801,8 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                                 await onSave();
                                 setStep(s.num);
                             }}
-                            className={`flex-none xl:flex-1 min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${step === s.num
+                            title={s.title}
+                            className={`flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${step === s.num
                                 ? 'bg-teal-600 text-white shadow-lg shadow-teal-900/30'
                                 : step > s.num
                                     ? 'bg-green-900/30 text-green-300 hover:bg-green-900/50 border border-green-700/50'
