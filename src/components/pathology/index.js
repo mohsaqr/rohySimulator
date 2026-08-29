@@ -5,8 +5,8 @@
  *
  *   1. STANDALONE — `app/` imports from here and mounts `StandaloneApp`.
  *   2. AS A DEPENDENCY — `vite build --mode plugin` bundles this file into
- *      dist/rohy-pathology.js with react, openseadragon and lucide-react left
- *      external, so a host imports `rohy-pathology` like any other package.
+ *      dist/pathoyon.js with react, openseadragon and lucide-react left
+ *      external, so a host imports `pathoyon` like any other package.
  *   3. VENDORED — a host copies `src/` wholesale and imports the files
  *      directly, which is what Rohy does today and what RPS-1 §4 describes.
  *
@@ -46,6 +46,7 @@ export * from './caseStudioModel.js';
 export * from './formatAdapters.js';
 export * from './geojson.js';
 export * from './grading.js';
+export * from './hostDocument.js';
 export * from './imageAdjustments.js';
 export * from './imageEmbed.js';
 export * from './keymap.js';

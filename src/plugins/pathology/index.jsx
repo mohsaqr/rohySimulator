@@ -1,6 +1,13 @@
 import { manifest } from './manifest.js';
 import { PathologyScreen } from '../../components/pathology/PathologyScreen.jsx';
 import { CaseAuthor } from '../../components/pathology/CaseAuthor.jsx';
+import {
+    caseDocumentIsServable,
+    caseDocumentIssues,
+    caseDocumentSummary,
+    learnerCase,
+    readCaseDocument,
+} from '../../components/pathology/hostDocument.js';
 
 /**
  * Pathology, expressed as an RPS-1 plugin.
@@ -9,67 +16,122 @@ import { CaseAuthor } from '../../components/pathology/CaseAuthor.jsx';
  * vendored copy of the upstream package and is not touched — which is the test
  * of whether the standard is real: if plugging something in required editing
  * it, it would not be plug-and-play.
+ *
+ * Every judgement below is DELEGATED to the package rather than made here. The
+ * moment this file decides what counts as material or what counts as an error,
+ * rohy and any other host answer the same question differently, and a case that
+ * is publishable in one is not publishable in the other. The adapter's job is
+ * to rename things; upstream's `hostDocument.js` is what actually knows what a
+ * pathology case is.
  */
 export default {
     manifest,
 
     component: PathologyScreen,
 
-    // The gate, borrowed from the upstream workstation's own registry: the
-    // gross module excludes itself when a case carries no specimen record.
-    // Here, a case with no pathology material means no Pathology room in the
-    // navigator at all — rather than a room that opens onto an empty state.
-    available: (ctx) => ctx.data != null,
+    // --- the gate (RPS-1 R20) ----------------------------------------------
+    //
+    // This used to be `ctx.data != null`, which the standard now names as the
+    // anti-pattern — and it was one: a case whose document had been saved but
+    // never filled put Pathology in the navigator, and opening it showed the
+    // room's own empty state, the precise failure available() exists to
+    // prevent. The question is not "is there a key" but "is there anything a
+    // learner can look at", and only the package can answer it: a slide with a
+    // resolvable source, or a gross photograph. Either alone is a real case —
+    // a specimen photographed but not yet sectioned is normal teaching
+    // material, not a broken case.
+    //
+    // Total by construction: it cannot throw on a malformed document, so one
+    // bad row cannot take the navigator down for every other case.
+    available: (ctx) => caseDocumentIsServable(ctx.data),
+
+    // --- the document contract (RPS-1 §11a.2) ------------------------------
+    //
+    // Pure functions of the document, taking no context, so the server could
+    // run them too. `validate` is REQUIRED because this plugin declares
+    // `authoring` (R19): an editor whose output the host cannot judge ships
+    // the material every learner is assessed against, unreviewable.
+    //
+    // The host uses these to show issues on the wizard card and to refuse to
+    // mark a case available to students — never to refuse to SAVE. A
+    // half-finished case is the normal state of an unfinished one.
+    validate: (doc) => caseDocumentIssues(doc).map(({ level, message }) => ({ level, message })),
+
+    // `count` fills the plural slot; `labelKey` names the sentence rather than
+    // writing it, so the package never ships English into rohy's locales.
+    summarize: (doc) => {
+        const { count, labelKey } = caseDocumentSummary(doc);
+        return { count, labelKey };
+    },
 
     // Map the generic context onto the plugin's own prop names.
     props: (ctx, persist) => ({
-        pathologyCase: ctx.data,
+        // The LEARNER projection, not the stored document.
+        //
+        // `ctx.data` is the author's document and carries the rubric — every
+        // expected answer, every ROI, every dwell threshold. Handing it to the
+        // room would put the answer key in the browser of the person being
+        // assessed with it. `learnerCase()` returns the published projection,
+        // where protected material is absent by construction rather than
+        // filtered out afterwards. `remote:` references have already been
+        // rewritten to this plugin's proxy mount by createPluginContext, so
+        // this is the case as the viewer can actually open it.
+        pathologyCase: learnerCase(ctx.data),
+        caseTitle: readCaseDocument(ctx.data)?.manifest?.title ?? undefined,
+
         eventLogger: ctx.eventLogger,
         examMode: ctx.session.examMode,
 
         // Upstream used to call `useTranslation()` itself, which quietly made
         // the package unable to render outside a host that had already mounted
         // an i18n provider — it could only ever be a rohy component. It now
-        // takes `t` as a prop, defaulting to "use the fallback string", so
-        // this is the seam §7 always described and rohy is simply the host
-        // that happens to fill it. Nothing about the visible labels changes.
+        // takes `t` as a prop, defaulting to "use the fallback string", so this
+        // is the seam the standard always described and rohy is simply the host
+        // that fills it.
         t: ctx.t,
 
-        // The persistence seam VIEWER.md specifies: the package persists
-        // nothing and hands back the whole document on every mutation, so the
-        // host writes it wherever it likes without replaying a change log.
+        // The persistence seam: the package persists nothing and hands back the
+        // whole document on every mutation, so the host writes it wherever it
+        // likes without replaying a change log.
+        //
+        // This is the LEARNER's work and belongs in ctx.store, per session —
+        // never in the case document, which is the author's. RPS-1 §11a.4: two
+        // documents, two stores, never confused.
         initialAnnotations: persist.state.annotations ?? undefined,
         onAnnotationsChange: (slideId, annotations) => persist.save({
             annotations: { ...(persist.state.annotations ?? {}), [slideId]: annotations },
         }),
-        // Now persisted: upstream exposes the `initialReports` seed this was
-        // waiting on, so a saved report set can be read back and §8's rule
-        // ("do not persist what you cannot restore") is satisfied. The seed is
-        // read ONCE by the room, and PluginRoom holds the mount until the store
-        // load settles — otherwise the room would seed empty and the next
-        // mutation would overwrite last session's drafts with [].
         initialReports: persist.state.reports ?? undefined,
         onReportsChange: (reports) => persist.save({ reports }),
-
-        // llmService is no longer passed at all. Upstream removed the prop
-        // along with the free-text diagnosis box it existed to grade — there is
-        // no longer an answer string for a model to settle, and matching a
-        // written report against requireTerms/rejectTerms would misfire on any
-        // legitimate differential ("no evidence of malignancy" contains
-        // "malignancy"). The manifest's 'llm' request should go with it.
     }),
 
     // --- authoring ---------------------------------------------------------
 
+    // `CaseAuthor` rather than `CaseStudio`, deliberately — this is §8's
+    // ordering trap, not a preference. CaseStudio is CONTROLLED: it renders the
+    // `document` prop and expects its owner to hold that state. PluginAuthor
+    // re-renders and calls authorProps() each time, so a controlled mount needs
+    // a document that is stable across renders, and with no case-config write
+    // path yet there is nowhere stable to keep one. CaseAuthor seeds ONCE from
+    // `initialCase` and owns the document itself, which is exactly the
+    // uncontrolled shape this mount point has.
+    //
+    // When the wizard surface lands and holds the draft in its own state
+    // (todo/pathology-authoring-plan.md WP4), that owner exists and this
+    // should become a controlled CaseStudio mount.
     authorComponent: CaseAuthor,
 
-    // The draft is the plugin's slice of the case config, and `save` is
-    // whatever the host wires up. Same shape as the room's adapter: the
-    // package keeps its own prop vocabulary (`initialCase` / `onChange`) and
-    // the mapping lives out here, so src/components/pathology/ stays
-    // byte-identical to upstream.
+    // The draft is the plugin's slice of the case config; `save` is whatever the
+    // host wires up. Normalised on the way IN, so the editor opens the same way
+    // on a canonical document, a bare manifest, or a legacy flat case — and the
+    // whole canonical document, manifest AND rubric, comes back out.
+    //
+    // `undefined` rather than `null` for a new case: it means "no case", which
+    // is what makes the editor create one and hand back the canonical shape.
+    // Handing it a legacy case makes it hand a legacy case back, and that
+    // projection drops the rubric — every expected answer with it.
     authorProps: (ctx, draft) => ({
-        initialCase: draft.value ?? undefined,
+        initialCase: readCaseDocument(draft.value) ?? undefined,
         onChange: draft.save,
     }),
 };

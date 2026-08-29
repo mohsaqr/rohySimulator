@@ -104,13 +104,13 @@ export const PATHOLOGY_INTERPRETATIONS = {
  * release defines its own VIEWED_SPECIMEN, this throws at boot with the
  * colliding key rather than silently changing how existing events resolve.
  *
- * @param {object} rohyMaps  {VERB_FALLBACKS, OBJECT_OVERRIDES, DEFAULT_INTERPRETATIONS}
+ * @param {object} hostMaps  {VERB_FALLBACKS, OBJECT_OVERRIDES, DEFAULT_INTERPRETATIONS}
  * @returns {{VERB_FALLBACKS: object, OBJECT_OVERRIDES: object, DEFAULT_INTERPRETATIONS: object}}
  * @throws {Error} when any pathology key already exists in the Rohy map.
  */
-export function mergePathologyStates(rohyMaps) {
-    if (!rohyMaps || typeof rohyMaps !== 'object') {
-        throw new TypeError('mergePathologyStates(rohyMaps): expected an object of Rohy state maps');
+export function mergePathologyStates(hostMaps) {
+    if (!hostMaps || typeof hostMaps !== 'object') {
+        throw new TypeError('mergePathologyStates(hostMaps): expected an object of the host\'s state maps');
     }
     const pairs = [
         ['VERB_FALLBACKS', PATHOLOGY_VERB_FALLBACKS],
@@ -120,7 +120,7 @@ export function mergePathologyStates(rohyMaps) {
 
     const collisions = pairs.flatMap(([name, additions]) =>
         Object.keys(additions)
-            .filter((key) => Object.prototype.hasOwnProperty.call(rohyMaps[name] ?? {}, key))
+            .filter((key) => Object.prototype.hasOwnProperty.call(hostMaps[name] ?? {}, key))
             .map((key) => `${name}.${key}`));
 
     if (collisions.length > 0) {
@@ -132,6 +132,6 @@ export function mergePathologyStates(rohyMaps) {
     }
 
     return Object.fromEntries(
-        pairs.map(([name, additions]) => [name, { ...(rohyMaps[name] ?? {}), ...additions }]),
+        pairs.map(([name, additions]) => [name, { ...(hostMaps[name] ?? {}), ...additions }]),
     );
 }

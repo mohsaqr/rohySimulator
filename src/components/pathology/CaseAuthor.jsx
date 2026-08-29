@@ -15,7 +15,16 @@ export function CaseAuthor({
     onSubmitReview,
     onPublish,
 }) {
-    const canonicalInput = !!initialCase?.manifest || !!initialCase?.schemaVersion;
+    // What shape does this host speak? A host that handed us a legacy flat
+    // case gets one back, because that is the contract it was written against.
+    //
+    // A host that handed us NOTHING is starting a new case, and has no legacy
+    // expectation to honour — so it gets the canonical document. This matters:
+    // the legacy projection is lossy (it drops the rubric, which is where every
+    // expected answer and ROI lives), and a host that stored it would silently
+    // lose the assessment half of every case it created.
+    const canonicalInput = initialCase === null || initialCase === undefined
+        || !!initialCase?.manifest || !!initialCase?.schemaVersion;
     const [document, setDocument] = useState(() => toStudioDocument(initialCase));
     const outward = (next) => (canonicalInput ? next : studioReaderCase(next));
     const change = (next) => {

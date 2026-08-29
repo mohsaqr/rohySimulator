@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.71] — 2026-08-29
+
+### Changed
+
+- **Pathology reads through the document contract (RPS-1 1.3, read side).**
+  The adapter no longer decides anything about a pathology case itself; it
+  asks upstream's `hostDocument.js` (vendored with this release, package
+  renamed `pathoyon`). `available()` was the `ctx.data != null` anti-pattern
+  R20 names — a saved-but-empty document lit the room onto its own empty
+  state; it now asks `caseDocumentIsServable()`. The room is handed
+  `learnerCase(doc)`, the published projection, instead of the author's
+  document — which carried the rubric, every expected answer and ROI, into
+  the browser of the learner being assessed with it. `validate()` (R19) and
+  `summarize()` are on the descriptor for the host's wizard card; the editor
+  opens on `readCaseDocument()` so a legacy flat case comes back canonical,
+  rubric included. 16 client tests.
+- Summary strings are ICU (`{count, plural, …}`) in all six locales; the
+  first cut used i18next-v1 `{{count}}`/`_plural` and only English.
+
 ## [2.9.70] — 2026-08-28
 
 ### Documentation

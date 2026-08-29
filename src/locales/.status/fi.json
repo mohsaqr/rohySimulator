@@ -11661,6 +11661,13 @@
     "reviewer": null,
     "risk": "low"
   },
+  "common.case_studio": {
+    "src": "9401c7eeac98",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "common.close": {
     "src": "7d9eb7acb13e",
     "state": "machine",
@@ -11768,6 +11775,34 @@
   },
   "common.page_of": {
     "src": "d746a867988f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.pathology_summary_empty": {
+    "src": "c689ac360605",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.pathology_summary_mixed": {
+    "src": "c7b96d302b76",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.pathology_summary_photographs": {
+    "src": "b0f5125752ee",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.pathology_summary_slides": {
+    "src": "1917bddc8e75",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,

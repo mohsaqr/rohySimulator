@@ -14,7 +14,7 @@
  * WHAT SURVIVES A ROUND TRIP THROUGH QUPATH, AND WHAT DOES NOT:
  * GeoJSON has no ellipse and no arrow. QuPath degrades its own ellipses to
  * polygons for the same reason. Rather than silently lose that, each feature
- * also carries a namespaced `rohyPathology` property block holding the true
+ * also carries a namespaced `pathoyon` property block holding the true
  * kind, the tally and the frame's nominal area. QuPath ignores unknown
  * properties, so the file opens there normally; re-importing it HERE restores
  * the exact shape. A file that has been through QuPath and back loses the
@@ -29,7 +29,17 @@ import {
 } from './annotationModel.js';
 
 /** Namespaced property key, so nothing here can collide with QuPath's own. */
-const EXTRA = 'rohyPathology';
+const EXTRA = 'pathoyon';
+
+/**
+ * The key this package wrote before it was renamed from `rohy-pathology`.
+ *
+ * Read-only, and deliberately never written. An exported .geojson is an
+ * interchange file that outlives the version that produced it — someone's
+ * annotations from last month must still restore their exact shapes, not
+ * degrade to polygons because the writer changed its own property name.
+ */
+const LEGACY_EXTRA = 'rohyPathology';
 
 /** Kinds stored as a closed GeoJSON Polygon. */
 const AREAL_KINDS = new Set([
@@ -181,7 +191,7 @@ export function fromGeoJSON(collection, { slideId = null, idPrefix = 'imported' 
     }
 
     return collection.features.map((feature, i) => {
-        const extra = feature?.properties?.[EXTRA] ?? {};
+        const extra = feature?.properties?.[EXTRA] ?? feature?.properties?.[LEGACY_EXTRA] ?? {};
         const geometry = feature?.geometry;
         if (!geometry || typeof geometry.type !== 'string') {
             throw new TypeError(`fromGeoJSON(): feature ${i} has no geometry`);
