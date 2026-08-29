@@ -53,8 +53,16 @@ export function validateCaseDocuments(manifest, rubric = null, options = {}) {
             duplicateIds(rows).forEach((id) => add('error', `$.${name}`, 'duplicate_id', `Two ${name} share id "${id}".`));
         });
 
-        if (manifest.slides.length === 0 && manifest.specimens.length === 0) {
-            add('error', '$.slides', 'empty_case', 'A case must contain at least one slide or specimen.');
+        // Material means something a LEARNER can look at: a slide, or a gross
+        // photograph. Counting a bare specimen was the bug — every case is
+        // created with one specimen part, so this rule could never fire, and a
+        // completely empty case validated clean right up until someone opened
+        // the room and found nothing in it.
+        const photographs = manifest.specimens
+            .reduce((total, specimen) => total + specimen.grossImageAssetIds.length, 0);
+        if (manifest.slides.length === 0 && photographs === 0) {
+            add('error', '$.slides', 'empty_case',
+                'This case has nothing for a learner to look at yet. Add a slide or a gross photograph.');
         }
 
         const specimenIds = ids(manifest.specimens);

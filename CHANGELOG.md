@@ -9,6 +9,26 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.79] — 2026-08-29
+
+### Fixed
+
+- **Re-vendored upstream: the pathology editor's publish lifecycle and slide
+  scoring both worked against the author.** Publish was offered on a draft and
+  threw every time (the model requires `review`), and after Submit review the
+  editor was stranded with no control that could return the revision to draft.
+  The permitted transitions now come from the model and the header renders them.
+  Separately, "Add scoring for this slide" seeded a zero `tissueBounds`, which
+  validation calls an error — one click made a case permanently unpublishable,
+  with nothing to remove the criteria again.
+
+  Neither reaches rohy's own code; both are in the vendored package. Listed here
+  because the vendored copy moved and because the wizard's Plugins card shows
+  `validate()` output, which the third fix below changes: `empty_case` required
+  zero slides AND zero specimens, but every case carries one specimen part, so a
+  completely empty case used to validate clean. It now reports itself, and the
+  card says so.
+
 ## [2.9.78] — 2026-08-29
 
 ### Fixed

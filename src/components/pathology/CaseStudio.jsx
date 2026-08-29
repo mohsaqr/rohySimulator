@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
     AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, Eye, ImageIcon, Layers,
     ImagePlus, LayoutGrid, Link2, LoaderCircle, Microscope, Pencil, Plus, RefreshCw,
-    Ruler, Save, Send, Trash2, Upload, UploadCloud, X,
+    Ruler, Save, Send, Trash2, Upload, UploadCloud, X, Undo2, GitBranch, Archive,
 } from 'lucide-react';
 import { PathologyRoom } from './PathologyRoom.jsx';
 import { filterCatalogAssets } from './assetCatalog.js';
@@ -10,6 +10,7 @@ import { SlideAssetCard } from './SlideAssetCard.jsx';
 import {
     addStudioActivity, addStudioBlock, addStudioGrossImage, addStudioRoi, addStudioSlide,
     addStudioSpecimen, ensureActivityRubric, ensureSlideCriteria, ensureStudioGrossTarget,
+    removeSlideCriteria, studioTransitions,
     ensureStudioSlideTarget, manualStudioAsset,
     moveStudioGrossImage, removeStudioEntity, removeStudioGrossImage, removeStudioRoi,
     replaceStudioSlideAsset, studioGrossImages, studioIssues, studioPreviewManifest,
@@ -59,8 +60,21 @@ const mpp = (value) => (Number.isFinite(value) ? Number(value).toFixed(3) : '—
 // migrator uses, so an authored case and a migrated one agree.
 const stainCode = (display) => String(display ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 24);
 
+const TRANSITION_ICONS = {
+    saveDraft: Save,
+    submitForReview: Send,
+    returnToDraft: Undo2,
+    publish: UploadCloud,
+    fork: GitBranch,
+    retire: Archive,
+};
+
 export function CaseStudio({
     document, onChange, assetService = null, onSaveDraft, onSubmitReview, onPublish,
+    // The rest of the lifecycle. `onReturnToDraft` is the one whose absence
+    // stranded the editor: once a revision reached `review`, nothing on screen
+    // could move it, and every other button threw.
+    onReturnToDraft, onFork, onRetire,
     topBarControls = null, instructorPreview = false, t = (key, fallback) => fallback,
     // How this host turns a `remote:` reference into something a browser can
     // load. Absent means "no referenced content here" — a plain path or a
@@ -84,6 +98,18 @@ export function CaseStudio({
     useEffect(() => { documentRef.current = document; });
     const issues = useMemo(() => studioIssues(document), [document]);
     const publishIssues = useMemo(() => studioIssues(document, { forPublication: true }), [document]);
+    const transitions = useMemo(() => studioTransitions(document), [document]);
+    // One place mapping the model's transition ids to this host's callbacks.
+    // A transition the host did not wire reports that plainly through
+    // lifecycle(), rather than looking available and doing nothing.
+    const TRANSITION_HANDLERS = {
+        saveDraft: onSaveDraft,
+        submitForReview: onSubmitReview,
+        returnToDraft: onReturnToDraft,
+        publish: onPublish,
+        fork: onFork,
+        retire: onRetire,
+    };
     const malformed = firstError(issues)?.code === 'malformed_document';
 
     useEffect(() => {
@@ -213,11 +239,29 @@ export function CaseStudio({
                     <p className="text-[11px] text-slate-500">Revision {manifest.revision.number} · {manifest.revision.status}</p>
                 </div>
                 <IssueBadge issues={publishIssues} />
+                {/* Only the transitions this revision actually permits.
+                    Offering all four regardless of status was not offering
+                    choices — it was offering four ways to meet a
+                    LifecycleError, and after "Submit review" there was no way
+                    back at all. The permitted set comes from the model, so the
+                    header cannot offer something the model would refuse. */}
                 <div className="ml-auto flex flex-wrap items-center gap-2">
                     <ActionButton icon={Eye} label={instructorPreview ? 'Instructor preview' : 'Learner preview'} onClick={openPreview} />
-                    <ActionButton icon={Save} label="Save draft" onClick={() => lifecycle('Save draft', onSaveDraft)} />
-                    <ActionButton icon={Send} label="Submit review" onClick={() => lifecycle('Submit review', onSubmitReview, issues)} />
-                    <ActionButton icon={UploadCloud} label="Publish" primary onClick={() => lifecycle('Publish', onPublish, publishIssues)} />
+                    {transitions.map((transition) => (
+                        <ActionButton
+                            key={transition.id}
+                            icon={TRANSITION_ICONS[transition.id] ?? Save}
+                            label={transition.label}
+                            primary={transition.primary}
+                            disabled={Boolean(transition.blockedBy)}
+                            title={transition.blockedBy?.message}
+                            onClick={() => lifecycle(
+                                transition.label,
+                                TRANSITION_HANDLERS[transition.id],
+                                transition.blockedBy ? [transition.blockedBy] : [],
+                            )}
+                        />
+                    ))}
                 </div>
             </header>
             {action.message && <p role={action.state === 'error' ? 'alert' : 'status'} aria-live="polite" className={`shrink-0 px-4 py-2 text-xs ${action.state === 'error' ? 'bg-rose-500/15 text-rose-200' : action.state === 'success' ? 'bg-emerald-500/15 text-emerald-200' : 'bg-slate-900 text-slate-300'}`}>{action.state === 'busy' && <LoaderCircle className="mr-1.5 inline h-3.5 w-3.5 animate-spin" aria-hidden="true" />}{action.message}</p>}
@@ -306,8 +350,22 @@ export function CaseStudio({
     );
 }
 
-function ActionButton({ icon: Icon, label, primary, onClick }) {
-    return <button type="button" className={primary ? PRIMARY : BTN} onClick={onClick}><Icon className="h-4 w-4" aria-hidden="true" />{label}</button>;
+function ActionButton({ icon: Icon, label, primary, onClick, disabled = false, title = null }) {
+    return (
+        <button
+            type="button"
+            className={`${primary ? PRIMARY : BTN} ${disabled ? 'cursor-not-allowed opacity-40' : ''}`}
+            onClick={onClick}
+            disabled={disabled}
+            title={title ?? undefined}
+            // The reason goes in the accessible name, not only the tooltip: a
+            // greyed button with a hover-only explanation tells a keyboard or
+            // screen-reader user nothing about why it will not work.
+            aria-label={disabled && title ? `${label} — unavailable: ${title}` : undefined}
+        >
+            <Icon className="h-4 w-4" aria-hidden="true" />{label}
+        </button>
+    );
 }
 function IssueBadge({ issues }) {
     const errors = issues.filter((issue) => issue.severity === 'error').length;
@@ -1185,17 +1243,32 @@ function Slide({ document, slide, activityId, onActivityId, onPatch, onChooseAss
                 >
                     {!protectedActivity && <button type="button" className={PRIMARY} onClick={() => onApply((current) => ensureActivityRubric(current, activityId))}><Plus className="h-4 w-4" aria-hidden="true" />Create protected rubric</button>}
                     {protectedActivity && !criteria && <button type="button" className={PRIMARY} onClick={() => onApply((current) => ensureSlideCriteria(current, activityId, slide.id))}><Plus className="h-4 w-4" aria-hidden="true" />Add scoring for this slide</button>}
-                    {criteria && <Criteria document={document} activityId={activityId} slide={slide} criteria={criteria} onApply={onApply} />}
+                    {criteria && (
+                        <Criteria
+                            document={document} activityId={activityId} slide={slide}
+                            criteria={criteria} onApply={onApply}
+                            onRemove={() => onApply((current) => removeSlideCriteria(current, activityId, slide.id))}
+                        />
+                    )}
                 </Card>
             )}
         </div>
     );
 }
 
-function Criteria({ document, activityId, slide, criteria, onApply }) {
+function Criteria({ document, activityId, slide, criteria, onApply, onRemove }) {
     const patch = (next) => onApply((current) => updateSlideCriteria(current, activityId, slide.id, next));
     return (
         <div className="space-y-4">
+            {/* Adding scoring is one click, so removing it has to be too.
+                Without this, a mis-click left criteria on the case that the
+                author could not take off — and until the bounds were seeded to
+                the whole slide, that also meant the case could never publish. */}
+            <div className="flex justify-end">
+                <button type="button" className={BTN} onClick={onRemove}>
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />Stop scoring this slide
+                </button>
+            </div>
             <div className="grid gap-4 sm:grid-cols-4">
                 <NumericField label="Weight" value={criteria.weight} onChange={(weight) => patch({ weight })} />
                 <NumericField label="Screening (x)" value={criteria.screeningObjective} onChange={(screeningObjective) => patch({ screeningObjective })} />

@@ -10,6 +10,7 @@
 import {
     CASE_SCHEMA_URI,
     CASE_SCHEMA_VERSION,
+    REVISION_STATUS,
     RUBRIC_SCHEMA_URI,
 } from './caseCore/constants.js';
 import { cloneCanonical } from './caseCore/canonicalJson.js';
@@ -150,6 +151,80 @@ export function studioIssues(document, options = {}) {
             severity: 'error', source: 'studio', path: '$', code: 'malformed_document',
             message: `Case Studio could not inspect the document safely: ${error.message}`,
         }];
+    }
+}
+
+/**
+ * What this revision can do next, and why it cannot do the rest.
+ *
+ * The lifecycle is a state machine — draft -> review -> published -> retired —
+ * and `caseCore/lifecycle.js` enforces it by throwing. An editor that offers
+ * every transition regardless of status is therefore not offering choices, it
+ * is offering four ways to meet an exception: pressing Publish on a draft threw
+ * `LifecycleError` every single time, and pressing Submit for review left the
+ * author stranded, because Save draft then threw too and nothing on the screen
+ * could return the revision to draft.
+ *
+ * So the permitted set is computed HERE, from the same status the transitions
+ * check, and the header renders it. The UI keeps no state machine of its own
+ * and cannot offer something the model would refuse.
+ *
+ * Validation is reported separately from permission because they are different
+ * answers: "not at this stage" and "not until you fix this" send an author to
+ * different places.
+ *
+ * @param {object} document
+ * @returns {Array<{id:string,label:string,primary:boolean,blockedBy:object|null}>}
+ *   `blockedBy` is the first validation error preventing an otherwise permitted
+ *   transition, or null.
+ */
+export function studioTransitions(document) {
+    let status;
+    try {
+        requireDocument(document, 'studioTransitions()');
+        status = document.manifest.revision.status;
+    } catch {
+        // A malformed document offers nothing rather than throwing: this runs
+        // during render, and the editor already shows the parse failure.
+        return [];
+    }
+
+    const firstError = (options) => studioIssues(document, options)
+        .find((issue) => issue.severity === 'error') ?? null;
+
+    switch (status) {
+        case REVISION_STATUS.DRAFT:
+            return [
+                { id: 'saveDraft', label: 'Save draft', primary: false, blockedBy: null },
+                {
+                    id: 'submitForReview',
+                    label: 'Submit for review',
+                    primary: true,
+                    // submitForReview() validates without publication strictness,
+                    // so ask exactly what it will ask.
+                    blockedBy: firstError({}),
+                },
+            ];
+        case REVISION_STATUS.REVIEW:
+            return [
+                // The way back. Its absence is what stranded the editor.
+                { id: 'returnToDraft', label: 'Return to draft', primary: false, blockedBy: null },
+                {
+                    id: 'publish',
+                    label: 'Publish',
+                    primary: true,
+                    blockedBy: firstError({ forPublication: true }),
+                },
+            ];
+        case REVISION_STATUS.PUBLISHED:
+            return [
+                { id: 'fork', label: 'New draft from this', primary: true, blockedBy: null },
+                { id: 'retire', label: 'Retire', primary: false, blockedBy: null },
+            ];
+        case REVISION_STATUS.RETIRED:
+            return [{ id: 'fork', label: 'New draft from this', primary: true, blockedBy: null }];
+        default:
+            return [];
     }
 }
 
@@ -670,17 +745,67 @@ export function ensureSlideCriteria(document, activityId, slideId) {
     const activity = rubricActivity(document, activityId);
     findRequired(document.manifest.slides, slideId, 'Slide');
     if (activity.slideCriteria.some((criteria) => criteria.slideId === slideId)) return document;
+
+    // Seed the tissue bounds to the WHOLE SLIDE rather than to a zero rect.
+    //
+    // A zero rect fails validation as `empty_tissue_bounds`, so a single click
+    // on "Add scoring" used to make the case permanently unpublishable — and
+    // with no way to remove the criteria again, permanently was the right word.
+    // The whole slide is also the honest default: before an author has drawn
+    // anything, every part of the slide is tissue as far as this case knows.
+    // They then narrow it.
+    //
+    // A slide whose asset never reported its pixel dimensions still gets a zero
+    // rect, because inventing a size would put the coverage grid over nothing.
+    // That case is now removable, and validation says what is wrong.
+    const slide = document.manifest.slides.find((entry) => entry.id === slideId);
+    const asset = document.manifest.assets.find((entry) => entry.id === slide?.assetId);
+    const width = asset?.metadata?.widthPx;
+    const height = asset?.metadata?.heightPx;
+    const wholeSlide = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0
+        ? { x: 0, y: 0, w: width, h: height }
+        : { x: 0, y: 0, w: 0, h: 0 };
+
     const criteria = {
         slideId,
         weight: 1,
         screeningObjective: 5,
         coverageObjective: 2,
         coverageGrid: 12,
-        tissueBounds: { x: 0, y: 0, w: 0, h: 0 },
+        tissueBounds: wholeSlide,
         rois: [],
     };
     return updateActivityRubric(document, activityId, {
         slideCriteria: [...activity.slideCriteria, criteria],
+    });
+}
+
+/**
+ * Stop scoring one slide in one activity.
+ *
+ * The counterpart `ensureSlideCriteria()` never had. Adding scoring is one
+ * click; without this, undoing it was impossible, so a mis-click left a case
+ * carrying criteria the author did not want and — until the seeding fix above —
+ * could not publish past.
+ *
+ * Removing criteria removes its ROIs with it: an ROI is scored only through the
+ * slide criteria that contains it, so leaving them would keep protected
+ * geometry in the rubric that nothing reads.
+ *
+ * Idempotent: removing criteria that is not there returns the document
+ * unchanged rather than raising, so a double click is not an error.
+ *
+ * @param {object} document
+ * @param {string} activityId
+ * @param {string} slideId
+ * @returns {object} the next document
+ */
+export function removeSlideCriteria(document, activityId, slideId) {
+    requireDocument(document, 'removeSlideCriteria()');
+    const activity = rubricActivity(document, activityId);
+    if (!activity.slideCriteria.some((entry) => entry.slideId === slideId)) return document;
+    return updateActivityRubric(document, activityId, {
+        slideCriteria: activity.slideCriteria.filter((entry) => entry.slideId !== slideId),
     });
 }
 

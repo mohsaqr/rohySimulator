@@ -143,13 +143,12 @@ export function caseDocumentIssues(stored, { forPublication = true } = {}) {
         message: issue.message ?? '',
     }));
 
-    // The two halves of this contract must agree, and left to themselves they
-    // do not. Schema validation's `empty_case` fires only when a manifest has
-    // no slides AND no specimens — but a case is created WITH its one specimen
-    // part, so a brand-new, entirely empty case validates clean while
-    // caseDocumentIsServable() correctly refuses it. A host would then show a
-    // green card beside a room that never appears, and the author would have
-    // nothing to read explaining why.
+    // The two halves of this contract must agree on every document.
+    //
+    // Schema validation names the common case itself (`empty_case`: no slide
+    // and no gross photograph). This catches the rest — a case that HAS a slide
+    // whose asset resolves to no source, say, which validation may accept and
+    // the gate still refuses because a learner would open an empty canvas.
     //
     // Publication is the question "may learners see this?", so the answer has
     // to be the same one the gate gives.
