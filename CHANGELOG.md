@@ -9,6 +9,57 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.94] — 2026-08-29
+
+### Added
+
+- **A knowledge base for the repository.** `npm run kb:build` derives one
+  SQLite file from what the repo already holds — 536 commits, 128 releases and
+  the 330 individual changes inside them, 41 triaged bugs, 318 learnings, 50
+  migrations, 36 agent notes and memory files, and 140 documents — with FTS5
+  search across all 1,579 of them. `npm run kb -- search "audit chain"`,
+  `-- file server/routes/orders-routes.js`, `-- bugs --status open`,
+  `-- release 2.9.93`, `-- stats`. Modelled on Carm's `data/knowledge.db`.
+
+  Two deliberate differences from the original:
+  - **Derived, never authored.** Every row is parsed from git or from markdown
+    already in the repo, and the build drops and rebuilds from scratch in about
+    three seconds. There is no second source of truth to forget to update.
+  - **Never committed.** Carm's equivalent was re-committed on every update and
+    now accounts for 6.24 GB of that repo's history, with its website copies
+    adding 2.6 GB more — recorded in its own `AGENT-NOTE-git-bloat.md`. Ours is
+    gitignored.
+
+- **`npm run kb -- stale`** — open bugs with later work on the files they
+  blamed. A triage report is a snapshot: it records what was true the day it was
+  written and is almost never edited when the fix ships, so `bugs --status open`
+  over-reports. This lists each still-open bug beside the later commits that
+  touched exactly the files it cited. It does not claim anything is fixed — a
+  confidently wrong record is worse than a stale one — it is a prompt to
+  re-triage. It currently flags **14 of 21** open bugs.
+
+- Documentation: `docs/integrator/knowledge-base.md`.
+
+### Fixed
+
+- Three defects the tool found in itself while being built, each caught by a
+  view rather than by a crash:
+  - **The table parser read 32 of `MANIFEST.md`'s 50 migration rows** and
+    reported success. Strict markdown ends a table at the first blank line;
+    that file spaces its rows out for readability. Blank lines inside a table
+    are now tolerated, and a test asserts the parser reads exactly as many rows
+    as the file contains.
+  - **Prose citations never resolved to a module.** Reports and learnings cite
+    `orders-routes.js:1745`, not the full path, so 17 of 41 bugs and 99 of 318
+    learnings classified as "unclassified" while the modules they were plainly
+    about read zero. Basenames now resolve through an index learned from every
+    path in git history, ambiguity broken by frequency and then alphabetically
+    so rebuilds stay deterministic. Unclassified bugs: 17 → 1; learnings:
+    99 → 35.
+  - **Root-level files had no home.** Every version bump touches
+    `package.json`, so "unclassified" was the single largest module in the repo
+    at 182 commits and told nobody anything. They are `repo:meta` now.
+
 ## [2.9.93] — 2026-08-29
 
 ### Fixed

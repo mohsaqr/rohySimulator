@@ -140,3 +140,10 @@ tests/e2e/.auth/
 # per-string review status in src/locales/.status/<lang>.json (tracked).
 /i18n/xliff/
 googlekey.text
+
+# The knowledge base is a DERIVED artifact — rebuild with `npm run kb:build`.
+# Carm committed its equivalent and it now accounts for 6.24 GB of that repo's
+# history (see its AGENT-NOTE-git-bloat.md). This one stays out of git.
+data/knowledge.db
+data/knowledge.db-wal
+data/knowledge.db-shm
