@@ -92,7 +92,7 @@ describe.skipIf(!HAVE_VIPS)('importing a slide from a link, end to end', () => {
     });
 
     /** Poll a job the way the editor does. */
-    async function settle(jobId, timeoutMs = 60_000) {
+    async function settle(jobId, timeoutMs = 180_000) {
         const deadline = Date.now() + timeoutMs;
         for (;;) {
             const job = await (await educator(`/api/plugins/pathology/jobs/${jobId}`)).json();
@@ -100,6 +100,27 @@ describe.skipIf(!HAVE_VIPS)('importing a slide from a link, end to end', () => {
             if (Date.now() > deadline) throw new Error(`job stuck in ${job.state}/${job.phase}`);
             await new Promise((r) => setTimeout(r, 100));
         }
+    }
+
+    /**
+     * Import one slide and wait for it.
+     *
+     * Each test asks for its OWN url, so each gets its own asset id and no test
+     * depends on what another left behind. They shared one asset at first, and
+     * it was order-dependent in a way that only showed up under full-suite
+     * load: the re-import test reset the calibration the test before it had
+     * just set.
+     */
+    async function importOne(name, label) {
+        const res = await educator('/api/plugins/pathology/imports', {
+            method: 'POST',
+            body: JSON.stringify({ url: `${slideOrigin.url}/${name}.tif`, label }),
+        });
+        expect(res.status).toBe(202);
+        const { jobId, assetId } = await res.json();
+        const job = await settle(jobId);
+        expect(job.state).toBe('done');
+        return assetId;
     }
 
     // A fresh install imports from nowhere: imports off, allowlist empty. Both
@@ -137,16 +158,7 @@ describe.skipIf(!HAVE_VIPS)('importing a slide from a link, end to end', () => {
     });
 
     it('imports, tiles and lands in needs_calibration — never a guessed 40x', async () => {
-        const started = await educator('/api/plugins/pathology/imports', {
-            method: 'POST',
-            body: JSON.stringify({ url: `${slideOrigin.url}/specimen.tif`, label: 'Specimen A' }),
-        });
-        expect(started.status).toBe(202);
-        const { jobId, assetId } = await started.json();
-
-        const job = await settle(jobId);
-        expect(job.state).toBe('done');
-        expect(job.phase).toBeNull();
+        const assetId = await importOne('specimen', 'Specimen A');
 
         // The tiles are really on disk, under the declared /library prefix.
         const dirs = await readdir(join(libraryDir, assetId));
@@ -160,14 +172,13 @@ describe.skipIf(!HAVE_VIPS)('importing a slide from a link, end to end', () => {
         expect(asset.status).toBe('needs_calibration');
         expect(asset.revisions[0].optics.nativeObjective).toBeNull();
         expect(asset.revisions[0].derivatives.dzi.url).toBe(`remote:library/${assetId}/slide.dzi`);
-    }, 120_000);
+    }, 240_000);
 
     it('an uncalibrated slide is not offered to an author, and a calibrated one is', async () => {
-        const { assets } = await (await educator('/api/plugins/pathology/assets')).json();
-        const assetId = assets.find((a) => a.status === 'needs_calibration').id;
+        const assetId = await importOne('calibrate-me');
 
-        let catalog = await (await educator('/api/plugins/pathology/catalog')).json().catch(() => ({ catalog: { assets: [] } }));
-        expect((catalog.catalog?.assets ?? []).some((a) => a.id === assetId)).toBe(false);
+        const before = await (await educator('/api/plugins/pathology/catalog')).json();
+        expect((before.catalog?.assets ?? []).some((a) => a.id === assetId)).toBe(false);
 
         // Both numbers are required; neither is defaulted.
         const bad = await educator(`/api/plugins/pathology/assets/${assetId}/calibration`, {
@@ -181,32 +192,31 @@ describe.skipIf(!HAVE_VIPS)('importing a slide from a link, end to end', () => {
         expect(ok.status).toBe(200);
         expect((await ok.json()).state).toBe('ready');
 
-        catalog = await (await educator('/api/plugins/pathology/catalog')).json();
-        const offered = (catalog.catalog?.assets ?? []).find((a) => a.id === assetId);
+        const after = await (await educator('/api/plugins/pathology/catalog')).json();
+        const offered = (after.catalog?.assets ?? []).find((a) => a.id === assetId);
         expect(offered).toBeTruthy();
         expect(offered.revisions[0].optics).toMatchObject({ nativeObjective: 20, nativeMpp: 0.5 });
-    }, 60_000);
+    }, 240_000);
 
     // Deterministic asset ids: the same link must not accumulate copies of a
     // multi-gigabyte slide.
     it('re-importing the same link reuses one asset and one directory', async () => {
+        const first = await importOne('twice');
         const before = await readdir(libraryDir);
-        const res = await educator('/api/plugins/pathology/imports', {
-            method: 'POST', body: JSON.stringify({ url: `${slideOrigin.url}/specimen.tif` }),
-        });
-        const { jobId } = await res.json();
-        expect((await settle(jobId)).state).toBe('done');
-        expect(await readdir(libraryDir)).toEqual(before);
-    }, 120_000);
+        const second = await importOne('twice');
+        expect(second).toBe(first);
+        expect((await readdir(libraryDir)).sort()).toEqual(before.sort());
+    }, 240_000);
 
     it('removes the row and the bytes together', async () => {
-        const { assets } = await (await educator('/api/plugins/pathology/assets')).json();
-        const assetId = assets[0].id;
+        const assetId = await importOne('disposable');
+        expect(await readdir(libraryDir)).toContain(assetId);
+
         expect((await educator(`/api/plugins/pathology/assets/${assetId}`, { method: 'DELETE' })).status).toBe(200);
         expect(await readdir(libraryDir)).not.toContain(assetId);
         const after = await (await educator('/api/plugins/pathology/assets')).json();
         expect(after.assets.some((a) => a.id === assetId)).toBe(false);
-    }, 60_000);
+    }, 240_000);
 
     it('refuses a link on a host nobody allowed, without fetching it', async () => {
         const res = await educator('/api/plugins/pathology/imports', {

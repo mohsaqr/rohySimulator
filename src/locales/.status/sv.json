@@ -4094,6 +4094,125 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.pathology_settings_imports": {
+    "src": "337fb9e1c45e",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_imports_enabled": {
+    "src": "26e9d5f4a154",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_imports_formats": {
+    "src": "67d3434a3674",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_imports_keep_original": {
+    "src": "fa2c1d60d15e",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_imports_max_bytes": {
+    "src": "307f456683ef",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_imports_origins": {
+    "src": "2876b1f4d364",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_imports_require_calibration": {
+    "src": "8b53f789640e",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_jobs": {
+    "src": "2f17a0f8d518",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_jobs_retention": {
+    "src": "642260fa3194",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_tiling": {
+    "src": "1f04a8531a46",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_tiling_objective": {
+    "src": "e1abbf5f1756",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_tiling_overlap": {
+    "src": "20dfe192268c",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_tiling_preview": {
+    "src": "87497a265445",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_tiling_quality": {
+    "src": "9c642cd8d8d1",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_tiling_shrink": {
+    "src": "f5c2dde8273d",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_tiling_tile_size": {
+    "src": "94e919ff1513",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.pathology_settings_tiling_timeout": {
+    "src": "8692b4b5d54d",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.persona_anxious": {
     "src": "90fdf1b76337",
     "state": "machine",
@@ -4202,6 +4321,83 @@
   "authoring_config.platform_section_users": {
     "src": "6b0cc904d081",
     "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugin_settings_add": {
+    "src": "9fd728c66c9a",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugin_settings_col_optics": {
+    "src": "1ec0b161fe04",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugin_settings_col_slide": {
+    "src": "6bb4c1177681",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugin_settings_col_state": {
+    "src": "a3b50c476732",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugin_settings_library": {
+    "src": "434d2d083b58",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugin_settings_library_empty": {
+    "src": "fe166da84638",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugin_settings_no_origins": {
+    "src": "5c2111613b76",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugin_settings_none": {
+    "src": "1b3ec50e95fe",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugin_settings_remove": {
+    "src": "c3812fc4acb8",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugin_settings_save": {
+    "src": "dd0ae7a5cbcf",
+    "state": "new",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugin_settings_saved": {
+    "src": "fca046ccd586",
+    "state": "new",
     "reviewed_at": null,
     "reviewer": null,
     "risk": "low"
@@ -5056,6 +5252,13 @@
   "authoring_config.tab_platform": {
     "src": "c78ffe195710",
     "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.tab_plugins": {
+    "src": "9514b7ff4860",
+    "state": "new",
     "reviewed_at": null,
     "reviewer": null,
     "risk": "low"

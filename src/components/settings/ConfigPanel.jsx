@@ -32,13 +32,14 @@ import AgentTemplateManager from './AgentTemplateManager';
 import CaseTreatmentConfig from './CaseTreatmentConfig';
 import VoiceSettingsTab from './VoiceSettingsTab';
 import AffectRoutingTab from './AffectRoutingTab';
+import PluginSettingsTab from './PluginSettingsTab';
 import AvatarsSettingsTab from './AvatarsSettingsTab';
 import NotificationsSettingsTab from './NotificationsSettingsTab';
 import OyonSettingsTab from './OyonSettingsTab';
 import OyonDataLogs from '../analytics/OyonDataLogs';
 import CohortsManagementTab from './CohortsManagementTab';
 import TnaDashboardV2 from '../analytics/tna/TnaDashboardV2';
-import { Bell as BellIcon, BookOpen } from 'lucide-react';
+import { Bell as BellIcon, BookOpen, Plug } from 'lucide-react';
 
 // Lazy-loaded so the TipTap/react-query editor bundle only loads when a teacher
 // opens the Lessons tab — keeps it out of the main app chunk.
@@ -782,6 +783,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             group: t('group_system'),
             items: [
                 { id: 'platform', label: t('tab_platform'), icon: Settings, visible: admin },
+                { id: 'plugins', label: t('tab_plugins'), icon: Plug, visible: admin },
                 { id: 'notifications', label: t('tab_notifications'), icon: BellIcon, visible: true },
             ],
         },
@@ -1438,6 +1440,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     )}
 
                     {/* --- AFFECT ROUTING TAB (Admin Only) --- */}
+                    {activeTab === 'plugins' && isAdmin() && (
+                        <PluginSettingsTab />
+                    )}
                     {activeTab === 'affect' && isAdmin() && (
                         <AffectRoutingTab />
                     )}

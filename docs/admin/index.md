@@ -11,6 +11,7 @@ For the **admin** — full platform configuration and user management.
 | [Platform settings](/admin/platform-settings) | Turnaround, notification routing, facility |
 | [Lab & medication editors](/admin/catalogue-editors) | Editing the clinical catalogue |
 | [Voice / TTS providers](/admin/voice-providers) | Provider keys, default voices |
+| [Pathology slides](/admin/pathology-slides) | Importing whole-slide images from a link |
 | [Multi-tenant operations](/admin/multi-tenant) | Tenant isolation, per-tenant config |
 | [System logs](/admin/system-logs) | Activity, chat, API logs and exports |
 

@@ -133,6 +133,7 @@ export default defineConfig({
             { text: 'Platform settings', link: '/admin/platform-settings' },
             { text: 'Lab & medication editors', link: '/admin/catalogue-editors' },
             { text: 'Voice / TTS providers', link: '/admin/voice-providers' },
+            { text: 'Pathology slides', link: '/admin/pathology-slides' },
             { text: 'Multi-tenant operations', link: '/admin/multi-tenant' },
             { text: 'System logs', link: '/admin/system-logs' },
           ],

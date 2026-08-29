@@ -362,6 +362,45 @@ block, one nginx file and one `id=origin` entry — the same shape every time.
 Routine content updates touch only the origin (`./deploy.sh <plugin>content`);
 the app is not redeployed.
 
+### 7a.2 The managed library *(1.4)*
+
+§7a.1 describes content an operator **deploys**. A host can also **produce**
+content: pathology imports a slide from a link, tiles it, and puts the result on
+the same origin. The two halves share an origin and nothing else.
+
+| Prefix | Owner | Written by | Lifecycle |
+|---|---|---|---|
+| the bundle's prefixes (`/tiles`, `/gross`) | the plugin | `./deploy.sh <plugin>content`, `rsync --delete` | replaced wholesale per content version |
+| `/library` | **the host** | the plugin's server module, as the rohy service user | per asset; removed only by an explicit act |
+
+Three rules make that division safe, and each exists because the failure it
+prevents is silent:
+
+1. **The content deploy's rsync excludes `library/`.** `--delete` against a
+   bundle that does not contain it would erase every imported slide.
+2. **The bundle script refuses to contain `library/`.** Checked on the
+   *allowlist* rather than the output directory, because the output is rebuilt
+   from scratch each run — a guard looking for a stray directory there is
+   unreachable code that reads like protection.
+3. **A case addresses a managed slide exactly as a bundled one**:
+   `remote:library/<assetId>/slide.dzi`. The same case runs against a
+   university's origin and a local one, unchanged.
+
+**The two halves fail independently.** `GET /api/plugins/<id>/catalog` merges
+them and returns whichever it has; when the bundle is missing it *names* that in
+the response (`bundleUnavailable`) so an editor can say which half is absent
+rather than showing a short list as if it were complete. Only having neither is
+a `503`. Before this was true, a deployment that imported its own slides and
+shipped no content bundle had an invisible library — slides on disk, rows in the
+database, and an editor told the plugin had no catalog.
+
+Only `ready` assets are offered to an author. One still importing, failed, or
+awaiting calibration is real but not usable, and a case built around a slide
+whose scale is unknown produces measurements that are wrong by an unknown
+factor.
+
+---
+
 ## 8. Persistence
 
 A plugin persists nothing. It hands the host its whole document on every

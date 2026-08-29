@@ -9,6 +9,56 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.89] — 2026-08-29
+
+### Added
+
+- **Settings → Plugins.** The admin surface for RPS-1 1.4's settings slot, and
+  the last piece of slide import. The host renders it **generically from the
+  schema each manifest declares**: one card per declared group, one control per
+  field type (`boolean`, `int`, `bytes`, `enum`, `enumList`, `origins`). A second
+  plugin gets an admin page by adding a `settings` block to its manifest, not by
+  anyone writing another React screen — which is the difference between closing
+  §14.4's gap and closing it once. A plugin without the slot is simply not
+  listed.
+  - **Save sends only the keys that changed.** The PUT is a key-presence merge,
+    so sending every field would overwrite a value another admin edited between
+    the page loading and the click.
+  - An `enum` sends the value **in the type the schema declared**. A `<select>`
+    hands back a string, a `tileSize` is a number, and `"1024"` would be refused
+    by the server's own validator.
+  - The server's field-level error is shown verbatim, because it names which of
+    the four cards is wrong.
+  - An **Imported slides** table lists every managed asset whatever state it is
+    in, with its failure reason and Remove. It renders nothing at all until it
+    knows whether this deployment has a managed library — "no library" and "an
+    empty library" are different, and a header that appears then vanishes is
+    worse than one that arrives a beat late.
+- **`docs/admin/pathology-slides.md`** — the educator, admin and operator
+  workflow end to end: the five states, why an uncalibrated slide is not offered,
+  the two halves of a library, the three things an operator provisions, and the
+  limits (one conversion at a time, an interrupted import restarts, no
+  multi-file formats yet).
+- Plugin standard **§7a.2 — the managed library**: the prefix table, the three
+  rules that keep the host's `/library` and the bundle's prefixes from
+  destroying each other, and why the two halves fail independently.
+
+### Fixed
+
+- **The end-to-end import test was order-dependent.** Its cases shared one
+  asset, so the re-import case reset the calibration the case before it had just
+  set — invisible in isolation, intermittent under full-suite load. Each case now
+  imports its own slide.
+
+### Notes
+
+- The 29 new admin-settings strings are English in de/es/fi/it/sv, recorded in
+  `src/locales/.status/*.json` as `state: 'new'`. `translate-locales.mjs` runs
+  through the app's own LLM proxy, which needs a live server and a provider key;
+  the keys are seeded so the locale key sets stay identical (which
+  `locales-integrity` requires) and the translation pass is visible as
+  outstanding rather than silently missing.
+
 ## [2.9.88] — 2026-08-29
 
 ### Added
