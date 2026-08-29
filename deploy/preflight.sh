@@ -308,6 +308,24 @@ check_port_free() {
         warn "neither ss nor lsof available; skipped port check on :$p"
     fi
 }
+# Plugin content origins (RPS-1 §7a). Each ROHY_PLUGIN_ORIGINS entry must
+# serve /content.json — the bundle's self-description — or every slide is a
+# 404 at runtime. Checked BEFORE the restart so a dark origin is a preflight
+# failure, not a learner's bug report. A malformed entry is fatal at boot by
+# design (server/lib/pluginRemoteOrigins.js); this only checks reachability.
+if [ -n "${ROHY_PLUGIN_ORIGINS:-}" ]; then
+    IFS=',' read -ra _origins <<< "$ROHY_PLUGIN_ORIGINS"
+    for entry in "${_origins[@]}"; do
+        entry="${entry// /}"; [ -z "$entry" ] && continue
+        pid="${entry%%=*}"; origin="${entry#*=}"
+        if curl -sf --max-time 10 "$origin/content.json" | grep -q "\"plugin\": *\"$pid\""; then
+            ok "plugin origin $pid → $origin serves its content.json"
+        else
+            fail "plugin origin $pid → $origin does not serve /content.json for '$pid' — deploy the content bundle first (./deploy.sh <plugin>content)"
+        fi
+    done
+fi
+
 check_port_free "$PORT"
 [[ -n "$HTTPS_PORT" ]] && check_port_free "$HTTPS_PORT"
 

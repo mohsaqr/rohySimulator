@@ -269,6 +269,27 @@ done
 # We accept 401/403 (auth gate did its job) AND 404 (route doesn't exist for
 # unauthenticated GET — also fine, as long as it's not 200). The only way
 # this section fails is if an unauthenticated GET returned data.
+section "Plugin content origins (RPS-1 §7a — a configured origin must answer)"
+# /api/health/plugins probes every ROHY_PLUGIN_ORIGINS entry for its
+# content.json. 200 = none configured or all reachable; 503 = at least one
+# configured origin is dark or serves the wrong plugin's bundle. Both are
+# honest answers; only 503 fails the deploy.
+plugins_body=$(mktemp)
+plugins_status=$(curl $INSECURE_ARG -sS -o "$plugins_body" -w "%{http_code}" --max-time 15 "$BASE_URL/api/health/plugins" 2>/dev/null || echo 000)
+if [[ "$plugins_status" == "200" ]]; then
+    n=$(grep -oE '"configured":[0-9]+' "$plugins_body" | grep -oE '[0-9]+' || echo 0)
+    printf '  %s✓%s %-46s %s%s%s (%s configured)\n' "$GRN" "$CLR" "GET /api/health/plugins" "$DIM" "200" "$CLR" "$n"; PASS=$((PASS+1))
+elif [[ "$plugins_status" == "503" ]]; then
+    printf '  %s✗%s %-46s 503 — a configured plugin origin is unreachable:\n' "$RED" "$CLR" "GET /api/health/plugins"
+    grep -oE '"unreachable":\[[^]]*\]' "$plugins_body" | sed 's/^/      /'
+    grep -oE '"error":"[^"]*"' "$plugins_body" | sed 's/^/      /' | head -5
+    FAIL=$((FAIL+1)); FAILED_CATEGORIES+=("$CURRENT_CAT")
+else
+    printf '  %s✗%s %-46s got %s, expected 200 or 503\n' "$RED" "$CLR" "GET /api/health/plugins" "$plugins_status"
+    FAIL=$((FAIL+1)); FAILED_CATEGORIES+=("$CURRENT_CAT")
+fi
+rm -f "$plugins_body"
+
 section "Auth gating (no 2xx without token)"
 for p in /api/users /api/cases /api/auth/profile /api/auth/verify /api/admin/database-stats; do
     probe "$BASE_URL$p" "401,403,404" 0 "" "$p"

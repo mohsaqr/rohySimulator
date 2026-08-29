@@ -41,6 +41,10 @@ const PUBLIC_ROUTE_ALLOWLIST = new Set([
     // (nginx, systemd, uptime checks) can probe without credentials.
     'server/routes/health-routes.js GET /health',
     'server/routes/health-routes.js GET /ready',
+    // Plugin content-origin probe (RPS-1 §7a.1) — public so the deploy hub's
+    // POST_VERIFY can gate a deploy on it without credentials; it reports
+    // reachable / content version only and never echoes the origin URL.
+    'server/routes/health-routes.js GET /health/plugins',
 ]);
 
 function routeDeclarations(file) {

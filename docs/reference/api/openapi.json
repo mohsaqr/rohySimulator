@@ -5285,7 +5285,34 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/health-routes.js:40",
+        "x-rohy-source": "server/routes/health-routes.js:42",
+        "x-rohy-auth": [
+          "public"
+        ],
+        "security": []
+      }
+    },
+    "/api/health/plugins": {
+      "get": {
+        "summary": "Get /health/plugins",
+        "tags": [
+          "health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/health-routes.js:151",
         "x-rohy-auth": [
           "public"
         ],
@@ -8290,7 +8317,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/health-routes.js:60",
+        "x-rohy-source": "server/routes/health-routes.js:62",
         "x-rohy-auth": [
           "public"
         ],

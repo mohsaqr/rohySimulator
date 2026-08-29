@@ -42,6 +42,11 @@ Environment=PORT=4000
 # `mkdir -p /var/cache/rohy-hf && chown saqr:saqr /var/cache/rohy-hf`
 Environment=TRANSFORMERS_CACHE=/var/cache/rohy-hf
 
+# Plugin content origins (RPS-1 §7a) live in /etc/rohy/env, not here:
+#   ROHY_PLUGIN_ORIGINS=pathology=http://192.168.50.39:8094
+# Deploy the bundle first (deploy hub: ./deploy.sh pathoyoncontent), then
+# set the variable and restart; /api/health/plugins confirms the origin.
+
 # Use Node's official binary, not a snap/apt symlink that can change paths
 # during system upgrades.
 ExecStart=/usr/bin/node server/server.js

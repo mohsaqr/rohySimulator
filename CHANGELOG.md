@@ -9,6 +9,24 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.80] — 2026-08-29
+
+### Added
+
+- **A plugin's content origin is a deployable contract, not a hand-made
+  nginx block (RPS-1 §7a.1).** `GET /api/health/plugins` probes every
+  `ROHY_PLUGIN_ORIGINS` entry for its `content.json` — the self-description
+  every plugin content bundle serves at its root — and reports `reachable`,
+  `content_version`, `file_count`, and a mismatch when the origin serves
+  another plugin's bundle; 503 when any configured origin is dark. Public
+  like `/health` so the deploy hub can gate on it without credentials, and
+  therefore never echoes the origin URL. `scripts/tech-test.sh` (the hub's
+  `POST_VERIFY`) fails a deploy on 503; `deploy/preflight.sh` checks each
+  origin before a restart; `deploy/systemd/rohy.service.example` and
+  `server/.env.example` say where the variable goes. The bundle script lives
+  in Pathoyon (`scripts/content-bundle.sh`) and the `KIND=plugin-content`
+  recipe in the deploy hub (`./deploy.sh pathoyoncontent`).
+
 ## [2.9.79] — 2026-08-29
 
 ### Fixed

@@ -20,6 +20,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dbAdapter from '../dbAdapter.js';
+import { pluginOrigins } from '../lib/pluginRemoteOrigins.js';
+import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -106,3 +108,74 @@ router.get('/ready', async (req, res) => {
 });
 
 export default router;
+
+// ---- Plugin content origins (RPS-1 §7a) ---------------------------------
+//
+// A plugin whose bulk content lives on another server is only as deployed as
+// that origin. This probe is what turns "we set ROHY_PLUGIN_ORIGINS" into a
+// verifiable fact: for every configured origin it fetches <origin>/content.json
+// — the self-description every plugin content bundle serves at its root — and
+// reports reachable / content version. The deploy hub's POST_VERIFY and
+// scripts/tech-test.sh read this; an operator who forgot to ship the bundle,
+// or pointed at the wrong port, finds out at deploy time rather than when a
+// learner opens a slide.
+//
+// Server-side only: content.json is NOT proxied to learners (the proxy relays
+// manifest paths only), and this endpoint never returns the origin's body.
+const ORIGIN_PROBE_TIMEOUT_MS = 2500;
+
+async function probeOrigin(origin) {
+    const started = Date.now();
+    try {
+        const res = await fetch(`${origin}/content.json`, {
+            redirect: 'manual',
+            signal: AbortSignal.timeout(ORIGIN_PROBE_TIMEOUT_MS),
+        });
+        const ms = Date.now() - started;
+        if (!res.ok) return { reachable: false, status: res.status, ms, error: `content.json returned ${res.status}` };
+        let body = null;
+        try { body = await res.json(); } catch { return { reachable: false, status: res.status, ms, error: 'content.json is not JSON' }; }
+        return {
+            reachable: true,
+            status: res.status,
+            ms,
+            content_version: typeof body?.version === 'string' ? body.version : null,
+            content_plugin: typeof body?.plugin === 'string' ? body.plugin : null,
+            file_count: Number.isInteger(body?.fileCount) ? body.fileCount : null,
+        };
+    } catch (err) {
+        return { reachable: false, status: null, ms: Date.now() - started, error: err?.name === 'TimeoutError' ? `no answer within ${ORIGIN_PROBE_TIMEOUT_MS}ms` : String(err?.message || err) };
+    }
+}
+
+router.get('/health/plugins', async (req, res) => {
+    // pluginOrigins() is a Map (plugin id → origin), parsed once at boot.
+    const origins = pluginOrigins();
+    const configured = [...origins.keys()];
+    const entries = await Promise.all(configured.map(async (id) => {
+        const manifest = PLUGIN_MANIFESTS.find((m) => m.id === id) || null;
+        const probe = await probeOrigin(origins.get(id));
+        // The origin must describe itself as THIS plugin's content: a bundle
+        // for another plugin on the right port is the kind of mistake that
+        // otherwise surfaces as "every slide is a 404".
+        const mismatch = probe.reachable && probe.content_plugin && probe.content_plugin !== id
+            ? `content.json says plugin '${probe.content_plugin}', expected '${id}'` : null;
+        // Public like /health, so the deploy verify needs no credentials —
+        // which is why the origin URL itself is NOT echoed: a LAN address
+        // and port belong in the operator's env, not in a public probe.
+        return [id, {
+            known_plugin: Boolean(manifest),
+            declared_paths: manifest?.remote?.paths ?? [],
+            ...probe,
+            ...(mismatch ? { reachable: false, error: mismatch } : {}),
+        }];
+    }));
+    const plugins = Object.fromEntries(entries);
+    const unreachable = entries.filter(([, v]) => !v.reachable).map(([id]) => id);
+    res.status(unreachable.length ? 503 : 200).json({
+        status: unreachable.length ? 'degraded' : 'ok',
+        configured: configured.length,
+        unreachable,
+        plugins,
+    });
+});

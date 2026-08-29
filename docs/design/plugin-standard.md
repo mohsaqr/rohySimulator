@@ -328,6 +328,23 @@ It is a read-only relay of declared paths from one operator-configured host.
 
 ---
 
+### 7a.1 Operating a content origin *(1.3)*
+
+Declaring `remote` says *where in the case* bulk content is addressed; this
+says how the content actually gets to a server, repeatably. The contract has
+three declarative parts and no bespoke steps:
+
+| Part | Owner | Rule |
+|---|---|---|
+| **The bundle** | the plugin | a script (`scripts/content-bundle.sh` in Pathoyon) emits a directory whose **top-level entries are exactly `remote.paths`** plus `content.json` — `{ plugin, version, paths, fileCount, files[{path, bytes, sha256}] }`. Nothing else may be present; symlinks are refused; originals are never bundled. |
+| **The origin** | the deploy hub | `KIND=plugin-content`: build the bundle, `rsync --delete` it to `DEST`, install the origin's nginx block idempotently (`nginx -t`, reload, restore on failure). The block serves only the declared prefixes + `/content.json`; everything else is 404; LAN-bound — the app relays server-side, so no DNS or tunnel entry exists. |
+| **The wiring** | the app operator | `ROHY_PLUGIN_ORIGINS=<id>=<origin>` in the app's env. `GET /api/health/plugins` probes every configured origin's `content.json` and reports `reachable`, `content_version` and a plugin-id mismatch; `deploy/preflight.sh` checks it before a restart and `scripts/tech-test.sh` (the deploy hub's `POST_VERIFY`) fails the deploy on 503. |
+
+Adding a second plugin's content is one bundle script, one `sites.conf`
+block, one nginx file and one `id=origin` entry — the same shape every time.
+Routine content updates touch only the origin (`./deploy.sh <plugin>content`);
+the app is not redeployed.
+
 ## 8. Persistence
 
 A plugin persists nothing. It hands the host its whole document on every
