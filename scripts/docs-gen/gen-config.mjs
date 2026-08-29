@@ -158,6 +158,7 @@ const PURPOSES = {
     PORT: 'HTTP listen port.',
     HTTPS_PORT: 'HTTPS listen port (used when TLS cert/key are set).',
     JWT_SECRET: 'Secret used to sign/verify auth + audit tokens. Fatal if unset.',
+    ROHY_PLUGIN_IMPORT_MAX_BYTES: 'Deployment-wide ceiling, in bytes, on any plugin setting that binds to it (RPS-1 1.4, `ceilingEnv`) \u2014 today pathology\u0027s `imports.maxBytes`. A tenant admin may set a value BELOW this and can never set one above it, so an operator who caps a deployment is not overridden by a manifest declaring a larger max. Unset means the manifest\u0027s own max applies; an unparseable value is treated as unset rather than as zero, so a typo cannot silently forbid every legal value.',
     ROHY_PLUGIN_ORIGINS: 'Comma-separated `<pluginId>=<origin>` allowlist naming where each RPS-1 plugin\'s remote content is fetched from, e.g. `pathology=https://slides.example.edu`. Unset means no plugin has a remote origin and every plugin proxy route answers 503. A malformed entry is fatal at boot — a typo must not degrade into rohy silently never contacting the host an operator believes it is using. The origin is operator configuration only: it is never read from a manifest, a case config or a request.',
     JWT_EXPIRY: 'Lifetime of issued JWTs.',
     TLS_CERT_PATH: 'Path to TLS certificate; must be paired with `TLS_KEY_PATH`.',

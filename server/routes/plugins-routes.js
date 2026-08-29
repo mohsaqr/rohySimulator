@@ -31,6 +31,8 @@ import { authenticateToken, requireStudent } from '../middleware/auth.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { roleAllows } from '../shared/pluginRegistry.js';
 import { pluginOrigins } from '../lib/pluginRemoteOrigins.js';
+import { readSettings, mergeSettings, visibleSettingKeys } from '../shared/pluginSettings.js';
+import { tenantId, auditSuccess, dbGet, dbRun } from './_helpers.js';
 import { logger } from '../logger.js';
 
 const log = logger('plugin-proxy');
@@ -183,6 +185,147 @@ router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async 
     }
     res.setHeader('Cache-Control', 'private, max-age=60');
     res.json({ plugin: pluginId, catalog });
+});
+
+// --- the settings slot (RPS-1 1.4, §11c) ---------------------------------
+//
+// The host stores and validates plugin settings GENERICALLY, from the schema
+// the manifest declares. Pathology is the first user; a second plugin gets an
+// admin page by declaring fields, not by shipping a React screen — which is the
+// difference between closing §14.4's gap and closing it once.
+//
+// Both routes are declared BEFORE the content splat so it does not swallow them.
+
+/** A tenant's stored flat map, or {} when it has never saved. */
+async function storedSettings(tenant, pluginId) {
+    const row = await dbGet(
+        'SELECT settings FROM plugin_settings WHERE tenant_id = ? AND plugin_id = ?',
+        [tenant, pluginId]
+    );
+    return row?.settings ?? null;
+}
+
+/**
+ * Deployment-wide ceilings for a manifest's numeric fields.
+ *
+ * A field declares the NAME of an env var (`ceilingEnv`); the value is read
+ * here, on the server, because server/shared/ is bundled into the browser and
+ * a limit read from a non-existent `process` would be no limit at all. A tenant
+ * admin may lower a value below the ceiling and never raise one above it — an
+ * operator who caps a deployment is not overridden by a manifest that declares
+ * a bigger max.
+ *
+ * @param {object} manifest
+ * @returns {object} dotted setting key → integer ceiling
+ */
+function hostCeilings(manifest) {
+    // Read LITERALLY, one line per ceiling, because docs-gen/gen-config.mjs
+    // discovers environment variables by scanning source for their literal
+    // spelling. A computed lookup by `field.ceilingEnv` works at runtime and is
+    // invisible to that scan — the config reference would omit the knob, and an
+    // operator would have no documented way to find it.
+    // server/shared/pluginSettings.js's HOST_CEILING_ENVS is the closed list a
+    // manifest may bind to, checked at plugins:gen time.
+    const values = {
+        ROHY_PLUGIN_IMPORT_MAX_BYTES: process.env.ROHY_PLUGIN_IMPORT_MAX_BYTES,
+    };
+    const out = {};
+    Object.entries(manifest.settings.fields).forEach(([key, field]) => {
+        if (!field.ceilingEnv) return;
+        const raw = Number(values[field.ceilingEnv]);
+        // An unset or unparseable ceiling is the field's own max, not zero:
+        // a typo'd env var must not silently forbid every legal value.
+        if (Number.isInteger(raw) && raw > 0) out[key] = raw;
+    });
+    return out;
+}
+
+/** Shared 404: an unknown plugin and a plugin with no settings slot answer the
+ *  same way, so the route does not reveal which plugins are installed. */
+function settingsManifest(pluginId) {
+    const manifest = MANIFESTS_BY_ID.get(pluginId);
+    return manifest && manifest.settings ? manifest : null;
+}
+
+router.get('/plugins/:pluginId/settings', authenticateToken, async (req, res) => {
+    const { pluginId } = req.params;
+    const manifest = settingsManifest(pluginId);
+    if (!manifest) {
+        return res.status(404).json({ error: 'no such plugin settings', code: 'plugin_settings_unknown' });
+    }
+    // Per-FIELD role gating, not per-route: the plan's library card is readable
+    // by an educator while the import policy above it is admin-only, and those
+    // are two audiences for one page. A field with no stated minRole reads as
+    // admin — the safe reading of an omission is the strictest one.
+    const visible = new Set(visibleSettingKeys(manifest.settings, req.user?.role, roleAllows));
+    if (visible.size === 0) {
+        return res.status(403).json({ error: 'insufficient role for this plugin\'s settings', code: 'plugin_forbidden' });
+    }
+    const effective = readSettings(manifest.settings, await storedSettings(tenantId(req), pluginId));
+    res.json({
+        plugin: pluginId,
+        // The schema travels with the values so the client renders from one
+        // source of truth rather than a second copy of the field list.
+        schema: {
+            groups: manifest.settings.groups,
+            fields: Object.fromEntries(
+                Object.entries(manifest.settings.fields).filter(([key]) => visible.has(key))
+            ),
+        },
+        settings: Object.fromEntries(Object.entries(effective).filter(([key]) => visible.has(key))),
+    });
+});
+
+router.put('/plugins/:pluginId/settings', authenticateToken, async (req, res) => {
+    const { pluginId } = req.params;
+    const manifest = settingsManifest(pluginId);
+    if (!manifest) {
+        return res.status(404).json({ error: 'no such plugin settings', code: 'plugin_settings_unknown' });
+    }
+    const tenant = tenantId(req);
+    const writable = new Set(visibleSettingKeys(manifest.settings, req.user?.role, roleAllows));
+    const forbidden = Object.keys(req.body ?? {}).find((key) => !writable.has(key));
+    // Checked BEFORE the merge, and reported as 403 rather than 400: an
+    // educator naming an admin-only key has made an authorisation mistake, not
+    // a validation one, and answering "unknown field" would be a lie that
+    // hides the real reason.
+    if (forbidden && manifest.settings.fields[forbidden]) {
+        return res.status(403).json({
+            error: `Setting '${forbidden}' is not writable by your role`,
+            code: 'plugin_setting_forbidden',
+        });
+    }
+    const current = await storedSettings(tenant, pluginId);
+    const merged = mergeSettings(manifest.settings, current, req.body, hostCeilings(manifest));
+    if (!merged.ok) {
+        // The field is named because an operator staring at a rejected form
+        // needs to know WHICH row is wrong, and a generic 400 sends them
+        // guessing through four cards.
+        return res.status(400).json({
+            error: merged.field ? `Setting '${merged.field}' ${merged.message}` : merged.message,
+            code: 'plugin_setting_invalid',
+            field: merged.field || undefined,
+        });
+    }
+    await dbRun(
+        `INSERT INTO plugin_settings (tenant_id, plugin_id, settings, updated_at, updated_by)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+         ON CONFLICT (tenant_id, plugin_id)
+         DO UPDATE SET settings = excluded.settings, updated_at = CURRENT_TIMESTAMP, updated_by = excluded.updated_by`,
+        [tenant, pluginId, JSON.stringify(merged.value), req.user?.id ?? null]
+    );
+    auditSuccess(req, {
+        action: 'plugin_settings_update',
+        resourceType: 'plugin',
+        resourceId: pluginId,
+        // The KEYS the caller changed, never the values: an allowlist of hosts
+        // is operational detail an audit row should name, but the row is read
+        // far more often than it is authorised, so it carries the shape of the
+        // change and the settings table carries the change.
+        metadata: { keys: Object.keys(req.body ?? {}).sort() },
+    });
+    req.log?.info('plugin settings updated', { pluginId, keys: Object.keys(req.body ?? {}).length });
+    res.json({ plugin: pluginId, settings: merged.value });
 });
 
 router.get('/plugins/:pluginId/*splat', authenticateToken, requireStudent, proxyLimiter, async (req, res) => {

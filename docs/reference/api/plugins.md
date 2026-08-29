@@ -3,11 +3,13 @@
 > **Generated file — do not hand-edit.** Produced from `server/routes/*.js`
 > by `scripts/docs-gen/gen-api.mjs`. Regenerate with `npm run docs:gen:api`.
 
-2 endpoints. All paths are
+4 endpoints. All paths are
 relative to the `/api` base. See the [API index](./index.md) for the auth
 model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/plugins/:pluginId/*splat` | `authenticateToken, requireStudent` | `server/routes/plugins-routes.js:188` |
-| `GET` | `/api/plugins/:pluginId/catalog` | `authenticateToken` | `server/routes/plugins-routes.js:127` |
+| `GET` | `/api/plugins/:pluginId/*splat` | `authenticateToken, requireStudent` | `server/routes/plugins-routes.js:331` |
+| `GET` | `/api/plugins/:pluginId/catalog` | `authenticateToken` | `server/routes/plugins-routes.js:129` |
+| `GET` | `/api/plugins/:pluginId/settings` | `authenticateToken` | `server/routes/plugins-routes.js:250` |
+| `PUT` | `/api/plugins/:pluginId/settings` | `authenticateToken` | `server/routes/plugins-routes.js:279` |

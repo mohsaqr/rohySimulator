@@ -93,6 +93,110 @@ export const manifest = {
         minRole: 'educator',
     },
 
+    // The settings slot (RPS-1 1.4). Everything an operator decides about slide
+    // IMPORT lives here rather than in code, because the answers differ per
+    // institution: which hosts a university will fetch from, how much disk a
+    // deployment will spend per slide, and what magnification its teaching
+    // actually uses are three different questions with three different owners.
+    //
+    // Every default is chosen to make a fresh install do NOTHING surprising:
+    // imports are off, the origin allowlist is empty, and turning it on is two
+    // deliberate acts (enable, then name a host). An empty allowlist is not a
+    // misconfiguration to warn about — it is the correct state of a server
+    // nobody has told where slides may come from.
+    settings: {
+        groups: [
+            { key: 'imports', labelKey: 'pathology_settings_imports' },
+            { key: 'tiling', labelKey: 'pathology_settings_tiling' },
+            { key: 'jobs', labelKey: 'pathology_settings_jobs' },
+        ],
+        fields: {
+            'imports.enabled': {
+                type: 'boolean', default: false, group: 'imports',
+                labelKey: 'pathology_settings_imports_enabled',
+            },
+            // Empty by default and empty is meaningful: no origin, no import.
+            // The same rule as ROHY_PLUGIN_ORIGINS — a case author picks a
+            // path, an operator picks a host — one level down, because a
+            // *download* from an arbitrary URL is the same SSRF shape as a
+            // proxy to one.
+            'imports.allowedOrigins': {
+                type: 'origins', default: [], group: 'imports',
+                labelKey: 'pathology_settings_imports_origins',
+            },
+            'imports.maxBytes': {
+                type: 'bytes', default: 4 * 1024 * 1024 * 1024,
+                min: 64 * 1024 * 1024, max: 16 * 1024 * 1024 * 1024,
+                // A tenant admin may lower this; only an operator raises the
+                // deployment's own roof.
+                ceilingEnv: 'ROHY_PLUGIN_IMPORT_MAX_BYTES',
+                group: 'imports', labelKey: 'pathology_settings_imports_max_bytes',
+            },
+            // The ALLOW set, not the detector: `vips openslideload` decides what
+            // a file actually is (Cytomine's rule — detect by content, never by
+            // extension), and this says which of those answers this deployment
+            // will accept.
+            'imports.acceptedFormats': {
+                type: 'enumList',
+                options: ['svs', 'ndpi', 'tiff', 'tif', 'dzi', 'zip', 'scn', 'bif', 'czi', 'svslide'],
+                default: ['svs', 'ndpi', 'tiff', 'tif', 'dzi', 'zip'],
+                group: 'imports', labelKey: 'pathology_settings_imports_formats',
+            },
+            // On by default. A slide whose optics are unknown is not a slide
+            // with default optics: every measurement the reader makes would be
+            // wrong by an unknown factor, and 40x/0.25 is the most plausible
+            // guess and therefore the most dangerous one.
+            'imports.requireCalibration': {
+                type: 'boolean', default: true, group: 'imports',
+                labelKey: 'pathology_settings_imports_require_calibration',
+            },
+            'imports.keepOriginal': {
+                type: 'boolean', default: true, group: 'imports',
+                labelKey: 'pathology_settings_imports_keep_original',
+            },
+
+            // 10x matches what the bundled slides already are, so an imported
+            // slide and a shipped one read identically. 'native' is offered and
+            // is not the default: it is 5-10x the disk for magnification most
+            // teaching never uses.
+            'tiling.targetObjective': {
+                type: 'enum', options: ['5', '10', '20', '40', 'native'], default: '10',
+                group: 'tiling', labelKey: 'pathology_settings_tiling_objective',
+            },
+            'tiling.tileSize': {
+                type: 'enum', options: [256, 512, 1024], default: 512,
+                group: 'tiling', labelKey: 'pathology_settings_tiling_tile_size',
+            },
+            'tiling.overlap': {
+                type: 'int', min: 0, max: 2, default: 1,
+                group: 'tiling', labelKey: 'pathology_settings_tiling_overlap',
+            },
+            'tiling.jpegQuality': {
+                type: 'int', min: 60, max: 95, default: 85,
+                group: 'tiling', labelKey: 'pathology_settings_tiling_quality',
+            },
+            // 'average' over 'median': median is for masks and label layers,
+            // and on H&E it quietly erases single-cell detail at low zoom.
+            'tiling.regionShrink': {
+                type: 'enum', options: ['average', 'median'], default: 'average',
+                group: 'tiling', labelKey: 'pathology_settings_tiling_shrink',
+            },
+            'tiling.previewLongestEdge': {
+                type: 'int', min: 256, max: 2048, default: 1024,
+                group: 'tiling', labelKey: 'pathology_settings_tiling_preview',
+            },
+            'tiling.timeoutMinutes': {
+                type: 'int', min: 10, max: 720, default: 120,
+                group: 'tiling', labelKey: 'pathology_settings_tiling_timeout',
+            },
+
+            'jobs.retentionDays': {
+                type: 'int', min: 1, max: 365, default: 30,
+                group: 'jobs', labelKey: 'pathology_settings_jobs_retention',
+            },
+        },
+    },
+
     // The document contract (§11a). `rubric` is the answer key — every expected
     // answer, ROI and dwell threshold — and the package's own `learnerCase()`
     // projection omits it in the room. But a projection in the browser only

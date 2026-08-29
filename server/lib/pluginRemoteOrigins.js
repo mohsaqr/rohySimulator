@@ -20,6 +20,7 @@
  * believing slides are served from a host that rohy never contacts.
  */
 import { logger } from '../logger.js';
+import { normalizeOrigin } from '../shared/pluginSettings.js';
 
 const log = logger('plugin-origins');
 
@@ -48,27 +49,11 @@ export function parsePluginOrigins(raw) {
             throw new Error(`ROHY_PLUGIN_ORIGINS lists plugin '${id}' twice — which host wins is not something to leave to parse order`);
         }
 
-        let url;
-        try {
-            url = new URL(value);
-        } catch {
-            throw new Error(`ROHY_PLUGIN_ORIGINS origin for '${id}' is not a URL: '${value}'`);
-        }
-        if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-            throw new Error(`ROHY_PLUGIN_ORIGINS origin for '${id}' must be http or https, got '${url.protocol}'`);
-        }
-        // Credentials in the URL would be forwarded on every tile request and
-        // logged by every intermediary. If an upstream needs auth, it needs a
-        // design, not a userinfo segment.
-        if (url.username || url.password) {
-            throw new Error(`ROHY_PLUGIN_ORIGINS origin for '${id}' carries credentials in the URL; that is not a supported way to authenticate an upstream`);
-        }
-        // A path/query on the origin would silently prefix or corrupt every
-        // proxied request. The origin is a HOST, and the manifest owns paths.
-        if ((url.pathname && url.pathname !== '/') || url.search || url.hash) {
-            throw new Error(`ROHY_PLUGIN_ORIGINS origin for '${id}' must be a bare origin with no path, query or fragment — the manifest declares the paths`);
-        }
-        out.set(id, url.origin);
+        // ONE definition of "a host rohy's server may talk to", shared with the
+        // 'origins' settings type (RPS-1 1.4). Two copies of this rule is two
+        // chances to refuse a userinfo segment in one place and accept it in
+        // the other; the manifest still owns the paths.
+        out.set(id, normalizeOrigin(value, `ROHY_PLUGIN_ORIGINS origin for '${id}'`));
     });
 
     return out;

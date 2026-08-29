@@ -122,7 +122,7 @@ plug-and-play.*
 
 > **1.3 note — the boundary is a test, and the location is upstream.**
 > `src/components/pathology/` is a byte-identical copy of
-> `~/Documents/Github/Pathoyon/rohy-pathology/src` (re-vendored at v2.9.69).
+> `~/Documents/Github/Pathoyon/pathoyon/src` (re-vendored at v2.9.69).
 > Edit the package upstream and re-vendor; never in rohy. Rohy's ESLint ignores
 > the folder (as it does `OyonR/`), and rohy's own gate on it is
 > `portability.test.js`: every import is a file inside the folder or a declared
@@ -159,6 +159,9 @@ far from its cause.
 | R18 | `remote.paths` are literal `/lower-kebab` prefixes and `remote.contentTypes` is a non-empty list of bare `type/subtype` | an unbounded proxy — an open relay onto the configured origin — and an image proxy that will happily relay `text/html` from it |
 | R19 *(1.3)* | if `authoring` is declared the descriptor MUST export `validate(doc)` | an editor whose output the host cannot judge — material every learner is assessed against, shipped unreviewable. See §11a |
 | R20 *(1.3)* | `available(ctx)` judges the **document**, never the key's presence | a saved-but-empty document lighting a room onto nothing — the exact failure `available()` exists to prevent |
+| R21 *(1.4)* | every `settings` field declares a `default`, and that default **passes the field's own constraints** | a schema that fails OPEN — a tenant which never opened the settings page running on a value the page itself refuses to save |
+| R22 *(1.4)* | every `settings` field key is `'<group>.<field>'` naming a **declared** group, and every field declares `labelKey` | a field stored correctly and rendered nowhere, or a blank row |
+| R23 *(1.4)* | a numeric `settings` field declares integer `min` and `max`; `ceilingEnv` is a `ROHY_`-prefixed name on a numeric field only | an unbounded number reaching whatever consumes it, and a ceiling with nothing to bound |
 
 Roles: `guest student reviewer educator admin` (mirrors `ROLE_RANKS` in
 `server/middleware/auth.js`; a contract test asserts the copies agree).
@@ -621,6 +624,84 @@ else having happened.
 
 ---
 
+## 11c. Settings *(1.4)*
+
+A plugin's material is per-case; its **policy** is per-deployment. Which hosts a
+university will fetch slides from, how much disk it will spend on one, and what
+magnification its teaching actually uses are three questions a case author
+cannot answer and a manifest must not hardcode.
+
+§14.4 recorded the gap as "no per-tenant enable/disable" and named
+`oyon_settings` as the pattern to copy. Copying it literally — a column per knob
+— solves it for pathology and leaves the second plugin exactly where the first
+one was, because a column per setting means a **migration per plugin**. So the
+host renders and stores plugin settings **generically from a schema the manifest
+declares**. Pathology is the first user, not the only intended one.
+
+### 11c.1 The schema
+
+```js
+settings: {
+    groups: [{ key: 'imports', labelKey: 'x_settings_imports' }],
+    fields: {
+        'imports.enabled':        { type: 'boolean', default: false, labelKey: 'x_imports_enabled' },
+        'imports.allowedOrigins': { type: 'origins', default: [],    labelKey: 'x_imports_origins' },
+        'imports.maxBytes':       { type: 'bytes', min: 1 << 26, max: 1 << 34, default: 1 << 32,
+                                    ceilingEnv: 'ROHY_PLUGIN_IMPORT_MAX_BYTES',
+                                    labelKey: 'x_imports_max_bytes' },
+    },
+}
+```
+
+Types are `boolean`, `int`, `bytes`, `enum`, `enumList`, `origins`. A field key
+is `'<group>.<field>'`; the group must be declared. `minRole` defaults to
+**admin** — the safe reading of an omission about who may change a
+deployment-wide knob is the strictest one, and it is per FIELD rather than per
+route because one page can hold an admin-only import policy and an
+educator-readable library table.
+
+`ceilingEnv` names an environment variable an **operator** sets. A tenant admin
+may lower a value below that ceiling and can never raise one above it: an
+operator who caps a deployment is not overridden by a manifest declaring a
+larger `max`. Only the server reads it — `server/shared/pluginSettings.js` is
+bundled into the browser, where `process` does not exist and a limit read from
+it would be no limit at all.
+
+### 11c.2 Storage is flat, and the PUT is a merge
+
+Values live in `plugin_settings(tenant_id, plugin_id, settings JSON, …)`
+(migration 0048) as a **flat map of dotted keys** — `{"imports.enabled": true}`
+— never a nested object. `PUT /api/plugins/<id>/settings` is a **key-presence
+merge** (the same semantics as `/platform-settings/voice`, and deliberately not
+the full replace `/addons/oyon/settings` is), and *"which keys did the caller
+send"* has exactly one answer on a flat map and several defensible ones on a
+nested one. Deep-merge ambiguity is how a partial save silently erases a sibling
+key. A plugin that would rather read `settings.imports.enabled` gets the nested
+view from `nestSettings()`; storage stays flat.
+
+A tenant with **no row** is not an error and must never be: it runs on the
+manifest's declared defaults. That is why every field is required to declare
+one, and why the absence of a row means *"never configured"* rather than
+*"configured to nothing"*.
+
+### 11c.3 A default is a value, and is checked like one
+
+The single most important check in the slot: a schema whose default violates its
+own constraint **fails open**. `{ max: 16 GiB, default: 64 GiB }` would ship
+64 GiB to every tenant that never opened the settings page, while the page
+itself refused to save that number. So `validateSettingsSchema()` runs each
+declared default through the same `coerceSettingValue()` a request body goes
+through, at `plugins:gen` time, before any code runs.
+
+Two more rules follow the same fail-closed instinct. An **unknown key in a PUT
+is refused**, never ignored — silently dropping it is how an operator saves a
+typo'd field, sees a `200`, and believes a limit is in force that nothing ever
+reads. And on **read**, a stored key the schema no longer declares is dropped
+and a stored value it now rejects falls back to the default, because that is
+what a plugin upgrade looks like from the database's point of view.
+
+---
+
 ## 12. Adding a plugin
 
 1. `src/plugins/<id>/manifest.js`
@@ -653,6 +734,11 @@ acceptance test** — each of those files used to require one.
       `available()` judges the document not the key (R20), and its document
       round-trips `PUT /cases` → `case_snapshot` → room with no plugin code (§11a)
 - [ ] *(1.3)* A blank document saved from the editor does NOT light the room
+- [ ] *(1.4)* If it declares `settings`: every field has a `default` that its own
+      constraints accept (R21), keys name declared groups (R22), numeric fields
+      are bounded (R23), and each `labelKey` has an i18n entry (§11c)
+- [ ] *(1.4)* Its settings survive the round trip `PUT` → re-`GET` with untouched
+      keys unchanged — the PUT is a merge, not a replace
 
 ---
 
@@ -672,11 +758,12 @@ Ordered by how much they matter to a plugin author.
    nor manifest version, and clinical state is resolved with the currently
    installed maps — so upgrading or removing a plugin retroactively reinterprets
    historical analytics.
-4. **No per-tenant enable/disable** (the `oyon_settings` table is the pattern to
-   copy). `minRole` and `authoring.minRole` ARE enforced — as of 1.1 in
-   `registry.resolve()` and `PluginAuthor`, and as of 1.2 server-side in the
-   remote proxy, which is the first surface rohy's *server* renders on a
-   plugin's behalf.
+4. ~~**No per-tenant enable/disable**~~ — **closed in 1.4** by the settings slot
+   (§11c): `plugin_settings` is per (tenant, plugin), and a plugin declares its
+   own knobs rather than getting a hand-written screen. `minRole` and
+   `authoring.minRole` ARE enforced — as of 1.1 in `registry.resolve()` and
+   `PluginAuthor`, as of 1.2 server-side in the remote proxy, and as of 1.4 per
+   settings FIELD.
 5. **No LLM grant exists**, so `capabilities.llm` is always absent.
 6. **No cleanup path for `rohy_plugin:*`** — a `session` lifetime is declared
    but nothing clears the keys, so state persists on shared browsers.
@@ -714,9 +801,9 @@ now rely on.
 
 ## 15. Reference implementation
 
-`src/plugins/pathology/` — adapts the `rohy-pathology` package
+`src/plugins/pathology/` — adapts the Pathoyon package
 (`src/components/pathology/`, a byte-identical copy of
-`~/Documents/Github/Pathoyon/rohy-pathology/src`, re-vendored v2.9.69; rohy's
+`~/Documents/Github/Pathoyon/pathoyon/src`, re-vendored v2.9.69; rohy's
 `portability.test.js` guards the boundary) into a room with 23
 verbs, 9 object types, whole-slide viewing, annotation with QuPath GeoJSON
 interchange, and read-process assessment.

@@ -31,6 +31,8 @@
  *               src/plugins/context.js for why that distinction is load-bearing.
  */
 
+import { validateSettingsSchema } from './pluginSettings.js';
+
 /** Clinical states a plugin verb may resolve to. Mirrors clinicalStates.js. */
 export const CLINICAL_STATES = [
     'assessing', 'examining', 'investigating', 'treating', 'communicating',
@@ -258,6 +260,12 @@ export function validateManifest(manifest) {
             }
         }
     }
+
+    // The settings slot (RPS-1 1.4, §11c). Optional. Validated here rather
+    // than at first render because a malformed schema is a manifest defect and
+    // the standard's discipline is that manifests fail at `plugins:gen` time,
+    // before any code runs.
+    validateSettingsSchema(manifest.settings, manifest.id);
 
     caps.forEach((cap) => {
         if (!CAPABILITIES.includes(cap)) {

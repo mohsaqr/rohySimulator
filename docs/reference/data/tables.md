@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Regenerate with `npm run docs:gen:data`. One section per table; columns in declaration order.
 
-**92 tables.**
+**93 tables.**
 
 ## `active_sessions`
 
@@ -1459,6 +1459,23 @@ Stores platform settings records.
 | `setting_value` | TEXT | — | — |
 | `updated_by` | INTEGER | — | — |
 | `updated_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+
+## `plugin_settings`
+
+Stores plugin settings records.
+
+**Introduced by:** migration `0048_plugin_settings.sql`
+
+**Cross-cutting:** `tenant-scoped` · `audit (updated_at)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `tenant_id` | INTEGER | NOT NULL | — |
+| `plugin_id` | TEXT | NOT NULL | — |
+| `which` | drops | keys the manifest no -- longer declares and falls back to the default for a value the schema now -- rejects. That is what a plugin upgrade looks like from here. settings TEXT NOT NULL DEFAULT '{}' | — |
+| `updated_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | — |
+| `updated_by` | INTEGER | REFERENCES users(id) | — |
 
 ## `questionnaire_responses`
 

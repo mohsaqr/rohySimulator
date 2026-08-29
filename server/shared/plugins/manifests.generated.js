@@ -39,6 +39,156 @@ export const PLUGIN_MANIFESTS = [
             "order": 50,
             "subKey": "room_pathology_sub"
         },
+        "settings": {
+            "fields": {
+                "imports.acceptedFormats": {
+                    "default": [
+                        "svs",
+                        "ndpi",
+                        "tiff",
+                        "tif",
+                        "dzi",
+                        "zip"
+                    ],
+                    "group": "imports",
+                    "labelKey": "pathology_settings_imports_formats",
+                    "options": [
+                        "svs",
+                        "ndpi",
+                        "tiff",
+                        "tif",
+                        "dzi",
+                        "zip",
+                        "scn",
+                        "bif",
+                        "czi",
+                        "svslide"
+                    ],
+                    "type": "enumList"
+                },
+                "imports.allowedOrigins": {
+                    "default": [],
+                    "group": "imports",
+                    "labelKey": "pathology_settings_imports_origins",
+                    "type": "origins"
+                },
+                "imports.enabled": {
+                    "default": false,
+                    "group": "imports",
+                    "labelKey": "pathology_settings_imports_enabled",
+                    "type": "boolean"
+                },
+                "imports.keepOriginal": {
+                    "default": true,
+                    "group": "imports",
+                    "labelKey": "pathology_settings_imports_keep_original",
+                    "type": "boolean"
+                },
+                "imports.maxBytes": {
+                    "ceilingEnv": "ROHY_PLUGIN_IMPORT_MAX_BYTES",
+                    "default": 4294967296,
+                    "group": "imports",
+                    "labelKey": "pathology_settings_imports_max_bytes",
+                    "max": 17179869184,
+                    "min": 67108864,
+                    "type": "bytes"
+                },
+                "imports.requireCalibration": {
+                    "default": true,
+                    "group": "imports",
+                    "labelKey": "pathology_settings_imports_require_calibration",
+                    "type": "boolean"
+                },
+                "jobs.retentionDays": {
+                    "default": 30,
+                    "group": "jobs",
+                    "labelKey": "pathology_settings_jobs_retention",
+                    "max": 365,
+                    "min": 1,
+                    "type": "int"
+                },
+                "tiling.jpegQuality": {
+                    "default": 85,
+                    "group": "tiling",
+                    "labelKey": "pathology_settings_tiling_quality",
+                    "max": 95,
+                    "min": 60,
+                    "type": "int"
+                },
+                "tiling.overlap": {
+                    "default": 1,
+                    "group": "tiling",
+                    "labelKey": "pathology_settings_tiling_overlap",
+                    "max": 2,
+                    "min": 0,
+                    "type": "int"
+                },
+                "tiling.previewLongestEdge": {
+                    "default": 1024,
+                    "group": "tiling",
+                    "labelKey": "pathology_settings_tiling_preview",
+                    "max": 2048,
+                    "min": 256,
+                    "type": "int"
+                },
+                "tiling.regionShrink": {
+                    "default": "average",
+                    "group": "tiling",
+                    "labelKey": "pathology_settings_tiling_shrink",
+                    "options": [
+                        "average",
+                        "median"
+                    ],
+                    "type": "enum"
+                },
+                "tiling.targetObjective": {
+                    "default": "10",
+                    "group": "tiling",
+                    "labelKey": "pathology_settings_tiling_objective",
+                    "options": [
+                        "5",
+                        "10",
+                        "20",
+                        "40",
+                        "native"
+                    ],
+                    "type": "enum"
+                },
+                "tiling.tileSize": {
+                    "default": 512,
+                    "group": "tiling",
+                    "labelKey": "pathology_settings_tiling_tile_size",
+                    "options": [
+                        256,
+                        512,
+                        1024
+                    ],
+                    "type": "enum"
+                },
+                "tiling.timeoutMinutes": {
+                    "default": 120,
+                    "group": "tiling",
+                    "labelKey": "pathology_settings_tiling_timeout",
+                    "max": 720,
+                    "min": 10,
+                    "type": "int"
+                }
+            },
+            "groups": [
+                {
+                    "key": "imports",
+                    "labelKey": "pathology_settings_imports"
+                },
+                {
+                    "key": "tiling",
+                    "labelKey": "pathology_settings_tiling"
+                },
+                {
+                    "key": "jobs",
+                    "labelKey": "pathology_settings_jobs"
+                }
+            ]
+        },
         "states": {
             "interpretations": {
                 "ANNOTATED_SLIDE:slide_measurement": "documenting",

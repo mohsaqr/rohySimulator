@@ -9,6 +9,50 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.84] — 2026-08-29
+
+### Added
+
+- **RPS-1 1.4 — the settings slot (§11c).** A plugin's material is per-case;
+  its *policy* is per-deployment, and until now there was nowhere to put it.
+  §14.4 recorded the gap as "no per-tenant enable/disable" and named
+  `oyon_settings` as the pattern to copy — but copying that literally (a column
+  per knob) means **a migration per plugin**, which solves it for pathology and
+  leaves the second plugin exactly where the first one was. So the host now
+  renders and stores plugin settings **generically from a schema the manifest
+  declares**: `settings: { groups, fields }` with types `boolean`, `int`,
+  `bytes`, `enum`, `enumList`, `origins`.
+  - `GET`/`PUT /api/plugins/:pluginId/settings`. The PUT is a **key-presence
+    merge** (like `/platform-settings/voice`, deliberately not the full replace
+    `/addons/oyon/settings` is), and storage is a **flat map of dotted keys**
+    because "which keys did the caller send" has exactly one answer on a flat
+    map and several defensible ones on a nested one.
+  - Gating is per **field**, not per route — one page holds an admin-only import
+    policy and an educator-readable library table. A field with no stated
+    `minRole` is admin: the strictest reading of an omission.
+  - `ceilingEnv` lets a numeric field bind to a deployment-wide operator limit
+    (`ROHY_PLUGIN_IMPORT_MAX_BYTES`). A tenant admin may set a value below it and
+    never above it. The list of bindable ceilings is **closed and host-owned**
+    (`HOST_CEILING_ENVS`), so a manifest cannot declare a ceiling nothing reads.
+  - A **default is validated against its own field** at `plugins:gen` time (R21).
+    This is the load-bearing check: `{ max: 16 GiB, default: 64 GiB }` would ship
+    64 GiB to every tenant that never opened the settings page, while the page
+    itself refused to save it — a schema that fails open.
+  - An unknown key in a PUT is **refused, not ignored** (a silently dropped typo
+    is how an operator believes a limit is in force that nothing reads); on read,
+    a key the schema no longer declares is dropped and a value it now rejects
+    falls back to the default — what a plugin upgrade looks like from the DB.
+  - Pathology declares the first schema: 14 fields across import policy,
+    conversion and job retention. Every default makes a fresh install do nothing
+    surprising — **imports off, allowlist empty**, so enabling them is two
+    deliberate acts.
+  - Migration `0048_plugin_settings.sql` (additive). Rules **R21–R23**, two new
+    conformance rows, §14.4 marked closed. 36 tests.
+- **One definition of "a host rohy's server may talk to."** The `origins`
+  setting type and `ROHY_PLUGIN_ORIGINS` now share `normalizeOrigin()` in
+  `server/shared/pluginSettings.js`. Two copies of that rule was two chances to
+  refuse a userinfo segment in one place and accept it in the other.
+
 ## [2.9.83] — 2026-08-29
 
 ### Fixed
