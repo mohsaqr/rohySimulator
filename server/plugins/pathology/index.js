@@ -35,12 +35,12 @@ export default {
                         SET state = ?, source_sha256 = ?, source_bytes = ?,
                             native_objective = ?, native_mpp_x = ?, native_mpp_y = ?,
                             tiled_objective = ?, width = ?, height = ?, disk_bytes = ?,
-                            error = NULL, updated_at = CURRENT_TIMESTAMP
+                            error = NULL, updated_at = ?
                       WHERE id = ? AND plugin_id = 'pathology'`,
                     [record.state, record.sourceSha256, record.sourceBytes,
                         record.nativeObjective, record.nativeMppX, record.nativeMppY,
                         record.tiledObjective, record.width, record.height, record.diskBytes,
-                        record.assetId]
+                        ctx.now(), record.assetId]
                 );
                 return record;
             } catch (err) {
@@ -48,9 +48,9 @@ export default {
                 // swept by retention and the card in the library has to keep
                 // saying why it is broken long after that.
                 await ctx.db.run(
-                    `UPDATE plugin_assets SET state = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP
+                    `UPDATE plugin_assets SET state = 'failed', error = ?, updated_at = ?
                       WHERE id = ? AND plugin_id = 'pathology'`,
-                    [String(err?.message ?? err).slice(0, 1000), job.asset_id]
+                    [String(err?.message ?? err).slice(0, 1000), ctx.now(), job.asset_id]
                 );
                 throw err;
             }
@@ -109,12 +109,12 @@ export default {
             // Deterministic id ⇒ re-importing the same URL updates the same row
             // rather than accumulating duplicates of a multi-gigabyte slide.
             await ctx.db.run(
-                `INSERT INTO plugin_assets (id, tenant_id, plugin_id, label, state, source_url, created_by)
-                 VALUES (?, ?, 'pathology', ?, 'importing', ?, ?)
+                `INSERT INTO plugin_assets (id, tenant_id, plugin_id, label, state, source_url, created_by, created_at, updated_at)
+                 VALUES (?, ?, 'pathology', ?, 'importing', ?, ?, ?, ?)
                  ON CONFLICT (id) DO UPDATE SET
                      state = 'importing', label = excluded.label, error = NULL,
-                     updated_at = CURRENT_TIMESTAMP`,
-                [assetId, tenant, label || url.split('/').pop(), url, req.user?.id ?? null]
+                     updated_at = excluded.updated_at`,
+                [assetId, tenant, label || url.split('/').pop(), url, req.user?.id ?? null, ctx.now(), ctx.now()]
             );
             const jobId = await ctx.enqueue({
                 tenantId: tenant, kind: 'import_slide', payload: { url, label },
@@ -242,10 +242,10 @@ export default {
             const result = await ctx.db.run(
                 `UPDATE plugin_assets
                     SET native_objective = ?, native_mpp_x = ?, native_mpp_y = ?,
-                        state = 'ready', updated_at = CURRENT_TIMESTAMP
+                        state = 'ready', updated_at = ?
                   WHERE id = ? AND tenant_id = ? AND plugin_id = 'pathology'
                     AND state = 'needs_calibration'`,
-                [objective, mpp, mpp, req.params.assetId, helpers.tenantId(req)]
+                [objective, mpp, mpp, ctx.now(), req.params.assetId, helpers.tenantId(req)]
             );
             if ((result?.changes ?? 0) === 0) {
                 return res.status(404).json({ error: 'No such uncalibrated slide.', code: 'plugin_asset_unknown' });

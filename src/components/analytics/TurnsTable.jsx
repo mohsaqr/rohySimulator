@@ -10,15 +10,10 @@ import { Download } from 'lucide-react';
 import LogGrid, { CopyableCell } from './LogGrid';
 import { buildCsv, downloadCsv } from './csvExport';
 import { emotionColor, signed, fix2 } from '../oyon/emotionLogShared';
+import { fmtTime } from '../../utils/formatTime.js';
 
 const DEFAULT_LIMIT = 500;
 
-function fmtTime(ts) {
-    if (!ts) return '';
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return ts;
-    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
-}
 function summarise(s, n = 120) {
     const str = s == null ? '' : String(s);
     return str.length <= n ? str : str.slice(0, n) + '…';

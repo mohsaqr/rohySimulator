@@ -250,11 +250,25 @@ function sendTelemetry(events, immediate) {
     // Trinity (user_id, case_id) is server-derived from session_id —
     // we deliberately do not send them. The server reads the sessions
     // row and ignores any client values. See PLAN_LOGGING.md Phase 1.
+    // Read the clock ONCE for the whole flush, so every event in this batch is
+    // measured against the same instant.
+    const flushedAt = Date.now();
     const payload = {
         events: events.map(n => {
             const v = n.data?.vitals || null;
             return {
-                timestamp: new Date(n.createdAt).toISOString(),
+                // The device's own reading, kept for skew analysis. The SERVER
+                // decides what `learning_events.timestamp` becomes — a browser
+                // clock is unverifiable, and a learner three hours fast used to
+                // drag their whole session away from the chat turns beside it.
+                client_time: new Date(n.createdAt).toISOString(),
+                // How long before this flush the event happened. The server
+                // subtracts it from its own receipt time, which keeps the
+                // SPACING between events exact (what time-on-task and TNA
+                // actually read) while the anchor stays on rohy's clock.
+                // Clamped at 0: a clock that ticked backwards mid-session
+                // would otherwise send a negative age.
+                offset_ms: Math.max(0, flushedAt - n.createdAt),
                 session_id: n.sessionId || null,
                 verb: n.data?.verb || defaultVerbFor(n),
                 object_type: n.data?.objectType || 'notification',

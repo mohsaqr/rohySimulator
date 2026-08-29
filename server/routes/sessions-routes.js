@@ -15,6 +15,7 @@ import {
 import { logger } from '../logger.js';
 import { projectCaseSnapshotForRole } from '../shared/pluginDocument.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
+import { SQL_NOW } from '../shared/time.js';
 import {
     canReadAcrossUsers,
     caseAccessEnforcedFor,
@@ -227,7 +228,7 @@ router.post('/sessions', authenticateToken, async (req, res) => {
 
         // Log case load event
         dbAdapter.run(
-            `INSERT INTO settings_logs (user_id, session_id, case_id, setting_type, settings_json, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO settings_logs (user_id, session_id, case_id, setting_type, settings_json, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
             [user_id, sessionId, case_id, 'case_load', JSON.stringify({ case_id, timestamp: new Date().toISOString() }), tenantId(req)]
         );
 
@@ -327,8 +328,8 @@ router.post('/sessions/:id/vitals', authenticateToken, async (req, res) => {
 
     const { elapsed_ms, hr, rhythm, spo2, bp_sys, bp_dia, rr, temp, etco2, source } = req.body || {};
     const sql = `INSERT INTO session_vitals
-        (session_id, elapsed_ms, hr, rhythm, spo2, bp_sys, bp_dia, rr, temp, etco2, source, tenant_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        (session_id, elapsed_ms, hr, rhythm, spo2, bp_sys, bp_dia, rr, temp, etco2, source, tenant_id, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`;
     dbAdapter.run(sql, [
         sessionId,
         Number.isFinite(elapsed_ms) ? elapsed_ms : null,

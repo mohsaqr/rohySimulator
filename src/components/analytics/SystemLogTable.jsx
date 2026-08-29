@@ -17,15 +17,10 @@ import { apiFetch, ApiError } from '../../services/apiClient';
 import { Download } from 'lucide-react';
 import LogGrid, { CopyableCell } from './LogGrid';
 import FilterBar, { applyClientFilters, contextualOptions } from './FilterBar';
+import { fmtTime } from '../../utils/formatTime.js';
 
 const DEFAULT_LIMIT = 500;
 
-function fmtTime(ts) {
-    if (!ts) return '';
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return ts;
-    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
-}
 
 const COMPONENT_COLOR = {
     auth:     'bg-emerald-900/40 text-emerald-300',

@@ -9,10 +9,10 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `POST` | `/api/auth/login` | `(none)` | `server/routes/auth-routes.js:436` |
-| `POST` | `/api/auth/logout` | `authenticateToken` | `server/routes/auth-routes.js:726` |
-| `GET` | `/api/auth/profile` | `authenticateToken` | `server/routes/auth-routes.js:709` |
-| `POST` | `/api/auth/refresh` | `authenticateToken` | `server/routes/auth-routes.js:643` |
-| `POST` | `/api/auth/register` | `(none)` | `server/routes/auth-routes.js:162` |
-| `GET` | `/api/auth/registration-policy` | `(none)` | `server/routes/auth-routes.js:136` |
-| `GET` | `/api/auth/verify` | `authenticateToken` | `server/routes/auth-routes.js:609` |
+| `POST` | `/api/auth/login` | `(none)` | `server/routes/auth-routes.js:437` |
+| `POST` | `/api/auth/logout` | `authenticateToken` | `server/routes/auth-routes.js:727` |
+| `GET` | `/api/auth/profile` | `authenticateToken` | `server/routes/auth-routes.js:710` |
+| `POST` | `/api/auth/refresh` | `authenticateToken` | `server/routes/auth-routes.js:644` |
+| `POST` | `/api/auth/register` | `(none)` | `server/routes/auth-routes.js:163` |
+| `GET` | `/api/auth/registration-policy` | `(none)` | `server/routes/auth-routes.js:137` |
+| `GET` | `/api/auth/verify` | `authenticateToken` | `server/routes/auth-routes.js:610` |

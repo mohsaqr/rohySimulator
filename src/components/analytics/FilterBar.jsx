@@ -28,6 +28,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, X } from 'lucide-react';
+import { timeMs } from '../../../server/shared/time.js';
 
 // ---------------------------------------------------------------------------
 // Pure helpers (exported for the tables + tests)
@@ -111,10 +112,14 @@ export function applyClientFilters(rows, accessors, values) {
 export function filterByDateRange(rows, getTs, values) {
     const { from, to } = values || {};
     if (!from && !to) return rows;
+    // Deliberately LOCAL midnight, unlike every other parse in this file. A
+    // reviewer who picks "29 August" means their own 29 August, not UTC's — so
+    // the boundary follows the viewer while the rows it compares against stay
+    // absolute. Do not "fix" this to timeMs(); it is the one correct local read.
     const fromMs = from ? new Date(`${from}T00:00:00`).getTime() : null;
     const toMs = to ? new Date(`${to}T00:00:00`).getTime() + 86_400_000 : null;
     return rows.filter((row) => {
-        const t = new Date(getTs(row)).getTime();
+        const t = timeMs(getTs(row)) ?? NaN;
         if (Number.isNaN(t)) return true;
         if (fromMs !== null && !Number.isNaN(fromMs) && t < fromMs) return false;
         if (toMs !== null && !Number.isNaN(toMs) && t >= toMs) return false;
@@ -156,7 +161,7 @@ export function deriveSessionOptions(rows, { id, ts, attempt, caseName }) {
         const sid = id(row);
         if (sid === null || sid === undefined || sid === '') return;
         const key = String(sid);
-        const t = ts ? new Date(ts(row)).getTime() : NaN;
+        const t = ts ? (timeMs(ts(row)) ?? NaN) : NaN;
         const existing = map.get(key);
         if (existing) {
             existing.count += 1;

@@ -38,7 +38,7 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_ADMIN_NAME` | No | — | Display name for the provisioned first admin. Defaults to "System Administrator". | `server/seeders/users.js:55` |
 | `ROHY_ADMIN_PASSWORD` | No | — | Password for the provisioned first admin. Must satisfy the normal password policy or the seeder refuses it. **⚠ secret — see security note above.** | `server/seeders/users.js:53` |
 | `ROHY_ADMIN_USERNAME` | No | — | Provisions the first admin on first boot (with ROHY_ADMIN_PASSWORD). Applied only while the users table is empty. | `server/seeders/users.js:52` |
-| `ROHY_DISABLE_AUTH_RATE_LIMIT` | No | — | Disables the auth-endpoint rate limiter (dev/test). | `server/routes/auth-routes.js:79`<br>`server/routes/registration-routes.js:35` |
+| `ROHY_DISABLE_AUTH_RATE_LIMIT` | No | — | Disables the auth-endpoint rate limiter (dev/test). | `server/routes/auth-routes.js:80`<br>`server/routes/registration-routes.js:35` |
 | `ROHY_TOKEN` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:47`<br>`scripts/translate-locales.mjs:77` |
 | `ROHY_TRUST_PROXY` | No | `loopback` | Express `trust proxy` setting (proxy hop count / IP / preset). | `server/server.js:64` |
 | `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:56` |
@@ -75,10 +75,10 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | No | — | Anthropic API credential (LLM). **⚠ secret — see security note above.** | `server/routes/proxy-routes.js:378` |
+| `ANTHROPIC_API_KEY` | No | — | Anthropic API credential (LLM). **⚠ secret — see security note above.** | `server/routes/proxy-routes.js:379` |
 | `GOOGLE_API_KEY` | No | — | Google API credential. **⚠ secret — see security note above.** | `server/services/googleTts.js:127` |
 | `GOOGLE_TTS_API_KEY` | No | — | Google Text-to-Speech API credential. **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1687`<br>`server/routes/admin-routes.js:1712`<br>`server/routes/admin-routes.js:1713`<br>_+2 more_ |
-| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1714`<br>`server/routes/admin-routes.js:1715`<br>`server/routes/proxy-routes.js:384`<br>_+2 more_ |
+| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1714`<br>`server/routes/admin-routes.js:1715`<br>`server/routes/proxy-routes.js:385`<br>_+2 more_ |
 | `PIPER_BIN` | No | — | Path to the Piper TTS binary. | `server/services/ttsProviders.js:35` |
 | `ROHY_TEST_FAIL_GOOGLE_TTS` | No | — | _see source_ | `server/services/googleTts.js:164` |
 | `ROHY_TEST_FAKE_GOOGLE_TTS` | No | — | Test hook: stub Google TTS instead of calling the API. | `server/services/googleTts.js:172` |
@@ -118,7 +118,7 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_LOCALES_ROOT` | No | — | _see source_ | `scripts/i18n/lib.mjs:61` |
 | `ROHY_PASSWORD` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:49` |
 | `ROHY_PLUGIN_IMPORT_MAX_BYTES` | No | — | Deployment-wide ceiling, in bytes, on any plugin setting that binds to it (RPS-1 1.4, `ceilingEnv`) — today pathology's `imports.maxBytes`. A tenant admin may set a value BELOW this and can never set one above it, so an operator who caps a deployment is not overridden by a manifest declaring a larger max. Unset means the manifest's own max applies; an unparseable value is treated as unset rather than as zero, so a typo cannot silently forbid every legal value. | `server/routes/plugins-routes.js:320` |
-| `ROHY_PLUGIN_LIBRARY_DIRS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;absolute path&gt;` map of the managed library directory each plugin's server module may write in (RPS-1 1.4). Plural, one per plugin, because a singular variable cannot serve a second plugin and "the second plugin needs no host edit" is the claim RPS-1 makes. Paths must be absolute: a relative path resolves against whatever working directory the service happens to have, which differs between a dev shell, a systemd unit and a Docker image. Unset means the plugin has no library and its import surface is unavailable — not an error. Malformed is fatal at boot. | `server/lib/pluginServerSlot.js:117` |
+| `ROHY_PLUGIN_LIBRARY_DIRS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;absolute path&gt;` map of the managed library directory each plugin's server module may write in (RPS-1 1.4). Plural, one per plugin, because a singular variable cannot serve a second plugin and "the second plugin needs no host edit" is the claim RPS-1 makes. Paths must be absolute: a relative path resolves against whatever working directory the service happens to have, which differs between a dev shell, a systemd unit and a Docker image. Unset means the plugin has no library and its import surface is unavailable — not an error. Malformed is fatal at boot. | `server/lib/pluginServerSlot.js:119` |
 | `ROHY_PLUGIN_VIPS_CONCURRENCY` | No | — | How many threads an image tool (libvips) may use for a plugin conversion job. Defaults to half the machine's cores, minimum 1. libvips otherwise uses every core: measured on a 4-core server, one unbounded `dzsave` took 301% CPU for 21 seconds — three of four cores — starving the web server sharing the box, and its peak memory scales with thread count too, so an unbounded tool on a wide machine uses far more RAM than a capacity proof taken on a narrow one. Raise it on a dedicated conversion host. | `server/lib/pluginSpawn.js:63` |
 | `ROHY_USERNAME` | No | — | _see source_ | `scripts/llm-language-smoke.mjs:48` |
 

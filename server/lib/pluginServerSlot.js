@@ -59,6 +59,8 @@ import {
     authenticateToken, requireAdmin, requireEducator, requireReviewer, requireStudent,
 } from '../middleware/auth.js';
 import { tenantId, auditSuccess } from '../routes/_helpers.js';
+import { LEARNING_VERBS, resolveEventMetadata } from '../shared/learningVerbs.js';
+import { nowIso, SQL_NOW } from '../shared/time.js';
 
 const log = logger('plugin-server-slot');
 const SLOT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugins');
@@ -188,6 +190,103 @@ export function buildServerContext(manifest) {
         },
 
         runBinary,
+
+        /**
+         * The clock. RPS-1 §17.
+         *
+         * A plugin must never reach for `new Date()` or sqlite's
+         * `CURRENT_TIMESTAMP` on its own: the first one that did would pick a
+         * third timestamp shape, and rohy has already paid for having two.
+         * This returns the one contract shape — UTC ISO-8601, `Z`,
+         * milliseconds — from the same clock the host stamps with.
+         *
+         * @returns {string} e.g. `2026-08-29T12:34:56.789Z`
+         */
+        now: nowIso,
+
+        /**
+         * Record a learning event from the SERVER side.
+         *
+         * Until this existed, every plugin event was emitted by the browser,
+         * so a plugin's server work was invisible to analytics: a slide import
+         * that ran for four minutes wrote `plugin_jobs` rows and not one
+         * learning event, and `plugin_jobs` is not one of the Activity view's
+         * sources. Work nobody clicked through — a job finishing, a job
+         * failing, an asset expiring — had no way to be seen at all.
+         *
+         * The verb must be one the plugin DECLARED in its manifest vocabulary.
+         * That is the same rule the ingest route applies to the browser, and
+         * it is what stops a plugin inventing verbs at runtime that no
+         * dashboard, state map or export knows how to interpret.
+         *
+         * `timestamp` is the server's clock, not a caller-supplied value:
+         * a plugin can say what happened, never when.
+         *
+         * @param {object} event
+         * @param {number} event.tenantId
+         * @param {string} event.verb        must be in this plugin's vocabulary
+         * @param {string} event.objectType
+         * @param {number} [event.sessionId] resolves user/case when present
+         * @param {number} [event.userId]    used when there is no session
+         * @param {string} [event.objectId]
+         * @param {string} [event.objectName]
+         * @param {string} [event.result]
+         * @param {number} [event.durationMs]
+         * @param {object} [event.context]   JSON-serialisable
+         * @returns {Promise<void>}
+         * @throws {Error} when the verb is not declared by this plugin
+         */
+        async emit({ tenantId: tid, verb, objectType, sessionId = null, userId = null,
+                     objectId = null, objectName = null, result = null,
+                     durationMs = null, context = null }) {
+            const ownVerbs = Object.keys(manifest.vocabulary?.verbs ?? {});
+            if (!ownVerbs.includes(verb)) {
+                throw new Error(
+                    `plugin '${pluginId}' cannot emit '${verb}': not in its manifest vocabulary ` +
+                    `(declares ${ownVerbs.length ? ownVerbs.join(', ') : 'no verbs'})`
+                );
+            }
+            // Belt and braces: foldManifests should already have merged the
+            // plugin's verbs into LEARNING_VERBS, so a verb that is declared
+            // but missing here means the generated manifests are stale rather
+            // than that the plugin is wrong. Say which, rather than failing at
+            // the CHECK constraint.
+            if (!LEARNING_VERBS.includes(verb)) {
+                throw new Error(
+                    `plugin '${pluginId}' declares '${verb}' but the host does not know it — ` +
+                    `run \`npm run plugins:gen\``
+                );
+            }
+            const meta = resolveEventMetadata(verb);
+            let resolvedUser = userId;
+            let resolvedCase = null;
+            if (sessionId != null) {
+                const row = await dbAdapter.get(
+                    'SELECT user_id, case_id FROM sessions WHERE id = ? AND tenant_id = ?',
+                    [sessionId, tid]
+                );
+                // The trinity is derived, never accepted — the same rule the
+                // ingest route follows. A session id from another tenant
+                // resolves to nothing rather than to that tenant's user.
+                if (!row) {
+                    throw new Error(`plugin '${pluginId}' cannot emit for session ${sessionId}: not in tenant ${tid}`);
+                }
+                resolvedUser = row.user_id;
+                resolvedCase = row.case_id;
+            }
+            await dbAdapter.run(
+                `INSERT INTO learning_events (
+                    session_id, user_id, case_id, verb, object_type, object_id, object_name,
+                    component, result, duration_ms, context, tenant_id, severity, category,
+                    room, timestamp
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
+                [sessionId, resolvedUser, resolvedCase, verb, objectType, objectId, objectName,
+                 `plugin:${pluginId}`, result, durationMs,
+                 context ? JSON.stringify(context) : null,
+                 tid, meta.severity, meta.category, pluginId]
+            );
+        },
+
 
         /**
          * Remove one asset's directory, and nothing else.

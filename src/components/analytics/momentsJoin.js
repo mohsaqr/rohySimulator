@@ -17,6 +17,7 @@
 
 import { aoiLabel } from '../oyon/screenAois.js';
 import { normalizeAoiDwell, zoneTargetLabel } from '../oyon/gazeAnalytics.js';
+import { timeMs } from '../../../server/shared/time.js';
 
 /** Enrichment fields attached to every event, all-null when no window covers it. */
 const NULL_MOMENT = Object.freeze({
@@ -48,7 +49,7 @@ export function parseTimestampMs(ts) {
     }
     if (typeof ts === 'number') return Number.isFinite(ts) ? ts : null;
     if (typeof ts === 'string') {
-        const ms = new Date(ts).getTime();
+        const ms = timeMs(ts);
         return Number.isNaN(ms) ? null : ms;
     }
     return null;

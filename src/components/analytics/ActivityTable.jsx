@@ -28,15 +28,10 @@ import FilterBar, {
 } from './FilterBar';
 import { buildCsv, downloadCsv } from './csvExport';
 import { useAuth } from '../../contexts/AuthContext';
+import { fmtTime } from '../../utils/formatTime.js';
 
 const DEFAULT_LIMIT = 500;
 
-function fmtTime(ts) {
-    if (!ts) return '';
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return ts;
-    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
-}
 
 function fmtCtx(c) {
     if (c === null || c === undefined) return '';

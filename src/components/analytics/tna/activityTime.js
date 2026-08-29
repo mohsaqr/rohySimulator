@@ -24,32 +24,33 @@
 // Every function here is pure and takes plain event rows; nothing reads
 // React state, so the server could run the same arithmetic.
 
+import { timeMs, compareTime } from '../../../../server/shared/time.js';
+
 export const DEFAULT_IDLE_CAP_MINUTES = 5;
 export const IDLE_CAP_OPTIONS = [2, 5, 10, 30];
-
-const SQLITE_TS = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/;
 
 /**
  * Event timestamp → epoch milliseconds, or null.
  *
- * Two formats coexist in `learning_events.timestamp`: the client's ISO string
- * (`2026-05-05T06:51:11.552Z`) and sqlite's `CURRENT_TIMESTAMP` fallback
- * (`2026-05-06 15:07:52`), which is UTC but carries no zone marker. V8 parses
- * the latter as LOCAL time, so it must be pinned to UTC before comparison —
- * otherwise a server-stamped row lands hours away from the client-stamped
- * rows around it and gaps go negative.
+ * The rule this module used to own alone now lives in `server/shared/time.js`
+ * (RPS-1 §17), because it was needed in ten more places than this one: every
+ * other analytics table parsed timestamps naively and rendered server-stamped
+ * rows at the viewer's UTC offset. Re-exported under the original name so the
+ * TNA call sites and their tests keep reading as they did.
  *
  * @param {string|number|Date|null|undefined} value
  * @returns {number|null}
  */
-export function eventTimeMs(value) {
-    if (value == null || value === '') return null;
-    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-    if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null;
-    const s = String(value).trim();
-    const t = new Date(SQLITE_TS.test(s) ? `${s.replace(' ', 'T')}Z` : s).getTime();
-    return Number.isFinite(t) ? t : null;
-}
+export const eventTimeMs = timeMs;
+
+/**
+ * Chronological comparator — see `compareTime` in server/shared/time.js.
+ *
+ * @param {object} a
+ * @param {object} b
+ * @returns {number}
+ */
+export const compareEventTime = compareTime;
 
 /**
  * The TNA grouping rule: a session is `s:<session_id>`; an event with no
@@ -64,24 +65,6 @@ export function sequenceGroupKey(event, groupBy = 'actor-session') {
     return groupBy === 'actor'
         ? `u:${event?.user_id ?? 'unknown'}`
         : `s:${event?.session_id ?? `u${event?.user_id ?? 'unknown'}`}`;
-}
-
-/** Chronological comparator: numeric time, then id, then stable. */
-export function compareEventTime(a, b) {
-    const ta = eventTimeMs(a?.timestamp);
-    const tb = eventTimeMs(b?.timestamp);
-    if (ta != null && tb != null && ta !== tb) return ta - tb;
-    if (ta == null && tb != null) return 1;
-    if (ta != null && tb == null) return -1;
-    if (ta == null && tb == null) {
-        const sa = String(a?.timestamp ?? '');
-        const sb = String(b?.timestamp ?? '');
-        if (sa !== sb) return sa < sb ? -1 : 1;
-    }
-    const ia = Number(a?.id);
-    const ib = Number(b?.id);
-    if (Number.isFinite(ia) && Number.isFinite(ib)) return ia - ib;
-    return 0;
 }
 
 function median(values) {

@@ -1,6 +1,6 @@
 # RPS-1 — the Rohy Plugin Standard
 
-**Status:** 1.0–1.3 implemented (rohy v2.9.59–v2.9.74) · **Spec version:** 1.3 · **Last reviewed:** 2026-08-29
+**Status:** 1.0–1.5 implemented (rohy v2.9.59–v2.9.93) · **Spec version:** 1.5 · **Last reviewed:** 2026-08-29
 
 > **Reading this document.** 1.3 was specified before it was built — the same
 > discipline as 1.1 and 1.2 — and landed in rohy v2.9.72–v2.9.74. The
@@ -165,6 +165,8 @@ far from its cause.
 | R24 *(1.4)* | a server module's own tables are prefixed `plugin_<id>_` (plus the shared `plugin_settings` / `plugin_jobs` / `plugin_assets`) | a plugin reaching into `users` or `cases` because that was easier than asking the host. Pinned by a contract test, not a runtime SQL guard — a regex that must understand joins and CTEs rejects legitimate queries in the hot path |
 | R25 *(1.4)* | a server module reaches the network only through `ctx.download` and runs binaries only through `ctx.runBinary` | a plugin re-implementing an origin allowlist, a byte cap or a shell-free exec, and eventually re-implementing one of them wrong |
 | R26 *(1.4)* | a server module writes only inside `ctx.libraryDir`, and treats its absence as "this surface is unavailable" | a plugin writing into the image, and a deployment with no provisioned disk failing at first import instead of declining up front |
+| R31 *(1.5)* | a server module takes every instant from `ctx.now()` — never `new Date()`, never `CURRENT_TIMESTAMP` | a second timestamp shape in a column the host orders by. rohy has already paid for having two; see §17 |
+| R32 *(1.5)* | a server module `INSERT`ing into a shared plugin table **names its time column** | sqlite's `DEFAULT CURRENT_TIMESTAMP` supplying the legacy shape, silently, in a statement that otherwise looks correct |
 
 Roles: `guest student reviewer educator admin` (mirrors `ROLE_RANKS` in
 `server/middleware/auth.js`; a contract test asserts the copies agree).
@@ -868,6 +870,13 @@ acceptance test** — each of those files used to require one.
 - [ ] *(1.4)* If it is vendored from its own repo: `.vendor.json` is present and
       current (R27), the copy has not been edited in rohy (R28), and
       `npm run vendor:check` is clean (§16)
+- [ ] *(1.5)* If it ships a server module: every instant comes from `ctx.now()` —
+      no `new Date()`, no `CURRENT_TIMESTAMP` (R31) — and every `INSERT` into a
+      shared plugin table names its time column (R32), pinned by a test in the
+      package's own repo so the author sees the failure before the host does (§17)
+- [ ] *(1.5)* Server-side events go through `ctx.emit()` with a verb the manifest
+      declares; operational work (an import, a sweep) is NOT dressed as a learner
+      verb (§17)
 
 ---
 
@@ -1021,3 +1030,133 @@ and are deliberately outside this section: neither is an RPS-1 plugin. `OyonR`
 is an add-on with its own server routes, and `lessons` was ported from LAILA and
 has diverged. The same discipline would suit both, and adding them is two lines
 in the registry once someone decides what their upstreams are.
+## 17. Time *(1.5)*
+
+**One rule: every instant rohy stores or transmits is UTC ISO-8601 with an
+explicit `Z` and milliseconds — `2026-08-29T12:34:56.789Z`.** It is defined once,
+in `server/shared/time.js`, and reaches a plugin as `ctx.now()`.
+
+### Why this is a standard and not a style note
+
+Before 1.5 two shapes coexisted in the same columns. Anything a browser wrote
+arrived as `2026-08-29T12:34:56.789Z`; anything falling through to sqlite's
+`DEFAULT CURRENT_TIMESTAMP` was written as `2026-08-29 12:34:56` — also UTC, but
+with a space, no zone marker and no milliseconds. Both are the same instant and
+sqlite's own date functions read them identically (`julianday(iso) -
+julianday(space)` is exactly `0.0`), which is why the defect survived so long:
+every `julianday()` and `date()` filter in the codebase was always correct.
+
+Two things were not.
+
+**Ordering.** These columns have TEXT storage, so `ORDER BY <ts>` is a *string*
+sort, and `' '` (0x20) sorts before `'T'` (0x54):
+
+```
+'2026-08-29 23:59:59'  <  '2026-08-29T00:00:01.000Z'   →  true
+```
+
+A row a full day later sorted first. On the development database, 2169 of 3119
+`learning_events` rows sat in the wrong position under `ORDER BY timestamp` —
+70% of them, from only 107 legacy rows among 3012 conforming ones. A minority
+shape is enough to scramble the majority.
+
+**Browser parsing.** `new Date('2026-08-29 23:59:59')` is not an ISO string, so
+V8 falls back to local-time parsing and the row lands at the *viewer's* UTC
+offset — three hours out in Europe/Helsinki, a different number for every
+viewer, and a different number either side of a DST boundary.
+
+Neither failure is loud. Both produce plausible numbers.
+
+### The contract
+
+| | |
+|---|---|
+| Shape | `YYYY-MM-DDTHH:MM:SS.mmmZ` — UTC, `T`, exactly three decimals, `Z` |
+| Minted by | `nowIso()` (JS) / `SQL_NOW` (SQL) / `ctx.now()` (a plugin) |
+| Parsed by | `timeMs()` / `toIsoZ()` — which also read the legacy shape *as UTC* |
+| Displayed by | `src/utils/formatTime.js` — the viewer's own zone, the one place a local zone belongs |
+
+Storage and comparison are zone-free; **display is local**. A learner in
+Helsinki and a reviewer in Madrid should see the same event at different
+wall-clock times. That is correct, and it is the only place a local zone
+belongs.
+
+### Whose clock
+
+**The server's.** A browser clock is unverifiable, and a device three hours fast
+used to drag a learner's whole session away from the server-stamped chat turns
+beside it — indistinguishable, afterwards, from a genuine overnight resume.
+
+The device's reading is *kept*, not *trusted*: `/learning-events/batch` writes
+the server's instant into `timestamp` and the browser's into `client_time`. The
+difference between those two columns is the skew, per event, measurable after
+the fact.
+
+Spacing survives the change. A batched event carries `offset_ms` — how long
+before the flush it happened — and the server subtracts that from its own
+receipt time. Gaps between a session's events stay exact, which is what
+time-on-task and TNA actually read, while the *anchor* comes from a clock rohy
+controls. A missing or absurd offset degrades to receipt time rather than
+throwing: telemetry that cannot be placed perfectly still beats telemetry
+dropped.
+
+### Two things a plugin must not do
+
+A plugin has `ctx.db`, so it *can* write any shape it likes. Both of these were
+found in the reference implementation when this section was written:
+
+```js
+// NO — sqlite's DEFAULT supplies the legacy shape, silently.
+INSERT INTO plugin_assets (id, tenant_id, label) VALUES (?, ?, ?)
+
+// NO — names the legacy shape outright.
+UPDATE plugin_assets SET state = 'ready', updated_at = CURRENT_TIMESTAMP
+
+// YES — the host's clock, bound like any other value.
+INSERT INTO plugin_assets (id, tenant_id, label, created_at) VALUES (?, ?, ?, ?)
+UPDATE plugin_assets SET state = 'ready', updated_at = ?
+```
+
+A column `DEFAULT` cannot be altered in sqlite without rebuilding the table, so
+the shared plugin tables still default to the legacy shape. **The guarantee rests
+entirely on the INSERT naming its time column** (R32), which is why both the host
+and the reference package pin it with a source-scanning test rather than trusting
+review.
+
+### The one column that is not normalised
+
+`system_audit_log.timestamp` keeps its original shape forever. It is inside the
+tamper-evident hash — `canonicalRow()` in `server/audit-chain.js` emits it as
+`ts` — and the chain cannot tell a reformat from a forgery. That is the property
+it exists to have, so rewriting it would make every historical row fail
+verification.
+
+It instead carries `ts_utc`, a VIRTUAL generated column over `timestamp`. A
+virtual column stores no bytes, is indexable, is correct for *any* input shape,
+and is not one of `canonicalRow()`'s `LOGICAL_FIELDS` — verified by
+`scripts/verify-audit-chain.js` producing byte-identical output with and without
+it. **Order and date-filter that table by `ts_utc`, never by `timestamp`.**
+
+### Server-side events
+
+Until 1.5 every plugin event was emitted by the browser, so a plugin's server
+work was invisible: a slide import that ran for four minutes wrote `plugin_jobs`
+rows and not one learning event, and `plugin_jobs` was not one of the Activity
+view's sources. Work nobody clicked through — a job finishing, a job failing, an
+asset expiring — had no way to be seen at all.
+
+`ctx.emit()` closes the learner-facing half. The verb must be one the plugin
+**declared in its manifest vocabulary**: the same rule the ingest route applies
+to a browser, and what stops a plugin inventing verbs at runtime that no
+dashboard, state map or export knows how to read. The trinity is derived from
+the session, never accepted — a plugin is not more trusted than a browser here —
+and `timestamp` is the server's clock, so a plugin can say *what* happened but
+never *when*.
+
+Operational work is not a learning event. A slide import is not something a
+learner did, and forcing it into a learner verb would corrupt exactly the
+analytics it was meant to enrich. `plugin_jobs` is instead its own source in the
+unified Activity view, beside `system_audit_log` — which is where a four-minute
+import, and every failure of one, belongs.
+
+---

@@ -71,6 +71,67 @@ describe('the narrowed context', () => {
     });
 });
 
+// RPS-1 §17 — the clock and the event API. Until these existed, a plugin's
+// server work was invisible: a slide import that ran for four minutes wrote
+// plugin_jobs rows and not one learning event, and plugin_jobs is not one of
+// the Activity view's sources. Work nobody clicked through could not be seen.
+describe('the clock and the event API', () => {
+    // pathology's real manifest, so the vocabulary check is tested against the
+    // verbs the plugin actually declares rather than a convenient fake.
+    let manifests;
+    beforeAll(async () => {
+        ({ PLUGIN_MANIFESTS: manifests } = await import('../../server/shared/plugins/manifests.generated.js'));
+    });
+
+    const pathology = () => manifests.find((m) => m.id === 'pathology');
+
+    it('ctx.now() returns the one contract shape', () => {
+        const t = slot.buildServerContext({ id: 'pathology', settings: undefined }).now();
+        expect(t).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    });
+
+    it('refuses a verb the plugin did not declare', async () => {
+        const ctx = slot.buildServerContext(pathology());
+        await expect(ctx.emit({ tenantId: 1, verb: 'LOGGED_IN', objectType: 'auth' }))
+            .rejects.toThrow(/cannot emit 'LOGGED_IN': not in its manifest vocabulary/);
+    });
+
+    it('refuses every verb when the plugin declares no vocabulary at all', async () => {
+        const ctx = slot.buildServerContext({ id: 'ecg', settings: undefined });
+        await expect(ctx.emit({ tenantId: 1, verb: 'VIEWED', objectType: 'x' }))
+            .rejects.toThrow(/declares no verbs/);
+    });
+
+    it('writes a learning event with the server clock and a plugin: component', async () => {
+        const ctx = slot.buildServerContext(pathology());
+        const verb = Object.keys(pathology().vocabulary.verbs)[0];
+        await ctx.emit({ tenantId: 1, verb, objectType: 'slide', objectName: 'case 7' });
+
+        const row = await testDb.get(
+            'SELECT * FROM learning_events WHERE verb = ? ORDER BY id DESC LIMIT 1', [verb]
+        );
+        expect(row.object_name).toBe('case 7');
+        expect(row.component).toBe('plugin:pathology');
+        expect(row.room).toBe('pathology');
+        // Server-stamped, in the contract shape — not the legacy default.
+        expect(row.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+        // Severity and category come from the plugin's own declared metadata,
+        // the same resolution the browser ingest route uses.
+        expect(row.severity).toBeTruthy();
+        expect(row.category).toBeTruthy();
+    });
+
+    // The trinity rule the ingest route follows: user and case are DERIVED
+    // from the session, never accepted from the caller. A plugin is not more
+    // trusted than a browser here.
+    it('refuses a session that is not in the given tenant', async () => {
+        const ctx = slot.buildServerContext(pathology());
+        const verb = Object.keys(pathology().vocabulary.verbs)[0];
+        await expect(ctx.emit({ tenantId: 999, verb, objectType: 'slide', sessionId: 1 }))
+            .rejects.toThrow(/not in tenant 999/);
+    });
+});
+
 // R24 — a plugin's own tables are prefixed plugin_<id>_. Enforced here rather
 // than by a runtime SQL guard: see pluginServerSlot.js's header.
 describe('R24 — plugin tables are namespaced', () => {

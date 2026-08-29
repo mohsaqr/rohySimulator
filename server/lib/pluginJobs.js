@@ -36,6 +36,7 @@
 import { randomUUID } from 'node:crypto';
 import dbAdapter from '../dbAdapter.js';
 import { logger } from '../logger.js';
+import { SQL_NOW } from '../shared/time.js';
 
 const log = logger('plugin-jobs');
 
@@ -89,8 +90,8 @@ export async function enqueueJob({ tenantId, pluginId, kind, payload = {}, asset
     }
     const id = randomUUID();
     await dbAdapter.run(
-        `INSERT INTO plugin_jobs (id, tenant_id, plugin_id, kind, state, payload, asset_id, created_by)
-         VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)`,
+        `INSERT INTO plugin_jobs (id, tenant_id, plugin_id, kind, state, payload, asset_id, created_by, created_at)
+         VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ${SQL_NOW})`,
         [id, tenantId, pluginId, kind, JSON.stringify(payload), assetId, userId]
     );
     pump();

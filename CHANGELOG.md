@@ -9,6 +9,107 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.93] — 2026-08-29
+
+### Fixed
+
+- **Two timestamp shapes lived in the same columns, and the ordering was wrong
+  because of it.** Anything a browser wrote arrived as
+  `2026-08-29T12:34:56.789Z`; anything falling through to sqlite's
+  `DEFAULT CURRENT_TIMESTAMP` was written as `2026-08-29 12:34:56` — also UTC,
+  but with a space, no zone marker and no milliseconds. sqlite's own date
+  functions read the two identically (`julianday(iso) - julianday(space)` is
+  exactly `0.0`), so every `julianday()` and `date()` filter was always correct,
+  which is why this survived so long. Two things were not correct:
+  - **Ordering.** These columns have TEXT storage, so `ORDER BY <ts>` is a
+    *string* sort, and `' '` (0x20) sorts before `'T'` (0x54) — a row a full day
+    later sorted first. Measured on the development database: **2169 of 3119
+    `learning_events` rows sat in the wrong position**, from only 107 legacy rows
+    among 3012 conforming ones. A minority shape is enough to scramble the
+    majority. After migration 0050: 0.
+  - **Rendering.** `new Date('2026-08-29 12:34:56')` is not an ISO string, so
+    browsers parse it as *local* time and every server-stamped row rendered at
+    the viewer's UTC offset — three hours out in Europe/Helsinki, a different
+    number per viewer, and a different number across a DST boundary.
+    `interactions`, `login_logs` and `emotion_logs` were 100% server-stamped, so
+    in the unified Activity view every chat turn sat hours away from the learning
+    events between which it belonged.
+
+  Migration 0050 rewrites the legacy shape across nineteen tables. It is a
+  reformat, not a reinterpretation — verified by `SUM(julianday(timestamp))`
+  being byte-identical before and after — and each statement skips rows that
+  already conform and rows sqlite cannot parse, so an unexpected value is left
+  alone rather than nulled.
+
+- **The correct parser already existed and nothing imported it.**
+  `eventTimeMs()` in `activityTime.js` had handled this exactly right, with a
+  comment naming the bug, and was used by its own file and nowhere else. It is
+  now `timeMs()` in `server/shared/time.js`, the one definition both sides use.
+  Twelve analytics call sites that parsed naively now go through it, including
+  six byte-identical private copies of the same `fmtTime` helper — one bug
+  written six times — replaced by `src/utils/formatTime.js`.
+
+- **The cross-source merge in the Activity view was a string sort too**
+  (`localeCompare` on the raw value, across fourteen tables). It now sorts on
+  parsed time, so it cannot silently mis-order the day a fifteenth source
+  arrives carrying something else.
+
+- **A subprocess-free defect in the vendored pathology plugin**: it wrote
+  `plugin_assets` timestamps by omitting `created_at` from its INSERT and by
+  naming `CURRENT_TIMESTAMP` in three UPDATEs — a plugin quietly choosing a
+  second shape in a host table. Fixed upstream (pathoyon `a2c9b14`) and
+  re-vendored; the package now pins the rule with its own source-scanning tests
+  so the author sees the failure before the host does.
+
+### Changed
+
+- **The server owns the clock; the learner's device is recorded, not trusted.**
+  `/learning-events/batch` used to persist whatever the browser put in
+  `timestamp`, unverified — so a device set a few hours wrong dragged a whole
+  session away from the chat turns beside it, indistinguishable afterwards from
+  a genuine overnight resume. The server now stamps `timestamp` itself and keeps
+  the browser's reading in the new `learning_events.client_time`, which turns
+  clock skew from an invisible corruption into a measurable per-event column.
+  Spacing is preserved exactly: each event reports how long before the flush it
+  happened and the server subtracts that from its own receipt time, so the gaps
+  time-on-task and TNA actually read are unaffected. A client that sends neither
+  field still works.
+
+- **`system_audit_log` is deliberately excluded from the rewrite.** Its
+  `timestamp` is inside the tamper-evident hash (`canonicalRow()` emits it as
+  `ts`), so reformatting it would make all 509 historical rows fail verification
+  — the chain cannot tell a reformat from a forgery, and that is the property it
+  exists to have. It gains `ts_utc`, a VIRTUAL generated column plus an index;
+  ordering and date filtering moved to it. Verified by
+  `scripts/verify-audit-chain.js` producing byte-identical output with and
+  without the column.
+
+### Added
+
+- **RPS-1 §17 "Time"** — one contract for every instant rohy stores or transmits,
+  with rules R31 (a plugin takes every instant from `ctx.now()`) and R32 (an
+  INSERT into a shared plugin table names its time column, because a column
+  DEFAULT cannot be altered in sqlite and the guarantee rests entirely on the
+  statement). Both pinned by source-scanning tests in the host *and* in the
+  package, so a plugin author fails in their own repo first.
+
+- **`ctx.now()` and `ctx.emit()` on the plugin server context.** A plugin's
+  server work had no way into analytics: a slide import that ran for four
+  minutes wrote `plugin_jobs` rows and not one learning event. `ctx.emit()`
+  writes a server-side learning event, restricted to verbs the plugin declared
+  in its manifest — the same rule the ingest route applies to a browser — with
+  the trinity derived from the session and the timestamp taken from the server,
+  so a plugin can say what happened but never when.
+
+- **`plugin_jobs` as the fourteenth source in the Activity view.** Operational
+  plugin work is not learner activity and is deliberately not dressed as a
+  learner verb; it now appears beside `system_audit_log`, carrying the job's
+  phase and its failure reason.
+
+- Documentation: `docs/admin/system-logs.md` gains "Timestamps and time zones"
+  and "Where Activity-view rows come from" (all fourteen sources, and how the
+  two halves of plugin telemetry differ).
+
 ## [2.9.92] — 2026-08-29
 
 ### Fixed

@@ -35,15 +35,10 @@ import FilterBar, {
 import { buildCsv, downloadCsv } from './csvExport';
 import { emotionColor, signed, fix2 } from '../oyon/emotionLogShared';
 import { useAuth } from '../../contexts/AuthContext';
+import { fmtTime } from '../../utils/formatTime.js';
 
 const DEFAULT_LIMIT = 1000;
 
-function fmtTime(ts) {
-    if (!ts) return '';
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return ts;
-    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
-}
 
 // Compact vitals summary: HR/SpO2/BP/rhythm in one cell. Only the fields
 // present on the event are shown; an event with no vitals renders a dash.

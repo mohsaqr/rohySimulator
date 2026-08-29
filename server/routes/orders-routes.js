@@ -19,6 +19,7 @@ import { VISIBILITY_SQL as TREATMENT_VISIBILITY_SQL } from './treatments-library
 
 
 import { logger } from '../logger.js';
+import { SQL_NOW } from '../shared/time.js';
 import {
     auditSuccess,
     logAudit,
@@ -259,8 +260,9 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
             const logSql = `
                 INSERT INTO learning_events (
                     session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                    component, result, duration_ms, context, tenant_id, room
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    component, result, duration_ms, context, tenant_id, room,
+                    timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})
             `;
 
             const context = {
@@ -1137,8 +1139,9 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                     const logSql = `
                         INSERT INTO learning_events (
                             session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                            component, result, context, room
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            component, result, context, room,
+                            timestamp
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})
                     `;
                     const orderRoom = req.body?.room || null;
 
@@ -1381,8 +1384,9 @@ router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireEducato
                 `INSERT INTO learning_events (
                     session_id, user_id, case_id, verb,
                     object_type, object_id, object_name,
-                    component, result, context, severity, category, tenant_id, room
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+                    component, result, context, severity, category, tenant_id, room,
+                    timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ${SQL_NOW})`,
                 [
                     sessionId,
                     trinity.user_id,
@@ -1655,8 +1659,9 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
                 const logSql = `
                     INSERT INTO learning_events (
                         session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                        component, result, context, room
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        component, result, context, room,
+                        timestamp
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})
                 `;
                 loggableOrders.forEach(o => {
                     dbAdapter.run(logSql, [

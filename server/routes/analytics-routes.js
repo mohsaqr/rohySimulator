@@ -33,6 +33,7 @@ import { LEARNING_VERBS, resolveEventMetadata } from '../shared/learningVerbs.js
 
 
 import { logger } from '../logger.js';
+import { SQL_NOW, anchorToServer, toIsoZ, timeMs } from '../shared/time.js';
 import {
     auditSuccess,
     canReadAcrossUsers,
@@ -151,7 +152,7 @@ router.post('/interactions', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        const sql = `INSERT INTO interactions (session_id, role, content, tenant_id) VALUES (?, ?, ?, ?)`;
+        const sql = `INSERT INTO interactions (session_id, role, content, tenant_id, timestamp) VALUES (?, ?, ?, ?, ${SQL_NOW})`;
         dbAdapter.run(sql, [session_id, role, content, tenantId(req)], function (err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ id: this.lastID, session_id, role, content });
@@ -304,8 +305,9 @@ router.post('/settings/log', authenticateToken, (req, res) => {
 
     const sql = `INSERT INTO settings_logs (
         user_id, session_id, case_id, setting_type, setting_name,
-        old_value, new_value, settings_json, tenant_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        old_value, new_value, settings_json, tenant_id,
+        timestamp
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`;
 
     dbAdapter.run(sql, [
         req.user.id, session_id, case_id, setting_type, setting_name,
@@ -321,8 +323,9 @@ router.post('/settings/log', authenticateToken, (req, res) => {
         dbAdapter.run(
             `INSERT INTO learning_events (
                 session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                component, result, context, severity, category, tenant_id, room
-            ) VALUES (?, ?, ?, 'CHANGED_SETTING', 'setting', ?, ?, 'CONFIG_PANEL', ?, ?, 'INFO', 'CONFIGURATION', ?, NULL)`,
+                component, result, context, severity, category, tenant_id, room,
+                timestamp
+            ) VALUES (?, ?, ?, 'CHANGED_SETTING', 'setting', ?, ?, 'CONFIG_PANEL', ?, ?, 'INFO', 'CONFIGURATION', ?, NULL, ${SQL_NOW})`,
             [
                 session_id || null,
                 req.user.id,
@@ -603,8 +606,9 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
             result, duration_ms, context,
             message_content, message_role, tenant_id,
             severity, category,
-            room
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            room,
+            timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})
     `;
 
     dbAdapter.run(sql, [
@@ -658,6 +662,10 @@ router.post('/learning-events/batch', authenticateToken, learningEventLimiter, a
     const { events } = req.body;
     const reqTenantId = tenantId(req);
     const principalUserId = req.user.id;
+    // Read the clock ONCE per batch. Reading it per event would spread a
+    // single flush across however many milliseconds the loop happens to take,
+    // which is indistinguishable from real spacing in the data afterwards.
+    const receivedMs = Date.now();
 
     if (!Array.isArray(events) || events.length === 0) {
         return res.status(400).json({ error: 'events array is required' });
@@ -685,12 +693,12 @@ router.post('/learning-events/batch', authenticateToken, learningEventLimiter, a
             object_type, object_id, object_name,
             component, parent_component,
             result, duration_ms, context,
-            message_content, message_role, timestamp, tenant_id,
+            message_content, message_role, timestamp, client_time, tenant_id,
             severity, category,
             vital_hr, vital_spo2, vital_bp_sys, vital_bp_dia,
             vital_rr, vital_temp, vital_etco2, vital_rhythm,
             room
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                   ?, ?,
                   ?, ?, ?, ?, ?, ?, ?, ?,
                   ?)
@@ -782,7 +790,14 @@ router.post('/learning-events/batch', authenticateToken, learningEventLimiter, a
                     event.context ? JSON.stringify(event.context) : null,
                     event.message_content || null,
                     event.message_role || null,
-                    event.timestamp || new Date().toISOString(),
+                    // The server's clock is the anchor; the device's reading is
+                    // kept beside it, never instead of it. `offset_ms` is how
+                    // long before this flush the event happened, so subtracting
+                    // it preserves the SPACING between a session's events exactly
+                    // while the anchor stays on a clock rohy controls. See
+                    // anchorToServer() in server/shared/time.js.
+                    anchorToServer(receivedMs, event.offset_ms),
+                    toIsoZ(event.client_time ?? event.timestamp),
                     reqTenantId,
                     meta.severity,
                     meta.category,
@@ -1520,6 +1535,11 @@ router.get('/analytics/case-insights', authenticateToken, async (req, res) => {
     // Date filter over a trigger timestamp column, mirroring
     // buildEventFilter's from/to handling.
     const isDateOnly = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    // String comparison, which is only sound because every stored instant is
+    // the same shape — UTC ISO-8601, `Z`, milliseconds (RPS-1 §17, enforced by
+    // migration 0050 and server/shared/time.js). Pass `sal.ts_utc` rather than
+    // `sal.timestamp` for the audit log: that column keeps its original shape
+    // because it is inside the tamper-evident hash.
     const dateFilter = (col) => {
         const clauses = [];
         const params = [];
@@ -1943,6 +1963,11 @@ router.get('/chat-log/feed', authenticateToken, requireAdmin, (req, res) => {
 
     const dateFrom = req.query.from || null;
     const dateTo = req.query.to || null;
+    // String comparison, which is only sound because every stored instant is
+    // the same shape — UTC ISO-8601, `Z`, milliseconds (RPS-1 §17, enforced by
+    // migration 0050 and server/shared/time.js). Pass `sal.ts_utc` rather than
+    // `sal.timestamp` for the audit log: that column keeps its original shape
+    // because it is inside the tamper-evident hash.
     const dateFilter = (col) => {
         const parts = []; const params = [];
         if (dateFrom) { parts.push(`${col} >= ?`); params.push(dateFrom); }
@@ -2183,8 +2208,12 @@ router.get('/chat-log/feed', authenticateToken, requireAdmin, (req, res) => {
 
     Promise.all(queries.map(q => q())).then(async (results) => {
         const flat = results.flat();
+        // Sort on parsed time, not on the string. Every source now emits the
+        // contract shape so a string sort would agree — but this is the one
+        // place fourteen tables meet, and it should not silently mis-order the
+        // day a fifteenth arrives carrying something else.
         const events = await enrichRowsWithCourses(flat
-            .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))
+            .sort((a, b) => (timeMs(b.ts) ?? -Infinity) - (timeMs(a.ts) ?? -Infinity))
             .slice(0, limit), tenant);
         const sources = {};
         for (const r of flat) sources[r.source] = (sources[r.source] || 0) + 1;
@@ -2379,6 +2408,11 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
     const dateFrom = req.query.from || null;
     const dateTo = req.query.to || null;
 
+    // String comparison, which is only sound because every stored instant is
+    // the same shape — UTC ISO-8601, `Z`, milliseconds (RPS-1 §17, enforced by
+    // migration 0050 and server/shared/time.js). Pass `sal.ts_utc` rather than
+    // `sal.timestamp` for the audit log: that column keeps its original shape
+    // because it is inside the tamper-evident hash.
     const dateFilter = (col) => {
         const parts = [];
         const params = [];
@@ -2415,7 +2449,7 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
 
     // 1. system_audit_log → 'admin'
     queries.push(async () => {
-        const f = dateFilter('sal.timestamp');
+        const f = dateFilter('sal.ts_utc');
         return allP(`
             SELECT sal.timestamp AS ts, sal.user_id, sal.username,
                    'admin' AS component, sal.action AS event,
@@ -2428,7 +2462,7 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
                    sal.status AS status
             FROM system_audit_log sal
             WHERE 1=1 ${f.clause}
-            ORDER BY sal.timestamp DESC LIMIT ?
+            ORDER BY sal.ts_utc DESC LIMIT ?
         `, [...f.params, perSource]);
     });
 
@@ -2658,10 +2692,44 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
         `, [...f.params, perSource]);
     });
 
+    // 14. plugin_jobs → 'plugin' (RPS-1 §11b server slot)
+    //
+    // A plugin's server work had no way into this view. A slide import that
+    // ran for four minutes wrote plugin_jobs rows and nothing else — and
+    // plugin_jobs was not one of the sources here, so the only trace an
+    // operator could see was the learner's click that started it. The work
+    // itself, and every failure of it, was invisible.
+    queries.push(async () => {
+        if (!await tableExists('plugin_jobs')) return [];
+        const f = dateFilter('pj.created_at');
+        return allP(`
+            SELECT pj.created_at AS ts, pj.created_by AS user_id, u.username,
+                   'plugin' AS component,
+                   pj.kind AS event,
+                   pj.plugin_id || ' ' || pj.state ||
+                       COALESCE(' — ' || pj.error, '')
+                       || COALESCE(' (' || pj.phase || ')', '') AS description,
+                   'server' AS origin, NULL AS ip,
+                   'plugin_asset' AS ref_type, pj.asset_id AS ref_id,
+                   CASE pj.state
+                       WHEN 'failed' THEN 'failure'
+                       WHEN 'done' THEN 'success'
+                       ELSE 'info' END AS status
+            FROM plugin_jobs pj
+            LEFT JOIN users u ON pj.created_by = u.id
+            WHERE pj.tenant_id = ? ${f.clause}
+            ORDER BY pj.created_at DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
+    });
+
     Promise.all(queries.map(q => q())).then(async (results) => {
         const flat = results.flat();
+        // Sort on parsed time, not on the string. Every source now emits the
+        // contract shape so a string sort would agree — but this is the one
+        // place fourteen tables meet, and it should not silently mis-order the
+        // day a fifteenth arrives carrying something else.
         const events = await enrichRowsWithCourses(flat
-            .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))
+            .sort((a, b) => (timeMs(b.ts) ?? -Infinity) - (timeMs(a.ts) ?? -Infinity))
             .slice(0, limit), tenant);
         // Per-source counts so you can see what fired and what was empty.
         const sources = {};
@@ -2759,8 +2827,8 @@ router.post('/alarms/log', authenticateToken, async (req, res) => {
 
     if (session_id && !await verifySessionOwnership(session_id, req.user, res)) return;
 
-    const sql = `INSERT INTO alarm_events (session_id, vital_sign, threshold_type, threshold_value, actual_value, tenant_id)
-                 VALUES (?, ?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO alarm_events (session_id, vital_sign, threshold_type, threshold_value, actual_value, tenant_id, triggered_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`;
 
     dbAdapter.run(sql, [session_id, vital_sign, threshold_type, threshold_value, actual_value, tenantId(req)], function(err) {
         if (err) {
@@ -3090,7 +3158,7 @@ router.post('/emotion-logs', authenticateToken, (req, res) => {
     }
 
     dbAdapter.run(
-        `INSERT INTO emotion_logs (session_id, user_id, case_id, emotion, tenant_id) VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO emotion_logs (session_id, user_id, case_id, emotion, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ${SQL_NOW})`,
         [session_id || null, user_id, case_id || null, emotion.trim(), tenantId(req)],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });

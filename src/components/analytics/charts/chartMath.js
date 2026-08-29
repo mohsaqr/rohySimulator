@@ -1,3 +1,4 @@
+import { timeMs } from '../../../../server/shared/time.js';
 // Shared chart math for the analytics chart primitives.
 //
 // Faithful ports of the algorithms used by the carmdash dashboard
@@ -359,7 +360,7 @@ export function bucketDayHour(events, { timeMode = 'day_hour' } = {}) {
 
     events.forEach((ev) => {
         if (!ev || !(ev.ts > 0) || !ev.student || !ev.state) return;
-        const d = new Date(ev.ts);
+        const d = new Date(timeMs(ev.ts) ?? NaN);
         const x = d.getHours();
         const y = d.getDay();
         const key = `${y}|${x}`;

@@ -32,6 +32,7 @@ const LOCKOUT_MINUTES = 15;
 
 
 import { logger } from '../logger.js';
+import { SQL_NOW } from '../shared/time.js';
 import {
     emailDomainAllowed,
     enrollUserInCohort,
@@ -452,12 +453,12 @@ router.post('/auth/login', authLimiter, (req, res) => {
             // Log failed login attempt — dual-write so the unified Activity
             // view sees auth events alongside in-session learning events.
             dbAdapter.run(
-                `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                 [null, username, 'failed_login', ipAddress, userAgent, 1]
             );
             dbAdapter.run(
-                `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room)
-                 VALUES (NULL, 'FAILED_LOGIN', 'auth', ?, 'IMPORTANT', 'SESSION', ?, 1, NULL)`,
+                `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room, timestamp)
+                 VALUES (NULL, 'FAILED_LOGIN', 'auth', ?, 'IMPORTANT', 'SESSION', ?, 1, NULL, ${SQL_NOW})`,
                 [username, JSON.stringify({ ip: ipAddress, ua: userAgent, reason: 'unknown_user' })]
             );
             return res.status(401).json({ error: 'Invalid username or password' });
@@ -472,7 +473,7 @@ router.post('/auth/login', authLimiter, (req, res) => {
         // that had just been switched off.
         if (user.deleted_at || user.status !== 'active') {
             dbAdapter.run(
-                `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                 [user.id, username, 'failed_login', ipAddress, userAgent, user.tenant_id || 1]
             );
             return res.status(403).json({
@@ -520,12 +521,12 @@ router.post('/auth/login', authLimiter, (req, res) => {
                     );
                 }
                 dbAdapter.run(
-                    `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+                    `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                     [user.id, username, 'failed_login', ipAddress, userAgent, user.tenant_id || 1]
                 );
                 dbAdapter.run(
-                    `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room)
-                     VALUES (?, 'FAILED_LOGIN', 'auth', ?, 'IMPORTANT', 'SESSION', ?, ?, NULL)`,
+                    `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room, timestamp)
+                     VALUES (?, 'FAILED_LOGIN', 'auth', ?, 'IMPORTANT', 'SESSION', ?, ?, NULL, ${SQL_NOW})`,
                     [user.id, username, JSON.stringify({ ip: ipAddress, ua: userAgent, reason: 'bad_password', attempts: newAttempts }), user.tenant_id || 1]
                 );
                 return res.status(401).json({ error: 'Invalid username or password' });
@@ -533,12 +534,12 @@ router.post('/auth/login', authLimiter, (req, res) => {
 
             // Log successful login (dual-write: legacy login_logs + canonical learning_events).
             dbAdapter.run(
-                `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                 [user.id, username, 'login', ipAddress, userAgent, user.tenant_id || 1]
             );
             dbAdapter.run(
-                `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room)
-                 VALUES (?, 'LOGGED_IN', 'auth', ?, 'INFO', 'SESSION', ?, ?, NULL)`,
+                `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room, timestamp)
+                 VALUES (?, 'LOGGED_IN', 'auth', ?, 'INFO', 'SESSION', ?, ?, NULL, ${SQL_NOW})`,
                 [user.id, username, JSON.stringify({ ip: ipAddress, ua: userAgent }), user.tenant_id || 1]
             );
 
@@ -750,13 +751,13 @@ router.post('/auth/logout', authenticateToken, async (req, res) => {
     // events never carry a room (logout fires from the menu, not a room);
     // column included as NULL for parity with the canonical schema.
     dbAdapter.run(
-        `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room)
-         VALUES (?, 'LOGGED_OUT', 'auth', ?, 'INFO', 'SESSION', ?, ?, NULL)`,
+        `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room, timestamp)
+         VALUES (?, 'LOGGED_OUT', 'auth', ?, 'INFO', 'SESSION', ?, ?, NULL, ${SQL_NOW})`,
         [req.user.id, req.user.username, JSON.stringify({ ip: ipAddress, ua: userAgent }), tenantId(req)]
     );
 
     dbAdapter.run(
-        `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
         [req.user.id, req.user.username, 'logout', ipAddress, userAgent, tenantId(req)],
         (err) => {
             if (err) {

@@ -905,6 +905,7 @@ Stores learning events records.
 | `vital_etco2` | REAL | — | `0018_learning_events_vitals.sql` |
 | `vital_rhythm` | TEXT | — | `0018_learning_events_vitals.sql` |
 | `room` | TEXT | — | `0021_learning_events_room.sql` |
+| `client_time` | TEXT | — | `0050_utc_iso_timestamps.sql` |
 
 ## `lesson_progress`
 
@@ -1987,6 +1988,7 @@ Stores system audit log records.
 | `error_message` | TEXT | — | — |
 | `metadata` | JSON | — | — |
 | `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | `0004_tenants.sql` |
+| `ts_utc` | TEXT | GENERATED ALWAYS AS (strftime('%Y-%m-%dT%H:%M:%fZ', timestamp)) VIRTUAL | `0050_utc_iso_timestamps.sql` |
 
 ## `team_communications_log`
 

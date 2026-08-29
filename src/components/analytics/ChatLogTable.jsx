@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { apiFetch, ApiError } from '../../services/apiClient';
 import LogGrid, { CopyableCell } from './LogGrid';
+import { fmtTime } from '../../utils/formatTime.js';
 import FilterBar, {
     applyClientFilters,
     contextualOptions,
@@ -29,12 +30,6 @@ import FilterBar, {
 
 const DEFAULT_LIMIT = 500;
 
-function fmtTime(ts) {
-    if (!ts) return '';
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return ts;
-    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
-}
 
 function summarise(s, n = 200) {
     if (!s) return '';

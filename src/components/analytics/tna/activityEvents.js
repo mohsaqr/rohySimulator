@@ -10,6 +10,7 @@
 
 import { resolveClinicalState } from './clinicalStates';
 import { compareEventTime, sequenceGroupKey } from './activityTime.js';
+import { timeMs } from '../../../../server/shared/time.js';
 
 /**
  * Resolve one learning-event row to a clinical state.
@@ -33,8 +34,8 @@ function dayKey(timestamp) {
     if (typeof timestamp === 'string' && /^\d{4}-\d{2}-\d{2}/.test(timestamp)) {
         return timestamp.slice(0, 10);
     }
-    const d = new Date(timestamp);
-    return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+    const ms = timeMs(timestamp);
+    return ms == null ? null : new Date(ms).toISOString().slice(0, 10);
 }
 
 /**
@@ -135,9 +136,9 @@ function hourKey(timestamp) {
     if (typeof timestamp === 'string' && /^\d{4}-\d{2}-\d{2}[T ]\d{2}/.test(timestamp)) {
         return `${timestamp.slice(0, 10)} ${timestamp.slice(11, 13)}`;
     }
-    const d = new Date(timestamp);
-    if (Number.isNaN(d.getTime())) return null;
-    const iso = d.toISOString();
+    const ms = timeMs(timestamp);
+    if (ms == null) return null;
+    const iso = new Date(ms).toISOString();
     return `${iso.slice(0, 10)} ${iso.slice(11, 13)}`;
 }
 
@@ -147,7 +148,7 @@ function fiveMinKey(timestamp) {
     if (!h) return null;
     const raw = typeof timestamp === 'string' && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(timestamp)
         ? timestamp
-        : new Date(timestamp).toISOString();
+        : new Date(timeMs(timestamp) ?? NaN).toISOString();
     const minute = parseInt(raw.slice(14, 16), 10);
     return `${h}:${String(Math.floor(minute / 5) * 5).padStart(2, '0')}`;
 }
@@ -251,7 +252,7 @@ export function toMatrixEvents(events, labelOf = eventState) {
     return (events ?? [])
         .map((e) => {
             if (!e) return null;
-            const ts = new Date(e.timestamp).getTime();
+            const ts = timeMs(e.timestamp);
             if (!(ts > 0)) return null;
             const student = e.username || (e.user_id != null ? `user ${e.user_id}` : 'unknown');
             return { ts, student, state: labelOf(e) };

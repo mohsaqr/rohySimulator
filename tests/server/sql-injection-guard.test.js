@@ -275,8 +275,20 @@ function findRiskyLines() {
         if (filePath.includes('/tests/')) continue;
         if (filePath.endsWith('.test.js')) continue;
 
-        const hasTemplate = TEMPLATE_INTERP.test(content);
-        const hasPlus = PLUS_CONCAT.test(content);
+        // `${SQL_NOW}` is the ONE interpolation this guard forgives, and it is
+        // forgiven by name rather than by file: it is a frozen constant in
+        // server/shared/time.js — `strftime('%Y-%m-%dT%H:%M:%fZ','now')` — with
+        // no parameter, no caller input and no way to carry any. It has to be
+        // interpolated because a column DEFAULT cannot be a bound parameter,
+        // and sqlite cannot ALTER an existing column's default.
+        //
+        // Neutralised, not allowlisted: it is removed from the line and the
+        // line is then judged normally, so an INSERT that interpolates SQL_NOW
+        // *and* a table name still fails here. A file-level allowlist entry
+        // would have blanket-passed both.
+        const judged = content.replaceAll('${SQL_NOW}', '?');
+        const hasTemplate = TEMPLATE_INTERP.test(judged);
+        const hasPlus = PLUS_CONCAT.test(judged);
         if (!hasTemplate && !hasPlus) continue;
 
         // Allowlist short-circuit.

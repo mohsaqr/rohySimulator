@@ -970,15 +970,19 @@ function handleSystemAuditLogRequest(req, res) {
         params.push(user_id);
     }
     if (from_date) {
-        sql += ` AND sal.timestamp >= ?`;
+        sql += ` AND sal.ts_utc >= ?`;
         params.push(from_date);
     }
     if (to_date) {
-        sql += ` AND sal.timestamp <= ?`;
+        sql += ` AND sal.ts_utc <= ?`;
         params.push(to_date);
     }
 
-    sql += ` ORDER BY sal.timestamp DESC LIMIT ? OFFSET ?`;
+    // ts_utc, not timestamp: this table's `timestamp` is inside the
+    // tamper-evident hash and so could not be normalised by migration 0050.
+    // ts_utc is a generated column over it — always the contract shape,
+    // indexed, and invisible to canonicalRow(). See migrations/0050.
+    sql += ` ORDER BY sal.ts_utc DESC LIMIT ? OFFSET ?`;
     params.push(parseInt(limit), parseInt(offset));
 
     dbAdapter.all(sql, params, (err, logs) => {

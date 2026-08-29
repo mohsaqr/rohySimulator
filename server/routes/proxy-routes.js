@@ -45,6 +45,7 @@ import {
     recordUsage
 } from '../usage-budget.js';
 import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor } from '../shared/llmCatalogue.js';
+import { SQL_NOW } from '../shared/time.js';
 
 const radiologyLog = logger('radiology');
 const routesLlmLog = logger('routes-llm-tts');
@@ -147,7 +148,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
 
         // Helper to log rate limit events (fire and forget with error handling)
         const logRateLimit = (msg) => {
-            dbAdapter.run('INSERT INTO llm_request_log (user_id, session_id, status, error_message) VALUES (?, ?, ?, ?)',
+            dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, status, error_message, request_timestamp) VALUES (?, ?, ?, ?, ${SQL_NOW})`,
                 [userId, session_id, 'rate_limited', msg],
                 (err) => { if (err) routesLlmLog.warn('llm rate-limit log failed', { error: err.message }); }
             );
@@ -574,7 +575,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 clearTimeout(overallTimer);
                 const errText = await upstream.text();
                 (req.log || routesLlmLog).error('llm stream upstream error', { status: upstream.status, error: errText.slice(0, 200) });
-                dbAdapter.run('INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms) VALUES (?, ?, ?, ?, ?, ?)',
+                dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms, request_timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                     [userId, session_id, model, 'error', errText.substring(0, 500), Date.now() - startTime]);
                 return res.status(upstream.status).json({ error: extractUpstreamError(errText) });
             }
@@ -690,8 +691,8 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             // Stream interrupts (upstream error mid-stream OR client disconnect)
             // get logged as 'error' with error_message disambiguating the cause.
             const finalStatus = streamInterrupted ? 'error' : 'success';
-            dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, error_message, response_time_ms)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, error_message, response_time_ms, request_timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                 [userId, session_id, model, promptTokens, completionTokens, totalTokens, estCost, finalStatus, streamErrMessage, responseTimeStream]);
 
             if (!res.writableEnded) {
@@ -737,7 +738,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             if (!response.ok) {
                 const errText = await response.text();
                 (req.log || routesLlmLog).error('llm upstream error', { status: response.status, error: errText });
-                dbAdapter.run('INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms) VALUES (?, ?, ?, ?, ?, ?)',
+                dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms, request_timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                     [userId, session_id, model, 'error', errText.substring(0, 500), responseTime]);
                 return res.status(response.status).json({ error: extractUpstreamError(errText) });
             }
@@ -809,8 +810,8 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         `, [userId, today, promptTokens, completionTokens, totalTokens, estimatedCost, model]);
 
         // 14. Log the request
-        dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, response_time_ms)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, response_time_ms, request_timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
             [userId, session_id, model, promptTokens, completionTokens, totalTokens, estimatedCost, 'success', responseTime]);
 
         (req.log || routesLlmLog).info('llm usage recorded', { user_id: userId, total_tokens: totalTokens, estimated_cost: Number(estimatedCost.toFixed(4)), response_time_ms: responseTime });
