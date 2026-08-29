@@ -638,7 +638,7 @@ mounted by the host exactly as its room and editor are.
 server/plugins/<id>/index.js
 
 export default {
-    jobs:   { import_slide: async (job, api) => { … } },
+    jobs:   { import_slide: async (job, api, ctx) => { … } },
     routes: (router, ctx) => { router.post('/imports', ctx.guards.educator, handler) },
 }
 ```
