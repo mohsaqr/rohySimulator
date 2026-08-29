@@ -13,9 +13,11 @@
 //   - When labOrders.length > 0 and the drawer is collapsed, a floating
 //     "Ordered Tests (N)" panel renders with READY / PENDING / VIEWED
 //     sections.
-//   - The five floating tab buttons (Laboratory / Radiology / Treatments /
-//     Records / Memory) are visible whenever the drawer is collapsed and
-//     `caseId && sessionId` are both truthy.
+//   - The floating tab buttons (Treatments / Records, plus Memory FOR ADMINS
+//     ONLY) are visible whenever the drawer is collapsed and
+//     `caseId && sessionId` are both truthy. Memory is PatientRecordViewer,
+//     a debug panel; `isAdmin` gates it as of v2.9.96. Learners meet the same
+//     record read-only at debrief instead, when the educator enables it.
 //   - "Order N Test(s)" button calls
 //        POST /api/sessions/:id/order-labs
 //        body: { lab_ids, turnaround_override }
@@ -194,6 +196,7 @@ function baseProps(overrides = {}) {
 // buttons share label text, so we find the floating button by its parent
 // (`.fixed.bottom-4.right-4` container).
 async function openDrawer(tab = 'labs') {
+    // 'memory' only resolves on an isAdmin mount — see the gating test below.
     const labelMap = { labs: 'Laboratory', radiology: 'Radiology', records: 'Records', memory: 'Memory', treatments: 'Treatments' };
     const label = labelMap[tab];
     const matches = screen.getAllByText(label);
@@ -204,6 +207,41 @@ async function openDrawer(tab = 'labs') {
     expect(btn).toBeTruthy();
     await act(async () => { fireEvent.click(btn); });
 }
+
+describe('OrdersDrawer — Memory tab is admin-only', () => {
+    // Regression lock: PatientRecordViewer shipped to every learner, mid-case,
+    // from 2026-01-15 (c3f65d9) until v2.9.96 — a debug console with a
+    // force-sync button, a raw sync-error dump and a JSON export of the
+    // learner's own session. Nothing gated it because nothing had been written
+    // to gate it: a React tab in an array defaults to visible for everyone.
+    it('does not offer Memory to a learner', async () => {
+        renderWithProviders(<OrdersDrawer {...baseProps()} />);
+        await waitFor(() => {
+            expect(screen.getAllByText('Treatments').length).toBeGreaterThan(0);
+        });
+        // The neighbouring pills still render — this is a gate, not a breakage.
+        expect(screen.getAllByText('Records').length).toBeGreaterThan(0);
+        expect(screen.queryByText('Memory')).toBeNull();
+    });
+
+    it('offers Memory to an admin', async () => {
+        renderWithProviders(<OrdersDrawer {...baseProps({ isAdmin: true })} />);
+        await waitFor(() => {
+            expect(screen.getAllByText('Memory').length).toBeGreaterThan(0);
+        });
+    });
+
+    it('defaults to hidden when the host forgets to pass isAdmin', async () => {
+        // App.jsx passes isAdmin={isAdmin()}. If a future call site omits it,
+        // the default must fail CLOSED — an undefined prop is not permission.
+        const { isAdmin: _omitted, ...propsWithoutFlag } = baseProps({ isAdmin: true });
+        renderWithProviders(<OrdersDrawer {...propsWithoutFlag} />);
+        await waitFor(() => {
+            expect(screen.getAllByText('Records').length).toBeGreaterThan(0);
+        });
+        expect(screen.queryByText('Memory')).toBeNull();
+    });
+});
 
 describe('OrdersDrawer — guard render', () => {
     it('renders nothing when caseId is missing', () => {
@@ -220,7 +258,7 @@ describe('OrdersDrawer — guard render', () => {
         expect(container.querySelector('button')).toBeNull();
     });
 
-    it('renders the three remaining floating tab buttons when caseId+sessionId are set', async () => {
+    it('renders the three remaining floating tab buttons for an admin', async () => {
         // Laboratory + Radiology used to render here. They were retired
         // when the bottom RoomNavigator took over both rooms. The
         // drawer-internal tabs for labs/rad are still alive in the DOM
@@ -228,7 +266,7 @@ describe('OrdersDrawer — guard render', () => {
         // working until the labs/rad code paths get folded into
         // InvestigationsScreen entirely. The floating pill cluster only
         // surfaces Treatments / Records / Memory now.
-        renderWithProviders(<OrdersDrawer {...baseProps()} />);
+        renderWithProviders(<OrdersDrawer {...baseProps({ isAdmin: true })} />);
         await waitFor(() => {
             expect(screen.getAllByText('Treatments').length).toBeGreaterThan(0);
         });

@@ -21,7 +21,7 @@ import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
  * - Radiology Studies
  * - Medications/Drugs
  */
-export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData }) {
+export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData, isAdmin = false }) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('labs'); // labs, radiology, drugs, records
     const [drawerHeight, setDrawerHeight] = useState('50vh'); // 50vh or 80vh
@@ -384,10 +384,17 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     // Floating pills cover what the bottom RoomNavigator doesn't —
     // treatments, records, memory. Labs and Radiology are full rooms now
     // and switch via the nav at the bottom of the screen.
+    // The Memory tab is PatientRecordViewer — a development panel whose own
+    // header says "can be hidden later but useful for development/debugging".
+    // It never was, so every learner has been carrying a debug console with a
+    // force-sync button, a raw sync-error dump and a JSON export of their own
+    // session. Admin-only during the case. Learners meet the same record at
+    // DEBRIEF instead, read-only, and only when the educator turns it on for
+    // the case (discussant config_override.show_encounter_record).
     const tabs = [
         { id: 'treatments', label: t('tab_treatments'), icon: Syringe, count: treatmentOrdersCount },
         { id: 'records', label: t('tab_records'), icon: FileText, count: 0 },
-        { id: 'memory', label: t('tab_memory'), icon: Activity, count: 0 }
+        ...(isAdmin ? [{ id: 'memory', label: t('tab_memory'), icon: Activity, count: 0 }] : []),
     ];
 
     return (
@@ -1117,7 +1124,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                         )}
 
                         {/* Memory Tab - Patient Record Viewer */}
-                        {activeTab === 'memory' && (
+                        {activeTab === 'memory' && isAdmin && (
                             <div className="h-full">
                                 <PatientRecordViewer />
                             </div>

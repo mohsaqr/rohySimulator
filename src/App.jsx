@@ -1144,6 +1144,7 @@ function MainApp() {
                sessionId={sessionId}
                onViewResult={handleViewResult}
                caseData={activeCase}
+               isAdmin={isAdmin()}
             />
          )}
 

@@ -9,6 +9,28 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.96] — 2026-08-30
+
+### Security
+
+- **The "Memory" tab was a developer debug panel shipped to every learner.**
+  `PatientRecordViewer` — whose own header said "can be hidden later but useful
+  for development/debugging" — has been a floating pill in every student's
+  session since 2026-01-15 (`c3f65d9`), carrying a force-sync button, a raw
+  sync-error dump and a JSON export of their own session. It is now admin-only,
+  gated by an `isAdmin` prop that fails closed when a call site omits it: an
+  undefined prop is not permission.
+
+  Nothing had gated it because nothing had been *written* to gate it. A React
+  tab in an array is visible to everyone by default, and a default does not
+  show up in review the way a wrong line does. The `isAdmin` prop already
+  existed in `App.jsx` — it was passed to the component on the line above and
+  never to `OrdersDrawer`. When auditing exposure, look for surfaces with no
+  role predicate at all, not for ones with the wrong predicate.
+
+  Learners meet the same record at debrief instead, read-only, when the
+  educator turns it on for the case (v2.9.98).
+
 ## [2.9.95] — 2026-08-29
 
 ### Fixed
