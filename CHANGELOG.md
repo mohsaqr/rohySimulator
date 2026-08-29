@@ -9,6 +9,50 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.97] — 2026-08-30
+
+### Added
+
+- **The discussant is finally told what the learner actually did.** Every
+  clinically relevant act has been logged to `patient_record_events` in eight
+  verbs since the beginning — and nothing ever read them back. `toNarrative()`
+  had exactly one call site: the debug panel retired in v2.9.96. Meanwhile the
+  discussant's own case context ended by apologising for the absence of that
+  data ("ask the learner about what they did rather than assuming"), a sentence
+  that papered over the gap convincingly enough that nobody looked.
+
+  `server/services/encounterRecord.js` renders those rows into a prompt block
+  that `/proxy/llm` appends **server-side**, on the same terms as the
+  observed-affect note: read from the database, never from client text. The
+  browser holds the same record and could have sent it, but then a learner's
+  own client would be dictating what their debriefing tutor believes they did —
+  and the omission a learner most needs to discuss is the one they would most
+  like to leave out.
+
+  The block states that an absent action did not happen, because the gap is the
+  teaching point: a model told only what *did* occur treats a short record as
+  missing information and debriefs on nothing.
+
+- **Rendering is per-verb, because the named columns are a lossy projection.**
+  `patient-record-routes.js` writes nine named columns and then stores the whole
+  event again as JSON in `details`. Four fields survive only there: `technique`
+  (EXAMINED), `dose` and `route` (ADMINISTERED), `parameter`/`from`/`to`
+  (CHANGED), and `test_name` (ELICITED). A generic renderer emits "gave Aspirin"
+  and "observed change in heart_rate" — technically true, useless to debrief
+  against. Each verb now has its own formatter.
+
+- **Which agents receive it is an allowlist, not a denylist** — `discussant`,
+  `nurse`, `consultant`, `pharmacist`, `technician`. A patient who can recite
+  their own troponin is not a patient, and a relative does not know what was
+  ordered from another room; either breaks the simulation in a way the learner
+  cannot detect or challenge. An agent type nobody has considered yet therefore
+  receives nothing until somebody decides it should.
+
+  The type is read from `agent_templates` by the template id the client names,
+  so the client chooses *which* agent and the server decides what that agent may
+  know. A source-scanning test pins that the route still consults the gate — a
+  gate nobody calls passes every unit test ever written.
+
 ## [2.9.96] — 2026-08-30
 
 ### Security

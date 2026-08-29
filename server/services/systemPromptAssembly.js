@@ -9,7 +9,12 @@
 //      builds persona, instructions, case design context, vitals, etc.).
 //   3. Platform-wide `systemPromptTemplate`, if an admin has set one
 //      explicitly, as a behavioral reminder.
-//   4. The RESPONSE CONTRACT trails everything (recency keeps it dominant
+//   4. The encounter record — what the learner has actually DONE this
+//      session, rendered server-side from patient_record_events by
+//      services/encounterRecord.js. Cumulative session state: more stable
+//      than the per-turn affect note, less stable than the case, so it sits
+//      between them. Only agent types on that module's allowlist get it.
+//   5. The RESPONSE CONTRACT trails everything (recency keeps it dominant
 //      over long English case prompts — the drift risk in I18N_PLAN.md §10):
 //      the registry's full language directive (case language is immutable,
 //      English included) plus the always-on plain-speech rules — replies are
@@ -56,6 +61,12 @@ function toTrimmedString(value) {
  *   line and the full directive inside the trailing response contract.
  *   Unknown/missing codes add no language blocks (body-sourced value —
  *   never trusted to be valid); the plain-speech rules apply regardless.
+ * @param {string} [parts.encounterRecordNote]   The learner's actual actions
+ *   this session, RENDERED SERVER-SIDE by renderEncounterRecord from rows the
+ *   server read itself — never client text, for the reason in that module's
+ *   header (a learner's own browser must not get to say what they did).
+ *   Empty for agent types outside its allowlist, and for sessions with no
+ *   recorded actions.
  * @param {string} [parts.studentAffectNote]     Transient per-turn observed-
  *   affect block, already validated and RENDERED SERVER-SIDE by
  *   resolveAffectNote (shared/affectNote.js) — never raw client text. Sits
@@ -63,7 +74,7 @@ function toTrimmedString(value) {
  *   response contract, which keeps recency.
  * @returns {string}
  */
-export function assembleSystemPrompt({ system_prompt = '', systemPromptTemplate = '', caseLanguage = '', studentAffectNote = '' } = {}) {
+export function assembleSystemPrompt({ system_prompt = '', systemPromptTemplate = '', caseLanguage = '', encounterRecordNote = '', studentAffectNote = '' } = {}) {
     const directive = llmDirectiveFor(caseLanguage);
     // A non-null directive implies a known registry code.
     let languageLead = '';
@@ -78,6 +89,7 @@ export function assembleSystemPrompt({ system_prompt = '', systemPromptTemplate 
         languageLead,
         toTrimmedString(system_prompt),
         toTrimmedString(systemPromptTemplate),
+        toTrimmedString(encounterRecordNote),
         toTrimmedString(studentAffectNote),
         responseContract
     ].filter(Boolean);

@@ -17,6 +17,7 @@ import { buildWavHeader } from '../services/wav.js';
 import { EvenByteAligner } from '../lib/pcmAlign.js';
 import { assembleSystemPrompt } from '../services/systemPromptAssembly.js';
 import { resolveAffectNote } from '../shared/affectNote.js';
+import { agentMaySeeRecord, renderEncounterRecord } from '../services/encounterRecord.js';
 import {
     TTS_PROVIDERS,
     guessVoiceProvider,
@@ -251,6 +252,10 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // used session/platform values regardless of the editor's settings.
         let agentTemperature = null;
         let agentMaxTokens = null;
+        // The agent's type as the SERVER knows it (from agent_templates, keyed
+        // by the template id the client names). Gates the encounter record —
+        // see services/encounterRecord.js.
+        let agentType = null;
         // F-001: previously this route trusted client-supplied
         // `agent_llm_config.{provider,endpoint,api_key}` outright, which let
         // any authenticated user point the server at a custom endpoint AND
@@ -271,12 +276,16 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         if (agent_llm_config?.agent_template_id) {
             // Try to fetch agent template LLM config from DB
             const agentTemplate = await new Promise((resolve, reject) => {
-                dbAdapter.get('SELECT llm_provider, llm_model, llm_api_key, llm_endpoint, llm_temperature, llm_max_tokens FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
+                dbAdapter.get('SELECT agent_type, llm_provider, llm_model, llm_api_key, llm_endpoint, llm_temperature, llm_max_tokens FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
                     [agent_llm_config.agent_template_id, tenantId(req)], (err, row) => {
                     if (err) reject(err);
                     else resolve(row);
                 });
             });
+            // Set even when the template overrides no LLM routing — the type
+            // governs what the agent may be told, which is unrelated to which
+            // model answers. Read from the DB, never from the request body.
+            agentType = agentTemplate?.agent_type || null;
             if (agentTemplate && agentTemplate.llm_provider) {
                 agentProvider = agentTemplate.llm_provider;
                 agentModel = agentTemplate.llm_model;
@@ -468,7 +477,39 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 });
             }
         }
-        let fullSystemPrompt = assembleSystemPrompt({ system_prompt, systemPromptTemplate, caseLanguage: case_language, studentAffectNote });
+        // The encounter record — what this learner has actually done. Read
+        // from patient_record_events (which the client syncs as it goes) so
+        // the debriefing tutor is not relying on the learner's own browser to
+        // report their omissions. Allowlisted agent types only: a patient who
+        // knows their own troponin is not a patient.
+        let encounterRecordNote = '';
+        if (session_id && agentMaySeeRecord(agentType)) {
+            const recordRows = await new Promise((resolve) => {
+                dbAdapter.all(
+                    `SELECT verb, time_elapsed, category, region, item, content, finding, value, unit, abnormal
+                     FROM patient_record_events WHERE session_id = ?
+                     ORDER BY time_elapsed ASC, id ASC`,
+                    [session_id],
+                    (err, rows) => {
+                        // A failed read must not take the conversation down
+                        // with it: the agent simply proceeds without the
+                        // record, exactly as it did before this existed. Logged
+                        // rather than swallowed — a silent [] here would look
+                        // identical to "the learner did nothing", which is the
+                        // one wrong answer this block can give.
+                        if (err) (req.log || routesLlmLog).warn('encounter record read failed', { error: err.message, session_id });
+                        resolve(err ? [] : (rows || []));
+                    }
+                );
+            });
+            encounterRecordNote = renderEncounterRecord(recordRows);
+            if (encounterRecordNote) {
+                (req.log || routesLlmLog).info('encounter record routed', {
+                    session_id, agent_type: agentType, events: recordRows.length
+                });
+            }
+        }
+        let fullSystemPrompt = assembleSystemPrompt({ system_prompt, systemPromptTemplate, caseLanguage: case_language, encounterRecordNote, studentAffectNote });
 
         // 9. Build request based on provider type
         let llmHeaders = { 'Content-Type': 'application/json' };
