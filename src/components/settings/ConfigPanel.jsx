@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera, ScanFace, Stethoscope, RotateCcw, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { CasePluginsStep } from './CasePluginsStep.jsx';
+import { PluginAuthorSurface } from './PluginAuthorSurface.jsx';
 import { registry } from '../../plugins/registry.js';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
@@ -3437,6 +3438,10 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
 // Sub-component for the Wizard to keep code clean
 function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, _hasUnsavedChanges, lastSavedAt, initialStep, onStepLoaded, onOpenPersonaEditor, onOpenPluginAuthor, resumedFromStash, onDiscardDraft }) {
     const { user: wizardUser } = useAuth();
+    // Which plugin's editor is open over the wizard, if any. Wizard-local
+    // on purpose: the editor hands its document back into `caseData`, and
+    // the wizard has to still be mounted and holding that draft when it does.
+    const [pluginAuthorId, setPluginAuthorId] = useState(null);
     const { t } = useTranslation('authoring_config');
     const [step, setStep] = useState(initialStep || 1);
     const [publicScenarios, setPublicScenarios] = useState([]);
@@ -3677,6 +3682,29 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
         (caseData.config.initialVitals.spo2 && caseData.config.initialVitals.spo2 !== scenarioVitals.spo2) ||
         (caseData.config.initialVitals.rr && caseData.config.initialVitals.rr !== scenarioVitals.rr)
     );
+
+    // The editor takes the whole viewport when it is open. Returned BEFORE the
+    // wizard's own markup rather than layered over it, so the wizard's scroll
+    // container and footer cannot show through or steal a keystroke — but still
+    // from inside CaseWizard, so `caseData` survives and Done has somewhere to
+    // put the document.
+    if (pluginAuthorId) {
+        return (
+            <PluginAuthorSurface
+                pluginId={pluginAuthorId}
+                caseData={caseData}
+                user={wizardUser}
+                onCommit={(document) => {
+                    setCaseData((prev) => ({
+                        ...prev,
+                        config: { ...(prev.config ?? {}), [pluginAuthorId]: document },
+                    }));
+                    setPluginAuthorId(null);
+                }}
+                onClose={() => setPluginAuthorId(null)}
+            />
+        );
+    }
 
     return (
         <div className="flex flex-col h-full max-w-5xl animate-in fade-in slide-in-from-right-4">
@@ -5113,7 +5141,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                         caseData={caseData}
                         setCaseData={setCaseData}
                         role={wizardUser?.role}
-                        onOpenPluginAuthor={onOpenPluginAuthor}
+                        onOpenPluginAuthor={onOpenPluginAuthor ?? setPluginAuthorId}
                     />
                 )}
 

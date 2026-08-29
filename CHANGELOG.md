@@ -9,6 +9,50 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.74] — 2026-08-29
+
+### Added
+
+- **The plugin authoring surface, and the write path it closes (RPS-1 §11a.3(2),
+  §11a.4).** "Open editor" on the Plugins step now opens the plugin's editor
+  full-viewport; **Done** hands the whole document back into the wizard's
+  `config[<pluginId>]` and the ordinary case save persists it. That closes the
+  loop the standard describes — wizard → editor → `PUT /cases` →
+  `case_snapshot` → `available(ctx)` — and with it the last gap that kept the
+  authoring slot from being end-to-end. §14 item 4 is gone.
+
+  Done and Discard live in the plugin's OWN header, through the `topBarControls`
+  slot the package exposes. A host header stacked above the plugin's would be
+  the second header the surface exists to avoid. Discard is guarded once the
+  draft is dirty: authored material is expensive to recreate.
+
+### Changed
+
+- The wizard's "Save & Finish" test now targets the final step rather than
+  naming Agents, and a sibling test asserts Next still appears on the step
+  before it. Agents stopped being last in 2.9.73; the invariant that matters is
+  that exactly one step ends the linear path.
+
+### Note
+
+- **Deviation from `todo/pathology-authoring-plan.md` WP4, deliberate.** The
+  plan put the surface behind an `App.jsx` early-return like
+  `personaEditorTarget`. That works for the persona editor because it saves
+  through its own endpoint; this one must hand its document back to a wizard
+  that is still mounted and holding the draft (§11a.3(3): the ordinary case save
+  and nothing else). Unmounting ConfigPanel would tear that draft down and
+  restore it from the localStorage stash — showing "Resumed draft from …"
+  immediately after the author pressed Done on their own edit. Mounted from
+  CaseWizard instead, the wizard owns the draft throughout and no handoff prop
+  is needed.
+- **The adapter still mounts `CaseAuthor`, not controlled `CaseStudio`**, also
+  deliberately. A controlled mount needs a NORMALISED document to render, and
+  the host cannot produce one for a blank case without knowing what a pathology
+  document is — `toStudioDocument(null)` mints a fresh document per render and
+  would reset the editor mid-keystroke. `CaseAuthor` is upstream's uncontrolled
+  wrapper for exactly this. Switching would need a `blankDocument()` descriptor
+  hook the standard does not define.
+
 ## [2.9.73] — 2026-08-29
 
 ### Added

@@ -361,14 +361,31 @@ describe('ConfigPanel', () => {
         expect(screen.queryByRole('button', { name: /Save & Finish/i })).not.toBeInTheDocument();
     });
 
-    it('offers Save & Finish only on the final wizard step (Agents)', async () => {
+    // CONTRACT: "Save & Finish" marks the LAST step and nothing else, so the
+    // linear path through the wizard cannot dead-end early. The final step was
+    // Agents (11) until v2.9.73 added Plugins (12); the invariant is the point,
+    // not which step happens to be last.
+    it('offers Save & Finish only on the final wizard step', async () => {
+        window.localStorage.setItem('rohy_editing_case', JSON.stringify({
+            id: 7, name: 'Resumed', description: 'd', config: { pages: [] },
+        }));
+        mount({ initialTab: 'cases', initialWizardStep: 12 });
+        await waitForAdmin();
+        expect(await screen.findByRole('button', { name: /Save & Finish/i })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^Next$/i })).not.toBeInTheDocument();
+    });
+
+    it('still offers Next on the step before the last', async () => {
+        // The other half of the same invariant: adding a step must not strand
+        // the one before it, which is exactly what a hardcoded last-step number
+        // did the last time the wizard grew (see the footer comment).
         window.localStorage.setItem('rohy_editing_case', JSON.stringify({
             id: 7, name: 'Resumed', description: 'd', config: { pages: [] },
         }));
         mount({ initialTab: 'cases', initialWizardStep: 11 });
         await waitForAdmin();
-        expect(await screen.findByRole('button', { name: /Save & Finish/i })).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /^Next$/i })).not.toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: /^Next$/i })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Save & Finish/i })).not.toBeInTheDocument();
     });
 
     // CONTRACT: round-trip — initialTab='cases' + initialWizardStep=11 lands

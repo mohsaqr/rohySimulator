@@ -4206,6 +4206,27 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.plugins_discard": {
+    "src": "eb1a70e39274",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugins_discard_confirm": {
+    "src": "99bbc62d0756",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugins_done": {
+    "src": "11a6767d5674",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.plugins_material_present": {
     "src": "528fe4d700b3",
     "state": "machine",
