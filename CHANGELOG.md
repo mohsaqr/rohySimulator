@@ -9,6 +9,40 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.73] — 2026-08-29
+
+### Added
+
+- **A "Plugins" step in the case wizard (RPS-1 §11a.3(1)).** One card per
+  plugin that ships an editor this role may open, showing the plugin's own
+  one-line summary and its own validation issues, with **Open editor** and
+  **Remove** (confirmed). Before this, a plugin's material could only reach a
+  case by hand-pasting its editor's JSON export into `config` — the authoring
+  slot was real in the standard and imaginary in the product.
+
+  `src/components/settings/CasePluginsStep.jsx` knows nothing about pathology:
+  the label comes from `authoring.labelKey`, the summary from `summarize(doc)`
+  and the problems from `validate(doc)`. A second plugin with an editor appears
+  here with no change to the file, which is the whole test of the standard. Its
+  tests drive a fake plugin through a mocked registry for that reason — if they
+  needed the real descriptor, the component would have failed it.
+
+  The step is hidden when `registry.authors(role)` is empty, and it is filtered
+  out of what RENDERS rather than out of `WIZARD_STEP_KEYS`: that list is what
+  `wizardStepNumber()` resolves deep links against, so dropping a key would
+  silently renumber every later step and send an existing `wizardStep=11` link
+  to the wrong page — the same trap as bug report 2.9.15 #2. The footer's
+  last-step test now derives from the visible list rather than the full one.
+
+  Removal deletes the key rather than setting it to `undefined`: an explicit
+  `undefined` survives a spread and still reads as present to anything checking
+  with `in`, so the room would stay lit on a case whose material was removed.
+
+  Errors are listed before warnings, and neither blocks saving — a half-finished
+  case is the normal state of an unfinished one (§11a.2). A descriptor whose
+  `validate()` throws is reported as one unreadable-material issue rather than
+  taking the wizard down.
+
 ## [2.9.72] — 2026-08-29
 
 ### Added

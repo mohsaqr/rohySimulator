@@ -4206,6 +4206,55 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.plugins_material_present": {
+    "src": "528fe4d700b3",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugins_no_material": {
+    "src": "c689ac360605",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugins_open_editor": {
+    "src": "550697e02ca1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugins_remove": {
+    "src": "c3812fc4acb8",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugins_remove_confirm": {
+    "src": "09680828aa2e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugins_step_help": {
+    "src": "9355f97589f4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.plugins_validate_failed": {
+    "src": "c29ea7540aa9",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.registration_bootstrap_note": {
     "src": "0c3db3a8c730",
     "state": "machine",
@@ -5832,6 +5881,13 @@
   },
   "authoring_config.wstep_labs": {
     "src": "d181843c9a23",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.wstep_plugins": {
+    "src": "9514b7ff4860",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,

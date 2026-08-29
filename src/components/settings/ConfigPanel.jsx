@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from
 import { useTranslation } from 'react-i18next';
 import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera, ScanFace, Stethoscope, RotateCcw, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { CasePluginsStep } from './CasePluginsStep.jsx';
+import { registry } from '../../plugins/registry.js';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
 import { listCohorts, listCaseAssignments, assignCaseCourse } from '../../services/cohortsService';
@@ -104,7 +106,7 @@ import { useBodyImage } from '../../hooks/useBodyImage';
 // removed from the wizard footer by deriving from WIZARD_STEPS.
 const WIZARD_STEP_KEYS = [
     'demographics', 'avatar', 'story', 'scenario', 'vitals', 'labs',
-    'radiology', 'exam', 'records', 'treatments', 'agents',
+    'radiology', 'exam', 'records', 'treatments', 'agents', 'plugins',
 ];
 const wizardStepNumber = (key) => WIZARD_STEP_KEYS.indexOf(key) + 1;
 
@@ -3433,7 +3435,8 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
 }
 
 // Sub-component for the Wizard to keep code clean
-function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, _hasUnsavedChanges, lastSavedAt, initialStep, onStepLoaded, onOpenPersonaEditor, resumedFromStash, onDiscardDraft }) {
+function CaseWizard({ caseData, setActiveTab, setCaseData, onSave, onCancel, _hasUnsavedChanges, lastSavedAt, initialStep, onStepLoaded, onOpenPersonaEditor, onOpenPluginAuthor, resumedFromStash, onDiscardDraft }) {
+    const { user: wizardUser } = useAuth();
     const { t } = useTranslation('authoring_config');
     const [step, setStep] = useState(initialStep || 1);
     const [publicScenarios, setPublicScenarios] = useState([]);
@@ -3642,8 +3645,19 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
         records:      { title: t('wstep_records'),      icon: '📄' },
         treatments:   { title: t('wstep_treatments'),   icon: '💊' },
         agents:       { title: t('wstep_agents'),       icon: '🤖' },
+        plugins:      { title: t('wstep_plugins'),      icon: '🧩' },
     };
     const WIZARD_STEPS = WIZARD_STEP_KEYS.map((key, i) => ({ num: i + 1, key, ...WIZARD_STEP_META[key] }));
+
+    // The Plugins step exists only when some registered plugin ships an editor
+    // this role may open. It is filtered out of what RENDERS rather than out of
+    // WIZARD_STEP_KEYS, because that list is what wizardStepNumber() resolves
+    // deep links against — dropping a key from it would silently renumber every
+    // step after it and send an existing `wizardStep=11` link to the wrong page
+    // (bug report 2.9.15 #2, the same trap).
+    const visibleSteps = WIZARD_STEPS.filter((s) => s.key !== 'plugins'
+        || registry.authors(wizardUser?.role).length > 0);
+    const lastStepNum = visibleSteps.length > 0 ? visibleSteps[visibleSteps.length - 1].num : WIZARD_STEPS.length;
 
     // Helper to get vitals from scenario's first keyframe
     const getScenarioFirstFrameVitals = () => {
@@ -3747,7 +3761,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     needs and buttons size to their content; from `xl` up the
                     original single equal-width row is unchanged. */}
                 <div className="flex flex-wrap xl:flex-nowrap gap-1">
-                    {WIZARD_STEPS.map((s, _idx) => (
+                    {visibleSteps.map((s, _idx) => (
                         <button
                             key={s.num}
                             onClick={async () => {
@@ -5093,6 +5107,16 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     </div>
                 )}
 
+                {/* STEP 12: PLUGINS — a card per plugin that ships an editor */}
+                {step === 12 && (
+                    <CasePluginsStep
+                        caseData={caseData}
+                        setCaseData={setCaseData}
+                        role={wizardUser?.role}
+                        onOpenPluginAuthor={onOpenPluginAuthor}
+                    />
+                )}
+
                 {/* STEP 10: AGENTS */}
                 {step === 11 && (
                     <CaseAgentEditor
@@ -5128,7 +5152,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                     )}
 
                     {/* Save Progress button on all steps except last */}
-                    {step < WIZARD_STEPS.length && (
+                    {step < lastStepNum && (
                         <button
                             onClick={onSave}
                             className="px-4 py-2 bg-blue-700 hover:bg-blue-600 rounded font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-900/20"
@@ -5137,7 +5161,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                         </button>
                     )}
 
-                    {step < WIZARD_STEPS.length ? (
+                    {step < lastStepNum ? (
                         <button
                             onClick={async () => {
                                 // Auto-save before moving forward
