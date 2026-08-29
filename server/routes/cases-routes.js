@@ -20,6 +20,8 @@ import { PATIENT_GENDERS, resolvePatientGender } from '../shared/patientDemograp
 import { RHYTHM_IDS, resolveRhythm } from '../shared/rhythms.js';
 import { DEFAULT_LANGUAGE, LANGUAGES, isKnownLanguage } from '../shared/languages.js';
 import { SCENARIO_CATEGORY_IDS, resolveScenarioCategory } from '../shared/scenarioCategories.js';
+import { validatePluginDocuments } from '../shared/pluginDocument.js';
+import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import {
     auditSuccess,
     canManageOwnedResource,
@@ -174,6 +176,17 @@ function normaliseCaseForStorage(req, res, body) {
         res.status(400).json({ error: alternativesError, code: 'invalid_scenario_alternatives' });
         return null;
     }
+    // RPS-1 §11a.3(4): a plugin's document must be storable before it is
+    // stored. Everything downstream — the session snapshot a learner's room is
+    // pinned to, export/import, case versions — carries `config` as a unit and
+    // assumes it round-trips. Driven by the frozen manifest snapshot, so a
+    // second authoring plugin needs no change here.
+    const pluginConfigError = validatePluginDocuments(safeConfig, PLUGIN_MANIFESTS);
+    if (pluginConfigError) {
+        res.status(400).json(pluginConfigError);
+        return null;
+    }
+
     logVocabularyWarnings(req, 'case', warnings);
 
     // Denormalised columns. The case editor writes the patient name to

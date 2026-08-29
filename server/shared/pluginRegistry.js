@@ -232,6 +232,24 @@ export function validateManifest(manifest) {
         });
     }
 
+    // The document cap (§11a.1). Optional — absent means the default. Checked
+    // because a typo here fails OPEN: a manifest saying `maxbytes` or '128kb'
+    // would silently keep the default and the author would meet a rejection
+    // the manifest appears to have prevented.
+    if (manifest.document !== undefined) {
+        const doc = manifest.document;
+        if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+            throw new Error(`Plugin '${manifest.id}' declares 'document' that is not an object`);
+        }
+        const unknown = Object.keys(doc).find((key) => key !== 'maxBytes');
+        if (unknown) {
+            throw new Error(`Plugin '${manifest.id}' document declares unknown field '${unknown}' — only maxBytes is defined`);
+        }
+        if (doc.maxBytes !== undefined && !(Number.isInteger(doc.maxBytes) && doc.maxBytes > 0)) {
+            throw new Error(`Plugin '${manifest.id}' document.maxBytes must be a positive integer number of bytes`);
+        }
+    }
+
     caps.forEach((cap) => {
         if (!CAPABILITIES.includes(cap)) {
             throw new Error(`Plugin '${manifest.id}' requests unknown capability '${cap}'`);

@@ -9,6 +9,45 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.72] — 2026-08-29
+
+### Added
+
+- **A plugin's case document is guarded on write (RPS-1 §11a.3(4)).**
+  `normaliseCaseForStorage` now checks `config[<pluginId>]` for every manifest
+  in the frozen snapshot that declares `authoring`: it must be a plain object
+  within the plugin's cap, and every `remote:` reference in it must fall under
+  one of that plugin's declared `remote.paths`. Anything else is
+  `400 { error, code: 'invalid_plugin_config' }` — never a 500. Absent and
+  `null` both mean "no material" and are left alone, as are config keys no
+  manifest claims: policing those would make this a gate on the whole case
+  shape. New `server/shared/pluginDocument.js`; driven entirely by the manifest
+  snapshot, so a second authoring plugin needs no change here.
+
+  The cap defaults to 64 KB and a plugin may raise it with
+  `document: { maxBytes }` in its manifest — per plugin, never globally, so one
+  plugin's appetite cannot enlarge every request rohy accepts. `validateManifest`
+  checks that block, because a typo there fails OPEN: a manifest saying
+  `maxbytes` would silently keep the default and the author would meet a
+  rejection the manifest appears to have prevented.
+
+  The `remote:` check is deliberately duplicated from the proxy, which already
+  403s an undeclared prefix at read time. Failing at authoring time tells the
+  AUTHOR which field is wrong; failing at read time tells a LEARNER their slide
+  is broken.
+
+### Note
+
+- **The 64 KB cap and inline gross photography cannot both stand.** Measured
+  through Pathoyon's real canvas pipeline: an empty canonical case is 1.0 KB, one
+  438x320 gross photograph takes it to 34 KB, and **two take it to 83 KB** —
+  already over. Case Studio bounds photographs at 1600px, several times larger
+  again, so no cap below express's 256 KB body limit makes a photographic case
+  fit. The cap was left at the specified 64 KB rather than inflated to a number
+  that still would not work: a text pathology case (slides, ROIs, prose) measures
+  about 1 KB, so the limit only bites on embedded images, which belong behind the
+  remote proxy. Closing this needs an upload path (§14.2), which does not exist.
+
 ## [2.9.71] — 2026-08-29
 
 ### Changed
