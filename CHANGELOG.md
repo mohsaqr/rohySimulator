@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.90] — 2026-08-29
+
+### Fixed
+
+- **`npm run build` failed on `main`: the frozen plugin manifest was missing
+  `pacs`.** `server/shared/plugins/manifests.generated.js` is the snapshot the
+  SERVER reads, and it had been regenerated from a working tree in which
+  `src/plugins/pacs/` was still untracked — so once that plugin was committed,
+  the generated file listed only `pathology`. `plugins:check` correctly reported
+  drift, `prebuild` runs it, and the Docker "Install from scratch" workflow
+  failed. Regenerated with both plugins; additive only, no manifest content
+  changed.
+
 ## [2.9.89] — 2026-08-29
 
 ### Added

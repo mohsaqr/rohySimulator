@@ -4,6 +4,137 @@
 export const PLUGIN_MANIFESTS = [
     {
         "authoring": {
+            "labelKey": "room_pacs_author",
+            "minRole": "educator"
+        },
+        "capabilities": [
+            "persist",
+            "remote"
+        ],
+        "document": {
+            "learnerOmit": [
+                "rubric"
+            ]
+        },
+        "id": "pacs",
+        "minRole": "student",
+        "remote": {
+            "contentTypes": [
+                "application/dicom",
+                "application/octet-stream",
+                "application/json",
+                "image/jpeg",
+                "image/png"
+            ],
+            "paths": [
+                "/dicom",
+                "/thumbs"
+            ]
+        },
+        "room": {
+            "accent": "indigo",
+            "icon": "Scan",
+            "key": "pacs",
+            "labelKey": "room_pacs",
+            "order": 55,
+            "subKey": "room_pacs_sub"
+        },
+        "states": {
+            "interpretations": {
+                "DRAFTED_REPORT:imaging_report": "documenting",
+                "MEASURED_REGION:imaging_measurement": "assessing",
+                "SUBMITTED_REPORT:imaging_report": "documenting"
+            },
+            "objectOverrides": {
+                "imaging_image": "assessing",
+                "imaging_measurement": "assessing",
+                "imaging_report": "documenting",
+                "imaging_series": "assessing",
+                "imaging_study": "assessing"
+            },
+            "verbFallbacks": {
+                "APPLIED_PRESET": "assessing",
+                "CHANGED_WINDOW": "assessing",
+                "CLOSED_STUDY": "assessing",
+                "DRAFTED_REPORT": "documenting",
+                "FAILED_TO_LOAD": "assessing",
+                "MEASURED_DISTANCE": "assessing",
+                "MEASURED_REGION": "assessing",
+                "OPENED_STUDY": "assessing",
+                "REVIEWED_SERIES": "assessing",
+                "SCROLLED_SERIES": "assessing",
+                "SELECTED_SERIES": "assessing",
+                "SUBMITTED_REPORT": "documenting"
+            }
+        },
+        "version": "0.1.0",
+        "vocabulary": {
+            "components": {
+                "REPORT": "RadoyonReport",
+                "VIEWPORT": "RadoyonViewport",
+                "WORKLIST": "RadoyonWorklist"
+            },
+            "objectTypes": {
+                "IMAGE": "imaging_image",
+                "MEASUREMENT": "imaging_measurement",
+                "REPORT": "imaging_report",
+                "SERIES": "imaging_series",
+                "STUDY": "imaging_study"
+            },
+            "verbs": {
+                "APPLIED_PRESET": {
+                    "category": "CLINICAL",
+                    "severity": "INFO"
+                },
+                "CHANGED_WINDOW": {
+                    "category": "CLINICAL",
+                    "severity": "INFO"
+                },
+                "CLOSED_STUDY": {
+                    "category": "CLINICAL",
+                    "severity": "INFO"
+                },
+                "DRAFTED_REPORT": {
+                    "category": "CLINICAL",
+                    "severity": "INFO"
+                },
+                "FAILED_TO_LOAD": {
+                    "category": "ERROR",
+                    "severity": "IMPORTANT"
+                },
+                "MEASURED_DISTANCE": {
+                    "category": "CLINICAL",
+                    "severity": "INFO"
+                },
+                "MEASURED_REGION": {
+                    "category": "CLINICAL",
+                    "severity": "INFO"
+                },
+                "OPENED_STUDY": {
+                    "category": "CLINICAL",
+                    "severity": "INFO"
+                },
+                "REVIEWED_SERIES": {
+                    "category": "CLINICAL",
+                    "severity": "INFO"
+                },
+                "SCROLLED_SERIES": {
+                    "category": "CLINICAL",
+                    "severity": "INFO"
+                },
+                "SELECTED_SERIES": {
+                    "category": "CLINICAL",
+                    "severity": "INFO"
+                },
+                "SUBMITTED_REPORT": {
+                    "category": "CLINICAL",
+                    "severity": "INFO"
+                }
+            }
+        }
+    },
+    {
+        "authoring": {
             "labelKey": "room_pathology_author",
             "minRole": "educator"
         },
