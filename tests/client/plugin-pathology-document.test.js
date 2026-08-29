@@ -239,3 +239,47 @@ describe('a new case comes back canonical, not as a lossy legacy shell', () => {
         expect(opened.manifest.schemaVersion).toBe('1.0.0');
     });
 });
+
+describe('§7a — referenced gross photography, so a case can hold any at all', () => {
+    it('resolves a reference to this plugin\'s proxy mount for the editor', () => {
+        // The room's ctx.data is resolved by createPluginContext; the EDITOR is
+        // handed the raw stored document, so it needs the rule itself. Without
+        // it an author sees a placeholder where their photograph should be and
+        // cannot tell a correct reference from a typo.
+        const { resolveRef } = descriptor.authorProps({ pluginId: 'pathology' }, { value: null, save() {} });
+        expect(resolveRef('remote:gross/case42/a.jpg')).toBe('/api/plugins/pathology/gross/case42/a.jpg');
+        expect(resolveRef('remote:/gross/case42/a.jpg')).toBe('/api/plugins/pathology/gross/case42/a.jpg');
+        // A filename may legitimately contain a space; it must not become a
+        // path separator on the way to the proxy.
+        expect(resolveRef('remote:gross/a fresh.jpg')).toBe('/api/plugins/pathology/gross/a%20fresh.jpg');
+        // Anything already loadable is left exactly as written.
+        expect(resolveRef('/slides/a.dzi')).toBe('/slides/a.dzi');
+        expect(resolveRef('https://example.org/a.jpg')).toBe('https://example.org/a.jpg');
+    });
+
+    it('a referenced photograph is material, and keeps the document storable', async () => {
+        const {
+            createStudioDocument, updateStudioEntity, addStudioGrossImage,
+        } = await import('../../src/components/pathology/caseStudioModel.js');
+        const { caseDocumentBytes } = await import('../../src/components/pathology/hostDocument.js');
+
+        const count = new Map();
+        const makeIds = (kind) => {
+            const next = (count.get(kind) ?? 0) + 1;
+            count.set(kind, next);
+            return `${kind}-${next}`;
+        };
+        let doc = createStudioDocument({ idFactory: makeIds, now: () => '2026-08-29T00:00:00.000Z', createdBy: 't' });
+        doc = updateStudioEntity(doc, 'specimen', 'specimen-1', { part: 'A', label: 'Breast' });
+        doc = addStudioGrossImage(doc, 'specimen-1', {
+            uri: 'remote:gross/case42/a.jpg', scaleMm: 120, checksum: 'sha256:a',
+        }, makeIds);
+
+        // A photographs-only case is a real case, and the room opens on it.
+        expect(descriptor.available({ data: doc })).toBe(true);
+        expect(descriptor.summarize(doc)).toEqual({ count: 1, labelKey: 'pathology_summary_photographs' });
+        // And it fits, which is the whole reason references exist: the same
+        // photograph carried inline measured 34 KB, two measured 83 KB.
+        expect(caseDocumentBytes(doc)).toBeLessThan(64 * 1024 / 10);
+    });
+});

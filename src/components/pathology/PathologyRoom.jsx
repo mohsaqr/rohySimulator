@@ -64,11 +64,20 @@ export function PathologyRoom({
     initialAnnotations,
     onReportsChange,
     initialReports,
+    // How this host turns a `remote:` reference into a loadable address. Some
+    // hosts resolve references before the case ever reaches this component; a
+    // host that does not passes the rule in here instead.
+    resolveRef = null,
 }) {
     const logger = useMemo(() => createPathologyLogger(eventLogger), [eventLogger]);
-    const viewerCase = useMemo(() => (
-        pathologyCase?.schemaVersion ? toLegacyViewerCase(pathologyCase) : pathologyCase
-    ), [pathologyCase]);
+    const viewerCase = useMemo(() => {
+        if (!pathologyCase?.schemaVersion) return pathologyCase;
+        return toLegacyViewerCase(pathologyCase, typeof resolveRef === 'function'
+            // Slides and gross plates both resolve through the same rule; the
+            // adapter asks per rendition and does not care which it is.
+            ? { resolveRendition: ({ rendition }) => (rendition ? resolveRef(rendition.uri) : undefined) }
+            : undefined);
+    }, [pathologyCase, resolveRef]);
     const [activeSlideId, setActiveSlideId] = useState(viewerCase?.slides?.[0]?.id ?? null);
     const [readResult, setReadResult] = useState(null);
     // Microscopy and gross are peer modules within the room, mirroring the

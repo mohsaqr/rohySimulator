@@ -9,6 +9,33 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.76] — 2026-08-29
+
+### Added
+
+- **Gross photographs can be referenced instead of carried, which is what makes
+  a photographic pathology case storable at all.** A case now says
+  `remote:gross/case42/a.jpg` and the host resolves it, exactly as slide
+  pyramids already work. Measured: one 438x320 photograph embedded as a `data:`
+  URL puts a case document at 34 KB and two put it at 83 KB, past the 64 KB cap
+  v2.9.72 enforces; the same photographs referenced leave the whole case at
+  **2.2 KB**, verified in a browser end to end.
+
+- `resolveRemoteRef(uri, pluginId)` split out of `resolveRemoteRefs` in
+  `src/plugins/context.js`, and handed to the editor through `authorProps`. The
+  ROOM never needed it — `createPluginContext` resolves `ctx.data` up front —
+  but the EDITOR is given the raw stored document, so without this an author
+  referencing a photograph sees a placeholder where their own picture should be
+  and cannot tell a correct reference from a typo.
+
+### Note
+
+- The upstream package gained a `resolveRef` prop on `CaseStudio`,
+  `CaseAuthor`, `PathologyRoom` and `PathologyScreen`, plus `src/remoteRef.js`.
+  Deliberately no `/api/...` prefix lives in any of them: resolution is the
+  host's rule, and a package that knew rohy's mount could not be dropped into
+  anything else. Vendored copy re-synced and byte-identical.
+
 ## [2.9.75] — 2026-08-29
 
 ### Changed

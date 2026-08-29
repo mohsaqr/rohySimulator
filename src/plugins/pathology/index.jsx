@@ -1,4 +1,5 @@
 import { manifest } from './manifest.js';
+import { resolveRemoteRef } from '../context.js';
 import { PathologyScreen } from '../../components/pathology/PathologyScreen.jsx';
 import { CaseAuthor } from '../../components/pathology/CaseAuthor.jsx';
 import {
@@ -133,5 +134,17 @@ export default {
     authorProps: (ctx, draft) => ({
         initialCase: readCaseDocument(draft.value) ?? undefined,
         onChange: draft.save,
+
+        // The editor is handed the RAW stored document — unlike the room, whose
+        // `ctx.data` createPluginContext has already resolved. So the editor
+        // needs the rule itself, or an author referencing a gross photograph
+        // would see a placeholder instead of their own picture and have no way
+        // to tell a correct reference from a typo.
+        //
+        // This is also what makes referencing usable at all: a photograph
+        // carried inline as a data: URL puts one case at 34 KB and two past the
+        // 64 KB a host will store, while the same photographs referenced leave
+        // the document at about 2 KB.
+        resolveRef: (uri) => resolveRemoteRef(uri, ctx.pluginId),
     }),
 };

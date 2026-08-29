@@ -54,6 +54,7 @@ export * from './magnification.js';
 export * from './pathologyEvents.js';
 export * from './pathologyStates.js';
 export * from './readAssessment.js';
+export * from './remoteRef.js';
 export * from './readRecorder.js';
 export * from './report.js';
 export * from './slideGeometry.js';

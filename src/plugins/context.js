@@ -91,14 +91,30 @@ function scopeStore(store, { pluginId, sessionId }) {
  * @param {string} pluginId
  * @returns {*} the same shape with every `remote:` string resolved
  */
+/**
+ * One `remote:` reference, resolved to this plugin's proxy mount.
+ *
+ * Split out of the walk below because the ROOM gets its whole case resolved up
+ * front, but the EDITOR is handed the raw stored document — the author has to
+ * see the picture their reference names while they are authoring it, and the
+ * only thing that can turn the name into an address is the host.
+ *
+ * @param {string} uri
+ * @param {string} pluginId
+ * @returns {string} unchanged when it is not a reference
+ */
+export function resolveRemoteRef(uri, pluginId) {
+    if (typeof uri !== 'string' || !uri.startsWith(REMOTE_SCHEME)) return uri;
+    const path = uri.slice(REMOTE_SCHEME.length).replace(/^\/+/, '');
+    // Encoded per segment: a filename may legitimately contain a space or a
+    // '+', and neither may be allowed to become a path separator.
+    const encoded = path.split('/').filter(Boolean).map(encodeURIComponent).join('/');
+    return `/api/plugins/${pluginId}/${encoded}`;
+}
+
 export function resolveRemoteRefs(value, pluginId) {
     if (typeof value === 'string') {
-        if (!value.startsWith(REMOTE_SCHEME)) return value;
-        const path = value.slice(REMOTE_SCHEME.length).replace(/^\/+/, '');
-        // Encoded per segment: a filename may legitimately contain a space or a
-        // '+', and neither may be allowed to become a path separator.
-        const encoded = path.split('/').filter(Boolean).map(encodeURIComponent).join('/');
-        return `/api/plugins/${pluginId}/${encoded}`;
+        return resolveRemoteRef(value, pluginId);
     }
     if (Array.isArray(value)) return value.map((v) => resolveRemoteRefs(v, pluginId));
     if (value && typeof value === 'object') {

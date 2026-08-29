@@ -20,6 +20,7 @@ import { specimenDisplayName } from './specimenNaming.js';
 import { sha256Bytes } from './caseCore/packageFiles.js';
 import { assetDziUrl } from './slideThumbnail.js';
 import { SlidePreview } from './SlidePreview.jsx';
+import { isRemoteRef, loadableSource, toRemoteRef } from './remoteRef.js';
 import { embedImageFile } from './imageEmbed.js';
 
 /**
@@ -61,6 +62,11 @@ const stainCode = (display) => String(display ?? '').toUpperCase().replace(/[^A-
 export function CaseStudio({
     document, onChange, assetService = null, onSaveDraft, onSubmitReview, onPublish,
     topBarControls = null, instructorPreview = false, t = (key, fallback) => fallback,
+    // How this host turns a `remote:` reference into something a browser can
+    // load. Absent means "no referenced content here" — a plain path or a
+    // data: URL still works, and a reference renders as a placeholder that
+    // says so rather than as a broken image.
+    resolveRef = null,
 }) {
     const [selection, setSelection] = useState({ kind: 'overview', id: null, section: null });
     const [activityId, setActivityId] = useState(document?.manifest?.activities?.[0]?.id ?? '');
@@ -235,6 +241,7 @@ export function CaseStudio({
                 <main className="min-w-0 flex-1 overflow-y-auto px-6 py-6 lg:px-10 lg:py-8">
                     {selection.kind === 'overview' && (
                         <Overview
+                    resolveRef={resolveRef}
                             document={document} onSelect={select}
                             onAddSlide={addSlideAnywhere} onAddGross={addGrossAnywhere}
                             onApply={(transition) => attempt(transition)}
@@ -251,6 +258,7 @@ export function CaseStudio({
                     {selection.kind === 'metadata' && <Metadata manifest={manifest} onPatch={(patch) => attempt((current) => updateStudioMetadata(current, patch))} />}
                     {selection.kind === 'specimen' && entity && (
                         <SpecimenWorkspace
+                    resolveRef={resolveRef}
                             document={document} specimen={entity} section={selection.section}
                             pendingDelete={pendingDelete} onDelete={requestDelete} onSelect={select}
                             onNotice={(message) => setAction({ state: 'notice', message })}
@@ -293,7 +301,7 @@ export function CaseStudio({
                 }
                 setAssetTarget(null);
             }} />}
-            {preview && <Preview document={document} activityId={activeActivityId} includeProtected={instructorPreview} onClose={() => setPreview(false)} />}
+            {preview && <Preview document={document} activityId={activeActivityId} includeProtected={instructorPreview} onClose={() => setPreview(false)} resolveRef={resolveRef} />}
         </div>
     );
 }
@@ -409,7 +417,7 @@ function Outline({ manifest, selection, onSelect, onAddSpecimen, onAddActivity, 
  * case: neither one asks the author to invent a specimen part and a paraffin
  * block first. The lineage is still created — it is just created for them.
  */
-function Overview({ document, onSelect, onAddSlide, onAddGross, onAddSpecimen, onApply, onNotice, onPatchSpecimen, onDelete, pendingDelete }) {
+function Overview({ document, onSelect, onAddSlide, onAddGross, onAddSpecimen, onApply, onNotice, onPatchSpecimen, onDelete, pendingDelete, resolveRef = null }) {
     const { manifest } = document;
     const plates = manifest.specimens.flatMap((specimen) => studioGrossImages(document, specimen.id)
         .map((image) => ({ ...image, specimen })));
@@ -466,6 +474,7 @@ function Overview({ document, onSelect, onAddSlide, onAddGross, onAddSpecimen, o
             {single
                 ? (
                     <GrossCard
+                    resolveRef={resolveRef}
                         document={document}
                         specimen={manifest.specimens[0]}
                         onApply={onApply}
@@ -627,7 +636,7 @@ function Metadata({ manifest, onPatch }) {
  * One specimen part, shown as its three real concerns: what was received, what
  * it looked like to the naked eye, and what was cut from it.
  */
-function SpecimenWorkspace({ document, specimen, section, onPatch, onApply, onNotice, onSelect, onAddSlide, onDelete, pendingDelete }) {
+function SpecimenWorkspace({ document, specimen, section, onPatch, onApply, onNotice, onSelect, onAddSlide, onDelete, pendingDelete, resolveRef = null }) {
     const grossRef = useRef(null);
     const histoRef = useRef(null);
     useEffect(() => {
@@ -654,6 +663,7 @@ function SpecimenWorkspace({ document, specimen, section, onPatch, onApply, onNo
 
             <div ref={grossRef}>
                 <GrossCard
+                    resolveRef={resolveRef}
                     document={document} specimen={specimen} onApply={onApply} onNotice={onNotice} onPatch={onPatch}
                     highlighted={section === 'gross' || section === 'gross-add'}
                     autoOpen={section === 'gross-add'}
@@ -701,7 +711,30 @@ async function preparePhotograph(file) {
  * submit, so the pin is visible before the plate is added and the transition
  * itself stays synchronous.
  */
-function GrossCard({ document, specimen, onApply, onNotice, onPatch, highlighted, autoOpen = false }) {
+/**
+ * One gross plate's picture.
+ *
+ * A `remote:` reference is a NAME, not a URL. Handing it to an <img> produces a
+ * broken-image icon and a console error the author cannot act on, so when this
+ * host cannot resolve references the plate says what it is instead. The author
+ * still sees the plate, its width field and its order controls — the reference
+ * is authored correctly here and resolves wherever it is served.
+ */
+function GrossPlateImage({ uri, resolveRef, alt }) {
+    const src = loadableSource(uri, resolveRef);
+    if (src === '') {
+        return (
+            <div className="flex h-40 w-full flex-col items-center justify-center gap-1 bg-slate-900 px-3 text-center">
+                <Link2 className="h-6 w-6 text-slate-600" aria-hidden="true" />
+                <p className="text-xs font-medium text-slate-400">Referenced photograph</p>
+                <p className="text-[11px] text-slate-500">Not previewable here. It loads wherever this case is served.</p>
+            </div>
+        );
+    }
+    return <img src={src} alt={alt} className="h-40 w-full bg-slate-900 object-cover" />;
+}
+
+function GrossCard({ document, specimen, onApply, onNotice, onPatch, highlighted, autoOpen = false, resolveRef = null }) {
     const solo = document.manifest.specimens.length === 1;
     const [linking, setLinking] = useState(false);
     const [linkUrl, setLinkUrl] = useState('');
@@ -718,7 +751,11 @@ function GrossCard({ document, specimen, onApply, onNotice, onPatch, highlighted
     /** Add one already-resolved picture, pinning it by its own bytes. */
     const attach = async (uri, label) => {
         let checksum = null;
-        try { checksum = await pinOf(uri); } catch { checksum = null; }
+        // Pinned by the bytes a reader will actually receive, so the resolver
+        // has to run first: `remote:gross/a.jpg` is a name, not something
+        // fetch() can open.
+        const loadable = loadableSource(uri, resolveRef);
+        try { checksum = loadable === '' ? null : await pinOf(loadable); } catch { checksum = null; }
         const added = onApply((current) => addStudioGrossImage(current, specimen.id, { uri, checksum }));
         if (!added) return false;
         if (checksum === null) onNotice(`Added ${label}, but it could not be pinned. Publication needs a pinned photograph — use "Pin now" once it is reachable.`);
@@ -745,10 +782,24 @@ function GrossCard({ document, specimen, onApply, onNotice, onPatch, highlighted
         if (failures.length > 0) onNotice(failures.join(' '));
     };
 
+    /**
+     * Add a photograph the case POINTS AT rather than carries.
+     *
+     * A bare path becomes a `remote:` reference; a complete http(s) URL is kept
+     * as written, because that is a real address and turning it into a
+     * reference would silently change which machine serves it.
+     */
     const addLink = async () => {
-        const uri = linkUrl.trim();
-        if (uri === '') return;
-        setBusy('Fetching the image…');
+        const typed = linkUrl.trim();
+        if (typed === '') return;
+        let uri;
+        try {
+            uri = /^https?:\/\//i.test(typed) || typed.startsWith('data:') ? typed : toRemoteRef(typed);
+        } catch (error) {
+            onNotice(error?.message ?? String(error));
+            return;
+        }
+        setBusy('Adding the photograph…');
         const ok = await attach(uri, uri);
         setBusy('');
         if (ok) { setLinkUrl(''); setLinking(false); }
@@ -757,7 +808,9 @@ function GrossCard({ document, specimen, onApply, onNotice, onPatch, highlighted
     const pinPlate = async (image) => {
         setPinning(image.id);
         try {
-            const checksum = await pinOf(image.uri);
+            const source = loadableSource(image.uri, resolveRef);
+            if (source === '') throw new Error('This host cannot resolve referenced content, so the photograph cannot be fetched to pin it.');
+            const checksum = await pinOf(source);
             onApply((current) => updateStudioGrossImage(current, specimen.id, image.id, { checksum }));
         } catch (error) {
             onNotice(`Could not pin this photograph: ${error?.message ?? error}`);
@@ -810,7 +863,7 @@ function GrossCard({ document, specimen, onApply, onNotice, onPatch, highlighted
                                     <ImagePlus className="h-4 w-4" aria-hidden="true" />Choose photographs
                                 </button>
                                 <button type="button" className={BTN} onClick={() => setLinking((open) => !open)} aria-expanded={linking}>
-                                    <Link2 className="h-4 w-4" aria-hidden="true" />Use a web address instead
+                                    <Link2 className="h-4 w-4" aria-hidden="true" />Reference one instead
                                 </button>
                             </div>
                         </>
@@ -818,7 +871,12 @@ function GrossCard({ document, specimen, onApply, onNotice, onPatch, highlighted
                 {linking && (
                     <div className="mx-auto mt-4 flex max-w-xl flex-wrap items-end gap-2 text-left">
                         <div className="min-w-56 flex-1">
-                            <TextField label="Image URL" value={linkUrl} onChange={setLinkUrl} hint="For a photograph already published somewhere, such as https://example.org/gross/a-fresh.jpg" />
+                            <TextField
+                                label="Path or web address"
+                                value={linkUrl}
+                                onChange={setLinkUrl}
+                                hint="A path such as gross/case42/a-fresh.jpg names a photograph kept with your slides — the case points at it and stays small. A full https:// address is used as written."
+                            />
                         </div>
                         <button type="button" className={PRIMARY} onClick={addLink}><Plus className="h-4 w-4" aria-hidden="true" />Add</button>
                     </div>
@@ -830,13 +888,22 @@ function GrossCard({ document, specimen, onApply, onNotice, onPatch, highlighted
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {images.map((image, index) => (
                     <figure key={image.id} className="overflow-hidden rounded-xl bg-slate-950/60 ring-1 ring-slate-800">
-                        <img src={image.uri} alt={`Gross plate ${index + 1} of ${named(specimen.label, 'this part')}`} className="h-40 w-full bg-slate-900 object-cover" />
+                        <GrossPlateImage
+                            uri={image.uri}
+                            resolveRef={resolveRef}
+                            alt={`Gross plate ${index + 1} of ${named(specimen.label, 'this part')}`}
+                        />
                         <figcaption className="space-y-3 p-3">
                             <div className="flex items-center gap-2">
                                 <span className="rounded-md bg-slate-800 px-1.5 py-0.5 text-[11px] font-bold text-slate-300">{index + 1}</span>
                                 <span className="min-w-0 flex-1 truncate text-xs text-slate-400">
                                     {image.uri.startsWith('data:') ? 'Stored in this case' : image.uri}
                                 </span>
+                                {isRemoteRef(image.uri) && (
+                                    <span className="shrink-0 rounded-md bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                                        Referenced
+                                    </span>
+                                )}
                             </div>
                             <NumericField
                                 label="Plate width (mm)"
@@ -1287,7 +1354,7 @@ function AssetPicker({ assetService, actionLabel, onSelect, onClose }) {
     );
 }
 
-function Preview({ document, activityId, includeProtected, onClose }) {
+function Preview({ document, activityId, includeProtected, onClose , resolveRef = null }) {
     const pathologyCase = useMemo(() => studioPreviewManifest(document, activityId), [document, activityId]);
     const previewName = includeProtected ? 'Instructor preview' : 'Learner preview';
     return (
@@ -1297,7 +1364,7 @@ function Preview({ document, activityId, includeProtected, onClose }) {
                 <span className="text-xs">Events and work are isolated and will not be saved.</span>
                 <button type="button" onClick={onClose} className="ml-auto min-h-9 rounded-lg bg-slate-950 px-3.5 py-2 text-xs font-semibold text-white">Close preview</button>
             </header>
-            <div className="flex min-h-0 flex-1"><PathologyRoom pathologyCase={pathologyCase} rubric={includeProtected ? document.rubric : null} eventLogger={NOOP_LOGGER} /></div>
+            <div className="flex min-h-0 flex-1"><PathologyRoom pathologyCase={pathologyCase} rubric={includeProtected ? document.rubric : null} eventLogger={NOOP_LOGGER} resolveRef={resolveRef} /></div>
         </div>
     );
 }

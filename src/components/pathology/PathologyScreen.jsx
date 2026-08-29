@@ -35,6 +35,7 @@ export function PathologyScreen({
     topBarControls = null,
     roomNav,
     t = (key, fallback) => fallback,
+    resolveRef = null,
 }) {
     return (
         <div className="flex h-screen w-screen flex-col overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-slate-100">
@@ -59,6 +60,7 @@ export function PathologyScreen({
             </header>
 
             <PathologyRoom
+                resolveRef={resolveRef}
                 pathologyCase={pathologyCase}
                 rubric={rubric}
                 eventLogger={eventLogger}

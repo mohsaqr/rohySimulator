@@ -14,6 +14,7 @@ export function CaseAuthor({
     onSaveDraft,
     onSubmitReview,
     onPublish,
+    resolveRef = null,
 }) {
     // What shape does this host speak? A host that handed us a legacy flat
     // case gets one back, because that is the contract it was written against.
@@ -41,6 +42,7 @@ export function CaseAuthor({
             onSubmitReview={onSubmitReview}
             onPublish={onPublish}
             topBarControls={topBarControls}
+            resolveRef={resolveRef}
         />
     );
 }
