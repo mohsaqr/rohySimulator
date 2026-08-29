@@ -3247,12 +3247,20 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
 
                 {editingAgent.agent_type === 'discussant' && (
                     <div className="space-y-4 p-4 rounded-lg bg-indigo-950/30 border border-indigo-900/50">
+                        {/* These three read `editingAgent.config` — the MERGED
+                            {...template_config, ...config_override} object that
+                            GET /cases/:id/agents actually returns. Reading the
+                            top-level `context_filter` / `unlock_trigger` instead
+                            showed the TEMPLATE value (or nothing) however the
+                            case was configured, so reopening the editor and
+                            saving silently reverted a per-case override to the
+                            default. The API sends no top-level field for either. */}
                         <h5 className="text-sm font-bold text-indigo-300">{t('agent_discussant_overrides')}</h5>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm text-neutral-400 mb-1">{t('agent_context_filter')}</label>
                                 <select
-                                    value={editingAgent._cfg_context_filter ?? editingAgent.context_filter ?? 'full'}
+                                    value={editingAgent._cfg_context_filter ?? editingAgent.config?.context_filter ?? editingAgent.context_filter ?? 'full'}
                                     onChange={(e) => setEditingAgent(prev => ({ ...prev, _cfg_context_filter: e.target.value }))}
                                     className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
                                 >
@@ -3265,7 +3273,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                             <div>
                                 <label className="block text-sm text-neutral-400 mb-1">{t('agent_unlock_trigger')}</label>
                                 <select
-                                    value={editingAgent._cfg_unlock_trigger ?? editingAgent.unlock_trigger ?? 'after_case_ended'}
+                                    value={editingAgent._cfg_unlock_trigger ?? editingAgent.config?.unlock_trigger ?? editingAgent.unlock_trigger ?? 'after_case_ended'}
                                     onChange={(e) => setEditingAgent(prev => ({ ...prev, _cfg_unlock_trigger: e.target.value }))}
                                     className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
                                 >

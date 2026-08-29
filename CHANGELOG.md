@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.99] — 2026-08-30
+
+### Fixed
+
+- **A saved per-case discussant override never displayed, and re-saving
+  silently reverted it.** `GET /cases/:id/agents` returns the merged
+  `{...template_config, ...config_override}` object as `config`, and sends **no**
+  top-level `unlock_trigger` and no per-case `context_filter` — the top-level
+  `context_filter` it does send is the *template's*. The editor read
+  `editingAgent.unlock_trigger` and `editingAgent.context_filter`, so both
+  controls showed the default however the case was actually configured. Opening
+  the editor for any other reason and pressing Save then wrote those defaults
+  back over the educator's real setting.
+
+  Both now read `editingAgent.config?.<key>` first, which is where the value has
+  always lived. Found while adding a third control to the same panel in v2.9.98
+  — that one was written against `config` from the start, and would otherwise
+  have inherited the same defect.
+
 ## [2.9.98] — 2026-08-30
 
 ### Added
