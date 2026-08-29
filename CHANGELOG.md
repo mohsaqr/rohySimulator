@@ -9,6 +9,30 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.77] — 2026-08-29
+
+### Fixed
+
+- **Analytics "Minutes" tile showed the calendar span of the dataset, not
+  time spent.** It was `max(timestamp) − min(timestamp)` over every filtered
+  event — right for one session, meaningless for a cohort (147,585 min = 102
+  days on a local DB). It is now **Active minutes**: idle-capped time on task
+  (Kovanović et al., 2015) — per session, the sum of gaps between consecutive
+  events with each gap capped at 5 minutes, the last event earning nothing;
+  rolled up per learner and in total, grouped exactly as TNA groups sequences.
+  The detail line shows session minutes (first → last event) and the median
+  active minutes per session. A new **Time on task** panel lists every
+  learner (sessions, events, active, session, median) with the idle cap
+  selectable (2 / 5 / 10 / 30 min) so the sensitivity is visible rather than
+  assumed. `sessions.duration` was not used: most sessions are never
+  explicitly ended, so it is NULL or stale.
+- **TNA sequences could be mis-ordered.** `learning_events.timestamp` holds
+  two formats — the client's ISO string and sqlite's zone-less
+  `CURRENT_TIMESTAMP` fallback — and `eventsToSequences` sorted by string, so
+  a server-stamped row sorted before client rows of the same day. Both now
+  sort by numeric time (the sqlite form pinned to UTC), through one shared
+  comparator and one shared grouping rule (`activityTime.js`).
+
 ## [2.9.76] — 2026-08-29
 
 ### Added
@@ -173,30 +197,6 @@ release before tagging.
   that still would not work: a text pathology case (slides, ROIs, prose) measures
   about 1 KB, so the limit only bites on embedded images, which belong behind the
   remote proxy. Closing this needs an upload path (§14.2), which does not exist.
-
-## [2.9.72] — 2026-08-29
-
-### Fixed
-
-- **Analytics "Minutes" tile showed the calendar span of the dataset, not
-  time spent.** It was `max(timestamp) − min(timestamp)` over every filtered
-  event — right for one session, meaningless for a cohort (147,585 min = 102
-  days on a local DB). It is now **Active minutes**: idle-capped time on task
-  (Kovanović et al., 2015) — per session, the sum of gaps between consecutive
-  events with each gap capped at 5 minutes, the last event earning nothing;
-  rolled up per learner and in total, grouped exactly as TNA groups sequences.
-  The detail line shows session minutes (first → last event) and the median
-  active minutes per session. A new **Time on task** panel lists every
-  learner (sessions, events, active, session, median) with the idle cap
-  selectable (2 / 5 / 10 / 30 min) so the sensitivity is visible rather than
-  assumed. `sessions.duration` was not used: most sessions are never
-  explicitly ended, so it is NULL or stale.
-- **TNA sequences could be mis-ordered.** `learning_events.timestamp` holds
-  two formats — the client's ISO string and sqlite's zone-less
-  `CURRENT_TIMESTAMP` fallback — and `eventsToSequences` sorted by string, so
-  a server-stamped row sorted before client rows of the same day. Both now
-  sort by numeric time (the sqlite form pinned to UTC), through one shared
-  comparator and one shared grouping rule (`activityTime.js`).
 
 ## [2.9.71] — 2026-08-29
 
