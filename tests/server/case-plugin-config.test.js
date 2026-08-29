@@ -168,3 +168,126 @@ describe('cases: config[pluginId] — the plugin document guard', () => {
         expect(res.status).toBe(200);
     });
 });
+
+// ---------------------------------------------------------------------------
+// RPS-1 §11a.4 — what may the learner's browser RECEIVE?
+//
+// Regression lock: the room rendered the package's learnerCase() projection,
+// but GET /cases, GET /cases/:id and every endpoint returning
+// sessions.case_snapshot handed the raw document — `rubric` and all, i.e. the
+// answer key — to the learner being assessed with it. The manifest now
+// declares `document.learnerOmit = ['rubric']` and the server strips those
+// paths for every role below reviewer.
+import bcrypt from 'bcrypt';
+import sqlite3 from 'sqlite3';
+import { projectPluginDocumentsForRole, projectCaseSnapshotForRole, learnerOmitPaths } from '../../server/shared/pluginDocument.js';
+import { validateManifest } from '../../server/shared/pluginRegistry.js';
+import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generated.js';
+
+function dbRun(dbPath, sql, params = []) {
+    return new Promise((resolve, reject) => {
+        const db = new sqlite3.Database(dbPath, (openErr) => {
+            if (openErr) return reject(openErr);
+            db.run(sql, params, function done(err) { db.close(() => (err ? reject(err) : resolve(this))); });
+        });
+    });
+}
+
+describe('cases: config[pluginId] — the learner projection (document.learnerOmit)', () => {
+    let server;
+    let admin;
+    let student;
+    let caseId;
+
+    beforeAll(async () => {
+        server = await startTestServer({ seed: false });
+        const hash = await bcrypt.hash('Student1!', 4);
+        await dbRun(server.dbPath,
+            `INSERT INTO users (username, name, email, password_hash, role, tenant_id, status) VALUES (?, ?, ?, ?, 'student', 1, 'active')`,
+            ['proj-student', 'proj-student', 'proj-student@example.com', hash]);
+        const authed = (token) => (path, init = {}) => fetch(`${server.baseUrl}${path}`, {
+            ...init,
+            headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...(init.headers || {}) },
+        });
+        admin = authed(await login(server.baseUrl, 'admin', 'admin123'));
+        student = authed(await login(server.baseUrl, 'proj-student', 'Student1!'));
+
+        const created = await admin('/api/cases', {
+            method: 'POST',
+            body: JSON.stringify({
+                name: 'projection-case', description: 'lock', system_prompt: 'You are a patient.',
+                config: { demographics: { gender: 'Female', age: 40 }, patient_name: 'P', pathology: pathologyDoc() },
+            }),
+        });
+        expect(created.status).toBe(200);
+        caseId = (await created.json()).id;
+        // Students see available cases only.
+        expect((await admin(`/api/cases/${caseId}/availability`, { method: 'PUT', body: JSON.stringify({ is_available: true }) })).status).toBe(200);
+    }, 90_000);
+
+    afterAll(async () => { if (server) await server.close(); });
+
+    it('the manifest declares what to strip, and the validator accepts it', () => {
+        const pathology = PLUGIN_MANIFESTS.find((m) => m.id === 'pathology');
+        expect(learnerOmitPaths(pathology)).toEqual(['rubric']);
+        expect(() => validateManifest({ ...pathology, document: { learnerOmit: ['rubric', 'manifest.answers'] } })).not.toThrow();
+        expect(() => validateManifest({ ...pathology, document: { learnerOmit: [] } })).toThrow(/learnerOmit/);
+        expect(() => validateManifest({ ...pathology, document: { learnerOmit: 'rubric' } })).toThrow(/learnerOmit/);
+        expect(() => validateManifest({ ...pathology, document: { learnerOmit: ['.rubric'] } })).toThrow(/learnerOmit/);
+        expect(() => validateManifest({ ...pathology, document: { learneromit: ['rubric'] } })).toThrow(/unknown field/);
+    });
+
+    it('projectPluginDocumentsForRole strips for students, leaves reviewer+ whole, never mutates', () => {
+        const config = { demographics: { age: 1 }, pathology: { manifest: { id: 'x' }, rubric: { secret: 1 } }, other: { rubric: 'not ours' } };
+        const forStudent = projectPluginDocumentsForRole(config, PLUGIN_MANIFESTS, 'student');
+        expect(forStudent.pathology).toEqual({ manifest: { id: 'x' } });
+        expect(forStudent.other).toEqual({ rubric: 'not ours' });          // unclaimed keys untouched
+        expect(config.pathology.rubric).toEqual({ secret: 1 });             // input not mutated
+        for (const role of ['reviewer', 'educator', 'admin']) {
+            expect(projectPluginDocumentsForRole(config, PLUGIN_MANIFESTS, role)).toBe(config);
+        }
+        expect(projectPluginDocumentsForRole({ pathology: null }, PLUGIN_MANIFESTS, 'student')).toEqual({ pathology: null });
+        // The snapshot form round-trips as the same type it was given.
+        const snap = JSON.stringify({ config, snapshot_at: 'x' });
+        const projected = JSON.parse(projectCaseSnapshotForRole(snap, PLUGIN_MANIFESTS, 'student'));
+        expect(projected.config.pathology.rubric).toBeUndefined();
+        expect(projected.snapshot_at).toBe('x');
+        expect(projectCaseSnapshotForRole(snap, PLUGIN_MANIFESTS, 'admin')).toBe(snap);
+        expect(projectCaseSnapshotForRole('{not json', PLUGIN_MANIFESTS, 'student')).toBe('{not json');
+    });
+
+    it('GET /cases/:id and GET /cases: a student gets the material without the rubric; an admin gets it whole', async () => {
+        const asStudent = await (await student(`/api/cases/${caseId}`)).json();
+        expect(asStudent.config.pathology.manifest.slides).toHaveLength(1);
+        expect(asStudent.config.pathology.rubric).toBeUndefined();
+
+        const listed = (await (await student('/api/cases')).json()).cases.find((c) => c.id === caseId);
+        expect(listed.config.pathology.rubric).toBeUndefined();
+
+        const asAdmin = await (await admin(`/api/cases/${caseId}`)).json();
+        expect(asAdmin.config.pathology.rubric).toEqual({ id: 'rubric-1', activities: [] });
+    });
+
+    it('the session snapshot a student is pinned to carries no rubric on any endpoint that returns it', async () => {
+        const start = await student('/api/sessions', { method: 'POST', body: JSON.stringify({ case_id: caseId }) });
+        expect(start.status).toBe(200);
+        const { id: sessionId } = await start.json();
+        const parse = (v) => (typeof v === 'string' ? JSON.parse(v) : v);
+
+        const own = await (await student(`/api/sessions/${sessionId}`)).json();
+        expect(parse(own.session.case_snapshot).config.pathology.manifest.slides).toHaveLength(1);
+        expect(parse(own.session.case_snapshot).config.pathology.rubric).toBeUndefined();
+
+        const detail = await (await student(`/api/analytics/sessions/${sessionId}`)).json();
+        expect(parse(detail.session.case_snapshot).config.pathology.rubric).toBeUndefined();
+
+        const list = await (await student('/api/analytics/sessions')).json();
+        const mine = list.sessions.find((s) => s.id === sessionId);
+        expect(mine).toBeTruthy();
+        expect(parse(mine.case_snapshot).config.pathology.rubric).toBeUndefined();
+
+        // The educator's view of the same session keeps the answer key.
+        const staff = await (await admin(`/api/sessions/${sessionId}`)).json();
+        expect(parse(staff.session.case_snapshot).config.pathology.rubric).toEqual({ id: 'rubric-1', activities: [] });
+    });
+});

@@ -11,6 +11,11 @@ export const PLUGIN_MANIFESTS = [
             "persist",
             "remote"
         ],
+        "document": {
+            "learnerOmit": [
+                "rubric"
+            ]
+        },
         "id": "pathology",
         "minRole": "student",
         "remote": {

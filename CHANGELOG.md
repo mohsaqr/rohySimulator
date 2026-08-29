@@ -9,6 +9,28 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.78] — 2026-08-29
+
+### Fixed
+
+- **A plugin's answer key no longer reaches a learner's browser.** The
+  pathology room rendered the package's learner projection, but `GET /cases`,
+  `GET /cases/:id` and every endpoint returning `sessions.case_snapshot` sent
+  the whole `config.pathology` — `rubric` included: every expected answer,
+  ROI and dwell threshold — to the student being assessed with it. The
+  manifest now declares `document.learnerOmit = ['rubric']` (validated
+  strictly, since a typo fails open) and the server strips those paths for
+  every role below reviewer at all five read sites (`/cases`, `/cases/:id`,
+  `/sessions/:id`, `/analytics/sessions`, `/analytics/sessions/:id`).
+  Educators and above receive the whole document. Spec §11a.2a.
+- **The wizard's Plugins card showed raw i18n keys** (`room_pathology_author`,
+  `pathology_summary_slides`): a plugin's keys live in the `common` namespace,
+  the step's own strings in `authoring_config`. Plugin keys are now resolved in
+  `common` explicitly.
+- Pressing *Done* on a never-edited new case wrote `config.<plugin> = null`;
+  it now removes the key, as *Remove* does. The Plugins step index is derived
+  from `WIZARD_STEP_KEYS` rather than the literal 12.
+
 ## [2.9.77] — 2026-08-29
 
 ### Fixed

@@ -130,3 +130,24 @@ describe('CasePluginsStep', () => {
         expect(screen.getByRole('button', { name: /open editor/i }).disabled).toBe(true);
     });
 });
+
+describe('CasePluginsStep — plugin keys resolve in the common namespace', () => {
+    // Regression lock: the step's own strings are `authoring_config`, but a
+    // plugin's `authoring.labelKey` and `summarize().labelKey` live in
+    // `common` (where every plugin string lives, room labels included). The
+    // hook's namespace rendered the raw keys — "room_pathology_author" on the
+    // card instead of "Pathology case editor".
+    it('renders the real pathology label and summary sentence, not the keys', () => {
+        renderStep({
+            config: { pathology: { manifest: { slides: [{ id: 's1' }] } } },
+            plugin: fakePlugin({
+                manifest: { id: 'pathology', authoring: { labelKey: 'room_pathology_author', minRole: 'educator' } },
+                summarize: () => ({ count: 2, labelKey: 'pathology_summary_slides' }),
+            }),
+        });
+        expect(screen.getByText('Pathology case editor')).toBeTruthy();
+        expect(screen.getByText('2 slides')).toBeTruthy();
+        expect(screen.queryByText('room_pathology_author')).toBeNull();
+        expect(screen.queryByText('pathology_summary_slides')).toBeNull();
+    });
+});

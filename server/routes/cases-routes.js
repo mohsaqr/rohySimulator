@@ -20,7 +20,7 @@ import { PATIENT_GENDERS, resolvePatientGender } from '../shared/patientDemograp
 import { RHYTHM_IDS, resolveRhythm } from '../shared/rhythms.js';
 import { DEFAULT_LANGUAGE, LANGUAGES, isKnownLanguage } from '../shared/languages.js';
 import { SCENARIO_CATEGORY_IDS, resolveScenarioCategory } from '../shared/scenarioCategories.js';
-import { validatePluginDocuments } from '../shared/pluginDocument.js';
+import { validatePluginDocuments, projectPluginDocumentsForRole } from '../shared/pluginDocument.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import {
     auditSuccess,
@@ -269,7 +269,7 @@ router.get('/cases', authenticateToken, async (req, res) => {
         // Parse JSON fields
         const cases = rows.map(row => ({
             ...row,
-            config: row.config ? JSON.parse(row.config) : {},
+            config: projectPluginDocumentsForRole(row.config ? JSON.parse(row.config) : {}, PLUGIN_MANIFESTS, req.user.role),
             scenario: row.scenario ? JSON.parse(row.scenario) : null,
             is_available: Boolean(row.is_available),
             is_default: Boolean(row.is_default)
@@ -322,7 +322,7 @@ router.get('/cases/:id', authenticateToken, async (req, res) => {
         if (!row) return res.status(404).json({ error: 'Case not found' });
         res.json({
             ...row,
-            config: row.config ? JSON.parse(row.config) : {},
+            config: projectPluginDocumentsForRole(row.config ? JSON.parse(row.config) : {}, PLUGIN_MANIFESTS, req.user.role),
             scenario: row.scenario ? JSON.parse(row.scenario) : null,
             is_available: Boolean(row.is_available),
             is_default: Boolean(row.is_default)

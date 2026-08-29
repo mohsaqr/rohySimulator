@@ -20,6 +20,8 @@
  * second authoring plugin needs no change in this file.
  */
 
+import { roleAllows } from './pluginRegistry.js';
+
 /**
  * The default cap on one plugin document, serialised.
  *
@@ -151,4 +153,92 @@ export function validatePluginDocuments(config, manifests) {
         }
     }
     return null;
+}
+
+// ---- Learner projection (RPS-1 §11a.4: "what may the learner's browser receive?") ----
+//
+// A plugin's document carries the material AND the answer key — pathology's
+// `rubric` holds every expected answer, ROI and dwell threshold. The room
+// renders the package's `learnerCase()` projection, but a projection applied
+// in the browser decides only what a component SHOWS; only the server decides
+// what a role RECEIVES. `GET /cases`, `GET /cases/:id` and every endpoint
+// that returns `sessions.case_snapshot` used to hand the whole document to
+// the learner being assessed with it — the same trap `case_treatments` was
+// kept out of `case_snapshot` to avoid (sessions-routes.js).
+//
+// The server cannot import the package, so the plugin names what to strip in
+// its manifest: `document.learnerOmit = ['rubric']` — dotted paths into the
+// document, removed for every role below reviewer. Frozen data, like
+// `maxBytes` and `remote.paths`.
+
+/** The role from which the whole document (answer key included) may be read. */
+export const DOCUMENT_FULL_READ_ROLE = 'reviewer';
+
+/** Dotted paths this plugin asks the host to strip for learners. */
+export function learnerOmitPaths(manifest) {
+    const declared = manifest?.document?.learnerOmit;
+    return Array.isArray(declared) ? declared.filter((p) => typeof p === 'string' && p.length > 0) : [];
+}
+
+function omitPath(document, dotted) {
+    const parts = dotted.split('.');
+    const clone = { ...document };
+    let cursor = clone;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const next = cursor[parts[i]];
+        if (!next || typeof next !== 'object' || Array.isArray(next)) return clone; // nothing to strip
+        cursor[parts[i]] = { ...next };
+        cursor = cursor[parts[i]];
+    }
+    delete cursor[parts[parts.length - 1]];
+    return clone;
+}
+
+/**
+ * The case config a given role may receive: every plugin document with its
+ * `learnerOmit` paths removed for roles below reviewer. Returns the input
+ * untouched (same reference) when there is nothing to strip, so callers can
+ * apply it unconditionally.
+ *
+ * @param {object|null|undefined} config
+ * @param {Array<object>} manifests   the frozen manifest snapshot
+ * @param {string} role
+ * @returns {object|null|undefined}
+ */
+export function projectPluginDocumentsForRole(config, manifests, role) {
+    if (!config || typeof config !== 'object') return config;
+    if (roleAllows(role, DOCUMENT_FULL_READ_ROLE)) return config;
+    let out = config;
+    for (const manifest of manifests ?? []) {
+        const id = manifest?.id;
+        const document = id ? config[id] : null;
+        if (!document || typeof document !== 'object' || Array.isArray(document)) continue;
+        const paths = learnerOmitPaths(manifest);
+        if (paths.length === 0) continue;
+        const projected = paths.reduce((doc, dotted) => omitPath(doc, dotted), document);
+        if (out === config) out = { ...config };
+        out[id] = projected;
+    }
+    return out;
+}
+
+/**
+ * Same projection for a `sessions.case_snapshot` value as stored (a JSON
+ * string, or an already-parsed object). Returns the same type it was given;
+ * an unparseable snapshot is returned unchanged rather than thrown on — the
+ * read endpoints never failed on it before and must not start now.
+ */
+export function projectCaseSnapshotForRole(snapshot, manifests, role) {
+    if (snapshot == null) return snapshot;
+    if (roleAllows(role, DOCUMENT_FULL_READ_ROLE)) return snapshot;
+    const isString = typeof snapshot === 'string';
+    let parsed = snapshot;
+    if (isString) {
+        try { parsed = JSON.parse(snapshot); } catch { return snapshot; }
+    }
+    if (!parsed || typeof parsed !== 'object') return snapshot;
+    const config = projectPluginDocumentsForRole(parsed.config, manifests, role);
+    if (config === parsed.config) return snapshot;
+    const projected = { ...parsed, config };
+    return isString ? JSON.stringify(projected) : projected;
 }

@@ -241,12 +241,21 @@ export function validateManifest(manifest) {
         if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
             throw new Error(`Plugin '${manifest.id}' declares 'document' that is not an object`);
         }
-        const unknown = Object.keys(doc).find((key) => key !== 'maxBytes');
+        const unknown = Object.keys(doc).find((key) => key !== 'maxBytes' && key !== 'learnerOmit');
         if (unknown) {
-            throw new Error(`Plugin '${manifest.id}' document declares unknown field '${unknown}' — only maxBytes is defined`);
+            throw new Error(`Plugin '${manifest.id}' document declares unknown field '${unknown}' — only maxBytes and learnerOmit are defined`);
         }
         if (doc.maxBytes !== undefined && !(Number.isInteger(doc.maxBytes) && doc.maxBytes > 0)) {
             throw new Error(`Plugin '${manifest.id}' document.maxBytes must be a positive integer number of bytes`);
+        }
+        // Dotted paths the host strips for roles below reviewer (§11a.4). A
+        // typo here fails OPEN — the answer key ships — so the shape is strict.
+        if (doc.learnerOmit !== undefined) {
+            const ok = Array.isArray(doc.learnerOmit) && doc.learnerOmit.length > 0
+                && doc.learnerOmit.every((p) => typeof p === 'string' && /^[A-Za-z0-9_$]+(\.[A-Za-z0-9_$]+)*$/.test(p));
+            if (!ok) {
+                throw new Error(`Plugin '${manifest.id}' document.learnerOmit must be a non-empty array of dotted paths like 'rubric' or 'manifest.answers'`);
+            }
         }
     }
 

@@ -92,6 +92,16 @@ export const manifest = {
         labelKey: 'room_pathology_author',
         minRole: 'educator',
     },
+
+    // The document contract (§11a). `rubric` is the answer key — every expected
+    // answer, ROI and dwell threshold — and the package's own `learnerCase()`
+    // projection omits it in the room. But a projection in the browser only
+    // decides what is SHOWN; the server strips these paths from every read a
+    // role below reviewer makes (GET /cases, GET /cases/:id, case_snapshot), so
+    // the key never reaches the learner's devtools in the first place.
+    document: {
+        learnerOmit: ['rubric'],
+    },
 };
 
 export default manifest;

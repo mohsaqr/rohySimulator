@@ -502,6 +502,27 @@ makes explicit what 1.1 left implicit: it decides on the **document**, not on
 whether the key exists. Pathology's `ctx.data != null` is the anti-pattern;
 `ctx.data?.slides?.some(s => s.dzi)` is the rule.
 
+### 11a.2a What the learner's browser may receive — `document.learnerOmit`
+
+`learnerCase()` in the room decides what a component **shows**; only the
+server decides what a role **receives**. `GET /cases`, `GET /cases/:id` and
+every endpoint that returns `sessions.case_snapshot` used to hand the whole
+document — pathology's `rubric`, i.e. the answer key — to the learner being
+assessed with it. The server cannot import the package, so the plugin names
+what to strip as frozen manifest data:
+
+```js
+document: { learnerOmit: ['rubric'] }   // dotted paths into the document
+```
+
+The host removes those paths from `config[<id>]` on every read a role below
+**reviewer** makes, before the response leaves the server (rohy: v2.9.78,
+`projectPluginDocumentsForRole` / `projectCaseSnapshotForRole` in
+`server/shared/pluginDocument.js`). Educators and above receive the whole
+document. The shape is validated strictly because a typo here fails *open*.
+The room-side projection stays: it is what makes the room correct on a
+document that arrived already stripped.
+
 ### 11a.3 What the host owes the editor half
 
 The mirror of §6–§9 for rooms. A host is conformant when all five hold:

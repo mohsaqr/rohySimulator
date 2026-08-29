@@ -283,3 +283,30 @@ describe('§7a — referenced gross photography, so a case can hold any at all',
         expect(caseDocumentBytes(doc)).toBeLessThan(64 * 1024 / 10);
     });
 });
+
+describe('§11a.4 — the document a STUDENT receives has no rubric, and the room still works on it', () => {
+    // The server strips manifest.document.learnerOmit (['rubric']) for roles
+    // below reviewer before the document reaches the browser. The adapter must
+    // therefore be total on a rubric-less document: the room lights, the
+    // learner projection renders, nothing throws.
+    const projected = () => {
+        const { rubric: _stripped, ...rest } = withSlide();
+        return rest;
+    };
+
+    it('available(), summarize() and the learner projection all hold without the rubric', () => {
+        const doc = projected();
+        expect(doc.rubric).toBeUndefined();
+        expect(descriptor.available({ data: doc })).toBe(true);
+        expect(descriptor.summarize(doc)).toEqual({ count: 1, labelKey: 'pathology_summary_slides' });
+        expect(() => descriptor.validate(doc)).not.toThrow();
+        const props = descriptor.props({ data: doc, eventLogger: {}, session: { examMode: false }, t: (k, f) => f }, { state: {}, save: () => {} });
+        expect(props.pathologyCase).toBeTruthy();
+        expect(JSON.stringify(props.pathologyCase)).not.toMatch(/rubric/);
+    });
+
+    it('the manifest names exactly what the server strips', async () => {
+        const { manifest } = await import('../../src/plugins/pathology/manifest.js');
+        expect(manifest.document).toEqual({ learnerOmit: ['rubric'] });
+    });
+});

@@ -13,6 +13,8 @@ import {
 
 
 import { logger } from '../logger.js';
+import { projectCaseSnapshotForRole } from '../shared/pluginDocument.js';
+import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import {
     canReadAcrossUsers,
     caseAccessEnforcedFor,
@@ -261,7 +263,12 @@ router.get('/sessions/:id', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        res.json({ session: redactRow(session) });
+        // A learner reads their own session — with the plugin answer keys
+        // stripped from the pinned case (RPS-1 §11a.4, document.learnerOmit).
+        res.json({ session: redactRow({
+            ...session,
+            case_snapshot: projectCaseSnapshotForRole(session.case_snapshot, PLUGIN_MANIFESTS, req.user.role),
+        }) });
     });
 });
 

@@ -18,6 +18,8 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
+import { projectCaseSnapshotForRole } from '../shared/pluginDocument.js';
+import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import {
     authenticateToken,
     requireAdmin,
@@ -211,7 +213,10 @@ router.get('/analytics/sessions', authenticateToken, (req, res) => {
 
     dbAdapter.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ sessions: redactRows(rows) });
+        res.json({ sessions: redactRows(rows.map((row) => ({
+            ...row,
+            case_snapshot: projectCaseSnapshotForRole(row.case_snapshot, PLUGIN_MANIFESTS, req.user.role),
+        }))) });
     });
 });
 
@@ -239,7 +244,13 @@ router.get('/analytics/sessions/:id', authenticateToken, (req, res) => {
         const interactionsSql = `SELECT * FROM interactions WHERE session_id = ? ORDER BY timestamp ASC`;
         dbAdapter.all(interactionsSql, [req.params.id], (err, interactions) => {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ session: redactRow(session), interactions });
+            res.json({
+                session: redactRow({
+                    ...session,
+                    case_snapshot: projectCaseSnapshotForRole(session.case_snapshot, PLUGIN_MANIFESTS, req.user.role),
+                }),
+                interactions,
+            });
         });
     });
 });

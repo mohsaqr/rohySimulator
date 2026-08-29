@@ -3695,10 +3695,13 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 caseData={caseData}
                 user={wizardUser}
                 onCommit={(document) => {
-                    setCaseData((prev) => ({
-                        ...prev,
-                        config: { ...(prev.config ?? {}), [pluginAuthorId]: document },
-                    }));
+                    setCaseData((prev) => {
+                        // Done on a never-edited new case hands back null. That
+                        // is "no material" — spell it the way Remove does
+                        // (delete the key) rather than leaving a null behind.
+                        const { [pluginAuthorId]: _previous, ...rest } = prev.config ?? {};
+                        return { ...prev, config: document == null ? rest : { ...rest, [pluginAuthorId]: document } };
+                    });
                     setPluginAuthorId(null);
                 }}
                 onClose={() => setPluginAuthorId(null)}
@@ -5136,7 +5139,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 )}
 
                 {/* STEP 12: PLUGINS — a card per plugin that ships an editor */}
-                {step === 12 && (
+                {step === wizardStepNumber('plugins') && (
                     <CasePluginsStep
                         caseData={caseData}
                         setCaseData={setCaseData}

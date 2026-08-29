@@ -83,11 +83,17 @@ export function CasePluginsStep({ caseData, setCaseData, role, onOpenPluginAutho
                         <div key={id} className="border border-neutral-800 rounded-lg p-4 bg-neutral-900/40">
                             <div className="flex items-start justify-between gap-4 flex-wrap">
                                 <div className="min-w-0">
-                                    <h4 className="font-bold text-white">{t(authoring.labelKey)}</h4>
+                                    {/* A plugin's keys (`authoring.labelKey`, `summarize().labelKey`)
+                                        live in the `common` namespace — that is where every
+                                        plugin string lives, room labels included — while this
+                                        step's own strings are `authoring_config`. Resolve
+                                        theirs explicitly; the hook's namespace would render
+                                        the raw key. */}
+                                    <h4 className="font-bold text-white">{t(authoring.labelKey, { ns: 'common' })}</h4>
                                     <p className="text-sm text-neutral-400 mt-0.5">
                                         {document
                                             ? (summary
-                                                ? t(summary.labelKey, { count: summary.count })
+                                                ? t(summary.labelKey, { ns: 'common', count: summary.count })
                                                 : t('plugins_material_present'))
                                             : t('plugins_no_material')}
                                     </p>
