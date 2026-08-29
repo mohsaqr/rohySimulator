@@ -7,6 +7,7 @@
   "chief_complaint": "Aufnahmegrund",
   "close_composer": "Eingabefeld schließen",
   "close_notes": "Notizen schließen",
+  "close_record": "Schließen",
   "close_summary": "Zusammenfassung schließen",
   "close_transcript": "Transkript schließen",
   "composer_placeholder": "Fragen Sie den Diskussionspartner beliebig…",
@@ -71,5 +72,6 @@
   "vital_rr": "AF",
   "vital_spo2": "SpO₂",
   "vital_temp": "Temp",
-  "voice_not_supported": "Spracheingabe wird in diesem Browser nicht unterstützt. Verwenden Sie die Schaltfläche zum Tippen unten."
+  "voice_not_supported": "Spracheingabe wird in diesem Browser nicht unterstützt. Verwenden Sie die Schaltfläche zum Tippen unten.",
+  "your_actions": "Deine Maßnahmen"
 }

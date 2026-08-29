@@ -69,6 +69,12 @@ function normalizeAgent(raw, caseId = null) {
         systemPrompt: (raw.system_prompt_override || raw.system_prompt || '').trim() || DEFAULT_DISCUSSANT_SYSTEM_PROMPT,
         contextFilter: raw.context_filter_override || raw.context_filter || 'full',
         unlockTrigger: config.unlock_trigger || 'after_case_ended',
+        // Per-case educator opt-in: show the learner their own encounter
+        // record during debrief. Default OFF — during the case the same view
+        // would be a checklist that does the remembering for them, and even at
+        // debrief an educator may want the learner to reconstruct it unaided
+        // first. `=== true` so a missing/garbage value is off, not truthy.
+        showEncounterRecord: config.show_encounter_record === true,
         gender,
         voice: config.voice ? { ...config.voice, gender: gender || config.voice.gender } : (gender ? { gender } : null),
         rawConfig: config,

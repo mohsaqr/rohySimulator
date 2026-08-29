@@ -3274,6 +3274,18 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                 </select>
                             </div>
                         </div>
+                        <label className="flex items-start gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={editingAgent._cfg_show_encounter_record ?? editingAgent.config?.show_encounter_record ?? false}
+                                onChange={(e) => setEditingAgent(prev => ({ ...prev, _cfg_show_encounter_record: e.target.checked }))}
+                                className="mt-0.5 w-4 h-4 accent-indigo-500"
+                            />
+                            <span>
+                                <span className="block text-sm text-neutral-300">{t('agent_show_encounter_record')}</span>
+                                <span className="block text-xs text-neutral-500">{t('agent_show_encounter_record_help')}</span>
+                            </span>
+                        </label>
                         <p className="text-xs text-neutral-500">{t('agent_discussant_help')} <code className="text-neutral-400">case_agents.config_override</code>.</p>
                     </div>
                 )}
@@ -3294,8 +3306,14 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                 const cfg = {};
                                 const ctx = editingAgent._cfg_context_filter ?? editingAgent.context_filter;
                                 const unlock = editingAgent._cfg_unlock_trigger ?? editingAgent.unlock_trigger;
+                                const showRecord = editingAgent._cfg_show_encounter_record ?? editingAgent.show_encounter_record;
                                 if (ctx) cfg.context_filter = ctx;
                                 if (unlock) cfg.unlock_trigger = unlock;
+                                // Written only when ON: an absent key and an
+                                // explicit false mean the same thing to
+                                // discussionService (`=== true`), so storing
+                                // false would just be noise in the blob.
+                                if (showRecord === true) cfg.show_encounter_record = true;
                                 updates.config_override = Object.keys(cfg).length ? cfg : null;
                             }
                             handleUpdateAgent(updates);

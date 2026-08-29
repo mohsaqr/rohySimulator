@@ -367,6 +367,44 @@ describe('normalizeAgent (via fetchDiscussantForCase) — discussant-voice contr
 // buildCaseContext — filtered prompt-context generation
 // ---------------------------------------------------------------------------
 
+describe('normalizeAgent — showEncounterRecord opt-in', () => {
+    function setCase(caseId, raw) {
+        caseAgentsByCaseId.set(String(caseId), [
+            { agent_type: 'discussant', enabled: 1, ...raw },
+        ]);
+    }
+
+    // Regression lock: the learner's own encounter record is an educator
+    // opt-in, per case. Anything other than a literal `true` must leave it off
+    // — a truthy string or a stray 1 in the config blob is not consent.
+    it('is off unless the case config says exactly true', async () => {
+        for (const [i, value] of [undefined, false, 0, 1, 'true', 'yes', null].entries()) {
+            const caseId = 900 + i;
+            setCase(caseId, { id: caseId, name: 'Tutor', config: JSON.stringify(
+                value === undefined ? {} : { show_encounter_record: value }
+            ) });
+            const result = await fetchDiscussantForCase(caseId);
+            expect(result.showEncounterRecord, `value ${JSON.stringify(value)}`).toBe(false);
+        }
+    });
+
+    it('is on when the educator has enabled it for the case', async () => {
+        setCase(910, { id: 910, name: 'Tutor', config: JSON.stringify({ show_encounter_record: true }) });
+        const result = await fetchDiscussantForCase(910);
+        expect(result.showEncounterRecord).toBe(true);
+    });
+
+    it('survives config arriving as a JSON string, like every other flag', async () => {
+        setCase(911, {
+            id: 911, name: 'Tutor',
+            config: JSON.stringify({ show_encounter_record: true, unlock_trigger: 'manual' }),
+        });
+        const result = await fetchDiscussantForCase(911);
+        expect(result.showEncounterRecord).toBe(true);
+        expect(result.unlockTrigger).toBe('manual');
+    });
+});
+
 describe('buildCaseContext — filter-aware prompt context', () => {
     const fullCase = {
         name: 'Acute MI',

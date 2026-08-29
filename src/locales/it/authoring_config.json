@@ -43,6 +43,8 @@
   "agent_response_max": "Tempo di risposta max (min)",
   "agent_response_min": "Tempo di risposta min (min)",
   "agent_save_first_badge": "Salva prima il caso per aggiungere agenti",
+  "agent_show_encounter_record": "Mostra il registro delle azioni nel debriefing",
+  "agent_show_encounter_record_help": "Consente allo studente di rivedere in sola lettura ciò che ha effettivamente fatto, una volta concluso il caso. Disattivato per impostazione predefinita. Il tutor del debriefing lo riceve comunque.",
   "agent_step_help": "Configura quali agenti AI sono disponibili in questo caso",
   "agent_step_title": "8. Agenti AI",
   "agent_system_prompt_help": "Sovrascrivi il prompt di sistema predefinito per questo caso",

@@ -9,6 +9,29 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.98] — 2026-08-30
+
+### Added
+
+- **An educator can show learners their own encounter record at debrief.** Off
+  by default, per case. When on, the debrief screen offers a read-only "Your
+  actions" panel — the same record the discussant is given, with the operator
+  affordances removed: no force-sync, no raw sync error, no JSON export. A
+  learner has no use for those and no business seeing them, so `readOnly`
+  removes them rather than disabling them.
+
+  Timing is the whole point of the setting. During the case the panel would be a
+  checklist that does the remembering for the learner; after it, the same list
+  is a reflection aid. Some educators will also want the learner to reconstruct
+  the encounter unaided first, which is why it stays off unless asked for.
+
+  Stored in the discussant's existing `case_agents.config_override` blob, so
+  there is **no migration** — `cases.config` and `config_override` are JSON
+  columns — and no new fetch: `GET /cases/:id/agents` already merges
+  `{...template_config, ...config_override}` and `fetchDiscussantForCase` already
+  carries the result to the client. The flag is read as `=== true`, so a truthy
+  string or a stray `1` in the blob is not consent.
+
 ## [2.9.97] — 2026-08-30
 
 ### Added

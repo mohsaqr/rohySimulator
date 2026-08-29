@@ -7,6 +7,7 @@
   "chief_complaint": "Sökorsak",
   "close_composer": "Stäng skrivfältet",
   "close_notes": "Stäng anteckningar",
+  "close_record": "Stäng",
   "close_summary": "Stäng sammanfattningen",
   "close_transcript": "Stäng transkriptet",
   "composer_placeholder": "Fråga diskutanten vad som helst…",
@@ -71,5 +72,6 @@
   "vital_rr": "AF",
   "vital_spo2": "SpO₂",
   "vital_temp": "Temp",
-  "voice_not_supported": "Röstinmatning stöds inte i den här webbläsaren. Använd skrivknappen nedan."
+  "voice_not_supported": "Röstinmatning stöds inte i den här webbläsaren. Använd skrivknappen nedan.",
+  "your_actions": "Dina åtgärder"
 }

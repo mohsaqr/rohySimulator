@@ -43,6 +43,8 @@
   "agent_response_max": "Svarstid max (min)",
   "agent_response_min": "Svarstid min (min)",
   "agent_save_first_badge": "Spara fallet först för att lägga till agenter",
+  "agent_show_encounter_record": "Visa åtgärdsloggen vid debriefing",
+  "agent_show_encounter_record_help": "Låter studenten granska en skrivskyddad lista över vad hen faktiskt gjorde, när fallet är avslutat. Av som standard. Debriefinghandledaren får den ändå.",
   "agent_step_help": "Konfigurera vilka AI-agenter som är tillgängliga i detta fall",
   "agent_step_title": "8. AI-agenter",
   "agent_system_prompt_help": "Åsidosätt standardsystemprompten för detta fall",

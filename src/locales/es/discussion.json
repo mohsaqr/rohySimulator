@@ -7,6 +7,7 @@
   "chief_complaint": "Motivo de consulta",
   "close_composer": "Cerrar compositor",
   "close_notes": "Cerrar notas",
+  "close_record": "Cerrar",
   "close_summary": "Cerrar resumen",
   "close_transcript": "Cerrar transcripción",
   "composer_placeholder": "Pregúntale al discutidor cualquier cosa…",
@@ -71,5 +72,6 @@
   "vital_rr": "FR",
   "vital_spo2": "SpO₂",
   "vital_temp": "Temp",
-  "voice_not_supported": "La entrada por voz no es compatible en este navegador. Utiliza el botón de escribir a continuación."
+  "voice_not_supported": "La entrada por voz no es compatible en este navegador. Utiliza el botón de escribir a continuación.",
+  "your_actions": "Tus acciones"
 }

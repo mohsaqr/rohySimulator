@@ -43,6 +43,8 @@
   "agent_response_max": "Antwortzeit max (Min)",
   "agent_response_min": "Antwortzeit min (Min)",
   "agent_save_first_badge": "Fall zuerst speichern, um Agenten hinzuzufügen",
+  "agent_show_encounter_record": "Handlungsprotokoll im Debriefing zeigen",
+  "agent_show_encounter_record_help": "Zeigt der lernenden Person nach Fallende eine schreibgeschützte Liste ihrer tatsächlichen Handlungen. Standardmäßig aus. Die Debriefing-Rolle erhält sie in jedem Fall.",
   "agent_step_help": "Konfigurieren Sie, welche KI-Agenten in diesem Fall verfügbar sind",
   "agent_step_title": "8. KI-Agenten",
   "agent_system_prompt_help": "Überschreiben Sie den Standard-System-Prompt für diesen Fall",

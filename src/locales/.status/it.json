@@ -1483,6 +1483,20 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.agent_show_encounter_record": {
+    "src": "edd62848c5be",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_show_encounter_record_help": {
+    "src": "62975241560a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.agent_step_help": {
     "src": "bca4a74abad0",
     "state": "machine",
@@ -12529,6 +12543,13 @@
     "reviewer": null,
     "risk": "low"
   },
+  "discussion.close_record": {
+    "src": "7d9eb7acb13e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "discussion.close_summary": {
     "src": "36db4874f32e",
     "state": "machine",
@@ -12979,6 +13000,13 @@
   },
   "discussion.voice_not_supported": {
     "src": "066fef195421",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "discussion.your_actions": {
+    "src": "6c06c355813b",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,

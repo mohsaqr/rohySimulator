@@ -43,6 +43,8 @@
   "agent_response_max": "Vastausajan enimmäisaika (min)",
   "agent_response_min": "Vastausajan vähimmäisaika (min)",
   "agent_save_first_badge": "Tallenna tapaus ensin lisätäksesi agentteja",
+  "agent_show_encounter_record": "Näytä toimintakirjaus purkukeskustelussa",
+  "agent_show_encounter_record_help": "Antaa opiskelijan tarkastella vain luettavaa listaa siitä, mitä hän todella teki, kun tapaus on päättynyt. Oletuksena pois päältä. Purkukeskustelun ohjaaja saa tiedot joka tapauksessa.",
   "agent_step_help": "Määritä, mitkä tekoälyagentit ovat käytettävissä tässä tapauksessa",
   "agent_step_title": "8. Tekoälyagentit",
   "agent_system_prompt_help": "Korvaa oletusjärjestelmäkehote tässä tapauksessa",

@@ -7,6 +7,7 @@
   "chief_complaint": "Chief complaint",
   "close_composer": "Close composer",
   "close_notes": "Close notes",
+  "close_record": "Close",
   "close_summary": "Close summary",
   "close_transcript": "Close transcript",
   "composer_placeholder": "Ask the discussant anything…",
@@ -71,5 +72,6 @@
   "vital_rr": "RR",
   "vital_spo2": "SpO₂",
   "vital_temp": "Temp",
-  "voice_not_supported": "Voice input isn't supported in this browser. Use the type button below."
+  "voice_not_supported": "Voice input isn't supported in this browser. Use the type button below.",
+  "your_actions": "Your actions"
 }

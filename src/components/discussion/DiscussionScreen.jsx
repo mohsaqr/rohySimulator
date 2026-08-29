@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Keyboard, GraduationCap, MessagesSquare, NotebookPen, Play } from 'lucide-react';
+import { ArrowLeft, Keyboard, GraduationCap, ListChecks, MessagesSquare, NotebookPen, Play, X } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -15,6 +15,7 @@ import TextComposerModal from './TextComposerModal';
 import NotesDrawer from './NotesDrawer';
 import PatientSummaryCard from './PatientSummaryCard';
 import CaseSummaryModal from './CaseSummaryModal';
+import PatientRecordViewer from '../PatientRecordViewer';
 
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 
@@ -33,6 +34,10 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
     const [showSummary, setShowSummary] = useState(false);
     const [showTranscript, setShowTranscript] = useState(false);
     const [showNotes, setShowNotes] = useState(false);
+    // The learner's own encounter record, at debrief only, and only when the
+    // educator enabled it for this case. Admins see the same data mid-case via
+    // OrdersDrawer; a learner meets it here or not at all.
+    const [showRecord, setShowRecord] = useState(false);
     // Subtitle state — mirrors ChatInterface's pattern. `listening`/`interim`
     // are mirrored up from VoiceControl via onListeningChange. `subtitleReady`
     // gates the discussant's TTS caption by ~30% of the estimated audio
@@ -173,6 +178,16 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                         <NotebookPen className="w-4 h-4" />
                         {t('notes')}
                     </button>
+                    {discussant?.showEncounterRecord && (
+                        <button
+                            type="button"
+                            onClick={() => setShowRecord(true)}
+                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm flex items-center gap-1.5 transition-colors border border-slate-700"
+                        >
+                            <ListChecks className="w-4 h-4" />
+                            {t('your_actions')}
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={() => setShowTranscript(true)}
@@ -330,6 +345,29 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                     sessionId={sessionId}
                     onClose={() => setShowSummary(false)}
                 />
+            )}
+            {showRecord && discussant?.showEncounterRecord && (
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label={t('your_actions')}>
+                    <div className="w-full max-w-3xl h-[80vh] bg-neutral-900 rounded-2xl border border-neutral-700 shadow-2xl flex flex-col overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800">
+                            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                                <ListChecks className="w-4 h-4 text-green-400" />
+                                {t('your_actions')}
+                            </h2>
+                            <button
+                                type="button"
+                                onClick={() => setShowRecord(false)}
+                                className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
+                                aria-label={t('close_record')}
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="flex-1 min-h-0">
+                            <PatientRecordViewer readOnly />
+                        </div>
+                    </div>
+                </div>
             )}
             {showTranscript && (
                 <DiscussionTranscript

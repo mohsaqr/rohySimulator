@@ -2,7 +2,19 @@
  * PatientRecordViewer - Live view of PatientRecord events
  *
  * Displays events as they happen during the simulation session.
- * Can be hidden later but useful for development/debugging.
+ *
+ * Two audiences, two modes:
+ *   - ADMIN (default): the full panel, including the operator affordances —
+ *     sync state, force-sync, and a JSON export of the record.
+ *   - LEARNER (`readOnly`): the event list and its filters only. Shown on the
+ *     debrief screen when the educator has enabled it for the case. A learner
+ *     has no use for a force-sync button and no business seeing a raw sync
+ *     error, so `readOnly` removes them rather than disabling them.
+ *
+ * Until v2.9.96 this panel shipped to every learner, mid-case, with all of the
+ * above — its own header said "can be hidden later but useful for
+ * development/debugging", and it never was. Nothing gates a React tab by
+ * default; see OrdersDrawer's `isAdmin`.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -37,7 +49,7 @@ const VERB_COLORS = {
     EXPRESSED: 'text-indigo-400 bg-indigo-900/30 border-indigo-700'
 };
 
-export default function PatientRecordViewer() {
+export default function PatientRecordViewer({ readOnly = false }) {
     const { t } = useTranslation('orders');
     // Event verbs are data enums (OBTAINED, EXAMINED, …); translate via a keyed
     // lookup, falling back to the raw verb if a locale is missing one.
@@ -142,32 +154,34 @@ export default function PatientRecordViewer() {
                             </p>
                         )}
                     </div>
-                    <div className="flex items-center gap-2">
-                        {/* Sync Status */}
-                        <div className="text-xs text-neutral-500">
-                            {syncError ? (
-                                <span className="text-red-400">{t('record_sync_error')}</span>
-                            ) : lastSyncTime ? (
-                                <span>{t('record_synced', { time: lastSyncTime.toLocaleTimeString() })}</span>
-                            ) : (
-                                <span>{t('record_not_synced')}</span>
-                            )}
+                    {!readOnly && (
+                        <div className="flex items-center gap-2">
+                            {/* Sync Status */}
+                            <div className="text-xs text-neutral-500">
+                                {syncError ? (
+                                    <span className="text-red-400">{t('record_sync_error')}</span>
+                                ) : lastSyncTime ? (
+                                    <span>{t('record_synced', { time: lastSyncTime.toLocaleTimeString() })}</span>
+                                ) : (
+                                    <span>{t('record_not_synced')}</span>
+                                )}
+                            </div>
+                            <button
+                                onClick={forceSync}
+                                className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
+                                title={t('record_force_sync')}
+                            >
+                                <RefreshCw className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={handleDownloadJSON}
+                                className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
+                                title={t('record_download_json')}
+                            >
+                                <Download className="w-4 h-4" />
+                            </button>
                         </div>
-                        <button
-                            onClick={forceSync}
-                            className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
-                            title={t('record_force_sync')}
-                        >
-                            <RefreshCw className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={handleDownloadJSON}
-                            className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
-                            title={t('record_download_json')}
-                        >
-                            <Download className="w-4 h-4" />
-                        </button>
-                    </div>
+                    )}
                 </div>
 
                 {/* Filters */}

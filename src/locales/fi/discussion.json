@@ -7,6 +7,7 @@
   "chief_complaint": "Tulosyy",
   "close_composer": "Sulje kirjoituskenttä",
   "close_notes": "Sulje muistiinpanot",
+  "close_record": "Sulje",
   "close_summary": "Sulje yhteenveto",
   "close_transcript": "Sulje keskusteluloki",
   "composer_placeholder": "Kysy keskustelijalta mitä tahansa…",
@@ -71,5 +72,6 @@
   "vital_rr": "HT",
   "vital_spo2": "SpO₂",
   "vital_temp": "Lämpö",
-  "voice_not_supported": "Selain ei tue äänisyötettä. Käytä alla olevaa kirjoituspainiketta."
+  "voice_not_supported": "Selain ei tue äänisyötettä. Käytä alla olevaa kirjoituspainiketta.",
+  "your_actions": "Omat toimesi"
 }
