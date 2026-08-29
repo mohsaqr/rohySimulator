@@ -1,5 +1,6 @@
 import { manifest } from './manifest.js';
-import { resolveRemoteRef } from '../context.js';
+import { resolveRemoteRef, resolveRemoteRefs, unresolveRemoteRefs } from '../context.js';
+import { createHostAssetService } from '../hostAssetService.js';
 import { PathologyScreen } from '../../components/pathology/PathologyScreen.jsx';
 import { CaseAuthor } from '../../components/pathology/CaseAuthor.jsx';
 import {
@@ -132,8 +133,16 @@ export default {
     // Handing it a legacy case makes it hand a legacy case back, and that
     // projection drops the rubric — every expected answer with it.
     authorProps: (ctx, draft) => ({
-        initialCase: readCaseDocument(draft.value) ?? undefined,
-        onChange: draft.save,
+        // Resolved on the way IN, un-resolved on the way OUT. The editor's
+        // thumbnails and picker load `<img src>` directly, so they need host
+        // addresses; the CASE must keep `remote:` references or it stops being
+        // portable. resolve/unresolve round-trip exactly (context.js).
+        initialCase: (() => { const doc = readCaseDocument(draft.value); return doc ? resolveRemoteRefs(doc, ctx.pluginId) : undefined; })(),
+        onChange: (next) => draft.save(unresolveRemoteRefs(next, ctx.pluginId)),
+
+        // The slide library (§7a.1): the content bundle's catalog.json, relayed
+        // by the host to authors and handed over with references resolved.
+        assetService: createHostAssetService({ pluginId: ctx.pluginId }),
 
         // The editor is handed the RAW stored document — unlike the room, whose
         // `ctx.data` createPluginContext has already resolved. So the editor

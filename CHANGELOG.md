@@ -9,6 +9,23 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.82] — 2026-08-29
+
+### Fixed
+
+- **The pathology editor's slide library was empty on rohy.** The editor asks
+  an injected `assetService.list()` for its catalog; the standalone app
+  builds one from `slides/library.json`, rohy passed none. The catalog is now
+  part of the content contract (RPS-1 §7a.1): the bundle ships
+  `catalog.json` with every URL a `remote:` reference, rohy relays it to
+  authoring roles (`GET /api/plugins/<id>/catalog` — gated on
+  `authoring.minRole`, JSON only, 4 MB cap, any non-`remote:` URL rejected),
+  and a host asset service hands it to the editor with references resolved.
+  The adapter now resolves the stored document on the way into the editor
+  and un-resolves it on every change (`unresolveRemoteRefs`, the exact inverse
+  of `resolveRemoteRefs`), so the case never stores a host address.
+  `/api/health/plugins` reports `has_catalog`.
+
 ## [2.9.81] — 2026-08-29
 
 ### Fixed

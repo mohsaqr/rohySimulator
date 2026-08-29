@@ -340,6 +340,17 @@ three declarative parts and no bespoke steps:
 | **The origin** | the deploy hub | `KIND=plugin-content`: build the bundle, `rsync --delete` it to `DEST`, install the origin's nginx block idempotently (`nginx -t`, reload, restore on failure). The block serves only the declared prefixes + `/content.json`; everything else is 404; LAN-bound — the app relays server-side, so no DNS or tunnel entry exists. |
 | **The wiring** | the app operator | `ROHY_PLUGIN_ORIGINS=<id>=<origin>` in the app's env. `GET /api/health/plugins` probes every configured origin's `content.json` and reports `reachable`, `content_version` and a plugin-id mismatch; `deploy/preflight.sh` checks it before a restart and `scripts/tech-test.sh` (the deploy hub's `POST_VERIFY`) fails the deploy on 503. |
 
+**The catalog.** An editor needs a library to pick from. The bundle ships it as
+`<origin>/catalog.json` — the plugin's asset catalog (`version: 1`, `assets[]`
+in the package's own catalog schema) with **every URL a `remote:` reference**.
+The host relays it to authoring roles only (`GET /api/plugins/<id>/catalog`,
+gated on `authoring.minRole`, JSON only, size-capped, rejected if any URL is
+not `remote:`), and the host's asset service hands it to the editor with
+references *resolved* — editors load thumbnails as plain `<img src>` — while
+the adapter *un-resolves* the document on every change, so the case never
+stores a host address (`resolveRemoteRefs` / `unresolveRemoteRefs` round-trip
+exactly). `/api/health/plugins` reports `has_catalog`.
+
 Adding a second plugin's content is one bundle script, one `sites.conf`
 block, one nginx file and one `id=origin` entry — the same shape every time.
 Routine content updates touch only the origin (`./deploy.sh <plugin>content`);

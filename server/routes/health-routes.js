@@ -135,10 +135,19 @@ async function probeOrigin(origin) {
         if (!res.ok) return { reachable: false, status: res.status, ms, error: `content.json returned ${res.status}` };
         let body = null;
         try { body = await res.json(); } catch { return { reachable: false, status: res.status, ms, error: 'content.json is not JSON' }; }
+        // The catalog is optional (an origin may ship tiles for cases authored
+        // elsewhere), but when the editor's library is empty this is the first
+        // thing to look at.
+        let hasCatalog = false;
+        try {
+            const head = await fetch(`${origin}/catalog.json`, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(ORIGIN_PROBE_TIMEOUT_MS) });
+            hasCatalog = head.ok;
+        } catch { hasCatalog = false; }
         return {
             reachable: true,
             status: res.status,
             ms,
+            has_catalog: hasCatalog,
             content_version: typeof body?.version === 'string' ? body.version : null,
             content_plugin: typeof body?.plugin === 'string' ? body.plugin : null,
             file_count: Number.isInteger(body?.fileCount) ? body.fileCount : null,

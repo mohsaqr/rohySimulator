@@ -115,6 +115,76 @@ export function pathIsDeclared(path, prefixes) {
     return (prefixes || []).some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
+// The plugin's slide/asset CATALOG for authors (RPS-1 §7a.1). The content
+// bundle ships `catalog.json` at the origin's root — the library the editor
+// offers, every URL a `remote:` reference — and this relays it to roles that
+// may author. Declared BEFORE the splat route so it is matched first; it is
+// deliberately NOT part of the learner-facing content proxy: the catalog is
+// JSON (the proxy's content types are images/XML) and it describes what an
+// institution owns, which is an author's concern, not a learner's.
+const CATALOG_MAX_BYTES = 4 * 1024 * 1024;
+
+router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async (req, res) => {
+    const { pluginId } = req.params;
+    const manifest = MANIFESTS_BY_ID.get(pluginId);
+    // No editor → no catalog; same shape as an unknown plugin so the route
+    // does not reveal which plugins are installed.
+    if (!manifest || !manifest.remote || !manifest.authoring) {
+        return res.status(404).json({ error: 'no such plugin catalog', code: 'plugin_catalog_unknown' });
+    }
+    if (!roleAllows(req.user?.role, manifest.authoring.minRole)) {
+        return res.status(403).json({ error: 'insufficient role for this plugin\'s catalog', code: 'plugin_forbidden' });
+    }
+    const origin = pluginOrigins().get(pluginId);
+    if (!origin) {
+        return res.status(503).json({
+            error: `No remote origin is configured for plugin '${pluginId}'. Set ROHY_PLUGIN_ORIGINS.`,
+            code: 'plugin_remote_not_configured',
+        });
+    }
+    let upstream;
+    try {
+        upstream = await fetch(`${origin}/catalog.json`, {
+            method: 'GET', redirect: 'manual',
+            signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+            headers: { accept: 'application/json' },
+        });
+    } catch (err) {
+        log.warn('plugin catalog fetch failed', { pluginId, error: err.message });
+        return res.status(502).json({ error: 'plugin catalog is unavailable', code: 'plugin_remote_unreachable' });
+    }
+    if (upstream.status === 404) {
+        return res.status(404).json({ error: 'this content origin ships no catalog', code: 'plugin_catalog_missing' });
+    }
+    if (!upstream.ok) {
+        return res.status(502).json({ error: 'plugin catalog is unavailable', code: 'plugin_remote_status' });
+    }
+    const declaredLength = Number(upstream.headers.get('content-length'));
+    if (Number.isFinite(declaredLength) && declaredLength > CATALOG_MAX_BYTES) {
+        return res.status(502).json({ error: 'plugin catalog is too large', code: 'plugin_remote_too_large' });
+    }
+    const text = await upstream.text();
+    if (Buffer.byteLength(text, 'utf8') > CATALOG_MAX_BYTES) {
+        return res.status(502).json({ error: 'plugin catalog is too large', code: 'plugin_remote_too_large' });
+    }
+    let catalog;
+    try { catalog = JSON.parse(text); } catch {
+        return res.status(502).json({ error: 'plugin catalog is not JSON', code: 'plugin_catalog_invalid' });
+    }
+    if (!catalog || typeof catalog !== 'object' || catalog.version !== 1 || !Array.isArray(catalog.assets)) {
+        return res.status(502).json({ error: 'plugin catalog has an unexpected shape', code: 'plugin_catalog_invalid' });
+    }
+    // Every URL must be a reference INTO this plugin's declared paths. A
+    // catalog that points elsewhere is the origin operator's mistake, and an
+    // author who adds such a slide would get a case the guard then rejects.
+    const stray = JSON.stringify(catalog).match(/"url":\s*"(?!remote:)[^"]*"/);
+    if (stray) {
+        return res.status(502).json({ error: 'plugin catalog carries a URL that is not a remote: reference', code: 'plugin_catalog_invalid' });
+    }
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    res.json({ plugin: pluginId, catalog });
+});
+
 router.get('/plugins/:pluginId/*splat', authenticateToken, requireStudent, proxyLimiter, async (req, res) => {
     const { pluginId } = req.params;
     const manifest = MANIFESTS_BY_ID.get(pluginId);

@@ -5312,7 +5312,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/health-routes.js:151",
+        "x-rohy-source": "server/routes/health-routes.js:160",
         "x-rohy-auth": [
           "public"
         ],
@@ -8148,10 +8148,44 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/plugins-routes.js:118",
+        "x-rohy-source": "server/routes/plugins-routes.js:188",
         "x-rohy-auth": [
           "authenticateToken",
           "requireStudent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/plugins/{pluginId}/catalog": {
+      "get": {
+        "summary": "Get /plugins/:pluginId/catalog",
+        "tags": [
+          "plugins"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/plugins-routes.js:127",
+        "x-rohy-auth": [
+          "authenticateToken"
         ],
         "security": [
           {

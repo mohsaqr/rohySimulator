@@ -112,6 +112,40 @@ export function resolveRemoteRef(uri, pluginId) {
     return `/api/plugins/${pluginId}/${encoded}`;
 }
 
+/**
+ * The inverse: a host-resolved address back to the `remote:` reference the
+ * CASE stores. The editor is shown resolved addresses (its thumbnails and
+ * picker load `<img src>` directly and know nothing about `remote:`), but a
+ * document must leave the editor host-agnostic — `remote:tiles/x.dzi`, never
+ * `/api/plugins/pathology/tiles/x.dzi` — or it stops being portable and the
+ * server guard's path check stops meaning anything. Segments are decoded
+ * because resolveRemoteRef encoded them; the pair round-trips exactly.
+ *
+ * @param {string} uri
+ * @param {string} pluginId
+ * @returns {string} unchanged when it is not this plugin's resolved address
+ */
+export function unresolveRemoteRef(uri, pluginId) {
+    const mount = `/api/plugins/${pluginId}/`;
+    if (typeof uri !== 'string' || !uri.startsWith(mount)) return uri;
+    const path = uri.slice(mount.length).split('/').map((seg) => {
+        try { return decodeURIComponent(seg); } catch { return seg; }
+    }).join('/');
+    return `${REMOTE_SCHEME}${path}`;
+}
+
+/** Deep walk of unresolveRemoteRef — the shape-preserving twin of resolveRemoteRefs. */
+export function unresolveRemoteRefs(value, pluginId) {
+    if (typeof value === 'string') return unresolveRemoteRef(value, pluginId);
+    if (Array.isArray(value)) return value.map((v) => unresolveRemoteRefs(v, pluginId));
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value).map(([k, v]) => [k, unresolveRemoteRefs(v, pluginId)])
+        );
+    }
+    return value;
+}
+
 export function resolveRemoteRefs(value, pluginId) {
     if (typeof value === 'string') {
         return resolveRemoteRef(value, pluginId);

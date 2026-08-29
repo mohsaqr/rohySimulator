@@ -10,5 +10,5 @@ model.
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
 | `GET` | `/api/health` | `(none)` | `server/routes/health-routes.js:42` |
-| `GET` | `/api/health/plugins` | `(none)` | `server/routes/health-routes.js:151` |
+| `GET` | `/api/health/plugins` | `(none)` | `server/routes/health-routes.js:160` |
 | `GET` | `/api/ready` | `(none)` | `server/routes/health-routes.js:62` |
