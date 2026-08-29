@@ -9,6 +9,63 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.85] — 2026-08-29
+
+### Added
+
+- **RPS-1 1.4 — the server slot (§11b).** Everything before this was a plugin
+  running in a browser. Whole-slide import is not: it downloads gigabytes, runs
+  a tiler for minutes, and writes to a directory only the server can see. A
+  plugin may now ship `server/plugins/<id>/index.js` exporting `{ jobs, routes }`,
+  mounted by the host exactly as its room and editor are.
+  - **Peaceful exclusion, preserved on the server.** Discovery is a directory
+    read plus a dynamic `import()` in a try/catch: a module that is absent,
+    throws, or has no manifest is *reported* unavailable and rohy boots. A plugin
+    that can take the server down at boot is not a plugin, it is a dependency.
+  - **A persisted job queue** (`plugin_jobs`, migration 0049) with exactly one
+    worker. Not a knob: measured this session, `openslideload --level 2` on a
+    2.1 GB NDPI peaks at 252 MB RSS and `dzsave` at 299 MB against a 3 GB budget
+    — four workers turn that margin into an OOM kill, and an OOM-killed tiler
+    leaves a partial pyramid nothing distinguishes from a complete one.
+  - **A job found `running` at boot is requeued from the START**, never resumed
+    from its recorded phase: the owning process is gone, so `phase` is the last
+    phase *announced*, not the one reached. Trusting it is how a half-downloaded
+    file gets tiled. Past three attempts it is abandoned with a message saying so.
+  - **Cancellation is cooperative**, checked at phase boundaries — a `dzsave`
+    killed mid-write leaves a directory of tiles that looks exactly like a
+    finished one.
+  - **`ctx` narrows everything a server module could otherwise reach**:
+    `download` (allowlist pre-resolved, byte cap enforced while streaming,
+    sha256, path containment), `runBinary` (allow-listed argv, **never a
+    shell**), `libraryDir` (the one writable directory), `registerJob`
+    (namespaced `<id>:<kind>`), `settings`, plus rohy's own `guards` and
+    `helpers` so a plugin does not hand-roll an auth check that loses CSRF and
+    revocation.
+  - **Route ordering is part of the contract** (§11b.4): host specific routes →
+    plugin routes → the content-proxy catch-all. Mounted in any other order a
+    plugin's `GET /plugins/pathology/jobs/:id` is answered as an undeclared
+    content path. The slot router is created synchronously so the async module
+    load cannot land it behind the catch-all.
+  - New operator variables, both fatal at boot if malformed:
+    `ROHY_PLUGIN_IMPORT_ORIGINS` (the outer allowlist a tenant admin narrows and
+    can never widen — a tenant admin is not the server operator) and
+    `ROHY_PLUGIN_LIBRARY_DIRS` (plural and per-plugin, because a singular
+    variable cannot serve a second plugin).
+  - Migration `0049_plugin_jobs_assets.sql` (additive). Rules **R24–R26**, two
+    conformance rows, §14.2 narrowed. 28 tests.
+
+### Fixed
+
+- **The API reference was silently omitting 7 endpoints.** `gen-api.mjs` matched
+  route registrations only on the literal identifier `router`, so a file
+  declaring a second Express router documented none of its routes —
+  `catalogue.js:556` has a `groupRouter` with 7 live endpoints that had never
+  appeared in `docs/reference/api/`. The scanner now *discovers* which
+  identifiers in a file are `express.Router()` rather than assuming the name,
+  and understands the mixed `import x, { y } from` form. Discovered rather than
+  loosened to `<anything>.get(`, which would match `dbAdapter.get('SELECT …')`
+  and invent endpoints out of SQL.
+
 ## [2.9.84] — 2026-08-29
 
 ### Added

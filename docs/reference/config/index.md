@@ -23,9 +23,9 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `HTTPS_PORT` | No | — | HTTPS listen port (used when TLS cert/key are set). | `server/server.js:54` |
+| `HTTPS_PORT` | No | — | HTTPS listen port (used when TLS cert/key are set). | `server/server.js:55` |
 | `NODE_ENV` | No | `development` | Runtime mode; `production` tightens defaults and enables prod-only validation. | `server/logger.js:40`<br>`server/logger.js:41`<br>`server/middleware/csrf.js:50`<br>_+11 more_ |
-| `PORT` | No | — | HTTP listen port. | `server/server.js:46` |
+| `PORT` | No | — | HTTP listen port. | `server/server.js:47` |
 
 ## Auth/security
 
@@ -40,9 +40,9 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_ADMIN_USERNAME` | No | — | Provisions the first admin on first boot (with ROHY_ADMIN_PASSWORD). Applied only while the users table is empty. | `server/seeders/users.js:52` |
 | `ROHY_DISABLE_AUTH_RATE_LIMIT` | No | — | Disables the auth-endpoint rate limiter (dev/test). | `server/routes/auth-routes.js:79`<br>`server/routes/registration-routes.js:35` |
 | `ROHY_TOKEN` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:47`<br>`scripts/translate-locales.mjs:77` |
-| `ROHY_TRUST_PROXY` | No | `loopback` | Express `trust proxy` setting (proxy hop count / IP / preset). | `server/server.js:63` |
-| `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:55` |
-| `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:56` |
+| `ROHY_TRUST_PROXY` | No | `loopback` | Express `trust proxy` setting (proxy hop count / IP / preset). | `server/server.js:64` |
+| `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:56` |
+| `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:57` |
 
 ## Database
 
@@ -59,7 +59,7 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_LOG_LEVEL` | No | `info` | Server log verbosity (Rohy-prefixed alias). | `server/logger.js:27`<br>`server/observability.js:17` |
 | `ROHY_LOG_SKIP_PATHS` | No | — | Comma-separated request paths excluded from access logging. | `server/observability.js:46` |
 | `ROHY_ROUTE_TIMEOUT_MS` | No | — | Per-route request timeout (ms). | `server/middleware/routeTimeout.js:38` |
-| `ROHY_SHUTDOWN_GRACE_MS` | No | — | Graceful-shutdown drain window (ms). | `server/server.js:379` |
+| `ROHY_SHUTDOWN_GRACE_MS` | No | — | Graceful-shutdown drain window (ms). | `server/server.js:400` |
 | `ROHY_SLOW_QUERY_MS` | No | — | Threshold (ms) above which a DB query is logged as slow. | `server/observability.js:22`<br>`server/observability.js:29` |
 | `VERBOSE` | No | — | Extra console diagnostics when truthy. | `scripts/rocketbox-convert/convert.mjs:135` |
 
@@ -67,7 +67,8 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `FRONTEND_URL` | No | — | Public frontend origin; drives CORS allow-list. _Recommended in production (validateEnv warns when unset)._ _Recommended in production (CORS rejects non-localhost origins when unset)._ | `server/server.js:75` |
+| `FRONTEND_URL` | No | — | Public frontend origin; drives CORS allow-list. _Recommended in production (validateEnv warns when unset)._ _Recommended in production (CORS rejects non-localhost origins when unset)._ | `server/server.js:76` |
+| `ROHY_PLUGIN_IMPORT_ORIGINS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;origin&gt;` allowlist naming the hosts a plugin may DOWNLOAD from (RPS-1 1.4). The operator's outer bound: a tenant admin narrows it through the plugin's own settings and can never widen it, because a tenant admin is not the server operator and naming a host for rohy's server to fetch from is the SSRF shape proxy-routes.js already closed once. A plugin id may repeat and the origins accumulate. Unset means NO plugin may import from anywhere — the correct default for a server nobody has told where content may come from. Malformed is fatal at boot. | `server/lib/pluginImportOrigins.js:86` |
 | `ROHY_PLUGIN_ORIGINS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;origin&gt;` allowlist naming where each RPS-1 plugin's remote content is fetched from, e.g. `pathology=https://slides.example.edu`. Unset means no plugin has a remote origin and every plugin proxy route answers 503. A malformed entry is fatal at boot — a typo must not degrade into rohy silently never contacting the host an operator believes it is using. The origin is operator configuration only: it is never read from a manifest, a case config or a request. | `server/lib/pluginRemoteOrigins.js:72` |
 
 ## LLM/TTS
@@ -88,7 +89,7 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `OYON_ENABLED` | No | — | Mounts the Oyon emotion-capture addon as a live router (vs 503 stub). | `server/routes.js:38`<br>`server/routes/help-routes.js:129` |
+| `OYON_ENABLED` | No | — | Mounts the Oyon emotion-capture addon as a live router (vs 503 stub). | `server/routes.js:39`<br>`server/routes/help-routes.js:129` |
 
 ## Retention
 
@@ -116,9 +117,10 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_LANGS` | No | `'' (empty string)` | _see source_ | `scripts/llm-language-smoke.mjs:108` |
 | `ROHY_LOCALES_ROOT` | No | — | _see source_ | `scripts/i18n/lib.mjs:61` |
 | `ROHY_PASSWORD` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:49` |
-| `ROHY_PLUGIN_IMPORT_MAX_BYTES` | No | — | Deployment-wide ceiling, in bytes, on any plugin setting that binds to it (RPS-1 1.4, `ceilingEnv`) — today pathology's `imports.maxBytes`. A tenant admin may set a value BELOW this and can never set one above it, so an operator who caps a deployment is not overridden by a manifest declaring a larger max. Unset means the manifest's own max applies; an unparseable value is treated as unset rather than as zero, so a typo cannot silently forbid every legal value. | `server/routes/plugins-routes.js:230` |
+| `ROHY_PLUGIN_IMPORT_MAX_BYTES` | No | — | Deployment-wide ceiling, in bytes, on any plugin setting that binds to it (RPS-1 1.4, `ceilingEnv`) — today pathology's `imports.maxBytes`. A tenant admin may set a value BELOW this and can never set one above it, so an operator who caps a deployment is not overridden by a manifest declaring a larger max. Unset means the manifest's own max applies; an unparseable value is treated as unset rather than as zero, so a typo cannot silently forbid every legal value. | `server/routes/plugins-routes.js:232` |
+| `ROHY_PLUGIN_LIBRARY_DIRS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;absolute path&gt;` map of the managed library directory each plugin's server module may write in (RPS-1 1.4). Plural, one per plugin, because a singular variable cannot serve a second plugin and "the second plugin needs no host edit" is the claim RPS-1 makes. Paths must be absolute: a relative path resolves against whatever working directory the service happens to have, which differs between a dev shell, a systemd unit and a Docker image. Unset means the plugin has no library and its import surface is unavailable — not an error. Malformed is fatal at boot. | `server/lib/pluginServerSlot.js:117` |
 | `ROHY_USERNAME` | No | — | _see source_ | `scripts/llm-language-smoke.mjs:48` |
 
 ---
 
-_50 variables discovered. Generated by `scripts/docs-gen/gen-config.mjs` — regenerate with `npm run docs:gen:config`._
+_52 variables discovered. Generated by `scripts/docs-gen/gen-config.mjs` — regenerate with `npm run docs:gen:config`._

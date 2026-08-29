@@ -51,6 +51,8 @@ describe('settings schema validation (gen time)', () => {
         ['min above max', (s) => { s.fields['imports.maxBytes'].min = 9000; }, /min 9000 above max/],
         ['an enum with no options', (s) => { s.fields['imports.enabled'] = { type: 'enum', default: 'a', labelKey: 'l' }; }, /declares no options/],
         ['ceilingEnv on a boolean', (s) => { s.fields['imports.enabled'].ceilingEnv = 'ROHY_X'; }, /not numeric/],
+        ['allowlistEnv on a number', (s) => { s.fields['imports.maxBytes'].allowlistEnv = 'ROHY_PLUGIN_IMPORT_ORIGINS'; }, /not an 'origins' field/],
+        ['an allowlistEnv the host does not define', (s) => { s.fields['imports.origins'] = { type: 'origins', default: [], labelKey: 'l', allowlistEnv: 'ROHY_MADE_UP' }; }, /host does not define/],
         ['a ceilingEnv the host does not define', (s) => { s.fields['imports.maxBytes'].ceilingEnv = 'ROHY_MADE_UP'; }, /host does not define/],
         ['no groups', (s) => { s.groups = []; }, /declares no groups/],
         ['an unknown top-level key', (s) => { s.extra = 1; }, /unknown key 'extra'/],
@@ -92,9 +94,22 @@ describe('reading and merging', () => {
     });
 
     it('applies a host ceiling that the field max cannot widen', () => {
-        expect(mergeSettings(ok(), {}, { 'imports.maxBytes': 4096 }, { 'imports.maxBytes': 2048 }))
+        expect(mergeSettings(ok(), {}, { 'imports.maxBytes': 4096 }, { 'imports.maxBytes': { ceiling: 2048 } }))
             .toMatchObject({ ok: false, field: 'imports.maxBytes', message: expect.stringMatching(/deployment's limit of 2048/) });
-        expect(mergeSettings(ok(), {}, { 'imports.maxBytes': 2048 }, { 'imports.maxBytes': 2048 }).ok).toBe(true);
+        expect(mergeSettings(ok(), {}, { 'imports.maxBytes': 2048 }, { 'imports.maxBytes': { ceiling: 2048 } }).ok).toBe(true);
+    });
+
+    // A tenant admin narrows the operator's list and can never widen it. The
+    // reverse would be the SSRF hole proxy-routes.js already closed once: a
+    // role inside one tenant choosing a host the SERVER will fetch from.
+    it('an origins field is bounded by the operator allowlist, and an empty one means nowhere', () => {
+        const schema = { groups: [{ key: 'imports', labelKey: 'g' }], fields: { 'imports.allowedOrigins': { type: 'origins', default: [], labelKey: 'l' } } };
+        const bounded = { 'imports.allowedOrigins': { allowedOrigins: ['https://a.edu'] } };
+        expect(mergeSettings(schema, {}, { 'imports.allowedOrigins': ['https://a.edu'] }, bounded).ok).toBe(true);
+        expect(mergeSettings(schema, {}, { 'imports.allowedOrigins': ['https://evil.example'] }, bounded))
+            .toMatchObject({ ok: false, field: 'imports.allowedOrigins', message: expect.stringMatching(/not among the origins this deployment allows/) });
+        expect(mergeSettings(schema, {}, { 'imports.allowedOrigins': ['https://a.edu'] }, { 'imports.allowedOrigins': { allowedOrigins: [] } }))
+            .toMatchObject({ ok: false, message: expect.stringMatching(/permits no import origins/) });
     });
 
     it('nests for a plugin that would rather read settings.imports.enabled', () => {
@@ -153,7 +168,13 @@ describe('GET/PUT /api/plugins/:pluginId/settings', () => {
     let server; let admin; let educator;
 
     beforeAll(async () => {
-        server = await startTestServer({ seed: false, env: { ROHY_PLUGIN_IMPORT_MAX_BYTES: String(8 * 1024 * 1024 * 1024) } });
+        server = await startTestServer({
+            seed: false,
+            env: {
+                ROHY_PLUGIN_IMPORT_MAX_BYTES: String(8 * 1024 * 1024 * 1024),
+                ROHY_PLUGIN_IMPORT_ORIGINS: 'pathology=https://openslide.cs.cmu.edu',
+            },
+        });
         const hash = await bcrypt.hash('Educator1!', 4);
         await dbRun(server.dbPath, `INSERT INTO users (username, name, email, password_hash, role, tenant_id, status) VALUES (?, ?, ?, ?, 'educator', 1, 'active')`,
             ['set-educator', 'set-educator', 'set-educator@example.com', hash]);
@@ -195,6 +216,7 @@ describe('GET/PUT /api/plugins/:pluginId/settings', () => {
         ['an overlap out of range', { 'tiling.overlap': 5 }, 'tiling.overlap', /at most 2/],
         ['a non-integer quality', { 'tiling.jpegQuality': 85.5 }, 'tiling.jpegQuality', /must be an integer/],
         ['an unknown format', { 'imports.acceptedFormats': ['svs', 'exe'] }, 'imports.acceptedFormats', /not one of/],
+        ['an origin the operator has not allowed', { 'imports.allowedOrigins': ['https://evil.example'] }, 'imports.allowedOrigins', /not among the origins this deployment allows/],
     ])('400s on %s, naming the field', async (_label, patch, field, pattern) => {
         const res = await admin('/api/plugins/pathology/settings', { method: 'PUT', body: JSON.stringify(patch) });
         expect(res.status).toBe(400);

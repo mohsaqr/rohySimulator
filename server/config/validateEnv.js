@@ -16,6 +16,8 @@
 import path from 'node:path';
 import { logger } from '../logger.js';
 import { parsePluginOrigins } from '../lib/pluginRemoteOrigins.js';
+import { parseImportOrigins } from '../lib/pluginImportOrigins.js';
+import { parseLibraryDirs } from '../lib/pluginServerSlot.js';
 
 const MIN_JWT_SECRET_LENGTH = 32;
 const defaultLog = logger('env');
@@ -54,6 +56,26 @@ export function validateEnv(env = process.env) {
     if (env.ROHY_PLUGIN_ORIGINS) {
         try {
             parsePluginOrigins(env.ROHY_PLUGIN_ORIGINS);
+        } catch (err) {
+            errors.push(err.message);
+        }
+    }
+
+    // ROHY_PLUGIN_IMPORT_ORIGINS / ROHY_PLUGIN_LIBRARY_DIRS — fatal if
+    // malformed, for the same reason as ROHY_PLUGIN_ORIGINS above. A typo in
+    // an import allowlist does not degrade into "imports are stricter than
+    // intended"; it degrades into an operator believing a host is permitted
+    // that rohy will refuse, discovered by an educator mid-import.
+    if (env.ROHY_PLUGIN_IMPORT_ORIGINS) {
+        try {
+            parseImportOrigins(env.ROHY_PLUGIN_IMPORT_ORIGINS);
+        } catch (err) {
+            errors.push(err.message);
+        }
+    }
+    if (env.ROHY_PLUGIN_LIBRARY_DIRS) {
+        try {
+            parseLibraryDirs(env.ROHY_PLUGIN_LIBRARY_DIRS);
         } catch (err) {
             errors.push(err.message);
         }

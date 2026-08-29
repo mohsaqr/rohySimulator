@@ -3,12 +3,19 @@
 > **Generated file — do not hand-edit.** Produced from `server/routes/*.js`
 > by `scripts/docs-gen/gen-api.mjs`. Regenerate with `npm run docs:gen:api`.
 
-12 endpoints. All paths are
+19 endpoints. All paths are
 relative to the `/api` base. See the [API index](./index.md) for the auth
 model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
+| `GET` | `/api/catalogue/` | `authenticateToken` | `server/routes/catalogue.js:558` |
+| `POST` | `/api/catalogue/` | `authenticateToken` | `server/routes/catalogue.js:579` |
+| `DELETE` | `/api/catalogue/:id` | `authenticateToken` | `server/routes/catalogue.js:628` |
+| `PUT` | `/api/catalogue/:id` | `authenticateToken` | `server/routes/catalogue.js:607` |
+| `GET` | `/api/catalogue/:id/items` | `authenticateToken` | `server/routes/catalogue.js:645` |
+| `POST` | `/api/catalogue/:id/items` | `authenticateToken` | `server/routes/catalogue.js:664` |
+| `DELETE` | `/api/catalogue/:id/items/:itemId` | `authenticateToken` | `server/routes/catalogue.js:686` |
 | `GET` | `/api/catalogue/lab-tests` | `authenticateToken` | `server/routes/catalogue.js:376` |
 | `POST` | `/api/catalogue/lab-tests` | `authenticateToken` | `server/routes/catalogue.js:404` |
 | `DELETE` | `/api/catalogue/lab-tests/:id` | `authenticateToken` | `server/routes/catalogue.js:478` |

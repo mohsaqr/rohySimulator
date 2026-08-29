@@ -122,6 +122,10 @@ export const manifest = {
             // proxy to one.
             'imports.allowedOrigins': {
                 type: 'origins', default: [], group: 'imports',
+                // Bounded by the OPERATOR's list. A tenant admin narrows it and
+                // can never widen it: naming a host for rohy's server to fetch
+                // 4 GB from is a deployment-level decision, not a tenant one.
+                allowlistEnv: 'ROHY_PLUGIN_IMPORT_ORIGINS',
                 labelKey: 'pathology_settings_imports_origins',
             },
             'imports.maxBytes': {

@@ -52,6 +52,22 @@
  */
 export const HOST_CEILING_ENVS = ['ROHY_PLUGIN_IMPORT_MAX_BYTES'];
 
+/**
+ * Operator allowlists an `origins` field may be bounded BY.
+ *
+ * The composition is one-directional and that is the whole point: a tenant
+ * admin narrows the operator's list and can never widen it. A tenant admin is
+ * not the server operator — they are a role inside one deployment, and the
+ * deployment's network position belongs to whoever runs it. Letting an admin
+ * name an arbitrary host for the server to fetch from is the SSRF hole rohy
+ * already closed once in proxy-routes.js.
+ *
+ * Closed for the same two reasons as HOST_CEILING_ENVS: a bound the host never
+ * reads is not a bound, and the read has to stay literal to be discoverable by
+ * the config reference.
+ */
+export const HOST_ORIGIN_ALLOWLIST_ENVS = ['ROHY_PLUGIN_IMPORT_ORIGINS'];
+
 /** Field types the host knows how to store, validate and render. */
 export const SETTING_TYPES = ['boolean', 'int', 'bytes', 'enum', 'enumList', 'origins'];
 
@@ -200,6 +216,17 @@ export function validateSettingsSchema(settings, pluginId) {
                 );
             }
         }
+        if (field.allowlistEnv !== undefined) {
+            if (field.type !== 'origins') {
+                throw new Error(`${where} declares allowlistEnv but is not an 'origins' field — an origin allowlist has nothing to bound`);
+            }
+            if (!HOST_ORIGIN_ALLOWLIST_ENVS.includes(field.allowlistEnv)) {
+                throw new Error(
+                    `${where} declares allowlistEnv '${field.allowlistEnv}', which the host does not define. `
+                    + `Known allowlists: ${HOST_ORIGIN_ALLOWLIST_ENVS.join(', ')}. A bound the host never reads is not a bound.`
+                );
+            }
+        }
         if (field.minRole !== undefined && !['guest', 'student', 'reviewer', 'educator', 'admin'].includes(field.minRole)) {
             throw new Error(`${where} declares minRole '${field.minRole}', which is not a rohy role`);
         }
@@ -220,12 +247,15 @@ export function validateSettingsSchema(settings, pluginId) {
  * Returns a result rather than throwing, because the caller is usually an HTTP
  * handler that must answer 400 naming the field rather than 500.
  *
- * @param {object} field    the field spec from the schema
- * @param {*}      value    the candidate
- * @param {number} [ceiling] optional host-imposed maximum, tighter than field.max
+ * @param {object} field        the field spec from the schema
+ * @param {*}      value        the candidate
+ * @param {object} [constraint] host-imposed bounds for this field:
+ *                              `{ ceiling }` for a number, `{ allowedOrigins }`
+ *                              for an origins list. Always tighter than the
+ *                              field's own declaration, never looser.
  * @returns {{ok: true, value: *}|{ok: false, message: string}}
  */
-export function coerceSettingValue(field, value, ceiling = undefined) {
+export function coerceSettingValue(field, value, constraint = {}) {
     switch (field.type) {
         case 'boolean':
             if (typeof value !== 'boolean') return { ok: false, message: 'must be true or false' };
@@ -239,6 +269,7 @@ export function coerceSettingValue(field, value, ceiling = undefined) {
             // The host ceiling is applied AFTER the field's own max, and is
             // never widened by it: an operator lowering the deployment-wide cap
             // must not be overridden by a manifest that declares a bigger one.
+            const { ceiling } = constraint;
             if (ceiling !== undefined && value > ceiling) {
                 return { ok: false, message: `exceeds this deployment's limit of ${ceiling}` };
             }
@@ -272,6 +303,21 @@ export function coerceSettingValue(field, value, ceiling = undefined) {
                 }
             }
             if (new Set(out).size !== out.length) return { ok: false, message: 'lists the same origin twice' };
+            // The operator's outer bound. Checked here so a tenant admin gets a
+            // 400 naming the origin rather than a save that looks successful and
+            // a download that is refused later for reasons they cannot see.
+            const { allowedOrigins } = constraint;
+            if (allowedOrigins !== undefined) {
+                const outside = out.find((o) => !allowedOrigins.includes(o));
+                if (outside !== undefined) {
+                    return {
+                        ok: false,
+                        message: allowedOrigins.length === 0
+                            ? `'${outside}' is not allowed: this deployment permits no import origins for this plugin`
+                            : `'${outside}' is not among the origins this deployment allows (${allowedOrigins.join(', ')})`,
+                    };
+                }
+            }
             return { ok: true, value: out };
         }
 
@@ -333,10 +379,11 @@ export function readSettings(settings, stored) {
  * @param {object|undefined} settings  manifest.settings
  * @param {object}           stored    the tenant's current flat map
  * @param {object}           patch     the request body
- * @param {object}          [ceilings] dotted key → host maximum
+ * @param {object}       [constraints] dotted key → host bounds for that field
+ *                                     (`{ ceiling }` / `{ allowedOrigins }`)
  * @returns {{ok: true, value: object}|{ok: false, field: string, message: string}}
  */
-export function mergeSettings(settings, stored, patch, ceilings = {}) {
+export function mergeSettings(settings, stored, patch, constraints = {}) {
     if (!settings) return { ok: false, field: '', message: 'this plugin declares no settings' };
     if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
         return { ok: false, field: '', message: 'body must be an object of setting keys' };
@@ -350,7 +397,7 @@ export function mergeSettings(settings, stored, patch, ceilings = {}) {
         if (!field) {
             return { ok: false, field: key, message: 'is not a setting this plugin declares' };
         }
-        const checked = coerceSettingValue(field, value, ceilings[key]);
+        const checked = coerceSettingValue(field, value, constraints[key] ?? {});
         if (!checked.ok) {
             return { ok: false, field: key, message: checked.message };
         }

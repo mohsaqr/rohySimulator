@@ -62,10 +62,19 @@ function resolveMounts() {
   const src = readFileSync(ROUTES_COMPOSER, 'utf8');
 
   // import xRoutes from './routes/x-routes.js';
-  const importRe = /import\s+(\w+)\s+from\s+['"]\.\/routes\/([\w.-]+\.js)['"]/g;
+  // ...and the mixed form, where one file exports a default router plus a named
+  // one it needs mounted separately:
+  //   import pluginsRoutes, { pluginContentProxy } from './routes/plugins-routes.js';
+  // Both names map to the same file, because both are routers whose paths are
+  // declared inside it. Without the named half, that file's endpoints fall back
+  // to a guessed prefix and the reference silently mis-documents them.
+  const importRe = /import\s+(\w+)\s*(?:,\s*\{([^}]*)\})?\s*from\s+['"]\.\/routes\/([\w.-]+\.js)['"]/g;
   const varToFile = new Map();
   for (const m of src.matchAll(importRe)) {
-    varToFile.set(m[1], m[2]);
+    const [, defaultName, namedList, file] = m;
+    varToFile.set(defaultName, file);
+    (namedList ?? '').split(',').map((n) => n.trim().split(/\s+as\s+/).pop()).filter(Boolean)
+      .forEach((name) => varToFile.set(name, file));
   }
 
   // Dynamic import for Oyon: (await import('./routes/oyon-routes.js')).default
@@ -99,9 +108,22 @@ function resolveMounts() {
 // skipped because we only scan server/routes/*.js, never routes.js itself, and
 // we still guard against a leading `//` for safety.
 function scanRouteFile(filePath, prefix) {
-  const lines = readFileSync(filePath, 'utf8').split('\n');
+  const source = readFileSync(filePath, 'utf8');
+  const lines = source.split('\n');
+
+  // Which identifiers in THIS file are express Routers. Discovered rather than
+  // assumed to be the literal name `router`, because a file may declare a second
+  // one — plugins-routes.js exports `pluginContentProxy` separately so routes.js
+  // can mount the catch-all content proxy AFTER any plugin's own routes.
+  //
+  // Discovered rather than loosened to `<anything>.get(`, which would match
+  // `dbAdapter.get('SELECT …')` and invent endpoints out of SQL.
+  const routerNames = new Set(['router']);
+  for (const m of source.matchAll(/(?:const|let|var|export\s+const)\s+(\w+)\s*=\s*express\.Router\(\)/g)) {
+    routerNames.add(m[1]);
+  }
   const routeRe = new RegExp(
-    `^\\s*router\\.(${HTTP_METHODS.join('|')})\\(\\s*(['"\`])([^'"\`]+)\\2\\s*(.*)$`,
+    `^\\s*(?:${[...routerNames].join('|')})\\.(${HTTP_METHODS.join('|')})\\(\\s*(['"\`])([^'"\`]+)\\2\\s*(.*)$`,
   );
   const endpoints = [];
 

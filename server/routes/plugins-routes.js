@@ -32,6 +32,7 @@ import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { roleAllows } from '../shared/pluginRegistry.js';
 import { pluginOrigins } from '../lib/pluginRemoteOrigins.js';
 import { readSettings, mergeSettings, visibleSettingKeys } from '../shared/pluginSettings.js';
+import { importOriginsFor } from '../lib/pluginImportOrigins.js';
 import { tenantId, auditSuccess, dbGet, dbRun } from './_helpers.js';
 import { logger } from '../logger.js';
 
@@ -218,24 +219,32 @@ async function storedSettings(tenant, pluginId) {
  * @param {object} manifest
  * @returns {object} dotted setting key → integer ceiling
  */
-function hostCeilings(manifest) {
-    // Read LITERALLY, one line per ceiling, because docs-gen/gen-config.mjs
+function hostConstraints(manifest, pluginId) {
+    // Read LITERALLY, one line per bound, because docs-gen/gen-config.mjs
     // discovers environment variables by scanning source for their literal
     // spelling. A computed lookup by `field.ceilingEnv` works at runtime and is
     // invisible to that scan — the config reference would omit the knob, and an
     // operator would have no documented way to find it.
-    // server/shared/pluginSettings.js's HOST_CEILING_ENVS is the closed list a
-    // manifest may bind to, checked at plugins:gen time.
-    const values = {
+    // server/shared/pluginSettings.js's HOST_CEILING_ENVS and
+    // HOST_ORIGIN_ALLOWLIST_ENVS are the closed lists a manifest may bind to,
+    // checked at plugins:gen time.
+    const ceilingValues = {
         ROHY_PLUGIN_IMPORT_MAX_BYTES: process.env.ROHY_PLUGIN_IMPORT_MAX_BYTES,
     };
     const out = {};
     Object.entries(manifest.settings.fields).forEach(([key, field]) => {
-        if (!field.ceilingEnv) return;
-        const raw = Number(values[field.ceilingEnv]);
-        // An unset or unparseable ceiling is the field's own max, not zero:
-        // a typo'd env var must not silently forbid every legal value.
-        if (Number.isInteger(raw) && raw > 0) out[key] = raw;
+        if (field.ceilingEnv) {
+            const raw = Number(ceilingValues[field.ceilingEnv]);
+            // An unset or unparseable ceiling is the field's own max, not zero:
+            // a typo'd env var must not silently forbid every legal value.
+            if (Number.isInteger(raw) && raw > 0) (out[key] ??= {}).ceiling = raw;
+        }
+        if (field.allowlistEnv === 'ROHY_PLUGIN_IMPORT_ORIGINS') {
+            // The opposite default to a ceiling, and deliberately so: an ABSENT
+            // origin allowlist means the operator has permitted nothing, and
+            // the safe reading of "nowhere is named" is "nowhere", not "any".
+            (out[key] ??= {}).allowedOrigins = importOriginsFor(pluginId);
+        }
     });
     return out;
 }
@@ -296,7 +305,7 @@ router.put('/plugins/:pluginId/settings', authenticateToken, async (req, res) =>
         });
     }
     const current = await storedSettings(tenant, pluginId);
-    const merged = mergeSettings(manifest.settings, current, req.body, hostCeilings(manifest));
+    const merged = mergeSettings(manifest.settings, current, req.body, hostConstraints(manifest, pluginId));
     if (!merged.ok) {
         // The field is named because an operator staring at a rejected form
         // needs to know WHICH row is wrong, and a generic 400 sends them
@@ -328,7 +337,13 @@ router.put('/plugins/:pluginId/settings', authenticateToken, async (req, res) =>
     res.json({ plugin: pluginId, settings: merged.value });
 });
 
-router.get('/plugins/:pluginId/*splat', authenticateToken, requireStudent, proxyLimiter, async (req, res) => {
+// The content proxy is a CATCH-ALL under /plugins/:pluginId/, so it lives on its
+// own router and routes.js mounts it LAST — after any plugin's own server-slot
+// routes. Mounted with the rest, a plugin's `GET /plugins/pathology/jobs/:id`
+// would be matched here first and answered as an undeclared content path.
+export const pluginContentProxy = express.Router();
+
+pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireStudent, proxyLimiter, async (req, res) => {
     const { pluginId } = req.params;
     const manifest = MANIFESTS_BY_ID.get(pluginId);
 

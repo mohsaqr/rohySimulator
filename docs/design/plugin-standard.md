@@ -162,6 +162,9 @@ far from its cause.
 | R21 *(1.4)* | every `settings` field declares a `default`, and that default **passes the field's own constraints** | a schema that fails OPEN — a tenant which never opened the settings page running on a value the page itself refuses to save |
 | R22 *(1.4)* | every `settings` field key is `'<group>.<field>'` naming a **declared** group, and every field declares `labelKey` | a field stored correctly and rendered nowhere, or a blank row |
 | R23 *(1.4)* | a numeric `settings` field declares integer `min` and `max`; `ceilingEnv` is a `ROHY_`-prefixed name on a numeric field only | an unbounded number reaching whatever consumes it, and a ceiling with nothing to bound |
+| R24 *(1.4)* | a server module's own tables are prefixed `plugin_<id>_` (plus the shared `plugin_settings` / `plugin_jobs` / `plugin_assets`) | a plugin reaching into `users` or `cases` because that was easier than asking the host. Pinned by a contract test, not a runtime SQL guard — a regex that must understand joins and CTEs rejects legitimate queries in the hot path |
+| R25 *(1.4)* | a server module reaches the network only through `ctx.download` and runs binaries only through `ctx.runBinary` | a plugin re-implementing an origin allowlist, a byte cap or a shell-free exec, and eventually re-implementing one of them wrong |
+| R26 *(1.4)* | a server module writes only inside `ctx.libraryDir`, and treats its absence as "this surface is unavailable" | a plugin writing into the image, and a deployment with no provisioned disk failing at first import instead of declining up front |
 
 Roles: `guest student reviewer educator admin` (mirrors `ROLE_RANKS` in
 `server/middleware/auth.js`; a contract test asserts the copies agree).
@@ -624,6 +627,85 @@ else having happened.
 
 ---
 
+## 11b. The server slot *(1.4)*
+
+Everything before this was a plugin running in a browser. Whole-slide import is
+not that: it downloads gigabytes, runs a tiler for minutes, and writes to a
+directory only the server can see. So a plugin may ship a **server module**,
+mounted by the host exactly as its room and editor are.
+
+```
+server/plugins/<id>/index.js
+
+export default {
+    jobs:   { import_slide: async (job, api) => { … } },
+    routes: (router, ctx) => { router.post('/imports', ctx.guards.educator, handler) },
+}
+```
+
+### 11b.1 Peaceful exclusion, on the server too
+
+`src/plugins/index.js` uses `import.meta.glob` so deleting a plugin directory
+still leaves a bootable app. The server half keeps that property: discovery is a
+directory read plus a dynamic `import()` in a `try/catch`. A module that is
+absent, throws while loading, or has no manifest is **reported** as unavailable
+and rohy starts normally. *A plugin that can take the server down at boot is not
+a plugin, it is a dependency.*
+
+### 11b.2 What the context narrows, and why harder than §6
+
+§6's rule is that a capability is an adapter the host builds, never a host
+singleton. It applies with more force here, because a server module runs as the
+rohy service user with the deployment's filesystem and network position.
+
+| `ctx` | What it is | Why it is not the raw thing |
+|---|---|---|
+| `registerJob` | one handler per kind, namespaced `<id>:<kind>` | two plugins cannot collide on `import`; the host owns the queue, the worker and the concurrency |
+| `download` | `pluginFetch.js`, allowlist already resolved | the plugin passes no origin list and therefore cannot widen one |
+| `runBinary` | `pluginSpawn.js`, argv only, allow-listed binary | **never a shell** — a filename containing `; rm -rf /` is a filename |
+| `libraryDir` | the one directory it may write in, or `null` | a path outside it is a refusal, not a warning |
+| `settings` | the tenant's effective settings, read fresh | an admin who turns imports off expects the *next* import refused, not the one after a cache expiry |
+| `guards` | rohy's own `authenticateToken` / `require*` | `authenticateToken` is not only auth — it checks revocation in `active_sessions`, re-reads the role so a change takes effect immediately, **and runs CSRF for cookie clients**. A hand-rolled equivalent loses all three |
+| `helpers` | `tenantId`, `auditSuccess` | a plugin's mutations are tenant-scoped and land in the tamper-evident audit chain like every other mutation |
+
+### 11b.3 One worker, and why that is not a knob
+
+Measured on 2026-08-29 with vips 8.18.6: `openslideload --level 2` on a 2.1 GB
+NDPI peaks at **252 MB** RSS, `dzsave` at **299 MB**. The target server is
+budgeted at 3 GB. One worker leaves an order of magnitude of headroom; four turn
+that margin into an OOM kill under a batch import — and an OOM-killed tiler
+leaves a partial pyramid on disk that nothing distinguishes from a complete one.
+Concurrency stays fixed at 1 in 1.4 because raising it needs a disk-state design
+first, not because nobody thought of it.
+
+For the same reason, **a job found `running` at boot is requeued from the
+start**, never resumed from its recorded phase: the process that owned it is
+gone, so `phase` is the last phase it *announced*, not the one it reached.
+Trusting it is how a half-downloaded file gets tiled. Handlers are therefore
+required to be idempotent over their own asset directory.
+
+**Cancellation is cooperative** and checked at phase boundaries, not by killing a
+child mid-write: a `dzsave` killed halfway leaves a directory of tiles that looks
+exactly like a finished one, and a phase boundary is the one place the on-disk
+state is known.
+
+### 11b.4 Route ordering is part of the contract
+
+Under `/api/plugins/:pluginId/` the host mounts three things, and the order is
+load-bearing:
+
+1. the host's own specific routes (`/catalog`, `/settings`) — so a plugin can
+   never shadow a surface the standard guarantees;
+2. the plugin's own routes;
+3. the content proxy, which is a **catch-all** (`*splat`) — so it does not
+   swallow the plugin's paths.
+
+Get this wrong and a plugin's `GET /plugins/pathology/jobs/:id` is answered as an
+undeclared content path — a bug that only appears once a plugin ships its first
+GET.
+
+---
+
 ## 11c. Settings *(1.4)*
 
 A plugin's material is per-case; its **policy** is per-deployment. Which hosts a
@@ -739,6 +821,11 @@ acceptance test** — each of those files used to require one.
       are bounded (R23), and each `labelKey` has an i18n entry (§11c)
 - [ ] *(1.4)* Its settings survive the round trip `PUT` → re-`GET` with untouched
       keys unchanged — the PUT is a merge, not a replace
+- [ ] *(1.4)* If it ships a server module: tables are namespaced (R24), the
+      network and binaries are reached only through `ctx` (R25), writes stay
+      inside `ctx.libraryDir` (R26), and deleting the directory still boots rohy
+- [ ] *(1.4)* Its job handlers are idempotent over their own asset directory —
+      an interrupted job is requeued from the START, not resumed mid-phase
 
 ---
 
@@ -748,10 +835,11 @@ Ordered by how much they matter to a plugin author.
 
 1. **No narrowed `log()` adapter** — `ctx.eventLogger` is the mutable global
    singleton (§6).
-2. **`/api/plugins/<id>` serves reads, not writes.** The `remote` proxy (§7a)
-   is mounted as of 1.2, so bulk content can live off-box — but there is still
-   no write path, so `ctx.store` remains per-browser: fine for drafts, not for
-   anything that must survive a device change.
+2. **`ctx.store` is still per-browser.** Narrowed in 1.4 rather than closed. A
+   plugin's SERVER module can now write (§11b) — routes, jobs and its own
+   `plugin_<id>_` tables — so bulk content and long work have a home. But the
+   CLIENT-side `ctx.store` a room uses for drafts is still `localStorage`: fine
+   for a draft, not for anything that must survive a device change.
    Nor is there an upstream-authentication design: the proxy can only reach a
    host that will serve it unauthenticated from rohy's network position.
 3. **No plugin/version attribution on rows.** Events store neither `plugin_id`

@@ -67,6 +67,7 @@ export const PLUGIN_MANIFESTS = [
                     "type": "enumList"
                 },
                 "imports.allowedOrigins": {
+                    "allowlistEnv": "ROHY_PLUGIN_IMPORT_ORIGINS",
                     "default": [],
                     "group": "imports",
                     "labelKey": "pathology_settings_imports_origins",

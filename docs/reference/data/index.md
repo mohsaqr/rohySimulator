@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Produced by `scripts/docs-gen/gen-data.mjs` from `server/db.js`, `migrations/0001_initial.sql` (the bootstrap schema) and all `migrations/*.sql`. Regenerate with `npm run docs:gen:data`.
 
-**93 tables** in the durable data model.
+**95 tables** in the durable data model.
 
 > Note: `server/db.js` no longer holds inline `CREATE TABLE` DDL — it delegates to the migration runner. The canonical bootstrap schema is `migrations/0001_initial.sql`, treated here as the base schema. SQLite rebuild-scaffold tables (`*_new`/`*_old`) are intentionally excluded.
 
@@ -23,7 +23,7 @@ These columns recur across many tables and carry platform-wide semantics (see `C
 
 Schema evolves only through versioned `migrations/*.sql`. Each migration is classified **additive** (previous-version code still runs) or **destructive** in `migrations/MANIFEST.md`, which `bin/rohy-update` reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.
 
-Parsed **47 migration files** beyond the base schema (`0001_initial.sql`).
+Parsed **48 migration files** beyond the base schema (`0001_initial.sql`).
 
 | Migration | Class | Note |
 | --- | --- | --- |
@@ -75,6 +75,7 @@ Parsed **47 migration files** beyond the base schema (`0001_initial.sql`).
 | `0046_treatment_effects_scope.sql` | additive | The treatment catalogue students order from (`treatment_effects`) becomes a scoped, editable library with the same three-tier ownership as the drug/lab catalogue: `scope TEXT NOT NULL DEFAULT 'platform'` ('platform' = every seeded row, visible to all tenants, admin-editable; 'tenant' = visible to `tenant_id` only, editable by that tenant's educator+), `tenant_id INTEGER NOT NULL DEFAULT 1`, `created_by INTEGER REFERENCES users(id)`, `updated_at DATETIME`, plus `idx_treatment_effects_scope ON (tenant_id, scope, is_active)` for the visibility predicate every read now uses (`scope='platform' OR (scope='tenant' AND tenant_id=?)`). Backs the new Settings → Libraries → Treatments editor and POST/PUT/DELETE `/treatment-effects`. Strictly additive: defaulted/nullable ADD COLUMNs only; the seeder's `INSERT … ON CONFLICT (treatment_name, route)` and every pre-migration query keep working. DELIBERATELY KEPT: the 0001 table-level `UNIQUE(treatment_name, route)` — SQLite cannot ALTER it and relaxing it to (tenant_id, name, route) means rebuilding a table `active_treatments.effect_id` references, deferred to a destructive multi-release window. Consequence: tenant rows need names distinct from every other tenant's and the platform's; the API answers a readable 409 (`code: 'duplicate_treatment'`) instead of leaking the constraint. |
 | `0047_cohorts_default_backfill_renamed.sql` | additive | Closes the upgrade-path gap in 0044: that data step flagged the default course by its literal name (`'Basic course'`), so a tenant whose admin had RENAMED the default before upgrading came out of 0044 with `is_default = 0` everywhere, and the boot seeder (`ensureBasicCourses`, keyed on `is_default`) then created a duplicate 'Basic course' beside the renamed one — the exact duplicate 0044 set out to prevent. The renamed course is still identifiable because 0033 stamped `auto_enroll = 1` on the seeded default and a rename does not clear it, so this migration sets `is_default = 1` on the lowest-id live `auto_enroll = 1` cohort in every tenant that has NO live default, and touches nothing in tenants that already have one. Data-only UPDATE, no schema change; idempotent (second run finds every tenant already flagged); the 0044 partial unique index makes a second live default impossible. |
 | `0048_plugin_settings.sql` | additive | Per-tenant plugin settings, closing the §14.4 gap in the plugin standard ("no per-tenant enable/disable", which named `oyon_settings` as the pattern to copy). New `plugin_settings(tenant_id, plugin_id, settings TEXT NOT NULL DEFAULT '{}', updated_at, updated_by)` with `UNIQUE(tenant_id, plugin_id)`. Copies oyon_settings' row shape but NOT its column-per-knob layout: a column per setting means a migration per plugin, and RPS-1's claim is that a plugin is added by declaring rather than by editing the host. Values are a flat JSON map of dotted keys (`{"imports.enabled": true}`) whose meaning comes from the manifest's `settings` schema, validated at `plugins:gen` time by `server/shared/pluginSettings.js`; flat rather than nested because `PUT /api/plugins/:id/settings` is a key-presence merge and "which keys did the caller send" is unambiguous only on a flat map. A tenant with NO row is not an error — it runs on the manifest defaults, which is why every declared field must carry one. Strictly additive: one new table, referenced by nothing pre-existing. |
+| `0049_plugin_jobs_assets.sql` | additive | The plugin job queue and managed asset library (RPS-1 1.4), the write half of the slot 0048 opened. `plugin_jobs(id, tenant_id, plugin_id, kind, state, phase, progress, payload, result, error, attempts, cancel_requested, asset_id, …)` is a PERSISTED queue because tiling a whole-slide image is minutes of CPU on a multi-gigabyte file: an in-memory job vanishes on deploy and leaves a half-written directory with no record anything was asked for, whereas a row lets a restart resume, an admin see a queue, and a job that died mid-phase be told apart from one never started. `plugin_assets(id, tenant_id, plugin_id, label, state, source_url, source_sha256, native_objective, native_mpp_x/y, tiled_objective, …)` is the library. Job `phase` and asset `state` are deliberately separate columns answering different questions with different lifetimes — phase is where a RUNNING job is and is meaningless once it ends; state is what the library holds and survives every job, including retention sweeping the job row. `needs_calibration` is a first-class state, not an error: OpenSlide exposes objective/mpp only for vendors that wrote them, and a slide with UNKNOWN optics is not a slide with DEFAULT optics — every measurement would be wrong by an unknown factor, so the author supplies the numbers once instead of the host guessing 40x/0.25. Strictly additive: two new tables, referenced by nothing pre-existing. |
 
 ## Tables by concern
 
@@ -136,7 +137,7 @@ Parsed **47 migration files** beyond the base schema (`0001_initial.sql`).
 
 ### Other
 
-`cohort_surveys`, `lesson_progress`, `lesson_sections`, `lessons`, `plugin_settings`, `registration_invite_uses`, `registration_invites`, `registration_requests`, `survey_answers`, `survey_questions`, `survey_responses`, `surveys`
+`cohort_surveys`, `lesson_progress`, `lesson_sections`, `lessons`, `plugin_assets`, `plugin_jobs`, `plugin_settings`, `registration_invite_uses`, `registration_invites`, `registration_requests`, `survey_answers`, `survey_questions`, `survey_responses`, `surveys`
 
 ---
 

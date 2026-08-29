@@ -9,11 +9,12 @@ import './bootstrap-env.js';
 import express from 'express';
 import cors from 'cors';
 import https from 'https';
-import apiRoutes from './routes.js';
+import apiRoutes, { pluginServerSlots } from './routes.js';
 import path from 'path';
 import fs from "fs";
 import { fileURLToPath } from 'url';
 import db, { dbReady } from './db.js';
+import { recoverInterruptedJobs, drain as drainPluginJobs, pump as pumpPluginJobs } from './lib/pluginJobs.js';
 import dbAdapter from './dbAdapter.js';
 import { runSeeders, needsSeeding } from './seeders/index.js';
 import { ensureCaseCodes } from './seeders/cases.js';
@@ -317,6 +318,26 @@ async function initializeAndStart() {
         bootLog.error('case code sweep failed', { error: err.message, fatal: false });
     }
 
+    // RPS-1 1.4 — the plugin server slot and its job queue.
+    //
+    // Ordered AFTER migrations and seeders because a job handler may read
+    // plugin_settings and write plugin_assets, and both are migration-created.
+    // Non-fatal throughout: a plugin whose server module will not load must not
+    // stop rohy from serving, which is the same peaceful-exclusion property the
+    // client registry has.
+    try {
+        const slots = await pluginServerSlots;
+        slots.filter((s) => !s.ok).forEach((s) => bootLog.warn('plugin server slot unavailable', s));
+        // A job left 'running' belongs to a process that is gone. Requeue it
+        // from the start (or abandon it past the attempt limit) BEFORE the
+        // worker starts, so the first pump does not race the recovery.
+        const recovered = await recoverInterruptedJobs();
+        if (recovered.requeued || recovered.failed) bootLog.info('plugin jobs recovered', recovered);
+        pumpPluginJobs();
+    } catch (err) {
+        bootLog.error('plugin server slot boot failed', { error: err.message, fatal: false });
+    }
+
     // Voice 2.0 seeding (VOICE2_PLAN.md §5.5). There is no platform engine
     // setting anymore — each voice plays on its own (derived) engine. What
     // gets seeded is the never-mute safety net: one default voice per
@@ -393,8 +414,15 @@ function installGracefulShutdown(servers) {
         // Stop accepting new HTTP/HTTPS connections; in-flight requests
         // continue. server.close fires its callback only after the last
         // active socket finishes.
-        Promise.all(servers.map(s => new Promise(resolve => s.close(resolve)))).then(() => {
+        Promise.all(servers.map(s => new Promise(resolve => s.close(resolve)))).then(async () => {
             bootLog.info('http listeners closed');
+            // Let the current plugin job reach a phase boundary before the DB
+            // closes under it. A job killed mid-write leaves a partial pyramid
+            // on disk; one stopped cleanly is requeued from the start at the
+            // next boot. Bounded so a wedged tiler cannot hold up the restart —
+            // the hard deadline above still applies.
+            const drained = await drainPluginJobs({ timeoutMs: 5000 });
+            if (!drained) bootLog.warn('a plugin job was still running at shutdown; it will be requeued at boot');
             // Now close the database. Any pending callbacks finish first.
             db.close((err) => {
                 clearTimeout(hardKill);

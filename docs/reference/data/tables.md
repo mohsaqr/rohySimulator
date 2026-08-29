@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Regenerate with `npm run docs:gen:data`. One section per table; columns in declaration order.
 
-**93 tables.**
+**95 tables.**
 
 ## `active_sessions`
 
@@ -1459,6 +1459,61 @@ Stores platform settings records.
 | `setting_value` | TEXT | — | — |
 | `updated_by` | INTEGER | — | — |
 | `updated_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+
+## `plugin_assets`
+
+Stores plugin assets records.
+
+**Introduced by:** migration `0049_plugin_jobs_assets.sql`
+
+**Cross-cutting:** `audit (created_by, created_at, updated_at)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | TEXT | PRIMARY KEY | — |
+| `plugin_id` | TEXT | NOT NULL | — |
+| `label` | TEXT | NOT NULL | — |
+| `state` | TEXT | NOT NULL DEFAULT 'importing' CHECK (state IN ('importing', 'ready', 'needs_calibration', 'failed')) | — |
+| `and` | a | digest is the only answer that survives the -- source host going away. source_url TEXT | — |
+| `source_sha256` | TEXT | — | — |
+| `source_bytes` | INTEGER | — | — |
+| `because` | a | slide -- scanned at 40x and archived at 10x has both | — |
+| `native_mpp_x` | REAL | — | — |
+| `native_mpp_y` | REAL | — | — |
+| `tiled_objective` | REAL | — | — |
+| `width` | INTEGER | — | — |
+| `height` | INTEGER | — | — |
+| `disk_bytes` | INTEGER | — | — |
+| `error` | TEXT | — | — |
+| `created_by` | INTEGER | REFERENCES users(id) | — |
+| `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | — |
+| `updated_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | — |
+
+## `plugin_jobs`
+
+Stores plugin jobs records.
+
+**Introduced by:** migration `0049_plugin_jobs_assets.sql`
+
+**Cross-cutting:** `audit (created_at)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | TEXT | PRIMARY KEY | — |
+| `generated` | by | the host tenant_id INTEGER NOT NULL | — |
+| `plugin_id` | TEXT | NOT NULL | — |
+| `kind` | TEXT | NOT NULL | — |
+| `e` | (untyped) | .g. 'import_slide' -- queued → running → done \| failed \| cancelled. A job found 'running' at boot -- is a job whose process died; the runner requeues or fails it explicitly -- rather than leaving a row that claims work is in progress forever. state TEXT NOT NULL DEFAULT 'queued' CHECK (state IN ('queued', 'running', 'done', 'failed', 'cancelled')) | — |
+| `phase` | TEXT | — | — |
+| `advisory` | only | CHECK (progress BETWEEN 0 AND 100) | — |
+| `payload` | TEXT | NOT NULL DEFAULT '{}' | — |
+| `attempts` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `and` | (untyped) | -- a phase boundary is the one place the on-disk state is known. cancel_requested INTEGER NOT NULL DEFAULT 0 | — |
+| `asset_id` | TEXT | — | — |
+| `if` | any | created_by INTEGER REFERENCES users(id) | — |
+| `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | — |
+| `started_at` | DATETIME | — | — |
+| `finished_at` | DATETIME | — | — |
 
 ## `plugin_settings`
 

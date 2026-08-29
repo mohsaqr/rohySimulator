@@ -22,7 +22,8 @@ import lessonsRoutes from './routes/lessons-routes.js';
 import surveysRoutes from './routes/surveys-routes.js';
 import healthRoutes from './routes/health-routes.js';
 import helpRoutes from './routes/help-routes.js';
-import pluginsRoutes from './routes/plugins-routes.js';
+import pluginsRoutes, { pluginContentProxy } from './routes/plugins-routes.js';
+import { mountPluginServerSlots } from './lib/pluginServerSlot.js';
 import { routeTimeout } from './middleware/routeTimeout.js';
 
 // Oyon mounts in three possible states. The stub matters because earlier
@@ -123,6 +124,25 @@ router.use(lessonsRoutes);
 router.use(surveysRoutes);
 router.use(helpRoutes);
 router.use(pluginsRoutes);
+
+// RPS-1 1.4 — a plugin's own server module, under /plugins/<id>/.
+//
+// Ordering is load-bearing and is the reason this is three lines rather than
+// one. The host's specific routes (/catalog, /settings) are matched FIRST, so a
+// plugin cannot shadow a surface the standard guarantees. The content proxy is
+// a catch-all and is matched LAST, so it does not swallow a plugin's own paths.
+// Plugin routes go in between.
+//
+// The slot router is created and mounted SYNCHRONOUSLY, here, and filled in
+// asynchronously as the modules load. Mounting it after the await would place
+// it behind the catch-all below and every plugin GET would be answered as an
+// undeclared content path — a routing bug that only appears once a plugin ships
+// its first GET, which is exactly the kind that reaches production.
+const pluginSlotRouter = express.Router();
+router.use(pluginSlotRouter);
+export const pluginServerSlots = mountPluginServerSlots(pluginSlotRouter);
+
+router.use(pluginContentProxy);
 if (oyonRoutes) {
     router.use('/addons/oyon', oyonRoutes);
 } else if (oyonDisabledReason) {
