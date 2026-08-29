@@ -12,8 +12,22 @@
  * when the scanner source is processed again.
  */
 
+/**
+ * Every state a catalog asset can be in.
+ *
+ * `importing` and `needs_calibration` are the MANAGED half's (RPS-1 1.4): a
+ * slide a host downloaded from a link and tiled itself. They are listed here
+ * because the picker has to render them honestly — before this, anything not
+ * `ready` was shown as "Needs calibration", so a download that 404'd told the
+ * author to go and type optics for a slide that does not exist.
+ *
+ * Widening this list does NOT widen what may be added to a case:
+ * `selectReadyRevision` still refuses an asset with no ready revision, which is
+ * the gate that actually matters.
+ */
 export const ASSET_STATUSES = Object.freeze([
     'discovered', 'queued', 'processing', 'ready', 'failed',
+    'importing', 'needs_calibration',
 ]);
 
 export const ASSET_REVISION_STATUSES = Object.freeze([
@@ -267,4 +281,29 @@ export function materializeSlideAsset(slide, asset, options = {}) {
         },
     };
     return next;
+}
+
+/**
+ * The one action offered on a card for an asset that is not ready.
+ *
+ * Each not-ready state has a different next step, and offering the wrong one is
+ * worse than offering none: "Process slide" on a download that 404'd sends an
+ * author to re-run something that never started, and "Add calibration" on a
+ * slide still downloading asks for optics nothing has read yet.
+ *
+ * Every capability is checked before it is offered, because they are OPTIONAL
+ * methods on the injected asset service — the standalone app has no host to
+ * import through, and must simply not show those buttons.
+ *
+ * @param {object} asset
+ * @param {{remove?: boolean, calibrate?: boolean, process?: boolean}} can
+ * @returns {'Remove'|'Add calibration'|'Process slide'|null}
+ */
+export function catalogAssetNextAction(asset, can = {}) {
+    if (asset?.status === 'failed') return can.remove ? 'Remove' : null;
+    if (asset?.status === 'needs_calibration') return can.calibrate ? 'Add calibration' : null;
+    // Still working: there is nothing for an author to do but wait.
+    if (asset?.status === 'importing') return null;
+    if (asset?.status === 'discovered') return can.process ? 'Process slide' : null;
+    return null;
 }

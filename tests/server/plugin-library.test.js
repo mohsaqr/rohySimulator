@@ -146,3 +146,48 @@ describe('a deployment with no library directory', () => {
         expect(health.plugins.pathology.reachable).toBe(true);
     });
 });
+
+// Regression lock: the two halves of a library fail INDEPENDENTLY.
+//
+// Before 1.4 the catalog route answered 503 the moment no content ORIGIN was
+// configured, because the bundle was the only source there was. A deployment
+// that imports its own slides and ships no content bundle then had an invisible
+// library — slides on disk, rows in the database, and the editor told the
+// plugin has no catalog.
+describe('a deployment that imports slides but ships no content bundle', () => {
+    let server; let admin; let libraryDir;
+
+    beforeAll(async () => {
+        libraryDir = await mkdtemp(join(tmpdir(), 'rohy-lib-nobundle-'));
+        server = await startTestServer({
+            seed: false,
+            // Deliberately NO ROHY_PLUGIN_ORIGINS.
+            env: { ROHY_PLUGIN_LIBRARY_DIRS: `pathology=${libraryDir}` },
+        });
+        await dbRun(server.dbPath,
+            `INSERT INTO plugin_assets (id, tenant_id, plugin_id, label, state, native_objective, native_mpp_x, tiled_objective, width, height)
+             VALUES ('asset-only01', 1, 'pathology', 'Imported only', 'ready', 40, 0.25, 10, 27840, 20736)`);
+        admin = authed(server.baseUrl, await login(server.baseUrl, 'admin', 'admin123'));
+    }, 90_000);
+    afterAll(async () => {
+        await server?.close();
+        await rm(libraryDir, { recursive: true, force: true });
+    });
+
+    it('still serves the imported slides, and names the missing half', async () => {
+        const res = await admin('/api/plugins/pathology/catalog');
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.catalog.assets.map((a) => a.id)).toEqual(['asset-only01']);
+        // Named, so the editor can say "your imported slides are here, the
+        // bundled ones are not" rather than showing a short list as if complete.
+        expect(body.bundleUnavailable).toBe('plugin_remote_not_configured');
+    });
+
+    it('but reports the operator state when there is nothing at all to show', async () => {
+        await dbRun(server.dbPath, `DELETE FROM plugin_assets WHERE id = 'asset-only01'`);
+        const res = await admin('/api/plugins/pathology/catalog');
+        expect(res.status).toBe(503);
+        expect((await res.json()).code).toBe('plugin_remote_not_configured');
+    });
+});

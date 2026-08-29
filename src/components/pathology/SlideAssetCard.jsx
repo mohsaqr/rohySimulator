@@ -2,6 +2,28 @@ import { useState } from 'react';
 import { ImageOff } from 'lucide-react';
 import { catalogAssetPreview, selectReadyRevision } from './assetCatalog.js';
 
+/**
+ * How each status reads on a card.
+ *
+ * The card used to be binary — ready, or "Needs calibration" for everything
+ * else. A MANAGED slide (one the host imported from a link, RPS-1 1.4) has two
+ * more states that are neither: it may still be importing, or it may have
+ * failed. Showing "Needs calibration" for a download that 404'd tells an author
+ * to go and type optics for a slide that does not exist.
+ */
+const DISABLED_REASON = {
+    importing: 'This slide is still being imported.',
+    failed: 'This slide could not be imported.',
+    needs_calibration: 'Verified scanner calibration is required before this slide can be added.',
+};
+
+const STATUS_CHIPS = {
+    ready: { label: 'Ready', tone: 'bg-emerald-500/15 text-emerald-300' },
+    importing: { label: 'Importing…', tone: 'bg-sky-500/15 text-sky-300' },
+    failed: { label: 'Failed', tone: 'bg-rose-500/15 text-rose-300' },
+    needs_calibration: { label: 'Needs calibration', tone: 'bg-amber-500/15 text-amber-300' },
+};
+
 const ACTION = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-fuchsia-500/25 px-3.5 py-2 text-[13px] font-semibold text-fuchsia-50 ring-1 ring-fuchsia-400/50 transition-colors hover:bg-fuchsia-500/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-400 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 disabled:ring-slate-700';
 
 /**
@@ -17,6 +39,7 @@ export function SlideAssetCard({
     const [previewFailed, setPreviewFailed] = useState(false);
     const preview = catalogAssetPreview(asset);
     const ready = asset.status === 'ready';
+    const chip = STATUS_CHIPS[asset.status] ?? STATUS_CHIPS.needs_calibration;
     let optics = null;
     if (ready) {
         try { optics = selectReadyRevision(asset).optics; } catch { optics = null; }
@@ -47,8 +70,8 @@ export function SlideAssetCard({
                             {asset.format || 'unknown'} · {asset.sourceId || 'source unknown'}
                         </p>
                     </div>
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${ready ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}`}>
-                        {ready ? 'Ready' : 'Needs calibration'}
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${chip.tone}`}>
+                        {chip.label}
                     </span>
                 </div>
                 {optics && (
@@ -56,8 +79,13 @@ export function SlideAssetCard({
                         {optics.nativeObjective}× · {Number(optics.nativeMpp).toFixed(3)} µm/px · ÷{optics.downsample}
                     </p>
                 )}
-                {!ready && asset.reviewReason && (
-                    <p className="mt-2 text-[11px] leading-relaxed text-amber-200/80">{asset.reviewReason}</p>
+                {!ready && (asset.error || asset.reviewReason) && (
+                    <p className={`mt-2 text-[11px] leading-relaxed ${asset.error ? 'text-rose-200/80' : 'text-amber-200/80'}`}>
+                        {asset.error || asset.reviewReason}
+                    </p>
+                )}
+                {asset.phase && asset.status === 'importing' && (
+                    <p className="mt-2 text-[11px] tabular-nums text-sky-300/80">{asset.phase}…</p>
                 )}
             </div>
         </>
@@ -79,7 +107,7 @@ export function SlideAssetCard({
                         type="button"
                         className={`${ACTION} w-full`}
                         disabled={disabled || (!ready && !notReadyActionLabel)}
-                        title={!ready && !notReadyActionLabel ? 'Verified scanner calibration is required before this slide can be added.' : undefined}
+                        title={!ready && !notReadyActionLabel ? DISABLED_REASON[asset.status] ?? DISABLED_REASON.needs_calibration : undefined}
                         onClick={() => (ready ? onAction?.(asset) : onNotReadyAction?.(asset))}
                     >
                         {ready ? actionLabel : notReadyActionLabel ?? 'Calibration required'}

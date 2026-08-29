@@ -8395,6 +8395,41 @@
         ]
       }
     },
+    "/api/plugins/pathology/assets/{assetId}": {
+      "delete": {
+        "summary": "Delete /plugins/pathology/assets/:assetId",
+        "tags": [
+          "plugins"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/plugins/pathology/index.js:203",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireEducator"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/api/plugins/pathology/assets/{assetId}/calibration": {
       "put": {
         "summary": "Replace /plugins/pathology/assets/:assetId/calibration",
@@ -8415,7 +8450,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/plugins/pathology/index.js:195",
+        "x-rohy-source": "server/plugins/pathology/index.js:230",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -8555,7 +8590,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/plugins-routes.js:388",
+        "x-rohy-source": "server/routes/plugins-routes.js:434",
         "x-rohy-auth": [
           "authenticateToken",
           "requireStudent"
@@ -8590,7 +8625,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/plugins-routes.js:130",
+        "x-rohy-source": "server/routes/plugins-routes.js:225",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8624,7 +8659,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/plugins-routes.js:301",
+        "x-rohy-source": "server/routes/plugins-routes.js:347",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8656,7 +8691,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/plugins-routes.js:330",
+        "x-rohy-source": "server/routes/plugins-routes.js:376",
         "x-rohy-auth": [
           "authenticateToken"
         ],

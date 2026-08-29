@@ -191,6 +191,41 @@ export default {
             });
         });
 
+        /**
+         * Remove an imported slide and everything derived from it.
+         *
+         * Only a MANAGED asset: a bundled slide belongs to the content bundle
+         * and is removed by redeploying it, not by an author clicking a button.
+         * The row goes first and the bytes second — a row with no directory is
+         * a slide that vanished, which is recoverable by re-importing; a
+         * directory with no row is invisible disk nobody can find or reclaim.
+         */
+        router.delete('/assets/:assetId', guards.authenticated, guards.educator, async (req, res) => {
+            const tenant = helpers.tenantId(req);
+            const assetId = String(req.params.assetId);
+            const row = await ctx.db.get(
+                `SELECT id FROM plugin_assets WHERE id = ? AND tenant_id = ? AND plugin_id = 'pathology'`,
+                [assetId, tenant]
+            );
+            if (!row) return res.status(404).json({ error: 'No such imported slide.', code: 'plugin_asset_unknown' });
+            await ctx.db.run(
+                `DELETE FROM plugin_assets WHERE id = ? AND tenant_id = ? AND plugin_id = 'pathology'`,
+                [assetId, tenant]
+            );
+            try {
+                await ctx.removeAssetDirectory(assetId);
+            } catch (err) {
+                // The row is already gone, so the slide is gone from every
+                // surface an author sees. Failing the request now would say
+                // "removal failed" about something that succeeded.
+                ctx.log.warn('asset row removed but its directory could not be', { assetId, error: err.message });
+            }
+            helpers.auditSuccess(req, {
+                action: 'plugin_asset_remove', resourceType: 'plugin_asset', resourceId: assetId,
+            });
+            return res.json({ assetId, removed: true });
+        });
+
         /** Supply the optics a file did not carry, moving it to 'ready'. */
         router.put('/assets/:assetId/calibration', guards.authenticated, guards.educator, async (req, res) => {
             const objective = Number(req.body?.nativeObjective);

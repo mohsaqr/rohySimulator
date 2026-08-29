@@ -32,6 +32,7 @@ import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { roleAllows } from '../shared/pluginRegistry.js';
 import { pluginOrigins } from '../lib/pluginRemoteOrigins.js';
 import { readSettings, mergeSettings, visibleSettingKeys } from '../shared/pluginSettings.js';
+
 import { importOriginsFor } from '../lib/pluginImportOrigins.js';
 import { tenantId, auditSuccess, dbGet, dbRun, dbAll } from './_helpers.js';
 import { logger } from '../logger.js';
@@ -127,6 +128,100 @@ export function pathIsDeclared(path, prefixes) {
 // institution owns, which is an author's concern, not a learner's.
 const CATALOG_MAX_BYTES = 4 * 1024 * 1024;
 
+/**
+ * The bundle half of a plugin's library, from its content origin.
+ *
+ * Returns a result rather than writing a response, because the caller now has
+ * a second source and must decide what an unavailable bundle means.
+ *
+ * @param {string} origin
+ * @param {string} pluginId
+ * @returns {Promise<{ok: true, catalog: object}|{ok: false, error: string, code: string}>}
+ */
+async function fetchBundleCatalog(origin, pluginId) {
+    let upstream;
+    try {
+        upstream = await fetch(`${origin}/catalog.json`, {
+            method: 'GET', redirect: 'manual',
+            signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+            headers: { accept: 'application/json' },
+        });
+    } catch (err) {
+        log.warn('plugin catalog fetch failed', { pluginId, error: err.message });
+        return { ok: false, status: 502, error: 'plugin catalog is unavailable', code: 'plugin_remote_unreachable' };
+    }
+    if (upstream.status === 404) {
+        return { ok: false, status: 404, error: 'this content origin ships no catalog', code: 'plugin_catalog_missing' };
+    }
+    if (!upstream.ok) {
+        return { ok: false, status: 502, error: 'plugin catalog is unavailable', code: 'plugin_remote_status' };
+    }
+    const declaredLength = Number(upstream.headers.get('content-length'));
+    if (Number.isFinite(declaredLength) && declaredLength > CATALOG_MAX_BYTES) {
+        return { ok: false, status: 502, error: 'plugin catalog is too large', code: 'plugin_remote_too_large' };
+    }
+    const text = await upstream.text();
+    if (Buffer.byteLength(text, 'utf8') > CATALOG_MAX_BYTES) {
+        return { ok: false, status: 502, error: 'plugin catalog is too large', code: 'plugin_remote_too_large' };
+    }
+    let catalog;
+    try { catalog = JSON.parse(text); } catch {
+        return { ok: false, status: 502, error: 'plugin catalog is not JSON', code: 'plugin_catalog_invalid' };
+    }
+    if (!catalog || typeof catalog !== 'object' || catalog.version !== 1 || !Array.isArray(catalog.assets)) {
+        return { ok: false, status: 502, error: 'plugin catalog has an unexpected shape', code: 'plugin_catalog_invalid' };
+    }
+    // Every URL must be a reference INTO this plugin's declared paths. A
+    // catalog that points elsewhere is the origin operator's mistake, and an
+    // author who added such a slide would get a case the guard then rejects.
+    if (JSON.stringify(catalog).match(/"url":\s*"(?!remote:)[^"]*"/)) {
+        return { ok: false, status: 502, error: 'plugin catalog carries a URL that is not a remote: reference', code: 'plugin_catalog_invalid' };
+    }
+    return { ok: true, catalog };
+}
+
+/** The READY managed slides for this tenant. */
+async function managedAssets(pluginId, tenant) {
+    return dbAll(
+        `SELECT id, label, native_objective, native_mpp_x, tiled_objective, width, height
+           FROM plugin_assets
+          WHERE plugin_id = ? AND tenant_id = ? AND state = 'ready'
+          ORDER BY created_at DESC`,
+        [pluginId, tenant]
+    ).catch(() => []);
+}
+
+/**
+ * Managed rows in the package's own catalog shape.
+ *
+ * Only 'ready' ones reach here. A slide still importing, failed, or awaiting
+ * calibration is real but not usable, and offering it would let an author build
+ * a case around a slide whose scale is unknown. The editor sees those through
+ * the plugin's own /assets instead.
+ */
+function managedCatalogEntries(rows) {
+    return rows.map((row) => ({
+        id: row.id,
+        label: row.label,
+        status: 'ready',
+        managed: true,
+        preview: { url: `remote:library/${row.id}/preview.jpg` },
+        currentRevisionId: 'managed',
+        revisions: [{
+            id: 'managed',
+            status: 'ready',
+            derivatives: { dzi: { url: `remote:library/${row.id}/slide.dzi` } },
+            optics: {
+                nativeObjective: row.native_objective,
+                nativeMpp: row.native_mpp_x,
+                tiledObjective: row.tiled_objective,
+            },
+            widthPx: row.width,
+            heightPx: row.height,
+        }],
+    }));
+}
+
 router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async (req, res) => {
     const { pluginId } = req.params;
     const manifest = MANIFESTS_BY_ID.get(pluginId);
@@ -138,96 +233,47 @@ router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async 
     if (!roleAllows(req.user?.role, manifest.authoring.minRole)) {
         return res.status(403).json({ error: 'insufficient role for this plugin\'s catalog', code: 'plugin_forbidden' });
     }
-    const origin = pluginOrigins().get(pluginId);
-    if (!origin) {
-        return res.status(503).json({
-            error: `No remote origin is configured for plugin '${pluginId}'. Set ROHY_PLUGIN_ORIGINS.`,
-            code: 'plugin_remote_not_configured',
-        });
-    }
-    let upstream;
-    try {
-        upstream = await fetch(`${origin}/catalog.json`, {
-            method: 'GET', redirect: 'manual',
-            signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-            headers: { accept: 'application/json' },
-        });
-    } catch (err) {
-        log.warn('plugin catalog fetch failed', { pluginId, error: err.message });
-        return res.status(502).json({ error: 'plugin catalog is unavailable', code: 'plugin_remote_unreachable' });
-    }
-    if (upstream.status === 404) {
-        return res.status(404).json({ error: 'this content origin ships no catalog', code: 'plugin_catalog_missing' });
-    }
-    if (!upstream.ok) {
-        return res.status(502).json({ error: 'plugin catalog is unavailable', code: 'plugin_remote_status' });
-    }
-    const declaredLength = Number(upstream.headers.get('content-length'));
-    if (Number.isFinite(declaredLength) && declaredLength > CATALOG_MAX_BYTES) {
-        return res.status(502).json({ error: 'plugin catalog is too large', code: 'plugin_remote_too_large' });
-    }
-    const text = await upstream.text();
-    if (Buffer.byteLength(text, 'utf8') > CATALOG_MAX_BYTES) {
-        return res.status(502).json({ error: 'plugin catalog is too large', code: 'plugin_remote_too_large' });
-    }
-    let catalog;
-    try { catalog = JSON.parse(text); } catch {
-        return res.status(502).json({ error: 'plugin catalog is not JSON', code: 'plugin_catalog_invalid' });
-    }
-    if (!catalog || typeof catalog !== 'object' || catalog.version !== 1 || !Array.isArray(catalog.assets)) {
-        return res.status(502).json({ error: 'plugin catalog has an unexpected shape', code: 'plugin_catalog_invalid' });
-    }
-    // Every URL must be a reference INTO this plugin's declared paths. A
-    // catalog that points elsewhere is the origin operator's mistake, and an
-    // author who adds such a slide would get a case the guard then rejects.
-    const stray = JSON.stringify(catalog).match(/"url":\s*"(?!remote:)[^"]*"/);
-    if (stray) {
-        return res.status(502).json({ error: 'plugin catalog carries a URL that is not a remote: reference', code: 'plugin_catalog_invalid' });
-    }
-    // Merge in the MANAGED half of the library (RPS-1 1.4). The bundle is what
-    // a content deploy shipped; these are slides this tenant imported from a
-    // link. The editor asks one endpoint and gets one library, because "which
-    // half did this slide come from" is an operator's question, not an author's.
+
+    // The library has two independent halves and they fail independently.
     //
-    // Only 'ready' assets. A slide that is still importing, has failed, or is
-    // awaiting calibration is real but not yet usable, and offering it here
-    // would let an author build a case around a slide whose scale is unknown.
-    // The full library, every state and its error text, is the plugin's own
-    // /assets route.
-    const managed = await dbAll(
-        `SELECT id, label, native_objective, native_mpp_x, tiled_objective, width, height
-           FROM plugin_assets
-          WHERE plugin_id = ? AND tenant_id = ? AND state = 'ready'
-          ORDER BY created_at DESC`,
-        [pluginId, tenantId(req)]
-    ).catch(() => []);
-    if (managed.length > 0) {
-        catalog.assets = [
-            ...managed.map((row) => ({
-                id: row.id,
-                label: row.label,
-                status: 'ready',
-                managed: true,
-                preview: { url: `remote:library/${row.id}/preview.jpg` },
-                currentRevisionId: 'managed',
-                revisions: [{
-                    id: 'managed',
-                    status: 'ready',
-                    derivatives: { dzi: { url: `remote:library/${row.id}/slide.dzi` } },
-                    optics: {
-                        nativeObjective: row.native_objective,
-                        nativeMpp: row.native_mpp_x,
-                        tiledObjective: row.tiled_objective,
-                    },
-                    widthPx: row.width,
-                    heightPx: row.height,
-                }],
-            })),
-            ...(catalog.assets ?? []),
-        ];
+    // Until 1.4 this route answered 503 the moment no content ORIGIN was
+    // configured, because the bundle was the only source there was. With a
+    // managed half that is wrong: a deployment that imports its own slides and
+    // ships no content bundle would have an invisible library — the slides are
+    // on disk, in the database, and the editor is told the plugin has no
+    // catalog. So the bundle is fetched when an origin exists, its absence is
+    // recorded rather than returned, and 503 is reserved for having genuinely
+    // nothing to show.
+    const managed = await managedAssets(pluginId, tenantId(req));
+    const origin = pluginOrigins().get(pluginId);
+    let catalog = { schemaVersion: '1.0.0', version: 1, assets: [] };
+    let bundleUnavailable = origin
+        ? null
+        : { status: 503, error: `No remote origin is configured for plugin '${pluginId}'. Set ROHY_PLUGIN_ORIGINS.`, code: 'plugin_remote_not_configured' };
+
+    if (origin) {
+        const bundle = await fetchBundleCatalog(origin, pluginId);
+        if (bundle.ok) catalog = bundle.catalog;
+        else bundleUnavailable = bundle;
     }
+    if (bundleUnavailable && managed.length === 0) {
+        // Nothing from either half — report the operator state, as before.
+        // The SAME status the route answered before 1.4 — an operator reading
+        // "404 plugin_catalog_missing" should not have it silently become a 502
+        // because the library grew a second half.
+        return res.status(bundleUnavailable.status)
+            .json({ error: bundleUnavailable.error, code: bundleUnavailable.code });
+    }
+
+    catalog.assets = [...managedCatalogEntries(managed), ...(catalog.assets ?? [])];
     res.setHeader('Cache-Control', 'private, max-age=60');
-    res.json({ plugin: pluginId, catalog });
+    res.json({
+        plugin: pluginId,
+        catalog,
+        // Named so the editor can say "your imported slides are here, the
+        // bundled ones are not" instead of showing a short list as if complete.
+        ...(bundleUnavailable ? { bundleUnavailable: bundleUnavailable.code } : {}),
+    });
 });
 
 // --- the settings slot (RPS-1 1.4, §11c) ---------------------------------

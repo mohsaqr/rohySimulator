@@ -4,8 +4,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const apiFetch = vi.hoisted(() => vi.fn());
+const apiGet = vi.hoisted(() => vi.fn());
+const apiPost = vi.hoisted(() => vi.fn());
 vi.mock('../../src/services/apiClient', () => ({
     apiFetch,
+    apiGet,
+    apiPost,
     ApiError: class ApiError extends Error { constructor(status) { super(`http ${status}`); this.status = status; } },
 }));
 
@@ -17,7 +21,7 @@ const descriptor = (await import('../../src/plugins/pathology/index.jsx')).defau
 const CATALOG = { version: 1, assets: [{ id: 'a', status: 'ready', preview: { url: 'remote:tiles/previews/a.jpg', widthPx: 1, heightPx: 1 },
     revisions: [{ id: 'r', status: 'ready', derivatives: { dzi: { url: 'remote:tiles/a.dzi' } } }] }] };
 
-beforeEach(() => apiFetch.mockReset());
+beforeEach(() => { apiFetch.mockReset(); apiGet.mockReset(); apiPost.mockReset(); });
 
 describe('resolve / unresolve round-trip', () => {
     it('is exact, including encoded segments, and leaves foreign strings alone', () => {
@@ -33,8 +37,13 @@ describe('resolve / unresolve round-trip', () => {
 describe('createHostAssetService', () => {
     it('lists the relayed catalog with every reference resolved for display', async () => {
         apiFetch.mockResolvedValue({ plugin: 'pathology', catalog: CATALOG });
+        apiGet.mockResolvedValue({ assets: [] });
         const svc = createHostAssetService({ pluginId: 'pathology' });
+        // False even though the service now WRITES: in the editor this flag
+        // gates the scan/process panel specifically, and a host has neither.
+        // The import panel is gated on `importUrl` being present instead.
         expect(svc.available).toBe(false);
+        expect(typeof svc.importUrl).toBe('function');
         const out = await svc.list();
         expect(apiFetch).toHaveBeenCalledWith('/plugins/pathology/catalog');
         expect(out.assets[0].preview.url).toBe('/api/plugins/pathology/tiles/previews/a.jpg');
@@ -76,5 +85,83 @@ describe('pathology adapter authorProps', () => {
         props.onChange({ manifest: { slides: [{ dzi: '/api/plugins/pathology/tiles/b.dzi' }] } });
         expect(save).toHaveBeenCalledWith({ manifest: { slides: [{ dzi: 'remote:tiles/b.dzi' }] } });
         expect(descriptor.authorProps({ pluginId: 'pathology' }, { value: null, save }).initialCase).toBeUndefined();
+    });
+});
+
+describe('the write half (RPS-1 1.4)', () => {
+    it('shows slides that are still importing or failed, which the catalog omits', async () => {
+        apiFetch.mockResolvedValue({ plugin: 'pathology', catalog: CATALOG });
+        apiGet.mockResolvedValue({ assets: [
+            { id: 'busy', status: 'importing', revisions: [] },
+            { id: 'broke', status: 'failed', error: '404 from the source', revisions: [] },
+            // Already in the catalog as a ready slide; must not appear twice.
+            { id: 'a', status: 'ready', revisions: [] },
+        ] });
+        const out = await createHostAssetService({ pluginId: 'pathology' }).list();
+        expect(out.assets.map((x) => x.id)).toEqual(['busy', 'broke', 'a']);
+    });
+
+    // A plugin with no server module (404) and a deployment with no library
+    // directory (503) are OPERATOR states, not failures an author can act on.
+    it.each([404, 503])('treats %i from /assets as "there is no managed half"', async (status) => {
+        apiFetch.mockResolvedValue({ plugin: 'pathology', catalog: CATALOG });
+        apiGet.mockRejectedValue(new ApiError(status));
+        const out = await createHostAssetService({ pluginId: 'pathology' }).list();
+        expect(out.assets.map((x) => x.id)).toEqual(['a']);
+    });
+
+    // ...but a 403 means something is wrong that the author should see.
+    // Swallowing it would show an empty library and call it normal.
+    it('rethrows any other failure from /assets', async () => {
+        apiFetch.mockResolvedValue({ plugin: 'pathology', catalog: CATALOG });
+        apiGet.mockRejectedValue(new ApiError(403));
+        await expect(createHostAssetService({ pluginId: 'pathology' }).list()).rejects.toThrow(/403/);
+    });
+
+    it('starts an import and returns as soon as it is queued', async () => {
+        apiPost.mockResolvedValue({ jobId: 'j1', assetId: 'asset-1', state: 'importing' });
+        const svc = createHostAssetService({ pluginId: 'pathology' });
+        expect(await svc.importUrl({ url: 'https://a.edu/s.svs', label: 'S' }))
+            .toEqual({ jobId: 'j1', assetId: 'asset-1', state: 'importing' });
+        expect(apiPost).toHaveBeenCalledWith('/plugins/pathology/imports', { url: 'https://a.edu/s.svs', label: 'S' });
+    });
+
+    it('polls a job to completion, reporting each phase on the way', async () => {
+        apiGet
+            .mockResolvedValueOnce({ state: 'running', phase: 'downloading', progress: 10 })
+            .mockResolvedValueOnce({ state: 'running', phase: 'tiling', progress: 60 })
+            .mockResolvedValueOnce({ state: 'done', phase: null, progress: 100 });
+        const seen = [];
+        const svc = createHostAssetService({ pluginId: 'pathology' });
+        const { promise } = svc.pollJob('j1', { intervalMs: 0, onProgress: (s) => seen.push(s.phase) });
+        expect((await promise).state).toBe('done');
+        expect(seen).toEqual(['downloading', 'tiling', null]);
+    });
+
+    // A failed import is an ERROR to the caller, not a resolved promise
+    // carrying a sad object: the editor's catch is what puts the reason in
+    // front of the author.
+    it('rejects with the server reason when an import fails', async () => {
+        apiGet.mockResolvedValue({ state: 'failed', error: 'libvips could not read the slide' });
+        const { promise } = createHostAssetService({ pluginId: 'pathology' }).pollJob('j1', { intervalMs: 0 });
+        await expect(promise).rejects.toThrow(/libvips could not read the slide/);
+    });
+
+    it('can be told to stop polling', async () => {
+        apiGet.mockResolvedValue({ state: 'running', phase: 'tiling' });
+        const { promise, cancel } = createHostAssetService({ pluginId: 'pathology' }).pollJob('j1', { intervalMs: 0 });
+        cancel();
+        expect((await promise).state).toBe('cancelled');
+    });
+
+    it('removes and calibrates through the plugin\'s own routes', async () => {
+        apiFetch.mockResolvedValue({ ok: true });
+        const svc = createHostAssetService({ pluginId: 'pathology' });
+        await svc.remove('asset 1');
+        expect(apiFetch).toHaveBeenCalledWith('/plugins/pathology/assets/asset%201', { method: 'DELETE' });
+        await svc.calibrate('a1', { nativeObjective: 20, nativeMpp: 0.5 });
+        expect(apiFetch).toHaveBeenCalledWith('/plugins/pathology/assets/a1/calibration', {
+            method: 'PUT', body: JSON.stringify({ nativeObjective: 20, nativeMpp: 0.5 }),
+        });
     });
 });

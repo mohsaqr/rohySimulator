@@ -5,7 +5,7 @@ import {
     Ruler, Save, Send, Trash2, Upload, UploadCloud, X, Undo2, GitBranch, Archive,
 } from 'lucide-react';
 import { PathologyRoom } from './PathologyRoom.jsx';
-import { filterCatalogAssets } from './assetCatalog.js';
+import { filterCatalogAssets, catalogAssetNextAction } from './assetCatalog.js';
 import { SlideAssetCard } from './SlideAssetCard.jsx';
 import {
     addStudioActivity, addStudioBlock, addStudioGrossImage, addStudioRoi, addStudioSlide,
@@ -1339,10 +1339,41 @@ function Checks({ issues }) {
     );
 }
 
+
+/** Optics for a slide whose file did not carry them. Both values required. */
+function CalibrationForm({ asset, onSave, onCancel }) {
+    const [objective, setObjective] = useState('');
+    const [mpp, setMpp] = useState('');
+    const valid = numberValue(objective) > 0 && numberValue(mpp) > 0;
+    return (
+        <fieldset className="mt-4 rounded-2xl bg-slate-900/55 p-5 ring-1 ring-amber-500/30">
+            <legend className="px-1 text-sm font-semibold">Calibrate “{asset.label || asset.id}”</legend>
+            <p className="mb-3 text-xs leading-relaxed text-slate-500">
+                This file carries no scanner optics. Every measurement a reader makes is scaled by
+                these two numbers, so they are asked for rather than assumed.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+                <TextField label="Scanned at (x)" value={objective} onChange={setObjective} />
+                <TextField label="µm per pixel" value={mpp} onChange={setMpp} />
+            </div>
+            <div className="mt-4 flex gap-2">
+                <button type="button" className={PRIMARY} disabled={!valid} onClick={() => onSave(numberValue(objective), numberValue(mpp))}>Save calibration</button>
+                <button type="button" className={BTN} onClick={onCancel}>Cancel</button>
+            </div>
+        </fieldset>
+    );
+}
+
 function AssetPicker({ assetService, actionLabel, onSelect, onClose }) {
     const [assets, setAssets] = useState([]); const [query, setQuery] = useState('');
     const [scanSourceId, setScanSourceId] = useState('');
     const [state, setState] = useState({ busy: true, error: '' });
+    // Import-from-link (RPS-1 1.4). Every method it needs is OPTIONAL on the
+    // asset service, so the standalone app — which has no host to import
+    // through — simply does not render the panel.
+    const [importForm, setImportForm] = useState({ url: '', label: '' });
+    const [importing, setImporting] = useState(null);
+    const [calibrating, setCalibrating] = useState(null);
     const [manual, setManual] = useState({ id: '', label: '', url: '', nativeObjective: '', nativeMpp: '', downsample: '', slideWidthPx: '', slideHeightPx: '' });
     const refresh = useCallback(async () => {
         if (!assetService?.list) { setState({ busy: false, error: 'No asset service is configured. Add an existing DZI manually below.' }); return; }
@@ -1368,6 +1399,56 @@ function AssetPicker({ assetService, actionLabel, onSelect, onClose }) {
         }
         catch (error) { setState({ busy: false, error: error?.message ?? String(error) }); }
     };
+    /**
+     * Import a slide from a URL, then follow the job to completion.
+     *
+     * The phase is surfaced as it arrives rather than only at the end: tiling a
+     * whole-slide image is minutes of work, and a spinner with no phase is
+     * indistinguishable from a hang.
+     */
+    const importFromLink = async (url, label) => {
+        if (!assetService?.importUrl) return;
+        setState({ busy: true, error: '' });
+        setImporting({ url, phase: 'queued', progress: 0 });
+        try {
+            const job = await assetService.importUrl({ url, label });
+            if (job?.jobId && assetService.pollJob) {
+                await assetService.pollJob(job.jobId, {
+                    onProgress: (status) => setImporting({
+                        url, phase: status?.phase ?? status?.state ?? 'working', progress: status?.progress ?? 0,
+                    }),
+                }).promise;
+            }
+            setImportForm({ url: '', label: '' });
+            setImporting(null);
+            await refresh();
+        } catch (error) {
+            setImporting(null);
+            setState({ busy: false, error: error?.message ?? String(error) });
+        }
+    };
+
+    const removeAsset = async (assetId) => {
+        if (!assetService?.remove) return;
+        setState({ busy: true, error: '' });
+        try { await assetService.remove(assetId); await refresh(); }
+        catch (error) { setState({ busy: false, error: error?.message ?? String(error) }); }
+    };
+
+    /**
+     * Supply the optics a file did not carry.
+     *
+     * Both numbers are required and neither is defaulted: this is what every
+     * measurement a reader makes is scaled by, and a plausible-looking 40x/0.25
+     * is the exact failure `needs_calibration` exists to prevent.
+     */
+    const calibrateAsset = async (assetId, nativeObjective, nativeMpp) => {
+        if (!assetService?.calibrate) return;
+        setState({ busy: true, error: '' });
+        try { await assetService.calibrate(assetId, { nativeObjective, nativeMpp }); await refresh(); }
+        catch (error) { setState({ busy: false, error: error?.message ?? String(error) }); }
+    };
+
     const processAsset = async (assetId) => {
         try {
             setState({ busy: true, error: '' });
@@ -1397,7 +1478,34 @@ function AssetPicker({ assetService, actionLabel, onSelect, onClose }) {
                             <button type="button" className={BTN} onClick={scan}>Scan source</button>
                         </div>
                     )}
-                    <div className={assetService?.available ? 'mt-3' : ''}><TextField label="Search slide library" value={query} onChange={setQuery} /></div>
+                    {assetService?.importUrl && (
+                        <fieldset className="mt-3 rounded-2xl bg-slate-900/55 p-4 ring-1 ring-slate-800">
+                            <legend className="px-1 text-sm font-semibold">Import from link</legend>
+                            <p className="mb-3 text-xs leading-relaxed text-slate-500">
+                                Paste a link to a whole-slide image (.svs, .ndpi, .tiff). It is downloaded,
+                                tiled and added to this library. Only hosts your administrator has allowed
+                                can be used.
+                            </p>
+                            <div className="grid grid-cols-[1fr_auto] items-end gap-2">
+                                <TextField label="Slide URL" value={importForm.url} onChange={(url) => setImportForm((f) => ({ ...f, url }))} />
+                                <button
+                                    type="button"
+                                    className={PRIMARY}
+                                    disabled={!importForm.url.trim() || Boolean(importing)}
+                                    onClick={() => importFromLink(importForm.url.trim(), importForm.label.trim())}
+                                >
+                                    Import
+                                </button>
+                            </div>
+                            <div className="mt-2"><TextField label="Label (optional)" value={importForm.label} onChange={(label) => setImportForm((f) => ({ ...f, label }))} /></div>
+                            {importing && (
+                                <p role="status" className="mt-3 text-[11px] tabular-nums text-sky-300">
+                                    {importing.phase}… {importing.progress > 0 ? `${Math.round(importing.progress)}%` : ''}
+                                </p>
+                            )}
+                        </fieldset>
+                    )}
+                    <div className="mt-3"><TextField label="Search slide library" value={query} onChange={setQuery} /></div>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                         {filtered.map((asset) => (
                             <SlideAssetCard
@@ -1405,11 +1513,26 @@ function AssetPicker({ assetService, actionLabel, onSelect, onClose }) {
                                 asset={asset}
                                 actionLabel={actionLabel}
                                 onAction={onSelect}
-                                notReadyActionLabel={assetService?.available && asset.status === 'discovered' ? 'Process slide' : null}
-                                onNotReadyAction={(candidate) => processAsset(candidate.id)}
+                                notReadyActionLabel={catalogAssetNextAction(asset, {
+                                    remove: Boolean(assetService?.remove),
+                                    calibrate: Boolean(assetService?.calibrate),
+                                    process: Boolean(assetService?.available),
+                                })}
+                                onNotReadyAction={(candidate) => {
+                                    if (candidate.status === 'failed') return removeAsset(candidate.id);
+                                    if (candidate.status === 'needs_calibration') return setCalibrating(candidate);
+                                    return processAsset(candidate.id);
+                                }}
                             />
                         ))}
                     </div>
+                    {calibrating && (
+                        <CalibrationForm
+                            asset={calibrating}
+                            onCancel={() => setCalibrating(null)}
+                            onSave={(objective, mpp) => { setCalibrating(null); return calibrateAsset(calibrating.id, objective, mpp); }}
+                        />
+                    )}
                     {!state.busy && filtered.length === 0 && <div className="mt-3"><Empty>No catalog assets match.</Empty></div>}
                     <fieldset className="mt-6 rounded-2xl bg-slate-900/55 p-5 ring-1 ring-slate-800">
                         <legend className="px-1 text-sm font-semibold">Existing DZI URL</legend>

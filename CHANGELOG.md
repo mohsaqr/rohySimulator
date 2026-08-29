@@ -9,6 +9,51 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.88] — 2026-08-29
+
+### Added
+
+- **An educator can paste a link and get a tiled slide.** The editor half of
+  slide import, and the end of the chain the last three releases built.
+  `hostAssetService` gains `importUrl`, `pollJob`, `cancelJob`, `remove` and
+  `calibrate`; Case Studio's slide library grows an **Import from link** panel
+  with the live phase, plus Remove on a failed import and a calibration form on
+  a slide whose file carried no optics.
+  - `available` stays **false** even though the service now writes. It is not a
+    general "can this do things" flag — in the editor it gates the *scan/process*
+    panel specifically, and a host has no source to scan. Setting it true would
+    render a "Scan source" button that can only ever answer *"Scanning requires a
+    configured asset service."* The import panel is gated on `importUrl` being
+    present, which is the capability it actually needs.
+  - `list()` merges the catalog with the plugin's own `/assets`, so a slide that
+    is still importing or has **failed** is visible. Without it an author who
+    pasted a link had no way to see what became of it. A 404 or 503 from
+    `/assets` reads as "there is no managed half"; a 403 is re-thrown, because
+    showing an empty library and calling it normal hides a real problem.
+  - A failed import **rejects** the poll promise with the server's reason rather
+    than resolving with a sad object — the editor's `catch` is what puts the
+    reason in front of the author.
+  - New `DELETE /api/plugins/pathology/assets/:assetId`. The directory removal
+    is the **host's** (`ctx.removeAssetDirectory`), not the plugin's: the asset
+    id arrives from a URL parameter, and unlike a bad read a bad recursive
+    delete cannot be undone by retrying. Two checks — the id must have the shape
+    the host generates, and the resolved path must still be inside the library.
+  - A full end-to-end test drives the whole stack against **real libvips** and a
+    real slide over HTTP: enable → allow an origin → import → tile → calibrate →
+    offer → remove. Skipped where `vips` is absent, which is honest: the feature
+    genuinely does not work without it.
+
+### Fixed
+
+- **A deployment that imports slides but ships no content bundle had an
+  invisible library.** `GET /catalog` answered 503 the moment no content origin
+  was configured, because before 1.4 the bundle was the only source there was —
+  so slides on disk, with rows in the database, were reported to the editor as
+  "this plugin has no catalog". The two halves now fail independently: the
+  bundle's absence is *named* in the response (`bundleUnavailable`) so the editor
+  can say which half is missing, and 503 is reserved for having genuinely
+  nothing to show. Found by the end-to-end test, not by review.
+
 ## [2.9.87] — 2026-08-29
 
 > Released as 2.9.87 rather than 2.9.86: this work and the PACS room below were

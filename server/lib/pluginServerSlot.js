@@ -44,8 +44,8 @@
  * where narrowing is cheap and total.
  */
 import express from 'express';
-import { readdir } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { readdir, rm } from 'node:fs/promises';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dbAdapter from '../dbAdapter.js';
 import { logger } from '../logger.js';
@@ -188,6 +188,37 @@ export function buildServerContext(manifest) {
         },
 
         runBinary,
+
+        /**
+         * Remove one asset's directory, and nothing else.
+         *
+         * The host owns this rather than the plugin, for the same reason it owns
+         * download and spawn: it is the destructive one. The id arrives from a
+         * URL parameter, so `assetId` of '../../etc' would escape a naively
+         * joined path — and unlike a bad read, a bad recursive delete cannot be
+         * undone by retrying. Two checks, both required: the id must have the
+         * shape the host generates, and the resolved path must still be inside
+         * the library.
+         *
+         * @param {string} assetId
+         * @returns {Promise<boolean>} false when there was nothing to remove
+         */
+        async removeAssetDirectory(assetId) {
+            if (!libraryDir) return false;
+            if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(String(assetId))) {
+                throw new Error(`refusing to remove '${assetId}': not a valid asset id`);
+            }
+            const target = resolve(libraryDir, String(assetId));
+            // Belt and braces. The pattern above already forbids a separator or
+            // a dot, so this cannot fail — which is the point: it is what keeps
+            // that true if the pattern is ever loosened.
+            if (!target.startsWith(libraryDir.endsWith(sep) ? libraryDir : libraryDir + sep)) {
+                throw new Error(`refusing to remove '${assetId}': outside the plugin library directory`);
+            }
+            await rm(target, { recursive: true, force: true });
+            pluginLog.info('asset directory removed', { assetId });
+            return true;
+        },
 
         /**
          * The host's auth guards, handed over rather than re-derived.
