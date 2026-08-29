@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.83] — 2026-08-29
+
+### Fixed
+
+- **The documented re-vendor command had become destructive.** The README in
+  `src/components/pathology/` told you to
+  `rsync -rc --delete ~/Documents/Github/Pathoyon/rohy-pathology/src/ …`, but the
+  upstream "Rename to Pathoyon" commit moved the package to `pathoyon/` and left
+  `rohy-pathology/` behind as a stray `.vite/deps` cache. rsync has no notion of
+  "this source looks wrong" — an empty source is a valid instruction to empty the
+  destination — so the command as written **deleted the vendored package**.
+  `portability.test.js` would not have caught it either: it walks whatever files
+  exist and passes vacuously on none.
+  Replaced with `npm run pathology:vendor` (`scripts/vendor-pathology.sh`), which
+  refuses to run unless the source actually contains the package and then asserts
+  the copy is byte-identical apart from the two rohy-only files — the same
+  discipline as `content-bundle.sh` refusing a bundle with no `.dzi` in it. The
+  stale path is corrected in `docs/design/plugin-standard.md` too.
+
 ## [2.9.82] — 2026-08-29
 
 ### Fixed
