@@ -38,6 +38,7 @@ import {
     centralities, prune, summary, layout as dynaLayout,
 } from 'dynajs';
 import { apiFetch } from '../../../services/apiClient';
+import { timeOnTask, DEFAULT_IDLE_CAP_MINUTES, IDLE_CAP_OPTIONS } from './activityTime.js';
 
 import { TnaNetworkGraph } from './laila/TnaNetworkGraph';
 import { TnaDistributionPlot } from './laila/TnaDistributionPlot';
@@ -108,7 +109,7 @@ function StatCard({ icon, label, value, accent = 'cyan' }) {
     );
 }
 
-function LandingMetricCard({ icon, label, value, detail, accent = 'cyan' }) {
+function LandingMetricCard({ icon, label, value, detail, accent = 'cyan', title }) {
     const colors = {
         cyan:   'from-cyan-50 to-white text-cyan-700 ring-cyan-100',
         green:  'from-emerald-50 to-white text-emerald-700 ring-emerald-100',
@@ -118,7 +119,7 @@ function LandingMetricCard({ icon, label, value, detail, accent = 'cyan' }) {
         slate:  'from-slate-50 to-white text-slate-700 ring-slate-100',
     };
     return (
-        <div className="group relative overflow-hidden rounded-md border border-gray-200 bg-gradient-to-br from-white to-gray-50 px-4 py-3 shadow-sm">
+        <div className="group relative overflow-hidden rounded-md border border-gray-200 bg-gradient-to-br from-white to-gray-50 px-4 py-3 shadow-sm" title={title}>
             <div className="flex items-start gap-3">
                 <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-md bg-gradient-to-br ring-1 ${colors[accent] || colors.cyan}`}>
                     {icon}
@@ -165,18 +166,6 @@ function formatNumber(value) {
     return Number.isFinite(n) ? n.toLocaleString() : '—';
 }
 
-function parseEventTime(value) {
-    if (!value) return null;
-    const t = new Date(value).getTime();
-    return Number.isFinite(t) ? t : null;
-}
-
-function activitySpanMinutes(events) {
-    const times = (events ?? []).map((e) => parseEventTime(e?.timestamp)).filter((t) => t != null);
-    if (times.length < 2) return 0;
-    return Math.max(1, Math.round((Math.max(...times) - Math.min(...times)) / 60000));
-}
-
 function hasGazePayload(record) {
     const dwell = record?.gaze?.aoi_dwell_ms;
     const zones = record?.gaze?.zone_proportions || record?.engagement?.gaze_zone_proportions;
@@ -205,6 +194,11 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [groupBy, setGroupBy] = useState('actor-session');
+    // Idle cap for time on task (activityTime.js). 5 min is the default a
+    // simulator earns — attention-dense, median session ≈ 10 active minutes —
+    // and the selector exists so the educator sees the sensitivity rather than
+    // trusting one number.
+    const [idleCapMinutes, setIdleCapMinutes] = useState(DEFAULT_IDLE_CAP_MINUTES);
     // Room filter — narrows the activity dataset to one simulator room. Empty
     // = all rooms. Applies to EVERY activity screen (charts + network + process
     // + clusters + patterns) because they all build off the same filtered rows.
@@ -585,6 +579,15 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
         };
     }, [emotionRecords]);
 
+    // Time on task — idle-capped sum of inter-event gaps per session, rolled
+    // up per user and in total (activityTime.js). Replaces the old
+    // `max(ts) − min(ts)` "activity span", which for a cohort was the calendar
+    // distance between the first and last event in the database.
+    const timeOnTaskStats = useMemo(
+        () => timeOnTask(filteredEvents || [], { idleCapMinutes }),
+        [filteredEvents, idleCapMinutes],
+    );
+
     const activityLandingStats = useMemo(() => {
         const events = filteredEvents || [];
         const caseCount = new Set(events.map((e) => e?.case_id).filter((v) => v != null && v !== '')).size;
@@ -599,7 +602,6 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
             users: summaryD.uniqueUsers ?? new Set(events.map((e) => e?.user_id).filter((v) => v != null)).size,
             sessions: summaryD.uniqueSessions ?? new Set(events.map((e) => e?.session_id).filter(Boolean)).size,
             cases: caseCount,
-            minutes: activitySpanMinutes(events),
             resources: objectCount,
             emotions: emotionWindows,
             emotionLabels,
@@ -895,7 +897,14 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                                     <LandingMetricCard icon={<Hash className="h-5 w-5" />} value={formatNumber(activityLandingStats.sessions)} label="Sessions" detail={`${formatNumber(activityLandingStats.events)} events`} accent="cyan" />
                                     <LandingMetricCard icon={<BookOpen className="h-5 w-5" />} value={formatNumber(activityLandingStats.cases)} label="Cases Taken" detail={`${formatNumber(activityLandingStats.resources)} resources touched`} accent="green" />
-                                    <LandingMetricCard icon={<Clock3 className="h-5 w-5" />} value={formatNumber(activityLandingStats.minutes)} label="Minutes" detail="Observed activity span" accent="amber" />
+                                    <LandingMetricCard
+                                        icon={<Clock3 className="h-5 w-5" />}
+                                        value={formatNumber(timeOnTaskStats.activeMinutes)}
+                                        label="Active minutes"
+                                        detail={`of ${formatNumber(timeOnTaskStats.sessionMinutes)} session-min · median ${formatNumber(timeOnTaskStats.medianActivePerSession)} min/session`}
+                                        title={`Sum over sessions of the gaps between consecutive events, each gap capped at ${idleCapMinutes} min (idle). The last event of a session earns nothing. Change the cap in "Time on task" below.`}
+                                        accent="amber"
+                                    />
                                     <LandingMetricCard icon={<Users className="h-5 w-5" />} value={formatNumber(activityLandingStats.users)} label="Students" detail={`${formatNumber(activityBundle?.summary?.avgPerUser ?? 0)} events / user`} accent="teal" />
                                     <LandingMetricCard icon={<Brain className="h-5 w-5" />} value={formatNumber(activityLandingStats.emotions)} label="Emotions Captured" detail={`${formatNumber(activityLandingStats.emotionLabels)} dominant labels`} accent="rose" />
                                     <LandingMetricCard icon={<ScanEye className="h-5 w-5" />} value={formatNumber(activityLandingStats.gazeWindows)} label="Gaze Records" detail="Windows with AOI signal" accent="slate" />
@@ -903,6 +912,61 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                     <LandingMetricCard icon={<Database className="h-5 w-5" />} value={formatNumber(activityBundle?.resources?.length ?? 0)} label="Top Resources" detail="Ranked resource rows" accent="green" />
                                 </div>
                             </div>
+                        )}
+                        {filteredEvents && (
+                            <Panel
+                                title="Time on task"
+                                actions={(
+                                    <label className="flex items-center gap-2 text-xs text-gray-600">
+                                        Idle cap
+                                        <select
+                                            aria-label="Idle cap (minutes)"
+                                            value={idleCapMinutes}
+                                            onChange={(e) => setIdleCapMinutes(Number(e.target.value))}
+                                            className="rounded border border-gray-300 bg-white px-2 py-1 text-sm"
+                                        >
+                                            {IDLE_CAP_OPTIONS.map((m) => <option key={m} value={m}>{m} min</option>)}
+                                        </select>
+                                    </label>
+                                )}
+                            >
+                                <p className="mb-3 text-xs text-gray-500">
+                                    Active minutes sum the gaps between a learner&apos;s consecutive events within a
+                                    session, each gap capped at the idle threshold; the last event of a session earns
+                                    nothing. Session minutes run from a session&apos;s first event to its last.
+                                    Sessions are grouped as in TNA (by session, falling back to the learner).
+                                </p>
+                                {timeOnTaskStats.perUser.length ? (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm" data-testid="time-on-task-table">
+                                            <thead>
+                                                <tr className="border-b border-gray-200 text-left text-[11px] uppercase tracking-wide text-gray-500">
+                                                    <th className="py-1.5 pr-3 font-semibold">Learner</th>
+                                                    <th className="py-1.5 pr-3 text-right font-semibold">Sessions</th>
+                                                    <th className="py-1.5 pr-3 text-right font-semibold">Events</th>
+                                                    <th className="py-1.5 pr-3 text-right font-semibold">Active min</th>
+                                                    <th className="py-1.5 pr-3 text-right font-semibold">Session min</th>
+                                                    <th className="py-1.5 text-right font-semibold">Median active / session</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {timeOnTaskStats.perUser.map((u) => (
+                                                    <tr key={String(u.user_id ?? u.username)} className="border-b border-gray-100 tabular-nums">
+                                                        <td className="py-1.5 pr-3 text-gray-900">{u.username || (u.user_id != null ? `#${u.user_id}` : 'unknown')}</td>
+                                                        <td className="py-1.5 pr-3 text-right">{formatNumber(u.sessions)}</td>
+                                                        <td className="py-1.5 pr-3 text-right">{formatNumber(u.events)}</td>
+                                                        <td className="py-1.5 pr-3 text-right font-semibold text-gray-900">{formatNumber(u.activeMinutes)}</td>
+                                                        <td className="py-1.5 pr-3 text-right">{formatNumber(u.sessionMinutes)}</td>
+                                                        <td className="py-1.5 text-right">{formatNumber(u.medianActivePerSession)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <EmptyPanelText>No events for the current filters</EmptyPanelText>
+                                )}
+                            </Panel>
                         )}
                         {activityCharts && (
                             <>

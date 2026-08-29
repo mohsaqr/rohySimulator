@@ -217,8 +217,9 @@ describe('TnaDashboardV2 activity tab charts', () => {
         // Both fixture events are case c1 — narrowing to c2 empties the charts
         // but must NOT re-fetch (the 5000-row cache is filtered in-memory).
         rerender(<TnaDashboardV2 externalFilters={{ caseId: 'c2' }} />);
+        // Three empty states: the two chart panels and the time-on-task panel.
         await waitFor(() =>
-            expect(screen.getAllByText('No events for the current filters').length).toBe(2));
+            expect(screen.getAllByText('No events for the current filters').length).toBe(3));
         expect(eventUrls().length).toBe(1);
     });
 });
@@ -350,5 +351,57 @@ describe('TnaDashboardV2 signal tabs', () => {
 
         expect(screen.getByText(/3 windows · 3 sessions/)).toBeTruthy();
         expect(screen.queryByText(/capped at the most recent 1000 windows/)).toBeNull();
+    });
+});
+
+describe('TnaDashboardV2 time on task (Activity tab)', () => {
+    // Regression lock: the "Minutes" tile was max(ts) − min(ts) over every
+    // filtered event — the calendar span of the dataset (147,585 min on a
+    // local DB), not time spent. It is now idle-capped time on task.
+    const T0 = Date.UTC(2026, 5, 1, 10, 0, 0);
+    const at = (min, extra) => ({ timestamp: new Date(T0 + min * 60_000).toISOString(), verb: 'CLICKED', object_type: 'button', case_id: 'c1', ...extra });
+    const richFixture = () => apiFetchMock.mockImplementation(async (url) => {
+        if (url.startsWith('/analytics/filter-options')) return { cases: [{ id: 'c1', title: 'Chest pain' }], users: [] };
+        if (url.startsWith('/learning-events/all')) {
+            return { events: [
+                // amina, session 7: gaps 1, 12, 3 → cap 5 → 9 active; span 16.
+                at(0, { id: 1, session_id: 7, user_id: 1, username: 'amina' }),
+                at(1, { id: 2, session_id: 7, user_id: 1, username: 'amina' }),
+                at(13, { id: 3, session_id: 7, user_id: 1, username: 'amina' }),
+                at(16, { id: 4, session_id: 7, user_id: 1, username: 'amina' }),
+                // omar, session 8, ten days later: one 40-min gap → 5 active; span 40.
+                at(14400, { id: 5, session_id: 8, user_id: 2, username: 'omar' }),
+                at(14440, { id: 6, session_id: 8, user_id: 2, username: 'omar' }),
+            ] };
+        }
+        return {};
+    });
+
+    it('shows idle-capped active minutes (default 5 min), not the calendar span', async () => {
+        richFixture();
+        render(<TnaDashboardV2 />);
+        const table = await screen.findByTestId('time-on-task-table');
+        expect(screen.getByText('Active minutes')).toBeTruthy();
+        // 9 + 5 = 14 active; the old formula would have shown 14,456 (ten days).
+        expect(screen.getByText('14')).toBeTruthy();
+        expect(screen.queryByText('14,456')).toBeNull();
+        expect(screen.getByText(/of 56 session-min · median 7 min\/session/)).toBeTruthy();
+        const rows = [...table.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent));
+        expect(rows).toEqual([
+            ['amina', '1', '4', '9', '16', '9'],
+            ['omar', '1', '2', '5', '40', '5'],
+        ]);
+    });
+
+    it('the idle cap selector re-computes the tile and the rows', async () => {
+        richFixture();
+        render(<TnaDashboardV2 />);
+        await screen.findByTestId('time-on-task-table');
+        fireEvent.change(screen.getByLabelText('Idle cap (minutes)'), { target: { value: '30' } });
+        // cap 30: amina 1 + 12 + 3 = 16; omar 30 → 46.
+        await waitFor(() => expect(screen.getByText('46')).toBeTruthy());
+        const rows = [...screen.getByTestId('time-on-task-table').querySelectorAll('tbody tr')]
+            .map((tr) => tr.querySelectorAll('td')[3].textContent);
+        expect(rows).toEqual(['30', '16']); // omar first: sorted by active minutes desc
     });
 });

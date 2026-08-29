@@ -9,6 +9,7 @@
 // the Network / Process Map tabs.
 
 import { resolveClinicalState } from './clinicalStates';
+import { compareEventTime, sequenceGroupKey } from './activityTime.js';
 
 /**
  * Resolve one learning-event row to a clinical state.
@@ -105,20 +106,19 @@ export function eventsToSequences(events, { groupBy = 'actor-session', labelOf }
     const groups = new Map();
     for (const e of events ?? []) {
         if (!e) continue;
-        const key = groupBy === 'actor'
-            ? `u:${e.user_id ?? 'unknown'}`
-            : `s:${e.session_id ?? `u${e.user_id ?? 'unknown'}`}`;
+        const key = sequenceGroupKey(e, groupBy);
         let arr = groups.get(key);
         if (!arr) { arr = []; groups.set(key, arr); }
         arr.push(e);
     }
     const seqs = [];
     for (const arr of groups.values()) {
-        arr.sort((a, b) => {
-            const ta = a.timestamp ?? '';
-            const tb = b.timestamp ?? '';
-            return ta < tb ? -1 : ta > tb ? 1 : 0;
-        });
+        // Numeric time, not string order: `learning_events.timestamp` mixes the
+        // client's ISO form ('…T10:00:00.000Z') with sqlite's CURRENT_TIMESTAMP
+        // fallback ('2026-05-06 15:07:52'), and 'T' sorts after ' ' — so a
+        // string sort put a server-stamped row before every client-stamped
+        // row of the same day and silently reordered the sequence.
+        arr.sort(compareEventTime);
         seqs.push(arr.map((e) => toLabel(e)).filter((v) => v != null && v !== ''));
     }
     return seqs;
