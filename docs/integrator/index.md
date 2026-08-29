@@ -11,6 +11,7 @@ For the **integrator / developer** — calling the API, embedding, extending.
 | [Embedding the avatar kit](/integrator/embedding) | `../talking-avatars` (workspace-sibling repo) in a third-party app |
 | [Adding a TTS/LLM provider](/integrator/providers) | The async-iterator service contract |
 | [Contributing & tests](/integrator/contributing) | Test split, coverage ratchet, conventions |
+| [Vendored packages](/integrator/vendored-packages) | Packages copied from their own repos, and the stamp that tracks them |
 | [Translation review (XLIFF)](/integrator/i18n-review) | Status sidecar, XLIFF 1.2 export/import for native reviewers |
 
 See also the generated [API reference](/reference/api/) and

@@ -32,22 +32,22 @@ README and `portability.test.js`. Do not edit the package here; edit upstream
 and re-vendor:
 
 ```
-npm run pathology:vendor          # scripts/vendor-pathology.sh
+npm run vendor            # every vendored package
+npm run vendor -- pathology       # just this half
+npm run vendor:check      # verify the stamps, and report staleness
 ```
 
-> **The path moved, and the old command was destructive.** Until v2.9.83 this
-> README said the upstream was `Pathoyon/rohy-pathology/src`. The "Rename to
-> Pathoyon" commit moved the package to `pathoyon/`, leaving `rohy-pathology/`
-> behind as a stray `.vite/deps` cache — so the documented
-> `rsync --delete <that>/ src/components/pathology/` had become a command that
-> **empties this folder**. rsync has no notion of "this source looks wrong": an
-> empty source is a valid instruction to empty the destination. Worse,
-> `portability.test.js` would not have caught it — it walks whatever files
-> exist and passes vacuously on none.
->
-> Hence the script rather than a copy-pasteable `rsync`: it refuses to run
-> unless the source actually contains the package, the same way
-> `content-bundle.sh` refuses a `dist-content/` with no `.dzi` in it.
+`.vendor.json` in this folder records which upstream commit this is and a hash
+of its contents. `tests/server/vendored-packages.test.js` fails the build if the
+copy is edited in place or the stamp is missing — see **RPS-1 §16**.
+
+> **The path moved once, and the old command was destructive.** Until v2.9.83
+> this README documented an `rsync --delete` from
+> `Pathoyon/rohy-pathology/src`, a path that the rename to Pathoyon had turned
+> into a stray `.vite` cache — so the documented command **emptied this folder**.
+> rsync has no notion of "this source looks wrong": an empty source is a valid
+> instruction to empty the destination. The tool refuses to run unless the
+> source actually holds the package.
 
 Rohy's ESLint ignores this folder (like `OyonR/`) because its lint posture is
 upstream's. Rohy's gate is `portability.test.js`: every import is a file inside

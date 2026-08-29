@@ -865,6 +865,9 @@ acceptance test** — each of those files used to require one.
       inside `ctx.libraryDir` (R26), and deleting the directory still boots rohy
 - [ ] *(1.4)* Its job handlers are idempotent over their own asset directory —
       an interrupted job is requeued from the START, not resumed mid-phase
+- [ ] *(1.4)* If it is vendored from its own repo: `.vendor.json` is present and
+      current (R27), the copy has not been edited in rohy (R28), and
+      `npm run vendor:check` is clean (§16)
 
 ---
 
@@ -934,3 +937,87 @@ now rely on.
 `portability.test.js` guards the boundary) into a room with 23
 verbs, 9 object types, whole-slide viewing, annotation with QuPath GeoJSON
 interchange, and read-process assessment.
+
+---
+
+## 16. Vendored packages *(1.4)*
+
+Three of rohy's plugins are not written in rohy. `pathoyon` and `radoyon` live
+in their own repositories and rohy carries **byte-identical copies** of them.
+This section is the contract that makes that safe, and it applies to every
+vendored plugin package equally.
+
+### 16.1 Why copies and not dependencies
+
+rohy ships a **Docker image** and an **air-gap source bundle**. A
+`file:../Radoyon/radoyon` dependency resolves on a developer's laptop and
+nowhere else — not in CI, not in the image, not in the offline tarball. The
+JStats siblings in this workspace use `file:` deps happily because they never
+ship offline.
+
+*Vendoring was never the mistake. Untracked vendoring was.*
+
+### 16.2 What a vendored folder contains
+
+| | |
+|---|---|
+| the package's files | byte-identical to the upstream subtree |
+| `README.md` | **host-owned** — where it came from, how to re-vendor |
+| `portability.test.js` | **host-owned** — the import gate (§3.2, §11b.2) |
+| `.vendor.json` | **the stamp** — written by the vendoring tool |
+
+Host-owned files are excluded from the copy and from the stamp's hash. They must
+survive re-vendoring: if a copy deleted them, the gate on that package would
+disappear with it and nothing would notice.
+
+```json
+{ "package": "radoyon", "version": "0.1.0", "commit": "029e4e1b…",
+  "vendoredAt": "2026-08-29", "files": 19, "sha256": "3a7f2d08…",
+  "hostOwned": ["README.md", "portability.test.js"] }
+```
+
+### 16.3 What a stamp proves, and what it cannot
+
+It proves **provenance** — which package, version and upstream commit this is —
+and **integrity**: `tests/server/vendored-packages.test.js` recomputes the hash
+over the folder's contents, so a copy edited in place is a red test rather than
+a surprise at the next re-vendor.
+
+It cannot prove **currency** on its own. A copy three commits behind hashes
+perfectly against its own stamp. Staleness needs the upstream checkout, which CI
+does not have, so `npm run vendor:check` reports it only where upstream is
+present. The stamp's job is to make the question *answerable* — before it, rohy's
+PACS copy sat frozen while both repos moved and nothing in rohy said so or could
+have. `portability.test.js` checks imports, not currency; the room's own tests
+stay green against stale code.
+
+### 16.4 The rules
+
+| # | Rule | What it prevents |
+|---|---|---|
+| R27 | A vendored folder carries `.vendor.json` naming the package, upstream commit and a content hash | a copy whose origin is archaeology, and drift nothing can detect |
+| R28 | The copy is **never edited in rohy** — edit upstream and re-vendor | a fix that exists in the host and vanishes at the next copy |
+| R29 | Vendoring **refuses a source that does not hold the package**, and refuses to stamp a **dirty** upstream | `rsync --delete` from an empty source emptying the destination (which has happened here), and a stamp naming a commit that does not contain the code |
+| R30 | Host-owned files are excluded from the copy and survive it | losing the gate along with the code it guards |
+
+### 16.5 The commands
+
+```
+npm run vendor              # every registered package
+npm run vendor -- pacs      # one of them
+npm run vendor:check        # verify stamps; report staleness where upstream is present
+```
+
+The registry lives in `scripts/vendor-plugins.mjs`. A package **may** ship its
+own installer — radoyon does, on the principle that a package knows how to
+install itself — and the host delegates to it, then verifies the stamp like any
+other. **One contract, one gate, more than one permitted implementation**, the
+same way `plugins:gen` owns the manifest contract without owning every manifest.
+
+### 16.6 Not covered here
+
+`OyonR/` and `src/components/lessons/` are also copies of code from elsewhere,
+and are deliberately outside this section: neither is an RPS-1 plugin. `OyonR`
+is an add-on with its own server routes, and `lessons` was ported from LAILA and
+has diverged. The same discipline would suit both, and adding them is two lines
+in the registry once someone decides what their upstreams are.

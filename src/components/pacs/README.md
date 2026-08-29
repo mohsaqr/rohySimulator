@@ -8,19 +8,20 @@ Editing anything else means the next re-vendor silently discards your change.
 
 ## Changing something
 
-```bash
-cd ~/Documents/Github/Radoyon/radoyon
-# edit, then:
-npm test
-
-rsync -rc --delete --exclude README.md --exclude portability.test.js \
-  ~/Documents/Github/Radoyon/radoyon/src/ \
-  ~/Documents/Github/rohySimulator/src/components/pacs/
-
-diff -rq ~/Documents/Github/Radoyon/radoyon/src \
-         ~/Documents/Github/rohySimulator/src/components/pacs
-# only README.md and portability.test.js may differ
 ```
+npm run vendor            # every vendored package
+npm run vendor -- pacs            # just this one
+npm run vendor:check      # verify the stamps, and report staleness
+```
+
+`.vendor.json` in this folder records which upstream commit this is and a hash
+of its contents. `tests/server/vendored-packages.test.js` fails the build if the
+copy is edited in place or the stamp is missing — see **RPS-1 §16**.
+
+Radoyon also ships its own installer (`scripts/vendor.mjs`) on the principle
+that a package knows how to install itself; `npm run vendor -- pacs` delegates
+to it and then verifies the stamp it wrote. Either entry point produces the same
+artefact.
 
 Then in rohy: `npm run plugins:gen && npx vitest run && npm run build`.
 

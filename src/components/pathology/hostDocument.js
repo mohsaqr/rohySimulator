@@ -31,9 +31,16 @@
 
 import { canonicalJSONStringify } from './caseCore/canonicalJson.js';
 import { toStudioDocument, studioIssues, studioReaderCase } from './caseStudioModel.js';
+import { REMOTE_SCHEME } from './remoteRef.js';
 
-/** The reference scheme a case uses for content it does not carry inline. */
-export const REMOTE_SCHEME = 'remote:';
+// `remoteRef.js` OWNS this — it is that module's whole subject. Re-exported
+// here rather than declared again because `index.js` star-exports both, and two
+// SEPARATE declarations of one name across star exports are *ambiguous* per the
+// ES spec: the name is dropped from the namespace and
+// `import { REMOTE_SCHEME } from 'pathoyon'` is a hard link error
+// ("conflicting star exports"). Re-exporting the same binding is not ambiguous,
+// so both spellings keep working and there is one declaration.
+export { REMOTE_SCHEME };
 
 /**
  * Normalise whatever a host stored into `{ manifest, rubric }`, or null.

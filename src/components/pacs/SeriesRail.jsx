@@ -8,16 +8,16 @@ import { Layers } from 'lucide-react';
  * InstanceNumber ordering, because that is the case where the stack's order is
  * only as trustworthy as the scanner's numbering, and a reader should know.
  */
-export function SeriesRail({ series = [], activeUid, onSelect, t = (k, f) => f ?? k }) {
+export function SeriesRail({ series = [], activeStackId, onSelect, t = (k, f) => f ?? k }) {
     if (series.length === 0) return null;
     return (
         <nav aria-label={t('radoyon_series_label', 'Series')} className="flex flex-col gap-1 p-2 overflow-y-auto">
             {series.map((s) => {
-                const active = s.seriesInstanceUid === activeUid;
+                const active = (s.stackId ?? s.seriesInstanceUid) === activeStackId;
                 return (
                     <button
                         type="button"
-                        key={s.seriesInstanceUid}
+                        key={s.stackId ?? s.seriesInstanceUid}
                         onClick={() => onSelect?.(s)}
                         aria-current={active ? 'true' : undefined}
                         className={`text-left rounded-md px-3 py-2 border transition-colors ${

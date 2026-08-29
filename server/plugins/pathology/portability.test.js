@@ -2,7 +2,7 @@
 //
 // Upstream is ~/Documents/Github/Pathoyon/pathoyon/server. This folder is a
 // byte-identical copy plus this file and README.md; re-vendor with
-// `npm run pathology:vendor`.
+// `npm run vendor -- pathology-server`.
 //
 // The client half's gate (src/components/pathology/portability.test.js) allows
 // a short list of peer dependencies — react, openseadragon and friends. This

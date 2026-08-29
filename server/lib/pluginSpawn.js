@@ -20,6 +20,7 @@
  * a shell interpolation two layers below where the name was accepted.
  */
 import { spawn } from 'node:child_process';
+import { availableParallelism } from 'node:os';
 import { logger } from '../logger.js';
 
 const log = logger('plugin-spawn');
@@ -43,6 +44,50 @@ export class PluginSpawnError extends Error {
 }
 
 /**
+ * How many cores an image tool may use.
+ *
+ * libvips defaults to every core. Measured on the 4-core target server, one
+ * `dzsave` took 301% CPU — three of four cores — for 21 seconds. That is a
+ * background job starving the web server that is meant to be answering
+ * requests, and on a box with one worker and one job at a time it buys nothing:
+ * the tiling is I/O- and JPEG-bound, and halving the threads costs a little
+ * wall-clock while leaving the machine responsive.
+ *
+ * It is also what keeps the peak RSS measured in the capacity proof honest —
+ * libvips' memory scales with thread count, so an unbounded tool on a
+ * 32-core machine would use far more than the 306 MB the 4-core proof recorded.
+ *
+ * `ROHY_PLUGIN_VIPS_CONCURRENCY` overrides it for an operator who knows better.
+ */
+export function imageToolConcurrency() {
+    const configured = Number(process.env.ROHY_PLUGIN_VIPS_CONCURRENCY);
+    if (Number.isInteger(configured) && configured > 0) return configured;
+    return Math.max(1, Math.floor(availableParallelism() / 2));
+}
+
+/**
+ * The environment an image tool runs in.
+ *
+ * An allowlist, not the parent's environment with a few things removed. rohy's
+ * process environment holds `JWT_SECRET` and every configured provider API key,
+ * and a subprocess that can read them is one `vips` plugin or one crafted
+ * filename away from leaking them. A tool needs a PATH, a home for its cache,
+ * and a locale; nothing else it needs is a secret.
+ *
+ * @param {object} [extra] caller-supplied additions
+ * @returns {object}
+ */
+export function childEnv(extra = {}) {
+    return {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        LANG: process.env.LANG ?? 'C.UTF-8',
+        VIPS_CONCURRENCY: String(imageToolConcurrency()),
+        ...extra,
+    };
+}
+
+/**
  * Run an allow-listed binary with an argv array.
  *
  * @param {string}   bin        must be in ALLOWED_BINARIES
@@ -51,10 +96,12 @@ export class PluginSpawnError extends Error {
  * @param {number}   [opts.timeoutMs]  killed past this, reported as a failure
  * @param {number}   [opts.maxOutputBytes] cap on captured stdout/stderr
  * @param {AbortSignal} [opts.signal]
+ * @param {object}   [opts.env]        extra environment; the child NEVER inherits
+ *                                     the parent's (it holds JWT_SECRET and keys)
  * @returns {Promise<{stdout: string, stderr: string}>}
  * @throws  {PluginSpawnError} on a disallowed binary, a non-zero exit, or a timeout
  */
-export function runBinary(bin, args, { timeoutMs = 120_000, maxOutputBytes = 1 << 20, signal } = {}) {
+export function runBinary(bin, args, { timeoutMs = 120_000, maxOutputBytes = 1 << 20, signal, env = {} } = {}) {
     if (!ALLOWED_BINARIES.includes(bin)) {
         throw new PluginSpawnError(`'${bin}' is not an allowed binary`, 'plugin_spawn_forbidden');
     }
@@ -64,7 +111,13 @@ export function runBinary(bin, args, { timeoutMs = 120_000, maxOutputBytes = 1 <
     return new Promise((resolve, reject) => {
         // shell:false is the default and is restated here because it is the
         // single most important property of this call.
-        const child = spawn(bin, args, { shell: false, signal, stdio: ['ignore', 'pipe', 'pipe'] });
+        const child = spawn(bin, args, {
+            shell: false,
+            signal,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            // Bounded, never inherited wholesale — see childEnv().
+            env: childEnv(env),
+        });
         let stdout = ''; let stderr = ''; let timedOut = false;
         const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, timeoutMs);
 

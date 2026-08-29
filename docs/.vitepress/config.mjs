@@ -166,6 +166,7 @@ export default defineConfig({
             { text: 'Embedding the avatar kit', link: '/integrator/embedding' },
             { text: 'Adding a TTS/LLM provider', link: '/integrator/providers' },
             { text: 'Contributing & tests', link: '/integrator/contributing' },
+            { text: 'Vendored packages', link: '/integrator/vendored-packages' },
             { text: 'Translation review (XLIFF)', link: '/integrator/i18n-review' },
           ],
         },

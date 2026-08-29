@@ -9,6 +9,50 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.91] — 2026-08-29
+
+### Added
+
+- **RPS-1 §16 — the vendoring contract, one standard for every vendored plugin.**
+  rohy carries byte-identical copies of `pathoyon` (client and server halves) and
+  `radoyon`, because it ships a Docker image and an air-gap bundle and a
+  `file:../Radoyon` dependency resolves on a laptop and nowhere else. Vendoring
+  was never the mistake; *untracked* vendoring was.
+  - **`.vendor.json`** in each vendored folder records the package, version,
+    upstream commit and a content hash. Rules **R27–R30**.
+  - **`npm run vendor`** / `npm run vendor -- <id>` / **`npm run vendor:check`**
+    replace the pathology-only shell script. The registry lives in
+    `scripts/vendor-plugins.mjs`; a package may ship its own installer (radoyon
+    does) and the host delegates to it, then verifies the stamp it wrote. One
+    contract, one gate, more than one permitted implementation.
+  - **`tests/server/vendored-packages.test.js`** fails the build on a missing
+    stamp or a copy edited in place. Honest about its limits: a stamp proves
+    provenance and integrity, not *currency* — a copy three commits behind hashes
+    perfectly against its own stamp, so staleness is reported by `vendor:check`
+    where the upstream checkout exists.
+  - `docs/integrator/vendored-packages.md` for the day-to-day workflow.
+  - This closes a real gap: `src/components/pacs/` had sat frozen at one commit
+    while both repos advanced, and nothing in rohy said so or could have —
+    `portability.test.js` checks imports, not currency, and the room's own tests
+    stay green against stale code. rohy's copy is now current with radoyon
+    `029e4e1` and stamped.
+
+### Fixed
+
+- **A conversion job could starve the server it runs on.** libvips uses every
+  core by default; measured on the 4-core target server, one `dzsave` took
+  **301% CPU for 21 seconds**. `ctx.runBinary` now bounds image tools to half the
+  machine's cores (`ROHY_PLUGIN_VIPS_CONCURRENCY` overrides). This also keeps the
+  measured peak RSS honest, since libvips' memory scales with thread count.
+- **A subprocess inherited every secret rohy holds.** `runBinary` passed the
+  parent environment straight through, so `vips` ran with `JWT_SECRET` and every
+  provider API key readable. The child now gets an allowlist — `PATH`, `HOME`,
+  `LANG`, `VIPS_CONCURRENCY` — built by `childEnv()`, which is exported so the
+  policy is testable rather than buried in a spawn call.
+- `gen-config.mjs` listed `PATH`, `HOME` and `LANG` as rohy configuration once
+  the spawner read them. They are the operating system's, not knobs an operator
+  sets; inherited names are now skipped unless `ROHY_`-prefixed.
+
 ## [2.9.90] — 2026-08-29
 
 ### Fixed

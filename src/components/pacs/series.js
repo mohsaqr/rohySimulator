@@ -26,7 +26,11 @@ export function sliceNormal(orientation) {
     // A degenerate orientation (parallel cosines) has no plane; say so rather
     // than dividing by zero and producing NaN positions for every slice.
     if (!(len > 0)) return null;
-    return [n[0] / len, n[1] / len, n[2] / len];
+    // `+ 0` normalises negative zero. A cross product routinely produces -0
+    // (0 * -1), which is mathematically identical to 0 but not `Object.is`
+    // identical — so it survives into deepStrictEqual comparisons, snapshot
+    // fixtures and cache keys as a value that looks equal and compares unequal.
+    return [n[0] / len + 0, n[1] / len + 0, n[2] / len + 0];
 }
 
 /** Where a slice sits along the stack, in millimetres, or null when unknowable. */
@@ -64,6 +68,11 @@ export function describeInstance(dicom, { source } = {}) {
         seriesDescription: dicom.string('SeriesDescription'),
         studyDescription: dicom.string('StudyDescription'),
         instanceNumber: dicom.number('InstanceNumber'),
+        // Discriminators for images that share a slice position — see
+        // splitCoincident() below.
+        echoNumber: dicom.number('EchoNumbers', null),
+        echoTime: dicom.number('EchoTime', null),
+        acquisitionNumber: dicom.number('AcquisitionNumber', null),
         position: dicom.numbers('ImagePositionPatient'),
         orientation: dicom.numbers('ImageOrientationPatient'),
         pixelSpacing: dicom.numbers('PixelSpacing'),
@@ -97,35 +106,158 @@ export function buildSeries(instances) {
     });
 
     return Array.from(groups.entries())
-        .map(([seriesInstanceUid, members]) => {
-            const normal = sliceNormal(members[0]?.orientation);
-            const positioned = members.map((m) => ({ ...m, along: slicePosition(m.position, normal) }));
-            const spatial = positioned.every((m) => m.along !== null);
+        .flatMap(([seriesInstanceUid, members]) => buildStacks(seriesInstanceUid, members))
+        .sort((a, b) => (a.seriesNumber ?? 0) - (b.seriesNumber ?? 0) || a.stackId.localeCompare(b.stackId));
+}
 
-            const ordered = positioned.slice().sort((a, b) => {
-                if (spatial && a.along !== b.along) return a.along - b.along;
-                return (a.instanceNumber ?? 0) - (b.instanceNumber ?? 0);
-            });
+/**
+ * One SeriesInstanceUID can hold several STACKS.
+ *
+ * A dual-echo MR puts two images at every slice position (proton-density at
+ * TE 17 ms and T2 at TE 102 ms); a multi-phase liver CT puts three or four
+ * (arterial, portal-venous, delayed). They legitimately share one series UID.
+ * Presented as a single stack the contrast flips on every slice as the reader
+ * scrolls, and the measured spacing collapses to zero because half the gaps
+ * between sorted positions are zero.
+ *
+ * So: if any slice position holds more than one image, the series is split into
+ * one stack per discriminator. `EchoNumbers` is the standard one, then
+ * `AcquisitionNumber`; failing both, the nth image at each position, which at
+ * least yields coherent stacks rather than an interleaved one.
+ *
+ * Found on real data — the Visible Human Male's T2 CORONAL CHEST — which no
+ * synthetic fixture had exercised, because a phantom writes one image per
+ * position by construction.
+ */
+function buildStacks(seriesInstanceUid, members) {
+    const normal = sliceNormal(members[0]?.orientation);
+    const positioned = members.map((m) => ({ ...m, along: slicePosition(m.position, normal) }));
+    const spatial = positioned.every((m) => m.along !== null);
 
-            return {
-                seriesInstanceUid,
-                modality: members[0]?.modality,
-                seriesNumber: members[0]?.seriesNumber,
-                description: members[0]?.seriesDescription,
-                plane: planeOf(members[0]?.orientation),
-                orderedBy: spatial ? 'position' : 'instance_number',
-                instances: ordered,
-                count: ordered.length,
-                ...spacingOf(ordered, spatial),
-                geometry: {
-                    rows: members[0]?.rows,
-                    columns: members[0]?.columns,
-                    pixelSpacing: members[0]?.pixelSpacing,
-                    sliceThickness: members[0]?.sliceThickness,
-                },
-            };
-        })
-        .sort((a, b) => (a.seriesNumber ?? 0) - (b.seriesNumber ?? 0));
+    const groups = spatial ? splitCoincident(positioned) : [{ key: null, label: null, members: positioned }];
+
+    return groups.map(({ key, label, members: stackMembers }) => {
+        const ordered = stackMembers.slice().sort((a, b) => {
+            if (spatial && a.along !== b.along) return a.along - b.along;
+            return (a.instanceNumber ?? 0) - (b.instanceNumber ?? 0);
+        });
+        const description = members[0]?.seriesDescription;
+        return {
+            seriesInstanceUid,
+            // Unique per STACK. The frame cache and the UI key on this: two
+            // stacks sharing a series UID would otherwise collide in the cache
+            // and serve each other's pixels.
+            stackId: key === null ? seriesInstanceUid : `${seriesInstanceUid}#${key}`,
+            modality: members[0]?.modality,
+            seriesNumber: members[0]?.seriesNumber,
+            description: label ? `${description ?? 'Series'} ${label}` : description,
+            plane: planeOf(members[0]?.orientation),
+            orderedBy: spatial ? 'position' : 'instance_number',
+            instances: ordered,
+            count: ordered.length,
+            ...spacingOf(ordered, spatial),
+            geometry: {
+                rows: members[0]?.rows,
+                columns: members[0]?.columns,
+                pixelSpacing: members[0]?.pixelSpacing,
+                sliceThickness: members[0]?.sliceThickness,
+            },
+        };
+    });
+}
+
+/**
+ * Split images that share a slice position into separate stacks.
+ *
+ * Two conditions, both learned from real data rather than reasoned about:
+ *
+ * 1. **The duplication must be SYSTEMATIC.** A dual-echo MR has exactly two
+ *    images at every position; a multi-phase CT has three or four at every
+ *    position. By contrast the Visible Human CT was acquired in overlapping
+ *    segments, so a handful of positions carry two images and the rest carry
+ *    one — incidental overlap, not a second stack. Splitting that produces one
+ *    full stack and one three-slice orphan. So a split needs the modal
+ *    multiplicity to be greater than one AND to hold across most positions.
+ *
+ * 2. **The discriminator must actually RESOLVE the coincidence.** The same
+ *    Visible Human CT numbers every slice with its own AcquisitionNumber, so
+ *    grouping on it shattered a 499-slice series into 499 single-image stacks.
+ *    A candidate is therefore accepted only if it yields exactly as many groups
+ *    as there are images at a position, and no group still holds two images at
+ *    the same position.
+ *
+ * Failing both candidates, images are assigned by their nth occurrence at each
+ * position: arbitrary, but coherent stacks beat one interleaved stack whose
+ * contrast flips on every slice.
+ */
+function splitCoincident(positioned) {
+    const perPosition = new Map();
+    positioned.forEach((m) => perPosition.set(m.along, (perPosition.get(m.along) ?? 0) + 1));
+
+    // The modal multiplicity, and how much of the series it accounts for.
+    const tally = new Map();
+    perPosition.forEach((n) => tally.set(n, (tally.get(n) ?? 0) + 1));
+    let modal = 1;
+    let modalPositions = 0;
+    tally.forEach((positions, multiplicity) => {
+        if (positions > modalPositions || (positions === modalPositions && multiplicity > modal)) {
+            modal = multiplicity;
+            modalPositions = positions;
+        }
+    });
+    const systematic = modal > 1 && modalPositions / perPosition.size >= 0.8;
+    if (!systematic) return [{ key: null, label: null, members: positioned }];
+
+    const single = [{ key: null, label: null, members: positioned }];
+
+    /** Group by `valueOf`, and accept only if the split truly resolves it. */
+    const tryCandidate = (valueOf, keyOf, labelOf) => {
+        if (!positioned.every((m) => Number.isFinite(valueOf(m)))) return null;
+        const groups = new Map();
+        positioned.forEach((m) => {
+            const v = valueOf(m);
+            if (!groups.has(v)) groups.set(v, []);
+            groups.get(v).push(m);
+        });
+        if (groups.size !== modal) return null;
+        for (const members of groups.values()) {
+            const seen = new Set();
+            for (const m of members) {
+                if (seen.has(m.along)) return null;
+                seen.add(m.along);
+            }
+        }
+        return Array.from(groups.entries())
+            .map(([v, members]) => ({ key: keyOf(v), label: labelOf(members[0]), members }))
+            .sort((a, b) => a.key.localeCompare(b.key));
+    };
+
+    const byEcho = tryCandidate(
+        (m) => m.echoNumber,
+        (v) => `e${v}`,
+        // TE is what a reader recognises; the echo index is not.
+        (m) => (Number.isFinite(m.echoTime) ? `(TE ${m.echoTime})` : `(echo ${m.echoNumber})`),
+    );
+    if (byEcho) return byEcho;
+
+    const byAcquisition = tryCandidate(
+        (m) => m.acquisitionNumber,
+        (v) => `a${v}`,
+        (m) => `(acq ${m.acquisitionNumber})`,
+    );
+    if (byAcquisition) return byAcquisition;
+
+    // Last resort: the nth image at each position.
+    const seenAtPosition = new Map();
+    const groups = new Map();
+    positioned.forEach((m) => {
+        const nth = (seenAtPosition.get(m.along) ?? 0) + 1;
+        seenAtPosition.set(m.along, nth);
+        const key = `s${nth}`;
+        if (!groups.has(key)) groups.set(key, { key, label: `(stack ${nth})`, members: [] });
+        groups.get(key).members.push(m);
+    });
+    return groups.size > 1 ? Array.from(groups.values()).sort((a, b) => a.key.localeCompare(b.key)) : single;
 }
 
 /**

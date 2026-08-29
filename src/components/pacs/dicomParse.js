@@ -54,7 +54,49 @@ export class DicomError extends Error {
     }
 }
 
-const textDecoder = new TextDecoder('latin1');
+/**
+ * Character sets.
+ *
+ * DICOM's default is ISO-IR 6 (ASCII); anything else is declared in
+ * SpecificCharacterSet (0008,0005). Hardcoding latin1 is right for ASCII and
+ * for ISO_IR 100, and silently wrong for the UTF-8 studies (ISO_IR 192) that
+ * any modern scanner produces for a non-English patient name or a translated
+ * series description — it renders them as mojibake rather than failing, which
+ * is the kind of wrong nobody notices until it is in front of a user.
+ *
+ * Only the single-byte sets and UTF-8 are mapped. The ISO 2022 escape-sequence
+ * variants (Japanese, Korean) switch encoding MID-VALUE and need a stateful
+ * decoder; they fall back to latin1 for the ASCII portion rather than pretending
+ * to be handled.
+ */
+const CHARSET_DECODERS = {
+    '': 'latin1',
+    'ISO_IR 6': 'latin1',
+    'ISO_IR 100': 'latin1',
+    'ISO_IR 101': 'iso-8859-2',
+    'ISO_IR 109': 'iso-8859-3',
+    'ISO_IR 110': 'iso-8859-4',
+    'ISO_IR 144': 'iso-8859-5',
+    'ISO_IR 127': 'iso-8859-6',
+    'ISO_IR 126': 'iso-8859-7',
+    'ISO_IR 138': 'iso-8859-8',
+    'ISO_IR 148': 'windows-1254',
+    'ISO_IR 166': 'windows-874',
+    'ISO_IR 192': 'utf-8',
+    GB18030: 'gb18030',
+    GBK: 'gbk',
+};
+
+const asciiDecoder = new TextDecoder('latin1');
+
+function decoderFor(charset) {
+    // Multi-valued SpecificCharacterSet means code extensions; the FIRST value
+    // is the initial set, which is what a non-stateful decoder can honour.
+    const primary = String(charset ?? '').split('\\')[0].trim();
+    const label = CHARSET_DECODERS[primary];
+    if (!label) return asciiDecoder;
+    try { return new TextDecoder(label); } catch { return asciiDecoder; }
+}
 
 function toBytes(input) {
     if (input instanceof Uint8Array) return input;
@@ -201,7 +243,7 @@ function readFragments(view, start, end, le) {
 }
 
 /** Decode one element's value according to its VR. */
-function decode(bytes, view, el, le) {
+function decode(bytes, view, el, le, textDecoder = asciiDecoder) {
     const { vr, offset, length } = el;
     if (length === 0) return STRING_VRS.has(vr) ? [] : [];
 
@@ -281,6 +323,10 @@ export function parseDicom(input, options = {}) {
  * and re-implement VR decoding at every call site.
  */
 function makeObject({ bytes, view, meta, elements, transferSyntax, littleEndian }) {
+    // SpecificCharacterSet is itself always ASCII, so it is safe to read with
+    // the default decoder before choosing the real one.
+    const charsetEl = elements.get('00080005');
+    const textDecoder = decoderFor(charsetEl ? decode(bytes, view, charsetEl, littleEndian, asciiDecoder)[0] : '');
     const resolve = (nameOrTag) => (DICTIONARY[nameOrTag] ? nameOrTag : tagOf(nameOrTag)) ?? nameOrTag;
     const find = (nameOrTag) => {
         const tag = resolve(nameOrTag);
@@ -309,7 +355,7 @@ function makeObject({ bytes, view, meta, elements, transferSyntax, littleEndian 
         strings(nameOrTag) {
             const el = find(nameOrTag);
             if (!el) return [];
-            const v = decode(bytes, view, el, littleEndian);
+            const v = decode(bytes, view, el, littleEndian, textDecoder);
             return v === null ? [] : v.map(String);
         },
 
@@ -323,7 +369,7 @@ function makeObject({ bytes, view, meta, elements, transferSyntax, littleEndian 
         numbers(nameOrTag) {
             const el = find(nameOrTag);
             if (!el) return [];
-            const v = decode(bytes, view, el, littleEndian);
+            const v = decode(bytes, view, el, littleEndian, textDecoder);
             if (v === null) return [];
             return v.map((x) => (typeof x === 'number' ? x : Number.parseFloat(x))).filter(Number.isFinite);
         },

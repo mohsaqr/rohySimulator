@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ruler, Circle, Contrast, RotateCcw } from 'lucide-react';
 
 import { Viewport } from './Viewport.jsx';
@@ -21,22 +21,85 @@ import { RADOYON_COMPONENTS, RADOYON_OBJECT_TYPES } from './radoyonEvents.js';
 export function PacsScreen({
     worklist = [],
     loadSeries,
+    loadSeriesIndex,
+    loadInstance,
     eventLogger,
     t = (key, fallback) => fallback ?? key,
     initialMeasurements = {},
     onMeasurementsChange,
 }) {
     const [activeEntry, setActiveEntry] = useState(() => worklist.find((e) => e.available) ?? null);
-    const [activeSeriesUid, setActiveSeriesUid] = useState(null);
+
+    // Whether the reader has actually picked a study, as opposed to the room
+    // having auto-selected one for them.
+    const chosenByReader = useRef(false);
+    // Which series has already had its declared window applied.
+    const windowedSeries = useRef(null);
+
+    // Re-select when the worklist arrives or changes.
+    //
+    // The initialiser above runs ONCE, at mount. A host that loads its worklist
+    // asynchronously — the normal case, since studies come from a case document
+    // and an archive catalogue over the network — mounts this room with an
+    // empty or partial list. The reader was then left looking at whichever
+    // study happened to exist at the first render for the rest of the session.
+    //
+    // Tracking WHO chose matters: testing only "is the selection still in the
+    // list" preserves an auto-pick that is merely still present, which is how
+    // the first attempt at this failed — the room kept showing a placeholder
+    // study while the real ones sat unopened above it.
+    useEffect(() => {
+        if (chosenByReader.current && activeEntry && worklist.some((e) => e.id === activeEntry.id)) return;
+        const next = worklist.find((e) => e.available) ?? null;
+        setActiveEntry((current) => (current?.id === next?.id ? current : next));
+    }, [worklist]); // eslint-disable-line react-hooks/exhaustive-deps
+    const [activeStackId, setActiveStackId] = useState(null);
     const [viewport, setViewport] = useState(() => initialViewport({ sliceCount: 1 }));
     const [tool, setTool] = useState('window');
     const [measurements, setMeasurements] = useState(initialMeasurements);
 
-    const study = useStudy({ ref: activeEntry?.ref, loadSeries });
-    const activeSeries = useMemo(
-        () => study.series.find((s) => s.seriesInstanceUid === activeSeriesUid) ?? study.series[0] ?? null,
-        [study.series, activeSeriesUid],
+    // A study's series are known from the worklist METADATA — key, description,
+    // plane, instance count — without fetching a pixel. That is what lets the
+    // rail list all 27 series of a whole-body examination while only the series
+    // the reader is looking at is loaded. Fetching a study to discover what is
+    // in it would mean a gigabyte to render one slice.
+    const catalogueSeries = activeEntry?.series ?? [];
+    const [selectedKey, setSelectedKey] = useState(null);
+    const hasCatalogue = catalogueSeries.length > 1;
+
+    const selected = useMemo(
+        () => catalogueSeries.find((s) => (s.key ?? s.ref) === selectedKey) ?? catalogueSeries[0] ?? null,
+        [catalogueSeries, selectedKey],
     );
+
+    // Falls back to the entry's own ref when the host supplies no series list —
+    // a study that is one directory of DICOM works exactly as before.
+    const study = useStudy({ ref: selected?.ref ?? activeEntry?.ref, loadSeries, loadSeriesIndex, loadInstance });
+
+    const activeSeries = useMemo(
+        () => study.series.find((s) => (s.stackId ?? s.seriesInstanceUid) === activeStackId) ?? study.series[0] ?? null,
+        [study.series, activeStackId],
+    );
+
+    // The rail is driven by the catalogue when there is one, and by whatever was
+    // loaded otherwise. Both shapes carry description, plane and count.
+    const railSeries = hasCatalogue
+        ? catalogueSeries.map((s) => ({
+            stackId: s.key ?? s.ref,
+            description: s.description || s.key,
+            plane: s.plane,
+            count: s.instances,
+            spacing: s.geometry?.spacing,
+        }))
+        : study.series;
+
+    const railActiveId = hasCatalogue
+        ? (selected?.key ?? selected?.ref)
+        : (activeSeries?.stackId ?? activeSeries?.seriesInstanceUid);
+
+    // Changing study resets to its first series, so a reader never lands on a
+    // series belonging to the study they just navigated away from.
+    useEffect(() => { setSelectedKey(null); }, [activeEntry?.id]);
 
     const log = useCallback((verb, objectType, detail) => {
         eventLogger?.log?.({
@@ -52,7 +115,8 @@ export function PacsScreen({
     // slice rather than the first (see openingWindow).
     useEffect(() => {
         if (!activeSeries) return;
-        setActiveSeriesUid(activeSeries.seriesInstanceUid);
+        setActiveStackId(activeSeries.stackId ?? activeSeries.seriesInstanceUid);
+        windowedSeries.current = null;
         setViewport(initialViewport({
             sliceCount: activeSeries.count,
             window: openingWindow(activeSeries, study.frameAt),
@@ -63,7 +127,7 @@ export function PacsScreen({
             images: activeSeries.count,
             plane: activeSeries.plane,
         });
-    }, [activeSeries?.seriesInstanceUid]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [activeSeries?.stackId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (study.status === 'error') {
@@ -92,10 +156,25 @@ export function PacsScreen({
             images_total: activeSeries.count,
             coverage: Number(coverage(viewport).toFixed(3)),
         });
-    }, [activeSeries?.seriesInstanceUid]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [activeSeries?.stackId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const frame = activeSeries ? study.frameAt(activeSeries, viewport.slice) : null;
     const presets = presetsFor(activeSeries?.modality);
+
+    // Apply the study's own window once the slice that declares it has arrived.
+    //
+    // Under lazy loading no pixels exist when a series is selected, so the
+    // window cannot be known yet and the viewport opens on a neutral default.
+    // Applying it later is not cosmetic: a CT opened at the wrong window can
+    // look like a normal study when it is not. Applied ONCE per series, so a
+    // reader who has since dialled their own window keeps it.
+    useEffect(() => {
+        if (!activeSeries || windowedSeries.current === activeSeries.stackId) return;
+        const opening = openingWindow(activeSeries, study.frameAt);
+        if (!opening) return;
+        windowedSeries.current = activeSeries.stackId;
+        setViewport((v) => ({ ...v, window: { center: opening.center, width: opening.width } }));
+    }, [activeSeries, frame, study.frameAt]);
 
     const onPreset = useCallback((preset) => {
         setViewport((v) => applyPreset(v, preset));
@@ -105,7 +184,7 @@ export function PacsScreen({
     }, [log]);
 
     const onMeasure = useCallback((measurement) => {
-        const key = activeSeries?.seriesInstanceUid ?? 'unknown';
+        const key = activeSeries?.stackId ?? 'unknown';
         setMeasurements((current) => {
             const next = { ...current, [key]: [...(current[key] ?? []), { ...measurement, slice: viewport.slice }] };
             onMeasurementsChange?.(next);
@@ -177,20 +256,23 @@ export function PacsScreen({
             </div>
 
             <div className="flex flex-1 min-h-0">
-                <aside className="w-60 flex-shrink-0 border-r border-slate-700 flex flex-col min-h-0">
+                <aside className="w-80 flex-shrink-0 border-r border-slate-700 flex flex-col min-h-0">
                     <div className="border-b border-slate-700 max-h-56 overflow-y-auto">
                         <Worklist
                             entries={worklist}
                             activeId={activeEntry?.id}
-                            onSelect={setActiveEntry}
+                            onSelect={(entry) => { chosenByReader.current = true; setActiveEntry(entry); }}
                             t={t}
                         />
                     </div>
                     <SeriesRail
-                        series={study.series}
-                        activeUid={activeSeries?.seriesInstanceUid}
+                        series={railSeries}
+                        activeStackId={railActiveId}
                         onSelect={(s) => {
-                            setActiveSeriesUid(s.seriesInstanceUid);
+                            // A different series means a different fetch;
+                            // useStudy re-runs on the new ref.
+                            if (hasCatalogue) { setSelectedKey(s.stackId); return; }
+                            setActiveStackId(s.stackId ?? s.seriesInstanceUid);
                             setViewport((v) => changeSeries(v, s.count));
                         }}
                         t={t}
@@ -206,6 +288,9 @@ export function PacsScreen({
                         </Centered>
                     )}
                     {study.status === 'idle' && <Centered>{t('radoyon_select_study', 'Select a study to read.')}</Centered>}
+                    {study.status === 'ready' && !frame && (
+                        <Centered>{t('radoyon_loading_slice', 'Loading slice…')}</Centered>
+                    )}
                     {study.status === 'ready' && frame && (
                         <Viewport
                             frame={frame}
@@ -214,7 +299,7 @@ export function PacsScreen({
                             pixelSpacing={activeSeries?.geometry?.pixelSpacing}
                             inverted={frame.inverted}
                             tool={tool}
-                            measurements={measurements[activeSeries?.seriesInstanceUid] ?? []}
+                            measurements={measurements[activeSeries?.stackId] ?? []}
                             onMeasure={onMeasure}
                             t={t}
                         />

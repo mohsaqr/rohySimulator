@@ -225,3 +225,44 @@ describe('the allow-listed downloader', () => {
         expect(fetchLib.containedPath('/library/a', '/library/a/../b')).toBe(false);
     });
 });
+
+describe('the allow-listed spawner', () => {
+    let spawn;
+    beforeAll(async () => { spawn = await import('../../server/lib/pluginSpawn.js'); });
+
+    it('refuses a binary that is not on the allowlist', async () => {
+        await expect(async () => spawn.runBinary('rm', ['-rf', '/tmp/x']))
+            .rejects.toMatchObject({ code: 'plugin_spawn_forbidden' });
+        await expect(async () => spawn.runBinary('vips', 'not an array'))
+            .rejects.toMatchObject({ code: 'plugin_spawn_bad_args' });
+    });
+
+    // The parent environment holds JWT_SECRET and every provider API key. A
+    // subprocess that can read them is one crafted filename away from leaking
+    // them, so the child gets an ALLOWLIST rather than the parent's env minus
+    // a few names.
+    it('hands the child an allowlisted environment, never the parent\'s', () => {
+        process.env.ROHY_SPAWN_CANARY = 'super-secret';
+        const env = spawn.childEnv();
+        expect(env.ROHY_SPAWN_CANARY).toBeUndefined();
+        expect(env.JWT_SECRET).toBeUndefined();
+        expect(Object.keys(env).sort()).toEqual(['HOME', 'LANG', 'PATH', 'VIPS_CONCURRENCY']);
+        delete process.env.ROHY_SPAWN_CANARY;
+    });
+
+    // Measured on the 4-core target server: one unbounded dzsave took 301% CPU
+    // for 21 seconds — three of four cores — starving the web server it shares
+    // the box with. libvips' peak memory also scales with thread count, so an
+    // unbounded tool would blow past the RSS the capacity proof recorded.
+    it('bounds image-tool concurrency below the machine width, and lets an operator override it', async () => {
+        const { availableParallelism } = await import('node:os');
+        expect(spawn.imageToolConcurrency()).toBeLessThan(Math.max(2, availableParallelism()));
+        expect(spawn.imageToolConcurrency()).toBeGreaterThanOrEqual(1);
+
+        process.env.ROHY_PLUGIN_VIPS_CONCURRENCY = '3';
+        expect(spawn.imageToolConcurrency()).toBe(3);
+        process.env.ROHY_PLUGIN_VIPS_CONCURRENCY = 'nonsense';
+        expect(spawn.imageToolConcurrency()).toBeGreaterThanOrEqual(1);
+        delete process.env.ROHY_PLUGIN_VIPS_CONCURRENCY;
+    });
+});

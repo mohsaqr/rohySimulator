@@ -56,10 +56,15 @@ describe.skipIf(!HAVE_VIPS)('importing a slide from a link, end to end', () => {
         // A real, small, tiled pyramidal TIFF — the "Generic-TIFF" case, which
         // libvips reports as `tiffload` and which carries no optics, so this
         // also exercises the needs_calibration path.
+        // One thread throughout. This suite proves CORRECTNESS, not throughput,
+        // and vitest runs test files in parallel — an unbounded libvips takes
+        // most of the machine and starves whatever else is running, which showed
+        // up as unrelated files timing out on unrelated assertions.
         slidePath = join(workDir, 'specimen.tif');
-        execFileSync('vips', ['gaussnoise', join(workDir, 'src.v'), '2400', '1800', '--mean', '128', '--sigma', '40']);
+        const oneThread = { env: { ...process.env, VIPS_CONCURRENCY: '1' } };
+        execFileSync('vips', ['gaussnoise', join(workDir, 'src.v'), '2400', '1800', '--mean', '128', '--sigma', '40'], oneThread);
         execFileSync('vips', ['copy', join(workDir, 'src.v'),
-            `${slidePath}[compression=jpeg,Q=85,tile,tile-width=256,tile-height=256,pyramid]`]);
+            `${slidePath}[compression=jpeg,Q=85,tile,tile-width=256,tile-height=256,pyramid]`], oneThread);
 
         const size = statSync(slidePath).size;
         const origin = http.createServer((req, res) => {
@@ -75,6 +80,9 @@ describe.skipIf(!HAVE_VIPS)('importing a slide from a link, end to end', () => {
             env: {
                 ROHY_PLUGIN_LIBRARY_DIRS: `pathology=${libraryDir}`,
                 ROHY_PLUGIN_IMPORT_ORIGINS: `pathology=${slideOrigin.url}`,
+                // See the fixture comment above: one thread, so this suite does
+                // not starve the test files running beside it.
+                ROHY_PLUGIN_VIPS_CONCURRENCY: '1',
             },
         });
         const hash = await bcrypt.hash('Educator1!', 4);

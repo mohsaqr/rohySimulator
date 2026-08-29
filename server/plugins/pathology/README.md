@@ -6,8 +6,14 @@ byte-identical copy plus two rohy-only files (this README and
 (`npm test` in `pathoyon/`, `node --test`), and re-vendor:
 
 ```
-npm run pathology:vendor      # vendors BOTH halves: src/ and server/
+npm run vendor            # every vendored package
+npm run vendor -- pathology-server  # just this half
+npm run vendor:check      # verify the stamps, and report staleness
 ```
+
+`.vendor.json` in this folder records which upstream commit this is and a hash
+of its contents. `tests/server/vendored-packages.test.js` fails the build if the
+copy is edited in place or the stamp is missing — see **RPS-1 §16**.
 
 ## What it is
 
