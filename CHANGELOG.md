@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.92] — 2026-08-29
+
+### Fixed
+
+- **A race in the PACS room test, surfaced by re-vendoring.** It waited for the
+  series rail to appear and then read the logged analytics verbs *synchronously*.
+  Those are two independent async effects, and assuming an order between them is
+  a race — radoyon's lazy-loading path (vendored at `029e4e1` in 2.9.91) moved
+  the emit later, so it passed on a fast machine and failed in CI with
+  `expected [] to include 'OPENED_STUDY'`. The verb assertions are now awaited.
+  A vendored upgrade changing *when* something happens is exactly the class of
+  break the stamp makes visible; the test just had to stop assuming.
+
 ## [2.9.91] — 2026-08-29
 
 ### Added

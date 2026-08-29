@@ -247,9 +247,17 @@ describe('PACS room — the end-to-end thin slice', () => {
 
         // Opening the study is an analytics event, which is what makes any of
         // this assessable.
-        const verbs = ctx.eventLogger.log.mock.calls.map(([e]) => e.verb);
-        expect(verbs).toContain('OPENED_STUDY');
-        expect(verbs).toContain('SELECTED_SERIES');
+        //
+        // Awaited, not read at the instant the rail appears. The rail rendering
+        // and the events being logged are two INDEPENDENT async effects, and
+        // assuming an order between them is a race: radoyon's lazy-loading path
+        // (vendored at 029e4e1) moved the emit later, and this passed on a fast
+        // machine while failing in CI.
+        await waitFor(() => {
+            const verbs = ctx.eventLogger.log.mock.calls.map(([e]) => e.verb);
+            expect(verbs).toContain('OPENED_STUDY');
+            expect(verbs).toContain('SELECTED_SERIES');
+        }, { timeout: 5000 });
     });
 
     it('the fetched bytes really are DICOM, and order spatially', () => {
