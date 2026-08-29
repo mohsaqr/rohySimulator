@@ -9,6 +9,31 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.95] — 2026-08-29
+
+### Fixed
+
+- **`kb -- stale` reported "0 of 7 open bugs" while all seven were invisible to
+  it.** A bug that cites no file was skipped by a bare `continue`, so a set it
+  had never examined printed as a clean result — "0 of 7 have later work" reads
+  as *checked and clear* when it meant *not checked at all*. It now lists what
+  it could not check and says why. A tool that filters silently will eventually
+  report an empty set as an all-clear.
+
+- **The bug parser never scanned the Verdict column**, which is where the pilot
+  triage puts its reasoning and every file it names — its remaining column is
+  only `Effort: ½ day`. All 13 of that report's findings therefore carried no
+  code references at all, which is what made them invisible to `stale`.
+
+- **`statusOf` classified prose by substring, and the words overlap.**
+  `CONFIRMED (design gap)` (an open defect) and `DESIGN/GAP — …` (an undecided
+  question) collided, and an `ALREADY` rule swallowed "the data model already
+  allows it". Rewritten as ordered rules — fixed, then nothing-to-build, then
+  confirmed-defect, then undecided — because the order is what disambiguates
+  words that legitimately appear inside one another. `EXISTS` (the reporter
+  asked for something already shipped) and a bare `DESIGN` are now classified
+  instead of falling through to `unknown`, which read as "nobody looked".
+
 ## [2.9.94] — 2026-08-29
 
 ### Added

@@ -243,12 +243,26 @@ const plain = (s) => (s ?? '').replace(/\*\*/g, '').replace(/`/g, '').trim();
 export function statusOf(verdict) {
     const v = plain(verdict).toUpperCase();
     if (!v) return 'unknown';
+    // ORDERED rules, not a bag of substrings. Order is the whole design here:
+    // these verdicts are prose, and several classifying words appear inside
+    // each other. 'CONFIRMED (design gap)' is an open defect, while
+    // 'DESIGN/GAP — …' is an undecided question — a DESIGN rule that ran first
+    // would swallow both, and an ALREADY rule swallowed 'the data model
+    // already allows it' when it was tried.
+    //
+    // 1. Fixed wins over everything: 'FIXED in v2.9.15 …; import path
+    //    CONFIRMED' is fixed, and a bug marked fixed must not resurface.
     if (/\bFIXED\b|\bDONE\b|\bSHIPPED\b|\bRESOLVED\b/.test(v)) return 'fixed';
-    if (/INVALID|MISUNDERSTANDING|BY DESIGN|NOT REPRODUCIBLE|WORKS AS/.test(v)) return 'invalid';
-    if (/CANNOT VERIFY|NEEDS|DEFER|LATER|QUESTION|ANSWER|DESIGN\/GAP|PROPOSAL/.test(v)) return 'deferred';
-    if (/CONFIRMED|BUG|GAP|GENUINE/.test(v)) return 'open';
+    // 2. Nothing to build: the premise was wrong, or the thing already ships.
+    if (/INVALID|MISUNDERSTANDING|\bEXISTS\b|NOT REPRODUCIBLE|BY DESIGN|WORKS AS/.test(v)) return 'invalid';
+    // 3. A real defect — checked BEFORE the design rule for the reason above.
+    if (/CONFIRMED|GENUINE|^BUG\b/.test(v)) return 'open';
+    // 4. A decision still to be taken, or a claim that could not be checked.
+    if (/CANNOT VERIFY|\bNEEDS\b|\bDEFER|\bLATER\b|QUESTION|\bANSWER\b|\bDESIGN\b|PROPOSAL/.test(v)) return 'deferred';
+    if (/\bGAP\b/.test(v)) return 'open';
     return 'unknown';
 }
+
 
 /**
  * Bugs from every triage table under `reports/`.
@@ -287,7 +301,13 @@ export function bugs(dir = 'reports', basenameIndex) {
                     .filter((x) => x && !/: *$/.test(x))
                     .join('\n');
                 const verdict = plain(cells[iVerdict]);
-                const refs = extractRefs(`${title} ${detail}`);
+                // The VERDICT is scanned too, not just the title and detail
+                // columns. In the pilot report the reasoning — and every file
+                // it names — lives in the verdict, while the remaining column
+                // is only 'Effort: ½ day'. Skipping it left all 13 of that
+                // report's findings with no refs at all, which in turn made
+                // `kb stale` silently skip them.
+                const refs = extractRefs(`${title} ${verdict} ${detail}`);
                 bugsOut.push({
                     id: `${file.replace(/\.md$/, '')}#${number}`,
                     report: file,

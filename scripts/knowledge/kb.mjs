@@ -376,9 +376,14 @@ async function cmdStale(kb, argv) {
            FROM bug WHERE status = 'open' AND reported_on IS NOT NULL ORDER BY report, CAST(number AS INTEGER)`);
 
     const suspects = [];
+    const uncheckable = [];
     for (const bug of open) {
         const files = [...new Set(JSON.parse(bug.refs).map((r) => r.split(':')[0]))].filter(Boolean);
-        if (!files.length) continue;
+        // A bug that cites no file cannot be checked this way — and saying so
+        // matters. Skipping it in silence is how this command reported "0 of 7"
+        // while all seven were simply invisible to it, which reads as "nothing
+        // to do" and is the opposite of the truth.
+        if (!files.length) { uncheckable.push(bug); continue; }
         const seen = new Map();
         for (const file of files) {
             const rows = await kb.all(
@@ -397,6 +402,13 @@ async function cmdStale(kb, argv) {
         console.log(`        ${dim('reported ' + bug.reported_on + ' · ' + oneLine(bug.verdict, 40))}`);
         for (const cm of commits) {
             console.log(`        ${cyan(cm.short_sha)} ${cm.authored_at.slice(0, 10)} ${cm.version ? dim('v' + cm.version + ' ') : ''}${oneLine(cm.subject, 74)}`);
+        }
+        console.log('');
+    }
+    if (uncheckable.length) {
+        console.log(dim(`  ${uncheckable.length} open bug${uncheckable.length === 1 ? '' : 's'} cite no file and cannot be checked this way — read ${uncheckable.length === 1 ? 'it' : 'them'} by hand:`));
+        for (const b of uncheckable) {
+            console.log(dim(`    ${b.report.replace(/^bug-triage-|\.md$/g, '')} #${b.number}  ${oneLine(b.title, 76)}`));
         }
         console.log('');
     }

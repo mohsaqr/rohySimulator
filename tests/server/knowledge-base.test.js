@@ -142,6 +142,16 @@ describe('verdict → status', () => {
         expect(statusOf('ANSWER — no; language is a case property')).toBe('deferred');
     });
 
+    it('classifies the verdicts that are findings but not defects', () => {
+        // 'EXISTS' means the reporter asked for something already shipped —
+        // nothing to build, same class as a misunderstanding. A bare 'DESIGN'
+        // is a decision still to be taken. Both used to fall through to
+        // 'unknown', which reads as "nobody looked" rather than "answered".
+        expect(statusOf('EXISTS — "12-Lead ECG" is in the catalogue')).toBe('invalid');
+        expect(statusOf('DESIGN — agrees with RxNorm\'s two-layer model')).toBe('deferred');
+        expect(statusOf('DESIGN/GAP — the data model already allows it')).toBe('deferred');
+    });
+
     it('says unknown rather than guessing', () => {
         expect(statusOf('')).toBe('unknown');
         expect(statusOf(null)).toBe('unknown');
