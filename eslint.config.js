@@ -22,6 +22,11 @@ export default defineConfig([
     // which IS rohy's and stays linted.
     'src/components/pathology/**/*.{js,jsx}',
     '!src/components/pathology/portability.test.js',
+    // Byte-identical vendored copy of ~/Documents/Github/Radoyon/radoyon/src.
+    // Same posture: lint is owned upstream, and rohy's gate on the folder is
+    // its own portability.test.js, which stays linted.
+    'src/components/pacs/**/*.{js,jsx}',
+    '!src/components/pacs/portability.test.js',
     'coverage/**',
     'playwright-report/**',
     'test-results/**',

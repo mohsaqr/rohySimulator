@@ -83,6 +83,13 @@ describe('R24 — plugin tables are namespaced', () => {
         expect(slot.disallowedTables("db.run('INSERT INTO plugin_pathology_slides VALUES (?)')", 'pathology')).toEqual([]);
         expect(slot.disallowedTables("db.get('SELECT * FROM plugin_assets')", 'pathology')).toEqual([]);
         expect(slot.disallowedTables("db.all('SELECT a FROM plugin_pathology_x JOIN sessions ON 1')", 'pathology')).toEqual(['sessions']);
+        // Prose is not SQL: a comment saying "imported from a link" or "update
+        // the row" must not be reported as tables called 'a' and 'the'.
+        expect(slot.disallowedTables('// imported from a link, then update the row', 'pathology')).toEqual([]);
+        expect(slot.disallowedTables('/** Select rows from a catalogue. */', 'pathology')).toEqual([]);
+        // An upsert ends 'ON CONFLICT (id) DO UPDATE SET …', so a naive scan
+        // reports a table called 'set'.
+        expect(slot.disallowedTables("db.run('INSERT INTO plugin_assets (id) VALUES (?) ON CONFLICT (id) DO UPDATE SET state = 1')", 'pathology')).toEqual([]);
     });
 
     it('every shipped plugin server module obeys it', async () => {

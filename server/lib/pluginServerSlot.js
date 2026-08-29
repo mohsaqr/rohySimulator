@@ -220,6 +220,18 @@ export function buildServerContext(manifest) {
 export const SHARED_PLUGIN_TABLES = ['plugin_settings', 'plugin_jobs', 'plugin_assets'];
 
 /**
+ * SQL words that follow one of the scanned keywords without being a table.
+ *
+ * The one that matters is `SET`: an upsert ends `ON CONFLICT (id) DO UPDATE SET
+ * …`, so `update` is followed by `SET` and a naive scan reports a table called
+ * `set`. The rest are here for the same reason — a lint that cries wolf gets
+ * switched off.
+ */
+const SQL_KEYWORDS = new Set([
+    'set', 'select', 'values', 'where', 'exists', 'if', 'not', 'and', 'or', 'on', 'conflict', 'do',
+]);
+
+/**
  * Table names a plugin's SQL touches that R24 does not permit it.
  *
  * R24: a plugin's own tables are prefixed `plugin_<id>_`. This finds the table
@@ -240,16 +252,29 @@ export const SHARED_PLUGIN_TABLES = ['plugin_settings', 'plugin_jobs', 'plugin_a
  */
 export function disallowedTables(source, pluginId) {
     const allowedPrefix = `plugin_${pluginId}_`;
+    // Comments first: English prose is full of "from a", "update the" and "set",
+    // and a detector that reads them reports `a`, `the` and `set` as tables.
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    // Then STRING LITERALS ONLY, and only ones that look like SQL. A table name
+    // can only appear inside a query, so anything outside one is noise.
+    const literals = code.match(/`[^`]*`|'[^']*'|"[^"]*"/g) ?? [];
+    const queries = literals.filter((lit) => /\b(SELECT|INSERT|UPDATE|DELETE|CREATE)\b/i.test(lit));
+
     const found = new Set();
     const re = /\b(?:from|join|into|update|table(?:\s+if\s+not\s+exists)?)\s+([a-z_][a-z0-9_]*)/gi;
-    let m;
-    while ((m = re.exec(source)) !== null) {
-        const table = m[1].toLowerCase();
-        // `from` also appears in JS (`import x from`), so anything that is not
-        // plausibly a table name is ignored rather than reported.
-        if (table.startsWith(allowedPrefix) || SHARED_PLUGIN_TABLES.includes(table)) continue;
-        found.add(table);
-    }
+    queries.forEach((query) => {
+        let m;
+        re.lastIndex = 0;
+        while ((m = re.exec(query)) !== null) {
+            const table = m[1].toLowerCase();
+            if (SQL_KEYWORDS.has(table)) continue;
+            // `continue`, not `return`: inside a forEach callback a `return`
+            // abandons the whole QUERY at its first allowed table, so
+            // `FROM plugin_pathology_x JOIN sessions` would report nothing.
+            if (table.startsWith(allowedPrefix) || SHARED_PLUGIN_TABLES.includes(table)) continue;
+            found.add(table);
+        }
+    });
     return [...found].sort();
 }
 
@@ -296,7 +321,13 @@ export async function mountPluginServerSlots(router) {
         }
         try {
             const ctx = buildServerContext(manifest);
-            Object.entries(mod.jobs ?? {}).forEach(([kind, handler]) => ctx.registerJob(kind, handler));
+            // The plugin's handler receives ctx as a third argument rather than
+            // through `this`: a module-level export is not a method, and binding
+            // `this` would work until the first time someone destructured the
+            // handler out of the object.
+            Object.entries(mod.jobs ?? {}).forEach(([kind, handler]) => {
+                ctx.registerJob(kind, (job, api) => handler(job, api, ctx));
+            });
             if (typeof mod.routes === 'function') {
                 // Every route the plugin declares lands under its own id, so the
                 // manifest's one identity stays one identity (§2).

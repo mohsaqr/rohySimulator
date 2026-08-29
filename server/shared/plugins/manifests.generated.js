@@ -28,7 +28,8 @@ export const PLUGIN_MANIFESTS = [
             ],
             "paths": [
                 "/tiles",
-                "/gross"
+                "/gross",
+                "/library"
             ]
         },
         "room": {
@@ -133,12 +134,16 @@ export const PLUGIN_MANIFESTS = [
                     "type": "int"
                 },
                 "tiling.regionShrink": {
-                    "default": "average",
+                    "default": "mean",
                     "group": "tiling",
                     "labelKey": "pathology_settings_tiling_shrink",
                     "options": [
-                        "average",
-                        "median"
+                        "mean",
+                        "median",
+                        "mode",
+                        "max",
+                        "min",
+                        "nearest"
                     ],
                     "type": "enum"
                 },

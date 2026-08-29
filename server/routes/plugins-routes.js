@@ -33,7 +33,7 @@ import { roleAllows } from '../shared/pluginRegistry.js';
 import { pluginOrigins } from '../lib/pluginRemoteOrigins.js';
 import { readSettings, mergeSettings, visibleSettingKeys } from '../shared/pluginSettings.js';
 import { importOriginsFor } from '../lib/pluginImportOrigins.js';
-import { tenantId, auditSuccess, dbGet, dbRun } from './_helpers.js';
+import { tenantId, auditSuccess, dbGet, dbRun, dbAll } from './_helpers.js';
 import { logger } from '../logger.js';
 
 const log = logger('plugin-proxy');
@@ -183,6 +183,48 @@ router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async 
     const stray = JSON.stringify(catalog).match(/"url":\s*"(?!remote:)[^"]*"/);
     if (stray) {
         return res.status(502).json({ error: 'plugin catalog carries a URL that is not a remote: reference', code: 'plugin_catalog_invalid' });
+    }
+    // Merge in the MANAGED half of the library (RPS-1 1.4). The bundle is what
+    // a content deploy shipped; these are slides this tenant imported from a
+    // link. The editor asks one endpoint and gets one library, because "which
+    // half did this slide come from" is an operator's question, not an author's.
+    //
+    // Only 'ready' assets. A slide that is still importing, has failed, or is
+    // awaiting calibration is real but not yet usable, and offering it here
+    // would let an author build a case around a slide whose scale is unknown.
+    // The full library, every state and its error text, is the plugin's own
+    // /assets route.
+    const managed = await dbAll(
+        `SELECT id, label, native_objective, native_mpp_x, tiled_objective, width, height
+           FROM plugin_assets
+          WHERE plugin_id = ? AND tenant_id = ? AND state = 'ready'
+          ORDER BY created_at DESC`,
+        [pluginId, tenantId(req)]
+    ).catch(() => []);
+    if (managed.length > 0) {
+        catalog.assets = [
+            ...managed.map((row) => ({
+                id: row.id,
+                label: row.label,
+                status: 'ready',
+                managed: true,
+                preview: { url: `remote:library/${row.id}/preview.jpg` },
+                currentRevisionId: 'managed',
+                revisions: [{
+                    id: 'managed',
+                    status: 'ready',
+                    derivatives: { dzi: { url: `remote:library/${row.id}/slide.dzi` } },
+                    optics: {
+                        nativeObjective: row.native_objective,
+                        nativeMpp: row.native_mpp_x,
+                        tiledObjective: row.tiled_objective,
+                    },
+                    widthPx: row.width,
+                    heightPx: row.height,
+                }],
+            })),
+            ...(catalog.assets ?? []),
+        ];
     }
     res.setHeader('Cache-Control', 'private, max-age=60');
     res.json({ plugin: pluginId, catalog });

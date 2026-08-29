@@ -132,6 +132,12 @@ export default defineConfig({
                     setupFiles: ['./tests/server-setup.js'],
                     include: [
                         'tests/server/**/*.test.{js,jsx}',
+                        // A vendored plugin server module keeps its portability
+                        // gate NEXT TO the code it guards, the way the client
+                        // half does under src/components/pathology/. A gate in
+                        // tests/server/ would survive the folder being emptied
+                        // by a bad re-vendor and pass vacuously.
+                        'server/plugins/**/*.test.{js,jsx}',
                     ],
                     exclude: sharedExclude,
                     // Phase 0 ships with no server tests yet — Phase 2

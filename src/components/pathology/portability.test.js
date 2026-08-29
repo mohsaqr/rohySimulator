@@ -21,6 +21,18 @@ const PACKAGE_DIR = __dirname;
 const PEER_DEPENDENCIES = new Set(['react', 'react-dom', 'openseadragon', 'lucide-react']);
 const IMPORT_RE = /(?:^|\n)\s*(?:import|export)\b[^'"\n]*?\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
 
+/**
+ * Source with comments removed.
+ *
+ * Without this the scan matches a JSDoc type annotation — `@param
+ * {import('express').Router} router` is a TYPE reference, not a dependency, and
+ * flagging it would force a package to stop documenting the shape of what the
+ * host hands it. It also stops a commented-out import from failing the gate.
+ */
+function code(source) {
+    return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
 function sourceFiles(dir = PACKAGE_DIR) {
     return readdirSync(dir, { withFileTypes: true })
         .flatMap((e) => (e.isDirectory()
@@ -30,7 +42,7 @@ function sourceFiles(dir = PACKAGE_DIR) {
 }
 
 function importsOf(file) {
-    const text = readFileSync(join(PACKAGE_DIR, file), 'utf8');
+    const text = code(readFileSync(join(PACKAGE_DIR, file), 'utf8'));
     const out = [];
     for (const m of text.matchAll(IMPORT_RE)) out.push(m[1] ?? m[2]);
     return out;

@@ -18,8 +18,8 @@
 // ESM only. No external deps.
 // =============================================================================
 
-import { readFileSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
-import { join, dirname, basename } from 'node:path';
+import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync } from 'node:fs';
+import { join, dirname, basename, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -37,6 +37,18 @@ const API_BASE = '/api';
 // Auth middleware identifiers we recognise when they appear as arguments on a
 // route registration line. authenticateToken is the JWT-extracting middleware;
 // requireAuth/requireRole/requireX are the authorization gates.
+// A plugin's server module reaches rohy's OWN middleware through `ctx.guards`
+// (RPS-1 §11b.2) rather than importing it — importing it is what the
+// portability gate forbids. Same guard, different spelling, so the reference
+// must recognise both or every plugin route reads as unauthenticated.
+const GUARD_ALIASES = {
+  'guards.authenticated': 'authenticateToken',
+  'guards.admin': 'requireAdmin',
+  'guards.educator': 'requireEducator',
+  'guards.reviewer': 'requireReviewer',
+  'guards.student': 'requireStudent',
+};
+
 const AUTH_TOKENS = [
   'authenticateToken',
   'requireAuth',
@@ -137,7 +149,11 @@ function scanRouteFile(filePath, prefix) {
 
     const method = m[1].toUpperCase();
     const routePath = m[3];
-    const rest = m[4] || '';
+    // Rewrite ctx.guards.* to the middleware it IS, before auth detection.
+    const rest = Object.entries(GUARD_ALIASES).reduce(
+      (line, [alias, real]) => line.split(alias).join(real),
+      m[4] || '',
+    );
 
     // Auth detection: look for known middleware tokens in the remainder of the
     // registration line (the arguments before the handler). requireRole(...) is
@@ -161,7 +177,7 @@ function scanRouteFile(filePath, prefix) {
       method,
       path: fullPath,
       routePath, // path within the router (used for summaries)
-      sourceFile: `server/routes/${basename(filePath)}`,
+      sourceFile: relative(REPO_ROOT, filePath),
       sourceLine: idx + 1,
       auth, // array; empty means public / no middleware on the line
     });
@@ -446,6 +462,26 @@ function main() {
     if (!byArea.has(area)) byArea.set(area, []);
     byArea.get(area).push(...eps);
     total += eps.length;
+  }
+
+  // RPS-1 1.4 — a plugin's own server module declares real endpoints under
+  // /api/plugins/<id>/ (§11b). They are as public as any other route and belong
+  // in the reference; without this they exist, are auth-gated, and are
+  // documented nowhere. The prefix comes from the directory name, which the
+  // standard already guarantees is the plugin id.
+  const SLOT_DIR = join(REPO_ROOT, 'server', 'plugins');
+  if (existsSync(SLOT_DIR)) {
+    for (const entry of readdirSync(SLOT_DIR, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const full = join(SLOT_DIR, entry.name, 'index.js');
+      if (!existsSync(full)) continue;
+      const eps = scanRouteFile(full, `/plugins/${entry.name}`);
+      if (eps.length === 0) continue;
+      const area = 'plugins';
+      if (!byArea.has(area)) byArea.set(area, []);
+      byArea.get(area).push(...eps);
+      total += eps.length;
+    }
   }
 
   mkdirSync(OUT_DIR, { recursive: true });

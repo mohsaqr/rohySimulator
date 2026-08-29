@@ -12,7 +12,7 @@
 ## Overview
 
 - **Routers:** 24
-- **Endpoints:** 365
+- **Endpoints:** 370
 - **Base path:** all endpoints are mounted under `/api`.
 - **Machine-readable spec:** [`openapi.json`](./openapi.json) (OpenAPI 3.1).
   Each operation carries an `x-rohy-source` extension pointing at the exact
@@ -37,7 +37,7 @@
 | [orders](./orders.md) | 37 |
 | [oyon](./oyon.md) | 13 |
 | [patient-record](./patient-record.md) | 5 |
-| [plugins](./plugins.md) | 4 |
+| [plugins](./plugins.md) | 9 |
 | [proxy](./proxy.md) | 12 |
 | [registration](./registration.md) | 8 |
 | [sessions](./sessions.md) | 5 |

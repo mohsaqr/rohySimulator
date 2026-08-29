@@ -5517,7 +5517,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/health-routes.js:42",
+        "x-rohy-source": "server/routes/health-routes.js:43",
         "x-rohy-auth": [
           "public"
         ],
@@ -5544,7 +5544,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/health-routes.js:160",
+        "x-rohy-source": "server/routes/health-routes.js:201",
         "x-rohy-auth": [
           "public"
         ],
@@ -8360,6 +8360,181 @@
         ]
       }
     },
+    "/api/plugins/pathology/assets": {
+      "get": {
+        "summary": "Get /plugins/pathology/assets",
+        "tags": [
+          "plugins"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/plugins/pathology/index.js:157",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireEducator"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/plugins/pathology/assets/{assetId}/calibration": {
+      "put": {
+        "summary": "Replace /plugins/pathology/assets/:assetId/calibration",
+        "tags": [
+          "plugins"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/plugins/pathology/index.js:195",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireEducator"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/plugins/pathology/imports": {
+      "post": {
+        "summary": "Create /plugins/pathology/imports",
+        "tags": [
+          "plugins"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/plugins/pathology/index.js:68",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireEducator"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/plugins/pathology/jobs/{jobId}": {
+      "get": {
+        "summary": "Get /plugins/pathology/jobs/:jobId",
+        "tags": [
+          "plugins"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/plugins/pathology/index.js:133",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireEducator"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/plugins/pathology/jobs/{jobId}/cancel": {
+      "post": {
+        "summary": "Create /plugins/pathology/jobs/:jobId/cancel",
+        "tags": [
+          "plugins"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/plugins/pathology/index.js:144",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireEducator"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/api/plugins/{pluginId}/*splat": {
       "get": {
         "summary": "Get /plugins/:pluginId/*splat",
@@ -8380,7 +8555,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/plugins-routes.js:346",
+        "x-rohy-source": "server/routes/plugins-routes.js:388",
         "x-rohy-auth": [
           "authenticateToken",
           "requireStudent"
@@ -8449,7 +8624,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/plugins-routes.js:259",
+        "x-rohy-source": "server/routes/plugins-routes.js:301",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8481,7 +8656,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/plugins-routes.js:288",
+        "x-rohy-source": "server/routes/plugins-routes.js:330",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8649,7 +8824,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/health-routes.js:62",
+        "x-rohy-source": "server/routes/health-routes.js:63",
         "x-rohy-auth": [
           "public"
         ],

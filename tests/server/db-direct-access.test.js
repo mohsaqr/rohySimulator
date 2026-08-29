@@ -43,7 +43,13 @@ function findDirectDbAccess() {
             return { filePath: m[1], line: m[2], content: m[3].trim() };
         })
         .filter(Boolean)
-        .filter((finding) => !isAllowlisted(finding.filePath));
+        .filter((finding) => !isAllowlisted(finding.filePath))
+        // `ctx.db.run(...)` in a vendored plugin server module IS the adapter:
+        // RPS-1 §11b hands `dbAdapter` to a plugin as `ctx.db`, precisely so a
+        // plugin cannot open its own handle. Matching it here would push plugin
+        // authors toward importing dbAdapter directly — which the portability
+        // gate then forbids — leaving no legal way to write a query.
+        .filter((finding) => !/\bctx\.db\.(run|get|all|exec)\b/.test(finding.content));
 }
 
 describe('database adapter boundary', () => {

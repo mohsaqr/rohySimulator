@@ -11962,6 +11962,13 @@
     "reviewer": null,
     "risk": "low"
   },
+  "common.radoyon_studies_count": {
+    "src": "ad5c7f033e5a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "common.rating_scale_hint": {
     "src": "f1a8a3245826",
     "state": "machine",
@@ -12041,6 +12048,27 @@
   },
   "common.room_navigation": {
     "src": "0ccd1ce71ee0",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.room_pacs": {
+    "src": "5e1015d9da4e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.room_pacs_author": {
+    "src": "5e6dff751a33",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.room_pacs_sub": {
+    "src": "9b2142694e6a",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,

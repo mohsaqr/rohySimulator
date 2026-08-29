@@ -9,6 +9,6 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/health` | `(none)` | `server/routes/health-routes.js:42` |
-| `GET` | `/api/health/plugins` | `(none)` | `server/routes/health-routes.js:160` |
-| `GET` | `/api/ready` | `(none)` | `server/routes/health-routes.js:62` |
+| `GET` | `/api/health` | `(none)` | `server/routes/health-routes.js:43` |
+| `GET` | `/api/health/plugins` | `(none)` | `server/routes/health-routes.js:201` |
+| `GET` | `/api/ready` | `(none)` | `server/routes/health-routes.js:63` |

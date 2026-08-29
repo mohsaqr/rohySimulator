@@ -9,6 +9,107 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.86] — 2026-08-29
+
+### Added
+
+- **PACS — a DICOM reading room (RPS-1 plugin `pacs`).** Radiology could order a
+  study and read a paragraph; there was no image anywhere. A learner can now
+  read the actual pixels, on a workstation that behaves like the one they will
+  sit at afterwards.
+  - **Why `pacs` and not `radiology`.** R3 rejects a plugin claiming a core room
+    key, and the constraint turned out to describe the real division of labour:
+    the RIS is where a study is ordered and its report read, the PACS is where
+    the images are read. Radiology keeps ordering, `turnaround_minutes` and the
+    text report exactly as they were; this room is where the study opens. A
+    learner crosses the same boundary a clinician does.
+  - **Real DICOM, and therefore real Hounsfield units.** The vendored package
+    reads Implicit VR LE, Explicit VR LE and Explicit VR BE, sequences of any
+    nesting, and multi-frame images, and applies the modality LUT — so a CT is
+    in HU, not stored integers, and window presets, HU probing and ROI density
+    are quantitatively right rather than approximately right. Compressed pixel
+    data is located and refused *by error code*; transcoding belongs at ingest,
+    not in every learner's browser.
+  - **A normal archive, and cases authored by substitution.** A case starts from
+    a complete normal examination and the author says only what is *different*.
+    Everything untouched stays normal, so finding the abnormality means
+    excluding a real study. Whole-series substitution is geometrically
+    self-consistent; a slice-range splice is permitted and *geometry-checked*,
+    because spliced material at a different matrix or spacing makes every
+    measurement across the seam wrong.
+  - **Studies are addressed, never embedded** (§7a `remote:`, `/dicom` and
+    `/thumbs` via `ROHY_PLUGIN_ORIGINS`), for the same reason slide pyramids
+    are: one chest CT is ~150 MB and has no business in the Docker image, the
+    backups, or the air-gap bundle.
+  - **The rubric never reaches the learner.** `learnerDocument()` rebuilds each
+    entry without the field rather than deleting it from a copy, and the
+    manifest declares `document.learnerOmit: ['rubric']` so the server strips
+    the path from every read below reviewer. Two defences, not one.
+
+### Notes
+
+- `src/components/pacs/` is a byte-identical vendored copy of
+  `~/Documents/Github/Radoyon/radoyon/src` — edit upstream and re-vendor, never
+  here. Rohy's gates on the folder are its own `portability.test.js` (which also
+  fails if any DICOM or imaging library creeps in: the parser, the modality LUT
+  and the VOI transform are the package's own, and its only peers are react,
+  react-dom and lucide-react) and `tests/client/plugins/pacs-room.test.jsx`,
+  which renders the real room with synthetic DICOM through the real descriptor.
+- Four new `common.json` keys are English in every locale pending translation.
+
+## [2.9.86] — 2026-08-29
+
+### Added
+
+- **Pathology can import a slide from a link.** The first user of the server
+  slot: Pathoyon's `server/` module is vendored into `server/plugins/pathology/`
+  the same way its `src/` already is, and the host mounts it at
+  `/api/plugins/pathology/` (`POST /imports`, `GET /jobs/:id`,
+  `POST /jobs/:id/cancel`, `GET /assets`, `PUT /assets/:id/calibration`).
+  - **The managed library shares the bundle's origin and nothing else.**
+    `/library` joins `/tiles` and `/gross` in the manifest's `remote.paths`, so
+    an imported slide is addressed as `remote:library/<assetId>/slide.dzi` —
+    host-agnostic, exactly like a bundled one. `GET /catalog` now merges the two
+    halves so the editor asks one endpoint: *which half did this slide come
+    from* is an operator's question, not an author's.
+  - Only `ready` assets reach the catalog. A slide still importing, failed, or
+    awaiting calibration is real but not usable, and offering it would let an
+    author build a case around a slide whose scale is unknown.
+  - `GET /api/health/plugins` gains a `library` block — counts and bytes only.
+    The route is public so a deploy verify needs no token, and what a tenant has
+    imported is not public information. A deployment with no library directory
+    reports **no block at all** rather than zeroes, so "not configured" and
+    "configured and empty" stay distinguishable.
+  - `npm run pathology:vendor` now vendors **both** halves, each guarded by its
+    own sentinel, and `server/plugins/pathology/portability.test.js` is the
+    server half's gate. It allows *no* peer dependencies — and specifically
+    refuses `node:child_process` and `node:http`, naming `ctx.runBinary` and
+    `ctx.download` as what to use instead: those two are precisely the powers
+    the allowlist and the byte cap exist to mediate.
+
+### Fixed
+
+- **`tiling.regionShrink` shipped a value libvips rejects.** The design note
+  called the default `average`; libvips calls it `mean`, and `dzsave` exits 1
+  with *"enum 'VipsRegionShrink' has no member 'average'"*. Caught by running
+  the real tiler. The field now mirrors libvips' own enum
+  (`mean, median, mode, max, min, nearest`) — a settings field that feeds a
+  tool's flag mirrors that tool's spelling, or it is a validated value that
+  fails at the one place validation was supposed to protect.
+- **Five API endpoints were undocumented.** A plugin's server module declares
+  real routes, and `gen-api.mjs` scanned only `server/routes/*.js`. It now scans
+  `server/plugins/*/index.js` under the `/plugins/<id>` prefix, reports each
+  route's true source file, and understands `ctx.guards.educator` as the
+  `requireEducator` it actually is — without that, every plugin route was
+  documented as unauthenticated.
+- **The db-adapter boundary test flagged `ctx.db`.** RPS-1 hands `dbAdapter` to
+  a plugin *as* `ctx.db`, precisely so a plugin cannot open its own handle;
+  flagging it pushed authors toward importing `dbAdapter` directly, which the
+  portability gate then forbids — leaving no legal way to write a query.
+- **Both portability gates read comments as imports.** A JSDoc
+  `@param {import('express').Router}` is a type reference, not a dependency.
+  Comments are now stripped before scanning, in the client gate too.
+
 ## [2.9.85] — 2026-08-29
 
 ### Added

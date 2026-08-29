@@ -37,7 +37,7 @@ describe('GET /api/health/plugins', () => {
             expect(body.plugins.pathology.origin).toBeUndefined();
             expect(JSON.stringify(body)).not.toContain(upstream.origin);
             expect(body.plugins.pathology).toMatchObject({
-                known_plugin: true, declared_paths: ['/tiles', '/gross'],
+                known_plugin: true, declared_paths: ['/tiles', '/gross', '/library'],
                 reachable: true, status: 200, content_version: '2026-08-29a', content_plugin: 'pathology', file_count: 3,
             });
         } finally { await server.close(); await upstream.close(); }

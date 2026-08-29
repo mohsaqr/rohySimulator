@@ -21,6 +21,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dbAdapter from '../dbAdapter.js';
 import { pluginOrigins } from '../lib/pluginRemoteOrigins.js';
+import { libraryDirs } from '../lib/pluginServerSlot.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 
 const router = express.Router();
@@ -157,6 +158,46 @@ async function probeOrigin(origin) {
     }
 }
 
+/**
+ * Counts for a plugin's managed asset library, or {} when it has none.
+ *
+ * Deliberately aggregate-only and unauthenticated-safe: /health/plugins is
+ * public so `scripts/tech-test.sh` can gate a deploy on it without a token.
+ *
+ * @param {string} pluginId
+ * @returns {Promise<{library?: object}>}
+ */
+async function libraryHealth(pluginId) {
+    if (!libraryDirs().has(pluginId)) return {};
+    try {
+        const assets = await dbAdapter.all(
+            `SELECT state, COUNT(*) AS n, COALESCE(SUM(disk_bytes), 0) AS bytes
+               FROM plugin_assets WHERE plugin_id = ? GROUP BY state`,
+            [pluginId]
+        );
+        const jobs = await dbAdapter.all(
+            `SELECT state, COUNT(*) AS n FROM plugin_jobs WHERE plugin_id = ? GROUP BY state`,
+            [pluginId]
+        );
+        const count = (rows, state) => Number(rows.find((r) => r.state === state)?.n ?? 0);
+        return {
+            library: {
+                assets: assets.reduce((sum, r) => sum + Number(r.n), 0),
+                ready: count(assets, 'ready'),
+                needs_calibration: count(assets, 'needs_calibration'),
+                failed: count(assets, 'failed'),
+                bytes: assets.reduce((sum, r) => sum + Number(r.bytes), 0),
+                queued: count(jobs, 'queued'),
+                running: count(jobs, 'running'),
+            },
+        };
+    } catch {
+        // A missing table (a deployment mid-migration) must not turn a health
+        // probe into a 500 — the probe's job is to report, not to fail.
+        return { library: { error: 'unavailable' } };
+    }
+}
+
 router.get('/health/plugins', async (req, res) => {
     // pluginOrigins() is a Map (plugin id → origin), parsed once at boot.
     const origins = pluginOrigins();
@@ -177,6 +218,13 @@ router.get('/health/plugins', async (req, res) => {
             declared_paths: manifest?.remote?.paths ?? [],
             ...probe,
             ...(mismatch ? { reachable: false, error: mismatch } : {}),
+            // The MANAGED half of the library (RPS-1 1.4). Counts only, no
+            // labels or source hosts: this route is public so the deploy verify
+            // needs no credentials, and what a tenant has imported is not
+            // public information. A deployment with no library reports nothing
+            // rather than zeroes, so "not configured" and "configured and
+            // empty" stay distinguishable.
+            ...(await libraryHealth(id)),
         }];
     }));
     const plugins = Object.fromEntries(entries);

@@ -16,26 +16,46 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC="${PATHOYON_SRC:-$HOME/Documents/Github/Pathoyon/pathoyon/src}"
-DEST="$ROOT/src/components/pathology"
+UPSTREAM="${PATHOYON:-$HOME/Documents/Github/Pathoyon/pathoyon}"
 
 fail() { printf '  ✗ %s\n' "$*" >&2; exit 1; }
 
-[ -d "$SRC" ] || fail "upstream source not found: $SRC
-    Clone Pathoyon beside rohy, or set PATHOYON_SRC to its pathoyon/src."
-# The guard. A source that exists but holds no package would delete the copy.
-[ -f "$SRC/index.js" ] || fail "$SRC has no index.js — that is not the package.
+# Two halves, vendored the same way and for the same reason. The CLIENT half is
+# the room and the editor; the SERVER half (RPS-1 1.4 §11b) is the import job
+# and its routes. Each has its own rohy-only files that must survive the copy.
+#
+#   <upstream subdir> | <rohy destination> | <sentinel> | <rohy-only files>
+VENDOR=(
+  "src|src/components/pathology|index.js|README.md portability.test.js"
+  "server|server/plugins/pathology|index.js|README.md portability.test.js"
+)
+
+for spec in "${VENDOR[@]}"; do
+  IFS='|' read -r sub dest sentinel keep <<< "$spec"
+  SRC="$UPSTREAM/$sub"
+  DEST="$ROOT/$dest"
+
+  [ -d "$SRC" ] || fail "upstream not found: $SRC
+    Clone Pathoyon beside rohy, or set PATHOYON to its pathoyon/ directory."
+  # The guard. A source that EXISTS but holds no package would delete the copy:
+  # rsync has no notion of "this source looks wrong", and an empty source is a
+  # valid instruction to empty the destination.
+  [ -f "$SRC/$sentinel" ] || fail "$SRC has no $sentinel — that is not the package.
     Refusing to rsync --delete from it; this is exactly the state that would
     empty $DEST."
-[ -d "$DEST" ] || fail "vendored copy not found: $DEST"
+  mkdir -p "$DEST"
 
-rsync -rc --delete --exclude README.md --exclude portability.test.js "$SRC/" "$DEST/"
+  excludes=()
+  for f in $keep; do excludes+=(--exclude "$f"); done
+  rsync -rc --delete "${excludes[@]}" "$SRC/" "$DEST/"
 
-# Only the two rohy-only files may differ. Anything else means the copy is not
-# byte-identical and the boundary claim in the README is no longer true.
-drift="$(diff -rq "$SRC" "$DEST" | grep -v 'README.md\|portability.test.js' || true)"
-[ -z "$drift" ] || fail "vendored copy differs from upstream beyond the two rohy files:
+  # Only the rohy-only files may differ. Anything else means the copy is not
+  # byte-identical and the boundary claim in the README is no longer true.
+  filter="$(printf '%s\\|' $keep)"
+  drift="$(diff -rq "$SRC" "$DEST" | grep -v "${filter%\\|}" || true)"
+  [ -z "$drift" ] || fail "vendored copy differs from upstream beyond its rohy-only files:
 $drift"
 
-printf '  ✓ vendored %s → src/components/pathology (%s files)\n' \
-  "$SRC" "$(find "$DEST" -type f -name '*.js*' | wc -l | tr -d ' ')"
+  printf '  ✓ %s → %s (%s files)\n' \
+    "$sub" "$dest" "$(find "$DEST" -type f -name '*.js*' | wc -l | tr -d ' ')"
+done

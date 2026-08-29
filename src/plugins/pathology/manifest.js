@@ -71,7 +71,12 @@ export const manifest = {
         // the specimen photography SpecimenTray renders. Two prefixes rather
         // than one open mount, so a mis-typed path is a 403 here instead of a
         // request rohy makes on the author's behalf.
-        paths: ['/tiles', '/gross'],
+        // '/library' (1.4) is the MANAGED half: slides imported from a link and
+        // tiled by the server, living beside the bundled ones on the same
+        // origin and served by the same nginx block. A bundle deploy never
+        // touches it (the rsync excludes it) and the bundle script refuses to
+        // contain it — the two halves share an origin and nothing else.
+        paths: ['/tiles', '/gross', '/library'],
         // A .dzi descriptor is XML and tile servers disagree about which XML
         // content type to send; the images are whatever the pyramid was encoded
         // as. text/html is conspicuously absent — see plugins-routes.js.
@@ -179,10 +184,20 @@ export const manifest = {
                 type: 'int', min: 60, max: 95, default: 85,
                 group: 'tiling', labelKey: 'pathology_settings_tiling_quality',
             },
-            // 'average' over 'median': median is for masks and label layers,
-            // and on H&E it quietly erases single-cell detail at low zoom.
+            // These are libvips' OWN enum members, not a curated subset and not
+            // a paraphrase. The design note called the default 'average' and
+            // libvips calls it 'mean'; passing 'average' makes `dzsave` exit 1
+            // with "enum 'VipsRegionShrink' has no member 'average'". A settings
+            // field that feeds a tool's flag mirrors that tool's spelling, or it
+            // is a validated value that fails at the one place validation was
+            // supposed to protect.
+            //
+            // 'mean' for histology: 'median' is for masks and label layers and
+            // quietly erases single-cell detail at low zoom on H&E.
             'tiling.regionShrink': {
-                type: 'enum', options: ['average', 'median'], default: 'average',
+                type: 'enum',
+                options: ['mean', 'median', 'mode', 'max', 'min', 'nearest'],
+                default: 'mean',
                 group: 'tiling', labelKey: 'pathology_settings_tiling_shrink',
             },
             'tiling.previewLongestEdge': {
