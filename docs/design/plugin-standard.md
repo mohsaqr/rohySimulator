@@ -1,11 +1,10 @@
 # RPS-1 — the Rohy Plugin Standard
 
-**Status:** 1.0–1.2 implemented (rohy v2.9.59–v2.9.61) · **1.3 DRAFT — specified, not yet implemented** · **Spec version:** 1.3-draft · **Last reviewed:** 2026-08-28
+**Status:** 1.0–1.3 implemented (rohy v2.9.59–v2.9.74) · **Spec version:** 1.3 · **Last reviewed:** 2026-08-29
 
-> **Reading this document.** Sections marked *(1.3, proposed)* describe behaviour
-> rohy does not have yet. They are written before the code on purpose — the
-> same discipline as 1.1 and 1.2 — and the marker is removed in the commit that
-> lands the code. Until then, §14 item 4 remains true.
+> **Reading this document.** 1.3 was specified before it was built — the same
+> discipline as 1.1 and 1.2 — and landed in rohy v2.9.72–v2.9.74. The
+> *(1.3, proposed)* markers came off in the commits that implemented each part.
 
 A plugin is a folder that **imports nothing from rohy**, declares itself in a
 manifest, receives a host context, gets a room, and emits events into
@@ -44,7 +43,7 @@ Everything rohy used to hardcode about a room is now one of six slots.
 | **capabilities** | props hand-picked at the mount site in `App.jsx` | manifest + host grant |
 | **data** | `caseSnapshot?.config?.<name>` | `caseConfig[manifest.id]` |
 | **authoring** *(1.1, optional)* | nothing — there was no way to ship an editor | manifest + descriptor |
-| **document** *(1.3, proposed)* | hand-pasting a plugin's export into `config` | descriptor (`validate`, `summarize`) + host case store |
+| **document** *(1.3)* | hand-pasting a plugin's export into `config` | descriptor (`validate`, `summarize`) + host case store |
 
 **One id.** The manifest `id` is the room key, the verb namespace, the
 case-config key, the storage namespace and the API mount path. Four identities
@@ -108,8 +107,8 @@ export default {
     authorComponent: EcgAuthor,                          // optional; see §11
     authorProps: (ctx, draft) => ({ value: draft.value, onChange: draft.save }),
 
-    // 1.3, proposed — the document contract (§11a). REQUIRED when `authoring`
-    // is declared; `summarize` is optional.
+    // 1.3 — the document contract (§11a). REQUIRED when `authoring` is
+    // declared; `summarize` is optional.
     validate: (doc) => [/* { level: 'error'|'warning', message } */],
     summarize: (doc) => ({ count: doc?.strips?.length ?? 0, labelKey: 'ecg_strips_count' }),
 };
@@ -158,8 +157,8 @@ far from its cause.
 | R16 | `remote` and the `remote` capability appear together or not at all | a manifest describing a proxy it never requested, or a proxy mounted onto nothing |
 | R17 | `remote.origin` is **forbidden** | a manifest choosing which host rohy's server will talk to. See §7a |
 | R18 | `remote.paths` are literal `/lower-kebab` prefixes and `remote.contentTypes` is a non-empty list of bare `type/subtype` | an unbounded proxy — an open relay onto the configured origin — and an image proxy that will happily relay `text/html` from it |
-| R19 *(1.3, proposed)* | if `authoring` is declared the descriptor MUST export `validate(doc)` | an editor whose output the host cannot judge — material every learner is assessed against, shipped unreviewable. See §11a |
-| R20 *(1.3, proposed)* | `available(ctx)` judges the **document**, never the key's presence | a saved-but-empty document lighting a room onto nothing — the exact failure `available()` exists to prevent |
+| R19 *(1.3)* | if `authoring` is declared the descriptor MUST export `validate(doc)` | an editor whose output the host cannot judge — material every learner is assessed against, shipped unreviewable. See §11a |
+| R20 *(1.3)* | `available(ctx)` judges the **document**, never the key's presence | a saved-but-empty document lighting a room onto nothing — the exact failure `available()` exists to prevent |
 
 Roles: `guest student reviewer educator admin` (mirrors `ROLE_RANKS` in
 `server/middleware/auth.js`; a contract test asserts the copies agree).
@@ -447,12 +446,13 @@ So `PluginAuthor` takes the draft and its save callback as props: whoever
 renders it decides where authored material lives. This is §8's rule applied one
 level up — the plugin hands back its whole document, and the host owns storage.
 
-> **Rohy has no case-config write path yet** (true until 1.3 lands). Until it
-> does, a host may render `PluginAuthor` with no `onSave` and the plugin's own
-> export is the way out — pathology writes the case JSON to a file. §11a
-> specifies the store behind the seam.
+> **Rohy's case-config write path landed in v2.9.74.** The wizard's *Plugins*
+> step opens the editor full-viewport and Done writes the document into
+> `editingCase.config[<id>]`, which the ordinary case save persists. A host may
+> still render `PluginAuthor` with no `onSave`, in which case the plugin's own
+> export remains the way out.
 
-## 11a. The document *(1.3, proposed)*
+## 11a. The document *(1.3)*
 
 A plugin is **part editor, part room**, and the thing that travels between the
 two halves is its *document*: the plugin's slice of the case config,
@@ -475,7 +475,17 @@ change to gain them.)
   behind the remote proxy, never inline. The server caps a document at
   **64 KB serialised** (well under the 256 KB request limit, and enough for
   hundreds of annotations); a plugin that needs more raises it *per plugin* in
-  the manifest, never globally.
+  the manifest (`document: { maxBytes }`), never globally.
+
+  **The cap is a real constraint, not a formality.** Measured on pathology: an
+  empty canonical case is 1.0 KB and a text case with slides, ROIs and prose
+  stays around that — but ONE 438x320 gross photograph embedded as a `data:`
+  URL takes the document to 34 KB and **two take it to 83 KB**, past the cap.
+  Case Studio bounds photographs at 1600px, several times larger again, so no
+  cap below express's 256 KB body limit makes a photographic case fit. This is
+  what "bulk bytes live behind the remote proxy, never inline" costs when a
+  plugin ignores it — and closing it properly needs an upload path, which
+  §14.2 says does not exist.
 
 ### 11a.2 The plugin judges its own document
 
@@ -569,7 +579,8 @@ else having happened.
 3. `npm run plugins:gen`, commit the generated file
 4. Add `room_<id>` / `room_<id>_sub` to `src/locales/en/common.json`, then
    `npm run i18n:extract` → `i18n:pseudo` → `i18n:translate`
-5. Put material on a case under `case.config.<id>`
+5. Put material on a case: the wizard's **Plugins** step lists every plugin
+   that ships an editor, and Done writes the document to `case.config.<id>`
 
 No edit to `App.jsx`, `RoomNavigator.jsx`, `eventLogger.js`,
 `clinicalStates.js` or `analytics-routes.js`. **That list is the standard's
@@ -612,22 +623,15 @@ Ordered by how much they matter to a plugin author.
    nor manifest version, and clinical state is resolved with the currently
    installed maps — so upgrading or removing a plugin retroactively reinterprets
    historical analytics.
-4. **No store behind the authoring seam.** `PluginAuthor` takes `value`/`onSave`
-   as props (§11) but rohy has no case-config write path, so authored material
-   currently leaves via the plugin's own export. This is the gap that keeps the
-   authoring slot from being end-to-end. **Specified by 1.3 (§11a, R19, R20);
-   remove this item in the commit that implements it.** Implementation plan:
-   `todo/pathology-authoring-plan.md` (WP1 server guard + WP2 availability, then
-   WP3 wizard step + WP4 surface).
-5. **No per-tenant enable/disable** (the `oyon_settings` table is the pattern to
+4. **No per-tenant enable/disable** (the `oyon_settings` table is the pattern to
    copy). `minRole` and `authoring.minRole` ARE enforced — as of 1.1 in
    `registry.resolve()` and `PluginAuthor`, and as of 1.2 server-side in the
    remote proxy, which is the first surface rohy's *server* renders on a
    plugin's behalf.
-6. **No LLM grant exists**, so `capabilities.llm` is always absent.
-7. **No cleanup path for `rohy_plugin:*`** — a `session` lifetime is declared
+5. **No LLM grant exists**, so `capabilities.llm` is always absent.
+6. **No cleanup path for `rohy_plugin:*`** — a `session` lifetime is declared
    but nothing clears the keys, so state persists on shared browsers.
-8. **Runtime/third-party loading is out of scope** (§1).
+7. **Runtime/third-party loading is out of scope** (§1).
 
 ### Pre-existing rohy issues surfaced during review — now fixed
 

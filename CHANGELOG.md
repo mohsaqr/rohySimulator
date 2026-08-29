@@ -9,6 +9,27 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.75] — 2026-08-29
+
+### Changed
+
+- **RPS-1 1.3 is implemented, and the spec says so.** Status header moved to
+  "1.0–1.3 implemented (rohy v2.9.59–v2.9.74)"; every *(1.3, proposed)* marker
+  removed; §11's "rohy has no case-config write path yet" replaced with how the
+  path actually works; §12 step 5 now describes the wizard's Plugins step rather
+  than editing `config` by hand. **§14 item 4 — "No store behind the authoring
+  seam" — is deleted**, which was the whole point of the exercise: it was the
+  gap that kept the authoring slot from being end-to-end.
+
+- **§11a.1 now states what the 64 KB cap costs, with measurements.** An empty
+  canonical pathology case is 1.0 KB and a text case with slides, ROIs and prose
+  stays near it — but one 438x320 gross photograph embedded as a `data:` URL
+  takes the document to 34 KB and two take it to 83 KB, past the cap. Case
+  Studio bounds photographs at 1600px, several times larger again. The section
+  already said bulk bytes belong behind the remote proxy; it now says what
+  ignoring that costs, and that closing it properly needs the upload path §14.2
+  records as missing.
+
 ## [2.9.74] — 2026-08-29
 
 ### Added
