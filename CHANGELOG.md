@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.100] — 2026-08-30
+
+### Fixed
+
+- **Centrality tabs in the Network view read "Sna.m in strength".** The LAILA
+  i18n shim humanises any key it has no override for — strip a `ns:` prefix,
+  swap underscores for spaces, capitalise. That fallback keeps new upstream keys
+  readable, but it does not strip a *dotted* prefix, so `sna.m_in_strength`
+  became "Sna.m in strength" and the four visible tabs all named an internal
+  key. Seven measures now have explicit labels, the same way the `sna.layout_*`
+  family already did. Reported against v2.9.82.
+
 ## [2.9.99] — 2026-08-30
 
 ### Fixed

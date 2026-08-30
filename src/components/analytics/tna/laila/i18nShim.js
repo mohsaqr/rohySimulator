@@ -54,6 +54,17 @@ const OVERRIDES = {
     sequences: 'Sequences',
     avg_length: 'Avg length',
     in_strength: 'In-strength',
+    // Centrality measure names, from CentralityBarChart / TnaCentralityTable.
+    // Without these, humanise() turns 'sna.m_in_strength' into the tab label
+    // "Sna.m in strength" — it strips a `ns:` prefix but not a dotted one, then
+    // swaps underscores for spaces. Reported against v2.9.82.
+    'sna.m_degree': 'Degree',
+    'sna.m_in_degree': 'In-degree',
+    'sna.m_out_degree': 'Out-degree',
+    'sna.m_in_strength': 'In-strength',
+    'sna.m_out_strength': 'Out-strength',
+    'sna.m_betweenness': 'Betweenness',
+    'sna.m_closeness': 'Closeness',
     'sna.layout_circle': 'Circle',
     'sna.layout_force': 'Force',
     'sna.layout_kamada_kawai': 'Kamada–Kawai',
