@@ -39,7 +39,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const LAB_PATH = path.join(ROOT, 'Lab_database.json');
+const LAB_PATH = path.join(ROOT, 'server', 'data', 'lab_database.json');
 const RAD_PATH = path.join(ROOT, 'server/data/radiology_database.json');
 
 const LAB_BUCKETS = {
@@ -161,5 +161,5 @@ if (check) {
 } else {
     fs.writeFileSync(LAB_PATH, JSON.stringify(labs, null, 2) + '\n');
     fs.writeFileSync(RAD_PATH, JSON.stringify(radiology, null, 2) + '\n');
-    console.log('wrote Lab_database.json + server/data/radiology_database.json');
+    console.log('wrote server/data/lab_database.json + server/data/radiology_database.json');
 }

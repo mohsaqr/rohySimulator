@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Mirror Lab_database.json (+ heart.txt) into the lab_tests SQL table.
+// Mirror server/data/lab_database.json (+ lab_cardiac_tests.txt) into the lab_tests SQL table.
 //
 // Why this exists:
 //   The simulator historically reads lab tests from JSON via
@@ -10,7 +10,7 @@
 //     - LOINC codes can be stamped onto them (scripts/import-loinc-mapping.js)
 //     - pediatric reference ranges can FK to them (scripts/seed-pediatric-ranges.js)
 //     - student/educator additions live in the same table with scope='user'
-//   This script is the bridge: every row in Lab_database.json + heart.txt
+//   This script is the bridge: every row in lab_database.json + lab_cardiac_tests.txt
 //   becomes a lab_tests row with is_curated=1, scope='platform',
 //   data_source_id pointing at the 'curated' provenance row.
 //
@@ -34,8 +34,8 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 
 const SOURCE_KEY = 'curated';
-const LAB_DB_PATH = path.join(repoRoot, 'Lab_database.json');
-const HEART_PATH = path.join(repoRoot, 'heart.txt');
+const LAB_DB_PATH = path.join(repoRoot, 'server', 'data', 'lab_database.json');
+const HEART_PATH = path.join(repoRoot, 'server', 'data', 'lab_cardiac_tests.txt');
 
 function run(db, sql, params = []) {
     return new Promise((resolve, reject) => {

@@ -105,7 +105,7 @@ jobs:
         # Vitest emits coverage/lcov.info via the v8 provider (see
         # vitest.config.js -> test.coverage.reporter). Codecov diff-checks
         # the PR head against main and posts a status check. Thresholds
-        # live in codecov.yml at the repo root — they are intentionally
+        # live in .github/codecov.yml — they are intentionally
         # SOFT for the first month so existing PRs don't break.
         #
         # Setup: a maintainer must add CODECOV_TOKEN to the repo's Actions

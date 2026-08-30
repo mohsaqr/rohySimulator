@@ -12,7 +12,7 @@ let labDatabaseCache = null;
 let groupsCache = null;
 
 /**
- * Load and parse Lab_database.json and additional lab files (e.g., heart.txt)
+ * Load and parse server/data/lab_database.json plus the cardiac set
  * @returns {Array} Array of lab test objects
  */
 export function loadLabDatabase() {
@@ -24,17 +24,17 @@ export function loadLabDatabase() {
 
     // Load main lab database
     try {
-        const labDbPath = path.resolve(__dirname, '../../Lab_database.json');
+        const labDbPath = path.resolve(__dirname, '../data/lab_database.json');
         const data = fs.readFileSync(labDbPath, 'utf8');
         allTests = JSON.parse(data);
-        labLog.info('lab database loaded', { source: 'Lab_database.json', count: allTests.length });
+        labLog.info('lab database loaded', { source: 'lab_database.json', count: allTests.length });
     } catch (error) {
-        labLog.error('lab database load failed', { source: 'Lab_database.json', error: error.message });
+        labLog.error('lab database load failed', { source: 'lab_database.json', error: error.message });
     }
 
-    // Load cardiac investigations from heart.txt
+    // Load cardiac investigations from lab_cardiac_tests.txt
     try {
-        const heartDbPath = path.resolve(__dirname, '../../heart.txt');
+        const heartDbPath = path.resolve(__dirname, '../data/lab_cardiac_tests.txt');
         if (fs.existsSync(heartDbPath)) {
             const heartData = fs.readFileSync(heartDbPath, 'utf8');
             const cardiacTests = JSON.parse(heartData);
@@ -45,13 +45,13 @@ export function loadLabDatabase() {
 
             allTests = [...allTests, ...newCardiacTests];
             labLog.info('cardiac lab database loaded', {
-                source: 'heart.txt',
+                source: 'lab_cardiac_tests.txt',
                 count: cardiacTests.length,
                 new_count: newCardiacTests.length
             });
         }
     } catch (error) {
-        labLog.error('cardiac lab database load failed', { source: 'heart.txt', error: error.message });
+        labLog.error('cardiac lab database load failed', { source: 'lab_cardiac_tests.txt', error: error.message });
     }
 
     labDatabaseCache = allTests;
@@ -321,11 +321,11 @@ export function clearCache() {
  */
 export function saveLabDatabase() {
     try {
-        const labDbPath = path.resolve(__dirname, '../../Lab_database.json');
+        const labDbPath = path.resolve(__dirname, '../data/lab_database.json');
         fs.writeFileSync(labDbPath, JSON.stringify(labDatabaseCache, null, 2), 'utf8');
         return true;
     } catch (error) {
-        labLog.error('lab database save failed', { source: 'Lab_database.json', error: error.message });
+        labLog.error('lab database save failed', { source: 'lab_database.json', error: error.message });
         return false;
     }
 }

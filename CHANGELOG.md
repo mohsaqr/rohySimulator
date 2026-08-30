@@ -9,6 +9,37 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.108] — 2026-08-30
+
+### Changed
+
+- **The lab catalogue moved out of the repo root, and the Docker special case
+  went with it.** `Lab_database.json` and `heart.txt` sat at the root only
+  because that is where they were first written — `radiology_database.json`,
+  `treatment_effects.json` and `lab_loinc_mapping.json` have always lived in
+  `server/data/`. They are now `server/data/lab_database.json` and
+  `server/data/lab_cardiac_tests.txt`.
+
+  The point is what this deletes. The Dockerfile carried two explicit `COPY`
+  lines for these files, added after a release shipped with an empty lab table:
+  the directory-level `COPY … /server ./server` missed them because they were
+  not under `server/`. Those lines are gone. The files now travel with the
+  directory that already ships, so the failure mode is structurally impossible
+  rather than prevented by a comment someone has to keep reading.
+
+  Five readers updated (`labDatabase.js`, `seed-lab-tests-from-json.js`,
+  `clamp-turnaround-defaults.js`, `orders-routes.js`, `admin-routes.js`).
+  Verified from the new path: 222 tests across 33 groups, cardiac set merged.
+
+- `codecov.yml` → `.github/codecov.yml`, a location Codecov reads natively.
+
+### Fixed
+
+- **`POST /api/admin/seed/lab-tests` has never worked.** It read
+  `../../Lab_database.txt` — a file that has never existed in this repository —
+  and then `JSON.parse`d it, so the endpoint returned 404 on every call since it
+  was written. It now reads the catalogue the rest of the platform uses.
+
 ## [2.9.107] — 2026-08-30
 
 ### Changed

@@ -158,13 +158,11 @@ COPY --from=builder --chown=node:node /workspace/rohy/src ./src
 # serves at /oyon/* and /standalone/*; without it those routes 404
 # in the container.
 COPY --from=builder --chown=node:node /workspace/rohy/OyonR ./OyonR
-# Repo-root lab catalogue files. `server/services/labDatabase.js` and
-# `scripts/seed-lab-tests-from-json.js` both read these via
-# `path.resolve(__dirname, '../../Lab_database.json')` / `heart.txt`.
-# They aren't under server/ so the directory-level COPYs above miss them,
-# which used to ship the runtime image with an empty lab table.
-COPY --from=builder --chown=node:node /workspace/rohy/Lab_database.json ./Lab_database.json
-COPY --from=builder --chown=node:node /workspace/rohy/heart.txt ./heart.txt
+# (The lab catalogue used to need two explicit COPYs here. It lived at the repo
+# root, the directory-level COPYs above missed it, and the runtime image shipped
+# with an empty lab table until someone noticed. Both files now live in
+# server/data/ beside radiology_database.json, so `COPY … /server ./server`
+# above carries them and there is no special case left to forget.)
 # Repo-root CHANGELOG.md. `server/routes/help-routes.js` reads it via
 # `join(REPO_ROOT, 'CHANGELOG.md')` to power the in-app "What's new" surface.
 # It lives at the repo root (not under server/), so the directory-level COPYs

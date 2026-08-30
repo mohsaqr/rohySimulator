@@ -324,7 +324,7 @@ running against a case.
 
 ### Investigations (labs, imaging, structured physical exam)
 
-- **Laboratory** — **A lab catalogue assembled at runtime** — `Lab_database.json` plus the cardiac-crisis set merged in from `heart.txt` by `server/services/labDatabase.js`. Categories include Hematology (CBC, Differential), Basic Metabolic Panel, Renal Function, Liver Function, Coagulation, Thyroid, Blood Gases, Cardiac Markers, Cardiology Crisis, Inflammatory Markers, Iron Studies, Vitamins, Lipid Panel, Diabetes, Metabolic, Urinalysis, Pancreatic, Adrenal, Reproductive Hormones, Tumor Markers, Drug Levels, Body Fluids, CSF, Autoimmune, Cardiovascular Risk, Toxicology, Trace Elements, Pituitary, Hemolysis Markers, Thrombophilia, Immunoglobulins, Parathyroid. **Gender-specific reference ranges where clinically relevant** (split by Male / Female: Hemoglobin 12-16 g/dL female / 14-18 g/dL male, Hematocrit, Iron, Testosterone, Estradiol, …). Search by test name or panel; admin can bulk-import additional tests via `POST /api/master/lab-tests`.
+- **Laboratory** — **A lab catalogue assembled at runtime** — `server/data/lab_database.json` plus the cardiac-crisis set merged in from `lab_cardiac_tests.txt` by `server/services/labDatabase.js`. Categories include Hematology (CBC, Differential), Basic Metabolic Panel, Renal Function, Liver Function, Coagulation, Thyroid, Blood Gases, Cardiac Markers, Cardiology Crisis, Inflammatory Markers, Iron Studies, Vitamins, Lipid Panel, Diabetes, Metabolic, Urinalysis, Pancreatic, Adrenal, Reproductive Hormones, Tumor Markers, Drug Levels, Body Fluids, CSF, Autoimmune, Cardiovascular Risk, Toxicology, Trace Elements, Pituitary, Hemolysis Markers, Thrombophilia, Immunoglobulins, Parathyroid. **Gender-specific reference ranges where clinically relevant** (split by Male / Female: Hemoglobin 12-16 g/dL female / 14-18 g/dL male, Hematocrit, Iron, Testosterone, Estradiol, …). Search by test name or panel; admin can bulk-import additional tests via `POST /api/master/lab-tests`.
 - **Lab panel templates** — Acute MI Panel, Heart Failure, Unstable Angina, **Diabetic Ketoacidosis (DKA)**, Hyperosmolar Hyperglycemic State, Sepsis, Stroke Workup, Pulmonary Embolism, Acute Pancreatitis, Liver Failure, Renal Failure, … Each panel pins specific tests with `value_multiplier` or `custom_value` overrides for case-specific abnormal results.
 - **Radiology** — **A pre-loaded study catalogue** spanning X-Ray, CT, MRI, Ultrasound, Cardiac (12-lead ECG, echocardiogram), Nuclear Medicine, Fluoroscopy, Mammography. Normal-report database for each study; per-case admin editor for abnormal reports; image / video upload + display for case-attached findings.
 - **Investigations screen — pill-stack viewer** — When a lab or radiology order is ready, clicking the worklist row both adds it to the persistent pill stack (newest on top, dismissible via the per-pill X) *and* expands the full report in the right pane (single-click flow since `ab266a4`; the previous two-step "click row → pill, click pill → expand" was retired). Re-opening a previously viewed report from the stack flips the same pane back to the full report; closing returns to the welcome card + pill row. Orders that were already `viewed_at` on first poll auto-populate the stack so refreshing mid-session doesn't lose your scratch-pad.
@@ -501,12 +501,10 @@ rohySimulator/
 │   └── rocketbox-convert/             # GLB pipeline for adding new avatars
 ├── tests/                             # Vitest + Playwright suite (server, client, e2e, audio)
 │   ├── server/                        # Server unit + integration tests
-│   ├── e2e/                           # 12 Playwright specs
+│   ├── e2e/                           # Playwright specs
 │   └── utils/                         # seedDb, startTestServer, mockTtsServer, renderWithProviders
-├── bench/                             # 3 vitest benches: TTS latency, LLM throughput, concurrent sessions
-├── docs/                              # Operator lifecycle: INSTALL, DEPLOY, UPDATING, UPDATE-STRATEGY
-├── Lab_database.json                  # Lab catalogue with gender-specific ranges
-└── server/data/radiology_database.json  # Radiology study catalogue
+├── bench/                             # vitest benches: TTS latency, LLM throughput, concurrent sessions
+└── docs/                              # Operator lifecycle, design records, generated reference
 ```
 
 ### Database (SQLite, versioned migrations)
@@ -616,7 +614,7 @@ Development tips:
 - Reset DB: stop the server, delete `server/database.sqlite`, restart — migrations + seeders re-run automatically.
 - Adding a TTS provider: implement an async-iterator service under `server/services/` mirroring `kokoroTts.js`, register it in the `/api/tts` route, and add a UI tab under `src/components/settings/VoiceSettingsTab.jsx`.
 - Adding an avatar: drop a viseme-rigged GLB in `public/avatars/heads/`, append to `manifest.json`. The `scripts/rocketbox-convert/` pipeline handles RocketBox source models with the canonical the canonical morph targets in Oculus order.
-- Adding a lab test: append to `Lab_database.json` (test_name, group, category, min_value, max_value, unit, normal_samples) — the seeder picks it up on next boot.
+- Adding a lab test: append to `server/data/lab_database.json` (test_name, group, category, min_value, max_value, unit, normal_samples) — the seeder picks it up on next boot.
 - Adding a scenario template: append to `src/data/scenarioTemplates.js` with timeline keyframes; it appears in the Scenario Repository.
 - Adding an audit endpoint: write `scripts/audit-<area>.sh` mirroring the pattern in `scripts/audit-observability.sh` (start isolated server, drive HTTP, assert).
 

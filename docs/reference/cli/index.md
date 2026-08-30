@@ -48,7 +48,7 @@ Operator-driven, backup-first upgrade path. One CLI, 5 subcommands. Never execut
 | `retention-sweep.js` | Delete time-bounded log rows past the retention horizon (inferred) | `node scripts/retention-sweep.js` |
 | `import-loinc-mapping.js` | Map LOINC codes + UCUM units onto the existing lab_tests rows | `node scripts/import-loinc-mapping.js` |
 | `seed-curated-medications.js` | Seed / refresh `medications` catalogue from server/data/treatment_effects.json | `node scripts/seed-curated-medications.js` |
-| `seed-lab-tests-from-json.js` | Mirror Lab_database.json (+ heart.txt) into the lab_tests SQL table | `node scripts/seed-lab-tests-from-json.js` |
+| `seed-lab-tests-from-json.js` | Mirror server/data/lab_database.json (+ lab_cardiac_tests.txt) into the lab_tests SQL table | `node scripts/seed-lab-tests-from-json.js` |
 | `seed-pediatric-ranges.js` | Seed lab_reference_ranges with pediatric overlay for tests we already curate | `node scripts/seed-pediatric-ranges.js` |
 | `seed-treatment-effects.js` | Seed / refresh `treatment_effects` from server/data/treatment_effects.json | `node scripts/seed-treatment-effects.js` |
 | `import-drugs.cjs` | Import drugs from local JSONL file | `node server/scripts/import-drugs.cjs` |

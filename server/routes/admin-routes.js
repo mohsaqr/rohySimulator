@@ -911,10 +911,13 @@ router.post('/admin/seed/vital-definitions', authenticateToken, requireAdmin, (r
 // POST /api/admin/seed/lab-tests - Seed lab tests from file
 router.post('/admin/seed/lab-tests', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const labDbPath = path.join(__dirname, '../../Lab_database.txt');
+        // Was `../../Lab_database.txt` — a file that has never existed, so
+        // this endpoint always 404'd. The catalogue it wants is the JSON one
+        // the loader uses (server/services/labDatabase.js).
+        const labDbPath = path.join(__dirname, '../data/lab_database.json');
 
         if (!fs.existsSync(labDbPath)) {
-            return res.status(404).json({ error: 'Lab_database.txt not found' });
+            return res.status(404).json({ error: 'lab_database.json not found' });
         }
 
         const content = fs.readFileSync(labDbPath, 'utf8');

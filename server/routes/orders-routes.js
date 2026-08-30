@@ -471,7 +471,7 @@ router.post('/labs/import', authenticateToken, requireEducator, (req, res) => {
         auditSuccess(req, {
             action: 'import_lab_catalog_tests',
             resourceType: 'lab_catalog',
-            resourceId: 'Lab_database.json',
+            resourceId: 'lab_database.json',
             newValue: { overwrite, submitted: tests.length, results }
         });
         res.json({
@@ -491,7 +491,7 @@ router.post('/labs/reload', authenticateToken, requireEducator, (req, res) => {
         auditSuccess(req, {
             action: 'reload_lab_catalog',
             resourceType: 'lab_catalog',
-            resourceId: 'Lab_database.json',
+            resourceId: 'lab_database.json',
             newValue: { totalTests: tests.length }
         });
         res.json({ message: 'Database reloaded', totalTests: tests.length });
