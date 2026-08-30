@@ -9,6 +9,24 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.106] — 2026-08-30
+
+### Changed
+
+- **README opens with what Rohy actually is.** Rohy combines the diagnostic depth
+  of virtual patients with the time pressure of educational escape rooms: the
+  patient can be diagnosed and treated, but only if the student works fast enough
+  and in the right order. The intro now says that, credits the **CRETIC** project
+  (Optimizing Clinical Reasoning in Time-Critical Scenarios, led by Sonsoles
+  López-Pernas, funded by the Research Council of Finland), and explains the name
+  — *Rohy* is the Egyptian Arabic word for soul or spirit.
+
+  A new **"Instruments, not pictures of instruments"** section states the fidelity
+  claim plainly: a real DICOM reading room driven by window width and level, whole-slide
+  pathology measuring in microns from scanner metadata, a twelve-lead ECG
+  workstation with calibrated paper and working calipers, and a bedside ECG that
+  is generated rather than looped.
+
 ## [2.9.105] — 2026-08-30
 
 ### Changed

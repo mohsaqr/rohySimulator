@@ -5,20 +5,65 @@
 ![Stack](https://img.shields.io/badge/stack-React%2019%20%7C%20Node%20%7C%20SQLite-blue)
 ![Tests](https://img.shields.io/badge/tests-vitest%20%2B%20playwright-success)
 
-A medical simulation platform for clinical education. Trainees converse with an
-AI-driven virtual patient — by text **or by voice with an animated 3D avatar** —
-interpret a live multi-parameter monitor with a physiologically generated ECG,
-order labs and imaging from catalogues with gender-specific reference ranges,
-perform structured physical examinations on a clickable anatomical body map,
-read DICOM studies and whole-slide pathology in purpose-built viewers,
-administer treatments that produce time-decaying changes to vitals, move between
-peer rooms with badge dots signalling ready results and a present consultant,
-page on-call agents with a server-anchored Call flow that survives refreshes and
-room hops, debrief afterwards with an AI discussant, and have every action —
-stamped with the active room — analysed in a Transition Network Analysis
-dashboard.
+Rohy combines the diagnostic depth of virtual patients with the time pressure of
+educational escape rooms into a single platform. The patient can be diagnosed and
+treated, but only if the student works fast enough and in the right order. It is
+an open-source simulator where the patient evolves in real time, deteriorates if
+untreated, and responds to both the student's actions and inactions. The platform
+brings together realistic patient monitoring, AI-powered interactions across
+multiple roles, a comprehensive laboratory and investigation system, and
+scenario-based clinical progression — all designed to capture the temporal,
+dynamic nature of clinical reasoning as it actually happens at the bedside. The
+entire system is free, self-hosted, and designed so that a single instructor can
+set up a case in minutes and run it with a class of students.
 
-Everything runs on your own infrastructure. Local TTS (Piper, Kokoro) and local LLMs (LM Studio, Ollama) are first-class — cloud providers (Anthropic, OpenAI, Google) are optional. Multi-tenant ready, role-hierarchy aware, audit-logged, soft-deleted with right-to-erasure purge, and instrumented with structured-NDJSON observability.
+### Instruments, not pictures of instruments
+
+Where a simulator would normally show a learner a flat image, Rohy gives them the
+tool a clinician actually uses:
+
+- **DICOM** — a real reading room. Multi-series studies with a thumbnail rail and
+  side-by-side viewports, driven by window width and level rather than
+  brightness and contrast, with linear and sigmoid transfer functions. Display
+  adjustments are marked as display-only and never touch the measurements.
+- **Digital pathology** — whole-slide imaging with a magnification ladder, a
+  scale bar in microns, and annotation tools that measure real areas from scanner
+  metadata rather than from screen pixels.
+- **Twelve-lead ECG** — a workstation with calibrated paper, selectable gain and
+  sweep speed, diagnostic and monitor filters, and working calipers that span an
+  interval and keep the measurement.
+- **The bedside monitor** — the ECG is generated, not looped: a sum-of-Gaussians
+  waveform producing a morphologically correct PQRST at whatever rate the case is
+  running, so a rhythm change is something the learner sees rather than something
+  the interface announces.
+- **Laboratory and imaging catalogues** — gender-specific reference ranges,
+  panel templates, and results that arrive on a turnaround rather than instantly.
+- **Structured physical examination** — an anatomical body map with named regions
+  across anterior and posterior views, technique by technique, with auscultation
+  audio per site.
+
+Everything runs on your own infrastructure. Local TTS (Piper, Kokoro) and local
+LLMs (LM Studio, Ollama) are first-class — cloud providers (Anthropic, OpenAI,
+Google) are optional. Multi-tenant ready, role-hierarchy aware, audit-logged,
+soft-deleted with right-to-erasure purge, and instrumented with structured-NDJSON
+observability.
+
+### The project behind it
+
+Rohy is developed within the **CRETIC** project (Optimizing Clinical Reasoning in
+Time-Critical Scenarios), led by **Sonsoles López-Pernas** and funded by the
+**Research Council of Finland**. The project aims to optimize clinical reasoning
+and decision-making in time-critical scenarios through multimodal learning
+analytics and gamified virtual patients. Rohy is the simulation platform at the
+heart of that effort.
+
+### The name
+
+*Rohy* comes from the Egyptian Arabic word for soul or spirit. A patient simulator
+without personality is just a dashboard of numbers. The ambition behind Rohy is to
+give the simulated patient something closer to presence — a coherent history,
+emotional responses to questions, and behavior that changes as the clinical
+situation evolves.
 
 ---
 
