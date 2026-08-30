@@ -34,28 +34,71 @@ export const WINDOW_PRESETS = Object.freeze({
         { id: 'subdural', label: 'Subdural', center: 75, width: 215, note: 'Extra-axial collections' },
         { id: 'angio', label: 'Angio', center: 300, width: 600, note: 'Contrast-filled vessels' },
     ],
-    CR: [
-        { id: 'chest', label: 'Chest', center: 2048, width: 4096, note: 'Full stored range' },
-        { id: 'bone', label: 'Bone', center: 2048, width: 2048, note: 'Higher contrast' },
-    ],
-    DX: [
-        { id: 'chest', label: 'Chest', center: 2048, width: 4096, note: 'Full stored range' },
-        { id: 'bone', label: 'Bone', center: 2048, width: 2048, note: 'Higher contrast' },
-    ],
-    // MR intensity is arbitrary and sequence-dependent; there is no preset that
-    // is correct across scanners. Auto-window per series instead.
-    MR: [],
-    US: [],
+    // CR, DX, MR, US and the rest have NO absolute scale, so no fixed table can
+    // be right for them — see RELATIVE_PRESETS below.
 });
 
-/** The presets that apply to a modality; unknown modalities get none. */
-export function presetsFor(modality) {
-    return WINDOW_PRESETS[String(modality ?? '').toUpperCase()] ?? [];
+/**
+ * Presets for modalities whose pixel values carry no absolute meaning.
+ *
+ * This distinction is the whole reason the two kinds exist. A Hounsfield unit
+ * is physics: -600 is lung on every CT ever built, so a CT preset can be a
+ * pair of numbers. A radiograph's values are detector counts, scaled by the
+ * vendor's own processing — a 15-bit Philips CR runs 0..32767 where a 12-bit
+ * plate runs 0..4095, and the same anatomy sits at completely different
+ * numbers. This table used to hold a fixed `center: 2048, width: 4096` for CR,
+ * which on a 15-bit image maps the darkest eighth of the range onto the whole
+ * grey ramp and washes the film out — and there was no way back to the window
+ * the study opened with.
+ *
+ * So these are expressed against the image's OWN window: a multiplier on its
+ * width, and a shift measured in widths. `scale < 1` is more contrast,
+ * `shift > 0` moves the ramp toward the dense (bright) end, which is what
+ * "penetrated" means on a plain film.
+ */
+const RELATIVE_PRESETS = Object.freeze([
+    { id: 'acquired', label: 'As acquired', scale: 1, shift: 0, note: 'The window the study was stored with' },
+    { id: 'soft', label: 'Soft tissue', scale: 1.6, shift: 0, note: 'Wider — flatter, shows the whole range' },
+    { id: 'contrast', label: 'High contrast', scale: 0.6, shift: 0, note: 'Narrower — separates similar densities' },
+    { id: 'bone', label: 'Bone', scale: 0.45, shift: 0.22, note: 'Narrow and bright — cortex and trabeculae' },
+    { id: 'penetrated', label: 'Penetrated', scale: 0.8, shift: 0.42, note: 'Through the mediastinum and diaphragm' },
+]);
+
+/**
+ * The presets that apply to a modality.
+ *
+ * @param {string} modality
+ * @param {{center:number,width:number}} [base] the window the image opened
+ *   with. Required for modalities with no absolute scale; without it they have
+ *   nothing to be relative TO, and get no presets rather than wrong ones.
+ */
+export function presetsFor(modality, base) {
+    const absolute = WINDOW_PRESETS[String(modality ?? '').toUpperCase()];
+    if (absolute) return absolute;
+    if (!(base?.width > 0) || !Number.isFinite(base?.center)) return [];
+    return RELATIVE_PRESETS.map((p) => ({
+        id: p.id,
+        label: p.label,
+        note: p.note,
+        center: Math.round(base.center + p.shift * base.width),
+        width: Math.max(1, Math.round(base.width * p.scale)),
+    }));
 }
 
 /** Look one preset up by id within a modality. */
-export function presetById(modality, id) {
-    return presetsFor(modality).find((p) => p.id === id);
+export function presetById(modality, id, base) {
+    return presetsFor(modality, base).find((p) => p.id === id);
+}
+
+/**
+ * Which preset the current window corresponds to, or null when the reader has
+ * dragged away from all of them. The control can then say "Custom" instead of
+ * going on claiming whichever preset was picked three adjustments ago.
+ */
+export function activePreset(presets, window) {
+    if (!window) return null;
+    return presets.find((p) => Math.round(p.center) === Math.round(window.center)
+        && Math.round(p.width) === Math.round(window.width)) ?? null;
 }
 
 /**
@@ -116,8 +159,25 @@ export function autoWindow({ values, min, max }, { lowPercentile = 0.5, highPerc
  * @param {{center:number, width:number, invert?:boolean, fn?:'LINEAR'|'LINEAR_EXACT'}} window
  * @returns {Uint8ClampedArray} one byte per pixel
  */
-export function applyWindow(values, { center, width, invert = false, fn = 'LINEAR' }) {
+export function applyWindow(values, { center, width, invert = false, fn = 'LINEAR', gamma = 1 }) {
     const out = new Uint8ClampedArray(values.length);
+
+    // SIGMOID is the other VOI LUT function the standard defines
+    // (PS3.3 C.11.2.1.3.1). It has no hard clip: instead of two corners where
+    // the ramp meets black and white, contrast rolls off smoothly, which is why
+    // it suits projection radiography — a chest film windowed linearly clips
+    // the lung apices to black and the abdomen to white at the same time.
+    //
+    //   y = (ymax - ymin) / (1 + exp(-4 (x - c) / w)) + ymin
+    if (fn === 'SIGMOID') {
+        const w = Math.max(width, 1e-6);
+        for (let i = 0; i < values.length; i++) {
+            const y = 255 / (1 + Math.exp((-4 * (values[i] - center)) / w));
+            out[i] = invert ? 255 - applyGamma(y, gamma) : applyGamma(y, gamma);
+        }
+        return out;
+    }
+
     // Width 0 is legal input from a UI drag and would divide by zero; the
     // standard's own guidance is that width < 1 is not meaningful for LINEAR.
     const w = fn === 'LINEAR_EXACT' ? Math.max(width, 1e-6) : Math.max(width, 1);
@@ -132,9 +192,23 @@ export function applyWindow(values, { center, width, invert = false, fn = 'LINEA
         if (x <= lo) y = 0;
         else if (x > hi) y = 255;
         else y = ((x - c) / denominator + 0.5) * 255;
+        if (gamma !== 1) y = applyGamma(y, gamma);
         out[i] = invert ? 255 - y : y;
     }
     return out;
+}
+
+/**
+ * Gamma on the DISPLAY value, after windowing — the knob a workstation calls
+ * "gamma" and not part of the DICOM VOI pipeline. Above 1 lifts the midtones
+ * (detail out of the dark half of a film), below 1 deepens them. It is applied
+ * to the 0..255 output rather than to real-world values on purpose: it is a
+ * presentation adjustment, and applying it before the window would silently
+ * change what a stated Hounsfield window means.
+ */
+function applyGamma(y, gamma) {
+    if (gamma === 1) return y;
+    return 255 * ((y / 255) ** (1 / gamma));
 }
 
 /**

@@ -1,7 +1,7 @@
 import { manifest } from './manifest.js';
 import { PacsRoom } from './PacsRoom.jsx';
 import { resolveRemoteRefs, unresolveRemoteRefs } from '../context.js';
-import { CaseAuthor } from '../../components/pacs/CaseAuthor.jsx';
+import { CaseEditor } from '../../components/pacs/CaseEditor.jsx';
 import {
     documentIsServable, documentIssues, documentSummary, learnerDocument,
     readDocument, resolveEntry,
@@ -85,10 +85,10 @@ export default {
 
     // --- authoring ---------------------------------------------------------
     //
-    // `CaseAuthor` is uncontrolled-with-seed: PluginAuthor re-renders and
+    // `CaseEditor` is uncontrolled-with-seed: PluginAuthor re-renders and
     // recomputes authorProps on every change, so a controlled mount would need
     // a document stable across renders and there is nowhere stable to keep one.
-    authorComponent: CaseAuthor,
+    authorComponent: CaseEditor,
 
     authorProps: (ctx, draft) => ({
         // Resolved on the way IN, un-resolved on the way OUT. The editor shows
@@ -128,7 +128,24 @@ function worklistProps(ctx) {
         const baseline = entry.baseline.kind === 'archive'
             ? entryById(archive, entry.baseline.ref)
             : null;
-        const { series } = resolveEntry(entry, { baselineSeries: baseline?.series ?? [] });
+        // A `remote:` baseline has no catalogue entry to expand — the series
+        // IS the reference, and its geometry (instance count, plane) comes
+        // from the index.json the loader fetches when the study is opened.
+        // Without this synthesis the entry resolved to zero series and the
+        // room showed it as an unclickable "Pending" with no explanation and
+        // no network attempt.
+        const remoteBaselineSeries = entry.baseline.kind === 'remote' && entry.baseline.ref
+            ? [{
+                key: 'baseline',
+                description: entry.description || entry.studyId,
+                plane: 'unknown',
+                instances: 0,
+                ref: entry.baseline.ref,
+            }]
+            : [];
+        const { series } = resolveEntry(entry, {
+            baselineSeries: baseline?.series ?? remoteBaselineSeries,
+        });
 
         // The first series is what the room opens; the rest are the rail.
         // `remote:` is rewritten to this plugin's proxy mount so the loader

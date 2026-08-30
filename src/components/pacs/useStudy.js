@@ -29,16 +29,30 @@ import { createFrameCache } from './frameCache.js';
  * The host decides. A host that provides only `loadSeries` keeps working
  * exactly as before.
  */
-export function useStudy({ ref, loadSeries, loadSeriesIndex, loadInstance, budgetBytes }) {
+const BYTE_BUDGET = 320 * 1024 * 1024;
+const SWEEP_CONCURRENCY = 4;
+
+export function useStudy({ ref, loadSeries, loadSeriesIndex, loadInstance, budgetBytes, prefetch = true }) {
     const [state, setState] = useState({ status: 'idle', instances: [], series: [], error: null });
     const cacheRef = useRef(null);
-    const bytesRef = useRef(new Map());
+    const bytesRef = useRef(null);
     const pendingRef = useRef(new Set());
     const refRef = useRef(null);
-    // Bumped when a lazily-fetched slice arrives, purely to re-render.
+    // Bumped when a lazily-fetched slice arrives, purely to re-render. Throttled:
+    // a 500-slice sweep must not cost 500 renders, but a slice the reader is
+    // waiting on must appear the moment it lands — so arrivals inside the
+    // prefetch radius render immediately and the rest coalesce on a timer.
     const [, setArrivals] = useState(0);
+    const [fetched, setFetched] = useState(0);
+    const throttleRef = useRef(null);
 
     if (cacheRef.current === null) cacheRef.current = createFrameCache({ budgetBytes });
+    if (bytesRef.current === null) {
+        // Raw instance bytes get their own LRU: the sweep below pulls the whole
+        // stack in, and a budget is what keeps 'the whole stack' from meaning
+        // 'the whole heap' on a series larger than expected.
+        bytesRef.current = createFrameCache({ budgetBytes: BYTE_BUDGET, sizeOf: (b) => b?.byteLength ?? 0 });
+    }
 
     const lazy = typeof loadSeriesIndex === 'function' && typeof loadInstance === 'function';
 
@@ -52,9 +66,10 @@ export function useStudy({ ref, loadSeries, loadSeriesIndex, loadInstance, budge
 
         setState({ status: 'loading', instances: [], series: [], error: null });
         cacheRef.current.clear();
-        bytesRef.current = new Map();
+        bytesRef.current.clear();
         pendingRef.current = new Set();
         refRef.current = ref;
+        setFetched(0);
 
         const run = lazy
             ? loadSeriesIndex(ref, { signal: controller.signal }).then((index) => fromIndex(index, ref))
@@ -75,18 +90,68 @@ export function useStudy({ ref, loadSeries, loadSeriesIndex, loadInstance, budge
     }, [ref, loadSeries, loadSeriesIndex, loadInstance, lazy]);
 
     /** Fetch one instance's bytes, once, then re-render. */
-    const request = useCallback((seriesRef, name) => {
+    const request = useCallback((seriesRef, name, { urgent = true } = {}) => {
         if (bytesRef.current.has(name) || pendingRef.current.has(name)) return;
         pendingRef.current.add(name);
         loadInstance(seriesRef, name)
             .then((bytes) => {
                 if (refRef.current !== seriesRef) return; // the reader moved on
-                bytesRef.current.set(name, bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
-                setArrivals((n) => n + 1);
+                bytesRef.current.put(name, bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
+                setFetched((n) => n + 1);
+                if (urgent) {
+                    setArrivals((n) => n + 1);
+                } else if (!throttleRef.current) {
+                    throttleRef.current = setTimeout(() => {
+                        throttleRef.current = null;
+                        setArrivals((n) => n + 1);
+                    }, 200);
+                }
             })
             .catch(() => { /* a single missing slice must not fail the study */ })
             .finally(() => pendingRef.current.delete(name));
     }, [loadInstance]);
+
+    /**
+     * Background sweep: once the index is known, pull the WHOLE stack in,
+     * ordered from the middle outward — the direction a reader actually moves.
+     *
+     * This is what makes scrolling feel like a workstation instead of a web
+     * page: the prefetch radius around the cursor hides one slice of latency,
+     * but a reader flicking the wheel outruns it instantly. The sweep runs a
+     * few requests at a time so it never starves the urgent fetches, and it
+     * checks `refRef` before every request so changing series stops it cold.
+     *
+     * `prefetch: false` turns it off. Right for a READER, wrong for an author
+     * glancing at three candidate studies in the case editor: the sweep pulls
+     * the whole stack — 263 MB on a 499-slice CT — for a look that touches four
+     * slices. The slices under the cursor still arrive on demand either way.
+     */
+    useEffect(() => {
+        if (!prefetch || !lazy || state.status !== 'ready') return undefined;
+        const series = state.series[0];
+        if (!series?.instances?.length) return undefined;
+
+        const seriesRef = refRef.current;
+        const middle = Math.floor(series.instances.length / 2);
+        const order = [...series.instances.keys()]
+            .sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle));
+
+        let stopped = false;
+        let cursor = 0;
+        const pump = () => {
+            if (stopped || refRef.current !== seriesRef) return;
+            while (cursor < order.length && pendingRef.current.size < SWEEP_CONCURRENCY) {
+                const name = series.instances[order[cursor]]?.name;
+                cursor += 1;
+                if (name && !bytesRef.current.has(name)) {
+                    request(seriesRef, name, { urgent: false });
+                }
+            }
+            if (cursor < order.length) timer = setTimeout(pump, 50);
+        };
+        let timer = setTimeout(pump, 0);
+        return () => { stopped = true; clearTimeout(timer); };
+    }, [lazy, state.status, state.series, request]);
 
     /**
      * The decoded frame at `index`, or null while its pixels are in flight.
@@ -105,17 +170,24 @@ export function useStudy({ ref, loadSeries, loadSeriesIndex, loadInstance, budge
                 const neighbour = series.instances[i];
                 if (neighbour?.name) request(series.ref ?? refRef.current, neighbour.name);
             }
-            const bytes = bytesRef.current.get(instance.name);
+            const bytes = bytesRef.current.read(instance.name);
             if (!bytes) return null;
             return cacheRef.current.get(`${series.stackId}:${index}`, () => decodeFrame(bytes));
         }
 
         return cacheRef.current.get(`${series.stackId ?? series.seriesInstanceUid}:${index}`, () => (
-            decodeFrame(bytesRef.current.get(instance.source))
+            decodeFrame(bytesRef.current.read(instance.source))
         ));
     }, [lazy, request]);
 
-    return { ...state, frameAt, cacheStats: () => cacheRef.current.stats() };
+    const total = state.series[0]?.count ?? 0;
+    return {
+        ...state,
+        frameAt,
+        // How much of the active stack has arrived, for a progress indicator.
+        progress: lazy ? { fetched: Math.min(fetched, total), total } : { fetched: total, total },
+        cacheStats: () => cacheRef.current.stats(),
+    };
 }
 
 function decodeFrame(bytes) {
@@ -127,11 +199,10 @@ function decodeFrame(bytes) {
 /** BULK: parse metadata for every instance, then group and order. */
 function fromBytes(files, bytesRef) {
     if (!Array.isArray(files) || files.length === 0) throw new Error('no instances were returned');
-    const store = new Map();
-    files.forEach((f, i) => store.set(i, f instanceof Uint8Array ? f : new Uint8Array(f)));
-    bytesRef.current = store;
+    const all = files.map((f) => (f instanceof Uint8Array ? f : new Uint8Array(f)));
+    all.forEach((bytes, i) => bytesRef.current.put(i, bytes));
 
-    const instances = Array.from(store.entries()).map(([i, bytes]) => (
+    const instances = all.map((bytes, i) => (
         describeInstance(parseDicom(bytes, { stopBeforePixelData: true }), { source: i })
     ));
     return { instances, series: buildSeries(instances) };

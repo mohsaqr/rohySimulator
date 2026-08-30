@@ -232,13 +232,15 @@ describe('PACS room — the end-to-end thin slice', () => {
         const Room = descriptor.component;
         render(<Room {...props} />);
 
-        expect(screen.getByText('CT Pulmonary Angiogram')).toBeInTheDocument();
-        expect(screen.getByText('RAD-000042')).toBeInTheDocument();
+        // Radoyon 0.3.x renders the study identity in both the worklist and
+        // the reading-pane header, so "at least once" is the stable assertion.
+        expect(screen.getAllByText('CT Pulmonary Angiogram').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('RAD-000042').length).toBeGreaterThan(0);
 
         // The series rail is populated only after the study has been fetched,
         // parsed and ordered — so its appearance proves the whole chain.
         await waitFor(() => {
-            expect(screen.getByText('CTPA SADDLE EMBOLUS')).toBeInTheDocument();
+            expect(screen.getAllByText('CTPA SADDLE EMBOLUS').length).toBeGreaterThan(0);
         }, { timeout: 5000 });
 
         // Four slices, the DISEASED count — not the baseline's six.
@@ -272,5 +274,53 @@ describe('PACS room — the end-to-end thin slice', () => {
         expect(series.count).toBe(4);
         expect(series.spacing).toBeCloseTo(1.25, 6);
         expect(series.spacingIsUniform).toBe(true);
+    });
+
+    // Regression lock: the PACS room stranded the learner — no room tabs, no
+    // End & Debrief, no top-bar chrome; only a reload escaped. PluginRoom
+    // spreads the chrome props, but the vendored PacsScreen destructures a
+    // closed prop list, so the adapter (PacsRoom) must render the host chrome
+    // itself. This fails against the un-fixed adapter.
+    it('renders the host chrome: top bar controls, case title, room navigator', () => {
+        const props = descriptor.props(ctx, persist);
+        const Room = descriptor.component;
+        render(
+            <Room
+                {...props}
+                caseTitle="Case of the day"
+                topBarControls={<div data-testid="host-top-bar" />}
+                roomNav={<nav data-testid="host-room-nav" />}
+            />,
+        );
+        expect(screen.getByTestId('host-top-bar')).toBeInTheDocument();
+        expect(screen.getByTestId('host-room-nav')).toBeInTheDocument();
+        expect(screen.getByText('Case of the day')).toBeInTheDocument();
+        expect(screen.getByText('PACS')).toBeInTheDocument();
+    });
+
+    // Regression lock: a `remote:` BASELINE (no archive entry, no
+    // substitutions) resolved to zero series, so the study rendered as an
+    // unclickable "Pending" with no message and no network attempt. The host
+    // now synthesises the baseline series from the reference; geometry comes
+    // from index.json when the study is opened.
+    it('a remote-baseline study is available and points at the proxy mount', () => {
+        const doc = {
+            version: 1,
+            worklist: [{
+                id: 'w2',
+                studyId: 'ct_head',
+                description: 'CT Head (remote baseline)',
+                accession: 'RAD-000043',
+                baseline: { kind: SOURCE_KIND.REMOTE, ref: 'remote:dicom/case43/head/' },
+                substitutions: [],
+                report: { findings: '', impression: '', released: false },
+            }],
+        };
+        const props = descriptor.props({ ...ctx, data: doc }, persist);
+        expect(props.worklist).toHaveLength(1);
+        const [study] = props.worklist;
+        expect(study.available).toBe(true);
+        expect(study.ref).toBe('/api/plugins/pacs/dicom/case43/head');
+        expect(study.series[0].origin).toBe('baseline');
     });
 });

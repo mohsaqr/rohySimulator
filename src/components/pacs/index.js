@@ -8,10 +8,14 @@
 
 // Components
 export { PacsScreen } from './PacsScreen.jsx';
-export { CaseAuthor } from './CaseAuthor.jsx';
+export { CaseEditor, CaseAuthor } from './CaseEditor.jsx';
+export { StudyLibrary } from './StudyLibrary.jsx';
+export { StudyInspector } from './StudyInspector.jsx';
 export { Viewport } from './Viewport.jsx';
+export { ReadingPane } from './ReadingPane.jsx';
 export { SeriesRail } from './SeriesRail.jsx';
 export { Worklist } from './Worklist.jsx';
+export { Toolbar, TOOLS, LAYOUTS } from './Toolbar.jsx';
 
 // The DICOM core
 export { DicomError, TRANSFER_SYNTAX, parseDicom } from './dicomParse.js';
@@ -21,27 +25,39 @@ export {
     presetById, presetsFor, toImageData,
 } from './windowLevel.js';
 export {
-    buildSeries, describeInstance, measureDistance, measureRegion, planeOf,
-    slicePosition, sliceNormal,
+    buildSeries, describeInstance, measureDistance, measureRegion,
+    orientationLabels, planeOf, slicePosition, sliceNormal,
 } from './series.js';
 
 // State
 export {
-    applyPreset, changeSeries, coverage, initialViewport, panBy, resetView,
-    scrollBy, scrollTo, toCanvasPoint, toImagePoint, viewTransform, windowBy, zoomAbout,
+    applyPreset, changeSeries, cineStep, coverage, displayedOrientation,
+    flipHorizontal, flipVertical, initialViewport, panBy, resetView,
+    rotateQuarter, scrollBy, scrollTo, toCanvasPoint, toImagePoint,
+    toggleInvert, viewTransform, windowBy, zoomAbout,
 } from './viewportState.js';
 export { createFrameCache } from './frameCache.js';
 export { useStudy, openingWindow } from './useStudy.js';
+export { useThumbnails } from './useThumbnails.js';
 
 // The host contract — pure, total, browser-free, so a server can run it too.
 export {
-    REDISTRIBUTION, archiveIssues, archiveTable, attributionNotices,
-    entriesForStudy, entryById, readArchive, redistributableEntries,
+    LIBRARY, REDISTRIBUTION, abnormalEntries, archiveIssues, archiveTable,
+    attributionNotices, confirmedEntries, entriesForStudy, entryById, entryStats,
+    libraryOf,
+    normalEntries, pathologySources, primaryEntries, readArchive,
+    readingEntries, redistributableEntries,
 } from './archive.js';
 export {
-    SOURCE_KIND, SUBSTITUTION_SCOPE, documentIsServable, documentIssues,
-    documentSummary, emptyDocument, learnerDocument, readDocument, resolveEntry,
+    SOURCE_KIND, SUBSTITUTION_SCOPE, caseCatalogue, documentIsServable,
+    documentIssues, documentSummary, emptyDocument, entryForStudy,
+    learnerDocument, readDocument, resolveEntry, studyForOrder,
 } from './caseDocument.js';
+export {
+    ACTION, addFinding, changeStudy, entryOf, patchFinding, patchStudy,
+    removeFinding, revertStudy, undoLabelFor, unwireBaseline, wireBaseline,
+} from './caseActions.js';
+export { defaultResolveRef, pictureOf, previewSeries, studyActions } from './caseView.js';
 
 // Vocabulary, for the host's manifest.
 export {

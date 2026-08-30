@@ -40,6 +40,39 @@ export function slicePosition(position, normal) {
 }
 
 /**
+ * The patient-direction letters for the image's row and column axes — the
+ * L/R/A/P/H/F markers a workstation prints at the edges of the viewport.
+ *
+ * DICOM's patient coordinate system (PS3.3 C.7.6.2.1.1): +x toward the
+ * patient's Left, +y toward Posterior, +z toward Head. The letter for an axis
+ * is the dominant component of its direction cosine; ties are broken by axis
+ * order, which cannot matter clinically because a genuinely diagonal
+ * acquisition has no single honest letter anyway.
+ *
+ * Returns null when the orientation is absent or degenerate, so a caller shows
+ * no marker rather than a wrong one.
+ */
+export function orientationLabels(orientation) {
+    if (!Array.isArray(orientation) || orientation.length < 6 || !orientation.slice(0, 6).every(Number.isFinite)) {
+        return null;
+    }
+    const letter = (v) => {
+        const ax = Math.abs(v[0]);
+        const ay = Math.abs(v[1]);
+        const az = Math.abs(v[2]);
+        if (ax === 0 && ay === 0 && az === 0) return null;
+        if (ax >= ay && ax >= az) return v[0] >= 0 ? 'L' : 'R';
+        if (ay >= ax && ay >= az) return v[1] >= 0 ? 'P' : 'A';
+        return v[2] >= 0 ? 'H' : 'F';
+    };
+    const opposite = { L: 'R', R: 'L', A: 'P', P: 'A', H: 'F', F: 'H' };
+    const right = letter(orientation.slice(0, 3));
+    const down = letter(orientation.slice(3, 6));
+    if (!right || !down) return null;
+    return { right, left: opposite[right], down, up: opposite[down] };
+}
+
+/**
  * Which anatomical plane an orientation describes. Determined by the dominant
  * component of the normal, which is how a PACS labels a series and how a
  * hanging protocol decides where to put it.

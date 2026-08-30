@@ -62,6 +62,39 @@ function readEntry(raw) {
         patient: raw.patient ?? {},
         series: Array.isArray(raw.series) ? raw.series.map(readSeriesRef) : [],
         provenance: raw.provenance ?? {},
+        /**
+         * How far anyone has actually gone in reading this study.
+         *
+         *   primary    an example is in place; its findings have not been read.
+         *              Most of the archive: an entry from a myeloma or sarcoma
+         *              cohort is abnormal by provenance, and that is all that is
+         *              known about it.
+         *   confirmed  someone looked and wrote down what they saw.
+         *
+         * `primary` is the default and is not a failure state — it is the honest
+         * description of an unread image. What it must never do is masquerade as
+         * the other: a library labelling presumption as fact teaches the wrong
+         * thing twice, once about the image and once about certainty.
+         */
+        review: {
+            state: raw.review?.state === 'confirmed' ? 'confirmed' : 'primary',
+            finding: raw.review?.finding ?? null,
+            reviewedBy: raw.review?.reviewedBy ?? null,
+            reviewedOn: raw.review?.reviewedOn ?? null,
+        },
+        // The report FOR THESE IMAGES, when one is known. Distinct from the
+        // catalogue's `normal_findings`, which describes what a normal study of
+        // this TYPE looks like and says nothing about the pixels in this entry.
+        // Absent by default: an archive that cannot cite a report should say so
+        // rather than borrow one.
+        report: raw.report
+            ? {
+                findings: raw.report.findings ?? '',
+                impression: raw.report.impression ?? '',
+                reportedBy: raw.report.reportedBy ?? null,
+                source: raw.report.source ?? null,
+            }
+            : null,
         tags: Array.isArray(raw.tags) ? raw.tags.map(String) : [],
     };
 }
@@ -85,6 +118,19 @@ function readSeriesRef(raw) {
 /** Every entry whose study id matches, in catalogue order. */
 export function entriesForStudy(archive, studyId) {
     return archive.entries.filter((e) => e.studyId === studyId);
+}
+
+/**
+ * How much imaging an entry actually holds — what a library card claims.
+ *
+ * `instances` defaults each series to 0 rather than letting an undeclared count
+ * poison the sum into NaN, which would render as "NaN images" on the card.
+ */
+export function entryStats(entry) {
+    return {
+        series: entry.series.length,
+        instances: entry.series.reduce((n, s) => n + (s.instances ?? 0), 0),
+    };
 }
 
 /** One entry by id, or undefined. */
@@ -175,4 +221,60 @@ export function attributionNotices(archive) {
         }
     });
     return Array.from(notices).sort();
+}
+
+/**
+ * The archive split by ROLE, which is a property of the entry, not of the UI:
+ *
+ *   readingEntries    what a learner may be handed as a study to read — the
+ *                     normal library. Excludes pathology sources, because a
+ *                     worklist row named "RUL nodule" is a spoiler.
+ *   pathologySources  material an AUTHOR substitutes into a case. Tagged
+ *                     'pathology' at ingest; never listed as a study.
+ */
+export function readingEntries(archive) {
+    return archive.entries.filter((e) => !(e.tags ?? []).includes('pathology'));
+}
+
+/**
+ * The two libraries.
+ *
+ * `normal/` holds one normal example per catalogue study — the baseline a case
+ * author starts from, and the only thing offerable as one. `abnormal/` holds
+ * real pathology, whether it is meant to be read as a study or spliced into a
+ * baseline as a finding.
+ *
+ * The split is by INTENT and lives in the id. What is actually KNOWN about an
+ * entry's findings is a separate axis entirely — see `review` — because most of
+ * the abnormal library is abnormal by provenance and has not been read.
+ */
+export const LIBRARY = Object.freeze({ NORMAL: 'normal', ABNORMAL: 'abnormal' });
+
+/** Which library an entry belongs to, from its id. */
+export function libraryOf(entry) {
+    return String(entry?.id ?? '').startsWith('abnormal/') ? LIBRARY.ABNORMAL : LIBRARY.NORMAL;
+}
+
+/** The baseline library: normal studies, safe to start a case from. */
+export function normalEntries(archive) {
+    return archive.entries.filter((e) => libraryOf(e) === LIBRARY.NORMAL);
+}
+
+/** The pathology library, readable studies and substitution sources alike. */
+export function abnormalEntries(archive) {
+    return archive.entries.filter((e) => libraryOf(e) === LIBRARY.ABNORMAL);
+}
+
+/** Entries whose findings someone has actually read and recorded. */
+export function confirmedEntries(archive) {
+    return archive.entries.filter((e) => e.review.state === 'confirmed');
+}
+
+/** Entries in place but unread — the ones a case author still has to look at. */
+export function primaryEntries(archive) {
+    return archive.entries.filter((e) => e.review.state !== 'confirmed');
+}
+
+export function pathologySources(archive) {
+    return archive.entries.filter((e) => (e.tags ?? []).includes('pathology'));
 }

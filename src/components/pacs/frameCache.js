@@ -19,7 +19,13 @@
 
 const DEFAULT_BUDGET_BYTES = 192 * 1024 * 1024;
 
-export function createFrameCache({ budgetBytes = DEFAULT_BUDGET_BYTES } = {}) {
+export function createFrameCache({
+    budgetBytes = DEFAULT_BUDGET_BYTES,
+    // How big a cached value is. The default measures a decoded frame; a store
+    // of raw instance bytes passes `(b) => b.byteLength` and reuses the same
+    // eviction machinery rather than growing a second, untested LRU.
+    sizeOf = (value) => value?.values?.byteLength ?? 0,
+} = {}) {
     // A Map iterates in insertion order, which is what makes it an LRU: delete
     // and re-set on every hit, and the oldest key is always the first one.
     const entries = new Map();
@@ -47,7 +53,7 @@ export function createFrameCache({ budgetBytes = DEFAULT_BUDGET_BYTES } = {}) {
                 return hit.frame;
             }
             const frame = decode();
-            const bytes = frame?.values?.byteLength ?? 0;
+            const bytes = sizeOf(frame);
             // A frame larger than the whole budget is returned to the caller
             // but not retained: it is inserted, then immediately evicted by the
             // sweep below. Showing the image matters; caching it is what the
@@ -56,6 +62,27 @@ export function createFrameCache({ budgetBytes = DEFAULT_BUDGET_BYTES } = {}) {
             used += bytes;
             evictTo(budgetBytes);
             return frame;
+        },
+
+        /** Insert or replace a value directly (for values produced asynchronously). */
+        put(key, value) {
+            if (entries.has(key)) {
+                used -= entries.get(key).bytes;
+                entries.delete(key);
+            }
+            const bytes = sizeOf(value);
+            entries.set(key, { frame: value, bytes });
+            used += bytes;
+            evictTo(budgetBytes);
+        },
+
+        /** The cached value, refreshing its recency — or undefined. Never decodes. */
+        read(key) {
+            if (!entries.has(key)) return undefined;
+            const hit = entries.get(key);
+            entries.delete(key);
+            entries.set(key, hit);
+            return hit.frame;
         },
 
         has: (key) => entries.has(key),

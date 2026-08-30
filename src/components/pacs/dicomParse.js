@@ -275,6 +275,20 @@ function decode(bytes, view, el, le, textDecoder = asciiDecoder) {
  * @throws {DicomError} codes: bad_input, not_dicom, unsupported_syntax,
  *   truncated, bad_length, bad_sequence.
  */
+/**
+ * The length the first element declares, for a dataset with no meta group, or
+ * null when the file is too short to hold one. Undefined length (0xFFFFFFFF) is
+ * legal for a sequence and is not a claim about size, so it reports null too.
+ */
+function firstElementLength(view, size, explicit) {
+    if (size < 8) return null;
+    const sized = (n) => (n === UNDEFINED_LENGTH ? null : n);
+    if (!explicit) return sized(view.getUint32(4, true));
+    const vr = String.fromCharCode(view.getUint8(4), view.getUint8(5));
+    if (LONG_FORM_VRS.has(vr)) return size < 12 ? null : sized(view.getUint32(8, true));
+    return view.getUint16(6, true);
+}
+
 export function parseDicom(input, options = {}) {
     const bytes = toBytes(input);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -304,6 +318,26 @@ export function parseDicom(input, options = {}) {
         const looksExplicit = bytes.length > 6
             && bytes[4] >= 0x41 && bytes[4] <= 0x5a && bytes[5] >= 0x41 && bytes[5] <= 0x5a;
         transferSyntax = looksExplicit ? TRANSFER_SYNTAX.EXPLICIT_VR_LE : TRANSFER_SYNTAX.IMPLICIT_VR_LE;
+
+        // With no DICM magic there is no evidence this is DICOM at all, so the
+        // first element has to earn it. If element ONE already claims more
+        // bytes than the whole file holds, the sniff read a length out of
+        // something that is not a length.
+        //
+        // This is not pedantry. Archives ship a LICENSE or README beside the
+        // images (TCIA's per-series zips do), and reading "Creative Commons…"
+        // as implicit VR yields tag (694c,6563) with a 543 MB length — which
+        // ingest then reported as `truncated`, telling the operator their
+        // DICOM was damaged when in fact it was a text file. Wrong diagnosis,
+        // and an alarming one.
+        const declared = firstElementLength(view, bytes.length, looksExplicit);
+        if (declared !== null && declared > bytes.length) {
+            throw new DicomError(
+                'not DICOM: no DICM magic, and the first element claims '
+                + `${declared} bytes in a ${bytes.length}-byte file`,
+                'not_dicom',
+            );
+        }
     }
 
     if (transferSyntax === TRANSFER_SYNTAX.DEFLATED_EXPLICIT_VR_LE) {
@@ -328,6 +362,12 @@ function makeObject({ bytes, view, meta, elements, transferSyntax, littleEndian 
     const charsetEl = elements.get('00080005');
     const textDecoder = decoderFor(charsetEl ? decode(bytes, view, charsetEl, littleEndian, asciiDecoder)[0] : '');
     const resolve = (nameOrTag) => (DICTIONARY[nameOrTag] ? nameOrTag : tagOf(nameOrTag)) ?? nameOrTag;
+    // Reads one element without going through the public accessors, so the
+    // frame/fragment mapping can consult NumberOfFrames while being built.
+    const decodeMaybe = (tag) => {
+        const el = elements.get(tag);
+        return el && !el.encapsulated ? decode(bytes, view, el, littleEndian, textDecoder)[0] : undefined;
+    };
     const find = (nameOrTag) => {
         const tag = resolve(nameOrTag);
         return elements.get(tag) ?? meta.get(tag);
@@ -398,6 +438,61 @@ function makeObject({ bytes, view, meta, elements, transferSyntax, littleEndian 
 
         /** True when pixel data is compressed and therefore not directly readable. */
         isEncapsulated: () => find(TAG_PIXEL_DATA)?.encapsulated === true,
+
+        /**
+         * The compressed bytes of one frame, for a decoder to work on.
+         *
+         * Encapsulated pixel data is a list of fragments, and the mapping from
+         * frames to fragments is not one-to-one: a single frame may be split
+         * across several fragments, and the standard's way of saying which is
+         * the basic offset table. When that table is absent — it frequently is —
+         * the only assumption the standard permits is one fragment per frame,
+         * so that is what is used, and a mismatch is reported rather than
+         * guessed at.
+         *
+         * Returns the concatenated fragments for `frameIndex`, or undefined if
+         * the pixel data is not encapsulated.
+         */
+        frameFragments(frameIndex = 0) {
+            const el = find(TAG_PIXEL_DATA);
+            if (!el?.encapsulated) return undefined;
+            const frames = Math.max(1, Math.trunc(Number(
+                decodeMaybe('00280008') ?? 1,
+            ) || 1));
+            const parts = el.fragments;
+            if (parts.length === 0) return undefined;
+
+            let chosen;
+            if (parts.length === frames) {
+                chosen = [parts[frameIndex]];
+            } else if (frames === 1) {
+                // One frame split across several fragments: all of them, in order.
+                chosen = parts;
+            } else if (parts.length % frames === 0) {
+                const per = parts.length / frames;
+                chosen = parts.slice(frameIndex * per, (frameIndex + 1) * per);
+            } else {
+                throw new DicomError(
+                    `${parts.length} fragments for ${frames} frames, and no basic offset table to `
+                    + 'resolve them; refusing to guess which bytes belong to which frame',
+                    'bad_fragments',
+                );
+            }
+            if (chosen.some((f) => !f)) {
+                throw new DicomError(`frame ${frameIndex} is out of range (${frames} frame(s))`, 'bad_frame');
+            }
+            if (chosen.length === 1) {
+                return bytes.subarray(chosen[0].offset, chosen[0].offset + chosen[0].length);
+            }
+            const total = chosen.reduce((n, f) => n + f.length, 0);
+            const out = new Uint8Array(total);
+            let at = 0;
+            chosen.forEach((f) => { out.set(bytes.subarray(f.offset, f.offset + f.length), at); at += f.length; });
+            return out;
+        },
+
+        /** How many fragments the encapsulated pixel data holds. */
+        fragmentCount: () => find(TAG_PIXEL_DATA)?.fragments?.length ?? 0,
 
         /** True when this transfer syntax stores pixels natively. */
         isNativePixelData: () => NATIVE_SYNTAXES.has(transferSyntax) && find(TAG_PIXEL_DATA)?.encapsulated !== true,

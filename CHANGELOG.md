@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.121] — 2026-08-30
+
+### Changed
+
+- **PACS workstation lifted to Radoyon 0.3.1**: hanging layouts, real
+  radiographs, compressed pixel decode (RLE/JPEG), reader's report pane,
+  and the new two-library case editor.
+
 ## [2.9.120] — 2026-08-30
 
 ### Changed

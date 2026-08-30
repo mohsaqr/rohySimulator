@@ -175,9 +175,13 @@ export function resolveEntry(entry, { baselineSeries = [] } = {}) {
         }
 
         if (sub.scope === SUBSTITUTION_SCOPE.SERIES) {
+            // The BASELINE's description is kept deliberately. The label is the
+            // author's name for the finding — the answer — and a scanner would
+            // have written 'AXIAL CHEST' whatever was in the lungs. Naming the
+            // series after its pathology hands the learner the diagnosis in
+            // the series rail, which defeats the case.
             series[index] = {
                 ...series[index],
-                description: sub.label || series[index].description,
                 ref: sub.source.ref,
                 instances: sub.geometry?.instances ?? series[index].instances,
                 origin: 'substitution',
@@ -238,6 +242,11 @@ export function documentIssues(doc, { archive = null } = {}) {
             if (!found) at('error', `${name} references archive entry "${entry.baseline.ref}", which is not in the catalogue`);
         }
 
+        // Resolved once: every substitution is judged against the same baseline.
+        const baseline = archive && entry.baseline.kind === SOURCE_KIND.ARCHIVE
+            ? archive.entries.find((e) => e.id === entry.baseline.ref)
+            : null;
+
         const subSeen = new Set();
         entry.substitutions.forEach((sub, i) => {
             const subName = sub.label || `substitution ${i + 1}`;
@@ -247,6 +256,18 @@ export function documentIssues(doc, { archive = null } = {}) {
 
             if (sub.source.kind === SOURCE_KIND.NONE || !sub.source.ref) {
                 at('error', `${name}: ${subName} has no source — the pathology is missing`);
+            }
+
+            // A substitution names the baseline series it replaces. Replacing
+            // the baseline with different imaging leaves that name pointing at
+            // nothing, and an orphaned substitution does not fail loudly — the
+            // finding simply never appears, and the case teaches a normal study
+            // while claiming to teach a nodule. Null means "the first series",
+            // which is what a single-series study always means, so only a
+            // NAMED key that is absent is wrong.
+            if (baseline && sub.targetSeriesKey !== null
+                && !baseline.series.some((s) => s.key === sub.targetSeriesKey)) {
+                at('error', `${name}: ${subName} replaces series "${sub.targetSeriesKey}", which is not in "${baseline.id}" — repoint it or the finding will not appear`);
             }
 
             if (sub.scope === SUBSTITUTION_SCOPE.RANGE) {
@@ -348,5 +369,115 @@ export function learnerDocument(doc) {
             ...entry,
             report: report.released ? report : { findings: '', impression: '', reportedBy: null, released: false },
         })),
+    };
+}
+
+/**
+ * A case as the CATALOGUE sees it: one row per orderable study, whether or not
+ * the case says anything about it.
+ *
+ * This is the shape the editor is built on, and it encodes the teaching claim.
+ * A learner may order any study in the catalogue, and unless the author changed
+ * it they get a real, complete, normal examination. So a case is not a worklist
+ * an author assembles — it is the whole catalogue, minus the author's changes.
+ *
+ * The stored document still holds only what CHANGED. That is deliberate: a case
+ * document that enumerated 74 studies to say "normal" 73 times would grow every
+ * time the catalogue did, and would silently freeze a case to the catalogue as
+ * it stood the day it was written.
+ *
+ * @param {object} doc the case document
+ * @param {{archive: object, catalogue: Array}} context
+ * @returns {Array<{studyId, name, modality, bodyRegion, state, entry, normalEntry,
+ *   wiredEntryId, findingCount, backed}>} one row per catalogue study, in
+ *   catalogue order. `state` is:
+ *     'changed'  the case says something about this study
+ *     'normal'   untouched, and the archive has a normal example to serve
+ *     'unbacked' untouched, and there is no imaging for it yet — orderable in
+ *                the host, but nothing to open
+ */
+export function caseCatalogue(doc, { archive = null, catalogue = [] } = {}) {
+    const document = readDocument(doc);
+    const byStudy = new Map(document.worklist.map((e) => [e.studyId, e]));
+    const normals = new Map();
+    (archive?.entries ?? []).forEach((e) => {
+        // The first normal example wins, so the row is stable rather than
+        // depending on catalogue order within a study.
+        if (e.studyId && !String(e.id).startsWith('abnormal/') && !normals.has(e.studyId)) {
+            normals.set(e.studyId, e);
+        }
+    });
+
+    return catalogue.map((study) => {
+        const entry = byStudy.get(study.id) ?? null;
+        const normalEntry = normals.get(study.id) ?? null;
+        return {
+            studyId: study.id,
+            name: study.name ?? study.id,
+            modality: study.modality ?? null,
+            bodyRegion: study.bodyRegion ?? study.body_region ?? null,
+            entry,
+            normalEntry,
+            backed: Boolean(normalEntry),
+            wiredEntryId: entry?.baseline?.kind === SOURCE_KIND.ARCHIVE ? entry.baseline.ref : null,
+            // The archive entry the case actually points at, which is what a
+            // card must show. For a changed study that is usually NOT the
+            // normal example, and showing the normal one would picture a study
+            // the learner will never see.
+            wiredEntry: entry?.baseline?.kind === SOURCE_KIND.ARCHIVE
+                ? ((archive?.entries ?? []).find((e) => e.id === entry.baseline.ref) ?? null)
+                : null,
+            findingCount: entry?.substitutions?.length ?? 0,
+            state: entry ? 'changed' : (normalEntry ? 'normal' : 'unbacked'),
+        };
+    });
+}
+
+/**
+ * What a learner ordering `studyId` should be handed.
+ *
+ * The rule the whole model rests on, in one place so a host cannot implement it
+ * differently from the editor: the case's own entry when it has one, otherwise
+ * the archive's normal example, otherwise nothing.
+ *
+ * @returns {{source: 'case'|'normal'|'none', entry: object|null, archiveEntry: object|null}}
+ */
+export function studyForOrder(doc, studyId, { archive = null } = {}) {
+    const document = readDocument(doc);
+    const entry = document.worklist.find((e) => e.studyId === studyId) ?? null;
+    if (entry) {
+        const archiveEntry = entry.baseline.kind === SOURCE_KIND.ARCHIVE && archive
+            ? (archive.entries.find((e) => e.id === entry.baseline.ref) ?? null)
+            : null;
+        return { source: 'case', entry, archiveEntry };
+    }
+    const normal = (archive?.entries ?? []).find(
+        (e) => e.studyId === studyId && !String(e.id).startsWith('abnormal/'),
+    ) ?? null;
+    return normal
+        ? { source: 'normal', entry: null, archiveEntry: normal }
+        : { source: 'none', entry: null, archiveEntry: null };
+}
+
+/**
+ * A blank entry for a catalogue study the author has decided to change.
+ *
+ * Seeded from the archive's normal example, because "changed" starts from
+ * normal — that is what makes everything the author does not touch stay real.
+ * The report is withheld rather than released-and-empty: nobody has written one
+ * yet, and releasing an empty report is a different claim from withholding it.
+ */
+export function entryForStudy(study, { normalEntry = null } = {}) {
+    return {
+        id: `study_${study.id ?? study.studyId}`,
+        studyId: study.id ?? study.studyId,
+        description: study.name ?? '',
+        accession: null,
+        availableAtMinutes: null,
+        baseline: normalEntry
+            ? { kind: SOURCE_KIND.ARCHIVE, ref: normalEntry.id }
+            : { kind: SOURCE_KIND.NONE, ref: null },
+        substitutions: [],
+        report: { findings: '', impression: '', reportedBy: null, released: false },
     };
 }

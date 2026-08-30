@@ -1,50 +1,86 @@
 import { Layers } from 'lucide-react';
 
 /**
- * The series rail — the study's contents, one row per series.
+ * The series rail — the study's contents, one THUMBNAIL per series.
  *
- * Each row states what a reader needs before opening it: plane, slice count and
- * reconstructed spacing. `orderedBy` is shown when a series had to fall back to
- * InstanceNumber ordering, because that is the case where the stack's order is
- * only as trustworthy as the scanner's numbering, and a reader should know.
+ * A reader recognises "the thin axial bone recon" from a picture in a tenth of
+ * a second and from a row of text not at all, which is why every real PACS
+ * shows the stack's face here. Warnings stay textual: irregular spacing and
+ * InstanceNumber-ordering are trust problems, and trust problems are stated in
+ * words.
  */
-export function SeriesRail({ series = [], activeStackId, onSelect, t = (k, f) => f ?? k }) {
+export function SeriesRail({
+    series = [],
+    activeStackId,
+    assignments = {},
+    onSelect,
+    thumbnailFor = () => null,
+    columns = 2,
+    t = (k, f) => f ?? k,
+}) {
     if (series.length === 0) return null;
     return (
-        <nav aria-label={t('radoyon_series_label', 'Series')} className="flex flex-col gap-1 p-2 overflow-y-auto">
+        <nav
+            aria-label={t('radoyon_series_label', 'Series')}
+            className={`grid ${columns === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-1.5 p-2 overflow-y-auto content-start`}
+        >
             {series.map((s) => {
-                const active = (s.stackId ?? s.seriesInstanceUid) === activeStackId;
+                const id = s.stackId ?? s.seriesInstanceUid;
+                const active = id === activeStackId;
+                const thumb = s.ref ? thumbnailFor(s.ref) : null;
+                const pane = assignments[id];
                 return (
                     <button
                         type="button"
-                        key={s.stackId ?? s.seriesInstanceUid}
+                        key={id}
                         onClick={() => onSelect?.(s)}
                         aria-current={active ? 'true' : undefined}
-                        className={`text-left rounded-md px-3 py-2 border transition-colors ${
+                        title={s.description || t('radoyon_series_untitled', 'Series')}
+                        className={`relative text-left rounded-md overflow-hidden border transition-colors group ${
                             active
-                                ? 'bg-cyan-500/15 border-cyan-400/60 text-cyan-100'
-                                : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800'
+                                ? 'border-cyan-400/80 ring-1 ring-cyan-400/40'
+                                : 'border-slate-800 hover:border-slate-600'
                         }`}
                     >
-                        <div className="flex items-center gap-2 text-sm font-medium">
-                            <Layers className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
-                            <span className="truncate">{s.description || t('radoyon_series_untitled', 'Series')}</span>
+                        <div className="aspect-square bg-black flex items-center justify-center">
+                            {thumb ? (
+                                <img src={thumb} alt="" className="w-full h-full object-contain" draggable={false} />
+                            ) : (
+                                <Layers className="w-6 h-6 text-slate-700" aria-hidden="true" />
+                            )}
                         </div>
-                        <div className="mt-1 text-[11px] font-mono text-slate-400 flex flex-wrap gap-x-3">
-                            <span>{s.count} {t('radoyon_images', 'img')}</span>
-                            <span>{s.plane}</span>
-                            {Number.isFinite(s.spacing) && <span>{s.spacing.toFixed(2)} mm</span>}
+                        {Number.isInteger(pane) && (
+                            <span className="absolute top-1 left-1 min-w-4 h-4 px-1 rounded-sm bg-cyan-500/90 text-black text-[10px] font-bold flex items-center justify-center">
+                                {pane + 1}
+                            </span>
+                        )}
+                        <span className="absolute top-1 right-1 px-1 rounded-sm bg-black/70 text-[10px] font-mono text-slate-300">
+                            {s.count}
+                        </span>
+                        <div className="px-1.5 py-1 bg-slate-950">
+                            <div className="text-[11px] leading-tight text-slate-300 truncate">
+                                {s.description || t('radoyon_series_untitled', 'Series')}
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-500 flex gap-1.5">
+                                {/* A radiograph has no plane, and printing
+                                    'unknown' under every film is worse than
+                                    printing nothing: it reads as a fault. The
+                                    modality is what actually distinguishes the
+                                    series in that case. */}
+                                <span>{s.plane && s.plane !== 'unknown' ? s.plane : s.modality}</span>
+                                {Number.isFinite(s.spacing) && <span>{s.spacing.toFixed(1)}mm</span>}
+                            </div>
+                            {/* Both warnings are about a STACK. A single image
+                                cannot be misordered and has no spacing to be
+                                irregular, so on a radiograph they are false alarms. */}
+                            {s.count > 1 && (s.spacingIsUniform === false || s.orderedBy === 'instance_number') && (
+                                <div className="text-[10px] text-amber-400 truncate">
+                                    {s.spacingIsUniform === false
+                                        ? t('radoyon_spacing_irregular', 'Irregular slice spacing')
+                                        : t('radoyon_ordered_by_number', 'Ordered by image number')}
+                                </div>
+                            )}
                         </div>
-                        {s.spacingIsUniform === false && (
-                            <div className="mt-1 text-[11px] text-amber-400">
-                                {t('radoyon_spacing_irregular', 'Irregular slice spacing')}
-                            </div>
-                        )}
-                        {s.orderedBy === 'instance_number' && (
-                            <div className="mt-1 text-[11px] text-amber-400">
-                                {t('radoyon_ordered_by_number', 'Ordered by image number')}
-                            </div>
-                        )}
                     </button>
                 );
             })}
