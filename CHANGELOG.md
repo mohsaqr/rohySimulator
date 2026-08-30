@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.101] — 2026-08-30
+
+### Fixed
+
+- **The case summary showed learners `thighRight` and `upperBack`.** Debriefing
+  is where a learner reviews what they examined, and the one surface that
+  bypassed `regionLabel()` was that summary — `CaseSummaryModal` rendered the
+  stored `body_region` id directly, while the exam room three clicks away said
+  "Right Thigh" for the same finding. `exam_type` had the same problem.
+
+  Both now go through the exam room's own `regionLabel` / `techniqueLabel`
+  resolvers, which fall back to the raw id for author-defined regions — worse
+  than a name, far better than blank. The resolvers live in the `examination`
+  namespace, so the modal takes a second `tExam` hook, the same pattern
+  `PhysicalExamEditor` uses. Reported against v2.9.82.
+
 ## [2.9.100] — 2026-08-30
 
 ### Fixed

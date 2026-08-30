@@ -215,7 +215,64 @@ describe('CaseSummaryModal — history, vitals, exam findings (bug report 2.9.15
         );
 
         expect(await screen.findByText('Bilateral basilar crackles')).toBeTruthy();
-        expect(screen.getByText('chest')).toBeTruthy();
+        // Stored ids resolve to display names via the exam room's own
+        // resolvers, so the summary and the room say the same words.
+        expect(screen.getByText('Chest')).toBeTruthy();
+        expect(screen.getByText(/Auscultation/)).toBeTruthy();
         expect(screen.queryByText('No examinations recorded.')).toBeNull();
+    });
+
+    // Regression lock: the summary rendered `body_region` raw, so a learner
+    // debriefing saw "thighRight" and "upperBack" (reported against v2.9.82)
+    // while the exam room three clicks away said "Right Thigh". regionLabel()
+    // had existed in src/components/examination/examinationLabels.js the whole
+    // time; the summary was the one surface that bypassed it.
+    it('renders camelCase region ids as human-readable names', async () => {
+        apiFetchMock.mockImplementation((path) => {
+            if (path.endsWith('/exam-findings')) {
+                return Promise.resolve({
+                    findings: [
+                        { id: 1, body_region: 'thighRight', exam_type: 'palpation', finding: 'Tender' },
+                        { id: 2, body_region: 'upperBack', exam_type: 'inspection', finding: 'No lesions' },
+                    ],
+                });
+            }
+            return Promise.resolve({});
+        });
+        renderWithProviders(
+            <CaseSummaryModal
+                activeCase={{ id: 'case-5', name: 'Trauma', config: {} }}
+                sessionId="sess-2"
+                onClose={() => {}}
+            />
+        );
+
+        expect(await screen.findByText('Right Thigh')).toBeTruthy();
+        expect(screen.getByText('Upper Back')).toBeTruthy();
+        expect(screen.queryByText('thighRight')).toBeNull();
+        expect(screen.queryByText('upperBack')).toBeNull();
+    });
+
+    // An educator may define a region the shipped map has never heard of.
+    // regionLabel falls back to the raw id, which is worse than a name and
+    // far better than blank.
+    it('falls back to the raw id for an author-defined region', async () => {
+        apiFetchMock.mockImplementation((path) => {
+            if (path.endsWith('/exam-findings')) {
+                return Promise.resolve({
+                    findings: [{ id: 1, body_region: 'customFlank', exam_type: 'palpation', finding: 'Guarding' }],
+                });
+            }
+            return Promise.resolve({});
+        });
+        renderWithProviders(
+            <CaseSummaryModal
+                activeCase={{ id: 'case-6', name: 'Abdo', config: {} }}
+                sessionId="sess-3"
+                onClose={() => {}}
+            />
+        );
+
+        expect(await screen.findByText('customFlank')).toBeTruthy();
     });
 });

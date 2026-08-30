@@ -4,6 +4,7 @@ import { X, Activity, Award, FlaskConical, Pill, Stethoscope, Image as ImageIcon
 import { apiFetch } from '../../services/apiClient';
 import { parseConfig } from '../../utils/parseConfig.js';
 import { resolveCaseHistory } from '../../utils/casePromptContext.js';
+import { regionLabel, techniqueLabel } from '../examination/examinationLabels';
 
 async function safeFetch(path) {
     try {
@@ -46,6 +47,10 @@ function resolveInitialVitals(activeCase, cfg) {
 // Uses the existing read-only session endpoints — no new backend work.
 export default function CaseSummaryModal({ activeCase, sessionId, onClose }) {
     const { t } = useTranslation('discussion');
+    // Region and technique names are keyed in the `examination` namespace, not
+    // this one — same second-hook pattern PhysicalExamEditor uses so the exam
+    // room and the summary say the same words for the same body part.
+    const { t: tExam } = useTranslation('examination');
     const [data, setData] = useState({ labs: null, treatments: null, exams: null, radiology: null, debrief: null });
     const [loading, setLoading] = useState(!!sessionId);
 
@@ -139,13 +144,23 @@ export default function CaseSummaryModal({ activeCase, sessionId, onClose }) {
                                     server/routes/cases-routes.js) — the old region_id /
                                     finding_text keys never existed, so every row rendered
                                     blank. */}
-                                <FindingsList items={data.exams?.findings || data.exams?.exam_findings} render={(f, i) => (
-                                    <li key={f.id ?? i} className="text-sm text-slate-200">
-                                        <span className="font-medium text-slate-100">{f.body_region || f.exam_type}</span>
-                                        {f.exam_type && f.body_region ? ` — ${f.exam_type}` : ''}
-                                        {f.finding && <>: <span className="text-slate-300">{f.finding}</span></>}
-                                    </li>
-                                )} empty={t('no_exams_recorded')} />
+                                <FindingsList items={data.exams?.findings || data.exams?.exam_findings} render={(f, i) => {
+                                    // `body_region` and `exam_type` are stored ids
+                                    // ('thighRight', 'auscultation'). Rendering them raw
+                                    // put "thighRight — upperBack" in front of learners;
+                                    // regionLabel / techniqueLabel are the same
+                                    // resolvers the exam room uses, and they fall back
+                                    // to the raw id for author-defined regions.
+                                    const region = f.body_region ? regionLabel(tExam, f.body_region) : '';
+                                    const technique = f.exam_type ? techniqueLabel(tExam, f.exam_type) : '';
+                                    return (
+                                        <li key={f.id ?? i} className="text-sm text-slate-200">
+                                            <span className="font-medium text-slate-100">{region || technique}</span>
+                                            {technique && region ? ` — ${technique}` : ''}
+                                            {f.finding && <>: <span className="text-slate-300">{f.finding}</span></>}
+                                        </li>
+                                    );
+                                }} empty={t('no_exams_recorded')} />
                             </Section>
 
                             <Section title={t('section_lab_results')} icon={<FlaskConical className="w-4 h-4" />}>
