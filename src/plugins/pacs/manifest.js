@@ -64,7 +64,16 @@ export const manifest = {
     // matching it against required terms would misfire on every legitimate
     // negative ("no evidence of pulmonary embolism" contains "pulmonary
     // embolism"). Tutor-side marking reads the rubric instead.
-    capabilities: ['persist', 'remote'],
+    //
+    // 'orders' is what makes ordering a CT produce images rather than only a
+    // report. The learner orders in the Radiology room; this room is where the
+    // study opens, and without the host granting the session's imaging orders
+    // the two halves of one act never meet — the worklist could only ever show
+    // what an educator had authored by hand. The grant is narrowed by the host
+    // (src/plugins/hostOrders.js): identity, study name and turnaround state,
+    // never the report text or the configured findings that ride on the order
+    // row, because what the imaging SHOWS is the case document's to say.
+    capabilities: ['persist', 'remote', 'orders'],
     minRole: 'student',
 
     // Remote content. This is the reason the plugin can exist at all: one

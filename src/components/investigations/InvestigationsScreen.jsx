@@ -82,6 +82,12 @@ export default function InvestigationsScreen({
     activeKind = 'lab',
     roomNav,
     topBarControls = null,
+    // Which plugin rooms this case offers, and how to reach one (RPS-1). Both
+    // come from App.jsx, which already computes them for the RoomNavigator.
+    // Used for exactly one thing: offering the crossing from a radiology REPORT
+    // to the images it describes.
+    enabledPlugins = null,
+    onSelectRoom = null,
 }) {
     const { t } = useTranslation('investigations');
     const [showNotes, setShowNotes] = useState(false);
@@ -133,6 +139,17 @@ export default function InvestigationsScreen({
         onOrdered: (item) => ordered('radiology', item.test_name, { urgency: 'routine' }),
         toast,
     });
+
+    // The images for an ordered study open in the PACS room. Named as a STRING
+    // and never imported: a core room that imported a plugin would turn deleting
+    // that plugin's directory into a build failure, which is precisely what
+    // RPS-1's peaceful exclusion rule forbids. A deployment without the room —
+    // or a case that offers no imaging at all — simply gets no button.
+    const IMAGING_ROOM = 'pacs';
+    const onOpenImages = activeKind === 'radiology' && typeof onSelectRoom === 'function'
+        && Array.isArray(enabledPlugins) && enabledPlugins.includes(IMAGING_ROOM)
+        ? () => onSelectRoom(IMAGING_ROOM)
+        : null;
 
     const active = activeKind === 'radiology' ? radiology : lab;
     const theme = MODALITY_THEME[activeKind];
@@ -247,6 +264,7 @@ export default function InvestigationsScreen({
                                     result={normaliseForView(expandedOrder, activeKind)}
                                     patientInfo={patientInfo}
                                     onClose={() => setExpandedId(null)}
+                                    {...(activeKind === 'radiology' ? { onOpenImages } : {})}
                                 />
                             </div>
                         ) : (

@@ -173,6 +173,7 @@
   "unknown_patient": "Unbekannter Patient",
   "value_status_unknown": "Wertstatus unbekannt",
   "video_not_supported": "Ihr Browser unterstützt keine Videowiedergabe.",
+  "view_images_in_pacs": "Bilder im PACS ansehen",
   "viewed_when": "Angesehen {when}",
   "watermark_lab": "LABOR",
   "watermark_radiology": "RADIOLOGIE",

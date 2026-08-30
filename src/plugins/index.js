@@ -23,5 +23,6 @@ Object.entries(modules).forEach(([file, mod]) => {
 });
 
 export { registry };
+export { useHostOrders } from './hostOrders.js';
 export { PluginRoom } from './PluginRoom.jsx';
 export { PluginAuthor } from './PluginAuthor.jsx';

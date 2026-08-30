@@ -152,11 +152,18 @@ describe('availability actually gates the navigator', () => {
     // mount cannot see.
     const APP = readFileSync(path.join(import.meta.dirname, '..', '..', 'src', 'App.jsx'), 'utf8');
 
+    // Counted PER MOUNT rather than by counting the two strings in the whole
+    // file. A bare occurrence count says "the prop appears as often as the
+    // component does", which is true of a file that passes it to something
+    // else entirely — and became false the moment InvestigationsScreen started
+    // taking the same list to offer the crossing into the PACS room. The
+    // property being locked is that each <RoomNavigator …/> carries it.
     it('every RoomNavigator mount in App.jsx passes enabledPlugins', () => {
-        const mounts = (APP.match(/<RoomNavigator\b/g) ?? []).length;
-        const gated = (APP.match(/enabledPlugins=\{enabledPlugins\}/g) ?? []).length;
-        expect(mounts).toBeGreaterThan(0);
-        expect(gated).toBe(mounts);
+        const mounts = APP.split('<RoomNavigator').slice(1)
+            .map((tail) => tail.slice(0, tail.indexOf('/>')));
+        expect(mounts.length).toBeGreaterThan(0);
+        const ungated = mounts.filter((props) => !props.includes('enabledPlugins={enabledPlugins}'));
+        expect(ungated).toEqual([]);
     });
 
     it('a declined plugin room does not mount, rather than rendering its own empty state', () => {

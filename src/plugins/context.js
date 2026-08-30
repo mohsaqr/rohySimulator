@@ -213,6 +213,35 @@ export function createPluginContext({ manifest, session, caseConfig, eventLogger
         store,
         t,
         navigate,
+        // The 'orders' capability (RPS-1): what this learner has ordered in a
+        // CORE room, narrowed by the host in src/plugins/hostOrders.js. Absent
+        // — not empty — for a plugin that did not ask, so a plugin cannot read
+        // a learner's order history by accident, and present as a stable empty
+        // shape when it did, so a room never has to guard the field itself.
+        //
+        // It sits beside `data` rather than inside `capabilities` because it is
+        // DATA, not a service: the same reasoning that puts the case config on
+        // `ctx.data` instead of handing over a getter. `available()` reads it
+        // too, and availability is given no services at all.
+        orders: requested.includes('orders') ? readOrders(grants.orders) : null,
+    };
+}
+
+/**
+ * The orders grant, normalised to one shape.
+ *
+ * Total, like every other judgement a plugin's `available()` may run through:
+ * a host that granted nothing, granted null, or granted something malformed
+ * yields an empty list rather than a throw, because the alternative is a
+ * navigator that loses every room when one fetch fails.
+ *
+ * @param {*} granted whatever the host passed as `grants.orders`
+ * @returns {{imaging: Array<object>, loaded: boolean}}
+ */
+export function readOrders(granted) {
+    return {
+        imaging: Array.isArray(granted?.imaging) ? granted.imaging : [],
+        loaded: Boolean(granted?.loaded),
     };
 }
 

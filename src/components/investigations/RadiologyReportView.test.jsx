@@ -48,6 +48,25 @@ describe('RadiologyReportView — embed vs modal close affordances', () => {
     });
 });
 
+// Regression lock: the RIS→PACS crossing. A learner who ordered a chest X-ray
+// read the report here and had no way to reach the images except by already
+// knowing the PACS room existed in the bottom nav. Fails against the un-fixed
+// component, which rendered no such affordance at all.
+describe('RadiologyReportView — the crossing to the images', () => {
+    it('offers "View images in PACS" when the host supplies the crossing', () => {
+        const onOpenImages = vi.fn();
+        render(<RadiologyReportView result={baseResult} patientInfo={{}} onOpenImages={onOpenImages} />);
+        const button = screen.getByRole('button', { name: /PACS/i });
+        button.click();
+        expect(onOpenImages).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers nothing when the deployment has no imaging workstation', () => {
+        render(<RadiologyReportView result={baseResult} patientInfo={{}} onClose={vi.fn()} />);
+        expect(screen.queryByRole('button', { name: /PACS/i })).toBeNull();
+    });
+});
+
 describe('RadiologyReportView — content', () => {
     it('renders the image when image_url is present', () => {
         render(<RadiologyReportView result={baseResult} patientInfo={{}} />);

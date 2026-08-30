@@ -127,7 +127,8 @@ export const PLUGIN_MANIFESTS = [
         },
         "capabilities": [
             "persist",
-            "remote"
+            "remote",
+            "orders"
         ],
         "catalog": {
             "collection": "entries",

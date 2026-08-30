@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.130] — 2026-08-30
+
+### Added
+
+- **Ordering imaging now produces images.** Order a study in Radiology
+  and the PACS room appears with that study — the case's changed
+  version if the author configured one, otherwise the archive's normal
+  example — honoring the turnaround clock, with a "View images in
+  PACS" link on the radiology report. Studies without archive backing
+  say so honestly.
+
 ## [2.9.129] — 2026-08-30
 
 ### Fixed

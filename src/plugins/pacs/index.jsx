@@ -7,6 +7,7 @@ import {
     readDocument, resolveEntry,
 } from '../../components/pacs/caseDocument.js';
 import { entryById, readArchive } from '../../components/pacs/archive.js';
+import { imagingOrders, mergeOrderedStudies } from './hostImagingOrders.js';
 
 /**
  * The PACS reading room, expressed as an RPS-1 plugin.
@@ -37,7 +38,22 @@ export default {
     //
     // Total by construction — it cannot throw on a malformed document, so one
     // bad row cannot take the navigator down for every other case.
-    available: (ctx) => documentIsServable(ctx.data),
+    // Since v2.9.129 there is a SECOND way a case has something to open, and it
+    // is the one that was missing: the learner ordered imaging. A case whose
+    // author wired nothing still owes a learner who orders a chest X-ray the
+    // archive's normal chest radiograph — that is what "a case is the
+    // catalogue, minus what changed" means — and while this gate asked only
+    // about the authored document, the room could not even be reached to say
+    // so. `imagingOrders()` is total for the same reason `documentIsServable()`
+    // is: a context with no orders granted, or a malformed one, answers false.
+    //
+    // What it deliberately does NOT do is try to decide whether an order
+    // RESOLVES. That needs the archive, the archive is a fetch, and `available`
+    // is synchronous — so the honest division is that this gate opens the room
+    // and the room itself says, per study, what it has. A room that says "no
+    // images for this study" is information; a room that cannot be opened is
+    // the bug being fixed.
+    available: (ctx) => documentIsServable(ctx.data) || imagingOrders(ctx).length > 0,
 
     // --- the document contract (RPS-1 §11a.2) ------------------------------
     //
@@ -76,9 +92,14 @@ export default {
         // resolver rather than the resolved list keeps the swap in exactly one
         // place; a second copy in the wrapper is how the room and the editor
         // start disagreeing about what a learner sees.
-        resolveWorklist: (archive) => worklistProps({ ...ctx, archive }).worklist,
-        // Only a case that actually names an archive entry pays for the fetch.
-        needsArchive: documentNeedsArchive(ctx.data),
+        resolveWorklist: (archive, studyCatalogue) => worklistProps({ ...ctx, archive, studyCatalogue }).worklist,
+        // Only a case that actually names an archive entry — or a learner who
+        // has actually ordered imaging — pays for the fetch.
+        needsArchive: documentNeedsArchive(ctx.data) || imagingOrders(ctx).length > 0,
+        // The catalogue is needed for exactly one thing — turning an order's
+        // study NAME into the catalogue id the package's rule takes — so only a
+        // learner who has ordered something pays for it.
+        needsCatalogue: imagingOrders(ctx).length > 0,
 
         eventLogger: ctx.eventLogger,
         // Upstream takes `t` as a prop rather than calling useTranslation()
@@ -182,7 +203,21 @@ export function worklistProps(ctx) {
         };
     });
 
-    return { worklist };
+    // The authored worklist is only half of it. The other half is what the
+    // LEARNER ordered in the Radiology room, resolved through the package's own
+    // `studyForOrder()` rule — see hostImagingOrders.js for why the host has to
+    // supply the name → catalogue-id join.
+    return {
+        worklist: mergeOrderedStudies({
+            authored: worklist,
+            doc,
+            archive,
+            orders: imagingOrders(ctx),
+            catalogue: ctx.studyCatalogue ?? [],
+            resolveRefs: (value) => resolveRemoteRefs(value, ctx.pluginId),
+            t: ctx.t ?? ((key, fallback) => fallback ?? key),
+        }),
+    };
 }
 
 /**

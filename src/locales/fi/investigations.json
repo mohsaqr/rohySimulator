@@ -173,6 +173,7 @@
   "unknown_patient": "Tuntematon potilas",
   "value_status_unknown": "Arvon tila tuntematon",
   "video_not_supported": "Selaimesi ei tue videotoistoa.",
+  "view_images_in_pacs": "Katso kuvat PACS:ssa",
   "viewed_when": "Katsottu {when}",
   "watermark_lab": "LABORATORIO",
   "watermark_radiology": "RADIOLOGIA",

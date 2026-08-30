@@ -36,7 +36,7 @@ import OyonConsentUpdate from './components/oyon/OyonConsentUpdate';
 import DiscussionScreen from './components/discussion/DiscussionScreen';
 import PhysicalExamScreen from './components/exam/PhysicalExamScreen';
 import InvestigationsScreen from './components/investigations/InvestigationsScreen';
-import { registry as pluginRegistry, PluginRoom } from './plugins/index.js';
+import { registry as pluginRegistry, PluginRoom, useHostOrders } from './plugins/index.js';
 import RoomNavigator from './components/common/RoomNavigator';
 import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
 import OyonCaptureWidget from './components/oyon/OyonCaptureWidget';
@@ -310,14 +310,32 @@ function MainApp() {
       examMode: false,
    }), [sessionId, activeCase?.id, user?.id, user?.role, uiLanguage]);
 
+   // The 'orders' capability (RPS-1): what this learner has ordered in the core
+   // rooms, narrowed by the host. Fetched only when an installed plugin asks
+   // for it, so a deployment whose plugins do not makes no request at all.
+   //
+   // It reaches availability as well as the room because it can be the ONLY
+   // reason a room has anything to show: PACS shows the images for a study
+   // ordered in Radiology, and a case whose author authored no imaging still
+   // owes the learner the normal study they ordered.
+   const pluginOrders = useHostOrders(sessionId);
+   const pluginGrants = useMemo(() => ({ orders: pluginOrders }), [pluginOrders]);
+
    // Which plugin rooms this case actually offers. A plugin gates itself —
    // pathology declines a case with no slides — so the navigator shows no tab
    // rather than a tab onto an empty state.
    const enabledPlugins = useMemo(
       () => pluginRegistry
-         .resolve((m) => ({ data: pluginCaseConfig?.[m.id] ?? null, session: pluginSession }))
+         .resolve((m) => ({
+            data: pluginCaseConfig?.[m.id] ?? null,
+            session: pluginSession,
+            // Gated on the manifest, exactly as the room context is: a plugin
+            // that never requested orders cannot read a learner's order history
+            // by reaching for a field the host happened to set.
+            orders: (m.capabilities ?? []).includes('orders') ? pluginOrders : null,
+         }))
          .map((p) => p.manifest.id),
-      [pluginCaseConfig, pluginSession],
+      [pluginCaseConfig, pluginSession, pluginOrders],
    );
 
    // Any room key owned by a plugin resolves to the generic PluginRoom mount —
@@ -995,6 +1013,8 @@ function MainApp() {
                sessionId={sessionId}
                patientInfo={patientInfo}
                activeKind={currentRoom === 'radiology' ? 'radiology' : 'lab'}
+               enabledPlugins={enabledPlugins}
+               onSelectRoom={navigateToRoom}
                roomNav={
                   <RoomNavigator
                      currentRoom={currentRoom}
@@ -1025,6 +1045,7 @@ function MainApp() {
                session={pluginSession}
                caseConfig={pluginCaseConfig}
                eventLogger={EventLogger}
+               grants={pluginGrants}
                navigate={navigateToRoom}
                roomNav={
                   <RoomNavigator

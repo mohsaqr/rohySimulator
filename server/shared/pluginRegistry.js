@@ -39,7 +39,13 @@ export const CLINICAL_STATES = [
     'documenting', 'monitoring', 'regulating', 'reflecting', 'navigating',
 ];
 
-export const CAPABILITIES = ['llm', 'uploads', 'notify', 'persist', 'remote'];
+// 'orders' is the session's INVESTIGATION ORDERS, narrowed. A plugin room that
+// shows the result of something the learner ordered in a core room (PACS shows
+// the images for a study ordered in Radiology) otherwise has to reach for
+// rohy's order API itself, from inside a package that is meant to be portable.
+// The host builds the adapter instead — the same rule every other capability
+// follows — so the plugin sees `{imaging: [...]}` and never an endpoint.
+export const CAPABILITIES = ['llm', 'uploads', 'notify', 'persist', 'remote', 'orders'];
 
 /**
  * A plugin's remote-content declaration (`manifest.remote`), which is what the

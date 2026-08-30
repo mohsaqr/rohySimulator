@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { registry } from './registry.js';
-import { createPluginContext } from './context.js';
+import { createPluginContext, readOrders } from './context.js';
 import ErrorBoundary from '../components/common/ErrorBoundary.jsx';
 
 /**
@@ -33,7 +33,7 @@ export function PluginRoom({
     const { t } = useTranslation();
     const plugin = registry.get(pluginId);
 
-    const ctx = useMemo(() => (plugin
+    const base = useMemo(() => (plugin
         ? createPluginContext({
             manifest: plugin.manifest, session, caseConfig, eventLogger, notify, t, navigate, grants,
         })
@@ -43,15 +43,32 @@ export function PluginRoom({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [plugin, session?.id, session?.caseId, session?.examMode, caseConfig]);
 
+    // The 'orders' capability is the one part of the context that legitimately
+    // CHANGES while the room is open — a study finishes its turnaround, or the
+    // learner orders another one — so it is layered on top rather than folded
+    // into the memo above. Folding it in would rebuild the STORE on every poll,
+    // and the load effect below would then unmount the plugin and re-seed it
+    // from disk each time: a learner reading a study would be thrown out of it
+    // every fifteen seconds. `base.orders === null` means this plugin never
+    // asked, and then there is nothing to layer.
+    const ctx = useMemo(() => {
+        if (!base || base.orders === null) return base;
+        return { ...base, orders: readOrders(grants?.orders) };
+    }, [base, grants?.orders]);
+
     // `null` means "not loaded yet" — a separate ready flag would need an
     // eager reset inside the effect, which is the setState-in-effect pattern
     // the lint rule (and RoomNavigator's own comment) discourages.
     const [state, setState] = useState(null);
 
+    // Keyed on `base`, never on `ctx`: `base` is the mount's IDENTITY (this
+    // plugin, this session, this case) and `ctx` additionally carries orders
+    // that change under the learner. Reloading persisted state because an order
+    // finished its turnaround would drop the room mid-read.
     useEffect(() => {
         let cancelled = false;
-        if (!ctx) return undefined;
-        const load = ctx.store ? ctx.store.get('state', {}) : Promise.resolve({});
+        if (!base) return undefined;
+        const load = base.store ? base.store.get('state', {}) : Promise.resolve({});
         load.then((loaded) => { if (!cancelled) setState(loaded ?? {}); });
         // Drop the previous plugin/session's state on the way out. Without
         // this, a context change leaves the OLD state renderable while the new
@@ -59,28 +76,28 @@ export function PluginRoom({
         // stale document through the NEW context — writing one session's work
         // into another's key.
         return () => { cancelled = true; setState(null); };
-    }, [ctx]);
+    }, [base]);
 
     // Write-behind. Keeping the store write here rather than inside save()
     // means save() is a pure functional update, so two mutations in the same
     // tick compose instead of the second clobbering the first — which is the
     // normal case when a plugin emits one change per annotation edit.
     useEffect(() => {
-        if (state === null || !ctx?.store) return;
+        if (state === null || !base?.store) return;
         // Surface a failed write. store.set() turns quota/private-mode errors
         // into `false`; ignoring that made persistence failure invisible until
         // the learner reloaded and found their work gone.
-        Promise.resolve(ctx.store.set('state', state)).then((ok) => {
+        Promise.resolve(base.store.set('state', state)).then((ok) => {
             if (ok === false) {
-                ctx.eventLogger?.log?.('ERROR_OCCURRED', 'plugin_state', {
-                    objectId: ctx.pluginId,
+                base.eventLogger?.log?.('ERROR_OCCURRED', 'plugin_state', {
+                    objectId: base.pluginId,
                     result: 'persist_failed',
                     severity: 'IMPORTANT',
                     category: 'ERROR',
                 });
             }
         });
-    }, [state, ctx]);
+    }, [state, base]);
 
     const persist = useMemo(() => ({
         state: state ?? {},

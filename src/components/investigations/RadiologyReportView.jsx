@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    Building2, FileText, Maximize2, Pause, Play,
+    Building2, FileText, Maximize2, Pause, Play, Scan,
     Stethoscope, X, ZoomIn, ZoomOut,
 } from 'lucide-react';
 import { apiPut } from '../../services/apiClient';
@@ -15,7 +15,14 @@ import { formatDate, formatTime, formatDateTime } from '../../utils/formatters';
 // surface the X + Close buttons; omit it for embedded use inside
 // InvestigationsScreen where the topbar's Back button is the canonical
 // exit.
-export default function RadiologyReportView({ result, patientInfo, onClose }) {
+//
+// `onOpenImages` is the crossing from the RIS to the PACS: this report is the
+// radiologist's text, and the images it describes are read in the PACS room.
+// The two were reachable only through the room navigator, which asks a learner
+// to already know that ordering a study in one room produces pictures in
+// another. Absent when the deployment has no imaging workstation — the caller
+// decides, so this component never has to know what a plugin is.
+export default function RadiologyReportView({ result, patientInfo, onClose, onOpenImages = null }) {
     const { t } = useTranslation('investigations');
     const { elicited } = usePatientRecord();
     const [imageZoom, setImageZoom] = useState(1);
@@ -73,11 +80,23 @@ export default function RadiologyReportView({ result, patientInfo, onClose }) {
                                 <p className="text-slate-400 text-xs mt-0.5">{t('imaging_department')}</p>
                             </div>
                         </div>
-                        {onClose && (
-                            <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors print:hidden">
-                                <X className="w-6 h-6" />
-                            </button>
-                        )}
+                        <div className="flex items-center gap-2 print:hidden">
+                            {onOpenImages && (
+                                <button
+                                    type="button"
+                                    onClick={onOpenImages}
+                                    className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center gap-1.5 transition-colors border border-white/20"
+                                >
+                                    <Scan className="w-4 h-4" />
+                                    {t('view_images_in_pacs')}
+                                </button>
+                            )}
+                            {onClose && (
+                                <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                                    <X className="w-6 h-6" />
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
