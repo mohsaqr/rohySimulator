@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.125] — 2026-08-30
+
+### Fixed
+
+- **You can exit the ECG and PACS rooms again, and the ECG room
+  scrolls.** The workstation was viewport-sized inside a smaller pane,
+  pushing the room navigator out of reach; the shell now takes its
+  height from the host, the tracing stays put, and the interpretation
+  rail scrolls in its own pane.
+
 ## [2.9.124] — 2026-08-30
 
 ### Fixed

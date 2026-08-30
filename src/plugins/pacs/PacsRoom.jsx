@@ -28,7 +28,7 @@ export function PacsRoom({ topBarControls = null, caseTitle = null, roomNav = nu
     // was a page reload. Mirrors PathologyScreen's own header + roomNav shell.
     return (
         <div className="flex h-screen w-screen flex-col overflow-hidden bg-slate-900 text-slate-100">
-            <header className="flex items-center justify-between border-b border-slate-800/80 bg-slate-950/80 px-6 py-3 shadow-lg shadow-black/20 backdrop-blur">
+            <header className="flex shrink-0 items-center justify-between border-b border-slate-800/80 bg-slate-950/80 px-6 py-3 shadow-lg shadow-black/20 backdrop-blur">
                 <div className="flex min-w-0 items-center gap-3 max-lg:max-w-[40%]">
                     <ScanLine className="h-6 w-6 shrink-0 text-cyan-300" />
                     <div className="flex min-w-0 items-baseline gap-2 text-sm">
@@ -46,13 +46,16 @@ export function PacsRoom({ topBarControls = null, caseTitle = null, roomNav = nu
                 <div className="flex items-center gap-2">{topBarControls}</div>
             </header>
 
-            <div className="min-h-0 flex-1">
+            <div className="min-h-0 flex-1 overflow-hidden">
                 <PacsScreen {...props} loadSeries={loadSeries} />
             </div>
 
             {/* Bottom RoomNavigator — rendered by App.jsx and passed in so the
-                bar stays consistent across every room. */}
-            {roomNav}
+                bar stays consistent across every room. `shrink-0` on this and
+                on the header because the way INTO the room and the way OUT of
+                it must not be negotiable: a study that renders taller than its
+                pane must lose the argument with the chrome, not win it. */}
+            <div className="shrink-0">{roomNav}</div>
         </div>
     );
 }

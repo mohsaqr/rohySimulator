@@ -166,14 +166,30 @@
 .ecg-library-empty strong { color: var(--ecg-slate-300); }
 
 /* --- Clinical workstation -------------------------------------------- */
-.ecg-screen { min-height: 100vh; display: grid; grid-template-rows: 62px 1fr; background: #0a1420; }
+/* The shell is a FIXED-height workstation, not a document: `.ecg-workspace`
+   and `.ecg-rail-body` carry their own `overflow: auto` so the tracing stays
+   put while the rail scrolls under it. That only works if this element has a
+   DEFINITE height — `min-height: 100vh` leaves the height auto, so the `1fr`
+   row resolves to max-content, both inner scrollers go slack, and the whole
+   workstation becomes one long page that scrolls its own top bar away.
+
+   `--ecg-shell-height` is the embedding seam. Standalone owns the viewport and
+   gets the 100vh default; a host that mounts the shell inside a box it already
+   sized (Rohy's plugin room reserves a bottom navigator) sets `100%` on the
+   mount and the shell fills that box instead of overflowing it by the height
+   of the host's own chrome. */
+.ecg-screen { height: var(--ecg-shell-height, 100vh); min-height: 0; display: grid; grid-template-rows: minmax(62px, auto) minmax(0, 1fr); background: #0a1420; }
 .ecg-topbar { z-index: 10; display: flex; align-items: center; gap: 12px; padding: 0 18px; border-bottom: 1px solid var(--ecg-line); background: rgba(12,23,36,.98); }
 .ecg-topbar .ecg-brand-mark { width: 34px; height: 34px; border-radius: 9px; }
 .ecg-brand-copy { display: grid; line-height: 1.1; }
 .ecg-brand-copy strong { font-size: 16px; }
 .ecg-brand-copy span { margin-top: 3px; color: var(--ecg-slate-500); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
 .ecg-topbar-actions { margin-left: auto; }
-.ecg-room { min-height: 0; display: grid; grid-template-columns: minmax(560px, 1fr) 372px; }
+/* `minmax(0, 1fr)` on the row, not the implicit `auto`: an auto row is sized to
+   max-content and `align-content: stretch` can only grow it, so the workspace
+   and the rail would be handed their full content height and neither would
+   ever scroll — the defect this row guards against. */
+.ecg-room { min-height: 0; display: grid; grid-template-columns: minmax(560px, 1fr) 372px; grid-template-rows: minmax(0, 1fr); }
 .ecg-safety-card { margin-top: 16px; padding: 13px; border: 1px solid rgba(244,187,93,.25); border-radius: 9px; background: rgba(244,187,93,.07); }
 .ecg-safety-card strong { color: var(--ecg-amber); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .ecg-safety-card p { margin: 6px 0 0; color: #d8c7aa; font-size: 11px; line-height: 1.45; }
@@ -488,7 +504,10 @@
 }
 
 @media (max-width: 980px) {
-  .ecg-room { display: block; overflow: visible; }
+  /* Stacked rather than side-by-side, so the room itself becomes the scroller:
+     with the shell at a definite height, `overflow: visible` here would spill
+     the stacked rail out of the bottom of the screen with nothing to scroll. */
+  .ecg-room { display: block; overflow: auto; }
   .ecg-side-rail { border: 0; border-top: 1px solid var(--ecg-line); }
   .ecg-workspace-body.has-lead-map { grid-template-columns: minmax(0, 1fr); }
   .ecg-author-layout { grid-template-columns: 1fr; }
@@ -531,7 +550,9 @@
 @media print {
   .ecg-screen { color-scheme: light; }
   .ecg-topbar, .ecg-side-rail, .ecg-lead-selector, .ecg-view-toolbar, .ecg-caliper-bar { display: none !important; }
-  .ecg-screen, .ecg-room, .ecg-workspace, .ecg-workspace-body { display: block; min-height: 0; padding: 0; background: white; }
+  /* `height: auto` matters as much as `display: block` here: a screen pinned to
+     one viewport height prints as one clipped page. */
+  .ecg-screen, .ecg-room, .ecg-workspace, .ecg-workspace-body { display: block; height: auto; min-height: 0; overflow: visible; padding: 0; background: white; }
   .ecg-paper-shell { border: 0; box-shadow: none; }
   .ecg-paper-meta { color: #422; background: white; }
 }
