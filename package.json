@@ -1,7 +1,7 @@
 {
   "name": "rohy",
   "private": true,
-  "version": "2.9.101",
+  "version": "2.9.102",
   "description": "Virtual Patient Simulation Platform for Medical Education",
   "author": {
     "name": "Mohammed Saqr",

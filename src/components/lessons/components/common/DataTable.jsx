@@ -408,7 +408,11 @@ export function DataTable({
           >
             <p className="text-xs" style={{ color: headerColor }}>
               {t('common:showing_range', {
-                defaultValue: 'Showing {{from}}–{{to}} of {{total}}',
+                // ICU placeholders: single braces. This module was ported from
+                // LAILA, which used plain i18next `{{x}}`, but rohy runs
+                // i18next-icu for ALL messages (src/i18n/index.js) — ICU sees no
+                // placeholder in `{{x}}` and emits the braces verbatim.
+                defaultValue: 'Showing {from}–{to} of {total}',
                 from: rangeStart,
                 to: rangeEnd,
                 total,

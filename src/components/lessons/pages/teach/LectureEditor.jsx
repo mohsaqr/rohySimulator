@@ -400,7 +400,7 @@ export const LectureEditor = ({ classroomId, lectureId, onDone = () => {} }) => 
         title={t('teaching:delete_lesson', { defaultValue: 'Delete lesson' })}
         message={t('teaching:delete_lesson_confirm', {
           title: lecture.title ?? '',
-          defaultValue: 'Delete "{{title}}"? This will remove all of its content.',
+          defaultValue: 'Delete "{title}"? This will remove all of its content.',
         })}
         confirmText={t('common:delete', { defaultValue: 'Delete' })}
         loading={deleteMutation.isPending}

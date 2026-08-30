@@ -125,7 +125,7 @@ function AuthoringInner() {
               <option key={a.caseId} value={a.caseId}>
                 {a.caseName}
                 {a.cohortId != null && a.cohortId !== cohortId
-                  ? ` (${t('assigned_case_was', { defaultValue: 'was: {{course}}', course: a.cohortName })})`
+                  ? ` (${t('assigned_case_was', { defaultValue: 'was: {course}', course: a.cohortName })})`
                   : ''}
               </option>
             ))}

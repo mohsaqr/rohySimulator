@@ -62,7 +62,7 @@ export const FolderNodeView = ({ node, deleteNode, editor }) => {
                 {label}
               </span>
               <span className="mt-0.5 block text-xs font-medium tracking-wide" style={{ color: colors.muted }}>
-                {t('folder_files_count', { defaultValue: '{{count}} file(s)', count })}
+                {t('folder_files_count', { defaultValue: '{count, plural, one {# file} other {# files}}', count })}
               </span>
             </span>
           </button>

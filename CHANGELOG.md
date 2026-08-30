@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.102] — 2026-08-30
+
+### Fixed
+
+- **Course self-check headers rendered `Q{{I}} OF {{N}}`.** rohy runs
+  `i18next-icu` for **all** messages (Finnish and Swedish plurals need it), and
+  ICU's placeholder is `{x}`. The lessons module was ported from LAILA, which
+  used plain i18next `{{x}}` — so ICU found no placeholder and emitted the
+  braces verbatim. Nothing can warn about this: to the parser it is literal
+  text.
+
+  One key was reported; **ten** were broken, including the shared table footer
+  ("Showing {{from}}–{{to}} of {{total}}") on every paginated lessons table.
+  All ten converted, and a source scan now fails the build if a `{{x}}`
+  defaultValue reappears in that module.
+
+  `{{count}} file(s)` became a real ICU plural while it was open, since
+  avoiding "file(s)" is what ICU was turned on for. Reported against v2.9.82.
+
 ## [2.9.101] — 2026-08-30
 
 ### Fixed

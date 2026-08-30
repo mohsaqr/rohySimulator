@@ -50,7 +50,7 @@ export const McqNodeView = ({ node, updateAttributes, deleteNode, editor }) => {
           icon={ListChecks}
           accent="cyan"
           title={t('mcq_self_check', { defaultValue: 'Self-check' })}
-          badge={t('mcq_n_questions', { defaultValue: '{{n}} Q', n })}
+          badge={t('mcq_n_questions', { defaultValue: '{n} Q', n })}
           actions={
             <button
               type="button"
@@ -68,7 +68,7 @@ export const McqNodeView = ({ node, updateAttributes, deleteNode, editor }) => {
               <div key={qi} className="rounded-lg border p-3" style={{ backgroundColor: cardBg, borderColor: cardBorder }}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: muted }}>
-                    {t('mcq_question_n', { defaultValue: 'Question {{n}}', n: qi + 1 })}
+                    {t('mcq_question_n', { defaultValue: 'Question {n}', n: qi + 1 })}
                   </span>
                   {n > 1 && (
                     <button
@@ -113,7 +113,7 @@ export const McqNodeView = ({ node, updateAttributes, deleteNode, editor }) => {
                         type="text"
                         value={opt}
                         onChange={e => setOption(qi, oi, e.target.value)}
-                        placeholder={t('mcq_option_placeholder', { defaultValue: 'Option {{n}}', n: oi + 1 })}
+                        placeholder={t('mcq_option_placeholder', { defaultValue: 'Option {n}', n: oi + 1 })}
                         className="flex-1 min-w-0 px-3 py-1.5 text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-cyan-400"
                         style={{ backgroundColor: cardBg, borderColor: cardBorder, color: subtle }}
                       />
@@ -226,7 +226,7 @@ const McqStudent = ({ questions, isDark }) => {
   };
 
   const badge = n > 1
-    ? t('mcq_q_of_n', { defaultValue: 'Q{{i}} of {{n}}', i: cur + 1, n })
+    ? t('mcq_q_of_n', { defaultValue: 'Q{i} of {n}', i: cur + 1, n })
     : t('mcq_self_check', { defaultValue: 'Self-check' });
 
   return (
@@ -236,7 +236,7 @@ const McqStudent = ({ questions, isDark }) => {
           {done ? (
             <div className="text-center py-4">
               <div className="text-2xl font-bold mb-1" style={{ color: subtle }}>
-                {t('mcq_score', { defaultValue: '{{c}} / {{n}}', c: correctCount, n })}
+                {t('mcq_score', { defaultValue: '{c} / {n}', c: correctCount, n })}
               </div>
               <p className="text-sm mb-3" style={{ color: muted }}>
                 {t('mcq_complete', { defaultValue: 'Self-check complete.' })}
@@ -254,7 +254,7 @@ const McqStudent = ({ questions, isDark }) => {
           ) : (
             <>
               <p className="text-sm font-medium mb-3" style={{ color: subtle }}>
-                {q.question || t('mcq_question_n', { defaultValue: 'Question {{n}}', n: cur + 1 })}
+                {q.question || t('mcq_question_n', { defaultValue: 'Question {n}', n: cur + 1 })}
               </p>
 
               <div className="space-y-2">
