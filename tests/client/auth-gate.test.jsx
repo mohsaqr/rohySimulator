@@ -98,6 +98,38 @@ describe('AuthGate with an invite link', () => {
         expect(screen.getByText('invited-to:Sepsis')).toBeTruthy();
     });
 
+    // Regression lock: the invite token is a CREDENTIAL, and it used to sit in
+    // the address bar for the entire time the register form was open — cleared
+    // only once you registered or switched to sign-in. That is precisely the
+    // window in which the screen gets shared, screenshotted or bookmarked. It
+    // now leaves as soon as the preview resolves; the result is in state, so
+    // nothing downstream depends on the URL still holding it.
+    it('drops the token from the address bar as soon as the invite resolves', async () => {
+        window.history.replaceState({}, '', '/register?invite=ABCD1234EFGH');
+        getRegistrationPolicy.mockResolvedValue({ mode: 'invite', self_registration: true });
+        previewInvite.mockResolvedValue({ valid: true, role: 'student', cohort_name: 'Cardiology 101' });
+
+        render(<AuthGate />);
+
+        await waitFor(() => expect(screen.getByText('register-screen')).toBeTruthy());
+        expect(window.location.search).toBe('');
+        // …and the token itself is untouched: it was read into state before the
+        // URL was cleared, so the form can still submit it.
+        expect(screen.getByText('token:ABCD1234EFGH')).toBeTruthy();
+    });
+
+    it('drops a DEAD token too, and still explains why it was dead', async () => {
+        window.history.replaceState({}, '', '/register?invite=DEADDEADDEAD');
+        getRegistrationPolicy.mockResolvedValue({ mode: 'invite', self_registration: true });
+        previewInvite.mockRejectedValue(new Error('network'));
+
+        render(<AuthGate />);
+
+        await waitFor(() => expect(screen.getByText('register-screen')).toBeTruthy());
+        expect(window.location.search).toBe('');
+        expect(screen.getByText('invite-bad:not_found')).toBeTruthy();
+    });
+
     it('waits for the invite preview before rendering anything', () => {
         window.history.replaceState({}, '', '/register?invite=SLOWSLOWSLOW');
         getRegistrationPolicy.mockResolvedValue({ mode: 'invite', self_registration: true });

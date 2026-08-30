@@ -51,6 +51,37 @@ afterEach(() => {
     delete globalThis.fetch;
 });
 
+// Regression lock: login()/register() used to throw a bare
+// `new Error(data.error)`, discarding the HTTP status and the server's
+// machine-readable `code` — which forced the auth pages to translate
+// failures by matching English message literals. The thrown error now
+// carries {status, code, body}.
+describe('AuthService error contract — status and code ride on the throw', () => {
+    it('login failure exposes status, code and body', async () => {
+        fetchSpy.mockResolvedValueOnce(makeResponse({
+            ok: false,
+            status: 401,
+            body: { error: 'Invalid credentials', code: 'invalid_credentials' },
+        }));
+        const err = await AuthService.login('u', 'wrong').catch((e) => e);
+        expect(err).toBeInstanceOf(Error);
+        expect(err.status).toBe(401);
+        expect(err.code).toBe('invalid_credentials');
+        expect(err.body).toEqual({ error: 'Invalid credentials', code: 'invalid_credentials' });
+    });
+
+    it('register failure exposes status, code and body', async () => {
+        fetchSpy.mockResolvedValueOnce(makeResponse({
+            ok: false,
+            status: 403,
+            body: { error: 'Registration is closed', code: 'registration_closed' },
+        }));
+        const err = await AuthService.register('u', 'u@example.test', 'P@ssw0rd!Long').catch((e) => e);
+        expect(err.status).toBe(403);
+        expect(err.code).toBe('registration_closed');
+    });
+});
+
 describe('AuthService.login', () => {
     it('POSTs JSON to /api/auth/login and does NOT write localStorage by default (cookie-mode flag day)', async () => {
         // Flag-day contract: cookie auth carries the session, so login no
@@ -219,6 +250,30 @@ describe('AuthService.verifyToken', () => {
 
         const user = await AuthService.verifyToken();
 
+        expect(user).toBeNull();
+        expect(localStorage.getItem('token')).toBeNull();
+    });
+
+    // Regression lock: verifyToken treated EVERY non-2xx as a definitive auth
+    // rejection — deleting the token and returning null. But 429/502/503/504
+    // are transient server answers: a rate-limit burst or a rolling deploy
+    // landing on /auth/verify silently logged every open tab out mid-case
+    // (observed live in the 2026-08-30 e2e run: three 429s on verify wiped
+    // otherwise-healthy sessions). Transient statuses must THROW like a
+    // network failure so the caller's retry branch handles them.
+    it.each([429, 502, 503, 504])('throws (and keeps the token) on transient HTTP %i', async (status) => {
+        localStorage.setItem('token', 'tok-alive');
+        fetchSpy.mockResolvedValueOnce(makeResponse({ ok: false, status, body: {} }));
+
+        await expect(AuthService.verifyToken()).rejects.toThrow(String(status));
+        expect(localStorage.getItem('token')).toBe('tok-alive');
+    });
+
+    it('403 is still a definitive rejection: token cleared, null returned', async () => {
+        localStorage.setItem('token', 'revoked');
+        fetchSpy.mockResolvedValueOnce(makeResponse({ ok: false, status: 403, body: {} }));
+
+        const user = await AuthService.verifyToken();
         expect(user).toBeNull();
         expect(localStorage.getItem('token')).toBeNull();
     });

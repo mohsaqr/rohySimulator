@@ -59,24 +59,38 @@ export default function AuthGate() {
         return () => { cancelled = true; };
     }, []);
 
+    // Drop the token from the address bar once we have read it. It is a
+    // credential; it should not sit in the URL to be screenshotted, bookmarked
+    // or pasted into a bug report.
+    //
+    // Declared above the preview effect because that effect calls it: the token
+    // is already in state by then, so nothing downstream depends on the URL.
+    const clearInviteFromUrl = () => {
+        try {
+            window.history.replaceState({}, '', baseUrl('/') || '/');
+        } catch { /* history is not load-bearing here */ }
+    };
+
     useEffect(() => {
         if (!inviteToken) return undefined;
         let cancelled = false;
         previewInvite(inviteToken)
             .then((res) => { if (!cancelled) setInvite(res); })
             .catch(() => { if (!cancelled) setInvite({ valid: false, reason: 'not_found' }); })
-            .finally(() => { if (!cancelled) setInvitePending(false); });
+            .finally(() => {
+                if (cancelled) return;
+                setInvitePending(false);
+                // The token has been resolved — valid or dead, we are done
+                // reading it, so it leaves the address bar NOW rather than
+                // sitting there for however long the form stays open. It used
+                // to survive until the user registered or switched to sign-in,
+                // which is the whole time the screen is likely to be shared,
+                // screenshotted or bookmarked. The preview RESULT lives in
+                // state, so clearing the URL cannot take the error with it.
+                clearInviteFromUrl();
+            });
         return () => { cancelled = true; };
     }, [inviteToken]);
-
-    // Drop the token from the address bar once we have read it. It is a
-    // credential; it should not sit in the URL to be screenshotted, bookmarked
-    // or pasted into a bug report.
-    const clearInviteFromUrl = () => {
-        try {
-            window.history.replaceState({}, '', baseUrl('/') || '/');
-        } catch { /* history is not load-bearing here */ }
-    };
 
     // Hold the CARD until we know — but show the brand panel immediately, so
     // the wait reads as the product loading, not a blank screen. Flashing a

@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.117] — 2026-08-30
+
+### Fixed
+
+- **A rate-limited or 5xx token verify no longer logs you out** — only
+  401/403 are definitive; everything else retries.
+- Login/register errors carry status+code to the UI, localized.
+- Profile password change enforces the same policy as the server.
+
 ## [2.9.116] — 2026-08-30
 
 ### Fixed

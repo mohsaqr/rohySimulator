@@ -59,10 +59,26 @@ export default function StudentFirstRun({ onDone }) {
         try { return localStorage.getItem(OYON_CONSENT_LS_KEY) !== '0'; } catch { return true; }
     });
     const [micStatus, setMicStatus] = useState(null); // null | 'ok' | 'blocked'
+    const [casesFailed, setCasesFailed] = useState(false);
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        apiFetch('/cases').then(list => setCases(Array.isArray(list) ? list : [])).catch(() => {});
+        // GET /cases answers `{ cases: [...] }` — never a bare array. The
+        // Array.isArray(list) guard therefore ALWAYS failed, so this card
+        // said "no case is published for you yet" on every install, however
+        // many cases existed (2026-08-30 UI review, #13). And the swallowed
+        // .catch() meant a genuine failure looked identical to an empty
+        // catalogue; it now has its own honest line.
+        apiFetch('/cases')
+            .then(list => {
+                setCasesFailed(false);
+                setCases(Array.isArray(list?.cases) ? list.cases : []);
+            })
+            .catch(err => {
+                console.error('[FirstRun] could not load cases:', err);
+                setCases([]);
+                setCasesFailed(true);
+            });
         apiFetch('/platform-settings/voice')
             .then(v => setVoicePlatformOn(Boolean(v?.voice_mode_enabled)))
             .catch(() => {});
@@ -163,7 +179,9 @@ export default function StudentFirstRun({ onDone }) {
                             <span>{caseDisplayLabel(landingCase, user, t('case_card_patient'))}</span>
                         </div>
                     ) : (
-                        <p className="text-sm text-neutral-400">{t('case_card_none')}</p>
+                        <p className="text-sm text-neutral-400">
+                            {casesFailed ? t('case_card_error') : t('case_card_none')}
+                        </p>
                     )}
                     {landingCase && landingLang !== uiLanguage && (
                         <p className="text-xs text-amber-400/90 mt-2">{t('case_card_language_fallback')}</p>

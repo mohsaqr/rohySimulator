@@ -12,6 +12,23 @@ import { LLM_PROVIDERS, defaultModelFor } from '../../services/llmCatalogue';
 import ModelSelect from './ModelSelect';
 import { ApiError, apiFetch, apiPut } from '../../services/apiClient';
 import JoinClassPanel from './JoinClassPanel';
+import { passwordMeetsRules } from '../../utils/passwordRules';
+
+// Built-in profile fields are labelled from the catalogue so the form speaks
+// the viewer's language. The server marks a still-built-in field with a
+// `labelKey` (admin-routes.js DEFAULT_USER_FIELD_CONFIG); this map is the
+// allowlist that turns it into a real key, so a stored config can never point
+// t() at something arbitrary. An admin's customised label carries no labelKey
+// and is rendered verbatim — it is not ours to translate.
+const FIELD_LABEL_KEYS = {
+    name: 'field_label_name',
+    institution: 'field_label_institution',
+    address: 'field_label_address',
+    phone: 'field_label_phone',
+    alternative_email: 'field_label_alternative_email',
+    education: 'field_label_education',
+    grade: 'field_label_grade',
+};
 
 /**
  * User Profile Panel
@@ -21,6 +38,12 @@ export default function UserProfilePanel({ _onClose }) {
     const { t } = useTranslation('profile');
     const toast = useToast();
     const { uiLanguage, setUiLanguage } = useLanguage();
+
+    /** Display label for a profile field: catalogue first, server label next. */
+    const fieldLabel = (fieldKey, config) => {
+        if (config?.labelKey && FIELD_LABEL_KEYS[fieldKey]) return t(FIELD_LABEL_KEYS[fieldKey]);
+        return config?.label || fieldKey.charAt(0).toUpperCase() + fieldKey.slice(1).replace(/_/g, ' ');
+    };
 
     const handleLanguageChange = async (code) => {
         try {
@@ -168,7 +191,7 @@ export default function UserProfilePanel({ _onClose }) {
         // Validate required fields
         for (const [field, config] of Object.entries(fieldConfig)) {
             if (config.required && config.enabled && !profile[field]) {
-                toast.error(t('field_required', { label: config.label }));
+                toast.error(t('field_required', { label: fieldLabel(field, config) }));
                 return;
             }
         }
@@ -207,7 +230,10 @@ export default function UserProfilePanel({ _onClose }) {
             return;
         }
 
-        if (passwordData.new_password.length < 6) {
+        // Mirror the server's validatePassword() exactly (8–128 + character
+        // classes) — a looser check here means the form accepts what the
+        // server rejects, the precise bug src/utils/passwordRules.js kills.
+        if (!passwordMeetsRules(passwordData.new_password)) {
             toast.error(t('password_min_length'));
             return;
         }
@@ -241,7 +267,7 @@ export default function UserProfilePanel({ _onClose }) {
 
         const Icon = icon;
         const isRequired = config?.required;
-        const label = config?.label || fieldKey.charAt(0).toUpperCase() + fieldKey.slice(1).replace(/_/g, ' ');
+        const label = fieldLabel(fieldKey, config);
 
         return (
             <div className="space-y-1">
@@ -478,7 +504,7 @@ export default function UserProfilePanel({ _onClose }) {
                                         {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                     </button>
                                 </div>
-                                {passwordData.new_password && passwordData.new_password.length < 6 && (
+                                {passwordData.new_password && !passwordMeetsRules(passwordData.new_password) && (
                                     <p className="text-xs text-red-400">{t('password_too_short')}</p>
                                 )}
                             </div>

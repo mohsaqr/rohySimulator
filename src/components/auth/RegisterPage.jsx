@@ -1,8 +1,91 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
-import { UserPlus, User, Mail, Lock, AlertCircle, CheckCircle, KeyRound, MailCheck } from 'lucide-react';
+import { UserPlus, User, Mail, Lock, AlertCircle, CheckCircle, Circle, KeyRound, MailCheck, Eye, EyeOff } from 'lucide-react';
 import { PASSWORD_RULES, passwordMeetsRules } from '../../utils/passwordRules';
+
+/**
+ * Turn a registration failure into a sentence in the user's own language.
+ *
+ * Same story as translateLoginError() in LoginPage: AuthService.register()
+ * throws `new Error(data.error)`, so the English server string was what every
+ * non-English user saw, and `registration_failed` was translated five times
+ * for nobody. The known shapes are fixed literals in
+ * server/routes/auth-routes.js and INVITE_ERRORS in server/lib/invites.js.
+ *
+ * Every key is spelled out literally — `t(variable)` is invisible to the
+ * i18n extractor. The `code` branch is checked first because the register
+ * route already emits machine-readable codes, and it survives a future move
+ * onto apiClient's ApiError (which preserves them).
+ *
+ * Admin-authored policy text (`policy.message` on a closed / invite-only
+ * platform) is deliberately NOT matched: it was written by a human for this
+ * platform, so it goes through as the detail of a translated frame.
+ */
+export function translateRegisterError(err, t) {
+    const code = err?.code || err?.body?.code || '';
+    const raw = typeof err?.message === 'string' ? err.message.trim() : '';
+
+    if (code === 'invite_not_found' || raw === 'That invite code is not valid. Check it, or ask whoever sent it for a new one.') {
+        return t('invite_invalid_not_found');
+    }
+    if (code === 'invite_revoked' || raw === 'That invite has been withdrawn. Ask whoever sent it for a new one.') {
+        return t('invite_invalid_revoked');
+    }
+    if (code === 'invite_expired' || raw === 'That invite has expired. Ask whoever sent it for a new one.') {
+        return t('invite_invalid_expired');
+    }
+    if (code === 'invite_exhausted' || raw === 'That invite has already been used the maximum number of times.') {
+        return t('invite_invalid_exhausted');
+    }
+
+    // The two domain rules read the same to a user but name different lists,
+    // and the list is the actionable part — pull it out and re-render it.
+    const inviteDomain = /^This invite is limited to @(\S+) addresses\.$/.exec(raw);
+    if (inviteDomain) return t('error_invite_email_domain', { domain: `@${inviteDomain[1]}` });
+    const platformDomains = /^Registration is limited to these email domains: (.+)\.$/.exec(raw);
+    if (platformDomains) return t('error_email_domain_not_allowed', { domains: platformDomains[1] });
+
+    if (raw === 'Registration is closed. Ask an administrator to create your account.') {
+        return t('error_registration_closed');
+    }
+    if (raw === 'You need an invite link or code to create an account here.') {
+        return t('error_invite_required');
+    }
+    if (code === 'approval_already_requested' || raw === 'A request for this username or email is already waiting for approval.') {
+        return t('error_approval_already_requested');
+    }
+    if (raw === 'Username or email already exists') return t('error_username_taken');
+    if (raw === 'Username, email, and password are required') return t('error_signup_fields_required');
+    // validatePassword() joins its complaints with '. ' — every one of them
+    // starts here, and the checklist above already states the whole policy.
+    if (raw.startsWith('Password must ')) return t('password_policy_unmet');
+    if (/^Too many /i.test(raw)) return t('error_too_many_attempts');
+
+    if (!raw || raw === 'Registration failed') return t('registration_failed');
+    return t('registration_failed_detail', { detail: raw });
+}
+
+/**
+ * One row of the live password checklist.
+ *
+ * Both states used to render the SAME filled tick and differ only by colour
+ * (green vs grey), which is nothing at all to a colour-blind user and nothing
+ * at all to a screen reader. So the shape changes too — a filled tick when the
+ * rule is met, an empty ring when it is not — and the state is spelled out in
+ * words for assistive tech. Colour is now the third channel, not the only one.
+ */
+function PasswordRequirement({ met, label, metLabel, unmetLabel }) {
+    return (
+        <li className="flex items-center gap-2" data-state={met ? 'met' : 'unmet'}>
+            {met
+                ? <CheckCircle className="w-3 h-3 text-green-500 shrink-0" aria-hidden="true" />
+                : <Circle className="w-3 h-3 text-neutral-600 shrink-0" aria-hidden="true" />}
+            <span className={met ? 'text-green-400' : undefined}>{label}</span>
+            <span className="sr-only">{met ? metLabel : unmetLabel}</span>
+        </li>
+    );
+}
 
 export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, invite, inviteToken, startWithCode = false }) {
     const { t } = useTranslation('auth');
@@ -19,6 +102,11 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
     const [codeLocked, setCodeLocked] = useState(Boolean(invite?.valid));
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    // Same affordance the sign-in card has. A password you cannot read is a
+    // password you mistype twice, and "passwords do not match" with both
+    // fields masked tells you nothing about which one is wrong.
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
     // approval mode: the request is queued and there is no account yet.
     const [submitted, setSubmitted] = useState(false);
     const { register } = useAuth();
@@ -65,7 +153,7 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
         }
 
         if (!passwordMeetsRules(formData.password)) {
-            setError(t('password_too_short'));
+            setError(t('password_policy_unmet'));
             return false;
         }
 
@@ -101,7 +189,7 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
             }
             onRegistered?.();
         } catch (err) {
-            setError(err.message || t('registration_failed'));
+            setError(translateRegisterError(err, t));
         } finally {
             setLoading(false);
         }
@@ -138,8 +226,12 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
                     </div>
 
                     {error && (
-                        <div className="mb-4 p-3 bg-red-900/30 border border-red-500/50 rounded-lg flex items-center gap-2 text-red-200">
-                            <AlertCircle className="w-5 h-5 shrink-0" />
+                        <div
+                            role="alert"
+                            aria-live="assertive"
+                            className="mb-4 p-3 bg-red-900/30 border border-red-500/50 rounded-lg flex items-center gap-2 text-red-200"
+                        >
+                            <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
                             <span className="text-sm">{error}</span>
                         </div>
                     )}
@@ -232,6 +324,7 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
                                     value={formData.username}
                                     onChange={handleChange}
                                     disabled={loading}
+                                    autoComplete="username"
                                     placeholder={t('choose_username')}
                                     className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50"
                                     required
@@ -252,6 +345,7 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
                                     value={formData.email}
                                     onChange={handleChange}
                                     disabled={loading}
+                                    autoComplete="email"
                                     placeholder={t('email_placeholder')}
                                     className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50"
                                     required
@@ -277,15 +371,25 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500" />
                                 <input
-                                    type="password"
+                                    type={showPassword ? 'text' : 'password'}
                                     name="password"
                                     value={formData.password}
                                     onChange={handleChange}
                                     disabled={loading}
+                                    autoComplete="new-password"
                                     placeholder={t('create_password_placeholder')}
-                                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50"
+                                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-10 pr-12 py-3 text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50"
                                     required
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword((v) => !v)}
+                                    aria-label={showPassword ? t('hide_password') : t('show_password')}
+                                    tabIndex={-1}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors"
+                                >
+                                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                </button>
                             </div>
                         </div>
 
@@ -297,15 +401,25 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500" />
                                 <input
-                                    type="password"
+                                    type={showConfirm ? 'text' : 'password'}
                                     name="confirmPassword"
                                     value={formData.confirmPassword}
                                     onChange={handleChange}
                                     disabled={loading}
+                                    autoComplete="new-password"
                                     placeholder={t('reenter_password_placeholder')}
-                                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50"
+                                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-10 pr-12 py-3 text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50"
                                     required
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowConfirm((v) => !v)}
+                                    aria-label={showConfirm ? t('hide_password') : t('show_password')}
+                                    tabIndex={-1}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors"
+                                >
+                                    {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                </button>
                             </div>
                         </div>
 
@@ -313,18 +427,23 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
                             validatePassword(). One row per rule, ticking as you
                             type, so nobody meets the policy for the first time as
                             a 400 after submit. */}
-                        <div className="text-xs text-neutral-500 grid grid-cols-2 gap-x-4 gap-y-1">
+                        <ul className="text-xs text-neutral-500 grid grid-cols-2 gap-x-4 gap-y-1 list-none p-0 m-0">
                             {PASSWORD_RULES.map(({ key, test }) => (
-                                <div key={key} className="flex items-center gap-2">
-                                    <CheckCircle className={`w-3 h-3 ${test(formData.password) ? 'text-green-500' : 'text-neutral-700'}`} />
-                                    <span>{t(`password_req_${key}`)}</span>
-                                </div>
+                                <PasswordRequirement
+                                    key={key}
+                                    met={test(formData.password)}
+                                    label={t(`password_req_${key}`)}
+                                    metLabel={t('password_req_met')}
+                                    unmetLabel={t('password_req_unmet')}
+                                />
                             ))}
-                            <div className="flex items-center gap-2">
-                                <CheckCircle className={`w-3 h-3 ${formData.password === formData.confirmPassword && formData.password ? 'text-green-500' : 'text-neutral-700'}`} />
-                                <span>{t('password_req_match')}</span>
-                            </div>
-                        </div>
+                            <PasswordRequirement
+                                met={Boolean(formData.password) && formData.password === formData.confirmPassword}
+                                label={t('password_req_match')}
+                                metLabel={t('password_req_met')}
+                                unmetLabel={t('password_req_unmet')}
+                            />
+                        </ul>
 
                         {/* Submit Button */}
                         <button

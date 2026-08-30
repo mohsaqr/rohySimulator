@@ -28,7 +28,15 @@ export const AuthService = {
 
         const data = await response.json();
         if (!response.ok) {
-            throw new Error(data.error || 'Registration failed');
+            // Carry the HTTP status and the server's machine-readable code so
+            // the auth pages can translate known failures instead of matching
+            // English message literals (which break the moment the server
+            // rewords a string).
+            const err = new Error(data.error || 'Registration failed');
+            err.status = response.status;
+            err.code = data.code;
+            err.body = data;
+            throw err;
         }
 
         if (rememberToken && data.token) {
@@ -64,7 +72,13 @@ export const AuthService = {
         }
 
         if (!response.ok) {
-            throw new Error(data.error || 'Login failed');
+            // Same contract as register(): status + code ride on the error so
+            // LoginPage.translateLoginError() can map without literal-matching.
+            const err = new Error(data.error || 'Login failed');
+            err.status = response.status;
+            err.code = data.code;
+            err.body = data;
+            throw err;
         }
 
         if (rememberToken && data.token) {
@@ -94,8 +108,17 @@ export const AuthService = {
         });
 
         if (!response.ok) {
-            if (legacyToken) localStorage.removeItem('token');
-            return null;
+            // Only an actual auth rejection is definitive. 429 and 5xx are
+            // TRANSIENT server answers — a rate-limit burst or a rolling
+            // deploy landing on /auth/verify must behave like the network
+            // failure above (throw, retry later), not silently log every
+            // open tab out mid-case. That outage was observed live: three
+            // 429s on verify wiped the session of otherwise-healthy tabs.
+            if (response.status === 401 || response.status === 403) {
+                if (legacyToken) localStorage.removeItem('token');
+                return null;
+            }
+            throw new Error(`auth verify unavailable (HTTP ${response.status})`);
         }
 
         const data = await response.json();

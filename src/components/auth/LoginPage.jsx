@@ -4,6 +4,53 @@ import { useAuth } from '../../contexts/AuthContext';
 import { LogIn, User, Lock, AlertCircle, KeyRound, Eye, EyeOff } from 'lucide-react';
 
 /**
+ * Turn a sign-in failure into a sentence in the user's own language.
+ *
+ * The server speaks English and only English: AuthService.login() throws a
+ * plain `new Error(data.error)`, so the status code and the machine-readable
+ * `code` are already on the floor by the time we get here. Rendering
+ * `err.message` therefore showed English to every Finnish, Swedish, German,
+ * Italian and Spanish user — and left the five translated failure strings in
+ * the catalogues as dead code.
+ *
+ * So: match the KNOWN server shapes (they are fixed literals in
+ * server/routes/auth-routes.js) back onto catalogue keys. Keys are spelled out
+ * literally at every branch — a `t(variable)` is invisible to the extractor.
+ * The `code`/`status` branches come first so this keeps working the day login
+ * moves onto apiClient's ApiError, which does carry both.
+ *
+ * Anything genuinely unrecognised still reaches the user, but wrapped in a
+ * translated frame rather than dumped raw: an unknown English detail is worth
+ * more than a shrug, and the sentence around it is still readable.
+ */
+export function translateLoginError(err, t) {
+    const code = err?.code || err?.body?.code || '';
+    const status = err?.status;
+    const raw = typeof err?.message === 'string' ? err.message.trim() : '';
+
+    if (code === 'account_disabled' || raw === 'This account is not active. Contact an administrator.') {
+        return t('error_account_disabled');
+    }
+
+    // 423 + "Account locked. Try again in N minutes." — the countdown is the
+    // whole point of the message, so carry it through the translation.
+    const locked = /^Account locked\. Try again in (\d+) minute/i.exec(raw);
+    if (locked) return t('error_account_locked', { minutes: Number(locked[1]) });
+
+    if (raw === 'Invalid username or password' || (status === 401 && !raw)) {
+        return t('error_invalid_credentials');
+    }
+    if (raw === 'Username and password are required') return t('error_credentials_required');
+    if (status === 429 || /^Too many /i.test(raw)) return t('error_too_many_attempts');
+    if (raw.startsWith('Cannot connect to server')) return t('error_cannot_connect');
+    if (raw.startsWith('Server returned empty response') || raw.startsWith('Invalid server response')) {
+        return t('error_bad_server_response');
+    }
+    if (!raw || raw === 'Login failed') return t('login_failed');
+    return t('login_failed_detail', { detail: raw });
+}
+
+/**
  * The sign-in card. Pure card — the split-panel shell around it is AuthLayout,
  * owned by AuthGate.
  *
@@ -35,7 +82,7 @@ export default function LoginPage({ onSwitchToRegister, onSwitchToInvite, policy
         try {
             await login(username, password);
         } catch (err) {
-            setError(err.message || t('login_failed'));
+            setError(translateLoginError(err, t));
         } finally {
             setLoading(false);
         }
@@ -47,8 +94,12 @@ export default function LoginPage({ onSwitchToRegister, onSwitchToInvite, policy
             <p className="text-sm text-neutral-400 mb-6">{t('signin_continue')}</p>
 
             {error && (
-                <div className="mb-4 p-3 bg-red-900/30 border border-red-500/50 rounded-lg flex items-center gap-2 text-red-200">
-                    <AlertCircle className="w-5 h-5 shrink-0" />
+                <div
+                    role="alert"
+                    aria-live="assertive"
+                    className="mb-4 p-3 bg-red-900/30 border border-red-500/50 rounded-lg flex items-center gap-2 text-red-200"
+                >
+                    <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
                     <span className="text-sm">{error}</span>
                 </div>
             )}
