@@ -13,6 +13,7 @@
 // router is imported only when OYON_ENABLED=1 (it pulls in the `oyon`
 // package). /setup/status must be able to answer regardless.
 import { dbGet, dbRun } from '../routes/_helpers.js';
+import { SQL_NOW } from '../shared/time.js';
 
 // Runtime defaults match the hard-coded values previously baked into the
 // frontends. Migration 0012 stamps the same defaults onto oyon_settings, so
@@ -48,8 +49,14 @@ export async function ensureSettings(currentTenantId) {
         `INSERT INTO oyon_settings (
             tenant_id,
             model_profile, sample_interval_ms, window_ms, min_valid_frames,
-            smoothing_alpha, min_hold_ms, min_switch_confidence
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            smoothing_alpha, min_hold_ms, min_switch_confidence,
+            -- Named, not left to the DEFAULT CURRENT_TIMESTAMP: that default
+            -- writes sqlite's legacy naive shape, and PUT /addons/oyon/settings
+            -- now stamps updated_at as UTC ISO. A column holding both shapes
+            -- sorts as a string and parses as local time in a browser
+            -- (RPS-1 section 17, migrations 0050-0052).
+            created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW}, ${SQL_NOW})
          ON CONFLICT(tenant_id) DO NOTHING`,
         [
             String(currentTenantId),

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, BarChart3 } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 import { oyonClientLog } from './clientLogger';
@@ -14,6 +15,10 @@ export const VALENCE_GRAPH_PREF_KEY = 'oyon.showValenceGraph';
 export const CONSENT_PREF_KEY = 'oyon.defaultConsent';
 
 const VALENCE_BUFFER = 30;
+
+// Sentinel for "the element itself would not load" — the only error message
+// Rohy authors (every other one is upstream text passed through verbatim).
+const LOAD_FAILED = Symbol('oyon-load-failed');
 
 /*
  * Oyon v2 embed. The <oyon-app chrome="capture"> element OWNS the camera,
@@ -37,6 +42,7 @@ const VALENCE_BUFFER = 30;
  * asset-base so air-gapped deploys never touch a CDN.
  */
 export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnalytics } = {}) {
+   const { t } = useTranslation('common');
    const [tenantEnabled, setTenantEnabled] = useState(false);
    const [runtimeConfig, setRuntimeConfig] = useState(null);
    const [status, setStatus] = useState('idle');
@@ -247,7 +253,10 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
          })
          .catch((e) => {
             if (cancelled) return;
-            setErrorMsg(e?.message || 'Could not load the Oyon capture element');
+            // A sentinel, not prose: the effect must not depend on `t` (a
+            // language switch would otherwise tear the camera element down
+            // mid-capture). Resolved to the catalogue string at render.
+            setErrorMsg(e?.message || LOAD_FAILED);
             oyonClientLog('error', 'oyon element load failed', { error: e?.message || String(e) });
          });
 
@@ -291,10 +300,11 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
       && Number.isFinite(emotion?.anxious_index)
       && emotion.anxious_index >= ANXIOUS_FLAG_THRESHOLD;
 
-   const errorBanner = errorMsg ? (
+   const errorText = errorMsg === LOAD_FAILED ? t('oyon_load_failed') : errorMsg;
+   const errorBanner = errorText ? (
       <div className="text-[11px] text-red-200 bg-red-950/60 border border-red-500/40 rounded px-2 py-1 leading-tight max-w-[480px] break-words"
-           title={errorMsg}>
-         {errorMsg}
+           title={errorText}>
+         {errorText}
       </div>
    ) : null;
 
@@ -307,15 +317,15 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
             {anxiousFlag && (
                <span
                   className="inline-flex items-center gap-1 self-center rounded-full border border-amber-400/50 bg-amber-950/50 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-200"
-                  title={`Derived anxiety indicator ${emotion.anxious_index.toFixed(2)} (high arousal + negative valence + fear)`}
+                  title={t('oyon_anxious_title', { value: emotion.anxious_index.toFixed(2) })}
                >
-                  anxious
+                  {t('oyon_anxious')}
                </span>
             )}
             {!persistOk && running && (
                <AlertTriangle
                   className="h-4 w-4 self-center text-amber-300"
-                  title="Local capture only — backend rejected writes"
+                  title={t('oyon_local_only')}
                />
             )}
             {showGraph && <ValenceTrack values={valenceTrack} active={running && status !== 'paused'} compact />}
@@ -326,7 +336,7 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
                <button
                   type="button"
                   onClick={onOpenAnalytics}
-                  title="Open Learning Analytics (Settings → Oyon — Learning Analytics)"
+                  title={t('oyon_open_analytics')}
                   className="grid place-items-center self-center h-8 w-8 rounded-full border border-white/10 bg-black/40 text-cyan-100/80 hover:bg-white/10 shrink-0"
                >
                   <BarChart3 className="h-4 w-4" />
@@ -377,6 +387,7 @@ function readGraphPref() {
 }
 
 function ValenceTrack({ values, active, compact = false }) {
+   const { t } = useTranslation('common');
    const W = compact ? 220 : 260;
    const H = compact ? 44 : 90;
    const PAD_X = compact ? 18 : 22;
@@ -414,7 +425,7 @@ function ValenceTrack({ values, active, compact = false }) {
       <div className={`rounded-lg border border-white/10 bg-black/40 ${compact ? 'px-1.5 py-1' : 'px-2 py-2'}`}>
          {!compact && (
             <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-cyan-100/70 px-0.5 pb-1">
-               <span>Valence</span>
+               <span>{t('oyon_valence')}</span>
                <span className="tabular-nums text-base font-bold leading-none" style={{ color: tone }}>
                   {last == null ? '—' : (last >= 0 ? '+' : '') + last.toFixed(2)}
                </span>
@@ -443,7 +454,7 @@ function ValenceTrack({ values, active, compact = false }) {
             )}
             {!lastPoint && (
                <text x={W / 2} y={H / 2 + 4} fontSize="11" fill="rgba(255,255,255,0.45)" textAnchor="middle">
-                  {active ? 'collecting…' : 'press camera to start'}
+                  {active ? t('oyon_collecting') : t('oyon_press_camera')}
                </text>
             )}
          </svg>

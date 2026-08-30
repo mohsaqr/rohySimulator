@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.118] — 2026-08-30
+
+### Fixed
+
+- Oyon capture widget reports loading/local-only/error states honestly;
+  the vendored element no longer throws at load when webgazer is absent.
+
 ## [2.9.117] — 2026-08-30
 
 ### Fixed

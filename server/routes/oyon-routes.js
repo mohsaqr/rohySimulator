@@ -9,6 +9,7 @@ import { dbAll, dbGet, dbRun, logAuditAsync, redactRow, tenantId } from './_help
 import { logger } from '../logger.js';
 import { rejectionMiddleware, getStats as getRejectionStats } from './oyon-rejection-counter.js';
 import { DEFAULT_RUNTIME, ensureSettings } from '../lib/oyonSettings.js';
+import { SQL_NOW } from '../shared/time.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -152,7 +153,7 @@ router.put('/settings', authenticateToken, requireAdmin, async (req, res) => {
              interaction_enabled = ?,
              discourse_enabled = ?,
              ai_assist_enabled = ?,
-             updated_at = CURRENT_TIMESTAMP
+             updated_at = ${SQL_NOW}
          WHERE tenant_id = ?`,
         [
             next.emotion_capture_enabled,
