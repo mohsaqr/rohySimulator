@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.128] — 2026-08-30
+
+### Fixed
+
+- **The ECG authoring studio can be saved, exited, and scrolled** — the
+  host's Done/Discard controls now reach the studio's header slot, and
+  the studio scrolls inside the authoring overlay.
+
 ## [2.9.127] — 2026-08-30
 
 ### Fixed

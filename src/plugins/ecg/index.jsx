@@ -5,7 +5,7 @@
  */
 import { manifest } from './manifest.js';
 import { EcgRoom } from './EcgRoom.jsx';
-import { CaseAuthor } from '../../components/ecg/ui/CaseAuthor.jsx';
+import { EcgCaseAuthor } from './EcgCaseAuthor.jsx';
 import {
   case_document_is_servable,
   case_document_issues,
@@ -30,7 +30,7 @@ export default {
     initial_work: persist.state,
     on_work_change: (next) => persist.save(next),
   }),
-  authorComponent: CaseAuthor,
+  authorComponent: EcgCaseAuthor,
   authorProps: (_ctx, draft) => ({
     initial_document: draft.value ?? undefined,
     on_change: draft.save,

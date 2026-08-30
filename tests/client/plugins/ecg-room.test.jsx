@@ -172,3 +172,30 @@ describe('ECG room — the end-to-end thin slice', () => {
         expect(roomRule).toContain('grid-template-rows: minmax(0, 1fr)');
     });
 });
+
+describe('ECG authoring studio — the host shell', () => {
+    // Regression lock: PluginAuthorSurface hands Done/Discard down as
+    // camelCase `topBarControls`; the vendored CaseAuthor only knows
+    // snake_case `top_bar_controls`. Mounting CaseAuthor directly dropped
+    // the controls — an educator could neither save nor leave the studio —
+    // and the fixed overlay had no scrolling element.
+    it('threads the host controls into the studio and provides the scroller', () => {
+        const Author = descriptor.authorComponent;
+        const { container } = render(
+            <Author
+                topBarControls={<button type="button">host-done</button>}
+                caseTitle="Anterior STEMI drill"
+                initial_document={CASE_DOCUMENT}
+                on_change={() => {}}
+            />
+        );
+        expect(screen.getByText('host-done')).toBeInTheDocument();
+        expect(screen.getByText('Anterior STEMI drill')).toBeInTheDocument();
+        // The studio must sit inside the host's scroll pane — the overlay
+        // parent it mounts into cannot scroll.
+        const studio = container.querySelector('.ecg-author');
+        expect(studio).toBeTruthy();
+        const scroller = studio.closest('.overflow-y-auto');
+        expect(scroller).toBeTruthy();
+    });
+});
