@@ -27,6 +27,11 @@ export default defineConfig([
     // its own portability.test.js, which stays linted.
     'src/components/pacs/**/*.{js,jsx}',
     '!src/components/pacs/portability.test.js',
+    // Byte-identical vendored copy of ~/Documents/Github/ECG/src (cardoyon).
+    // Same posture again: lint is owned upstream; the host-owned
+    // portability.test.js is rohy's and stays linted.
+    'src/components/ecg/**/*.{js,jsx}',
+    '!src/components/ecg/portability.test.js',
     'coverage/**',
     'playwright-report/**',
     'test-results/**',

@@ -88,6 +88,29 @@ export const VENDORED = [
         // verifies the stamp it wrote like any other.
         installer: 'scripts/vendor.mjs',
     },
+    {
+        id: 'ecg',
+        package: 'cardoyon',
+        upstream: '~/Documents/Github/ECG',
+        upstreamEnv: 'ROHY_VENDOR_CARDOYON',
+        from: 'src',
+        into: 'src/components/ecg',
+        sentinel: 'index.js',
+        hostOwned: ['README.md', 'portability.test.js'],
+    },
+    // The package stylesheet lives outside upstream's src/ (the standalone
+    // app imports its own globals separately), so it is its own entry —
+    // scoped selectors only, verified before the split was vendored.
+    {
+        id: 'ecg-styles',
+        package: 'cardoyon',
+        upstream: '~/Documents/Github/ECG',
+        upstreamEnv: 'ROHY_VENDOR_CARDOYON',
+        from: 'styles',
+        into: 'src/components/ecg-styles',
+        sentinel: 'package.css',
+        hostOwned: ['README.md'],
+    },
 ];
 
 export const STAMP_FILE = '.vendor.json';

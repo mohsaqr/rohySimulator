@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.122] — 2026-08-30
+
+### Added
+
+- **A 12-lead ECG reading room (Cardoyon) as the third RPS-1 plugin.**
+  Educators author calibrated tracings from curated presets or uploads;
+  learners record a structured read with notes and measurements; the
+  rubric never reaches the learner's browser. Vendored and stamped like
+  PACS and Pathology (`npm run vendor -- ecg` / `-- ecg-styles`).
+
 ## [2.9.121] — 2026-08-30
 
 ### Changed

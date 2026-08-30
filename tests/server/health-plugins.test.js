@@ -44,18 +44,20 @@ describe('GET /api/health/plugins', () => {
     }, 60_000);
 
     it('is 503 + names the plugin when the origin is dark, and when it serves another plugin\'s bundle', async () => {
-        const wrong = await startOrigin(goodBundle('ecg'));
+        const wrong = await startOrigin(goodBundle('cardiograph'));
         const dark = await startOrigin((req, res) => { res.writeHead(404); res.end(); });
-        // 'ecg' is not a registered plugin; the parser accepts any lower_snake id.
-        const server = await startTestServer({ seed: false, env: { ROHY_PLUGIN_ORIGINS: `pathology=${wrong.origin},ecg=${dark.origin}` } });
+        // 'cardiograph' is not a registered plugin (since v2.9.109 'ecg' IS — the
+        // Cardoyon room — so the fictional id moved); the parser accepts any
+        // lower_snake id.
+        const server = await startTestServer({ seed: false, env: { ROHY_PLUGIN_ORIGINS: `pathology=${wrong.origin},cardiograph=${dark.origin}` } });
         try {
             const res = await fetch(`${server.baseUrl}/api/health/plugins`);
             expect(res.status).toBe(503);
             const body = await res.json();
             expect(body.status).toBe('degraded');
-            expect(body.unreachable.sort()).toEqual(['ecg', 'pathology']);
-            expect(body.plugins.pathology.error).toMatch(/says plugin 'ecg', expected 'pathology'/);
-            expect(body.plugins.ecg).toMatchObject({ known_plugin: false, reachable: false, status: 404 });
+            expect(body.unreachable.sort()).toEqual(['cardiograph', 'pathology']);
+            expect(body.plugins.pathology.error).toMatch(/says plugin 'cardiograph', expected 'pathology'/);
+            expect(body.plugins.cardiograph).toMatchObject({ known_plugin: false, reachable: false, status: 404 });
         } finally { await server.close(); await wrong.close(); await dark.close(); }
     }, 60_000);
 

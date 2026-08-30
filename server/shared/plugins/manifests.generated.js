@@ -4,6 +4,124 @@
 export const PLUGIN_MANIFESTS = [
     {
         "authoring": {
+            "labelKey": "room_ecg_author",
+            "minRole": "educator"
+        },
+        "capabilities": [
+            "persist"
+        ],
+        "document": {
+            "learnerOmit": [
+                "rubric"
+            ]
+        },
+        "id": "ecg",
+        "minRole": "student",
+        "room": {
+            "accent": "teal",
+            "icon": "HeartPulse",
+            "key": "ecg",
+            "labelKey": "room_ecg",
+            "order": 45,
+            "subKey": "room_ecg_sub"
+        },
+        "states": {
+            "interpretations": {
+                "FOCUSED_ECG_LEAD:ecg_lead": "examining",
+                "OPENED_ECG_RECORDING:ecg_recording": "assessing",
+                "RECORDED_ECG_NOTE:ecg_note": "documenting",
+                "SUBMITTED_ECG_INTERPRETATION:ecg_interpretation": "documenting"
+            },
+            "objectOverrides": {
+                "ecg_interpretation": "documenting",
+                "ecg_lead": "examining",
+                "ecg_measurement": "examining",
+                "ecg_note": "documenting",
+                "ecg_recording": "assessing",
+                "ecg_teaching_point": "reflecting"
+            },
+            "verbFallbacks": {
+                "CHANGED_ECG_LAYOUT": "examining",
+                "FOCUSED_ECG_LEAD": "examining",
+                "MEASURED_ECG_AMPLITUDE": "examining",
+                "MEASURED_ECG_INTERVAL": "examining",
+                "OPENED_ECG_RECORDING": "assessing",
+                "RECORDED_ECG_NOTE": "documenting",
+                "REQUESTED_ECG_HINT": "reflecting",
+                "REVEALED_ECG_EXPLANATION": "reflecting",
+                "REVISED_ECG_INTERPRETATION": "documenting",
+                "SAVED_ECG_INTERPRETATION": "documenting",
+                "SUBMITTED_ECG_INTERPRETATION": "documenting"
+            }
+        },
+        "version": "1.0.0",
+        "vocabulary": {
+            "components": {
+                "CASE_AUTHOR": "ECGCaseAuthor",
+                "ECG_PAPER": "ECGPaper",
+                "ECG_ROOM": "ECGRoom",
+                "INTERPRETATION_PANEL": "ECGInterpretationPanel",
+                "LEAD_SELECTOR": "ECGLeadSelector",
+                "NOTES_PANEL": "ECGNotesPanel"
+            },
+            "objectTypes": {
+                "ECG_INTERPRETATION": "ecg_interpretation",
+                "ECG_LEAD": "ecg_lead",
+                "ECG_MEASUREMENT": "ecg_measurement",
+                "ECG_NOTE": "ecg_note",
+                "ECG_RECORDING": "ecg_recording",
+                "ECG_TEACHING_POINT": "ecg_teaching_point"
+            },
+            "verbs": {
+                "CHANGED_ECG_LAYOUT": {
+                    "category": "NAVIGATION",
+                    "severity": "INFO"
+                },
+                "FOCUSED_ECG_LEAD": {
+                    "category": "CLINICAL",
+                    "severity": "INFO"
+                },
+                "MEASURED_ECG_AMPLITUDE": {
+                    "category": "ASSESSMENT",
+                    "severity": "ACTION"
+                },
+                "MEASURED_ECG_INTERVAL": {
+                    "category": "ASSESSMENT",
+                    "severity": "ACTION"
+                },
+                "OPENED_ECG_RECORDING": {
+                    "category": "CLINICAL",
+                    "severity": "IMPORTANT"
+                },
+                "RECORDED_ECG_NOTE": {
+                    "category": "ASSESSMENT",
+                    "severity": "ACTION"
+                },
+                "REQUESTED_ECG_HINT": {
+                    "category": "ASSESSMENT",
+                    "severity": "ACTION"
+                },
+                "REVEALED_ECG_EXPLANATION": {
+                    "category": "ASSESSMENT",
+                    "severity": "IMPORTANT"
+                },
+                "REVISED_ECG_INTERPRETATION": {
+                    "category": "ASSESSMENT",
+                    "severity": "IMPORTANT"
+                },
+                "SAVED_ECG_INTERPRETATION": {
+                    "category": "ASSESSMENT",
+                    "severity": "ACTION"
+                },
+                "SUBMITTED_ECG_INTERPRETATION": {
+                    "category": "ASSESSMENT",
+                    "severity": "CRITICAL"
+                }
+            }
+        }
+    },
+    {
+        "authoring": {
             "labelKey": "room_pacs_author",
             "minRole": "educator"
         },
