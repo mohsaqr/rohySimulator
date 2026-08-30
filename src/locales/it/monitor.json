@@ -36,6 +36,7 @@
   "monitor_settings_custom": "Impostazioni monitor (impostazioni personalizzate caricate)",
   "mute_alarms": "Silenzia allarmi",
   "n_minutes": "{count, plural, one {# minuto} other {# minuti}}",
+  "nibp_cycle_auto": "AUTO {minutes}min",
   "override_mode": "Modalità override ({count} modificati)",
   "pattern_afib": "Fibrillazione atriale",
   "pattern_angina": "Angina (lieve sottoslivellamento ST)",

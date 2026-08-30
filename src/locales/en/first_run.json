@@ -11,6 +11,7 @@
   "affect_enabled": "Affect routing enabled",
   "affect_note": "When enabled, the patient can subtly adapt to a visibly anxious learner. Details under Settings → Affect.",
   "back": "Back",
+  "case_card_error": "We couldn't load your cases just now — you can still continue, and they'll appear in the menu → Cases.",
   "case_card_hint": "You can switch cases at any time via the menu → Cases.",
   "case_card_language_fallback": "No case exists in your language yet, so you'll start with the default case.",
   "case_card_none": "No case is published for you yet — check back with your teacher.",

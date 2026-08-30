@@ -54,7 +54,7 @@
   "route_iv_infusion": "Infusione EV",
   "route_iv_push": "EV in bolo",
   "route_label": "Via: {route}",
-  "route_po": "PO",
+  "route_po": "OS",
   "route_sc": "SC",
   "route_sl": "SL",
   "search_category_placeholder": "Cerca {category}...",

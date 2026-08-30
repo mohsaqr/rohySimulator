@@ -60,6 +60,7 @@
   "summary_footer_hint": "Use this summary to anchor the discussion. Ask the discussant to focus on any section.",
   "transcript": "Transcript",
   "transcript_title": "Conversation transcript",
+  "tutor_reply_failed": "The tutor's reply failed to arrive. Your message was not lost — try sending again.",
   "type_a_message": "Type a message",
   "type_instead": "Type instead",
   "view_full_summary": "View full case summary",

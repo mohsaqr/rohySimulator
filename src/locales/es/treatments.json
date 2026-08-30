@@ -54,7 +54,7 @@
   "route_iv_infusion": "Infusión IV",
   "route_iv_push": "bolo intravenoso",
   "route_label": "Vía: {route}",
-  "route_po": "PO",
+  "route_po": "VO",
   "route_sc": "SC",
   "route_sl": "SL",
   "search_category_placeholder": "Buscar {category}...",

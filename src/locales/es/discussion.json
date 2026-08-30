@@ -60,6 +60,7 @@
   "summary_footer_hint": "Utiliza este resumen para anclar la discusión. Pide al interlocutor que se concentre en cualquier sección.",
   "transcript": "Transcripción",
   "transcript_title": "Transcripción de la conversación",
+  "tutor_reply_failed": "No llegó la respuesta del tutor. Tu mensaje no se ha perdido — inténtalo de nuevo.",
   "type_a_message": "Escribe un mensaje",
   "type_instead": "Escribe en su lugar",
   "view_full_summary": "Ver resumen completo del caso",

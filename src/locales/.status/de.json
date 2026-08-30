@@ -384,6 +384,104 @@
     "reviewer": null,
     "risk": "low"
   },
+  "auth.error_account_disabled": {
+    "src": "f4f078344d09",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_account_locked": {
+    "src": "adc9f25856eb",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_approval_already_requested": {
+    "src": "17c88e8904c0",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_bad_server_response": {
+    "src": "1b5fa903b736",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_cannot_connect": {
+    "src": "00e1f31f3ba7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_credentials_required": {
+    "src": "4c53a801ee97",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_email_domain_not_allowed": {
+    "src": "985a345c0407",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_invalid_credentials": {
+    "src": "2420afe3a6e3",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_invite_email_domain": {
+    "src": "bdf9312d96b7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_invite_required": {
+    "src": "b51642c84d3c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_registration_closed": {
+    "src": "5d65715cd849",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_signup_fields_required": {
+    "src": "44083a8710ca",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_too_many_attempts": {
+    "src": "76d7a82c8b1d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_username_taken": {
+    "src": "e72a4356284a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "auth.feature_affect_desc": {
     "src": "394e6bbe1145",
     "state": "machine",
@@ -594,6 +692,13 @@
     "reviewer": null,
     "risk": "low"
   },
+  "auth.login_failed_detail": {
+    "src": "11dab7f70aec",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "auth.no_account_prompt": {
     "src": "1b545b23fae3",
     "state": "machine",
@@ -603,6 +708,13 @@
   },
   "auth.password": {
     "src": "e7cf3ef4f17c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.password_policy_unmet": {
+    "src": "b756dabd1bd6",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -631,6 +743,27 @@
   },
   "auth.password_req_match": {
     "src": "49665aad0be4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.password_req_max": {
+    "src": "cfbeff8e7da1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.password_req_met": {
+    "src": "f414ae66800d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.password_req_unmet": {
+    "src": "1657e3706bfc",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -687,6 +820,13 @@
   },
   "auth.registration_failed": {
     "src": "d40e3b08ef50",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.registration_failed_detail": {
+    "src": "16f6d4202f02",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -11549,6 +11689,55 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "chat.llm_error_bubble": {
+    "src": "020abfd756a0",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.llm_error_cannot_connect": {
+    "src": "dae0548f2b10",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.llm_error_rate_limited": {
+    "src": "abc797fe3d61",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.llm_error_rate_limited_until": {
+    "src": "67507bf6bc53",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.llm_error_service_unavailable": {
+    "src": "14cb4fb70753",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.llm_error_timeout": {
+    "src": "53d67720ba13",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.llm_error_unknown": {
+    "src": "ffc0eed2f944",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "chat.load_case_from_settings": {
     "src": "fbbd8a5a6d20",
     "state": "machine",
@@ -12011,8 +12200,50 @@
     "reviewer": null,
     "risk": "low"
   },
+  "common.ecg_summary_empty": {
+    "src": "55d05b2ec0d4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.ecg_summary_recording": {
+    "src": "a79bc4a7958d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.ecg_summary_recordings": {
+    "src": "a79bc4a7958d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "common.error": {
     "src": "54a0e8c17ebb",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.error_boundary_body": {
+    "src": "315e097d4023",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.error_boundary_retry": {
+    "src": "d8b8392e2c54",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.error_boundary_title": {
+    "src": "8147f06ae657",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -12062,6 +12293,62 @@
   },
   "common.not_confident": {
     "src": "916159fb3216",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.oyon_anxious": {
+    "src": "faef616df2ec",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.oyon_anxious_title": {
+    "src": "0e0dccbf5f72",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.oyon_collecting": {
+    "src": "ec1fdeb085eb",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.oyon_load_failed": {
+    "src": "e89614ffe838",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.oyon_local_only": {
+    "src": "8b8de3af2a0a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.oyon_open_analytics": {
+    "src": "16a88c0fad0f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.oyon_press_camera": {
+    "src": "f5da9497f2e8",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.oyon_valence": {
+    "src": "b7fd1c957706",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -12179,8 +12466,1436 @@
     "reviewer": null,
     "risk": "low"
   },
+  "common.radoyon_accession": {
+    "src": "057fdb1eb48b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_actions_label": {
+    "src": "5d5ee1577500",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_accession": {
+    "src": "9dd2145468bf",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_accession_hint": {
+    "src": "73e70dc234e0",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_add_finding": {
+    "src": "adba82d0db2a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_add_study": {
+    "src": "f3ece0db3029",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_advanced": {
+    "src": "9f088dbebd6c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_all_normal": {
+    "src": "024c2e5f5140",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_all_studies": {
+    "src": "abfe466fff4b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_available_at": {
+    "src": "905253b8206d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_available_at_hint": {
+    "src": "18748883e0a4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_baseline": {
+    "src": "a57da239b766",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_baseline_hint": {
+    "src": "9ae0d4016a2d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_catalogue_study": {
+    "src": "d8ffcd94ddb1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_change_to": {
+    "src": "96df90a7b431",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_changed": {
+    "src": "2a6141e43be0",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_changed_imaging": {
+    "src": "508da07dc325",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_choose": {
+    "src": "f00d97477a31",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_choose_source": {
+    "src": "83dacc7fd5fc",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_custom_ref": {
+    "src": "32aa52084984",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_custom_ref_hint": {
+    "src": "c60e5793a1f5",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_description": {
+    "src": "c5da1f1c0fc8",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_empty": {
+    "src": "5960acccd7d9",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_filter_all": {
+    "src": "a52ace420f21",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_filter_backed": {
+    "src": "08c751992b39",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_filter_changed": {
+    "src": "2a6141e43be0",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_filter_unbacked": {
+    "src": "94f1c1267c36",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_finding_label": {
+    "src": "59d032ea6dfc",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_finding_ph": {
+    "src": "3406015b0ed9",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_findings": {
+    "src": "e171c2ff25b5",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_generated": {
+    "src": "e0cb800a5ccd",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_impression": {
+    "src": "9b86bb71856f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_intro": {
+    "src": "4bb1194470ca",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_is_normal_short": {
+    "src": "310c995e15db",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_need_baseline": {
+    "src": "5cb78654828e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_no_imaging": {
+    "src": "9f1e8ce7c6b4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_no_normal": {
+    "src": "8d243a18ecfd",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_no_sources": {
+    "src": "0b8ab31cbe75",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_none_match": {
+    "src": "e6e9852b5e89",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_normal": {
+    "src": "317b32c14369",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_not_backed": {
+    "src": "943d67f2d4c2",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_open": {
+    "src": "9ffa9c296a42",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_order_default": {
+    "src": "9a44737c0012",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_orphaned": {
+    "src": "f200d11f85cd",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_release_hint": {
+    "src": "a08e70ff3673",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_release_report": {
+    "src": "0022586b76bc",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_remove": {
+    "src": "98b478a30ae1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_remove_finding": {
+    "src": "1528b12def87",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_report": {
+    "src": "3591d85a0ba5",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_same_order": {
+    "src": "b78ec0935dad",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_same_order_hint": {
+    "src": "b9d942566c72",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_scope": {
+    "src": "11755fd7edde",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_scope_range": {
+    "src": "541e8a88b34c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_scope_series": {
+    "src": "aeb5be65909f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_search": {
+    "src": "ab23a13793fd",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_show_all": {
+    "src": "b95c4f014119",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_slice_from": {
+    "src": "6cbcf95944c7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_slice_to": {
+    "src": "a703f2e4f4ce",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_slices": {
+    "src": "05e9dfc25551",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_source": {
+    "src": "0e570ca6fabe",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_splice_warning": {
+    "src": "4a93cf49f72c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_substitutions": {
+    "src": "c1b77db987c0",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_target": {
+    "src": "3fc09d55024a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_target_auto": {
+    "src": "2225cd9c961c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_title": {
+    "src": "60afdf5ecd87",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_undo": {
+    "src": "a8283ade3185",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_undo_removed_study": {
+    "src": "404245f5dc7b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_unlinked": {
+    "src": "1e31d9596d67",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_unlisted": {
+    "src": "4c9354a244b2",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_author_unlisted_hint": {
+    "src": "b2f83bd0f44f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_baseline_abnormal": {
+    "src": "23a885be76f8",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_cancel": {
+    "src": "19766ed6ccb2",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_cine_pause": {
+    "src": "a6485e52c16a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_cine_play": {
+    "src": "d099ed4ac50c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_close": {
+    "src": "7d9eb7acb13e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_coverage_hint": {
+    "src": "71c07ea91354",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_centre": {
+    "src": "1709305c9fa9",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_centre_hint": {
+    "src": "529ec9d6a3f2",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_detail": {
+    "src": "fb5f27d5457c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_gamma": {
+    "src": "a8ab3d5805c9",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_gamma_hint": {
+    "src": "cf12c2323d28",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_linear": {
+    "src": "e6950b45d25c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_reset": {
+    "src": "775f18245d1d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_sharpen": {
+    "src": "e6b5e9a5685c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_sharpen_hint": {
+    "src": "2eb2f7c23cb4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_sigmoid": {
+    "src": "1ec8c4f3c945",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_sigmoid_hint": {
+    "src": "8c88e8a075a7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_smooth": {
+    "src": "74c2db58a7ae",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_transfer": {
+    "src": "a168627f87ec",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_width": {
+    "src": "3019947b6daf",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_width_hint": {
+    "src": "a1cba7e5881d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ctl_window": {
+    "src": "ae93936e7385",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_delete_measurement": {
+    "src": "13a7482258de",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_description": {
+    "src": "526e0087cc3f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_dismiss": {
+    "src": "48845bff334a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_family_all": {
+    "src": "a52ace420f21",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_family_diagnostics": {
+    "src": "268f14bbfe11",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_family_imaging": {
+    "src": "60afdf5ecd87",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_family_label": {
+    "src": "f12a424ad0d6",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_finding_many": {
+    "src": "8aa3c4ce3ccd",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_finding_one": {
+    "src": "8bf18252cb6d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_image_controls": {
+    "src": "1aa4cb0bcca7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_image_many": {
+    "src": "21b2eed1e328",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_image_one": {
+    "src": "6105d6cc76af",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_images": {
+    "src": "b29814cf5792",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_inspect_no_loader": {
+    "src": "5cbb54a01fcc",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_inspect_nothing": {
+    "src": "b88147d69b17",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_layout_label": {
+    "src": "a511909161e1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_abnormal": {
+    "src": "fbe27b8e4327",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_abnormal_note": {
+    "src": "36c25be8bcf2",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_all_modalities": {
+    "src": "a52ace420f21",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_attribution": {
+    "src": "a902dcce0886",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_backed": {
+    "src": "08c751992b39",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_content": {
+    "src": "47bd29075f8b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_dataset": {
+    "src": "4411e525721e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_details": {
+    "src": "5fc7177fa386",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_empty": {
+    "src": "e18b8f04b0b2",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_geometry": {
+    "src": "fa9da5754ccf",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_in_use": {
+    "src": "64c6c17ec05d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_keep": {
+    "src": "64909be65576",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_licence": {
+    "src": "f3ec8e880a46",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_no_geometry": {
+    "src": "afdbd7b988d7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_no_imaging": {
+    "src": "9f1e8ce7c6b4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_normal": {
+    "src": "a7248eeb45eb",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_not_backed": {
+    "src": "943d67f2d4c2",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_plane": {
+    "src": "c66523fc0372",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_read": {
+    "src": "9b9a8d05a7ec",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_redistribution": {
+    "src": "29aa6c37f042",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_same_order": {
+    "src": "52238d6e0db4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_search": {
+    "src": "99b9aee2edfb",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_series": {
+    "src": "a8295e08ff7a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_show_all": {
+    "src": "b95c4f014119",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_title": {
+    "src": "eff98bcd88fc",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_unbacked": {
+    "src": "adb85cf22bfc",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_unread": {
+    "src": "63977a321b39",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_library_use": {
+    "src": "d54ba91c72cf",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_load_failed": {
+    "src": "39b773973bb4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_loading": {
+    "src": "b0d034ba8e61",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_loading_slice": {
+    "src": "3221a9929e7c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_measurements": {
+    "src": "3c7578035649",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_modality": {
+    "src": "5e99d7d126db",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_no_matches": {
+    "src": "32ab4da69c2b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_no_measurements": {
+    "src": "1b3672f146d5",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_ordered_by_number": {
+    "src": "b5cf26ff65b9",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_panel_label": {
+    "src": "71e3d156af25",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_picker_replace": {
+    "src": "753d6fe52683",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_picker_title": {
+    "src": "0365d426c50b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_picker_wire": {
+    "src": "c5d9b2f561e6",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_preset_custom": {
+    "src": "494ca78f7374",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_presets_label": {
+    "src": "bc904b1c3b55",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report": {
+    "src": "b6ce788d9786",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_copy": {
+    "src": "a1e9fce48e59",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_copy_short": {
+    "src": "e21f935f11d7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_coverage": {
+    "src": "ce635188cbe4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_evidence_hint": {
+    "src": "dac6917a382e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_file": {
+    "src": "7ea44b612ae6",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_filed": {
+    "src": "e418437797b7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_filing": {
+    "src": "b0145ef31c27",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_findings": {
+    "src": "e171c2ff25b5",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_findings_hint": {
+    "src": "fd4e554fab6a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_hide_normal": {
+    "src": "c04a97016749",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_impression": {
+    "src": "9b86bb71856f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_impression_hint": {
+    "src": "eed88f3aa1ed",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_measurements": {
+    "src": "3c7578035649",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_no_study": {
+    "src": "5f68d73770d9",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_normal_label": {
+    "src": "66d46772130e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_open_form": {
+    "src": "4859d9e90497",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_series_seen": {
+    "src": "d2e76542bf67",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_report_show_normal": {
+    "src": "5ddc20047d6e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_reset": {
+    "src": "daee7606b339",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_reset_view": {
+    "src": "ce89ae822e8b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_review_confirmed": {
+    "src": "9b9a8d05a7ec",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_review_primary": {
+    "src": "efe10c80ec8a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_review_primary_long": {
+    "src": "57c0b341a11c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_review_primary_short": {
+    "src": "63977a321b39",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_review_read": {
+    "src": "d0101eb7c9c5",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_review_unread": {
+    "src": "b03194e61754",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_search_studies": {
+    "src": "7939397d4b36",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_select_series": {
+    "src": "8b7793d1792f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_select_study": {
+    "src": "c6249ca98a36",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_series_label": {
+    "src": "a8295e08ff7a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_series_many": {
+    "src": "9cda38ea3a2b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_series_one": {
+    "src": "9cda38ea3a2b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_series_untitled": {
+    "src": "a8295e08ff7a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_slice": {
+    "src": "87bd78650264",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_slice_slider": {
+    "src": "87bd78650264",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_spacing_irregular": {
+    "src": "7f204fd282e1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_status": {
+    "src": "920e413c7d41",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_status_no_pixels": {
+    "src": "09c6b91f12f0",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_status_pending": {
+    "src": "331551b0de41",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_status_ready": {
+    "src": "5fa7aac5375c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_status_unavailable": {
+    "src": "ca1844969742",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "common.radoyon_studies_count": {
     "src": "ad5c7f033e5a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_study": {
+    "src": "3ff5620b0294",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_tool_distance": {
+    "src": "b7bdf7a2d6e7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_tool_pan": {
+    "src": "fd92d952db92",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_tool_region": {
+    "src": "d3a008ef1335",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_tool_window": {
+    "src": "19734a1b58ca",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_tool_zoom": {
+    "src": "509c517ede79",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_tools": {
+    "src": "ea93d6a262ec",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_tools_label": {
+    "src": "ea93d6a262ec",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_viewport_label": {
+    "src": "9c5932a86265",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_worklist_empty": {
+    "src": "72f70c088aa2",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_worklist_label": {
+    "src": "d84a5c0a1ffc",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_zoom": {
+    "src": "509c517ede79",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -12230,6 +13945,27 @@
   },
   "common.room_course": {
     "src": "2096cefba06a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.room_ecg": {
+    "src": "0212d87aedf9",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.room_ecg_author": {
+    "src": "6e96d7ef3609",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.room_ecg_sub": {
+    "src": "394353d9e9d4",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -12914,6 +14650,13 @@
     "reviewer": null,
     "risk": "low"
   },
+  "discussion.tutor_reply_failed": {
+    "src": "ebc8ddaf17fa",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "discussion.type_a_message": {
     "src": "00cd58f655da",
     "state": "machine",
@@ -13021,6 +14764,13 @@
   },
   "examination.abnormal_count": {
     "src": "63210823fc3b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.age_years": {
+    "src": "4b80f8aa437f",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -13194,6 +14944,20 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "examination.case_debrief_summary": {
+    "src": "e1de32e87c2a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.chief_complaint": {
+    "src": "2415571d319f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "examination.choose_technique": {
     "src": "d997c2a6482c",
     "state": "machine",
@@ -13224,6 +14988,48 @@
   },
   "examination.click_region_to_begin": {
     "src": "33c2f5666d12",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.close_summary": {
+    "src": "36db4874f32e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.debrief_missed_heading": {
+    "src": "76d8defd1fdf",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.debrief_missed_pending": {
+    "src": "6293ff36a53c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.debrief_none_missed": {
+    "src": "29fbe6e5b662",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.debrief_points_chip": {
+    "src": "8df16656d667",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.debrief_total_points": {
+    "src": "e76dde2b8b9e",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -13285,6 +15091,62 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "examination.hpi": {
+    "src": "2df32c61dde8",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.label_age": {
+    "src": "39b7370f30a3",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.label_allergies": {
+    "src": "c21b6d2a6144",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.label_gender": {
+    "src": "a04630ef8bc3",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.label_medications": {
+    "src": "6b5763afa621",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.label_mrn": {
+    "src": "a67a86167360",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.label_name": {
+    "src": "dcd1d5223f73",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.label_pmh": {
+    "src": "383964f4ba00",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "examination.legend_click_points": {
     "src": "e84618aa6a95",
     "state": "machine",
@@ -13301,6 +15163,13 @@
   },
   "examination.legend_selected": {
     "src": "57fd7a0cf33f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.loading_findings": {
+    "src": "adc36bbe4887",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -13460,6 +15329,13 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "examination.no_exams_recorded": {
+    "src": "d5e62278a114",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "examination.no_exams_yet": {
     "src": "2484a0e5d357",
     "state": "machine",
@@ -13469,6 +15345,27 @@
   },
   "examination.no_finding": {
     "src": "ac994fb1337b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.no_imaging_ordered": {
+    "src": "5769ce8cd3a1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.no_labs_returned": {
+    "src": "ea24ae33d97f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.no_treatments_administered": {
+    "src": "abc0b28b5e42",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -13490,6 +15387,13 @@
   },
   "examination.notes": {
     "src": "8a7525b1492f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.patient_fallback": {
+    "src": "835043ec8e6b",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -14160,6 +16064,62 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "examination.section_demographics": {
+    "src": "7bcf032544c5",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.section_exam_findings": {
+    "src": "4f3381f94ec4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.section_history": {
+    "src": "0e7696009337",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.section_imaging": {
+    "src": "60afdf5ecd87",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.section_initial_vitals": {
+    "src": "160712d0608a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.section_lab_results": {
+    "src": "fd28788fdfb3",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.section_treatment_debrief": {
+    "src": "1144c18bfccb",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.section_treatments": {
+    "src": "f52bf7d284fb",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "examination.select_region": {
     "src": "e1ffb6645b33",
     "state": "machine",
@@ -14190,6 +16150,13 @@
   },
   "examination.special_tests_available": {
     "src": "d6d0bb97e190",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.summary_footer_hint": {
+    "src": "0ce7fae792bb",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -14734,6 +16701,69 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "examination.vital_bp": {
+    "src": "36b717811ee1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.vital_bpm": {
+    "src": "ffed9caac8a7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.vital_celsius": {
+    "src": "c795b130d664",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.vital_etco2": {
+    "src": "18b917ba1730",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.vital_hr": {
+    "src": "15e68b1f4657",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.vital_per_min": {
+    "src": "13c8f415d57b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.vital_rr": {
+    "src": "e6c5af58dda1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.vital_spo2": {
+    "src": "cd24c6656d91",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.vital_temp": {
+    "src": "d62f436b9e1b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "first_run.access_enforce": {
     "src": "735293dc5931",
     "state": "machine",
@@ -14813,6 +16843,13 @@
   },
   "first_run.back": {
     "src": "76900f1bfd16",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "first_run.case_card_error": {
+    "src": "a2c345ea3fd0",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -15344,6 +17381,405 @@
     "risk": "low"
   },
   "first_run.welcome_title": {
+    "src": "1f16522f7ccd",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_case_wizard": {
+    "src": "37a9eafd97a4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_classroom_policy": {
+    "src": "daf4b0535a62",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_cohorts": {
+    "src": "40355040c1f1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_debrief": {
+    "src": "8f86a81abd30",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_educator_faq": {
+    "src": "8116f15421af",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_examination": {
+    "src": "225fedfea3c5",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_first_week": {
+    "src": "6ab9db44262d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_getting_started": {
+    "src": "831d0f72d242",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_history": {
+    "src": "8b7793a78b80",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_investigations": {
+    "src": "6bac854f1a5d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_platform_settings": {
+    "src": "257cdfcd9bc0",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_reporting": {
+    "src": "9f51f0ce63f0",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_rooms": {
+    "src": "cb27606b6621",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_trainee_faq": {
+    "src": "c59c557d823e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_treatments": {
+    "src": "fa17d213a32a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_users_roles": {
+    "src": "c70ded13bc76",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_vitals": {
+    "src": "ee86e92a7477",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_voice": {
+    "src": "5c6aea379fa2",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.close": {
+    "src": "88f2b69280f6",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.copied_message": {
+    "src": "8229cc6b91e2",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.copied_title": {
+    "src": "717cfcb34de4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.copy_bundle": {
+    "src": "91db6ffcd88b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.drawer_aria_label": {
+    "src": "3e382536ad47",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.drawer_title": {
+    "src": "1f8ecc2426e4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.error_clipboard_unavailable": {
+    "src": "65afce1f4038",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.error_release_notes_unavailable": {
+    "src": "69059bfe40ef",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.error_support_bundle_unavailable": {
+    "src": "7e9821fff161",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.group_administration": {
+    "src": "4b42c6690ebe",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.group_teaching": {
+    "src": "63c34f0d4cc5",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.group_using": {
+    "src": "e71b5a7d6372",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.loading": {
+    "src": "ba3bbbe10d8b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.no_release_notes": {
+    "src": "8f5ad742d6a4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.support_intro": {
+    "src": "3006e91807a0",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tab_help": {
+    "src": "b79cac926e0b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tab_support": {
+    "src": "be91940b79f4",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tab_whatsnew": {
+    "src": "135e912e8905",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_aria_label": {
+    "src": "831d0f72d242",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_done": {
+    "src": "11a6767d5674",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_educator_authoring_body": {
+    "src": "d154ca0ce572",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_educator_authoring_title": {
+    "src": "aaf7c2d4ce48",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_educator_classes_body": {
+    "src": "643e09d3d842",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_educator_classes_title": {
+    "src": "84637286c5b7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_educator_help_body": {
+    "src": "f0e7a6dbeb5c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_educator_help_title": {
+    "src": "c225cdfb755f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_educator_welcome_body": {
+    "src": "3f53b8b41248",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_educator_welcome_title": {
+    "src": "dfa6fb7dabdb",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_next": {
+    "src": "1ff57a29d7c9",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_skip": {
+    "src": "28d03596d24e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_step_progress": {
+    "src": "dc1249ded00f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_student_help_body": {
+    "src": "0066d40610ff",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_student_help_title": {
+    "src": "c225cdfb755f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_student_rooms_body": {
+    "src": "2166360ca53b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_student_rooms_title": {
+    "src": "e0219a1b2278",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_student_start_body": {
+    "src": "750a0411d86b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_student_start_title": {
+    "src": "abc4d425c255",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_student_welcome_body": {
+    "src": "cd2e3a1cd71e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.tour_student_welcome_title": {
     "src": "1f16522f7ccd",
     "state": "machine",
     "reviewed_at": null,
@@ -16883,6 +19319,13 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "monitor.nibp_cycle_auto": {
+    "src": "a30caa3925d6",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "monitor.override_mode": {
     "src": "0e0bd62f6911",
     "state": "machine",
@@ -18285,6 +20728,55 @@
   },
   "profile.email": {
     "src": "969ccbd3cf63",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "profile.field_label_address": {
+    "src": "56ef8f20955f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "profile.field_label_alternative_email": {
+    "src": "bc440326edca",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "profile.field_label_education": {
+    "src": "512ab3c6b986",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "profile.field_label_grade": {
+    "src": "6bb35715f977",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "profile.field_label_institution": {
+    "src": "65a1553729e3",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "profile.field_label_name": {
+    "src": "8e00cdf71fa7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "profile.field_label_phone": {
+    "src": "72dba9aeed89",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,

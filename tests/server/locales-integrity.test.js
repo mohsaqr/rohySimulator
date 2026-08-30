@@ -78,3 +78,75 @@ describe.each([...TRANSLATED, ...GENERATED])('locale %s', (lng) => {
         }
     });
 });
+
+// ---------------------------------------------------------------------------
+// Untranslated-leftover locks (2026-08-30 UI review, findings #23 / #39).
+//
+// The key-set check above catches a MISSING key. It cannot catch a key that is
+// present but still holds the English string — that ships as "translated" and
+// is invisible until a pilot user reads it. The PACS worklist and 24 other
+// strings read English in all six languages for exactly that reason.
+//
+// Two shapes of that bug are never a coincidence, so they are locked here.
+// (Plenty of values legitimately match English — "EtCO2", "PACS", "{value}/min"
+// — so a blanket "must differ" rule would be noise. These two are not that.)
+
+/** Keys whose English value contains an ICU plural. */
+function pluralKeys(file) {
+    return Object.entries(readNs('en', file))
+        .filter(([, v]) => /\{\s*\w+\s*,\s*plural/.test(v))
+        .map(([k]) => k);
+}
+
+// Prose that a pilot reported reading in English: PACS chrome, the help
+// drawer, the auth error set, the exam/debrief summary, plugin + pathology
+// settings, the chat failure bubble, profile field labels. None of these can
+// legitimately be identical to English in any of the five languages.
+const MUST_BE_TRANSLATED = {
+    'auth.json': ['error_invalid_credentials', 'error_account_locked', 'password_req_met'],
+    'authoring_config.json': ['plugin_settings_library_empty', 'pathology_settings_imports', 'plugin_settings_save'],
+    'chat.json': ['llm_error_cannot_connect', 'llm_error_service_unavailable'],
+    'common.json': [
+        'radoyon_worklist_empty', 'radoyon_author_intro', 'radoyon_studies_count',
+        'radoyon_tools_label', 'radoyon_status_pending', 'room_pacs_sub', 'room_pacs_author',
+        'error_boundary_title', 'oyon_press_camera',
+    ],
+    'discussion.json': ['tutor_reply_failed'],
+    'examination.json': ['section_demographics', 'no_labs_returned', 'debrief_total_points'],
+    'first_run.json': ['case_card_error'],
+    'help.json': ['drawer_title', 'tour_student_welcome_body', 'article_getting_started', 'group_using', 'support_intro'],
+    'investigations.json': ['radiologist_credentials'],
+    'profile.json': ['field_label_name', 'field_label_grade'],
+};
+
+describe.each(TRANSLATED)('locale %s carries no English leftovers', (lng) => {
+    it('no ICU plural is a byte-identical copy of the English message', () => {
+        // Plural morphology differs from English in all five languages, so an
+        // identical plural message is a copied English shell — the shape that
+        // put "# imaging study / # imaging studies" into the fi and sv
+        // catalogues.
+        const en = {};
+        const offenders = [];
+        for (const file of enFiles) {
+            en[file] = readNs('en', file);
+            const target = readNs(lng, file);
+            for (const key of pluralKeys(file)) {
+                if (target[key] === en[file][key]) offenders.push(`${file}#${key}`);
+            }
+        }
+        expect(offenders).toEqual([]);
+    });
+
+    it('the prose the 2026-08-30 pass translated is not English again', () => {
+        const offenders = [];
+        for (const [file, keys] of Object.entries(MUST_BE_TRANSLATED)) {
+            const en = readNs('en', file);
+            const target = readNs(lng, file);
+            for (const key of keys) {
+                expect(en[key], `en/${file}#${key} vanished — update this list`).toBeTypeOf('string');
+                if (target[key] === en[key]) offenders.push(`${file}#${key}`);
+            }
+        }
+        expect(offenders).toEqual([]);
+    });
+});

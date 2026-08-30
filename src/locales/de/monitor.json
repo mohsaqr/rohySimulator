@@ -36,6 +36,7 @@
   "monitor_settings_custom": "Monitoreinstellungen (Benutzerdefinierte Einstellungen geladen)",
   "mute_alarms": "Alarme stummschalten",
   "n_minutes": "{count, plural, one {# Minute} other {# Minuten}}",
+  "nibp_cycle_auto": "AUTO {minutes}min",
   "override_mode": "Überschreibungsmodus ({count} geändert)",
   "pattern_afib": "Vorhofflimmern",
   "pattern_angina": "Angina (leichte ST-Senkung)",

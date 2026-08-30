@@ -36,6 +36,7 @@
   "monitor_settings_custom": "Monitorinställningar (anpassade inställningar laddade)",
   "mute_alarms": "Tysta larm",
   "n_minutes": "{count, plural, one {# minut} other {# minuter}}",
+  "nibp_cycle_auto": "AUTO {minutes} min",
   "override_mode": "Åsidosättningsläge ({count} ändrade)",
   "pattern_afib": "Förmaksflimmer",
   "pattern_angina": "Angina (lätt ST-sänkning)",

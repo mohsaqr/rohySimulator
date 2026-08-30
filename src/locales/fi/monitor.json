@@ -36,6 +36,7 @@
   "monitor_settings_custom": "Monitorin asetukset (mukautetut asetukset ladattu)",
   "mute_alarms": "Mykistä hälytykset",
   "n_minutes": "{count, plural, one {# minuutti} other {# minuuttia}}",
+  "nibp_cycle_auto": "AUTO {minutes} min",
   "override_mode": "Ohitustila ({count} muokattu)",
   "pattern_afib": "Eteisvärinä",
   "pattern_angina": "Angina pectoris (lievä ST-lasku)",

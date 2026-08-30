@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.123] — 2026-08-30
+
+### Changed
+
+- **Locale catalogues synced across all six languages**: review-session
+  strings, 148 new PACS workstation keys (740 machine translations,
+  flagged for native review in the status sidecars), and the ECG room
+  vocabulary as ICU plurals.
+
 ## [2.9.122] — 2026-08-30
 
 ### Added
