@@ -160,7 +160,7 @@ function WorklistRow({ entry, active, onSelect, t }) {
                 disabled={!entry.available}
                 onClick={() => onSelect?.(entry)}
                 aria-current={active ? 'true' : undefined}
-                title={entry.available ? undefined : t('radoyon_status_no_pixels', 'No imaging material in the archive yet')}
+                title={entry.available ? undefined : (entry.statusLabel ?? t('radoyon_status_no_pixels', 'No imaging material in the archive yet'))}
                 className={`w-full text-left px-2 py-1.5 rounded-md border flex items-center gap-2 min-w-0 transition-colors ${
                     active
                         ? 'border-cyan-400/60 bg-cyan-500/10'
@@ -187,7 +187,7 @@ function WorklistRow({ entry, active, onSelect, t }) {
                 ) : (
                     <span
                         className={`flex-shrink-0 w-1.5 h-1.5 rounded-full ${entry.available ? 'bg-emerald-400' : 'bg-slate-700'}`}
-                        aria-label={entry.available ? t('radoyon_status_ready', 'Ready') : t('radoyon_status_no_pixels', 'No imaging material in the archive yet')}
+                        aria-label={entry.available ? t('radoyon_status_ready', 'Ready') : (entry.statusLabel ?? t('radoyon_status_no_pixels', 'No imaging material in the archive yet'))}
                     />
                 )}
             </button>

@@ -141,6 +141,7 @@ export function mergeOrderedStudies({
         modality: MODALITY_CODE[order.modality] ?? null,
         accession: null,
         detail: t('radoyon_order_no_images', 'No images for this study'),
+        statusLabel: t('radoyon_order_no_images', 'No images for this study'),
         available: false,
         error: true,
         ref: null,
@@ -164,6 +165,7 @@ function gateByTurnaround(row, order, t) {
         ...row,
         available: false,
         detail: t('radoyon_order_reporting', 'Reporting — images not released yet'),
+        statusLabel: t('radoyon_order_reporting', 'Reporting — images not released yet'),
         // Withheld, not merely un-clickable. A pending study's references are
         // in the props of a component the learner can open devtools on, and
         // "not available yet" should mean the images are not there yet.
@@ -195,6 +197,7 @@ function rowForOrder({ order, study, doc, archive, resolveRefs, t }) {
         return {
             ...base,
             detail: t('radoyon_order_no_images', 'No images for this study'),
+            statusLabel: t('radoyon_order_no_images', 'No images for this study'),
             available: false,
             error: true,
             ref: null,
@@ -205,6 +208,7 @@ function rowForOrder({ order, study, doc, archive, resolveRefs, t }) {
         return {
             ...base,
             detail: t('radoyon_order_reporting', 'Reporting — images not released yet'),
+            statusLabel: t('radoyon_order_reporting', 'Reporting — images not released yet'),
             available: false,
             ref: null,
             series: [],

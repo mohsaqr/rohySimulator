@@ -175,8 +175,15 @@ export function useStudy({ ref, loadSeries, loadSeriesIndex, loadInstance, budge
             return cacheRef.current.get(`${series.stackId}:${index}`, () => decodeFrame(bytes));
         }
 
+        // Same guard as the lazy branch above: on a study switch the byte
+        // store is cleared while a stale render can still hold the OLD series
+        // and ask for its frames — decodeFrame(undefined) would throw
+        // DicomError('bad_input') in the middle of render. A missing frame is
+        // a loading state, never a crash.
+        const stored = bytesRef.current.read(instance.source);
+        if (!stored) return null;
         return cacheRef.current.get(`${series.stackId ?? series.seriesInstanceUid}:${index}`, () => (
-            decodeFrame(bytesRef.current.read(instance.source))
+            decodeFrame(stored)
         ));
     }, [lazy, request]);
 

@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.131] — 2026-08-30
+
+### Fixed
+
+- **The PACS room no longer crashes to the error boundary when switching
+  studies while images are loading** — a missing frame renders as loading
+  instead of throwing mid-render.
+- Pending imaging orders announce their real state to screen readers.
+
 ## [2.9.130] — 2026-08-30
 
 ### Added
