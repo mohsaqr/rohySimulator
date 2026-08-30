@@ -1,4 +1,11 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+
+// The remote pref calls must fire with NO legacy localStorage token (cookie
+// auth). Mock the apiClient so we can observe the calls.
+vi.mock('../services/apiClient', () => ({
+    apiFetch: vi.fn(),
+    apiPut: vi.fn(),
+}));
 import {
     loadPrefsSync,
     savePrefsSync,
@@ -7,7 +14,9 @@ import {
     loadAckedSync,
     saveAckedSync,
 } from './persistence';
+import { loadPrefsRemote, savePrefsRemote } from './persistence';
 import { DEFAULT_PREFS } from './defaults';
+import { apiFetch, apiPut } from '../services/apiClient';
 
 // Audit #18: lock the per-user scoping + one-shot legacy-key migration in
 // notifications/persistence.js. The audit flagged that on shared
@@ -152,5 +161,33 @@ describe('persistence — graceful degradation', () => {
     it('returns empty Set when acked value is unparseable JSON', () => {
         localStorage.setItem(`${LEGACY.acked}:user-x`, '{not json');
         expect([...loadAckedSync('user-x')]).toEqual([]);
+    });
+});
+
+
+// Regression lock: loadPrefsRemote/savePrefsRemote gated on
+// AuthService.getToken() — the legacy localStorage token, null under cookie
+// auth — so notification/alarm preferences never persisted to the account
+// after the cookie flag-day while the UI promised they did. The guards are
+// deleted; these assert the network calls fire with no token anywhere.
+describe('persistence — remote prefs under cookie auth (no localStorage token)', () => {
+    it('savePrefsRemote PUTs even without a legacy token', async () => {
+        apiPut.mockResolvedValue({ ok: true });
+        const ok = await savePrefsRemote({ dnd: true });
+        expect(ok).toBe(true);
+        expect(apiPut).toHaveBeenCalledWith('/notification-prefs', { prefs: { dnd: true } });
+    });
+
+    it('loadPrefsRemote GETs even without a legacy token', async () => {
+        apiFetch.mockResolvedValue({ prefs: { dnd: true } });
+        const prefs = await loadPrefsRemote();
+        expect(prefs).toEqual({ dnd: true });
+        expect(apiFetch).toHaveBeenCalledWith('/notification-prefs');
+    });
+
+    it('savePrefsRemote reports false on rejection (kept localStorage copy)', async () => {
+        apiPut.mockRejectedValue(new Error('401'));
+        const ok = await savePrefsRemote({ dnd: false });
+        expect(ok).toBe(false);
     });
 });

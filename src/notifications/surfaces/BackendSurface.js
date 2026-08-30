@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useNotifications } from '../useNotifications';
 import { SURFACES, SOURCES } from '../types';
-import { AuthService } from '../../services/authService';
 import { apiPost, apiPut } from '../../services/apiClient';
 import { apiUrl } from '../../config/api';
 
@@ -183,7 +182,11 @@ export function _resetBackendTelemetryForTest() {
 }
 
 async function sendClinical(events, keyToAlarmId, pendingAcks) {
-    if (!AuthService.getToken()) return;
+    // No AuthService.getToken() pre-check: that reads the legacy localStorage
+    // token, null under cookie auth, and the early return sat BEFORE the
+    // try/catch — so alarm logging was 100% dead and the alarmLogFailures
+    // telemetry read 0. apiFetch carries the cookie; a real auth failure now
+    // lands in recordFailure like any other error.
     // /api/alarms/log accepts one event per call. Fire them in parallel.
     await Promise.all(events.map(async (n) => {
         const body = {
@@ -214,7 +217,6 @@ async function sendClinical(events, keyToAlarmId, pendingAcks) {
 }
 
 function sendAck(alarmEventId) {
-    if (!AuthService.getToken()) return;
     apiPut(`/alarms/${alarmEventId}/acknowledge`).catch((err) => {
         recordFailure('alarm-ack', {
             alarmEventId,

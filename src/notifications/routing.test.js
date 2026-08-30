@@ -61,6 +61,79 @@ describe('routeNotification', () => {
     expect(routeNotification(warning, { ...DEFAULT_PREFS, minSeverity: SEVERITY.CRITICAL }, transient())).toEqual([]);
   });
 
+  // Regression lock: the minSeverity gate ran before the routing matrix, so
+  // with the default minSeverity (info) every DEBUG telemetry verb
+  // (NAVIGATED / CLICKED / SWITCHED_TAB …) returned [] and never reached the
+  // BACKEND surface — `telemetry/debug → [BACKEND]` in defaults.js was dead
+  // code and the navigation layer was missing from every TNA analysis.
+  const debugTelemetry = () => notification({
+    source: SOURCES.TELEMETRY,
+    severity: SEVERITY.DEBUG,
+    key: 'telemetry:NAVIGATED:room:lab',
+  });
+
+  it('persists a DEBUG telemetry event to BACKEND under the default minSeverity', () => {
+    expect(routeNotification(debugTelemetry(), DEFAULT_PREFS, transient()))
+      .toEqual([SURFACES.BACKEND]);
+  });
+
+  it('never shows a DEBUG telemetry event on a user-facing surface', () => {
+    const surfaces = routeNotification(debugTelemetry(), DEFAULT_PREFS, transient());
+
+    expect(surfaces).not.toContain(SURFACES.TOAST);
+    expect(surfaces).not.toContain(SURFACES.BANNER);
+    expect(surfaces).not.toContain(SURFACES.AUDIO);
+    expect(surfaces).not.toContain(SURFACES.HISTORY);
+  });
+
+  // Regression lock: DND / pause / source-mute are volume controls, not a
+  // "stop recording my session" switch — they strip user-facing surfaces only.
+  it('keeps BACKEND under DND, pause, a raised minSeverity, and a source mute', () => {
+    const cases = [
+      { dnd: true },
+      { pausedUntil: Date.now() + 60_000 },
+      { minSeverity: SEVERITY.CRITICAL },
+      { mutedSources: [SOURCES.TELEMETRY] },
+    ];
+
+    cases.forEach((override) => {
+      expect(routeNotification(debugTelemetry(), { ...DEFAULT_PREFS, ...override }, transient()))
+        .toEqual([SURFACES.BACKEND]);
+    });
+  });
+
+  it('drops a muted CONSOLE surface but keeps BACKEND for telemetry errors', () => {
+    const surfaces = routeNotification(
+      notification({ source: SOURCES.TELEMETRY, severity: SEVERITY.ERROR, key: 'telemetry:err' }),
+      { ...DEFAULT_PREFS, consoleMuted: true },
+      transient(),
+    );
+
+    expect(surfaces).toEqual([SURFACES.BACKEND]);
+  });
+
+  it('still suppresses everything, BACKEND included, for an acked or snoozed key', () => {
+    expect(routeNotification(
+      debugTelemetry(),
+      DEFAULT_PREFS,
+      transient({ acked: new Set(['telemetry:NAVIGATED:room:lab']) }),
+    )).toEqual([]);
+
+    expect(routeNotification(
+      debugTelemetry(),
+      DEFAULT_PREFS,
+      transient({ snoozed: new Map([['telemetry:NAVIGATED:room:lab', Date.now() + 60_000]]) }),
+    )).toEqual([]);
+  });
+
+  it('leaves a blanket-muted notification with no BACKEND route fully silent', () => {
+    // SYSTEM/WARNING has no BACKEND row in the matrix — nothing to persist,
+    // so the blanket mutes still produce a completely empty surface list.
+    const warning = notification({ source: SOURCES.SYSTEM, severity: SEVERITY.WARNING, key: 'system:warn' });
+
+    expect(routeNotification(warning, { ...DEFAULT_PREFS, dnd: true }, transient())).toEqual([]);
+  });
+
   it('removes muted surfaces after routing', () => {
     const surfaces = routeNotification(notification(), {
       ...DEFAULT_PREFS,

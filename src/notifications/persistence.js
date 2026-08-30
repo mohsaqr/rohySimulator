@@ -1,5 +1,4 @@
 import { DEFAULT_PREFS } from './defaults';
-import { AuthService } from '../services/authService';
 import { apiFetch, apiPut } from '../services/apiClient';
 
 // Per-user localStorage scoping. On a shared workstation, user A's acks /
@@ -105,7 +104,10 @@ export function saveAckedSync(acked, userId) {
 // the user's settings follow them between machines. Failure is non-fatal —
 // we keep the localStorage copy.
 export async function loadPrefsRemote() {
-    if (!AuthService.getToken()) return null;
+    // No auth pre-check here: AuthService.getToken() reads the legacy
+    // localStorage token, which is null under cookie auth — gating on it
+    // silently disabled every remote save/load after the cookie flag-day.
+    // apiFetch carries the cookie; an unauthenticated call just rejects.
     try {
         const data = await apiFetch('/notification-prefs');
         return data?.prefs || null;
@@ -115,7 +117,6 @@ export async function loadPrefsRemote() {
 }
 
 export async function savePrefsRemote(prefs) {
-    if (!AuthService.getToken()) return false;
     try {
         await apiPut('/notification-prefs', { prefs });
         return true;

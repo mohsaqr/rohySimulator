@@ -13,9 +13,28 @@ import { DEFAULT_ROUTING } from './defaults';
 //  4. severity below minSeverity → blanket; clinical critical escapes.
 //  5. source in mutedSources → blanket; clinical critical escapes.
 //  6. apply per-surface mutes (audioMuted, bannerMuted, consoleMuted).
+//
+// BACKEND is the one surface the blanket mutes (3-5) do NOT strip. It is not
+// something the user sees or hears — it is persistence (learning events /
+// alarm log), and "be quieter" is not "stop recording what I did". Before
+// this split, the minSeverity gate at step 4 ran BEFORE the routing matrix
+// was ever consulted, so with the default minSeverity of INFO every DEBUG
+// telemetry verb (NAVIGATED, CLICKED, SWITCHED_TAB, …) was dropped and the
+// `telemetry/debug → [BACKEND]` row in defaults.js was dead code — the whole
+// navigation layer was missing from the TNA analyses.
+// Steps 1-2 (ack / snooze) still suppress everything: they are explicit,
+// key-specific user actions on one alarm, not a global volume setting.
 export function routeNotification(notification, prefs, transient) {
     const { source, severity, key } = notification;
     const isCriticalClinical = source === SOURCES.CLINICAL && severity === SEVERITY.CRITICAL;
+
+    // Base surface list: the producer's explicit list wins, else the matrix.
+    // Computed up front so the blanket mutes below can still return the
+    // persistence surface after stripping every user-facing one.
+    const explicit = notification.surfaces;
+    const fromMatrix = DEFAULT_ROUTING[`${source}/${severity}`] || [];
+    let surfaces = explicit && explicit.length > 0 ? [...explicit] : [...fromMatrix];
+    const persistedOnly = surfaces.includes(SURFACES.BACKEND) ? [SURFACES.BACKEND] : [];
 
     // Acked: explicit user action on this exact key. Honor it regardless of
     // severity — if the clinician acks a critical alarm, they have seen it
@@ -34,29 +53,24 @@ export function routeNotification(notification, prefs, transient) {
 
     // Blanket rules below — clinical critical bypasses these so a user who
     // turned on DND or muted the clinical source still gets paged on a
-    // life-threatening vital.
+    // life-threatening vital. Everything else falls back to persistence only.
 
     // DND / paused.
     const now = Date.now();
     const isPaused = prefs.dnd || (prefs.pausedUntil && now < prefs.pausedUntil);
     if (isPaused && !isCriticalClinical) {
-        return [];
+        return persistedOnly;
     }
 
     // Severity threshold.
     if (severityRank(severity) < severityRank(prefs.minSeverity) && !isCriticalClinical) {
-        return [];
+        return persistedOnly;
     }
 
     // Source mute.
     if (prefs.mutedSources.includes(source) && !isCriticalClinical) {
-        return [];
+        return persistedOnly;
     }
-
-    // Compute base surface list.
-    const explicit = notification.surfaces;
-    const fromMatrix = DEFAULT_ROUTING[`${source}/${severity}`] || [];
-    let surfaces = explicit && explicit.length > 0 ? [...explicit] : [...fromMatrix];
 
     // Strip muted surfaces.
     if (prefs.audioMuted) surfaces = surfaces.filter(s => s !== SURFACES.AUDIO);

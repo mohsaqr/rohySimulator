@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.110] — 2026-08-30
+
+### Fixed
+
+- **Alarm logging and notification persistence work again for
+  cookie-authenticated users** — four dead pre-cookie token guards removed.
+- Muting notifications (minSeverity, DND, source mutes) no longer stops
+  backend persistence; "be quieter" is not "stop recording".
+
 ## [2.9.109] — 2026-08-30
 
 ### Fixed
